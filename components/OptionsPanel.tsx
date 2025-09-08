@@ -21,6 +21,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({ options, setOptions,
     <div className="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-6">
       <h2 className="text-xl font-bold text-cyan-400">2. Configure Options</h2>
 
+      {/* Number of Images */}
       <div>
         <label htmlFor="numImages" className="block text-sm font-medium text-gray-300">
           Number of Images: <span className="font-bold text-white">{options.numImages}</span>
@@ -37,6 +38,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({ options, setOptions,
         />
       </div>
 
+      {/* Aspect Ratio */}
       <div>
         <label htmlFor="aspectRatio" className="block text-sm font-medium text-gray-300 mb-1">Aspect Ratio</label>
         <select
@@ -52,6 +54,41 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({ options, setOptions,
         </select>
       </div>
 
+      {/* Clothing Style */}
+      <div>
+        <label htmlFor="clothing" className="block text-sm font-medium text-gray-300 mb-1">Clothing Style</label>
+        <select
+          id="clothing"
+          value={options.clothing}
+          onChange={(e) => handleOptionChange('clothing', e.target.value as GenerationOptions['clothing'])}
+          disabled={isDisabled}
+          className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 disabled:opacity-50"
+        >
+            <option value="original">Keep Original Clothing</option>
+            <option value="image">Use Clothing from Image</option>
+            <option value="prompt">Describe with Prompt</option>
+        </select>
+      </div>
+      
+      {options.clothing === 'prompt' && (
+        <div className="space-y-2 p-4 bg-gray-700/50 rounded-lg">
+            <label htmlFor="customClothingPrompt" className="block text-sm font-medium text-gray-300">
+              Clothing Prompt
+            </label>
+            <textarea
+              id="customClothingPrompt"
+              rows={3}
+              value={options.customClothingPrompt || ''}
+              onChange={(e) => handleOptionChange('customClothingPrompt', e.target.value)}
+              disabled={isDisabled}
+              placeholder="e.g., a vintage leather jacket, a blue silk dress"
+              className="bg-gray-900/50 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 disabled:opacity-50 resize-y"
+            />
+        </div>
+      )}
+
+
+      {/* Background */}
       <div>
         <label htmlFor="background" className="block text-sm font-medium text-gray-300 mb-1">Background</label>
         <select

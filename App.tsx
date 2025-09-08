@@ -11,6 +11,7 @@ import { CloseIcon, DownloadIcon } from './components/icons';
 
 const App: React.FC = () => {
   const [sourceImage, setSourceImage] = useState<File | null>(null);
+  const [clothingImage, setClothingImage] = useState<File | null>(null);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
@@ -24,11 +25,17 @@ const App: React.FC = () => {
     aspectRatio: '1:1',
     customBackground: '',
     consistentBackground: false,
+    clothing: 'original',
+    customClothingPrompt: '',
   });
 
   const handleGenerate = useCallback(async () => {
     if (!sourceImage) {
       setError('Please upload a source image first.');
+      return;
+    }
+    if (options.clothing === 'image' && !clothingImage) {
+      setError('Please upload a clothing image or change the clothing style.');
       return;
     }
 
@@ -41,6 +48,7 @@ const App: React.FC = () => {
     try {
       const images = await generatePortraitSeries(
         sourceImage,
+        clothingImage,
         options,
         (message: string, newProgress: number) => {
           setStatusMessage(message);
@@ -59,10 +67,11 @@ const App: React.FC = () => {
       setIsLoading(false);
       setStatusMessage('');
     }
-  }, [sourceImage, options]);
+  }, [sourceImage, clothingImage, options]);
   
   const resetState = () => {
     setSourceImage(null);
+    setClothingImage(null);
     setGeneratedImages([]);
     setIsLoading(false);
     setStatusMessage('');
@@ -74,6 +83,8 @@ const App: React.FC = () => {
         aspectRatio: '1:1',
         customBackground: '',
         consistentBackground: false,
+        clothing: 'original',
+        customClothingPrompt: '',
     });
   }
 
@@ -112,13 +123,20 @@ const App: React.FC = () => {
         <div className="flex flex-col lg:flex-row gap-8">
           <aside className="w-full lg:w-1/3 xl:w-1/4 flex flex-col gap-6">
             <div className="bg-gray-800 p-6 rounded-2xl shadow-lg">
-                <h2 className="text-xl font-bold mb-4 text-cyan-400">1. Upload Image</h2>
+                <h2 className="text-xl font-bold mb-4 text-cyan-400">1. Upload Image(s)</h2>
                 <div className="space-y-4">
                     <ImageUploader 
-                        label="Source Image"
+                        label="Source Image (Subject)"
                         onImageUpload={setSourceImage}
                         id="source-uploader"
                     />
+                    {options.clothing === 'image' && (
+                        <ImageUploader 
+                            label="Clothing Image"
+                            onImageUpload={setClothingImage}
+                            id="clothing-uploader"
+                        />
+                    )}
                 </div>
             </div>
             

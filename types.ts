@@ -4,4 +4,6 @@ export interface GenerationOptions {
   aspectRatio: string;
   customBackground?: string;
   consistentBackground?: boolean;
+  clothing: 'original' | 'image' | 'prompt';
+  customClothingPrompt?: string;
 }
