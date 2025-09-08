@@ -7,7 +7,7 @@ import { Loader } from './components/Loader';
 import { ImageUploader } from './components/ImageUploader';
 import { generatePortraitSeries, enhanceImageResolution } from './services/geminiService';
 import type { GenerationOptions } from './types';
-import { CloseIcon, DownloadIcon, SpinnerIcon } from './components/icons';
+import { CloseIcon, DownloadIcon, SpinnerIcon, GenerateIcon } from './components/icons';
 
 const App: React.FC = () => {
   const [sourceImage, setSourceImage] = useState<File | null>(null);
@@ -17,10 +17,20 @@ const App: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  
+  // Single image zoom/enhance state
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [isEnhancing, setIsEnhancing] = useState<boolean>(false);
   const [enhancedImage, setEnhancedImage] = useState<string | null>(null);
   const [enhanceError, setEnhanceError] = useState<string | null>(null);
+
+  // Bulk enhancement state
+  const [isEnhancingAll, setIsEnhancingAll] = useState<boolean>(false);
+  const [enhancementResults, setEnhancementResults] = useState<Record<number, string>>({});
+  const [enhancementProgress, setEnhancementProgress] = useState<number>(0);
+  const [enhancementStatus, setEnhancementStatus] = useState<string>('');
+  const [enhancementError, setEnhancementError] = useState<string | null>(null);
+
 
   const [options, setOptions] = useState<GenerationOptions>({
     numImages: 12,
@@ -48,6 +58,8 @@ const App: React.FC = () => {
     setGeneratedImages([]);
     setProgress(0);
     setStatusMessage('Kicking things off...');
+    setEnhancementResults({});
+    setEnhancementError(null);
 
     try {
       const images = await generatePortraitSeries(
@@ -91,6 +103,11 @@ const App: React.FC = () => {
         customClothingPrompt: '',
         randomizeClothing: false,
     });
+    setEnhancementResults({});
+    setIsEnhancingAll(false);
+    setEnhancementProgress(0);
+    setEnhancementStatus('');
+    setEnhancementError(null);
   }
 
   const dataURLToBlob = (dataURL: string) => {
@@ -116,6 +133,51 @@ const App: React.FC = () => {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(content);
     link.download = 'zGenMedia_Portraits.zip';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleEnhanceAll = async () => {
+    if (generatedImages.length === 0) return;
+
+    setIsEnhancingAll(true);
+    setEnhancementError(null);
+    setEnhancementProgress(0);
+    setEnhancementStatus('Starting enhancement process...');
+    const results: Record<number, string> = {};
+
+    try {
+        for (let i = 0; i < generatedImages.length; i++) {
+            setEnhancementStatus(`Enhancing image ${i + 1} of ${generatedImages.length}...`);
+            const enhanced = await enhanceImageResolution(generatedImages[i]);
+            results[i] = enhanced;
+            setEnhancementResults({ ...results });
+            setEnhancementProgress((i + 1) / generatedImages.length);
+        }
+    } catch (err: any) {
+        setEnhancementError(err.message || 'An error occurred during bulk enhancement.');
+        console.error(err);
+    } finally {
+        setIsEnhancingAll(false);
+        setEnhancementStatus('');
+    }
+  };
+
+  const handleDownloadEnhancedZip = async () => {
+    const enhancedCount = Object.keys(enhancementResults).length;
+    if (enhancedCount === 0) return;
+
+    const zip = new JSZip();
+    Object.entries(enhancementResults).forEach(([index, imgSrc]) => {
+        const blob = dataURLToBlob(imgSrc);
+        zip.file(`enhanced_portrait_${parseInt(index, 10) + 1}.png`, blob);
+    });
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(content);
+    link.download = 'zGenMedia_Enhanced_Portraits.zip';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -156,6 +218,9 @@ const App: React.FC = () => {
     }
   }, [zoomedImage, enhancedImage]);
 
+  const numEnhanced = Object.keys(enhancementResults).length;
+  const allAreEnhanced = numEnhanced === generatedImages.length && generatedImages.length > 0;
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-sans flex flex-col">
       <Header />
@@ -185,28 +250,48 @@ const App: React.FC = () => {
               setOptions={setOptions}
               onGenerate={handleGenerate}
               onReset={resetState}
-              isDisabled={isLoading}
+              isDisabled={isLoading || isEnhancingAll}
               isReady={!!sourceImage}
             />
           </aside>
 
           <section className="w-full lg:w-2/3 xl:w-3/4 bg-gray-800 p-6 rounded-2xl shadow-lg min-h-[60vh] flex flex-col">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
               <h2 className="text-xl font-bold text-cyan-400">3. Generated Portraits</h2>
               {generatedImages.length > 0 && !isLoading && (
-                  <button onClick={handleDownloadAll} className="flex items-center gap-2 text-sm bg-gray-700 hover:bg-gray-600 text-cyan-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-200">
-                      <DownloadIcon className="w-4 h-4" />
-                      Download All as ZIP
-                  </button>
+                  <div className="flex items-center gap-2">
+                      <button onClick={handleDownloadAll} className="flex items-center gap-2 text-sm bg-gray-700 hover:bg-gray-600 text-cyan-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-200">
+                          <DownloadIcon className="w-4 h-4" />
+                          Download All as ZIP
+                      </button>
+                      {allAreEnhanced ? (
+                         <button onClick={handleDownloadEnhancedZip} className="flex items-center gap-2 text-sm bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200">
+                            <DownloadIcon className="w-4 h-4" />
+                            Download Enhanced ZIP
+                        </button>
+                      ) : (
+                        <button onClick={handleEnhanceAll} disabled={isEnhancingAll} className="flex items-center gap-2 text-sm bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed">
+                           {isEnhancingAll ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <GenerateIcon className="w-4 h-4" />}
+                           {isEnhancingAll ? 'Enhancing...' : 'Enhance All'}
+                        </button>
+                      )}
+                  </div>
               )}
             </div>
             <div className="flex-grow flex items-center justify-center">
               {isLoading ? (
                 <Loader message={statusMessage} progress={progress} />
+              ) : isEnhancingAll ? (
+                <Loader message={enhancementStatus} progress={enhancementProgress} />
               ) : error ? (
                 <div className="text-center text-red-400 bg-red-900/20 p-6 rounded-lg">
                   <h3 className="text-lg font-semibold mb-2">Generation Failed</h3>
                   <p>{error}</p>
+                </div>
+              ) : enhancementError ? (
+                <div className="text-center text-red-400 bg-red-900/20 p-6 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-2">Enhancement Failed</h3>
+                  <p>{enhancementError}</p>
                 </div>
               ) : generatedImages.length > 0 ? (
                 <ImageGrid images={generatedImages} onZoom={handleZoom} />
