@@ -3,4 +3,5 @@ export interface GenerationOptions {
   background: string;
   aspectRatio: string;
   customBackground?: string;
+  consistentBackground?: boolean;
 }

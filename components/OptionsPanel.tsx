@@ -68,19 +68,34 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({ options, setOptions,
       </div>
 
       {options.background === 'prompt' && (
-        <div>
-          <label htmlFor="customBackground" className="block text-sm font-medium text-gray-300 mb-1">
-            Background Prompt
-          </label>
-          <textarea
-            id="customBackground"
-            rows={3}
-            value={options.customBackground || ''}
-            onChange={(e) => handleOptionChange('customBackground', e.target.value)}
-            disabled={isDisabled}
-            placeholder="e.g., a futuristic city skyline at night"
-            className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 disabled:opacity-50 resize-y"
-          />
+        <div className="space-y-4 p-4 bg-gray-700/50 rounded-lg">
+          <div>
+            <label htmlFor="customBackground" className="block text-sm font-medium text-gray-300 mb-1">
+              Background Prompt
+            </label>
+            <textarea
+              id="customBackground"
+              rows={3}
+              value={options.customBackground || ''}
+              onChange={(e) => handleOptionChange('customBackground', e.target.value)}
+              disabled={isDisabled}
+              placeholder="e.g., a futuristic city skyline at night"
+              className="bg-gray-900/50 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 disabled:opacity-50 resize-y"
+            />
+          </div>
+          <div className="flex items-center">
+            <input
+              id="consistentBackground"
+              type="checkbox"
+              checked={options.consistentBackground || false}
+              onChange={(e) => handleOptionChange('consistentBackground', e.target.checked)}
+              disabled={isDisabled}
+              className="w-4 h-4 text-cyan-600 bg-gray-700 border-gray-600 rounded focus:ring-cyan-500 focus:ring-2 disabled:opacity-50"
+            />
+            <label htmlFor="consistentBackground" className="ml-2 text-sm font-medium text-gray-300">
+              Consistent Background
+            </label>
+          </div>
         </div>
       )}
 

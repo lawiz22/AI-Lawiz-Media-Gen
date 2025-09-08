@@ -23,6 +23,7 @@ const App: React.FC = () => {
     background: 'black',
     aspectRatio: '1:1',
     customBackground: '',
+    consistentBackground: false,
   });
 
   const handleGenerate = useCallback(async () => {
@@ -72,6 +73,7 @@ const App: React.FC = () => {
         background: 'black',
         aspectRatio: '1:1',
         customBackground: '',
+        consistentBackground: false,
     });
   }
 
