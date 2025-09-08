@@ -37,6 +37,40 @@ const dataUrlToGenerativePart = async (dataUrl: string): Promise<Part> => {
     };
 };
 
+export const generateBackgroundImagePreview = async (
+  prompt: string,
+  aspectRatio: string
+): Promise<string> => {
+  if (!prompt.trim()) {
+    throw new Error("Prompt cannot be empty.");
+  }
+  
+  const fullPrompt = `A high-quality, photorealistic background image for a portrait photography session. The background should be: ${prompt}. Do not include any people or prominent figures. Focus on creating a beautiful and believable environment.`;
+
+  try {
+    const response = await ai.models.generateImages({
+      model: 'imagen-4.0-generate-001',
+      prompt: fullPrompt,
+      config: {
+        numberOfImages: 1,
+        outputMimeType: 'image/jpeg',
+        aspectRatio: aspectRatio as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
+      },
+    });
+
+    if (response.generatedImages && response.generatedImages.length > 0) {
+      const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+      return `data:image/jpeg;base64,${base64ImageBytes}`;
+    } else {
+      throw new Error("The AI did not return an image. Please try a different prompt.");
+    }
+  } catch (error: any) {
+    console.error("Error generating background preview:", error);
+    // Re-throw a more user-friendly error message
+    throw new Error(error.message || "Failed to generate background preview due to an unknown error.");
+  }
+};
+
 export const enhanceImageResolution = async (base64ImageData: string): Promise<string> => {
     const imagePart = await dataUrlToGenerativePart(base64ImageData);
     
@@ -74,6 +108,7 @@ export const generatePortraitSeries = async (
   sourceImage: File,
   clothingImage: File | null,
   backgroundImage: File | null,
+  previewedBackground: string | null,
   options: GenerationOptions,
   onProgress: (message: string, progress: number) => void
 ): Promise<string[]> => {
@@ -84,6 +119,11 @@ export const generatePortraitSeries = async (
   
   const clothingImagePart = clothingImage ? await fileToGenerativePart(clothingImage) : null;
   const backgroundImagePart = backgroundImage ? await fileToGenerativePart(backgroundImage) : null;
+
+  let consistentBackgroundPart: Part | null = null;
+  if (options.background === 'prompt' && options.consistentBackground && previewedBackground) {
+    consistentBackgroundPart = await dataUrlToGenerativePart(previewedBackground);
+  }
 
   let selectedPoses: string[];
   if (options.poseMode === 'select' && options.poseSelection.length > 0) {
@@ -118,7 +158,10 @@ export const generatePortraitSeries = async (
     }
 
     // Background
-    if (options.background === 'image' && backgroundImagePart) {
+    if (consistentBackgroundPart) {
+        parts.push(consistentBackgroundPart);
+        promptSegments.push(`Background: Place the person in a setting identical to the provided background image.`);
+    } else if (options.background === 'image' && backgroundImagePart) {
         parts.push(backgroundImagePart);
         promptSegments.push(`Background: Place the person in a setting identical to the provided background image.`);
     } else if (options.background === 'prompt' && options.customBackground) {

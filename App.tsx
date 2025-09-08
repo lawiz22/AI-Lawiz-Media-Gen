@@ -13,6 +13,7 @@ const App: React.FC = () => {
   const [sourceImage, setSourceImage] = useState<File | null>(null);
   const [clothingImage, setClothingImage] = useState<File | null>(null);
   const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
+  const [previewedBackgroundImage, setPreviewedBackgroundImage] = useState<string | null>(null);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
@@ -78,6 +79,7 @@ const App: React.FC = () => {
         sourceImage,
         clothingImage,
         backgroundImage,
+        previewedBackgroundImage,
         options,
         (message: string, newProgress: number) => {
           setStatusMessage(message);
@@ -96,12 +98,13 @@ const App: React.FC = () => {
       setIsLoading(false);
       setStatusMessage('');
     }
-  }, [sourceImage, clothingImage, backgroundImage, options]);
+  }, [sourceImage, clothingImage, backgroundImage, previewedBackgroundImage, options]);
   
   const resetState = () => {
     setSourceImage(null);
     setClothingImage(null);
     setBackgroundImage(null);
+    setPreviewedBackgroundImage(null);
     setGeneratedImages([]);
     setIsLoading(false);
     setStatusMessage('');
@@ -272,6 +275,7 @@ const App: React.FC = () => {
             <OptionsPanel
               options={options}
               setOptions={setOptions}
+              setPreviewedBackgroundImage={setPreviewedBackgroundImage}
               onGenerate={handleGenerate}
               onReset={resetState}
               isDisabled={isLoading || isEnhancingAll}

@@ -1,5 +1,5 @@
 // Implemented OptionsPanel component to fix module resolution errors.
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { GenerationOptions } from '../types';
 import { 
     MAX_IMAGES, 
@@ -8,11 +8,13 @@ import {
     ASPECT_RATIO_OPTIONS,
     PHOTO_STYLE_OPTIONS
 } from '../constants';
-import { GenerateIcon, ResetIcon } from './icons';
+import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon } from './icons';
+import { generateBackgroundImagePreview } from '../services/geminiService';
 
 interface OptionsPanelProps {
   options: GenerationOptions;
   setOptions: React.Dispatch<React.SetStateAction<GenerationOptions>>;
+  setPreviewedBackgroundImage: (image: string | null) => void;
   onGenerate: () => void;
   onReset: () => void;
   isDisabled: boolean;
@@ -51,11 +53,19 @@ const PoseSelector: React.FC<{ selected: string[], onChange: (selected: string[]
 export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   options,
   setOptions,
+  setPreviewedBackgroundImage,
   onGenerate,
   onReset,
   isDisabled,
   isReady,
 }) => {
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewTrigger, setPreviewTrigger] = useState(0);
+  const isManualTrigger = useRef(false);
+
+
   const handleOptionChange = <K extends keyof GenerationOptions>(
     key: K,
     value: GenerationOptions[K]
@@ -70,6 +80,56 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         handleOptionChange('numImages', selection.length);
       }
   };
+  
+  const handleRandomizePreview = () => {
+    isManualTrigger.current = true;
+    setPreviewTrigger(p => p + 1);
+  };
+
+  useEffect(() => {
+    if (options.background !== 'prompt' || !options.customBackground?.trim()) {
+      setPreviewImage(null);
+      setPreviewError(null);
+      setIsPreviewLoading(false);
+      setPreviewedBackgroundImage(null); // Clear lifted state
+      return;
+    }
+    
+    const performGeneration = () => {
+      setIsPreviewLoading(true);
+      setPreviewError(null);
+      setPreviewImage(null);
+      setPreviewedBackgroundImage(null);
+      generateBackgroundImagePreview(options.customBackground!, options.aspectRatio)
+        .then(imageSrc => {
+          setPreviewImage(imageSrc);
+          setPreviewedBackgroundImage(imageSrc); // Lift state up
+        })
+        .catch(err => {
+          setPreviewError(err.message || 'Failed to generate preview.');
+          setPreviewedBackgroundImage(null); // Clear lifted state on error
+        })
+        .finally(() => {
+          setIsPreviewLoading(false);
+        });
+    };
+    
+    // If triggered by the randomize button, generate immediately
+    if (isManualTrigger.current) {
+        isManualTrigger.current = false; // reset flag
+        performGeneration();
+        return; 
+    }
+
+    // Otherwise, use a debounce for typing
+    const handler = setTimeout(() => {
+        performGeneration();
+    }, 1000); // 1-second debounce delay
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [options.customBackground, options.aspectRatio, options.background, previewTrigger, setPreviewedBackgroundImage]);
 
   return (
     <div className="bg-gray-800 p-6 rounded-2xl shadow-lg">
@@ -123,14 +183,68 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 {BACKGROUND_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
             {options.background === 'prompt' && (
-                <input
-                    type="text"
-                    placeholder="e.g., a vibrant cityscape at night"
-                    value={options.customBackground}
-                    onChange={(e) => handleOptionChange('customBackground', e.target.value)}
-                    disabled={isDisabled}
-                    className="mt-2 w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500"
-                />
+                <>
+                  <textarea
+                      placeholder="e.g., a vibrant cityscape at night"
+                      value={options.customBackground}
+                      onChange={(e) => handleOptionChange('customBackground', e.target.value)}
+                      disabled={isDisabled}
+                      className="mt-2 w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500 min-h-[60px]"
+                      rows={2}
+                  />
+                  <div className="mt-2 p-2 bg-gray-900/50 rounded-lg min-h-[100px] flex flex-col items-center justify-center">
+                    {isPreviewLoading && (
+                      <div className="text-center text-gray-400">
+                        <SpinnerIcon className="w-6 h-6 animate-spin mx-auto mb-2" />
+                        <p className="text-xs">Generating preview...</p>
+                      </div>
+                    )}
+                    {previewError && !isPreviewLoading && (
+                      <div className="text-center text-red-400 text-xs p-2">
+                        <p className="font-semibold">Preview Failed</p>
+                        <p className="max-w-xs mx-auto">{previewError}</p>
+                        <button
+                          onClick={handleRandomizePreview}
+                          className="mt-2 flex items-center gap-1 mx-auto text-xs bg-gray-700 hover:bg-gray-600 text-cyan-300 font-semibold py-1 px-3 rounded-lg transition-colors duration-200"
+                          aria-label="Retry background preview generation"
+                        >
+                          <RefreshIcon className="w-4 h-4"/>
+                          Retry
+                        </button>
+                      </div>
+                    )}
+                    {previewImage && !isPreviewLoading && (
+                       <div className="relative w-full">
+                        <img src={previewImage} alt="Background preview" className="rounded-md object-contain max-h-48 w-full" />
+                        <button
+                            onClick={handleRandomizePreview}
+                            className="absolute top-2 right-2 flex items-center gap-1 bg-gray-800/80 backdrop-blur-sm text-white text-xs font-bold py-1 px-2 rounded-full hover:bg-cyan-600 transition-colors duration-200 shadow-lg"
+                            aria-label="Generate new background preview"
+                        >
+                            <RefreshIcon className="w-4 h-4"/>
+                            <span>Randomize</span>
+                        </button>
+                      </div>
+                    )}
+                    {!isPreviewLoading && !previewError && !previewImage && (
+                       <p className="text-xs text-gray-500 text-center">A preview of your background will appear here after you stop typing.</p>
+                    )}
+                  </div>
+                   {previewImage && !isPreviewLoading && !previewError && (
+                      <div className="mt-3">
+                        <label className="flex items-center space-x-2 cursor-pointer p-1">
+                          <input
+                            type="checkbox"
+                            checked={!!options.consistentBackground}
+                            onChange={(e) => handleOptionChange('consistentBackground', e.target.checked)}
+                            disabled={isDisabled}
+                            className="h-4 w-4 rounded border-gray-500 bg-gray-700 text-cyan-600 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+                          />
+                          <span className="text-sm text-gray-300">Use this background for all images</span>
+                        </label>
+                      </div>
+                    )}
+                </>
             )}
         </div>
 
