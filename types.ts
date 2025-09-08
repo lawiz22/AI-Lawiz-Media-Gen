@@ -11,3 +11,9 @@ export interface GenerationOptions {
   poseSelection: string[];
   photoStyle: string;
 }
+
+export interface User {
+  username: string;
+  password?: string; // Not always present, e.g., when just identifying the current user
+  role: 'admin' | 'user';
+}
