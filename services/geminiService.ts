@@ -102,7 +102,13 @@ export const generatePortraitSeries = async (
     - DO NOT alter their core facial features, age, or ethnicity.
 2.  ${clothingRule}
 3.  **POSE**: Change the subject's pose to: "${_z}".
-4.  **PHOTOREALISM**: The final image must be a high-quality, realistic photograph. The lighting on the subject must match the lighting of the new background perfectly.
+4.  **PHOTOREALISM & LIGHTING INTEGRATION**: This is critical for realism. The final image must look like it was taken with a single camera in a real location.
+    - **AVOID THE "PHOTOSHOPPED" LOOK**: The subject must not look cut and pasted onto the background. Their lighting and shadows must blend seamlessly.
+    - **MATCH LIGHTING PERFECTLY**: The lighting on the subject MUST be completely dictated by the new background environment. This includes:
+        - **Direction & Source**: Light on the subject must come from the logical direction of the light source in the background (e.g., the sun, a window, a studio lamp).
+        - **Color Temperature**: Match the warm (sunset) or cool (overcast day) tones of the ambient light.
+        - **Quality**: Match the hardness or softness of the light. A bright sun creates hard-edged shadows; a cloudy sky creates soft, diffused shadows.
+        - **Reflections**: The subject should pick up subtle bounce light and color reflections from their surroundings.
 5.  **ASPECT RATIO**: The output image MUST perfectly match the aspect ratio of the FIRST source image you've been given. Do not add letterboxing or change the framing.
 ${backgroundRule}
 
