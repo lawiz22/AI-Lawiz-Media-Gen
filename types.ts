@@ -6,4 +6,5 @@ export interface GenerationOptions {
   consistentBackground?: boolean;
   clothing: 'original' | 'image' | 'prompt';
   customClothingPrompt?: string;
+  randomizeClothing?: boolean;
 }

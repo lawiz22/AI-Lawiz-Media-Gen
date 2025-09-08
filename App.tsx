@@ -27,6 +27,7 @@ const App: React.FC = () => {
     consistentBackground: false,
     clothing: 'original',
     customClothingPrompt: '',
+    randomizeClothing: false,
   });
 
   const handleGenerate = useCallback(async () => {
@@ -85,6 +86,7 @@ const App: React.FC = () => {
         consistentBackground: false,
         clothing: 'original',
         customClothingPrompt: '',
+        randomizeClothing: false,
     });
   }
 

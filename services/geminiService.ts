@@ -28,14 +28,18 @@ const getBackgroundInstruction = (_b: string, _customPrompt?: string): string =>
 };
 
 const getClothingRule = (options: GenerationOptions): string => {
-    const { clothing, customClothingPrompt } = options;
+    const { clothing, customClothingPrompt, randomizeClothing } = options;
     switch (clothing) {
         case 'image':
             return `**CLOTHING**: The SECOND image provided is a reference for clothing. You MUST dress the subject in the clothing shown in that second image. Adapt it to fit the subject's new pose naturally and photorealistically.`;
         case 'prompt':
-            return customClothingPrompt?.trim()
-                ? `**CLOTHING**: You MUST dress the subject in the following clothing: "${customClothingPrompt.trim()}".`
-                : `**CLOTHING**: The clothing MUST be identical to the clothing in the FIRST source image.`;
+            if (!customClothingPrompt?.trim()) {
+                return `**CLOTHING**: The clothing MUST be identical to the clothing in the FIRST source image.`;
+            }
+            if (randomizeClothing) {
+                return `**CLOTHING**: You MUST dress the subject in clothing that fits this description: "${customClothingPrompt.trim()}". IMPORTANT: For each new image you generate, you must create a *different variation* of this clothing. Interpret the prompt as a theme or style guide, and generate a unique but related outfit for every photo.`;
+            }
+            return `**CLOTHING**: You MUST dress the subject in the following clothing: "${customClothingPrompt.trim()}".`;
         case 'original':
         default:
             return `**CLOTHING**: The clothing MUST be identical to the clothing in the FIRST source image.`;

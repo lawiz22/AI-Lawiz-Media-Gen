@@ -84,6 +84,19 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({ options, setOptions,
               placeholder="e.g., a vintage leather jacket, a blue silk dress"
               className="bg-gray-900/50 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 disabled:opacity-50 resize-y"
             />
+            <div className="flex items-center pt-2">
+              <input
+                id="randomizeClothing"
+                type="checkbox"
+                checked={options.randomizeClothing || false}
+                onChange={(e) => handleOptionChange('randomizeClothing', e.target.checked)}
+                disabled={isDisabled}
+                className="w-4 h-4 text-cyan-600 bg-gray-700 border-gray-600 rounded focus:ring-cyan-500 focus:ring-2 disabled:opacity-50"
+              />
+              <label htmlFor="randomizeClothing" className="ml-2 text-sm font-medium text-gray-300">
+                Randomize clothes with every picture
+              </label>
+            </div>
         </div>
       )}
 
