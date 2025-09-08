@@ -28,7 +28,7 @@ export const Header: React.FC = () => {
             />
         </div>
         <div>
-            <h1 className="text-2xl font-bold text-white">zGenMedia's Portrait Generator</h1>
+            <h1 className="text-2xl font-bold text-white">LAWIZ's Portrait Generator</h1>
             <p className="text-sm text-gray-400">
               Create stunning portrait variations from a single image using AI. 
               <span className="block sm:inline sm:ml-1">

@@ -34,19 +34,24 @@ const App: React.FC = () => {
     setError(null);
     setGeneratedImages([]);
     setProgress(0);
+    setStatusMessage('Kicking things off...');
 
     try {
       const images = await generatePortraitSeries(
         sourceImage,
         options,
-        (currentStep) => {
-          setStatusMessage(`Generating image ${currentStep} of ${options.numImages}...`);
-          setProgress(currentStep / options.numImages);
+        (message: string, newProgress: number) => {
+          setStatusMessage(message);
+          setProgress(newProgress);
         }
       );
       setGeneratedImages(images);
     } catch (err: any) {
-      setError(err.message || 'An unknown error occurred during image generation.');
+      let errorMessage = err.message || 'An unknown error occurred during image generation.';
+      if (errorMessage.includes("AI returned text instead of an image")) {
+        errorMessage = "The AI failed to generate an image for one of the poses and returned text instead. This can sometimes happen with complex requests. Please try again or adjust the options.";
+      }
+      setError(errorMessage);
       console.error(err);
     } finally {
       setIsLoading(false);
