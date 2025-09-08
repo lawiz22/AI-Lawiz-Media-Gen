@@ -1,252 +1,172 @@
+// Implemented Gemini API service to fix module resolution errors.
 import { GoogleGenAI, Modality, Part } from "@google/genai";
-import { POSES } from '../constants';
-import type { GenerationOptions } from '../types';
-import { fileToGenerativePart } from '../utils/imageUtils';
-import { cropImageToAspectRatio } from '../utils/imageProcessing';
+import type { GenerationOptions } from "../types";
+import { fileToGenerativePart } from "../utils/imageUtils";
+import { cropImageToAspectRatio } from "../utils/imageProcessing";
+import { POSES } from "../constants";
 
-const _k = process.env.API_KEY;
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
-if (!_k) {
-  throw new Error("API_KEY environment variable not set");
-}
-
-const _a = new GoogleGenAI({ apiKey: _k });
-
-const getBackgroundInstruction = (_b: string, _customPrompt?: string): string => {
-    switch (_b) {
-        case 'prompt':
-            return _customPrompt?.trim()
-                ? `A background described as: "${_customPrompt.trim()}"`
-                : 'A neutral, plain background.';
-        case 'original':
-            return `Seamlessly and photorealistically extend the background from the source image to fill the new frame. Analyze the existing lighting, textures, and style and expand upon it naturally. The result should look like the camera simply revealed more of the original scene.`;
-        case 'natural studio':
-            return 'A soft-focus, professional photography studio setting with natural, diffused light. This completely replaces the original background.';
-        default: // black, white, gray, green screen
-            return `A solid, flat, professional studio backdrop of ${_b} color. This completely replaces the original background.`;
-    }
+// Helper to decode base64 poses
+const decodePose = (encoded: string): string => {
+  try {
+    // This will work in browser environments
+    return atob(encoded);
+  } catch (e) {
+    console.error("Failed to decode pose:", e);
+    // Fallback for non-browser env or error
+    return "a standard portrait pose";
+  }
 };
 
-const getClothingRule = (options: GenerationOptions): string => {
-    const { clothing, customClothingPrompt, randomizeClothing } = options;
-    switch (clothing) {
-        case 'image':
-            return `**CLOTHING**: The SECOND image provided is a reference for clothing. You MUST dress the subject in the clothing shown in that second image. Adapt it to fit the subject's new pose naturally and photorealistically.`;
-        case 'prompt':
-            if (!customClothingPrompt?.trim()) {
-                return `**CLOTHING**: The clothing MUST be identical to the clothing in the FIRST source image.`;
-            }
-            if (randomizeClothing) {
-                return `**CLOTHING**: You MUST dress the subject in clothing that fits this description: "${customClothingPrompt.trim()}". IMPORTANT: For each new image you generate, you must create a *different variation* of this clothing. Interpret the prompt as a theme or style guide, and generate a unique but related outfit for every photo.`;
-            }
-            return `**CLOTHING**: You MUST dress the subject in the following clothing: "${customClothingPrompt.trim()}".`;
-        case 'original':
-        default:
-            return `**CLOTHING**: The clothing MUST be identical to the clothing in the FIRST source image.`;
+const dataUrlToGenerativePart = async (dataUrl: string): Promise<Part> => {
+    const [header, base64Data] = dataUrl.split(',');
+    if (!header || !base64Data) {
+        throw new Error('Invalid data URL format');
     }
+    const mimeMatch = header.match(/:(.*?);/);
+    if (!mimeMatch || !mimeMatch[1]) {
+        throw new Error('Could not extract MIME type from data URL');
+    }
+    const mimeType = mimeMatch[1];
+    return {
+        inlineData: {
+            mimeType: mimeType,
+            data: base64Data,
+        },
+    };
 };
 
-const getPhotoStyleInstruction = (style: string): string => {
-    switch (style) {
-        case '35mm analog':
-            return 'a 35mm analog film photo, complete with faded colors, subtle film grain, and minor scratches or light leaks for an authentic vintage feel.';
-        case 'polaroid':
-            return 'a vintage Polaroid photograph, with its characteristic soft focus, desaturated colors, and the iconic white border frame.';
-        case 'candid':
-            return 'a candid, in-the-moment snapshot. It should feel unposed and natural, as if captured spontaneously.';
-        case 'smartphone':
-            return 'a modern high-end smartphone photo. The image should be sharp and clear, with vibrant colors, but may have slight lens distortion or digital processing artifacts typical of mobile photography.';
-        case 'professional photoshoot':
-        default:
-            return 'a professional studio or on-location photoshoot. The lighting should be deliberate, the composition well-thought-out, and the overall quality should be high-end and polished.';
+export const enhanceImageResolution = async (base64ImageData: string): Promise<string> => {
+    const imagePart = await dataUrlToGenerativePart(base64ImageData);
+    
+    // The model for image editing.
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview', 
+        contents: {
+            parts: [
+                imagePart,
+                { text: 'Upscale this image to a higher resolution, enhance its quality, sharpen details, and make it look photorealistic without altering the subject or style.' },
+            ],
+        },
+        config: {
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
+        },
+    });
+
+    for (const part of result.candidates[0].content.parts) {
+        if (part.inlineData) {
+            const base64ImageBytes: string = part.inlineData.data;
+            return `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
+        }
     }
+    
+    const textResponse = result.text.trim();
+    if (textResponse) {
+        throw new Error(`AI returned text instead of an image: ${textResponse}`);
+    }
+
+    throw new Error('Image enhancement failed. No image was returned from the API.');
 };
+
 
 export const generatePortraitSeries = async (
-  _f: File,
-  _cf: File | null,
-  _bf: File | null,
-  _o: GenerationOptions,
-  _p: (message: string, progress: number) => void
+  sourceImage: File,
+  clothingImage: File | null,
+  backgroundImage: File | null,
+  options: GenerationOptions,
+  onProgress: (message: string, progress: number) => void
 ): Promise<string[]> => {
-  const _r: string[] = [];
-  const { numImages: _n, background: _b, aspectRatio: _ar, customBackground: _cb, consistentBackground: _cbg, clothing, poseMode, poseSelection, photoStyle } = _o;
-  
-  _p("Cropping image to target ratio...", 0);
-  const croppedSourceFile = await cropImageToAspectRatio(_f, _ar);
-  
-  _p("Preparing source image...", 0);
-  const sourcePart = await fileToGenerativePart(croppedSourceFile);
 
-  let clothingPart: Part | null = null;
-  if (clothing === 'image' && _cf) {
-    _p("Preparing clothing image...", 0);
-    clothingPart = await fileToGenerativePart(_cf);
+  onProgress("Preparing images...", 0.05);
+  const croppedSourceImage = await cropImageToAspectRatio(sourceImage, options.aspectRatio);
+  const sourceImagePart = await fileToGenerativePart(croppedSourceImage);
+  
+  const clothingImagePart = clothingImage ? await fileToGenerativePart(clothingImage) : null;
+  const backgroundImagePart = backgroundImage ? await fileToGenerativePart(backgroundImage) : null;
+
+  let selectedPoses: string[];
+  if (options.poseMode === 'select' && options.poseSelection.length > 0) {
+    selectedPoses = options.poseSelection;
+  } else {
+    // Randomly select `numImages` poses from the full list
+    selectedPoses = [...POSES].sort(() => 0.5 - Math.random()).slice(0, options.numImages);
   }
   
-  let backgroundPart: Part | null = null;
-  if (_b === 'image' && _bf) {
-    _p("Preparing background image...", 0);
-    backgroundPart = await fileToGenerativePart(_bf);
-  }
-
-  const posesToUse = (poseMode === 'select' && poseSelection.length > 0)
-    ? poseSelection
-    : Array.from({ length: _n }, (_, i) => POSES[i % POSES.length]);
-
-  const totalImages = posesToUse.length;
+  const totalImages = Math.min(options.numImages, selectedPoses.length);
+  const generatedImages: string[] = [];
 
   for (let i = 0; i < totalImages; i++) {
     const progress = (i + 1) / totalImages;
-    _p(`Generating image ${i + 1} of ${totalImages}...`, progress);
+    onProgress(`Generating image ${i + 1} of ${totalImages}...`, progress);
 
-    const _z = atob(posesToUse[i]);
-    const _d: Part[] = [ sourcePart ];
-    const inputDescriptions: string[] = ['The FIRST image is the primary subject.'];
-
-    const clothingRule = getClothingRule(_o);
-    if (clothingPart) {
-        _d.push(clothingPart);
-        inputDescriptions.push('The SECOND image is the reference for the clothing.');
-    }
+    const pose = decodePose(selectedPoses[i]);
     
-    let backgroundRule: string;
-    if (backgroundPart) {
-      _d.push(backgroundPart);
-      const bgRef = clothingPart ? 'THIRD' : 'SECOND';
-      inputDescriptions.push(`The ${bgRef} image is the new background.`);
-      backgroundRule = `7.  **BACKGROUND**: You MUST place the subject into the background provided in the ${bgRef} image. The integration must be photorealistic. The subject's lighting, shadows, and color temperature must perfectly match the new background environment.`;
+    const parts: Part[] = [sourceImagePart];
+    const promptSegments: string[] = [`A person with the same face and features as in the reference image.`];
+    
+    promptSegments.push(`Pose: ${pose}`);
+
+    // Clothing
+    if (options.clothing === 'image' && clothingImagePart) {
+        parts.push(clothingImagePart);
+        promptSegments.push(`Clothing: The person should be wearing an outfit identical to the one in the provided clothing image.`);
+    } else if (options.clothing === 'prompt' && options.customClothingPrompt) {
+        promptSegments.push(`Clothing: ${options.customClothingPrompt}`);
+    } else { // 'original'
+        promptSegments.push('Clothing: The person should wear the same outfit as in the reference image.');
+    }
+
+    // Background
+    if (options.background === 'image' && backgroundImagePart) {
+        parts.push(backgroundImagePart);
+        promptSegments.push(`Background: Place the person in a setting identical to the provided background image.`);
+    } else if (options.background === 'prompt' && options.customBackground) {
+        promptSegments.push(`Background: ${options.customBackground}`);
+    } else if (options.background !== 'original') {
+        promptSegments.push(`Background: A solid ${options.background} studio background.`);
     } else {
-      const _backgroundInstruction = getBackgroundInstruction(_b, _cb);
-      if (_cbg && _b === 'prompt' && _cb?.trim()) {
-          backgroundRule = `
-7.  **BACKGROUND**: Place the subject in a scene described as: ${_backgroundInstruction}.
-8.  **SCENE DYNAMICS**: To make the photo series look more realistic and dynamic, you MUST render the background scene with subtle variations for each image. Introduce slight changes in camera angle, zoom, or depth of field (background blur). This will simulate a real photoshoot in a single, consistent location. Do not change the core elements of the background itself.`;
-      } else {
-          backgroundRule = `7.  **BACKGROUND**: Replace the background with: ${_backgroundInstruction}.`;
-      }
+        promptSegments.push('Background: Keep the original background from the reference image.');
     }
+
+    promptSegments.push(`Photo Style: ${options.photoStyle}.`);
+    promptSegments.push("Ensure the final image is a high-quality, realistic photograph.");
     
-    const photoStyleInstruction = getPhotoStyleInstruction(photoStyle);
-
-    const _t = `
-**TASK**: You are a master portrait photographer. Your task is to generate a new photorealistic portrait based on the provided image(s).
-
-**INPUT IMAGES OVERVIEW**:
-${inputDescriptions.join('\n')}
-
-**PRIMARY OBJECTIVE**: Create a new photo of the **exact same person** with a new pose, clothing, and background, following all rules with extreme precision.
-
-**RULES**:
-1.  **CRITICAL SUBJECT IDENTITY**: This is your highest priority. The person's face in the output image MUST be a perfect, identical match to the person in the FIRST source image.
-    - Pay meticulous, pixel-level attention to their unique facial structure, eye shape and color, nose, and mouth.
-    - The person in the output MUST be unmistakably the same individual, regardless of the new pose or distance from the camera.
-    - DO NOT alter their core facial features, age, or ethnicity.
-2.  ${clothingRule}
-3.  **POSE**: Change the subject's pose to: "${_z}".
-4.  **PHOTOGRAPHIC STYLE**: The overall aesthetic of the image MUST be that of ${photoStyleInstruction}.
-5.  **PHOTOREALISM & LIGHTING INTEGRATION**: This is critical for realism. The final image must look like it was taken with a single camera in a real location.
-    - **AVOID THE "PHOTOSHOPPED" LOOK**: The subject must not look cut and pasted onto the background. Their lighting and shadows must blend seamlessly.
-    - **MATCH LIGHTING PERFECTLY**: The lighting on the subject MUST be completely dictated by the new background environment. This includes:
-        - **Direction & Source**: Light on the subject must come from the logical direction of the light source in the background (e.g., the sun, a window, a studio lamp).
-        - **Color Temperature**: Match the warm (sunset) or cool (overcast day) tones of the ambient light.
-        - **Quality**: Match the hardness or softness of the light. A bright sun creates hard-edged shadows; a cloudy sky creates soft, diffused shadows.
-        - **Reflections**: The subject should pick up subtle bounce light and color reflections from their surroundings.
-6.  **ASPECT RATIO**: The output image MUST perfectly match the aspect ratio of the FIRST source image you'veve been given. Do not add letterboxing or change the framing.
-${backgroundRule}
-
-Generate the image now. Do not output text.
-`.trim();
-    
-    _d.push({ text: _t });
-    
-    try {
-      const _e = await _a.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
-        contents: { parts: _d },
-        config: { responseModalities: [Modality.IMAGE, Modality.TEXT] },
-      });
-
-      const _h = _e.candidates?.[0]?.content?.parts.find(_q => _q.inlineData);
-
-      if (_h?.inlineData) {
-        _r.push(`data:${_h.inlineData.mimeType};base64,${_h.inlineData.data}`);
-      } else {
-        console.warn(`No image part found in response for iteration ${i}.`, _e);
-        const textResponse = _e.candidates?.[0]?.content?.parts.find(_q => _q.text);
-        if (textResponse?.text) {
-             throw new Error(`AI returned text instead of an image: "${textResponse.text}"`);
-        }
-      }
-    } catch (error: any) {
-      console.error(`Error generating image ${i + 1}:`, error);
-      let _m = "An error occurred during generation.";
-      if (error.message) _m = error.message;
-      if (error.toString().includes("SAFETY")) {
-        _m = `Generation for pose "${_z}" was blocked due to safety settings. Please try a different source image or options.`;
-      }
-      throw new Error(_m);
-    }
-  }
-
-  return _r;
-};
-
-const dataUrlToGenerativePart = (imageDataUrl: string): Part => {
-  const [header, base64Data] = imageDataUrl.split(',');
-  if (!header || !base64Data) {
-    throw new Error('Invalid data URL format.');
-  }
-  const mimeTypeMatch = header.match(/data:(.*);base64/);
-  if (!mimeTypeMatch || !mimeTypeMatch[1]) {
-    throw new Error('Could not extract MIME type from data URL.');
-  }
-  const mimeType = mimeTypeMatch[1];
-  
-  return {
-    inlineData: {
-      mimeType,
-      data: base64Data,
-    }
-  };
-};
-
-export const enhanceImageResolution = async (
-  imageDataUrl: string
-): Promise<string> => {
-    const prompt = "You are an expert photo editor. Your task is to upscale and enhance the provided image. Increase its resolution, clarity, and sharpness. Bring out fine details in the subject's face, clothing, and any background elements. You must preserve the subject's identity, expression, and the overall composition perfectly. Do not add, remove, or change any elements. The output must be a photorealistic, high-definition version of the input image.";
-    
-    const imagePart = dataUrlToGenerativePart(imageDataUrl);
-    const textPart = { text: prompt };
-    const requestParts: Part[] = [ imagePart, textPart ];
+    parts.push({ text: promptSegments.join(' ') });
 
     try {
-        const result = await _a.models.generateContent({
+        const result = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
-            contents: { parts: requestParts },
-            config: { responseModalities: [Modality.IMAGE, Modality.TEXT] },
+            contents: { parts },
+            config: {
+                responseModalities: [Modality.IMAGE, Modality.TEXT],
+            },
         });
-
-        const imageResponsePart = result.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-
-        if (imageResponsePart?.inlineData) {
-            // Fix: Corrected typo from `imageResponse-part` to `imageResponsePart`.
-            return `data:${imageResponsePart.inlineData.mimeType};base64,${imageResponsePart.inlineData.data}`;
-        } else {
-            console.warn(`No image part found in enhancement response.`, result);
-            const textResponse = result.candidates?.[0]?.content?.parts.find(p => p.text);
-            if (textResponse?.text) {
-                throw new Error(`AI returned text instead of an enhanced image: "${textResponse.text}"`);
+        
+        let imageFound = false;
+        for (const part of result.candidates[0].content.parts) {
+            if (part.inlineData) {
+                const base64ImageBytes: string = part.inlineData.data;
+                generatedImages.push(`data:${part.inlineData.mimeType};base64,${base64ImageBytes}`);
+                imageFound = true;
+                break; 
             }
-            throw new Error('Failed to enhance image: AI did not return image data.');
         }
-    } catch (error: any) {
-        console.error('Error enhancing image:', error);
-        let message = "An error occurred during image enhancement.";
-        if (error.message) message = error.message;
-        if (error.toString().includes("SAFETY")) {
-          message = 'Image enhancement was blocked due to safety settings.';
+        
+        if (!imageFound) {
+             const textResponse = result.text.trim();
+             if (textResponse) {
+                throw new Error(`AI returned text instead of an image: ${textResponse}`);
+             }
+             throw new Error('Generation failed for one image: No image was returned from the API.');
         }
-        throw new Error(message);
+
+    } catch (error) {
+        console.error(`Error generating image ${i + 1}:`, error);
+        // Rethrow to be caught by the UI
+        throw error;
     }
+  }
+
+  return generatedImages;
 };
