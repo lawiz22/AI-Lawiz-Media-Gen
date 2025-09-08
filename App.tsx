@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import JSZip from 'jszip';
 import { Header } from './components/Header';
 import { OptionsPanel } from './components/OptionsPanel';
@@ -32,6 +32,14 @@ const App: React.FC = () => {
   const [enhancementProgress, setEnhancementProgress] = useState<number>(0);
   const [enhancementStatus, setEnhancementStatus] = useState<string>('');
   const [enhancementError, setEnhancementError] = useState<string | null>(null);
+
+  // Theme state
+  const [theme, setTheme] = useState(() => localStorage.getItem('app-theme') || 'cyberpunk');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('app-theme', theme);
+  }, [theme]);
 
 
   const [options, setOptions] = useState<GenerationOptions>({
@@ -242,13 +250,13 @@ const App: React.FC = () => {
   const allAreEnhanced = numEnhanced === generatedImages.length && generatedImages.length > 0;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 font-sans flex flex-col">
-      <Header />
+    <div className="min-h-screen bg-bg-primary text-text-primary font-sans flex flex-col">
+      <Header theme={theme} setTheme={setTheme} />
       <main className="container mx-auto p-4 md:p-8 flex-grow">
         <div className="flex flex-col lg:flex-row gap-8">
           <aside className="w-full lg:w-1/3 xl:w-1/4 flex flex-col gap-6">
-            <div className="bg-gray-800 p-6 rounded-2xl shadow-lg">
-                <h2 className="text-xl font-bold mb-4 text-cyan-400">1. Upload Image(s)</h2>
+            <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Image(s)</h2>
                 <div className="space-y-4">
                     <ImageUploader 
                         label="Source Image (Subject)"
@@ -283,17 +291,17 @@ const App: React.FC = () => {
             />
           </aside>
 
-          <section className="w-full lg:w-2/3 xl:w-3/4 bg-gray-800 p-6 rounded-2xl shadow-lg min-h-[60vh] flex flex-col">
+          <section className="w-full lg:w-2/3 xl:w-3/4 bg-bg-secondary p-6 rounded-2xl shadow-lg min-h-[60vh] flex flex-col">
             <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-              <h2 className="text-xl font-bold text-cyan-400">3. Generated Portraits</h2>
+              <h2 className="text-xl font-bold text-accent">3. Generated Portraits</h2>
               {generatedImages.length > 0 && !isLoading && (
                   <div className="flex items-center gap-2">
-                      <button onClick={handleDownloadAll} className="flex items-center gap-2 text-sm bg-gray-700 hover:bg-gray-600 text-cyan-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-200">
+                      <button onClick={handleDownloadAll} className="flex items-center gap-2 text-sm bg-bg-tertiary hover:bg-bg-tertiary-hover text-accent font-semibold py-2 px-4 rounded-lg transition-colors duration-200">
                           <DownloadIcon className="w-4 h-4" />
                           Download All as ZIP
                       </button>
                       {allAreEnhanced ? (
-                         <button onClick={handleDownloadEnhancedZip} className="flex items-center gap-2 text-sm bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200">
+                         <button onClick={handleDownloadEnhancedZip} className="flex items-center gap-2 text-sm bg-accent hover:bg-accent-hover text-accent-text font-semibold py-2 px-4 rounded-lg transition-colors duration-200">
                             <DownloadIcon className="w-4 h-4" />
                             Download Enhanced ZIP
                         </button>
@@ -312,19 +320,19 @@ const App: React.FC = () => {
               ) : isEnhancingAll ? (
                 <Loader message={enhancementStatus} progress={enhancementProgress} />
               ) : error ? (
-                <div className="text-center text-red-400 bg-red-900/20 p-6 rounded-lg">
+                <div className="text-center text-danger bg-danger-bg p-6 rounded-lg">
                   <h3 className="text-lg font-semibold mb-2">Generation Failed</h3>
                   <p>{error}</p>
                 </div>
               ) : enhancementError ? (
-                <div className="text-center text-red-400 bg-red-900/20 p-6 rounded-lg">
+                <div className="text-center text-danger bg-danger-bg p-6 rounded-lg">
                   <h3 className="text-lg font-semibold mb-2">Enhancement Failed</h3>
                   <p>{enhancementError}</p>
                 </div>
               ) : generatedImages.length > 0 ? (
                 <ImageGrid images={generatedImages} onZoom={handleZoom} />
               ) : (
-                <div className="text-center text-gray-400">
+                <div className="text-center text-text-secondary">
                   <p className="text-lg">Your generated images will appear here.</p>
                   <p className="text-sm">Upload an image and configure the options to get started.</p>
                 </div>
@@ -333,8 +341,8 @@ const App: React.FC = () => {
           </section>
         </div>
       </main>
-      <footer className="text-center p-4 text-gray-500 text-xs">
-        <p>Based off of Replicate's flux-kontext-apps/portrait-series. Thank you everyone that supports us on our group (<a href="https://www.facebook.com/groups/alrevolutionmidjourneydalle2stablediffusion" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">join here</a>).</p>
+      <footer className="text-center p-4 text-text-muted text-xs">
+        <p>Based off of Replicate's flux-kontext-apps/portrait-series. Thank you everyone that supports us on our group (<a href="https://www.facebook.com/groups/alrevolutionmidjourneydalle2stablediffusion" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">join here</a>).</p>
         <p>If you have any issues or want an app of your own make a request on our fb or our socials. We are ©zgenmedia everywhere and blkcosmo.com</p>
       </footer>
 
@@ -344,7 +352,7 @@ const App: React.FC = () => {
           onClick={closeZoom}
         >
           <div className="relative" onClick={e => e.stopPropagation()}>
-            <div className="relative bg-gray-900 rounded-lg shadow-2xl">
+            <div className="relative bg-bg-primary rounded-lg shadow-2xl">
               <img 
                 src={enhancedImage || zoomedImage} 
                 alt="Zoomed view" 
@@ -353,7 +361,7 @@ const App: React.FC = () => {
               
               {isEnhancing && (
                 <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center rounded-lg text-white">
-                  <SpinnerIcon className="w-12 h-12 text-cyan-400 animate-spin" />
+                  <SpinnerIcon className="w-12 h-12 text-accent animate-spin" />
                   <p className="mt-4 font-semibold">Enhancing resolution...</p>
                 </div>
               )}
@@ -368,7 +376,7 @@ const App: React.FC = () => {
             
             <button
               onClick={closeZoom}
-              className="absolute -top-2 -right-2 bg-gray-800 text-white rounded-full p-2 hover:bg-gray-700 transition-colors shadow-lg"
+              className="absolute -top-2 -right-2 bg-bg-secondary text-text-primary rounded-full p-2 hover:bg-bg-tertiary-hover transition-colors shadow-lg"
               aria-label="Close zoomed image"
             >
               <CloseIcon className="w-6 h-6" />
@@ -378,7 +386,7 @@ const App: React.FC = () => {
               <button
                   onClick={downloadZoomedImage}
                   disabled={isEnhancing || !zoomedImage}
-                  className="flex items-center gap-2 bg-cyan-600 text-white font-bold py-2 px-5 rounded-full hover:bg-cyan-700 transition-colors duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed shadow-lg"
+                  className="flex items-center gap-2 bg-accent text-accent-text font-bold py-2 px-5 rounded-full hover:bg-accent-hover transition-colors duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed shadow-lg"
               >
                   <DownloadIcon className="w-5 h-5"/>
                   Download {enhancedImage ? 'Enhanced' : 'Image'}

@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="cyberpunk">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lawiz's Portrait Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
   <script type="importmap">
 {
@@ -17,8 +20,87 @@
   }
 }
 </script>
+<style>
+  :root[data-theme="cyberpunk"] {
+    --color-bg-primary: #030712;
+    --color-bg-secondary: #111827;
+    --color-bg-tertiary: #1f2937;
+    --color-bg-tertiary-hover: #374151;
+    --color-border: #374151;
+    --color-text-primary: #f9fafb;
+    --color-text-secondary: #9ca3af;
+    --color-text-muted: #6b7280;
+    --color-accent: #06b6d4;
+    --color-accent-text: #ffffff;
+    --color-accent-hover: #0891b2;
+    --color-danger: #f87171;
+    --color-danger-bg: rgba(127, 29, 29, 0.2);
+    --color-banner-fill: #e0f2fe;
+    --color-banner-glow-1: #0ea5e9;
+    --color-banner-glow-2: #0284c7;
+  }
+  :root[data-theme="synthwave"] {
+    --color-bg-primary: #1a103c;
+    --color-bg-secondary: #2c1e5b;
+    --color-bg-tertiary: #452a8a;
+    --color-bg-tertiary-hover: #5935b5;
+    --color-border: #6d48c7;
+    --color-text-primary: #f3e8ff;
+    --color-text-secondary: #d8b4fe;
+    --color-text-muted: #a78bfa;
+    --color-accent: #ec4899;
+    --color-accent-text: #ffffff;
+    --color-accent-hover: #db2777;
+    --color-danger: #fb923c;
+    --color-danger-bg: rgba(154, 52, 18, 0.2);
+    --color-banner-fill: #f5d0fe;
+    --color-banner-glow-1: #ec4899;
+    --color-banner-glow-2: #c026d3;
+  }
+  :root[data-theme="studio-light"] {
+    --color-bg-primary: #ffffff;
+    --color-bg-secondary: #f9fafb;
+    --color-bg-tertiary: #f3f4f6;
+    --color-bg-tertiary-hover: #e5e7eb;
+    --color-border: #d1d5db;
+    --color-text-primary: #111827;
+    --color-text-secondary: #4b5563;
+    --color-text-muted: #6b7280;
+    --color-accent: #2563eb;
+    --color-accent-text: #ffffff;
+    --color-accent-hover: #1d4ed8;
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.1);
+    --color-banner-fill: #1e3a8a;
+    --color-banner-glow-1: #2563eb;
+    --color-banner-glow-2: #1e40af;
+  }
+</style>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'bg-primary': 'var(--color-bg-primary)',
+            'bg-secondary': 'var(--color-bg-secondary)',
+            'bg-tertiary': 'var(--color-bg-tertiary)',
+            'bg-tertiary-hover': 'var(--color-bg-tertiary-hover)',
+            'text-primary': 'var(--color-text-primary)',
+            'text-secondary': 'var(--color-text-secondary)',
+            'text-muted': 'var(--color-text-muted)',
+            'accent': 'var(--color-accent)',
+            'accent-text': 'var(--color-accent-text)',
+            'accent-hover': 'var(--color-accent-hover)',
+            'border-primary': 'var(--color-border)',
+            'danger': 'var(--color-danger)',
+            'danger-bg': 'var(--color-danger-bg)',
+          },
+        },
+      },
+    };
+  </script>
 </head>
-  <body class="bg-gray-900 text-gray-100">
+  <body class="bg-bg-primary text-text-primary">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

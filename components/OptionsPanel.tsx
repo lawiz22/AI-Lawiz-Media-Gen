@@ -39,8 +39,8 @@ const PoseSelector: React.FC<{ selected: string[], onChange: (selected: string[]
                     onClick={() => togglePose(pose.value)}
                     className={`w-full text-left text-sm p-2 rounded-md transition-colors ${
                         selected.includes(pose.value)
-                            ? 'bg-cyan-600 text-white'
-                            : 'bg-gray-700 hover:bg-gray-600'
+                            ? 'bg-accent text-accent-text'
+                            : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'
                     }`}
                 >
                     {pose.label}
@@ -132,13 +132,13 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   }, [options.customBackground, options.aspectRatio, options.background, previewTrigger, setPreviewedBackgroundImage]);
 
   return (
-    <div className="bg-gray-800 p-6 rounded-2xl shadow-lg">
-      <h2 className="text-xl font-bold mb-4 text-cyan-400">2. Configure Options</h2>
+    <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+      <h2 className="text-xl font-bold mb-4 text-accent">2. Configure Options</h2>
       <div className="space-y-6">
         
         {/* Number of Images */}
         <div>
-            <label htmlFor="numImages" className="block text-sm font-medium text-gray-300">
+            <label htmlFor="numImages" className="block text-sm font-medium text-text-secondary">
                 Number of Images ({options.numImages})
             </label>
             <input
@@ -148,23 +148,24 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 max={MAX_IMAGES}
                 value={options.numImages}
                 onChange={(e) => handleOptionChange('numImages', parseInt(e.target.value, 10))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-thumb"
+                className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer range-thumb"
+                style={{'--thumb-color': 'var(--color-accent)'} as React.CSSProperties}
                 disabled={isDisabled || options.poseMode === 'select'}
             />
              {options.poseMode === 'select' && (
-                <p className="text-xs text-gray-400 mt-1">Number of images is determined by your pose selection.</p>
+                <p className="text-xs text-text-muted mt-1">Number of images is determined by your pose selection.</p>
             )}
         </div>
 
         {/* Aspect Ratio */}
         <div>
-            <label htmlFor="aspectRatio" className="block text-sm font-medium text-gray-300 mb-1">Aspect Ratio</label>
+            <label htmlFor="aspectRatio" className="block text-sm font-medium text-text-secondary mb-1">Aspect Ratio</label>
             <select
                 id="aspectRatio"
                 value={options.aspectRatio}
                 onChange={(e) => handleOptionChange('aspectRatio', e.target.value)}
                 disabled={isDisabled}
-                className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500"
+                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
             >
                 {ASPECT_RATIO_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
@@ -172,13 +173,13 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         {/* Background */}
         <div>
-            <label htmlFor="background" className="block text-sm font-medium text-gray-300 mb-1">Background</label>
+            <label htmlFor="background" className="block text-sm font-medium text-text-secondary mb-1">Background</label>
             <select
                 id="background"
                 value={options.background}
                 onChange={(e) => handleOptionChange('background', e.target.value)}
                 disabled={isDisabled}
-                className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500"
+                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
             >
                 {BACKGROUND_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
@@ -189,23 +190,23 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                       value={options.customBackground}
                       onChange={(e) => handleOptionChange('customBackground', e.target.value)}
                       disabled={isDisabled}
-                      className="mt-2 w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500 min-h-[60px]"
+                      className="mt-2 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[60px]"
                       rows={2}
                   />
-                  <div className="mt-2 p-2 bg-gray-900/50 rounded-lg min-h-[100px] flex flex-col items-center justify-center">
+                  <div className="mt-2 p-2 bg-bg-primary/50 rounded-lg min-h-[100px] flex flex-col items-center justify-center">
                     {isPreviewLoading && (
-                      <div className="text-center text-gray-400">
+                      <div className="text-center text-text-secondary">
                         <SpinnerIcon className="w-6 h-6 animate-spin mx-auto mb-2" />
                         <p className="text-xs">Generating preview...</p>
                       </div>
                     )}
                     {previewError && !isPreviewLoading && (
-                      <div className="text-center text-red-400 text-xs p-2">
+                      <div className="text-center text-danger text-xs p-2">
                         <p className="font-semibold">Preview Failed</p>
                         <p className="max-w-xs mx-auto">{previewError}</p>
                         <button
                           onClick={handleRandomizePreview}
-                          className="mt-2 flex items-center gap-1 mx-auto text-xs bg-gray-700 hover:bg-gray-600 text-cyan-300 font-semibold py-1 px-3 rounded-lg transition-colors duration-200"
+                          className="mt-2 flex items-center gap-1 mx-auto text-xs bg-bg-tertiary hover:bg-bg-tertiary-hover text-accent font-semibold py-1 px-3 rounded-lg transition-colors duration-200"
                           aria-label="Retry background preview generation"
                         >
                           <RefreshIcon className="w-4 h-4"/>
@@ -218,7 +219,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         <img src={previewImage} alt="Background preview" className="rounded-md object-contain max-h-48 w-full" />
                         <button
                             onClick={handleRandomizePreview}
-                            className="absolute top-2 right-2 flex items-center gap-1 bg-gray-800/80 backdrop-blur-sm text-white text-xs font-bold py-1 px-2 rounded-full hover:bg-cyan-600 transition-colors duration-200 shadow-lg"
+                            className="absolute top-2 right-2 flex items-center gap-1 bg-bg-secondary/80 backdrop-blur-sm text-text-primary text-xs font-bold py-1 px-2 rounded-full hover:bg-accent hover:text-accent-text transition-colors duration-200 shadow-lg"
                             aria-label="Generate new background preview"
                         >
                             <RefreshIcon className="w-4 h-4"/>
@@ -227,7 +228,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                       </div>
                     )}
                     {!isPreviewLoading && !previewError && !previewImage && (
-                       <p className="text-xs text-gray-500 text-center">A preview of your background will appear here after you stop typing.</p>
+                       <p className="text-xs text-text-muted text-center">A preview of your background will appear here after you stop typing.</p>
                     )}
                   </div>
                    {previewImage && !isPreviewLoading && !previewError && (
@@ -238,9 +239,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             checked={!!options.consistentBackground}
                             onChange={(e) => handleOptionChange('consistentBackground', e.target.checked)}
                             disabled={isDisabled}
-                            className="h-4 w-4 rounded border-gray-500 bg-gray-700 text-cyan-600 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+                            className="h-4 w-4 rounded border-border-primary bg-bg-tertiary text-accent focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-secondary"
                           />
-                          <span className="text-sm text-gray-300">Use this background for all images</span>
+                          <span className="text-sm text-text-secondary">Use this background for all images</span>
                         </label>
                       </div>
                     )}
@@ -250,13 +251,13 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         {/* Clothing */}
         <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Clothing Style</label>
+            <label className="block text-sm font-medium text-text-secondary mb-1">Clothing Style</label>
              <select
                 id="clothing"
                 value={options.clothing}
                 onChange={(e) => handleOptionChange('clothing', e.target.value as GenerationOptions['clothing'])}
                 disabled={isDisabled}
-                className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500"
+                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
             >
                 <option value="original">Original from Image</option>
                 <option value="image">From Uploaded Image</option>
@@ -269,21 +270,21 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     value={options.customClothingPrompt}
                     onChange={(e) => handleOptionChange('customClothingPrompt', e.target.value)}
                     disabled={isDisabled}
-                    className="mt-2 w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500"
+                    className="mt-2 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
                 />
             )}
         </div>
         
         {/* Poses */}
         <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Poses</label>
+            <label className="block text-sm font-medium text-text-secondary mb-2">Poses</label>
             <div className="flex items-center gap-4">
-                <button onClick={() => handleOptionChange('poseMode', 'random')} className={`px-4 py-2 text-sm rounded-md transition-colors w-1/2 ${options.poseMode === 'random' ? 'bg-cyan-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`} disabled={isDisabled}>Random Poses</button>
-                <button onClick={() => handleOptionChange('poseMode', 'select')} className={`px-4 py-2 text-sm rounded-md transition-colors w-1/2 ${options.poseMode === 'select' ? 'bg-cyan-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`} disabled={isDisabled}>Select Poses</button>
+                <button onClick={() => handleOptionChange('poseMode', 'random')} className={`px-4 py-2 text-sm rounded-md transition-colors w-1/2 ${options.poseMode === 'random' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`} disabled={isDisabled}>Random Poses</button>
+                <button onClick={() => handleOptionChange('poseMode', 'select')} className={`px-4 py-2 text-sm rounded-md transition-colors w-1/2 ${options.poseMode === 'select' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`} disabled={isDisabled}>Select Poses</button>
             </div>
             {options.poseMode === 'select' && (
                 <div className="mt-4">
-                    <p className="text-xs text-gray-400 mb-2">Select one or more poses. The number of images will match your selection.</p>
+                    <p className="text-xs text-text-muted mb-2">Select one or more poses. The number of images will match your selection.</p>
                     <PoseSelector selected={options.poseSelection} onChange={handlePoseSelectionChange} />
                 </div>
             )}
@@ -291,24 +292,24 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         
         {/* Photo Style */}
         <div>
-            <label htmlFor="photoStyle" className="block text-sm font-medium text-gray-300 mb-1">Photo Style</label>
+            <label htmlFor="photoStyle" className="block text-sm font-medium text-text-secondary mb-1">Photo Style</label>
             <select
                 id="photoStyle"
                 value={options.photoStyle}
                 onChange={(e) => handleOptionChange('photoStyle', e.target.value)}
                 disabled={isDisabled}
-                className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500"
+                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
             >
                 {PHOTO_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
         </div>
 
         {/* Action Buttons */}
-        <div className="border-t border-gray-700 pt-6 flex flex-col gap-3">
+        <div className="border-t border-border-primary pt-6 flex flex-col gap-3">
             <button
               onClick={onGenerate}
               disabled={isDisabled || !isReady}
-              className="w-full flex items-center justify-center gap-2 bg-cyan-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-cyan-700 transition-colors duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed"
             >
                 <GenerateIcon className="w-5 h-5" />
                 Generate Portraits
@@ -316,7 +317,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             <button
                 onClick={onReset}
                 disabled={isDisabled}
-                className="w-full flex items-center justify-center gap-2 bg-gray-700 text-gray-300 font-semibold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors duration-200 disabled:bg-gray-500"
+                className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:bg-gray-500"
             >
                 <ResetIcon className="w-5 h-5" />
                 Reset All Options

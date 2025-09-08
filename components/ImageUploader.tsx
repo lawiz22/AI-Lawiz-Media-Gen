@@ -51,11 +51,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
 
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-300 mb-2">{label}</label>
+      <label htmlFor={id} className="block text-sm font-medium text-text-secondary mb-2">{label}</label>
       <label
         htmlFor={id}
         className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer transition-colors duration-200
-        ${isDragging ? 'border-cyan-400 bg-gray-700' : 'border-gray-600 bg-gray-700/50 hover:bg-gray-700'}`}
+        ${isDragging ? 'border-accent bg-bg-tertiary' : 'border-border-primary bg-bg-tertiary/50 hover:bg-bg-tertiary'}`}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
@@ -63,15 +63,15 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
         {preview ? (
           <img src={preview} alt="Preview" className="object-contain w-full h-full rounded-lg p-1" />
         ) : (
-          <div className="flex flex-col items-center justify-center pt-5 pb-6 text-gray-400">
+          <div className="flex flex-col items-center justify-center pt-5 pb-6 text-text-secondary">
             <UploadIcon className="w-8 h-8 mb-3" />
-            <p className="mb-2 text-sm"><span className="font-semibold text-cyan-400">Click to upload</span> or drag and drop</p>
+            <p className="mb-2 text-sm"><span className="font-semibold text-accent">Click to upload</span> or drag and drop</p>
             <p className="text-xs">PNG, JPG, WEBP</p>
           </div>
         )}
         <input id={id} type="file" className="hidden" accept="image/*" onChange={onFileChange} />
       </label>
-      {fileName && <p className="text-xs text-gray-500 mt-1 truncate">File: {fileName}</p>}
+      {fileName && <p className="text-xs text-text-muted mt-1 truncate">File: {fileName}</p>}
     </div>
   );
 };
