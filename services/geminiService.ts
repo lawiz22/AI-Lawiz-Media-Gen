@@ -40,38 +40,8 @@ export const generatePortraitSeries = async (
   
   _p("Preparing source image...", 0);
   const sourcePart = await fileToGenerativePart(croppedSourceFile);
-  
-  let backgroundPart: Part | null = null;
 
-  if (_b === 'prompt' && _cbg && _cb?.trim()) {
-      _p("Generating consistent background...", 0.05);
-      try {
-          const response = await _a.models.generateImages({
-              model: 'imagen-4.0-generate-001',
-              prompt: `A high-quality, photorealistic background image described as: "${_cb.trim()}"`,
-              config: {
-                  numberOfImages: 1,
-                  outputMimeType: 'image/jpeg',
-                  aspectRatio: _ar as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
-              },
-          });
-
-          const generatedImage = response.generatedImages?.[0];
-          if (generatedImage?.image?.imageBytes) {
-              backgroundPart = {
-                  inlineData: {
-                      mimeType: 'image/jpeg',
-                      data: generatedImage.image.imageBytes,
-                  },
-              };
-          } else {
-              throw new Error("Failed to generate the background image from the prompt.");
-          }
-      } catch (error: any) {
-          console.error("Error generating consistent background:", error);
-          throw new Error("Could not generate the consistent background. Please try a different prompt or disable the feature.");
-      }
-  }
+  // Removed the pre-generation of a static background image to allow for dynamic variations.
 
   for (let i = 0; i < _n; i++) {
     const progress = (i + 1) / _n;
@@ -79,41 +49,34 @@ export const generatePortraitSeries = async (
 
     const _z = atob(POSES[i % POSES.length]);
     const _d: Part[] = [ sourcePart ];
-    let _t: string;
+    
+    const _backgroundInstruction = getBackgroundInstruction(_b, _cb);
+    let backgroundRule: string;
 
-    if (backgroundPart) {
-        _d.push(backgroundPart);
-        _t = `
-**TASK**: Generate a new photorealistic portrait by placing the person from the first image into the second image (the background).
-
-**PRIMARY OBJECTIVE**: Create a new photo of the **exact same person** from the first image, but with a new pose, and seamlessly integrated into the background provided in the second image.
-
-**RULES**:
-1.  **SUBJECT IDENTITY**: The person in the output image (face, hair, clothing) MUST be identical to the person in the first source image. This is the most important rule.
-2.  **PHOTOREALISM**: The final image must be a high-quality, realistic photograph. The lighting on the subject must match the lighting of the background image.
-3.  **ASPECT RATIO**: The output image MUST perfectly match the aspect ratio of the source images.
-4.  **POSE**: Change the subject's pose to: "${_z}".
-5.  **BACKGROUND**: Use the second image provided as the new background. Do not alter the background.
-
-Generate the image now. Do not output text.
-`.trim();
+    // When "Consistent Background" is checked for a custom prompt, we now instruct the AI
+    // to render the same SCENE with variations, rather than using one static image.
+    if (_cbg && _b === 'prompt' && _cb?.trim()) {
+        backgroundRule = `
+5.  **BACKGROUND**: Place the subject in a scene described as: ${_backgroundInstruction}.
+6.  **SCENE DYNAMICS**: To make the photo series look more realistic and dynamic, you MUST render the background scene with subtle variations for each image. Introduce slight changes in camera angle, zoom, or depth of field (background blur). This will simulate a real photoshoot in a single, consistent location. Do not change the core elements of the background itself.`;
     } else {
-        const _backgroundInstruction = getBackgroundInstruction(_b, _cb);
-        _t = `
+        backgroundRule = `5.  **BACKGROUND**: Replace the background with: ${_backgroundInstruction}.`;
+    }
+
+    const _t = `
 **TASK**: Generate a new photorealistic portrait based on the provided image.
 
 **PRIMARY OBJECTIVE**: Create a new photo of the **exact same person** with a new pose and background.
 
 **RULES**:
 1.  **SUBJECT IDENTITY**: The person in the output image (face, hair, clothing) MUST be identical to the person in the source image. This is the most important rule.
-2.  **PHOTOREALISM**: The final image must be a high-quality, realistic photograph.
+2.  **PHOTOREALISM**: The final image must be a high-quality, realistic photograph. The lighting on the subject must match the lighting of the background.
 3.  **ASPECT RATIO**: The output image MUST perfectly match the aspect ratio of the source image you've been given. Do not add letterboxing or change the framing.
 4.  **POSE**: Change the subject's pose to: "${_z}".
-5.  **BACKGROUND**: Replace the background with: "${_backgroundInstruction}".
+${backgroundRule}
 
 Generate the image now. Do not output text.
 `.trim();
-    }
     
     _d.push({ text: _t });
     
