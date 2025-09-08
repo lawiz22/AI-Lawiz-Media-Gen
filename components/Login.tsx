@@ -1,21 +1,30 @@
 import React, { useState } from 'react';
 import { Banner } from './Banner';
+import { SpinnerIcon } from './icons';
 
 interface LoginProps {
-  onLogin: (username: string, password: string) => string | true;
+  onLogin: (username: string, password: string) => Promise<string | true>;
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const result = onLogin(username, password);
-    if (typeof result === 'string') {
-      setError(result);
+    setIsLoading(true);
+    try {
+      const result = await onLogin(username, password);
+      if (typeof result === 'string') {
+        setError(result);
+      }
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -51,7 +60,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent shadow-sm"
+                disabled={isLoading}
+                className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent shadow-sm disabled:opacity-50"
                 placeholder="e.g., admin"
               />
             </div>
@@ -69,7 +79,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent shadow-sm"
+                disabled={isLoading}
+                className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent shadow-sm disabled:opacity-50"
                 placeholder="••••••••"
               />
             </div>
@@ -82,9 +93,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
             <button
               type="submit"
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-accent-text bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent-hover transition-colors"
+              disabled={isLoading}
+              className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-accent-text bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent-hover transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
             >
-              Enter Application
+              {isLoading && <SpinnerIcon className="w-5 h-5 animate-spin" />}
+              {isLoading ? 'Authenticating...' : 'Enter Application'}
             </button>
           </form>
         </div>

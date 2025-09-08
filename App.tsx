@@ -8,7 +8,7 @@ import { ImageUploader } from './components/ImageUploader';
 import { Login } from './components/Login';
 import { AdminPanel } from './components/AdminPanel';
 import { generatePortraitSeries, enhanceImageResolution } from './services/geminiService';
-import { authenticateUser } from './services/userService';
+import { authenticateUser } from './services/cloudUserService';
 import type { GenerationOptions, User } from './types';
 import { CloseIcon, DownloadIcon, SpinnerIcon, GenerateIcon, UserGroupIcon, PhotoIcon } from './components/icons';
 
@@ -56,8 +56,8 @@ const App: React.FC = () => {
     localStorage.setItem('app-theme', theme);
   }, [theme]);
   
-  const handleLogin = (username: string, password: string): string | true => {
-    const user = authenticateUser(username, password);
+  const handleLogin = async (username: string, password: string): Promise<string | true> => {
+    const user = await authenticateUser(username, password);
     if (user) {
       sessionStorage.setItem('currentUser', JSON.stringify(user));
       setCurrentUser(user);
