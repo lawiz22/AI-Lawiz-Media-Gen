@@ -21,7 +21,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onZoom }) => {
     <div className="w-full h-full overflow-y-auto">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4 p-1">
         {images.map((imgSrc, index) => (
-            <div key={index} className="aspect-w-1 aspect-h-1 bg-gray-900 rounded-lg overflow-hidden shadow-md group relative">
+            <div key={index} className="bg-gray-900 rounded-lg overflow-hidden shadow-md group relative">
               <img 
                   src={imgSrc} 
                   alt={`Generated portrait ${index + 1}`} 

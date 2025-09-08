@@ -25,3 +25,11 @@ export const BACKGROUND_OPTIONS = [
     { value: 'natural studio', label: 'Natural Studio' },
     { value: 'gray', label: 'Gray' },
 ];
+
+export const ASPECT_RATIO_OPTIONS = [
+    { value: '1:1', label: '1:1 (Square)' },
+    { value: '3:4', label: '3:4 (Portrait)' },
+    { value: '4:3', label: '4:3 (Landscape)' },
+    { value: '9:16', label: '9:16 (Tall)' },
+    { value: '16:9', label: '16:9 (Widescreen)' },
+];

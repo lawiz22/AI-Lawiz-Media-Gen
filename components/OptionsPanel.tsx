@@ -1,6 +1,6 @@
 import React from 'react';
 import type { GenerationOptions } from '../types';
-import { MAX_IMAGES, BACKGROUND_OPTIONS } from '../constants';
+import { MAX_IMAGES, BACKGROUND_OPTIONS, ASPECT_RATIO_OPTIONS } from '../constants';
 import { GenerateIcon, ResetIcon } from './icons';
 
 interface OptionsPanelProps {
@@ -35,6 +35,21 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({ options, setOptions,
           disabled={isDisabled}
           className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-cyan-500 disabled:opacity-50"
         />
+      </div>
+
+      <div>
+        <label htmlFor="aspectRatio" className="block text-sm font-medium text-gray-300 mb-1">Aspect Ratio</label>
+        <select
+          id="aspectRatio"
+          value={options.aspectRatio}
+          onChange={(e) => handleOptionChange('aspectRatio', e.target.value)}
+          disabled={isDisabled}
+          className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 disabled:opacity-50"
+        >
+          {ASPECT_RATIO_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
       </div>
 
       <div>

@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [options, setOptions] = useState<GenerationOptions>({
     numImages: 12,
     background: 'black',
+    aspectRatio: '1:1',
   });
 
   const handleGenerate = useCallback(async () => {
@@ -63,6 +64,7 @@ const App: React.FC = () => {
     setOptions({
         numImages: 12,
         background: 'black',
+        aspectRatio: '1:1',
     });
   }
 

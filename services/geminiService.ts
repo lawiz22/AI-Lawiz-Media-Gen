@@ -25,7 +25,7 @@ export const generatePortraitSeries = async (
   _p: (progress: number) => void
 ): Promise<string[]> => {
   const _r: string[] = [];
-  const { numImages: _n, background: _b } = _o;
+  const { numImages: _n, background: _b, aspectRatio: _ar } = _o;
   const _s = await fileToGenerativePart(_f);
 
   for (let i = 0; i < _n; i++) {
@@ -38,6 +38,7 @@ export const generatePortraitSeries = async (
         "Generate a new photorealistic portrait of the same person from the provided source image.",
         `**New Pose and Composition:** The person must be in the following pose: "${_z}".`,
         "**Maintain Identity:** It is absolutely crucial to maintain the person's exact identity, facial features, ethnicity, hairstyle, and clothing from the source image. Do not change the person.",
+        `**Aspect Ratio:** The final image must have an aspect ratio of ${_ar}.`,
         `**Final Image Style:** ${_c}`
     ].join('\n');
     
