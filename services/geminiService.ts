@@ -142,3 +142,61 @@ Generate the image now. Do not output text.
 
   return _r;
 };
+
+const dataUrlToGenerativePart = (imageDataUrl: string): Part => {
+  const [header, base64Data] = imageDataUrl.split(',');
+  if (!header || !base64Data) {
+    throw new Error('Invalid data URL format.');
+  }
+  const mimeTypeMatch = header.match(/data:(.*);base64/);
+  if (!mimeTypeMatch || !mimeTypeMatch[1]) {
+    throw new Error('Could not extract MIME type from data URL.');
+  }
+  const mimeType = mimeTypeMatch[1];
+  
+  return {
+    inlineData: {
+      mimeType,
+      data: base64Data,
+    }
+  };
+};
+
+export const enhanceImageResolution = async (
+  imageDataUrl: string
+): Promise<string> => {
+    const prompt = "You are an expert photo editor. Your task is to upscale and enhance the provided image. Increase its resolution, clarity, and sharpness. Bring out fine details in the subject's face, clothing, and any background elements. You must preserve the subject's identity, expression, and the overall composition perfectly. Do not add, remove, or change any elements. The output must be a photorealistic, high-definition version of the input image.";
+    
+    const imagePart = dataUrlToGenerativePart(imageDataUrl);
+    const textPart = { text: prompt };
+    const requestParts: Part[] = [ imagePart, textPart ];
+
+    try {
+        const result = await _a.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents: { parts: requestParts },
+            config: { responseModalities: [Modality.IMAGE, Modality.TEXT] },
+        });
+
+        const imageResponsePart = result.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+
+        if (imageResponsePart?.inlineData) {
+            return `data:${imageResponsePart.inlineData.mimeType};base64,${imageResponsePart.inlineData.data}`;
+        } else {
+            console.warn(`No image part found in enhancement response.`, result);
+            const textResponse = result.candidates?.[0]?.content?.parts.find(p => p.text);
+            if (textResponse?.text) {
+                throw new Error(`AI returned text instead of an enhanced image: "${textResponse.text}"`);
+            }
+            throw new Error('Failed to enhance image: AI did not return image data.');
+        }
+    } catch (error: any) {
+        console.error('Error enhancing image:', error);
+        let message = "An error occurred during image enhancement.";
+        if (error.message) message = error.message;
+        if (error.toString().includes("SAFETY")) {
+          message = 'Image enhancement was blocked due to safety settings.';
+        }
+        throw new Error(message);
+    }
+};

@@ -5,9 +5,9 @@ import { OptionsPanel } from './components/OptionsPanel';
 import { ImageGrid } from './components/ImageGrid';
 import { Loader } from './components/Loader';
 import { ImageUploader } from './components/ImageUploader';
-import { generatePortraitSeries } from './services/geminiService';
+import { generatePortraitSeries, enhanceImageResolution } from './services/geminiService';
 import type { GenerationOptions } from './types';
-import { CloseIcon, DownloadIcon } from './components/icons';
+import { CloseIcon, DownloadIcon, SpinnerIcon } from './components/icons';
 
 const App: React.FC = () => {
   const [sourceImage, setSourceImage] = useState<File | null>(null);
@@ -18,6 +18,9 @@ const App: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [isEnhancing, setIsEnhancing] = useState<boolean>(false);
+  const [enhancedImage, setEnhancedImage] = useState<string | null>(null);
+  const [enhanceError, setEnhanceError] = useState<string | null>(null);
 
   const [options, setOptions] = useState<GenerationOptions>({
     numImages: 12,
@@ -118,6 +121,41 @@ const App: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const handleZoom = useCallback(async (imageSrc: string) => {
+    setZoomedImage(imageSrc);
+    setEnhancedImage(null);
+    setEnhanceError(null);
+    setIsEnhancing(true);
+
+    try {
+      const highResImage = await enhanceImageResolution(imageSrc);
+      setEnhancedImage(highResImage);
+    } catch (err: any) {
+      setEnhanceError(err.message || 'An unknown error occurred while enhancing the image.');
+      console.error(err);
+    } finally {
+      setIsEnhancing(false);
+    }
+  }, []);
+
+  const closeZoom = useCallback(() => {
+    setZoomedImage(null);
+    setEnhancedImage(null);
+    setEnhanceError(null);
+  }, []);
+
+  const downloadZoomedImage = useCallback(() => {
+    const imageToDownload = enhancedImage || zoomedImage;
+    if (imageToDownload) {
+      const link = document.createElement('a');
+      link.href = imageToDownload;
+      link.download = enhancedImage ? 'enhanced_portrait.png' : 'portrait.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  }, [zoomedImage, enhancedImage]);
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-sans flex flex-col">
       <Header />
@@ -171,7 +209,7 @@ const App: React.FC = () => {
                   <p>{error}</p>
                 </div>
               ) : generatedImages.length > 0 ? (
-                <ImageGrid images={generatedImages} onZoom={setZoomedImage} />
+                <ImageGrid images={generatedImages} onZoom={handleZoom} />
               ) : (
                 <div className="text-center text-gray-400">
                   <p className="text-lg">Your generated images will appear here.</p>
@@ -190,17 +228,49 @@ const App: React.FC = () => {
       {zoomedImage && (
         <div 
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" 
-          onClick={() => setZoomedImage(null)}
+          onClick={closeZoom}
         >
-          <div className="relative max-w-4xl max-h-[90vh]" onClick={e => e.stopPropagation()}>
-            <img src={zoomedImage} alt="Zoomed view" className="object-contain w-full h-full rounded-lg shadow-2xl" />
+          <div className="relative" onClick={e => e.stopPropagation()}>
+            <div className="relative bg-gray-900 rounded-lg shadow-2xl">
+              <img 
+                src={enhancedImage || zoomedImage} 
+                alt="Zoomed view" 
+                className="object-contain max-w-[90vw] max-h-[85vh] rounded-lg" 
+              />
+              
+              {isEnhancing && (
+                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center rounded-lg text-white">
+                  <SpinnerIcon className="w-12 h-12 text-cyan-400 animate-spin" />
+                  <p className="mt-4 font-semibold">Enhancing resolution...</p>
+                </div>
+              )}
+
+              {enhanceError && !isEnhancing && (
+                  <div className="absolute inset-0 bg-red-900/50 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg p-4 text-center">
+                      <p className="text-lg font-semibold text-red-300">Enhancement Failed</p>
+                      <p className="text-red-400 text-sm mt-2 max-w-md">{enhanceError}</p>
+                  </div>
+              )}
+            </div>
+            
             <button
-              onClick={() => setZoomedImage(null)}
-              className="absolute -top-2 -right-2 bg-gray-800 text-white rounded-full p-2 hover:bg-gray-700 transition-colors"
+              onClick={closeZoom}
+              className="absolute -top-2 -right-2 bg-gray-800 text-white rounded-full p-2 hover:bg-gray-700 transition-colors shadow-lg"
               aria-label="Close zoomed image"
             >
               <CloseIcon className="w-6 h-6" />
             </button>
+
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+              <button
+                  onClick={downloadZoomedImage}
+                  disabled={isEnhancing || !zoomedImage}
+                  className="flex items-center gap-2 bg-cyan-600 text-white font-bold py-2 px-5 rounded-full hover:bg-cyan-700 transition-colors duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed shadow-lg"
+              >
+                  <DownloadIcon className="w-5 h-5"/>
+                  Download {enhancedImage ? 'Enhanced' : 'Image'}
+              </button>
+            </div>
           </div>
         </div>
       )}
