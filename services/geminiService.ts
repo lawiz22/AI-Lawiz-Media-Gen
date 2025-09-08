@@ -49,6 +49,7 @@ const getClothingRule = (options: GenerationOptions): string => {
 export const generatePortraitSeries = async (
   _f: File,
   _cf: File | null,
+  _bf: File | null,
   _o: GenerationOptions,
   _p: (message: string, progress: number) => void
 ): Promise<string[]> => {
@@ -66,6 +67,12 @@ export const generatePortraitSeries = async (
     _p("Preparing clothing image...", 0);
     clothingPart = await fileToGenerativePart(_cf);
   }
+  
+  let backgroundPart: Part | null = null;
+  if (_b === 'image' && _bf) {
+    _p("Preparing background image...", 0);
+    backgroundPart = await fileToGenerativePart(_bf);
+  }
 
   const posesToUse = (poseMode === 'select' && poseSelection.length > 0)
     ? poseSelection
@@ -79,25 +86,36 @@ export const generatePortraitSeries = async (
 
     const _z = atob(posesToUse[i]);
     const _d: Part[] = [ sourcePart ];
-    if (clothingPart) {
-        _d.push(clothingPart);
-    }
-    
-    const _backgroundInstruction = getBackgroundInstruction(_b, _cb);
-    let backgroundRule: string;
-
-    if (_cbg && _b === 'prompt' && _cb?.trim()) {
-        backgroundRule = `
-6.  **BACKGROUND**: Place the subject in a scene described as: ${_backgroundInstruction}.
-7.  **SCENE DYNAMICS**: To make the photo series look more realistic and dynamic, you MUST render the background scene with subtle variations for each image. Introduce slight changes in camera angle, zoom, or depth of field (background blur). This will simulate a real photoshoot in a single, consistent location. Do not change the core elements of the background itself.`;
-    } else {
-        backgroundRule = `6.  **BACKGROUND**: Replace the background with: ${_backgroundInstruction}.`;
-    }
+    const inputDescriptions: string[] = ['The FIRST image is the primary subject.'];
 
     const clothingRule = getClothingRule(_o);
+    if (clothingPart) {
+        _d.push(clothingPart);
+        inputDescriptions.push('The SECOND image is the reference for the clothing.');
+    }
+    
+    let backgroundRule: string;
+    if (backgroundPart) {
+      _d.push(backgroundPart);
+      const bgRef = clothingPart ? 'THIRD' : 'SECOND';
+      inputDescriptions.push(`The ${bgRef} image is the new background.`);
+      backgroundRule = `6.  **BACKGROUND**: You MUST place the subject into the background provided in the ${bgRef} image. The integration must be photorealistic. The subject's lighting, shadows, and color temperature must perfectly match the new background environment.`;
+    } else {
+      const _backgroundInstruction = getBackgroundInstruction(_b, _cb);
+      if (_cbg && _b === 'prompt' && _cb?.trim()) {
+          backgroundRule = `
+6.  **BACKGROUND**: Place the subject in a scene described as: ${_backgroundInstruction}.
+7.  **SCENE DYNAMICS**: To make the photo series look more realistic and dynamic, you MUST render the background scene with subtle variations for each image. Introduce slight changes in camera angle, zoom, or depth of field (background blur). This will simulate a real photoshoot in a single, consistent location. Do not change the core elements of the background itself.`;
+      } else {
+          backgroundRule = `6.  **BACKGROUND**: Replace the background with: ${_backgroundInstruction}.`;
+      }
+    }
 
     const _t = `
 **TASK**: You are a master portrait photographer. Your task is to generate a new photorealistic portrait based on the provided image(s).
+
+**INPUT IMAGES OVERVIEW**:
+${inputDescriptions.join('\n')}
 
 **PRIMARY OBJECTIVE**: Create a new photo of the **exact same person** with a new pose, clothing, and background, following all rules with extreme precision.
 
@@ -115,7 +133,7 @@ export const generatePortraitSeries = async (
         - **Color Temperature**: Match the warm (sunset) or cool (overcast day) tones of the ambient light.
         - **Quality**: Match the hardness or softness of the light. A bright sun creates hard-edged shadows; a cloudy sky creates soft, diffused shadows.
         - **Reflections**: The subject should pick up subtle bounce light and color reflections from their surroundings.
-5.  **ASPECT RATIO**: The output image MUST perfectly match the aspect ratio of the FIRST source image you've been given. Do not add letterboxing or change the framing.
+5.  **ASPECT RATIO**: The output image MUST perfectly match the aspect ratio of the FIRST source image you'veve been given. Do not add letterboxing or change the framing.
 ${backgroundRule}
 
 Generate the image now. Do not output text.
@@ -193,6 +211,7 @@ export const enhanceImageResolution = async (
         const imageResponsePart = result.candidates?.[0]?.content?.parts.find(p => p.inlineData);
 
         if (imageResponsePart?.inlineData) {
+            // Fix: Corrected typo from `imageResponse-part` to `imageResponsePart`.
             return `data:${imageResponsePart.inlineData.mimeType};base64,${imageResponsePart.inlineData.data}`;
         } else {
             console.warn(`No image part found in enhancement response.`, result);

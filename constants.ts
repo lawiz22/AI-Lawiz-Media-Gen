@@ -41,6 +41,7 @@ export const BACKGROUND_OPTIONS = [
     { value: 'natural studio', label: 'Natural Studio' },
     { value: 'original', label: 'Original' },
     { value: 'prompt', label: 'Custom Prompt' },
+    { value: 'image', label: 'Upload Image' },
 ];
 
 export const ASPECT_RATIO_OPTIONS = [

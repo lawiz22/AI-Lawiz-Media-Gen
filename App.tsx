@@ -12,6 +12,7 @@ import { CloseIcon, DownloadIcon, SpinnerIcon, GenerateIcon } from './components
 const App: React.FC = () => {
   const [sourceImage, setSourceImage] = useState<File | null>(null);
   const [clothingImage, setClothingImage] = useState<File | null>(null);
+  const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
@@ -54,6 +55,10 @@ const App: React.FC = () => {
       setError('Please upload a clothing image or change the clothing style.');
       return;
     }
+    if (options.background === 'image' && !backgroundImage) {
+      setError('Please upload a background image or change the background style.');
+      return;
+    }
     if (options.poseMode === 'select' && options.poseSelection.length === 0) {
       setError('Please select at least one pose or switch to Random Poses mode.');
       return;
@@ -71,6 +76,7 @@ const App: React.FC = () => {
       const images = await generatePortraitSeries(
         sourceImage,
         clothingImage,
+        backgroundImage,
         options,
         (message: string, newProgress: number) => {
           setStatusMessage(message);
@@ -89,11 +95,12 @@ const App: React.FC = () => {
       setIsLoading(false);
       setStatusMessage('');
     }
-  }, [sourceImage, clothingImage, options]);
+  }, [sourceImage, clothingImage, backgroundImage, options]);
   
   const resetState = () => {
     setSourceImage(null);
     setClothingImage(null);
+    setBackgroundImage(null);
     setGeneratedImages([]);
     setIsLoading(false);
     setStatusMessage('');
@@ -248,6 +255,13 @@ const App: React.FC = () => {
                             label="Clothing Image"
                             onImageUpload={setClothingImage}
                             id="clothing-uploader"
+                        />
+                    )}
+                    {options.background === 'image' && (
+                        <ImageUploader
+                            label="Background Image"
+                            onImageUpload={setBackgroundImage}
+                            id="background-uploader"
                         />
                     )}
                 </div>
