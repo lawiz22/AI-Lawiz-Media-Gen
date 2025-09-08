@@ -32,7 +32,7 @@ export const Header: React.FC = () => {
             <p className="text-sm text-gray-400">
               Create stunning portrait variations from a single image using AI. 
               <span className="block sm:inline sm:ml-1">
-                AI can make mistakes. We will update this daily. <a href="https://ko-fi.com/zgenmedia" target="_blank" rel="noopener noreferrer" className="font-semibold text-cyan-400 hover:underline">Donations</a> are greatly appreciated.
+                AI can make mistakes. We will update this daily.
               </span>
             </p>
             {userCount !== null && (

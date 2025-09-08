@@ -67,6 +67,23 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({ options, setOptions,
         </select>
       </div>
 
+      {options.background === 'prompt' && (
+        <div>
+          <label htmlFor="customBackground" className="block text-sm font-medium text-gray-300 mb-1">
+            Background Prompt
+          </label>
+          <textarea
+            id="customBackground"
+            rows={3}
+            value={options.customBackground || ''}
+            onChange={(e) => handleOptionChange('customBackground', e.target.value)}
+            disabled={isDisabled}
+            placeholder="e.g., a futuristic city skyline at night"
+            className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 disabled:opacity-50 resize-y"
+          />
+        </div>
+      )}
+
       <div className="flex flex-col space-y-3 pt-4 border-t border-gray-700">
         <button
           onClick={onGenerate}

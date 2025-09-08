@@ -12,8 +12,12 @@ if (!_k) {
 
 const _a = new GoogleGenAI({ apiKey: _k });
 
-const getBackgroundInstruction = (_b: string): string => {
+const getBackgroundInstruction = (_b: string, _customPrompt?: string): string => {
     switch (_b) {
+        case 'prompt':
+            return _customPrompt?.trim()
+                ? `A background described as: "${_customPrompt.trim()}"`
+                : 'A neutral, plain background.';
         case 'original':
             return `Seamlessly and photorealistically extend the background from the source image to fill the new frame. Analyze the existing lighting, textures, and style and expand upon it naturally. The result should look like the camera simply revealed more of the original scene.`;
         case 'natural studio':
@@ -29,7 +33,7 @@ export const generatePortraitSeries = async (
   _p: (message: string, progress: number) => void
 ): Promise<string[]> => {
   const _r: string[] = [];
-  const { numImages: _n, background: _b, aspectRatio: _ar } = _o;
+  const { numImages: _n, background: _b, aspectRatio: _ar, customBackground: _cb } = _o;
   
   _p("Cropping image to target ratio...", 0);
   const croppedSourceFile = await cropImageToAspectRatio(_f, _ar);
@@ -42,7 +46,7 @@ export const generatePortraitSeries = async (
     _p(`Generating image ${i + 1} of ${_n}...`, progress);
 
     const _z = atob(POSES[i % POSES.length]);
-    const _backgroundInstruction = getBackgroundInstruction(_b);
+    const _backgroundInstruction = getBackgroundInstruction(_b, _cb);
     
     const _t = `
 **TASK**: Generate a new photorealistic portrait based on the provided image.

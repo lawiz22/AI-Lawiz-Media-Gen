@@ -20,10 +20,11 @@ export const POSES = [
 export const BACKGROUND_OPTIONS = [
     { value: 'black', label: 'Black' },
     { value: 'white', label: 'White' },
-    { value: 'original', label: 'Original' },
+    { value: 'gray', label: 'Gray' },
     { value: 'green screen', label: 'Green Screen' },
     { value: 'natural studio', label: 'Natural Studio' },
-    { value: 'gray', label: 'Gray' },
+    { value: 'original', label: 'Original' },
+    { value: 'prompt', label: 'Custom Prompt' },
 ];
 
 export const ASPECT_RATIO_OPTIONS = [

@@ -22,6 +22,7 @@ const App: React.FC = () => {
     numImages: 12,
     background: 'black',
     aspectRatio: '1:1',
+    customBackground: '',
   });
 
   const handleGenerate = useCallback(async () => {
@@ -70,6 +71,7 @@ const App: React.FC = () => {
         numImages: 12,
         background: 'black',
         aspectRatio: '1:1',
+        customBackground: '',
     });
   }
 
