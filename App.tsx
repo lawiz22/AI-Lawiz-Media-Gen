@@ -44,6 +44,7 @@ const App: React.FC = () => {
     randomizeClothing: false,
     poseMode: 'random',
     poseSelection: [],
+    photoStyle: 'professional photoshoot',
   });
 
   const handleGenerate = useCallback(async () => {
@@ -117,6 +118,7 @@ const App: React.FC = () => {
         randomizeClothing: false,
         poseMode: 'random',
         poseSelection: [],
+        photoStyle: 'professional photoshoot',
     });
     setEnhancementResults({});
     setIsEnhancingAll(false);

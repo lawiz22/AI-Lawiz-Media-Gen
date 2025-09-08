@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import type { GenerationOptions } from '../types';
-import { MAX_IMAGES, BACKGROUND_OPTIONS, ASPECT_RATIO_OPTIONS, PRESET_POSES } from '../constants';
+import { MAX_IMAGES, BACKGROUND_OPTIONS, ASPECT_RATIO_OPTIONS, PRESET_POSES, PHOTO_STYLE_OPTIONS } from '../constants';
 import { GenerateIcon, ResetIcon } from './icons';
 
 interface OptionsPanelProps {
@@ -129,6 +129,22 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({ options, setOptions,
           className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 disabled:opacity-50"
         >
           {ASPECT_RATIO_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Photo Style */}
+      <div>
+        <label htmlFor="photoStyle" className="block text-sm font-medium text-gray-300 mb-1">Photo Style</label>
+        <select
+          id="photoStyle"
+          value={options.photoStyle}
+          onChange={(e) => handleOptionChange('photoStyle', e.target.value)}
+          disabled={isDisabled}
+          className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 disabled:opacity-50"
+        >
+          {PHOTO_STYLE_OPTIONS.map(opt => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>

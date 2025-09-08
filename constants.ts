@@ -51,3 +51,11 @@ export const ASPECT_RATIO_OPTIONS = [
     { value: '9:16', label: '9:16 (Tall)' },
     { value: '16:9', label: '16:9 (Widescreen)' },
 ];
+
+export const PHOTO_STYLE_OPTIONS = [
+    { value: 'professional photoshoot', label: 'Professional Photoshoot' },
+    { value: '35mm analog', label: '35mm Analog Film' },
+    { value: 'polaroid', label: 'Old Polaroid' },
+    { value: 'candid', label: 'Candid Photo' },
+    { value: 'smartphone', label: 'Smartphone Photo' },
+];

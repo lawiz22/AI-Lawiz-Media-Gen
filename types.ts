@@ -9,4 +9,5 @@ export interface GenerationOptions {
   randomizeClothing?: boolean;
   poseMode: 'random' | 'select';
   poseSelection: string[];
+  photoStyle: string;
 }

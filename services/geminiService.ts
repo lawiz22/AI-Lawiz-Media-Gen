@@ -46,6 +46,22 @@ const getClothingRule = (options: GenerationOptions): string => {
     }
 };
 
+const getPhotoStyleInstruction = (style: string): string => {
+    switch (style) {
+        case '35mm analog':
+            return 'a 35mm analog film photo, complete with faded colors, subtle film grain, and minor scratches or light leaks for an authentic vintage feel.';
+        case 'polaroid':
+            return 'a vintage Polaroid photograph, with its characteristic soft focus, desaturated colors, and the iconic white border frame.';
+        case 'candid':
+            return 'a candid, in-the-moment snapshot. It should feel unposed and natural, as if captured spontaneously.';
+        case 'smartphone':
+            return 'a modern high-end smartphone photo. The image should be sharp and clear, with vibrant colors, but may have slight lens distortion or digital processing artifacts typical of mobile photography.';
+        case 'professional photoshoot':
+        default:
+            return 'a professional studio or on-location photoshoot. The lighting should be deliberate, the composition well-thought-out, and the overall quality should be high-end and polished.';
+    }
+};
+
 export const generatePortraitSeries = async (
   _f: File,
   _cf: File | null,
@@ -54,7 +70,7 @@ export const generatePortraitSeries = async (
   _p: (message: string, progress: number) => void
 ): Promise<string[]> => {
   const _r: string[] = [];
-  const { numImages: _n, background: _b, aspectRatio: _ar, customBackground: _cb, consistentBackground: _cbg, clothing, poseMode, poseSelection } = _o;
+  const { numImages: _n, background: _b, aspectRatio: _ar, customBackground: _cb, consistentBackground: _cbg, clothing, poseMode, poseSelection, photoStyle } = _o;
   
   _p("Cropping image to target ratio...", 0);
   const croppedSourceFile = await cropImageToAspectRatio(_f, _ar);
@@ -99,17 +115,19 @@ export const generatePortraitSeries = async (
       _d.push(backgroundPart);
       const bgRef = clothingPart ? 'THIRD' : 'SECOND';
       inputDescriptions.push(`The ${bgRef} image is the new background.`);
-      backgroundRule = `6.  **BACKGROUND**: You MUST place the subject into the background provided in the ${bgRef} image. The integration must be photorealistic. The subject's lighting, shadows, and color temperature must perfectly match the new background environment.`;
+      backgroundRule = `7.  **BACKGROUND**: You MUST place the subject into the background provided in the ${bgRef} image. The integration must be photorealistic. The subject's lighting, shadows, and color temperature must perfectly match the new background environment.`;
     } else {
       const _backgroundInstruction = getBackgroundInstruction(_b, _cb);
       if (_cbg && _b === 'prompt' && _cb?.trim()) {
           backgroundRule = `
-6.  **BACKGROUND**: Place the subject in a scene described as: ${_backgroundInstruction}.
-7.  **SCENE DYNAMICS**: To make the photo series look more realistic and dynamic, you MUST render the background scene with subtle variations for each image. Introduce slight changes in camera angle, zoom, or depth of field (background blur). This will simulate a real photoshoot in a single, consistent location. Do not change the core elements of the background itself.`;
+7.  **BACKGROUND**: Place the subject in a scene described as: ${_backgroundInstruction}.
+8.  **SCENE DYNAMICS**: To make the photo series look more realistic and dynamic, you MUST render the background scene with subtle variations for each image. Introduce slight changes in camera angle, zoom, or depth of field (background blur). This will simulate a real photoshoot in a single, consistent location. Do not change the core elements of the background itself.`;
       } else {
-          backgroundRule = `6.  **BACKGROUND**: Replace the background with: ${_backgroundInstruction}.`;
+          backgroundRule = `7.  **BACKGROUND**: Replace the background with: ${_backgroundInstruction}.`;
       }
     }
+    
+    const photoStyleInstruction = getPhotoStyleInstruction(photoStyle);
 
     const _t = `
 **TASK**: You are a master portrait photographer. Your task is to generate a new photorealistic portrait based on the provided image(s).
@@ -126,14 +144,15 @@ ${inputDescriptions.join('\n')}
     - DO NOT alter their core facial features, age, or ethnicity.
 2.  ${clothingRule}
 3.  **POSE**: Change the subject's pose to: "${_z}".
-4.  **PHOTOREALISM & LIGHTING INTEGRATION**: This is critical for realism. The final image must look like it was taken with a single camera in a real location.
+4.  **PHOTOGRAPHIC STYLE**: The overall aesthetic of the image MUST be that of ${photoStyleInstruction}.
+5.  **PHOTOREALISM & LIGHTING INTEGRATION**: This is critical for realism. The final image must look like it was taken with a single camera in a real location.
     - **AVOID THE "PHOTOSHOPPED" LOOK**: The subject must not look cut and pasted onto the background. Their lighting and shadows must blend seamlessly.
     - **MATCH LIGHTING PERFECTLY**: The lighting on the subject MUST be completely dictated by the new background environment. This includes:
         - **Direction & Source**: Light on the subject must come from the logical direction of the light source in the background (e.g., the sun, a window, a studio lamp).
         - **Color Temperature**: Match the warm (sunset) or cool (overcast day) tones of the ambient light.
         - **Quality**: Match the hardness or softness of the light. A bright sun creates hard-edged shadows; a cloudy sky creates soft, diffused shadows.
         - **Reflections**: The subject should pick up subtle bounce light and color reflections from their surroundings.
-5.  **ASPECT RATIO**: The output image MUST perfectly match the aspect ratio of the FIRST source image you'veve been given. Do not add letterboxing or change the framing.
+6.  **ASPECT RATIO**: The output image MUST perfectly match the aspect ratio of the FIRST source image you'veve been given. Do not add letterboxing or change the framing.
 ${backgroundRule}
 
 Generate the image now. Do not output text.
