@@ -21,6 +21,11 @@ const themes = [
     label: 'Studio Light',
     colors: { bg: '#2563eb', ring: '#1e40af' },
   },
+  {
+    name: '70s-groove',
+    label: '70s Groove',
+    colors: { bg: '#FF7043', ring: '#E64A19' },
+  },
 ];
 
 export const ThemeSwitcher: React.FC<ThemeSwitcherProps> = ({ currentTheme, setTheme }) => {
