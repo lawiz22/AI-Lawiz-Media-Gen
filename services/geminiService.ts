@@ -53,7 +53,7 @@ export const generatePortraitSeries = async (
   _p: (message: string, progress: number) => void
 ): Promise<string[]> => {
   const _r: string[] = [];
-  const { numImages: _n, background: _b, aspectRatio: _ar, customBackground: _cb, consistentBackground: _cbg, clothing } = _o;
+  const { numImages: _n, background: _b, aspectRatio: _ar, customBackground: _cb, consistentBackground: _cbg, clothing, poseMode, poseSelection } = _o;
   
   _p("Cropping image to target ratio...", 0);
   const croppedSourceFile = await cropImageToAspectRatio(_f, _ar);
@@ -67,11 +67,17 @@ export const generatePortraitSeries = async (
     clothingPart = await fileToGenerativePart(_cf);
   }
 
-  for (let i = 0; i < _n; i++) {
-    const progress = (i + 1) / _n;
-    _p(`Generating image ${i + 1} of ${_n}...`, progress);
+  const posesToUse = (poseMode === 'select' && poseSelection.length > 0)
+    ? poseSelection
+    : Array.from({ length: _n }, (_, i) => POSES[i % POSES.length]);
 
-    const _z = atob(POSES[i % POSES.length]);
+  const totalImages = posesToUse.length;
+
+  for (let i = 0; i < totalImages; i++) {
+    const progress = (i + 1) / totalImages;
+    _p(`Generating image ${i + 1} of ${totalImages}...`, progress);
+
+    const _z = atob(posesToUse[i]);
     const _d: Part[] = [ sourcePart ];
     if (clothingPart) {
         _d.push(clothingPart);

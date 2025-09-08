@@ -17,6 +17,22 @@ export const POSES = [
   "QSBwb3dlciBwb3NlLCBzdGFuZGluZyB3aXRoIGhhbmRzIG9uIGhpcHMsIGxvb2tpbmcgc3Ryb25nIGFuZCBjb25maWRlbnQu"
 ];
 
+export const PRESET_POSES = [
+    { label: "Professional Headshot", value: POSES[0] },
+    { label: "Thoughtful 3/4 Profile", value: POSES[1] },
+    { label: "Candid Laughter", value: POSES[2] },
+    { label: "Serene Profile View", value: POSES[3] },
+    { label: "Creative Arms Overhead", value: POSES[4] },
+    { label: "Leaning In (Focused)", value: POSES[5] },
+    { label: "Over the Shoulder", value: POSES[6] },
+    { label: "Aspirational Low-Angle", value: POSES[7] },
+    { label: "Relaxed Side-Lying", value: POSES[8] },
+    { label: "Dynamic Mid-Motion", value: POSES[9] },
+    { label: "Comfortably Seated", value: POSES[10] },
+    { label: "Gentle Close-Up", value: POSES[11] },
+    { label: "Confident Power Pose", value: POSES[12] },
+];
+
 export const BACKGROUND_OPTIONS = [
     { value: 'black', label: 'Black' },
     { value: 'white', label: 'White' },

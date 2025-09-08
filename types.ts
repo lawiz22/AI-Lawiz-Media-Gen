@@ -7,4 +7,6 @@ export interface GenerationOptions {
   clothing: 'original' | 'image' | 'prompt';
   customClothingPrompt?: string;
   randomizeClothing?: boolean;
+  poseMode: 'random' | 'select';
+  poseSelection: string[];
 }

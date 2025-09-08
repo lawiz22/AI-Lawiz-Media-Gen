@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { GenerationOptions } from '../types';
-import { MAX_IMAGES, BACKGROUND_OPTIONS, ASPECT_RATIO_OPTIONS } from '../constants';
+import { MAX_IMAGES, BACKGROUND_OPTIONS, ASPECT_RATIO_OPTIONS, PRESET_POSES } from '../constants';
 import { GenerateIcon, ResetIcon } from './icons';
 
 interface OptionsPanelProps {
@@ -13,13 +13,68 @@ interface OptionsPanelProps {
 }
 
 export const OptionsPanel: React.FC<OptionsPanelProps> = ({ options, setOptions, onGenerate, onReset, isDisabled, isReady }) => {
+  
+  useEffect(() => {
+    if (options.poseMode === 'select') {
+      handleOptionChange('numImages', options.poseSelection.length);
+    }
+  }, [options.poseSelection, options.poseMode]);
+
   const handleOptionChange = <K extends keyof GenerationOptions,>(key: K, value: GenerationOptions[K]) => {
     setOptions(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handlePoseSelectionChange = (poseValue: string, isChecked: boolean) => {
+    setOptions(prev => {
+        const currentSelection = prev.poseSelection;
+        const newSelection = isChecked
+            ? [...currentSelection, poseValue]
+            : currentSelection.filter(p => p !== poseValue);
+        return { ...prev, poseSelection: newSelection };
+    });
   };
 
   return (
     <div className="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-6">
       <h2 className="text-xl font-bold text-cyan-400">2. Configure Options</h2>
+
+      {/* Pose Selection */}
+      <div className="space-y-3">
+          <label className="block text-sm font-medium text-gray-300">Pose Selection</label>
+          <div className="flex gap-4">
+            <div className="flex items-center">
+                <input
+                  id="poseModeRandom"
+                  name="poseMode"
+                  type="radio"
+                  value="random"
+                  checked={options.poseMode === 'random'}
+                  onChange={() => handleOptionChange('poseMode', 'random')}
+                  disabled={isDisabled}
+                  className="h-4 w-4 border-gray-600 bg-gray-700 text-cyan-600 focus:ring-cyan-500 disabled:opacity-50"
+                />
+                <label htmlFor="poseModeRandom" className="ml-2 block text-sm text-gray-300">
+                  Random Poses
+                </label>
+            </div>
+            <div className="flex items-center">
+                <input
+                  id="poseModeSelect"
+                  name="poseMode"
+                  type="radio"
+                  value="select"
+                  checked={options.poseMode === 'select'}
+                  onChange={() => handleOptionChange('poseMode', 'select')}
+                  disabled={isDisabled}
+                  className="h-4 w-4 border-gray-600 bg-gray-700 text-cyan-600 focus:ring-cyan-500 disabled:opacity-50"
+                />
+                <label htmlFor="poseModeSelect" className="ml-2 block text-sm text-gray-300">
+                  Select Poses
+                </label>
+            </div>
+          </div>
+      </div>
+
 
       {/* Number of Images */}
       <div>
@@ -33,10 +88,35 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({ options, setOptions,
           max={MAX_IMAGES}
           value={options.numImages}
           onChange={(e) => handleOptionChange('numImages', parseInt(e.target.value, 10))}
-          disabled={isDisabled}
-          className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-cyan-500 disabled:opacity-50"
+          disabled={isDisabled || options.poseMode === 'select'}
+          className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
+
+      {options.poseMode === 'select' && (
+        <div className="space-y-2 p-4 bg-gray-700/50 rounded-lg">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Choose Poses ({options.poseSelection.length} selected)
+            </label>
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+                {PRESET_POSES.map(pose => (
+                    <div key={pose.value} className="flex items-center">
+                        <input
+                            id={`pose-${pose.value}`}
+                            type="checkbox"
+                            checked={options.poseSelection.includes(pose.value)}
+                            onChange={(e) => handlePoseSelectionChange(pose.value, e.target.checked)}
+                            disabled={isDisabled}
+                            className="w-4 h-4 text-cyan-600 bg-gray-700 border-gray-600 rounded focus:ring-cyan-500 focus:ring-2 disabled:opacity-50"
+                        />
+                        <label htmlFor={`pose-${pose.value}`} className="ml-2 text-sm font-medium text-gray-300">
+                            {pose.label}
+                        </label>
+                    </div>
+                ))}
+            </div>
+        </div>
+      )}
 
       {/* Aspect Ratio */}
       <div>

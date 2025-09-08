@@ -41,6 +41,8 @@ const App: React.FC = () => {
     clothing: 'original',
     customClothingPrompt: '',
     randomizeClothing: false,
+    poseMode: 'random',
+    poseSelection: [],
   });
 
   const handleGenerate = useCallback(async () => {
@@ -50,6 +52,10 @@ const App: React.FC = () => {
     }
     if (options.clothing === 'image' && !clothingImage) {
       setError('Please upload a clothing image or change the clothing style.');
+      return;
+    }
+    if (options.poseMode === 'select' && options.poseSelection.length === 0) {
+      setError('Please select at least one pose or switch to Random Poses mode.');
       return;
     }
 
@@ -102,6 +108,8 @@ const App: React.FC = () => {
         clothing: 'original',
         customClothingPrompt: '',
         randomizeClothing: false,
+        poseMode: 'random',
+        poseSelection: [],
     });
     setEnhancementResults({});
     setIsEnhancingAll(false);
