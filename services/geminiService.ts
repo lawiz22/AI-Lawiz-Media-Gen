@@ -91,15 +91,18 @@ export const generatePortraitSeries = async (
     const clothingRule = getClothingRule(_o);
 
     const _t = `
-**TASK**: Generate a new photorealistic portrait based on the provided image(s).
+**TASK**: You are a master portrait photographer. Your task is to generate a new photorealistic portrait based on the provided image(s).
 
-**PRIMARY OBJECTIVE**: Create a new photo of the **exact same person** with a new pose, clothing, and background, following all rules.
+**PRIMARY OBJECTIVE**: Create a new photo of the **exact same person** with a new pose, clothing, and background, following all rules with extreme precision.
 
 **RULES**:
-1.  **SUBJECT IDENTITY**: The person's face and hair in the output image MUST be identical to the person in the FIRST source image. This is the most important rule.
+1.  **CRITICAL SUBJECT IDENTITY**: This is your highest priority. The person's face in the output image MUST be a perfect, identical match to the person in the FIRST source image.
+    - Pay meticulous, pixel-level attention to their unique facial structure, eye shape and color, nose, and mouth.
+    - The person in the output MUST be unmistakably the same individual, regardless of the new pose or distance from the camera.
+    - DO NOT alter their core facial features, age, or ethnicity.
 2.  ${clothingRule}
 3.  **POSE**: Change the subject's pose to: "${_z}".
-4.  **PHOTOREALISM**: The final image must be a high-quality, realistic photograph. The lighting on the subject must match the lighting of the new background.
+4.  **PHOTOREALISM**: The final image must be a high-quality, realistic photograph. The lighting on the subject must match the lighting of the new background perfectly.
 5.  **ASPECT RATIO**: The output image MUST perfectly match the aspect ratio of the FIRST source image you've been given. Do not add letterboxing or change the framing.
 ${backgroundRule}
 
