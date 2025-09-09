@@ -88,19 +88,21 @@ export const enhanceImageResolution = async (base64ImageData: string): Promise<s
         },
     });
 
-    for (const part of result.candidates[0].content.parts) {
-        if (part.inlineData) {
-            const base64ImageBytes: string = part.inlineData.data;
-            return `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
+    if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts) {
+        for (const part of result.candidates[0].content.parts) {
+            if (part.inlineData) {
+                const base64ImageBytes: string = part.inlineData.data;
+                return `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
+            }
         }
     }
     
-    const textResponse = result.text.trim();
+    const textResponse = result.text?.trim();
     if (textResponse) {
         throw new Error(`AI returned text instead of an image: ${textResponse}`);
     }
 
-    throw new Error('Image enhancement failed. No image was returned from the API.');
+    throw new Error('Image enhancement failed. No image was returned from the API. The request may have been blocked.');
 };
 
 
@@ -198,21 +200,23 @@ export const generatePortraitSeries = async (
         });
         
         let imageFound = false;
-        for (const part of result.candidates[0].content.parts) {
-            if (part.inlineData) {
-                const base64ImageBytes: string = part.inlineData.data;
-                generatedImages.push(`data:${part.inlineData.mimeType};base64,${base64ImageBytes}`);
-                imageFound = true;
-                break; 
+        if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts) {
+            for (const part of result.candidates[0].content.parts) {
+                if (part.inlineData) {
+                    const base64ImageBytes: string = part.inlineData.data;
+                    generatedImages.push(`data:${part.inlineData.mimeType};base64,${base64ImageBytes}`);
+                    imageFound = true;
+                    break; 
+                }
             }
         }
         
         if (!imageFound) {
-             const textResponse = result.text.trim();
+             const textResponse = result.text?.trim();
              if (textResponse) {
                 throw new Error(`AI returned text instead of an image: ${textResponse}`);
              }
-             throw new Error('Generation failed for one image: No image was returned from the API.');
+             throw new Error('Generation failed for one image: No image was returned. The request might have been blocked due to safety settings.');
         }
 
     } catch (error) {

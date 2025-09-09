@@ -93,6 +93,13 @@
     --color-banner-glow-1: #FF7043;
     --color-banner-glow-2: #E64A19;
   }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out forwards;
+  }
 </style>
 <script>
     tailwind.config = {
