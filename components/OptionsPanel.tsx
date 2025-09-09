@@ -462,19 +462,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 </div>
             )}
         </div>
-        
-        <div>
-            <label htmlFor="photoStyle" className="block text-sm font-medium text-text-secondary mb-1">Photo Style</label>
-            <select
-                id="photoStyle"
-                value={options.photoStyle}
-                onChange={(e) => handleOptionChange('photoStyle', e.target.value)}
-                disabled={isDisabled}
-                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-            >
-                {PHOTO_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-            </select>
-        </div>
 
         <div>
             <label htmlFor="imageStyle" className="block text-sm font-medium text-text-secondary mb-1">Image Style</label>
@@ -487,6 +474,22 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             >
                 {IMAGE_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
+        </div>
+        
+        <div>
+            <label htmlFor="photoStyle" className="block text-sm font-medium text-text-secondary mb-1">Photo Style</label>
+            <select
+                id="photoStyle"
+                value={options.photoStyle}
+                onChange={(e) => handleOptionChange('photoStyle', e.target.value)}
+                disabled={isDisabled || options.imageStyle !== 'photorealistic'}
+                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {PHOTO_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+            {options.imageStyle !== 'photorealistic' && (
+                <p className="text-xs text-text-muted mt-1">Photo Style is only available for the 'Photorealistic' Image Style.</p>
+            )}
         </div>
 
         <div className="border-t border-border-primary pt-6 flex flex-col gap-3">
