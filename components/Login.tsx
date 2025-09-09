@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Banner } from './Banner';
 import { SpinnerIcon } from './icons';
+import { Logo } from './Logo';
 
 interface LoginProps {
   onLogin: (username: string, password: string) => Promise<string | true>;
@@ -33,12 +34,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       <div className="w-full max-w-md mx-auto">
         <div className="text-center mb-8">
             <div className="flex justify-center items-center gap-4 mb-4">
-                 <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 border-2 border-border-primary">
-                    <img 
-                        src="https://storage.ko-fi.com/cdn/useruploads/641ac8f7-0ccd-47d0-b775-532bf235d9c4_7f5b18e9-ba-4cb3-a029-d6d243fdaabe.png" 
-                        alt="zGenMedia Logo" 
-                        className="w-full h-full object-cover"
-                    />
+                 <div className="w-16 h-16 flex-shrink-0">
+                    <Logo />
                 </div>
                 <Banner />
             </div>

@@ -7,6 +7,7 @@ import {
     BACKGROUND_OPTIONS, 
     ASPECT_RATIO_OPTIONS,
     PHOTO_STYLE_OPTIONS,
+    IMAGE_STYLE_OPTIONS,
     CLOTHING_ADJECTIVES,
     CLOTHING_COLORS,
     CLOTHING_MATERIALS,
@@ -472,6 +473,19 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
             >
                 {PHOTO_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+        </div>
+
+        <div>
+            <label htmlFor="imageStyle" className="block text-sm font-medium text-text-secondary mb-1">Image Style</label>
+            <select
+                id="imageStyle"
+                value={options.imageStyle}
+                onChange={(e) => handleOptionChange('imageStyle', e.target.value)}
+                disabled={isDisabled}
+                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+            >
+                {IMAGE_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
         </div>
 

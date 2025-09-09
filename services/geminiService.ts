@@ -178,7 +178,13 @@ export const generatePortraitSeries = async (
     }
 
     promptSegments.push(`Photo Style: ${options.photoStyle}.`);
-    promptSegments.push("Ensure the final image is a high-quality, realistic photograph.");
+    promptSegments.push(`Artistic Style: Render the image in a ${options.imageStyle} style.`);
+    
+    if (options.imageStyle === 'photorealistic') {
+        promptSegments.push("Ensure the final image is a high-quality, realistic photograph.");
+    } else {
+        promptSegments.push(`Ensure the final result is a high-quality image in the specified artistic style.`);
+    }
     
     parts.push({ text: promptSegments.join(' ') });
 

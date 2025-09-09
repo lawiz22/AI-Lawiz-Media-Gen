@@ -60,6 +60,16 @@ export const PHOTO_STYLE_OPTIONS = [
     { value: 'smartphone', label: 'Smartphone Photo' },
 ];
 
+export const IMAGE_STYLE_OPTIONS = [
+    { value: 'photorealistic', label: 'Photorealistic' },
+    { value: 'cartoon', label: 'Cartoon' },
+    { value: 'oil painting', label: 'Oil Painting' },
+    { value: 'watercolor painting', label: 'Watercolor' },
+    { value: 'charcoal sketch', label: 'Charcoal Sketch' },
+    { value: 'anime', label: 'Anime / Manga' },
+    { value: 'pixel art', label: 'Pixel Art' },
+];
+
 // --- For Clothing Randomization ---
 export const CLOTHING_ADJECTIVES = ['stylish', 'elegant', 'casual', 'formal', 'vintage', 'modern', 'cozy', 'rugged', 'chic', 'minimalist', 'bohemian', 'vibrant', 'dark', 'lightweight', 'tailored'];
 export const CLOTHING_COLORS = ['black', 'white', 'charcoal gray', 'navy blue', 'khaki', 'olive green', 'burgundy', 'crimson red', 'pastel pink', 'sky blue', 'sunflower yellow', 'cream', 'beige', 'forest green'];

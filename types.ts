@@ -10,6 +10,7 @@ export interface GenerationOptions {
   poseMode: 'random' | 'select' | 'prompt';
   poseSelection: string[];
   photoStyle: string;
+  imageStyle: string;
 }
 
 export interface User {
