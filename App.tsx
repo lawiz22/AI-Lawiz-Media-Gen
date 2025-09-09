@@ -10,7 +10,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { generatePortraitSeries, enhanceImageResolution } from './services/geminiService';
 import { authenticateUser } from './services/cloudUserService';
 import type { GenerationOptions, User } from './types';
-import { CloseIcon, DownloadIcon, SpinnerIcon, GenerateIcon, UserGroupIcon, PhotoIcon } from './components/icons';
+import { CloseIcon, DownloadIcon, SpinnerIcon, GenerateIcon, UserGroupIcon, PhotoIcon, SetSourceIcon } from './components/icons';
 
 type AppTab = 'generator' | 'admin';
 
@@ -100,8 +100,8 @@ const App: React.FC = () => {
       setError('Please upload a background image or change the background style.');
       return;
     }
-    if (options.poseMode === 'select' && options.poseSelection.length === 0) {
-      setError('Please select at least one pose or switch to Random Poses mode.');
+    if ((options.poseMode === 'select' || options.poseMode === 'prompt') && options.poseSelection.length === 0) {
+      setError('Please select or add at least one pose, or switch to Random Poses mode.');
       return;
     }
 
@@ -242,14 +242,21 @@ const App: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  const handleZoom = useCallback(async (imageSrc: string) => {
+  const handleZoom = useCallback((imageSrc: string) => {
     setZoomedImage(imageSrc);
     setEnhancedImage(null);
     setEnhanceError(null);
+    setIsEnhancing(false);
+  }, []);
+
+  const handleEnhanceZoomedImage = useCallback(async () => {
+    if (!zoomedImage || isEnhancing) return;
+
     setIsEnhancing(true);
+    setEnhanceError(null);
 
     try {
-      const highResImage = await enhanceImageResolution(imageSrc);
+      const highResImage = await enhanceImageResolution(zoomedImage);
       setEnhancedImage(highResImage);
     } catch (err: any) {
       setEnhanceError(err.message || 'An unknown error occurred while enhancing the image.');
@@ -257,7 +264,7 @@ const App: React.FC = () => {
     } finally {
       setIsEnhancing(false);
     }
-  }, []);
+  }, [zoomedImage, isEnhancing]);
 
   const closeZoom = useCallback(() => {
     setZoomedImage(null);
@@ -276,6 +283,19 @@ const App: React.FC = () => {
       document.body.removeChild(link);
     }
   }, [zoomedImage, enhancedImage]);
+
+  const handleSetAsSource = useCallback(() => {
+    const imageToSet = enhancedImage || zoomedImage;
+    if (!imageToSet) return;
+  
+    const blob = dataURLToBlob(imageToSet);
+    const newSourceFile = new File([blob], "generated_source.png", { type: blob.type });
+  
+    setSourceImage(newSourceFile);
+    setGeneratedImages([]);
+    setEnhancementResults({});
+    closeZoom();
+  }, [zoomedImage, enhancedImage, closeZoom]);
 
   const numEnhanced = Object.keys(enhancementResults).length;
   const allAreEnhanced = numEnhanced === generatedImages.length && generatedImages.length > 0;
@@ -327,6 +347,7 @@ const App: React.FC = () => {
                           label="Source Image (Subject)"
                           onImageUpload={setSourceImage}
                           id="source-uploader"
+                          sourceFile={sourceImage}
                       />
                       {options.clothing === 'image' && (
                           <ImageUploader 
@@ -449,7 +470,7 @@ const App: React.FC = () => {
               <CloseIcon className="w-6 h-6" />
             </button>
 
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3">
               <button
                   onClick={downloadZoomedImage}
                   disabled={isEnhancing || !zoomedImage}
@@ -457,6 +478,26 @@ const App: React.FC = () => {
               >
                   <DownloadIcon className="w-5 h-5"/>
                   Download {enhancedImage ? 'Enhanced' : 'Image'}
+              </button>
+
+              <button
+                onClick={handleEnhanceZoomedImage}
+                disabled={isEnhancing || !!enhancedImage}
+                className="flex items-center gap-2 bg-blue-600 text-white font-bold py-2 px-5 rounded-full hover:bg-blue-700 transition-colors duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed shadow-lg"
+                title="Enhance image resolution"
+              >
+                {isEnhancing ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                {isEnhancing ? 'Enhancing...' : 'Enhance'}
+              </button>
+
+              <button
+                onClick={handleSetAsSource}
+                disabled={isEnhancing || !zoomedImage}
+                className="flex items-center gap-2 bg-purple-600 text-white font-bold py-2 px-5 rounded-full hover:bg-purple-700 transition-colors duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed shadow-lg"
+                title="Use this image as the new source"
+              >
+                <SetSourceIcon className="w-5 h-5" />
+                Use as Source
               </button>
             </div>
           </div>

@@ -16,8 +16,12 @@ import {
     BACKGROUND_STYLES,
     BACKGROUND_TIMES_OF_DAY,
     BACKGROUND_DETAILS,
+    POSE_ACTIONS,
+    POSE_MODIFIERS,
+    POSE_DIRECTIONS,
+    POSE_DETAILS,
 } from '../constants';
-import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon } from './icons';
+import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, TrashIcon } from './icons';
 import { generateBackgroundImagePreview } from '../services/geminiService';
 
 interface OptionsPanelProps {
@@ -59,6 +63,59 @@ const PoseSelector: React.FC<{ selected: string[], onChange: (selected: string[]
     );
 };
 
+const CustomPoseEditor: React.FC<{ 
+    poses: string[], 
+    onChange: (poses: string[]) => void,
+    onRandomize: () => void,
+    isDisabled: boolean 
+}> = ({ poses, onChange, onRandomize, isDisabled }) => {
+    const [newPose, setNewPose] = useState('');
+
+    const handleAddPose = () => {
+        if (newPose.trim()) {
+            onChange([...poses, newPose.trim()]);
+            setNewPose('');
+        }
+    };
+
+    const handleRemovePose = (index: number) => {
+        onChange(poses.filter((_, i) => i !== index));
+    };
+
+    return (
+        <div>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-2 mb-2 border border-border-primary rounded-md p-2 bg-bg-primary/50">
+                {poses.length > 0 ? poses.map((pose, index) => (
+                    <div key={index} className="flex items-center justify-between gap-2 bg-bg-tertiary p-2 rounded-md">
+                        <span className="text-sm text-text-primary flex-1 break-words">{pose}</span>
+                        <button onClick={() => handleRemovePose(index)} disabled={isDisabled} aria-label={`Remove pose: ${pose}`}>
+                            <TrashIcon className="w-4 h-4 text-text-secondary hover:text-danger flex-shrink-0"/>
+                        </button>
+                    </div>
+                )) : <p className="text-xs text-text-muted text-center p-4">Add custom poses below or use the randomize button.</p>}
+            </div>
+
+            <div className="flex gap-2 mb-2">
+                <input 
+                    type="text" 
+                    value={newPose} 
+                    onChange={e => setNewPose(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddPose(); }}}
+                    placeholder="Describe a pose..." 
+                    disabled={isDisabled}
+                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                />
+                <button onClick={handleAddPose} disabled={isDisabled} className="bg-accent text-accent-text px-4 rounded-md text-sm font-semibold hover:bg-accent-hover disabled:bg-gray-600 disabled:opacity-50">Add</button>
+            </div>
+
+            <button onClick={onRandomize} disabled={isDisabled} className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                <RefreshIcon className="w-5 h-5" />
+                Randomize Poses
+            </button>
+        </div>
+    );
+};
+
 export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   options,
   setOptions,
@@ -73,7 +130,13 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewTrigger, setPreviewTrigger] = useState(0);
   const isManualTrigger = useRef(false);
+  const randomImageCount = useRef(options.numImages);
 
+  useEffect(() => {
+    if (options.poseMode === 'random') {
+        randomImageCount.current = options.numImages;
+    }
+  }, [options.numImages, options.poseMode]);
 
   const handleOptionChange = <K extends keyof GenerationOptions>(
     key: K,
@@ -82,12 +145,24 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     setOptions((prev) => ({ ...prev, [key]: value }));
   };
   
+  const handlePoseModeChange = (mode: GenerationOptions['poseMode']) => {
+    setOptions(prev => {
+        const newOptions = { ...prev, poseMode: mode, poseSelection: [] };
+        if (mode === 'select' || mode === 'prompt') {
+            newOptions.numImages = 0;
+        } else {
+            newOptions.numImages = randomImageCount.current;
+        }
+        return newOptions;
+    });
+  };
+
   const handlePoseSelectionChange = (selection: string[]) => {
-      handleOptionChange('poseSelection', selection);
-      // Automatically adjust numImages to match selection count
-      if (options.poseMode === 'select') {
-        handleOptionChange('numImages', selection.length);
-      }
+      setOptions(prev => ({
+        ...prev,
+        poseSelection: selection,
+        numImages: selection.length
+      }));
   };
   
   const handleRandomizePreview = () => {
@@ -134,6 +209,29 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     handleOptionChange('customBackground', randomPrompt);
   };
 
+  const handleRandomizeCustomPoses = () => {
+    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+    const numToGenerate = randomImageCount.current > 0 ? randomImageCount.current : 3;
+    const newPoses: string[] = [];
+
+    for (let i = 0; i < numToGenerate; i++) {
+        const action = getRandom(POSE_ACTIONS);
+        const modifier = getRandom(POSE_MODIFIERS);
+        const direction = getRandom(POSE_DIRECTIONS);
+        const detail = getRandom(POSE_DETAILS);
+
+        const structures = [
+            `${action} ${modifier} ${direction}`,
+            `${action} ${direction} ${detail}`,
+            `${modifier} ${action}, ${detail}`,
+            `A person ${action} ${modifier}, ${direction}, ${detail}`
+        ];
+        newPoses.push(getRandom(structures));
+    }
+    
+    handlePoseSelectionChange(newPoses);
+  };
+
   useEffect(() => {
     if (options.background !== 'prompt' || !options.customBackground?.trim()) {
       setPreviewImage(null);
@@ -162,17 +260,15 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         });
     };
     
-    // If triggered by the randomize button, generate immediately
     if (isManualTrigger.current) {
-        isManualTrigger.current = false; // reset flag
+        isManualTrigger.current = false;
         performGeneration();
         return; 
     }
 
-    // Otherwise, use a debounce for typing
     const handler = setTimeout(() => {
         performGeneration();
-    }, 1000); // 1-second debounce delay
+    }, 1000);
 
     return () => {
       clearTimeout(handler);
@@ -184,7 +280,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
       <h2 className="text-xl font-bold mb-4 text-accent">2. Configure Options</h2>
       <div className="space-y-6">
         
-        {/* Number of Images */}
         <div>
             <label htmlFor="numImages" className="block text-sm font-medium text-text-secondary">
                 Number of Images ({options.numImages})
@@ -198,14 +293,13 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 onChange={(e) => handleOptionChange('numImages', parseInt(e.target.value, 10))}
                 className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer range-thumb"
                 style={{'--thumb-color': 'var(--color-accent)'} as React.CSSProperties}
-                disabled={isDisabled || options.poseMode === 'select'}
+                disabled={isDisabled || options.poseMode === 'select' || options.poseMode === 'prompt'}
             />
-             {options.poseMode === 'select' && (
+             {(options.poseMode === 'select' || options.poseMode === 'prompt') && (
                 <p className="text-xs text-text-muted mt-1">Number of images is determined by your pose selection.</p>
             )}
         </div>
 
-        {/* Aspect Ratio */}
         <div>
             <label htmlFor="aspectRatio" className="block text-sm font-medium text-text-secondary mb-1">Aspect Ratio</label>
             <select
@@ -219,7 +313,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             </select>
         </div>
 
-        {/* Background */}
         <div>
             <label htmlFor="background" className="block text-sm font-medium text-text-secondary mb-1">Background</label>
             <select
@@ -308,7 +401,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             )}
         </div>
 
-        {/* Clothing */}
         <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">Clothing Style</label>
              <select
@@ -345,12 +437,12 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             )}
         </div>
         
-        {/* Poses */}
         <div>
             <label className="block text-sm font-medium text-text-secondary mb-2">Poses</label>
-            <div className="flex items-center gap-4">
-                <button onClick={() => handleOptionChange('poseMode', 'random')} className={`px-4 py-2 text-sm rounded-md transition-colors w-1/2 ${options.poseMode === 'random' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`} disabled={isDisabled}>Random Poses</button>
-                <button onClick={() => handleOptionChange('poseMode', 'select')} className={`px-4 py-2 text-sm rounded-md transition-colors w-1/2 ${options.poseMode === 'select' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`} disabled={isDisabled}>Select Poses</button>
+            <div className="flex flex-col sm:flex-row items-center gap-2">
+                <button onClick={() => handlePoseModeChange('random')} className={`w-full text-center px-3 py-2 text-sm rounded-md transition-colors ${options.poseMode === 'random' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`} disabled={isDisabled}>Random</button>
+                <button onClick={() => handlePoseModeChange('select')} className={`w-full text-center px-3 py-2 text-sm rounded-md transition-colors ${options.poseMode === 'select' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`} disabled={isDisabled}>Select</button>
+                <button onClick={() => handlePoseModeChange('prompt')} className={`w-full text-center px-3 py-2 text-sm rounded-md transition-colors ${options.poseMode === 'prompt' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`} disabled={isDisabled}>Custom</button>
             </div>
             {options.poseMode === 'select' && (
                 <div className="mt-4">
@@ -358,9 +450,18 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     <PoseSelector selected={options.poseSelection} onChange={handlePoseSelectionChange} />
                 </div>
             )}
+            {options.poseMode === 'prompt' && (
+                <div className="mt-4">
+                    <CustomPoseEditor
+                        poses={options.poseSelection}
+                        onChange={handlePoseSelectionChange}
+                        onRandomize={handleRandomizeCustomPoses}
+                        isDisabled={isDisabled}
+                    />
+                </div>
+            )}
         </div>
         
-        {/* Photo Style */}
         <div>
             <label htmlFor="photoStyle" className="block text-sm font-medium text-text-secondary mb-1">Photo Style</label>
             <select
@@ -374,7 +475,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             </select>
         </div>
 
-        {/* Action Buttons */}
         <div className="border-t border-border-primary pt-6 flex flex-col gap-3">
             <button
               onClick={onGenerate}

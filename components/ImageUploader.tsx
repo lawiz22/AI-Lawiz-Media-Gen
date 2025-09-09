@@ -1,36 +1,44 @@
-
-import React, { useState, useCallback, ChangeEvent, DragEvent } from 'react';
+import React, { useState, useCallback, ChangeEvent, DragEvent, useEffect } from 'react';
 import { UploadIcon } from './icons';
 
 interface ImageUploaderProps {
   label: string;
   id: string;
   onImageUpload: (file: File | null) => void;
+  sourceFile?: File | null;
 }
 
-export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImageUpload }) => {
+export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImageUpload, sourceFile }) => {
   const [preview, setPreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [fileName, setFileName] = useState<string>('');
 
-  const handleFileChange = useCallback((file: File | null) => {
-    if (file && file.type.startsWith('image/')) {
+  useEffect(() => {
+    if (sourceFile) {
+      if (!sourceFile.type.startsWith('image/')) {
+        onImageUpload(null);
+        return;
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result as string);
       };
-      reader.readAsDataURL(file);
-      onImageUpload(file);
-      setFileName(file.name);
+      reader.readAsDataURL(sourceFile);
+      setFileName(sourceFile.name);
     } else {
       setPreview(null);
-      onImageUpload(null);
       setFileName('');
     }
+  }, [sourceFile, onImageUpload]);
+
+  const handleFileChange = useCallback((file: File | null) => {
+    onImageUpload(file);
   }, [onImageUpload]);
 
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     handleFileChange(e.target.files ? e.target.files[0] : null);
+    // Clear the input value to allow re-uploading the same file
+    e.target.value = '';
   };
   
   const onDragOver = (e: DragEvent<HTMLLabelElement>) => {

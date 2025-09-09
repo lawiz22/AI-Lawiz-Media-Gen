@@ -126,10 +126,15 @@ export const generatePortraitSeries = async (
   }
 
   let selectedPoses: string[];
+  let posesAreEncoded = true; // Flag to check if poses need decoding
+
   if (options.poseMode === 'select' && options.poseSelection.length > 0) {
     selectedPoses = options.poseSelection;
+  } else if (options.poseMode === 'prompt' && options.poseSelection.length > 0) {
+    selectedPoses = options.poseSelection;
+    posesAreEncoded = false; // Custom poses are plain text
   } else {
-    // Randomly select `numImages` poses from the full list
+    // 'random' mode or fallback
     selectedPoses = [...POSES].sort(() => 0.5 - Math.random()).slice(0, options.numImages);
   }
   
@@ -140,7 +145,7 @@ export const generatePortraitSeries = async (
     const progress = (i + 1) / totalImages;
     onProgress(`Generating image ${i + 1} of ${totalImages}...`, progress);
 
-    const pose = decodePose(selectedPoses[i]);
+    const pose = posesAreEncoded ? decodePose(selectedPoses[i]) : selectedPoses[i];
     
     const parts: Part[] = [sourceImagePart];
     const promptSegments: string[] = [`A person with the same face and features as in the reference image.`];
