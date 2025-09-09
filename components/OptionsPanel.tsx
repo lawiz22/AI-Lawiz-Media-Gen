@@ -6,7 +6,12 @@ import {
     PRESET_POSES, 
     BACKGROUND_OPTIONS, 
     ASPECT_RATIO_OPTIONS,
-    PHOTO_STYLE_OPTIONS
+    PHOTO_STYLE_OPTIONS,
+    CLOTHING_ADJECTIVES,
+    CLOTHING_COLORS,
+    CLOTHING_MATERIALS,
+    CLOTHING_ITEMS,
+    CLOTHING_DETAILS,
 } from '../constants';
 import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon } from './icons';
 import { generateBackgroundImagePreview } from '../services/geminiService';
@@ -84,6 +89,26 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   const handleRandomizePreview = () => {
     isManualTrigger.current = true;
     setPreviewTrigger(p => p + 1);
+  };
+
+  const handleRandomizeClothing = () => {
+    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+    
+    const adjective = getRandom(CLOTHING_ADJECTIVES);
+    const color = getRandom(CLOTHING_COLORS);
+    const material = getRandom(CLOTHING_MATERIALS);
+    const item = getRandom(CLOTHING_ITEMS);
+    const detail = getRandom(CLOTHING_DETAILS);
+
+    const phraseStructures = [
+      `a ${adjective} ${color} ${material} ${item}`,
+      `a ${color} ${item} with ${detail}`,
+      `a ${adjective} ${item} made of ${material}`,
+      `a ${adjective} ${color} ${item} with ${detail}`,
+    ];
+    
+    const randomPrompt = getRandom(phraseStructures);
+    handleOptionChange('customClothingPrompt', randomPrompt);
   };
 
   useEffect(() => {
@@ -264,14 +289,25 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 <option value="prompt">From Text Prompt</option>
             </select>
             {options.clothing === 'prompt' && (
-                <input
-                    type="text"
-                    placeholder="e.g., a stylish black leather jacket"
-                    value={options.customClothingPrompt}
-                    onChange={(e) => handleOptionChange('customClothingPrompt', e.target.value)}
-                    disabled={isDisabled}
-                    className="mt-2 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                />
+                <div className="relative mt-2">
+                    <input
+                        type="text"
+                        placeholder="e.g., a stylish black leather jacket"
+                        value={options.customClothingPrompt}
+                        onChange={(e) => handleOptionChange('customClothingPrompt', e.target.value)}
+                        disabled={isDisabled}
+                        className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 pr-10 text-sm focus:ring-accent focus:border-accent"
+                    />
+                     <button
+                        onClick={handleRandomizeClothing}
+                        disabled={isDisabled}
+                        title="Randomize Clothing"
+                        aria-label="Randomize Clothing Description"
+                        className="absolute inset-y-0 right-0 flex items-center justify-center w-10 text-text-secondary hover:text-accent transition-colors disabled:opacity-50"
+                    >
+                        <RefreshIcon className="w-5 h-5" />
+                    </button>
+                </div>
             )}
         </div>
         
