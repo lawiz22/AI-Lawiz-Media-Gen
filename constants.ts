@@ -63,10 +63,14 @@ export const PHOTO_STYLE_OPTIONS = [
 export const IMAGE_STYLE_OPTIONS = [
     { value: 'photorealistic', label: 'Photorealistic' },
     { value: 'cartoon', label: 'Cartoon' },
+    { value: 'comic book style', label: 'Comic Book' },
+    { value: 'anime', label: 'Anime / Manga' },
     { value: 'oil painting', label: 'Oil Painting' },
     { value: 'watercolor painting', label: 'Watercolor' },
+    { value: 'impressionism', label: 'Impressionism' },
     { value: 'charcoal sketch', label: 'Charcoal Sketch' },
-    { value: 'anime', label: 'Anime / Manga' },
+    { value: 'cubism', label: 'Cubism' },
+    { value: 'surrealism', label: 'Surrealism' },
     { value: 'pixel art', label: 'Pixel Art' },
 ];
 
