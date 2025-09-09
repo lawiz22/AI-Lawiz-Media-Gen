@@ -12,6 +12,10 @@ import {
     CLOTHING_MATERIALS,
     CLOTHING_ITEMS,
     CLOTHING_DETAILS,
+    BACKGROUND_LOCATIONS,
+    BACKGROUND_STYLES,
+    BACKGROUND_TIMES_OF_DAY,
+    BACKGROUND_DETAILS,
 } from '../constants';
 import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon } from './icons';
 import { generateBackgroundImagePreview } from '../services/geminiService';
@@ -109,6 +113,25 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     
     const randomPrompt = getRandom(phraseStructures);
     handleOptionChange('customClothingPrompt', randomPrompt);
+  };
+
+  const handleRandomizeBackgroundPrompt = () => {
+    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+    
+    const location = getRandom(BACKGROUND_LOCATIONS);
+    const style = getRandom(BACKGROUND_STYLES);
+    const time = getRandom(BACKGROUND_TIMES_OF_DAY);
+    const detail = getRandom(BACKGROUND_DETAILS);
+
+    const promptStructures = [
+      `${location} ${style} ${time}`,
+      `${location} ${time}, ${style}`,
+      `${location} ${style}, ${detail}`,
+      `A portrait background of ${location} ${time} ${style}`,
+    ];
+
+    const randomPrompt = getRandom(promptStructures);
+    handleOptionChange('customBackground', randomPrompt);
   };
 
   useEffect(() => {
@@ -209,15 +232,26 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 {BACKGROUND_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
             {options.background === 'prompt' && (
-                <>
-                  <textarea
-                      placeholder="e.g., a vibrant cityscape at night"
-                      value={options.customBackground}
-                      onChange={(e) => handleOptionChange('customBackground', e.target.value)}
-                      disabled={isDisabled}
-                      className="mt-2 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[60px]"
-                      rows={2}
-                  />
+                <div className="mt-2">
+                  <div className="relative">
+                    <textarea
+                        placeholder="e.g., a vibrant cityscape at night"
+                        value={options.customBackground}
+                        onChange={(e) => handleOptionChange('customBackground', e.target.value)}
+                        disabled={isDisabled}
+                        className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 pr-10 text-sm focus:ring-accent focus:border-accent min-h-[60px]"
+                        rows={2}
+                    />
+                    <button
+                        onClick={handleRandomizeBackgroundPrompt}
+                        disabled={isDisabled}
+                        title="Randomize Background Prompt"
+                        aria-label="Randomize Background Prompt"
+                        className="absolute top-2 right-2 flex items-center justify-center w-8 h-8 text-text-secondary hover:text-accent transition-colors disabled:opacity-50"
+                    >
+                        <RefreshIcon className="w-5 h-5" />
+                    </button>
+                  </div>
                   <div className="mt-2 p-2 bg-bg-primary/50 rounded-lg min-h-[100px] flex flex-col items-center justify-center">
                     {isPreviewLoading && (
                       <div className="text-center text-text-secondary">
@@ -270,7 +304,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         </label>
                       </div>
                     )}
-                </>
+                </div>
             )}
         </div>
 
