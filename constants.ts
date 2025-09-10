@@ -8,7 +8,7 @@ export const POSES = [
   "UHJvZmlsZSB2aWV3LCBsb29raW5nIGF3YXkgZnJvbSB0aGUgY2FtZXJhIGludG8gdGhlIGRpc3RhbmNlLCBzZXJlbmUgZXhwcmVzc2lvbi4=",
   "QXJtcyByYWlzZWQgb3ZlcmhlYWQsIGhhbmRzIGZvcm1pbmcgYSBjcmVhdGl2ZSBzaGFwZSwgbG9va2luZyBkaXJlY3RseSBhdCB0aGUgY2FtZXJhIHdpdGggY29uZmlkZW5jZS4=",
   "TGVhbmluZyBmb3J3YXJkIG9uIGEgdGFibGUsIGhhbmRzIGNsYXNwZWQsIG1ha2luZyBkaXJlY3QgZXllIGNvbnRhY3Qgd2l0aCB0aGUgY2FtZXJhLg==",
-  "QSBzaG90IGZyb20gdGhlIGJhY2ssIHNob3dpbmcgdGhlIGhhaXJzdHlsZSBhbmQgc2hvdWxkZXIgcG9zdHVyZSwgaGVhZCBzbGlnaHRseSB0dXJuZWQu",
+  "QSBzaG90IGZyb20gdGhlIGJhY2ssIHNob3dpbmcgdGhlIGhhaXJzdHlsZSBhbmQgc2hvdWxkZXXIgcG9zdHVyZSwgaGVhZCBzbGlnaHRseSB0dXJuZWQu",
   "TG93LWFuZ2xlIHNob3QsIHN1YmplY3QgbG9va2luZyB1cCBhbmQgYXdheSwgY3JlYXRpbmcgYSBzZW5zZSBvZiBhc3BpcmF0aW9uLg==",
   "THlpbmcgb24gdGhlaXIgc2lkZSBvbiBhIGZsYXQgc3VyZmFjZSwgcHJvcHBpbmcgdGhlaXIgaGVhZCB1cCB3aXRoIG9uZSBoYW5kLCBzbWlsaW5nIGF0IHRoZSBjYW1lcmEu",
   "QSBkeW5hbWljIHBvc2UsIG1pZC1tb3Rpb24sIHBlcmhhcHMgdHVybmluZyB0b3dhcmRzIHRoZSBjYW1lcmEgcXVpY2tseS4=",
@@ -169,5 +169,94 @@ export const COMFYUI_WORKFLOW_TEMPLATE = {
     "inputs": { "images": [ "8", 0 ] },
     "class_type": "PreviewImage",
     "_meta": { "title": "Preview Image" }
+  }
+};
+
+// --- ComfyUI WAN 2.2 Workflow ---
+export const COMFYUI_WAN22_WORKFLOW_TEMPLATE = {
+  "3": {
+    "inputs": { "text": "positive prompt here", "clip": ["14", 1] },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Positive Prompt" }
+  },
+  "4": {
+    "inputs": { "text": "negative prompt here", "clip": ["14", 1] },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Negative Prompt" }
+  },
+  "5": {
+    "inputs": { "width": 1280, "height": 720, "batch_size": 1, "length": 1 },
+    "class_type": "EmptyHunyuanLatentVideo",
+    "_meta": { "title": "Empty Latent" }
+  },
+  "8": {
+    "inputs": { "vae_name": "wan_2.1_vae.safetensors" },
+    "class_type": "VAELoader",
+    "_meta": { "title": "VAE Loader" }
+  },
+  "9": {
+    "inputs": { "samples": ["36", 0], "vae": ["8", 0] },
+    "class_type": "VAEDecode",
+    "_meta": { "title": "VAE Decode" }
+  },
+  "10": {
+    "inputs": { "filename_prefix": "ComfyUI", "images": ["9", 0] },
+    "class_type": "SaveImage",
+    "_meta": { "title": "Save Image" }
+  },
+  "14": {
+    "inputs": { "lora_name": "stock_photography_wan22_HIGH_v1.safetensors", "strength_model": 1.5, "strength_clip": 1.5, "model": ["29", 0], "clip": ["29", 1] },
+    "class_type": "LoraLoader",
+    "_meta": { "title": "Stock LoRA (High)" }
+  },
+  "22": {
+    "inputs": { "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan" },
+    "class_type": "CLIPLoader",
+    "_meta": { "title": "CLIP Loader" }
+  },
+  "29": {
+    "inputs": { "lora_name": "Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors", "strength_model": 0.6, "strength_clip": 0.6, "model": ["30", 0], "clip": ["30", 1] },
+    "class_type": "LoraLoader",
+    "_meta": { "title": "Lightning LoRA (High)" }
+  },
+  "30": {
+    "inputs": { "lora_name": "Wan2.1_T2V_14B_FusionX_LoRA.safetensors", "strength_model": 0.8, "strength_clip": 0.8, "model": ["38", 0], "clip": ["22", 0] },
+    "class_type": "LoraLoader",
+    "_meta": { "title": "FusionX LoRA" }
+  },
+  "35": {
+    "inputs": { "add_noise": "enable", "noise_seed": 123, "control_after_generate": "randomize", "steps": 6, "cfg": 1, "sampler_name": "res_2s", "scheduler": "bong_tangent", "start_at_step": 0, "end_at_step": 3, "return_with_leftover_noise": "disable", "model": ["14", 0], "positive": ["3", 0], "negative": ["4", 0], "latent_image": ["5", 0] },
+    "class_type": "KSamplerAdvanced",
+    "_meta": { "title": "KSampler Pass 1 (High)" }
+  },
+  "36": {
+    "inputs": { "add_noise": "enable", "noise_seed": 123, "control_after_generate": "fixed", "steps": 6, "cfg": 1, "sampler_name": "res_2s", "scheduler": "bong_tangent", "start_at_step": 3, "end_at_step": 6, "return_with_leftover_noise": "disable", "model": ["45", 0], "positive": ["3", 0], "negative": ["4", 0], "latent_image": ["35", 0] },
+    "class_type": "KSamplerAdvanced",
+    "_meta": { "title": "KSampler Pass 2 (Low)" }
+  },
+  "38": {
+    "inputs": { "unet_name": "Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf" },
+    "class_type": "UnetLoaderGGUF",
+    "_meta": { "title": "Unet GGUF (High)" }
+  },
+  "39": {
+    "inputs": { "unet_name": "Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf" },
+    "class_type": "UnetLoaderGGUF",
+    "_meta": { "title": "Unet GGUF (Low)" }
+  },
+  "43": {
+    "inputs": { "lora_name": "Wan2.1_T2V_14B_FusionX_LoRA.safetensors", "strength_model": 0.8, "model": ["39", 0] },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": { "title": "FusionX LoRA (Low)" }
+  },
+  "44": {
+    "inputs": { "lora_name": "Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors", "strength_model": 0.6, "model": ["43", 0] },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": { "title": "Lightning LoRA (Low)" }
+  },
+  "45": {
+    "inputs": { "lora_name": "stock_photography_wan22_LOW_v1.safetensors", "strength_model": 1.5, "model": ["44", 0] },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": { "title": "Stock LoRA (Low)" }
   }
 };

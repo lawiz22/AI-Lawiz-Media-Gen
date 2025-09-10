@@ -5,7 +5,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { GenerationOptions } from '../types';
 import { fileToGenerativePart } from "../utils/imageUtils";
-import { COMFYUI_WORKFLOW_TEMPLATE } from '../constants';
+import { COMFYUI_WORKFLOW_TEMPLATE, COMFYUI_WAN22_WORKFLOW_TEMPLATE } from '../constants';
 
 // --- State Management ---
 let objectInfoCache: any | null = null;
@@ -125,7 +125,80 @@ const getImageAsDataUrl = async (filename: string, subfolder: string, type: stri
     });
 };
 
+const buildWan22Workflow = (options: GenerationOptions): any => {
+    const workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_WORKFLOW_TEMPLATE));
+
+    // --- Positive & Negative Prompts (Node 3, 4) ---
+    let finalPositivePrompt = options.comfyPrompt || '';
+    if (options.addTextToImage && options.textOnImagePrompt?.trim() && options.textObjectPrompt?.trim()) {
+        let textInstruction = options.textObjectPrompt;
+        const userText = options.textOnImagePrompt;
+        if (textInstruction.includes('%s')) {
+            textInstruction = textInstruction.replace('%s', `'${userText}'`);
+        } else {
+            textInstruction = `${textInstruction} with the text '${userText}'`;
+        }
+        finalPositivePrompt = `The image must include ${textInstruction}, clearly legible. ${finalPositivePrompt}`;
+    }
+    workflow['3'].inputs.text = finalPositivePrompt;
+    workflow['4'].inputs.text = options.comfyNegativePrompt || 'blurry, low quality';
+
+    // --- Latent Image Size (Node 5) ---
+    const [w, h] = options.aspectRatio.split(':').map(Number);
+    const baseRes = w > h ? 1280 : 720;
+    workflow['5'].inputs.width = w > h ? baseRes : Math.round(baseRes * (w / h));
+    workflow['5'].inputs.height = h >= w ? baseRes : Math.round(baseRes * (h / w));
+    workflow['5'].inputs.width = Math.round(workflow['5'].inputs.width / 8) * 8;
+    workflow['5'].inputs.height = Math.round(workflow['5'].inputs.height / 8) * 8;
+    
+    // --- Core Models (Nodes 38, 39, 22, 8) ---
+    workflow['38'].inputs.unet_name = options.comfyWanHighNoiseModel || 'Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf';
+    workflow['39'].inputs.unet_name = options.comfyWanLowNoiseModel || 'Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf';
+    workflow['22'].inputs.clip_name = options.comfyWanClipModel || 'umt5_xxl_fp8_e4m3fn_scaled.safetensors';
+    workflow['8'].inputs.vae_name = options.comfyWanVaeModel || 'wan_2.1_vae.safetensors';
+
+    // --- Samplers (Nodes 35, 36) ---
+    const samplerSettings = {
+        steps: options.comfySteps || 6,
+        cfg: options.comfyCfg || 1.0,
+        sampler_name: options.comfySampler || 'res_2s',
+        scheduler: options.comfyScheduler || 'bong_tangent',
+    };
+    const refinerStart = Math.min(options.comfyWanRefinerStartStep || 3, samplerSettings.steps - 1);
+    
+    Object.assign(workflow['35'].inputs, samplerSettings, { end_at_step: refinerStart });
+    Object.assign(workflow['36'].inputs, samplerSettings, { start_at_step: refinerStart, end_at_step: samplerSettings.steps });
+
+    // --- LoRAs (Nodes 30, 29, 14 for High; 43, 44, 45 for Low) ---
+    const fusionXStrength = options.comfyWanUseFusionXLora ? options.comfyWanFusionXLoraStrength : 0.0;
+    workflow['30'].inputs.lora_name = options.comfyWanFusionXLoraName || 'Wan2.1_T2V_14B_FusionX_LoRA.safetensors';
+    workflow['30'].inputs.strength_model = fusionXStrength;
+    workflow['30'].inputs.strength_clip = fusionXStrength;
+    workflow['43'].inputs.lora_name = options.comfyWanFusionXLoraName || 'Wan2.1_T2V_14B_FusionX_LoRA.safetensors';
+    workflow['43'].inputs.strength_model = fusionXStrength;
+
+    const lightningStrength = options.comfyWanUseLightningLora ? options.comfyWanLightningLoraStrength : 0.0;
+    workflow['29'].inputs.lora_name = options.comfyWanLightningLoraNameHigh || 'Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors';
+    workflow['29'].inputs.strength_model = lightningStrength;
+    workflow['29'].inputs.strength_clip = lightningStrength;
+    workflow['44'].inputs.lora_name = options.comfyWanLightningLoraNameLow || 'Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors';
+    workflow['44'].inputs.strength_model = lightningStrength;
+    
+    const stockStrength = options.comfyWanUseStockPhotoLora ? options.comfyWanStockPhotoLoraStrength : 0.0;
+    workflow['14'].inputs.lora_name = options.comfyWanStockPhotoLoraNameHigh || 'stock_photography_wan22_HIGH_v1.safetensors';
+    workflow['14'].inputs.strength_model = stockStrength;
+    workflow['14'].inputs.strength_clip = stockStrength;
+    workflow['45'].inputs.lora_name = options.comfyWanStockPhotoLoraNameLow || 'stock_photography_wan22_LOW_v1.safetensors';
+    workflow['45'].inputs.strength_model = stockStrength;
+
+    return workflow;
+};
+
 const buildWorkflow = (options: GenerationOptions): any => {
+    if (options.comfyModelType === 'wan2.2') {
+        return buildWan22Workflow(options);
+    }
+
     const workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE));
     const checkPointLoader = workflow['4'];
     const positivePrompt = workflow['6'];
@@ -201,14 +274,19 @@ export const exportComfyUIWorkflow = (options: GenerationOptions): void => {
     URL.revokeObjectURL(url);
 };
 
-export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: 'sdxl' | 'flux'): Promise<string> => {
+export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: 'sdxl' | 'flux' | 'wan2.2'): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const imagePart = await fileToGenerativePart(sourceImage);
     const basePrompt = "Analyze this image of a person and generate a descriptive text prompt for a text-to-image AI model. Focus on subject, expression, clothing, and background style.";
     
-    const systemInstruction = modelType === 'flux'
-        ? "You are a prompt generator for the FLUX.1 image model. Create a highly detailed, narrative prompt. Do not use commas; instead, use natural language conjunctions like 'and', 'with', 'wearing a'. Describe the scene, mood, and lighting in a conversational style."
-        : "You are a prompt generator for the SDXL image model. Create a concise, keyword-driven prompt under 75 words. Use comma-separated keywords and phrases. Prioritize key elements: subject, clothing, action, setting, and style. Be direct and specific.";
+    let systemInstruction;
+    if (modelType === 'flux') {
+        systemInstruction = "You are a prompt generator for the FLUX.1 image model. Create a highly detailed, narrative prompt. Do not use commas; instead, use natural language conjunctions like 'and', 'with', 'wearing a'. Describe the scene, mood, and lighting in a conversational style.";
+    } else if (modelType === 'wan2.2') {
+         systemInstruction = "You are a prompt generator for the WAN 2.2 image model. Create a detailed, artistic prompt focusing on atmosphere, color, and emotional tone. Describe the subject's appearance, clothing, and the environment with rich, evocative language. Mention camera angles and lighting styles like 'cinematic lighting' or 'soft focus'.";
+    } else { // 'sdxl'
+        systemInstruction = "You are a prompt generator for the SDXL image model. Create a concise, keyword-driven prompt under 75 words. Use comma-separated keywords and phrases. Prioritize key elements: subject, clothing, action, setting, and style. Be direct and specific.";
+    }
 
     try {
         const result = await ai.models.generateContent({
@@ -236,7 +314,9 @@ export const generateComfyUIPortraits = async (
     const baseUrl = getComfyUIUrl();
 
     return new Promise((resolve, reject) => {
-        const ws = new WebSocket(`ws://${new URL(baseUrl).host}/ws?clientId=${clientId}`);
+        const url = new URL(baseUrl);
+        const wsProtocol = url.protocol === 'https:' ? 'wss' : 'ws';
+        const ws = new WebSocket(`${wsProtocol}://${url.host}/ws?clientId=${clientId}`);
         
         const queuedPromptIds = new Set<string>();
         const executedPromptIds = new Set<string>();
@@ -298,15 +378,19 @@ export const generateComfyUIPortraits = async (
                     const workflow = buildWorkflow(options);
                     
                     if (i === 0) {
-                        // The positive prompt is in node '6' of our template
-                        finalPromptForDisplay = workflow['6']?.inputs?.text || options.comfyPrompt!;
+                        const positivePromptNodeKey = Object.keys(workflow).find(k => workflow[k]._meta?.title === "Positive Prompt" || k === '3' || k === '6');
+                        if (positivePromptNodeKey) {
+                            finalPromptForDisplay = workflow[positivePromptNodeKey].inputs.text;
+                        } else {
+                            finalPromptForDisplay = options.comfyPrompt!;
+                        }
                     }
 
                     // Use a different seed for each image
-                    const samplerNodeKey = Object.keys(workflow).find(k => workflow[k].class_type.includes('Sampler'));
-                    if (samplerNodeKey) {
-                        workflow[samplerNodeKey].inputs.seed = Math.floor(Math.random() * 1_000_000_000);
-                    }
+                    const samplerNodeKeys = Object.keys(workflow).filter(k => workflow[k].class_type.includes('Sampler'));
+                    samplerNodeKeys.forEach(key => {
+                        workflow[key].inputs.seed = Math.floor(Math.random() * 1_000_000_000);
+                    });
                     
                     const response = await queuePrompt(workflow);
                     if (response.prompt_id) {
@@ -357,13 +441,10 @@ export const generateComfyUIPortraits = async (
                     case 'executed': {
                         const promptId = data.data.prompt_id;
                         if (executedPromptIds.has(promptId)) break; 
-
-                        // The final image data comes from the PreviewImage node, which is '9'
-                        if (queuedPromptIds.has(promptId) && data.data.node === '9') {
+                        
+                        if (queuedPromptIds.has(promptId) && data.data.output.images) {
                             executedPromptIds.add(promptId);
-                            if (data.data.output.images) {
-                                imageMetadata.push(...data.data.output.images);
-                            }
+                            imageMetadata.push(...data.data.output.images);
                             checkCompletion();
                         }
                         break;

@@ -1,5 +1,5 @@
 {
-  "version": "1.29",
-  "date": "2024-07-31T12:00:00Z",
-  "changes": "Fixed a bug where the UI displayed the original ComfyUI prompt instead of the final, modified prompt that included text overlay instructions."
+  "version": "1.31",
+  "date": "2024-08-02T11:00:00Z",
+  "changes": "Fixed critical bugs in the ComfyUI WAN 2.2 workflow, improving stability with missing nodes and adding support for text input-based GGUF models."
 }

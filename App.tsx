@@ -51,6 +51,24 @@ const initialOptions: GenerationOptions = {
   comfyPrompt: '',
   comfyNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed',
   comfyFluxNodeName: null,
+
+  // ComfyUI WAN 2.2 defaults
+  comfyWanHighNoiseModel: 'Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf',
+  comfyWanLowNoiseModel: 'Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf',
+  comfyWanClipModel: 'umt5_xxl_fp8_e4m3fn_scaled.safetensors',
+  comfyWanVaeModel: 'wan_2.1_vae.safetensors',
+  comfyWanUseFusionXLora: true,
+  comfyWanFusionXLoraStrength: 0.8,
+  comfyWanFusionXLoraName: 'Wan2.1_T2V_14B_FusionX_LoRA.safetensors',
+  comfyWanUseLightningLora: true,
+  comfyWanLightningLoraStrength: 0.6,
+  comfyWanLightningLoraNameHigh: 'Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors',
+  comfyWanLightningLoraNameLow: 'Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors',
+  comfyWanUseStockPhotoLora: true,
+  comfyWanStockPhotoLoraStrength: 1.5,
+  comfyWanStockPhotoLoraNameHigh: 'stock_photography_wan22_HIGH_v1.safetensors',
+  comfyWanStockPhotoLoraNameLow: 'stock_photography_wan22_LOW_v1.safetensors',
+  comfyWanRefinerStartStep: 3,
 };
 
 function App() {

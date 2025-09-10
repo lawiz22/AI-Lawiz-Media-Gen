@@ -19,7 +19,7 @@ export interface GenerationOptions {
   textObjectPrompt?: string;
 
   // ComfyUI specific options
-  comfyModelType?: 'sdxl' | 'flux';
+  comfyModelType?: 'sdxl' | 'flux' | 'wan2.2';
   comfyFluxGuidance?: number;
   comfyModel?: string;
   comfySteps?: number;
@@ -29,6 +29,24 @@ export interface GenerationOptions {
   comfyPrompt?: string;
   comfyNegativePrompt?: string;
   comfyFluxNodeName?: string | null;
+
+  // ComfyUI WAN 2.2 specific options
+  comfyWanHighNoiseModel?: string;
+  comfyWanLowNoiseModel?: string;
+  comfyWanClipModel?: string;
+  comfyWanVaeModel?: string;
+  comfyWanUseFusionXLora?: boolean;
+  comfyWanFusionXLoraStrength?: number;
+  comfyWanFusionXLoraName?: string;
+  comfyWanUseLightningLora?: boolean;
+  comfyWanLightningLoraStrength?: number;
+  comfyWanLightningLoraNameHigh?: string;
+  comfyWanLightningLoraNameLow?: string;
+  comfyWanUseStockPhotoLora?: boolean;
+  comfyWanStockPhotoLoraStrength?: number;
+  comfyWanStockPhotoLoraNameHigh?: string;
+  comfyWanStockPhotoLoraNameLow?: string;
+  comfyWanRefinerStartStep?: number;
 }
 
 export interface User {

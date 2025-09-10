@@ -13,7 +13,7 @@ import {
 } from '../constants';
 import { generateBackgroundImagePreview, generateClothingPreview } from '../services/geminiService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
-import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon } from './icons';
+import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon } from './icons';
 
 // --- Prop Types ---
 interface OptionsPanelProps {
@@ -65,6 +65,34 @@ const TextInput: React.FC<{ label: string, value: string, onChange: (e: ChangeEv
     </div>
 );
 
+const CheckboxSlider: React.FC<{
+    label: string;
+    isChecked: boolean;
+    onCheckboxChange: (e: ChangeEvent<HTMLInputElement>) => void;
+    sliderValue: number;
+    onSliderChange: (e: ChangeEvent<HTMLInputElement>) => void;
+    min: number; max: number; step: number;
+    disabled?: boolean;
+}> = ({ label, isChecked, onCheckboxChange, sliderValue, onSliderChange, min, max, step, disabled }) => (
+    <div>
+        <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+            <input type="checkbox" checked={isChecked} onChange={onCheckboxChange} disabled={disabled} className="rounded text-accent focus:ring-accent" />
+            {label} {isChecked && `(${sliderValue})`}
+        </label>
+        {isChecked && (
+            <input
+                type="range"
+                min={min} max={max} step={step}
+                value={sliderValue}
+                onChange={onSliderChange}
+                disabled={disabled}
+                className="w-full h-2 mt-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
+            />
+        )}
+    </div>
+);
+
+
 // --- Main Component ---
 export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   options, setOptions,
@@ -84,16 +112,24 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         setOptions(prev => ({ ...prev, poseSelection: selectedPoses }));
     }, [selectedPoses, setOptions]);
     
-    const comfyModels = useMemo(() => {
-        if (!comfyUIObjectInfo || !comfyUIObjectInfo.CheckpointLoaderSimple) return [];
-        return comfyUIObjectInfo.CheckpointLoaderSimple.input.required.ckpt_name[0];
-    }, [comfyUIObjectInfo]);
+    // Standard model lists
+    const comfyModels = useMemo(() => comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || [], [comfyUIObjectInfo]);
+    const comfySamplers = useMemo(() => comfyUIObjectInfo?.KSampler?.input?.required?.sampler_name?.[0] || [], [comfyUIObjectInfo]);
+    const comfySchedulers = useMemo(() => comfyUIObjectInfo?.KSampler?.input?.required?.scheduler?.[0] || [], [comfyUIObjectInfo]);
+    const comfyLoras = useMemo(() => comfyUIObjectInfo?.LoraLoader?.input?.required?.lora_name?.[0] || [], [comfyUIObjectInfo]);
+    const comfyVaes = useMemo(() => comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name?.[0] || [], [comfyUIObjectInfo]);
+    const comfyClips = useMemo(() => comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name?.[0] || [], [comfyUIObjectInfo]);
+
+    // WAN 2.2 specific logic to handle text inputs vs dropdowns for GGUF models
+    const ggufWidgetInfo = useMemo(() => comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name, [comfyUIObjectInfo]);
+    const isGgufDropdown = useMemo(() => Array.isArray(ggufWidgetInfo?.[0]), [ggufWidgetInfo]);
+    const comfyGgufModels = useMemo(() => isGgufDropdown ? (ggufWidgetInfo?.[0] || []) : [], [isGgufDropdown, ggufWidgetInfo]);
 
     const handleOptionChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
         
         if (field === 'comfyModelType') {
-            const newModelType = value as 'sdxl' | 'flux';
+            const newModelType = value as 'sdxl' | 'flux' | 'wan2.2';
             if (newModelType === 'flux') {
                 const specificFluxModel = comfyModels.find((m: string) => m === 'flux1-dev-fp8.safetensors');
                 const genericFluxModel = comfyModels.find((m: string) => m.toLowerCase().includes('flux'));
@@ -104,6 +140,15 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyModel: specificFluxModel || genericFluxModel || 'flux1-dev-fp8.safetensors',
                     comfySteps: 20,
                     comfyCfg: 1,
+                }));
+            } else if (newModelType === 'wan2.2') {
+                 setOptions(prev => ({
+                    ...prev,
+                    comfyModelType: 'wan2.2',
+                    comfySteps: 6,
+                    comfyCfg: 1,
+                    comfySampler: 'res_2s',
+                    comfyScheduler: 'bong_tangent',
                 }));
             } else { // Switching back to 'sdxl'
                 const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
@@ -189,16 +234,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             setIsPreviewingClothing(false);
         }
     };
-
-    const comfySamplers = useMemo(() => {
-        if (!comfyUIObjectInfo || !comfyUIObjectInfo.KSampler) return [];
-        return comfyUIObjectInfo.KSampler.input.required.sampler_name[0];
-    }, [comfyUIObjectInfo]);
-
-    const comfySchedulers = useMemo(() => {
-        if (!comfyUIObjectInfo || !comfyUIObjectInfo.KSampler) return [];
-        return comfyUIObjectInfo.KSampler.input.required.scheduler[0];
-    }, [comfyUIObjectInfo]);
 
     useEffect(() => {
         if (options.provider === 'comfyui' && comfyModels.length > 0 && !options.comfyModel) {
@@ -437,6 +472,148 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
       </>
     );
     
+    const renderComfyUIBaseOptions = () => (
+        <>
+            <OptionSection title="Core Settings">
+                <SelectInput label="Checkpoint Model" value={options.comfyModel || ''} onChange={handleOptionChange('comfyModel')} options={comfyModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                <SelectInput label="Sampler" value={options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={comfySamplers.map((s:string) => ({value: s, label: s}))} disabled={isDisabled} />
+                <SelectInput label="Scheduler" value={options.comfyScheduler || ''} onChange={handleOptionChange('comfyScheduler')} options={comfySchedulers.map((s:string) => ({value: s, label: s}))} disabled={isDisabled} />
+                <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={ASPECT_RATIO_OPTIONS} disabled={isDisabled} />
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary">Number of Images: {options.numImages}</label>
+                    <input type="range" min="1" max="8" step="1" value={options.numImages} onChange={handleNumberInputChange('numImages')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+            </OptionSection>
+
+            <OptionSection title="Prompt">
+                <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea={true} placeholder="A photorealistic portrait of a person..." />
+                <TextInput label="Negative Prompt" value={options.comfyNegativePrompt || ''} onChange={handleOptionChange('comfyNegativePrompt')} disabled={isDisabled} isTextArea={true} placeholder="blurry, bad quality, low-res, ugly, deformed..." />
+                <button onClick={onGeneratePrompt} disabled={!sourceImage || isGeneratingPrompt || isDisabled} className="w-full text-sm flex items-center justify-center gap-2 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isGeneratingPrompt ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <GenerateIcon className="w-4 h-4"/>}
+                    {isGeneratingPrompt ? 'Generating...' : 'Generate from Source Image'}
+                </button>
+            </OptionSection>
+
+            <OptionSection title="Parameters">
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary">Steps: {options.comfySteps}</label>
+                    <input type="range" min="10" max="50" step="1" value={options.comfySteps} onChange={handleSliderChange('comfySteps')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary">CFG Scale: {options.comfyCfg}</label>
+                    <input type="range" min="1" max="15" step="0.5" value={options.comfyCfg} onChange={handleSliderChange('comfyCfg')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+                {options.comfyModelType === 'flux' && (
+                    <div>
+                        <label className="block text-sm font-medium text-text-secondary">FLUX Guidance: {options.comfyFluxGuidance}</label>
+                        <input type="range" min="1" max="10" step="0.1" value={options.comfyFluxGuidance} onChange={handleSliderChange('comfyFluxGuidance')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                    </div>
+                )}
+            </OptionSection>
+        </>
+    );
+
+    const renderWan22Options = () => (
+        <>
+            <OptionSection title="WAN 2.2 Models">
+                {isGgufDropdown ? (
+                    <SelectInput label="High-Noise GGUF" value={options.comfyWanHighNoiseModel || ''} onChange={handleOptionChange('comfyWanHighNoiseModel')} options={comfyGgufModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                ) : (
+                    <TextInput label="High-Noise GGUF Filename" value={options.comfyWanHighNoiseModel || ''} onChange={handleOptionChange('comfyWanHighNoiseModel')} placeholder="e.g., Wan2.2-HighNoise.gguf" disabled={isDisabled} />
+                )}
+                {isGgufDropdown ? (
+                    <SelectInput label="Low-Noise GGUF" value={options.comfyWanLowNoiseModel || ''} onChange={handleOptionChange('comfyWanLowNoiseModel')} options={comfyGgufModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                ) : (
+                    <TextInput label="Low-Noise GGUF Filename" value={options.comfyWanLowNoiseModel || ''} onChange={handleOptionChange('comfyWanLowNoiseModel')} placeholder="e.g., Wan2.2-LowNoise.gguf" disabled={isDisabled} />
+                )}
+                <SelectInput label="CLIP Model" value={options.comfyWanClipModel || ''} onChange={handleOptionChange('comfyWanClipModel')} options={comfyClips.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                <SelectInput label="VAE Model" value={options.comfyWanVaeModel || ''} onChange={handleOptionChange('comfyWanVaeModel')} options={comfyVaes.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+            </OptionSection>
+
+            <OptionSection title="Prompt & Core">
+                <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea={true} placeholder="A photorealistic portrait of a person..." />
+                <TextInput label="Negative Prompt" value={options.comfyNegativePrompt || ''} onChange={handleOptionChange('comfyNegativePrompt')} disabled={isDisabled} isTextArea={true} placeholder="blurry, bad quality, low-res, ugly, deformed..." />
+                <button onClick={onGeneratePrompt} disabled={!sourceImage || isGeneratingPrompt || isDisabled} className="w-full text-sm flex items-center justify-center gap-2 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isGeneratingPrompt ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <GenerateIcon className="w-4 h-4"/>}
+                    {isGeneratingPrompt ? 'Generating...' : 'Generate from Source Image'}
+                </button>
+                <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={ASPECT_RATIO_OPTIONS} disabled={isDisabled} />
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary">Number of Images: {options.numImages}</label>
+                    <input type="range" min="1" max="8" step="1" value={options.numImages} onChange={handleNumberInputChange('numImages')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+            </OptionSection>
+
+            <OptionSection title="WAN 2.2 LoRAs">
+                <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                    <CheckboxSlider
+                        label="Use FusionX LoRA"
+                        isChecked={!!options.comfyWanUseFusionXLora}
+                        onCheckboxChange={handleOptionChange('comfyWanUseFusionXLora')}
+                        sliderValue={options.comfyWanFusionXLoraStrength || 0}
+                        onSliderChange={handleSliderChange('comfyWanFusionXLoraStrength')}
+                        min={0} max={2} step={0.1}
+                        disabled={isDisabled}
+                    />
+                    {options.comfyWanUseFusionXLora && <SelectInput label="" value={options.comfyWanFusionXLoraName || ''} onChange={handleOptionChange('comfyWanFusionXLoraName')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />}
+                </div>
+
+                 <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                    <CheckboxSlider
+                        label="Use Lightning LoRA"
+                        isChecked={!!options.comfyWanUseLightningLora}
+                        onCheckboxChange={handleOptionChange('comfyWanUseLightningLora')}
+                        sliderValue={options.comfyWanLightningLoraStrength || 0}
+                        onSliderChange={handleSliderChange('comfyWanLightningLoraStrength')}
+                        min={0} max={2} step={0.1}
+                        disabled={isDisabled}
+                    />
+                    {options.comfyWanUseLightningLora && (
+                        <div className="space-y-2">
+                            <SelectInput label="High-Noise LoRA" value={options.comfyWanLightningLoraNameHigh || ''} onChange={handleOptionChange('comfyWanLightningLoraNameHigh')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />
+                            <SelectInput label="Low-Noise LoRA" value={options.comfyWanLightningLoraNameLow || ''} onChange={handleOptionChange('comfyWanLightningLoraNameLow')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />
+                        </div>
+                    )}
+                </div>
+
+                <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                    <CheckboxSlider
+                        label="Use Stock Photo LoRA"
+                        isChecked={!!options.comfyWanUseStockPhotoLora}
+                        onCheckboxChange={handleOptionChange('comfyWanUseStockPhotoLora')}
+                        sliderValue={options.comfyWanStockPhotoLoraStrength || 0}
+                        onSliderChange={handleSliderChange('comfyWanStockPhotoLoraStrength')}
+                        min={0} max={2} step={0.1}
+                        disabled={isDisabled}
+                    />
+                    {options.comfyWanUseStockPhotoLora && (
+                         <div className="space-y-2">
+                            <SelectInput label="High-Noise LoRA" value={options.comfyWanStockPhotoLoraNameHigh || ''} onChange={handleOptionChange('comfyWanStockPhotoLoraNameHigh')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />
+                            <SelectInput label="Low-Noise LoRA" value={options.comfyWanStockPhotoLoraNameLow || ''} onChange={handleOptionChange('comfyWanStockPhotoLoraNameLow')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />
+                        </div>
+                    )}
+                </div>
+            </OptionSection>
+
+            <OptionSection title="WAN 2.2 Sampler">
+                <SelectInput label="Sampler" value={options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={comfySamplers.map((s:string) => ({value: s, label: s}))} disabled={isDisabled} />
+                <SelectInput label="Scheduler" value={options.comfyScheduler || ''} onChange={handleOptionChange('comfyScheduler')} options={comfySchedulers.map((s:string) => ({value: s, label: s}))} disabled={isDisabled} />
+                 <div>
+                    <label className="block text-sm font-medium text-text-secondary">Steps: {options.comfySteps}</label>
+                    <input type="range" min="4" max="20" step="1" value={options.comfySteps} onChange={handleSliderChange('comfySteps')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+                 <div>
+                    <label className="block text-sm font-medium text-text-secondary">CFG Scale: {options.comfyCfg}</label>
+                    <input type="range" min="1" max="5" step="0.1" value={options.comfyCfg} onChange={handleSliderChange('comfyCfg')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+                 <div>
+                    <label className="block text-sm font-medium text-text-secondary">Refiner Start At Step: {options.comfyWanRefinerStartStep}</label>
+                    <input type="range" min="1" max={(options.comfySteps || 6) - 1} step="1" value={options.comfyWanRefinerStartStep} onChange={handleSliderChange('comfyWanRefinerStartStep')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+            </OptionSection>
+        </>
+    );
+
     const renderComfyUIOptions = () => (
       <>
         {comfyUIObjectInfo === null ? (
@@ -451,76 +628,113 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         ) : (
             <>
                 <OptionSection title="Core Settings">
-                    <SelectInput label="Model Type" value={options.comfyModelType || 'sdxl'} onChange={handleOptionChange('comfyModelType')} options={[{label: 'SDXL', value: 'sdxl'}, {label: 'FLUX', value: 'flux'}]} disabled={isDisabled} />
-                    <SelectInput label="Checkpoint Model" value={options.comfyModel || ''} onChange={handleOptionChange('comfyModel')} options={comfyModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
-                    <SelectInput label="Sampler" value={options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={comfySamplers.map((s:string) => ({value: s, label: s}))} disabled={isDisabled} />
-                    <SelectInput label="Scheduler" value={options.comfyScheduler || ''} onChange={handleOptionChange('comfyScheduler')} options={comfySchedulers.map((s:string) => ({value: s, label: s}))} disabled={isDisabled} />
-                    <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={ASPECT_RATIO_OPTIONS} disabled={isDisabled} />
-                    <div>
-                        <label className="block text-sm font-medium text-text-secondary">Number of Images: {options.numImages}</label>
-                        <input type="range" min="1" max="8" step="1" value={options.numImages} onChange={handleNumberInputChange('numImages')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
-                    </div>
+                    <SelectInput 
+                        label="Model Type" 
+                        value={options.comfyModelType || 'sdxl'} 
+                        onChange={handleOptionChange('comfyModelType')} 
+                        options={[
+                            {label: 'SDXL', value: 'sdxl'}, 
+                            {label: 'FLUX', value: 'flux'},
+                            {label: 'WAN 2.2 Image', value: 'wan2.2'}
+                        ]} 
+                        disabled={isDisabled} 
+                    />
                 </OptionSection>
 
-                <OptionSection title="Prompt">
-                    <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea={true} placeholder="A photorealistic portrait of a person..." />
-                    <TextInput label="Negative Prompt" value={options.comfyNegativePrompt || ''} onChange={handleOptionChange('comfyNegativePrompt')} disabled={isDisabled} isTextArea={true} placeholder="blurry, bad quality, low-res, ugly, deformed..." />
-                    <button onClick={onGeneratePrompt} disabled={!sourceImage || isGeneratingPrompt || isDisabled} className="w-full text-sm flex items-center justify-center gap-2 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        {isGeneratingPrompt ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <GenerateIcon className="w-4 h-4"/>}
-                        {isGeneratingPrompt ? 'Generating...' : 'Generate from Source Image'}
-                    </button>
-                </OptionSection>
-
-                <OptionSection title="Parameters">
-                    <div>
-                        <label className="block text-sm font-medium text-text-secondary">Steps: {options.comfySteps}</label>
-                        <input type="range" min="10" max="50" step="1" value={options.comfySteps} onChange={handleSliderChange('comfySteps')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-text-secondary">CFG Scale: {options.comfyCfg}</label>
-                        <input type="range" min="1" max="15" step="0.5" value={options.comfyCfg} onChange={handleSliderChange('comfyCfg')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
-                    </div>
-                    {options.comfyModelType === 'flux' && (
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary">FLUX Guidance: {options.comfyFluxGuidance}</label>
-                            <input type="range" min="1" max="10" step="0.1" value={options.comfyFluxGuidance} onChange={handleSliderChange('comfyFluxGuidance')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
-                        </div>
-                    )}
-                </OptionSection>
-
-                <OptionSection title="Text Overlay (Optional)">
-                    <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
-                        <input type="checkbox" checked={options.addTextToImage} onChange={handleOptionChange('addTextToImage')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
-                        Add text to image
-                    </label>
-                    {options.addTextToImage && (
-                        <div className="space-y-4 pl-4 border-l-2 border-border-primary">
-                            <TextInput label="Text to Display" value={options.textOnImagePrompt || ''} onChange={handleOptionChange('textOnImagePrompt')} placeholder="e.g., Happy Birthday" disabled={isDisabled} />
-                            <div>
-                                <label className="block text-sm font-medium text-text-secondary mb-1">How to display text</label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="text"
-                                        value={options.textObjectPrompt || ''}
-                                        onChange={handleOptionChange('textObjectPrompt')}
-                                        placeholder="a sign with '%s' on it"
-                                        disabled={isDisabled}
-                                        className="block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleRandomizeTextObject}
-                                        disabled={isDisabled}
-                                        className="p-2 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold rounded-lg transition-colors flex-shrink-0"
-                                        title="Randomize how text is displayed"
-                                    >
-                                        <RefreshIcon className="w-5 h-5"/>
-                                    </button>
-                                </div>
+                {(() => {
+                    if (options.comfyModelType === 'wan2.2') {
+                        const isWanReady = !!comfyUIObjectInfo?.UnetLoaderGGUF;
+                        if (isWanReady) {
+                             return (
+                                <>
+                                    {renderWan22Options()}
+                                    <OptionSection title="Text Overlay (Optional)">
+                                        <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+                                            <input type="checkbox" checked={options.addTextToImage} onChange={handleOptionChange('addTextToImage')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
+                                            Add text to image
+                                        </label>
+                                        {options.addTextToImage && (
+                                            <div className="space-y-4 pl-4 border-l-2 border-border-primary">
+                                                <TextInput label="Text to Display" value={options.textOnImagePrompt || ''} onChange={handleOptionChange('textOnImagePrompt')} placeholder="e.g., Happy Birthday" disabled={isDisabled} />
+                                                <div>
+                                                    <label className="block text-sm font-medium text-text-secondary mb-1">How to display text</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="text"
+                                                            value={options.textObjectPrompt || ''}
+                                                            onChange={handleOptionChange('textObjectPrompt')}
+                                                            placeholder="a sign with '%s' on it"
+                                                            disabled={isDisabled}
+                                                            className="block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleRandomizeTextObject}
+                                                            disabled={isDisabled}
+                                                            className="p-2 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold rounded-lg transition-colors flex-shrink-0"
+                                                            title="Randomize how text is displayed"
+                                                        >
+                                                            <RefreshIcon className="w-5 h-5"/>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </OptionSection>
+                                </>
+                            );
+                        }
+                        return (
+                            <div className="bg-danger-bg text-danger p-4 rounded-lg text-sm space-y-2 mt-4">
+                                <h4 className="font-bold flex items-center gap-2"><WarningIcon className="w-5 h-5"/>WAN 2.2 Workflow Not Available</h4>
+                                <p>Your ComfyUI server appears to be missing required custom nodes for this workflow.</p>
+                                <ul className="list-disc list-inside text-xs space-y-1">
+                                    <li>Ensure the <strong>UnetLoaderGGUF</strong> custom node is installed via the ComfyUI Manager.</li>
+                                </ul>
                             </div>
-                        </div>
-                    )}
-                </OptionSection>
+                        );
+                    }
+                    
+                    // For SDXL and FLUX
+                    return (
+                         <>
+                            {renderComfyUIBaseOptions()}
+                             <OptionSection title="Text Overlay (Optional)">
+                                <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+                                    <input type="checkbox" checked={options.addTextToImage} onChange={handleOptionChange('addTextToImage')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
+                                    Add text to image
+                                </label>
+                                {options.addTextToImage && (
+                                    <div className="space-y-4 pl-4 border-l-2 border-border-primary">
+                                        <TextInput label="Text to Display" value={options.textOnImagePrompt || ''} onChange={handleOptionChange('textOnImagePrompt')} placeholder="e.g., Happy Birthday" disabled={isDisabled} />
+                                        <div>
+                                            <label className="block text-sm font-medium text-text-secondary mb-1">How to display text</label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={options.textObjectPrompt || ''}
+                                                    onChange={handleOptionChange('textObjectPrompt')}
+                                                    placeholder="a sign with '%s' on it"
+                                                    disabled={isDisabled}
+                                                    className="block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleRandomizeTextObject}
+                                                    disabled={isDisabled}
+                                                    className="p-2 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold rounded-lg transition-colors flex-shrink-0"
+                                                    title="Randomize how text is displayed"
+                                                >
+                                                    <RefreshIcon className="w-5 h-5"/>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </OptionSection>
+                        </>
+                    );
+                })()}
             </>
         )}
       </>
