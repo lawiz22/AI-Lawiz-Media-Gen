@@ -14,6 +14,7 @@ import {
   POSE_MODIFIERS,
   POSE_DIRECTIONS,
   POSE_DETAILS,
+  TEXT_OBJECT_PROMPTS,
 } from '../constants';
 
 // Helper to decode base64 poses
@@ -94,6 +95,8 @@ export const generateRandomPosePrompts = (count: number): string[] => {
 
     return Array.from(generatedPoses);
 };
+
+export const getRandomTextObjectPrompt = (): string => getRandom(TEXT_OBJECT_PROMPTS);
 
 
 export const buildPromptSegments = (options: GenerationOptions, pose: string, hasPreviewedClothing: boolean): string[] => {

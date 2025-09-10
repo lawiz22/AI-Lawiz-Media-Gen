@@ -29,7 +29,7 @@ const dataUrlToGenerativePart = async (dataUrl: string): Promise<Part> => {
     };
 };
 
-export const generateClothingPreview = async (prompt: string): Promise<string> => {
+export const generateClothingPreview = async (prompt: string, aspectRatio: string): Promise<string> => {
   if (!prompt.trim()) {
     throw new Error("Prompt cannot be empty.");
   }
@@ -43,7 +43,7 @@ export const generateClothingPreview = async (prompt: string): Promise<string> =
       config: {
         numberOfImages: 1,
         outputMimeType: 'image/jpeg',
-        aspectRatio: '1:1',
+        aspectRatio: aspectRatio as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
       },
     });
 

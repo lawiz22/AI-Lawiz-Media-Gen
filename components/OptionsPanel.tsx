@@ -10,10 +10,9 @@ import {
   IMAGE_STYLE_OPTIONS,
   ERA_STYLE_OPTIONS,
   PRESET_POSES,
-  TEXT_OBJECT_PROMPTS
 } from '../constants';
 import { generateBackgroundImagePreview, generateClothingPreview } from '../services/geminiService';
-import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts } from '../utils/promptBuilder';
+import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
 import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon } from './icons';
 
 // --- Prop Types ---
@@ -182,7 +181,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         setClothingPreviewError(null);
         setPreviewedClothingImage(null);
         try {
-            const imageUrl = await generateClothingPreview(options.customClothingPrompt);
+            const imageUrl = await generateClothingPreview(options.customClothingPrompt, options.aspectRatio);
             setPreviewedClothingImage(imageUrl);
         } catch (err: any) {
             setClothingPreviewError(err.message || "Failed to generate clothing preview.");
@@ -228,6 +227,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     };
     
     const handleRerollClothing = () => setOptions(prev => ({...prev, customClothingPrompt: generateRandomClothingPrompt()}));
+
+    const handleRandomizeTextObject = () => {
+        setOptions(prev => ({ ...prev, textObjectPrompt: getRandomTextObjectPrompt() }));
+    };
 
     const renderProviderSwitch = () => (
         <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
@@ -404,9 +407,30 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 Add text to image
             </label>
             {options.addTextToImage && (
-                 <div className="space-y-2 pl-4 border-l-2 border-border-primary">
+                 <div className="space-y-4 pl-4 border-l-2 border-border-primary">
                     <TextInput label="Text to Display" value={options.textOnImagePrompt || ''} onChange={handleOptionChange('textOnImagePrompt')} placeholder="e.g., Happy Birthday" disabled={isDisabled} />
-                    <SelectInput label="How to display text" value={options.textObjectPrompt || ''} onChange={handleOptionChange('textObjectPrompt')} options={TEXT_OBJECT_PROMPTS.map(p => ({value: p, label: p.replace("'%s'", '...')}))} disabled={isDisabled} />
+                    <div>
+                        <label className="block text-sm font-medium text-text-secondary mb-1">How to display text</label>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="text"
+                                value={options.textObjectPrompt || ''}
+                                onChange={handleOptionChange('textObjectPrompt')}
+                                placeholder="a sign with '%s' on it"
+                                disabled={isDisabled}
+                                className="block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleRandomizeTextObject}
+                                disabled={isDisabled}
+                                className="p-2 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold rounded-lg transition-colors flex-shrink-0"
+                                title="Randomize how text is displayed"
+                            >
+                                <RefreshIcon className="w-5 h-5"/>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </OptionSection>
