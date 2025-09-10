@@ -1,5 +1,6 @@
+
 {
-  "version": "1.22",
-  "date": "2024-07-30T10:30:00Z",
-  "changes": "Added version number to the login screen and updated the footer contact information."
+  "version": "1.23",
+  "date": "2024-07-30T11:00:00Z",
+  "changes": "Updated the styling for section titles in the options panel to improve visual hierarchy and aesthetics."
 }

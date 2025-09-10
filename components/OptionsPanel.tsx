@@ -1,3 +1,4 @@
+
 // Fix: Implemented the full OptionsPanel component, which was missing.
 // This resolves the module resolution error and provides the necessary UI
 // for configuring image generation for both Gemini and ComfyUI providers.
@@ -39,8 +40,8 @@ interface OptionsPanelProps {
 // --- Helper Components ---
 const OptionSection: React.FC<{ title: string, children: React.ReactNode }> = ({ title, children }) => (
     <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-text-primary border-b border-border-primary pb-2">{title}</h3>
-        <div className="space-y-4">{children}</div>
+        <h3 className="text-lg font-bold text-accent tracking-wider uppercase border-b-2 border-accent/30 pb-2">{title}</h3>
+        <div className="space-y-4 pt-2">{children}</div>
     </div>
 );
 
