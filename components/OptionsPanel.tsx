@@ -12,7 +12,7 @@ import {
   PRESET_POSES,
   TEXT_OBJECT_PROMPTS
 } from '../constants';
-import { generateBackgroundImagePreview } from '../services/geminiService';
+import { generateBackgroundImagePreview, generateClothingPreview } from '../services/geminiService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt } from '../utils/promptBuilder';
 import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon } from './icons';
 
@@ -22,6 +22,8 @@ interface OptionsPanelProps {
   setOptions: React.Dispatch<React.SetStateAction<GenerationOptions>>;
   previewedBackgroundImage: string | null;
   setPreviewedBackgroundImage: (url: string | null) => void;
+  previewedClothingImage: string | null;
+  setPreviewedClothingImage: (url: string | null) => void;
   onGenerate: () => void;
   onReset: () => void;
   onGeneratePrompt: () => void;
@@ -66,13 +68,17 @@ const TextInput: React.FC<{ label: string, value: string, onChange: (e: ChangeEv
 
 // --- Main Component ---
 export const OptionsPanel: React.FC<OptionsPanelProps> = ({
-  options, setOptions, previewedBackgroundImage, setPreviewedBackgroundImage,
+  options, setOptions,
+  previewedBackgroundImage, setPreviewedBackgroundImage,
+  previewedClothingImage, setPreviewedClothingImage,
   onGenerate, onReset, onGeneratePrompt, onExportWorkflow,
   isDisabled, isReady, isGeneratingPrompt,
   comfyUIObjectInfo, comfyUIUrl, sourceImage,
 }) => {
     const [isPreviewingBg, setIsPreviewingBg] = useState(false);
     const [bgPreviewError, setBgPreviewError] = useState<string | null>(null);
+    const [isPreviewingClothing, setIsPreviewingClothing] = useState(false);
+    const [clothingPreviewError, setClothingPreviewError] = useState<string | null>(null);
     const [selectedPoses, setSelectedPoses] = useState<string[]>(options.poseSelection);
 
     useEffect(() => {
@@ -119,6 +125,24 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             setBgPreviewError(err.message || "Failed to generate preview.");
         } finally {
             setIsPreviewingBg(false);
+        }
+    };
+    
+    const handleGenerateClothingPreview = async () => {
+        if (!options.customClothingPrompt) {
+            setClothingPreviewError("Please enter a clothing prompt first.");
+            return;
+        }
+        setIsPreviewingClothing(true);
+        setClothingPreviewError(null);
+        setPreviewedClothingImage(null);
+        try {
+            const imageUrl = await generateClothingPreview(options.customClothingPrompt);
+            setPreviewedClothingImage(imageUrl);
+        } catch (err: any) {
+            setClothingPreviewError(err.message || "Failed to generate clothing preview.");
+        } finally {
+            setIsPreviewingClothing(false);
         }
     };
     
@@ -237,10 +261,31 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
              {(options.clothing === 'prompt' || options.clothing === 'random') && (
                 <div className="space-y-2 pl-4 border-l-2 border-border-primary">
                     <TextInput label="Custom Clothing Prompt" value={options.customClothingPrompt || ''} onChange={handleOptionChange('customClothingPrompt')} placeholder="e.g., a stylish leather jacket" disabled={isDisabled} />
-                     {options.clothing === 'random' && (
-                        <button onClick={handleRerollClothing} disabled={isDisabled} className="text-sm w-full bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2">
-                           <RefreshIcon className="w-4 h-4"/> Re-roll Clothing
+                    <div className="flex items-center gap-2">
+                         {options.clothing === 'random' && (
+                            <button onClick={handleRerollClothing} disabled={isDisabled} className="text-sm bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                               <RefreshIcon className="w-4 h-4"/> Re-roll
+                            </button>
+                        )}
+                        <button onClick={handleGenerateClothingPreview} disabled={isDisabled || isPreviewingClothing} className={`text-sm flex-1 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2`}>
+                            {isPreviewingClothing ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <RefreshIcon className="w-4 h-4"/>}
+                            {isPreviewingClothing ? 'Generating...' : 'Preview Clothing'}
                         </button>
+                    </div>
+                     {clothingPreviewError && <p className="text-xs text-danger">{clothingPreviewError}</p>}
+                    {previewedClothingImage && (
+                        <div className="mt-4 relative">
+                            <p className="text-xs font-medium text-text-secondary mb-1">Clothing Preview:</p>
+                            <img src={previewedClothingImage} alt="Clothing Preview" className="rounded-lg w-full object-contain border border-border-primary" />
+                            <button 
+                                onClick={() => setPreviewedClothingImage(null)}
+                                className="absolute top-6 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-black/75 transition-colors"
+                                title="Clear Clothing Preview"
+                                aria-label="Clear clothing preview"
+                            >
+                                <CloseIcon className="w-4 h-4" />
+                            </button>
+                        </div>
                     )}
                     {(options.clothing === 'prompt' || options.clothing === 'random') && (
                         <SelectInput label="Style Consistency" value={options.clothingStyleConsistency || 'varied'} onChange={handleOptionChange('clothingStyleConsistency')} options={[

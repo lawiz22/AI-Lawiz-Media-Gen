@@ -63,13 +63,15 @@ export const generateRandomBackgroundPrompt = (): string => {
 };
 
 
-export const buildPromptSegments = (options: GenerationOptions, pose: string): string[] => {
+export const buildPromptSegments = (options: GenerationOptions, pose: string, hasPreviewedClothing: boolean): string[] => {
     const promptSegments: string[] = [`Generate a high-quality, professional, and tasteful portrait. The subject is a person with the same face and features as in the reference image.`];
     
     promptSegments.push(`Pose: ${pose}`);
 
     // Clothing
-    if (options.clothing === 'image') {
+    if (hasPreviewedClothing) {
+        promptSegments.push(`Clothing: The person should be wearing an outfit identical to the one in the provided clothing preview image.`);
+    } else if (options.clothing === 'image') {
         promptSegments.push(`Clothing: The person should be wearing an outfit identical to the one in the provided clothing image.`);
     } else if ((options.clothing === 'prompt' || options.clothing === 'random') && options.customClothingPrompt?.trim()) {
         const basePrompt = options.customClothingPrompt;

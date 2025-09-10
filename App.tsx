@@ -68,6 +68,7 @@ function App() {
   const [clothingImage, setClothingImage] = useState<File | null>(null);
   const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
   const [previewedBackgroundImage, setPreviewedBackgroundImage] = useState<string | null>(null);
+  const [previewedClothingImage, setPreviewedClothingImage] = useState<string | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
@@ -169,6 +170,7 @@ function App() {
     setClothingImage(null);
     setBackgroundImage(null);
     setPreviewedBackgroundImage(null);
+    setPreviewedClothingImage(null);
     setGeneratedImages([]);
     setError(null);
     setLastUsedPrompt(null);
@@ -224,7 +226,15 @@ function App() {
           setIsLoading(false);
           return;
         }
-        generationPromise = generatePortraitSeries(sourceImage, clothingImage, backgroundImage, previewedBackgroundImage, options, updateProgress);
+        generationPromise = generatePortraitSeries(
+          sourceImage,
+          clothingImage,
+          backgroundImage,
+          previewedBackgroundImage,
+          previewedClothingImage,
+          options,
+          updateProgress
+        );
       } else if (options.provider === 'comfyui') {
         if (!options.comfyPrompt) {
           setError("Please enter a prompt for ComfyUI or generate one from a source image.");
@@ -349,6 +359,8 @@ function App() {
                 setOptions={setOptions}
                 previewedBackgroundImage={previewedBackgroundImage}
                 setPreviewedBackgroundImage={setPreviewedBackgroundImage}
+                previewedClothingImage={previewedClothingImage}
+                setPreviewedClothingImage={setPreviewedClothingImage}
                 onGenerate={handleGenerate}
                 onReset={handleReset}
                 onGeneratePrompt={handleGeneratePrompt}

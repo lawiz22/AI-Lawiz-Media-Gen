@@ -29,6 +29,36 @@ const dataUrlToGenerativePart = async (dataUrl: string): Promise<Part> => {
     };
 };
 
+export const generateClothingPreview = async (prompt: string): Promise<string> => {
+  if (!prompt.trim()) {
+    throw new Error("Prompt cannot be empty.");
+  }
+  
+  const fullPrompt = `A high-quality, photorealistic image of a single clothing item on a plain white background. The item is: ${prompt}. Do not include any person, mannequin, or body parts. The image should be a clean product shot of the clothing.`;
+
+  try {
+    const response = await ai.models.generateImages({
+      model: 'imagen-4.0-generate-001',
+      prompt: fullPrompt,
+      config: {
+        numberOfImages: 1,
+        outputMimeType: 'image/jpeg',
+        aspectRatio: '1:1',
+      },
+    });
+
+    if (response.generatedImages && response.generatedImages.length > 0) {
+      const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+      return `data:image/jpeg;base64,${base64ImageBytes}`;
+    } else {
+      throw new Error("The AI did not return an image. Please try a different prompt.");
+    }
+  } catch (error: any) {
+    console.error("Error generating clothing preview:", error);
+    throw new Error(error.message || "Failed to generate clothing preview due to an unknown error.");
+  }
+};
+
 export const generateBackgroundImagePreview = async (
   prompt: string,
   aspectRatio: string
@@ -105,6 +135,7 @@ export const generatePortraitSeries = async (
   clothingImage: File | null,
   backgroundImage: File | null,
   previewedBackground: string | null,
+  previewedClothing: string | null,
   options: GenerationOptions,
   onProgress: (message: string, progress: number) => void
 ): Promise<{ images: string[], firstPrompt: string }> => {
@@ -119,6 +150,11 @@ export const generatePortraitSeries = async (
   let consistentBackgroundPart: Part | null = null;
   if (options.background === 'prompt' && options.consistentBackground && previewedBackground) {
     consistentBackgroundPart = await dataUrlToGenerativePart(previewedBackground);
+  }
+  
+  let consistentClothingPart: Part | null = null;
+  if ((options.clothing === 'prompt' || options.clothing === 'random') && previewedClothing) {
+    consistentClothingPart = await dataUrlToGenerativePart(previewedClothing);
   }
 
   let selectedPoses: string[];
@@ -145,10 +181,12 @@ export const generatePortraitSeries = async (
     const pose = posesAreEncoded ? decodePose(selectedPoses[i]) : selectedPoses[i];
     
     const parts: Part[] = [sourceImagePart];
-    const promptSegments = buildPromptSegments(options, pose);
+    const promptSegments = buildPromptSegments(options, pose, !!consistentClothingPart);
     
-    // Handle clothing image part
-    if (options.clothing === 'image' && clothingImagePart) {
+    // Handle clothing image parts
+    if (consistentClothingPart) {
+        parts.push(consistentClothingPart);
+    } else if (options.clothing === 'image' && clothingImagePart) {
         parts.push(clothingImagePart);
     }
 
