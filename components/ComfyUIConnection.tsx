@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { checkConnection } from '../services/comfyUIService';
 import { CloseIcon, SpinnerIcon } from './icons';
@@ -5,19 +6,26 @@ import { CloseIcon, SpinnerIcon } from './icons';
 interface ComfyUIConnectionProps {
   isOpen: boolean;
   onClose: () => void;
+  initialUrl: string;
+  onSaveUrl: (url: string) => void;
 }
 
 type ConnectionStatus = 'idle' | 'testing' | 'success' | 'failed';
 
-const COMFYUI_URL_KEY = 'comfyui_url';
-
-export const ComfyUIConnection: React.FC<ComfyUIConnectionProps> = ({ isOpen, onClose }) => {
-  const [url, setUrl] = useState<string>(() => {
-    return localStorage.getItem(COMFYUI_URL_KEY) || 'http://127.0.0.1:8188';
-  });
+export const ComfyUIConnection: React.FC<ComfyUIConnectionProps> = ({ isOpen, onClose, initialUrl, onSaveUrl }) => {
+  const [url, setUrl] = useState<string>(initialUrl || 'http://127.0.0.1:8188');
   const [status, setStatus] = useState<ConnectionStatus>('idle');
   const [statusMessage, setStatusMessage] = useState<string>('');
   
+  // Effect to sync the internal URL state if the modal is reopened
+  // with a different URL from the parent component.
+  useEffect(() => {
+    if (isOpen) {
+        setUrl(initialUrl || 'http://127.0.0.1:8188');
+        setStatus('idle'); // Reset status when opening
+    }
+  }, [initialUrl, isOpen]);
+
   const handleTestConnection = async () => {
     setStatus('testing');
     setStatusMessage('');
@@ -32,15 +40,12 @@ export const ComfyUIConnection: React.FC<ComfyUIConnectionProps> = ({ isOpen, on
   };
   
   const handleSave = () => {
-    localStorage.setItem(COMFYUI_URL_KEY, url);
+    onSaveUrl(url);
     setStatus('success');
     setStatusMessage('URL saved!');
     setTimeout(() => {
-        if(status === 'success') {
-            setStatus('idle');
-            setStatusMessage('');
-        }
-    }, 2000);
+        onClose();
+    }, 1000); // Close modal automatically after 1 second
   };
 
   const getStatusColor = () => {
@@ -137,7 +142,7 @@ export const ComfyUIConnection: React.FC<ComfyUIConnectionProps> = ({ isOpen, on
                 style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                 className="flex-1 font-bold py-2 px-4 rounded-lg transition-colors duration-200"
               >
-                Save URL
+                Save and Close
               </button>
             </div>
         </div>

@@ -16,12 +16,15 @@ export interface GenerationOptions {
   eraStyle: string;
   
   // ComfyUI specific options
+  comfyModelType?: 'sdxl' | 'flux';
+  comfyFluxGuidance?: number;
   comfyModel?: string;
   comfySteps?: number;
   comfyCfg?: number;
   comfySampler?: string;
   comfyScheduler?: string;
   comfyPrompt?: string;
+  comfyFluxNodeName?: string | null;
 }
 
 export interface User {

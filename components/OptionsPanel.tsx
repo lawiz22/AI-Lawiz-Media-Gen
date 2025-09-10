@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { GenerationOptions } from '../types';
 import { 
     MAX_IMAGES, 
@@ -22,9 +22,8 @@ import {
     POSE_DIRECTIONS,
     POSE_DETAILS,
 } from '../constants';
-import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, TrashIcon, WorkflowIcon } from './icons';
+import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, TrashIcon, WorkflowIcon, WarningIcon } from './icons';
 import { generateBackgroundImagePreview } from '../services/geminiService';
-import { getComfyUIResource } from '../services/comfyUIService';
 
 interface OptionsPanelProps {
   options: GenerationOptions;
@@ -36,293 +35,50 @@ interface OptionsPanelProps {
   isDisabled: boolean;
   isReady: boolean;
   isGeneratingPrompt?: boolean;
+  comfyUIObjectInfo: any | null;
+  comfyUIUrl: string;
 }
 
-// Simple multi-select component for poses
-const PoseSelector: React.FC<{ selected: string[], onChange: (selected: string[]) => void }> = ({ selected, onChange }) => {
-    const togglePose = (poseValue: string) => {
-        if (selected.includes(poseValue)) {
-            onChange(selected.filter(p => p !== poseValue));
-        } else {
-            onChange([...selected, poseValue]);
-        }
-    };
+// --- Prop Interfaces for Extracted Components ---
+interface GeminiOptionsProps {
+  options: GenerationOptions;
+  isDisabled: boolean;
+  handleOptionChange: <K extends keyof GenerationOptions>(key: K, value: GenerationOptions[K]) => void;
+  handleRandomizeBackgroundPrompt: () => void;
+  isPreviewLoading: boolean;
+  previewError: string | null;
+  previewImage: string | null;
+  handleRandomizePreview: () => void;
+  handleRandomizeClothing: () => void;
+}
 
-    return (
-        <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-            {PRESET_POSES.map((pose) => (
-                <button
-                    key={pose.value}
-                    onClick={() => togglePose(pose.value)}
-                    className={`w-full text-left text-sm p-2 rounded-md transition-colors ${
-                        selected.includes(pose.value)
-                            ? 'bg-accent text-accent-text'
-                            : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'
-                    }`}
-                >
-                    {pose.label}
-                </button>
-            ))}
-        </div>
-    );
-};
+interface ComfyUIOptionsProps {
+  options: GenerationOptions;
+  isDisabled: boolean;
+  isGeneratingPrompt?: boolean;
+  handleOptionChange: <K extends keyof GenerationOptions>(key: K, value: GenerationOptions[K]) => void;
+  isComfyLoading: boolean;
+  comfyError: string | null;
+  comfyModels: string[];
+  comfySamplers: string[];
+  comfySchedulers: string[];
+  comfyUIUrl: string;
+}
 
-const CustomPoseEditor: React.FC<{ 
-    poses: string[], 
-    onChange: (poses: string[]) => void,
-    onRandomize: () => void,
-    isDisabled: boolean 
-}> = ({ poses, onChange, onRandomize, isDisabled }) => {
-    const [newPose, setNewPose] = useState('');
 
-    const handleAddPose = () => {
-        if (newPose.trim()) {
-            onChange([...poses, newPose.trim()]);
-            setNewPose('');
-        }
-    };
+// --- Extracted Components ---
 
-    const handleRemovePose = (index: number) => {
-        onChange(poses.filter((_, i) => i !== index));
-    };
-
-    return (
-        <div>
-            <div className="space-y-2 max-h-48 overflow-y-auto pr-2 mb-2 border border-border-primary rounded-md p-2 bg-bg-primary/50">
-                {poses.length > 0 ? poses.map((pose, index) => (
-                    <div key={index} className="flex items-center justify-between gap-2 bg-bg-tertiary p-2 rounded-md">
-                        <span className="text-sm text-text-primary flex-1 break-words">{pose}</span>
-                        <button onClick={() => handleRemovePose(index)} disabled={isDisabled} aria-label={`Remove pose: ${pose}`}>
-                            <TrashIcon className="w-4 h-4 text-text-secondary hover:text-danger flex-shrink-0"/>
-                        </button>
-                    </div>
-                )) : <p className="text-xs text-text-muted text-center p-4">Add custom poses below or use the randomize button.</p>}
-            </div>
-
-            <div className="flex gap-2 mb-2">
-                <input 
-                    type="text" 
-                    value={newPose} 
-                    onChange={e => setNewPose(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddPose(); }}}
-                    placeholder="Describe a pose..." 
-                    disabled={isDisabled}
-                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                />
-                <button onClick={handleAddPose} disabled={isDisabled} className="bg-accent text-accent-text px-4 rounded-md text-sm font-semibold hover:bg-accent-hover disabled:bg-gray-600 disabled:opacity-50">Add</button>
-            </div>
-
-            <button onClick={onRandomize} disabled={isDisabled} className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
-                <RefreshIcon className="w-5 h-5" />
-                Randomize Poses
-            </button>
-        </div>
-    );
-};
-
-export const OptionsPanel: React.FC<OptionsPanelProps> = ({
+const GeminiOptions: React.FC<GeminiOptionsProps> = ({
   options,
-  setOptions,
-  setPreviewedBackgroundImage,
-  onGenerate,
-  onReset,
-  onExportWorkflow,
   isDisabled,
-  isReady,
-  isGeneratingPrompt,
-}) => {
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewTrigger, setPreviewTrigger] = useState(0);
-  const isManualTrigger = useRef(false);
-  const randomImageCount = useRef(options.numImages);
-
-  const [comfyModels, setComfyModels] = useState<string[]>([]);
-  const [comfySamplers, setComfySamplers] = useState<string[]>([]);
-  const [comfySchedulers, setComfySchedulers] = useState<string[]>([]);
-  const [isComfyLoading, setIsComfyLoading] = useState(false);
-  const [comfyError, setComfyError] = useState<string | null>(null);
-
-  // Fetch ComfyUI resources when provider is selected
-  useEffect(() => {
-    if (options.provider === 'comfyui') {
-        setIsComfyLoading(true);
-        setComfyError(null);
-        Promise.all([
-            getComfyUIResource('checkpoints'),
-            getComfyUIResource('samplers'),
-            getComfyUIResource('schedulers'),
-        ]).then(([models, samplers, schedulers]) => {
-            if (models.length === 0) {
-                setComfyError('Could not load models. Check ComfyUI connection and ensure models are available.');
-            }
-            setComfyModels(models);
-            setComfySamplers(samplers);
-            setComfySchedulers(schedulers);
-            
-            if (!options.comfyModel && models.length > 0) {
-                handleOptionChange('comfyModel', models[0]);
-            }
-             if (!options.comfySampler && samplers.length > 0) {
-                handleOptionChange('comfySampler', 'euler');
-            }
-            if (!options.comfyScheduler && schedulers.length > 0) {
-                handleOptionChange('comfyScheduler', 'normal');
-            }
-        }).catch(() => {
-            setComfyError('Failed to fetch resources from ComfyUI server.');
-        }).finally(() => {
-            setIsComfyLoading(false);
-        });
-    }
-  }, [options.provider]);
-
-
-  useEffect(() => {
-    if (options.poseMode === 'random') {
-        randomImageCount.current = options.numImages;
-    }
-  }, [options.numImages, options.poseMode]);
-
-  const handleOptionChange = <K extends keyof GenerationOptions>(
-    key: K,
-    value: GenerationOptions[K]
-  ) => {
-    setOptions((prev) => ({ ...prev, [key]: value }));
-  };
-  
-  const handlePoseModeChange = (mode: GenerationOptions['poseMode']) => {
-    setOptions(prev => {
-        const newOptions = { ...prev, poseMode: mode, poseSelection: [] };
-        if (mode === 'select' || mode === 'prompt') {
-            newOptions.numImages = 0;
-        } else {
-            newOptions.numImages = randomImageCount.current;
-        }
-        return newOptions;
-    });
-  };
-
-  const handlePoseSelectionChange = (selection: string[]) => {
-      setOptions(prev => ({
-        ...prev,
-        poseSelection: selection,
-        numImages: selection.length
-      }));
-  };
-  
-  const handleRandomizePreview = () => {
-    isManualTrigger.current = true;
-    setPreviewTrigger(p => p + 1);
-  };
-
-  const handleRandomizeClothing = () => {
-    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-    
-    const adjective = getRandom(CLOTHING_ADJECTIVES);
-    const color = getRandom(CLOTHING_COLORS);
-    const material = getRandom(CLOTHING_MATERIALS);
-    const item = getRandom(CLOTHING_ITEMS);
-    const detail = getRandom(CLOTHING_DETAILS);
-
-    const phraseStructures = [
-      `a ${adjective} ${color} ${material} ${item}`,
-      `a ${color} ${item} with ${detail}`,
-      `a ${adjective} ${item} made of ${material}`,
-      `a ${adjective} ${color} ${item} with ${detail}`,
-    ];
-    
-    const randomPrompt = getRandom(phraseStructures);
-    handleOptionChange('customClothingPrompt', randomPrompt);
-  };
-
-  const handleRandomizeBackgroundPrompt = () => {
-    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-    
-    const location = getRandom(BACKGROUND_LOCATIONS);
-    const style = getRandom(BACKGROUND_STYLES);
-    const time = getRandom(BACKGROUND_TIMES_OF_DAY);
-    const detail = getRandom(BACKGROUND_DETAILS);
-
-    const promptStructures = [
-      `${location} ${style} ${time}`,
-      `${location} ${time}, ${style}`,
-      `${location} ${style}, ${detail}`,
-      `A portrait background of ${location} ${time} ${style}`,
-    ];
-
-    const randomPrompt = getRandom(promptStructures);
-    handleOptionChange('customBackground', randomPrompt);
-  };
-
-  const handleRandomizeCustomPoses = () => {
-    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-    const numToGenerate = randomImageCount.current > 0 ? randomImageCount.current : 3;
-    const newPoses: string[] = [];
-
-    for (let i = 0; i < numToGenerate; i++) {
-        const action = getRandom(POSE_ACTIONS);
-        const modifier = getRandom(POSE_MODIFIERS);
-        const direction = getRandom(POSE_DIRECTIONS);
-        const detail = getRandom(POSE_DETAILS);
-
-        const structures = [
-            `${action} ${modifier} ${direction}`,
-            `${action} ${direction} ${detail}`,
-            `${modifier} ${action}, ${detail}`,
-            `A person ${action} ${modifier}, ${direction}, ${detail}`
-        ];
-        newPoses.push(getRandom(structures));
-    }
-    
-    handlePoseSelectionChange(newPoses);
-  };
-
-  useEffect(() => {
-    if (options.background !== 'prompt' || !options.customBackground?.trim() || options.provider !== 'gemini') {
-      setPreviewImage(null);
-      setPreviewError(null);
-      setIsPreviewLoading(false);
-      setPreviewedBackgroundImage(null); // Clear lifted state
-      return;
-    }
-    
-    const performGeneration = () => {
-      setIsPreviewLoading(true);
-      setPreviewError(null);
-      setPreviewImage(null);
-      setPreviewedBackgroundImage(null);
-      generateBackgroundImagePreview(options.customBackground!, options.aspectRatio)
-        .then(imageSrc => {
-          setPreviewImage(imageSrc);
-          setPreviewedBackgroundImage(imageSrc); // Lift state up
-        })
-        .catch(err => {
-          setPreviewError(err.message || 'Failed to generate preview.');
-          setPreviewedBackgroundImage(null); // Clear lifted state on error
-        })
-        .finally(() => {
-          setIsPreviewLoading(false);
-        });
-    };
-    
-    if (isManualTrigger.current) {
-        isManualTrigger.current = false;
-        performGeneration();
-        return; 
-    }
-
-    const handler = setTimeout(() => {
-        performGeneration();
-    }, 1000);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [options.customBackground, options.aspectRatio, options.background, options.provider, previewTrigger, setPreviewedBackgroundImage]);
-
-  const GeminiOptions = () => (
+  handleOptionChange,
+  handleRandomizeBackgroundPrompt,
+  isPreviewLoading,
+  previewError,
+  previewImage,
+  handleRandomizePreview,
+  handleRandomizeClothing,
+}) => (
     <div className="space-y-6">
        <div>
             <label htmlFor="background" className="block text-sm font-medium text-text-secondary mb-1">Background</label>
@@ -484,9 +240,29 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             )}
         </div>
     </div>
-  );
+);
 
-  const ComfyUIOptions = () => (
+const ComfyUIOptions: React.FC<ComfyUIOptionsProps> = ({
+  options,
+  isDisabled,
+  isGeneratingPrompt,
+  handleOptionChange,
+  isComfyLoading,
+  comfyError,
+  comfyModels,
+  comfySamplers,
+  comfySchedulers,
+  comfyUIUrl,
+}) => {
+    
+    // Auto-adjust CFG when switching model type
+    useEffect(() => {
+        if (options.comfyModelType === 'flux' && options.comfyCfg !== 1) {
+            handleOptionChange('comfyCfg', 1);
+        }
+    }, [options.comfyModelType, options.comfyCfg, handleOptionChange]);
+    
+    return (
     <div className="space-y-6">
       {isComfyLoading && (
         <div className="flex items-center justify-center gap-2 text-text-secondary p-4">
@@ -494,13 +270,26 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             <span>Loading ComfyUI options...</span>
         </div>
       )}
-      {comfyError && (
+      {comfyError && !isComfyLoading && (
         <div className="bg-danger-bg text-danger text-sm text-center p-3 rounded-md">
             {comfyError}
         </div>
       )}
       {!isComfyLoading && !comfyError && (
         <>
+            {options.comfyModelType === 'flux' && options.comfyFluxNodeName === null && (
+              <div className="bg-danger-bg/50 border border-danger/50 text-danger-text p-3 rounded-md flex gap-3 text-sm" style={{color: 'var(--color-danger)'}}>
+                  <WarningIcon className="w-8 h-8 flex-shrink-0 mt-1" />
+                  <div>
+                      <p className="font-bold">FLUX Node Missing</p>
+                      <p className="mt-1">
+                          Could not find a compatible FLUX guidance node on your server at 
+                          <code className="bg-bg-primary text-accent px-1 py-0.5 rounded text-xs mx-1">{comfyUIUrl || 'N/A'}</code>. 
+                          The app is searching for a node containing both "flux" and "guidance" (or "guidage") in its name. Please ensure the correct node pack is installed and enabled in ComfyUI.
+                      </p>
+                  </div>
+              </div>
+            )}
             <div>
                 <label htmlFor="comfyPrompt" className="block text-sm font-medium text-text-secondary mb-1">Prompt</label>
                 <div className="relative">
@@ -532,6 +321,15 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     {comfyModels.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
             </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Model Architecture</label>
+              <div className="flex rounded-md border border-border-primary">
+                  <button onClick={() => handleOptionChange('comfyModelType', 'sdxl')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${options.comfyModelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>SDXL</button>
+                  <button onClick={() => handleOptionChange('comfyModelType', 'flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors border-l border-border-primary ${options.comfyModelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>FLUX</button>
+              </div>
+            </div>
+            
             <div>
                 <label htmlFor="comfySteps" className="block text-sm font-medium text-text-secondary">
                     Steps ({options.comfySteps})
@@ -547,7 +345,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             </div>
              <div>
                 <label htmlFor="comfyCfg" className="block text-sm font-medium text-text-secondary">
-                    CFG Scale ({options.comfyCfg})
+                    CFG Scale ({options.comfyModelType === 'flux' ? '1.0 (auto)' : options.comfyCfg})
                 </label>
                 <input
                     id="comfyCfg" type="range" min="1" max="20" step="0.5"
@@ -555,9 +353,26 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     onChange={(e) => handleOptionChange('comfyCfg', parseFloat(e.target.value))}
                     className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer range-thumb"
                     style={{'--thumb-color': 'var(--color-accent)'} as React.CSSProperties}
-                    disabled={isDisabled}
+                    disabled={isDisabled || options.comfyModelType === 'flux'}
                 />
             </div>
+            
+            {options.comfyModelType === 'flux' && (
+              <div>
+                  <label htmlFor="comfyFluxGuidance" className="block text-sm font-medium text-text-secondary">
+                      FLUX Guidance ({options.comfyFluxGuidance?.toFixed(1)})
+                  </label>
+                  <input
+                      id="comfyFluxGuidance" type="range" min="1" max="10" step="0.1"
+                      value={options.comfyFluxGuidance}
+                      onChange={(e) => handleOptionChange('comfyFluxGuidance', parseFloat(e.target.value))}
+                      className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer range-thumb"
+                      style={{'--thumb-color': 'var(--color-accent)'} as React.CSSProperties}
+                      disabled={isDisabled}
+                  />
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label htmlFor="comfySampler" className="block text-sm font-medium text-text-secondary mb-1">Sampler</label>
@@ -587,7 +402,318 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         </>
       )}
     </div>
-  );
+);
+};
+
+// Simple multi-select component for poses
+const PoseSelector: React.FC<{ selected: string[], onChange: (selected: string[]) => void }> = ({ selected, onChange }) => {
+    const togglePose = (poseValue: string) => {
+        if (selected.includes(poseValue)) {
+            onChange(selected.filter(p => p !== poseValue));
+        } else {
+            onChange([...selected, poseValue]);
+        }
+    };
+
+    return (
+        <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+            {PRESET_POSES.map((pose) => (
+                <button
+                    key={pose.value}
+                    onClick={() => togglePose(pose.value)}
+                    className={`w-full text-left text-sm p-2 rounded-md transition-colors ${
+                        selected.includes(pose.value)
+                            ? 'bg-accent text-accent-text'
+                            : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'
+                    }`}
+                >
+                    {pose.label}
+                </button>
+            ))}
+        </div>
+    );
+};
+
+const CustomPoseEditor: React.FC<{ 
+    poses: string[], 
+    onChange: (poses: string[]) => void,
+    onRandomize: () => void,
+    isDisabled: boolean 
+}> = ({ poses, onChange, onRandomize, isDisabled }) => {
+    const [newPose, setNewPose] = useState('');
+
+    const handleAddPose = () => {
+        if (newPose.trim()) {
+            onChange([...poses, newPose.trim()]);
+            setNewPose('');
+        }
+    };
+
+    const handleRemovePose = (index: number) => {
+        onChange(poses.filter((_, i) => i !== index));
+    };
+
+    return (
+        <div>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-2 mb-2 border border-border-primary rounded-md p-2 bg-bg-primary/50">
+                {poses.length > 0 ? poses.map((pose, index) => (
+                    <div key={index} className="flex items-center justify-between gap-2 bg-bg-tertiary p-2 rounded-md">
+                        <span className="text-sm text-text-primary flex-1 break-words">{pose}</span>
+                        <button onClick={() => handleRemovePose(index)} disabled={isDisabled} aria-label={`Remove pose: ${pose}`}>
+                            <TrashIcon className="w-4 h-4 text-text-secondary hover:text-danger flex-shrink-0"/>
+                        </button>
+                    </div>
+                )) : <p className="text-xs text-text-muted text-center p-4">Add custom poses below or use the randomize button.</p>}
+            </div>
+
+            <div className="flex gap-2 mb-2">
+                <input 
+                    type="text" 
+                    value={newPose} 
+                    onChange={e => setNewPose(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddPose(); }}}
+                    placeholder="Describe a pose..." 
+                    disabled={isDisabled}
+                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                />
+                <button onClick={handleAddPose} disabled={isDisabled} className="bg-accent text-accent-text px-4 rounded-md text-sm font-semibold hover:bg-accent-hover disabled:bg-gray-600 disabled:opacity-50">Add</button>
+            </div>
+
+            <button onClick={onRandomize} disabled={isDisabled} className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                <RefreshIcon className="w-5 h-5" />
+                Randomize Poses
+            </button>
+        </div>
+    );
+};
+
+export const OptionsPanel: React.FC<OptionsPanelProps> = ({
+  options,
+  setOptions,
+  setPreviewedBackgroundImage,
+  onGenerate,
+  onReset,
+  onExportWorkflow,
+  isDisabled,
+  isReady,
+  isGeneratingPrompt,
+  comfyUIObjectInfo,
+  comfyUIUrl,
+}) => {
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewTrigger, setPreviewTrigger] = useState(0);
+  const isManualTrigger = useRef(false);
+  const randomImageCount = useRef(options.numImages);
+
+  // --- Derive ComfyUI resources from prop ---
+  const { 
+    comfyModels, 
+    comfySamplers, 
+    comfySchedulers, 
+    isComfyLoading, 
+    comfyError 
+  } = useMemo(() => {
+    if (options.provider !== 'comfyui') {
+      return { comfyModels: [], comfySamplers: [], comfySchedulers: [], isComfyLoading: false, comfyError: null };
+    }
+    
+    // Loading state is when the object is null
+    if (comfyUIObjectInfo === null) {
+      return { comfyModels: [], comfySamplers: [], comfySchedulers: [], isComfyLoading: true, comfyError: null };
+    }
+    
+    // Error state can be an empty object
+    if (Object.keys(comfyUIObjectInfo).length === 0) {
+       return { comfyModels: [], comfySamplers: [], comfySchedulers: [], isComfyLoading: false, comfyError: 'Failed to fetch resources from ComfyUI server.' };
+    }
+    
+    const models = comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || [];
+    const samplers = comfyUIObjectInfo?.KSampler?.input?.required?.sampler_name?.[0] || [];
+    const schedulers = comfyUIObjectInfo?.KSampler?.input?.required?.scheduler?.[0] || [];
+    
+    let error = null;
+    if (models.length === 0) {
+      error = 'Could not load models. Check ComfyUI connection and ensure models are available.';
+    }
+
+    return { 
+      comfyModels: models, 
+      comfySamplers: samplers, 
+      comfySchedulers: schedulers, 
+      isComfyLoading: false,
+      comfyError: error
+    };
+  }, [comfyUIObjectInfo, options.provider]);
+
+  // Set default ComfyUI options once resources are loaded
+  useEffect(() => {
+    if (options.provider === 'comfyui' && !isComfyLoading && !comfyError) {
+      setOptions(prev => {
+        const newOpts = { ...prev };
+        let changed = false;
+        
+        if (!prev.comfyModel && comfyModels.length > 0) {
+          newOpts.comfyModel = comfyModels[0];
+          changed = true;
+        }
+        if (!prev.comfySampler && comfySamplers.length > 0) {
+          newOpts.comfySampler = comfySamplers.includes('euler') ? 'euler' : comfySamplers[0];
+          changed = true;
+        }
+        if (!prev.comfyScheduler && comfySchedulers.length > 0) {
+          newOpts.comfyScheduler = comfySchedulers.includes('normal') ? 'normal' : comfySchedulers[0];
+          changed = true;
+        }
+        return changed ? newOpts : prev;
+      });
+    }
+  }, [options.provider, isComfyLoading, comfyError, comfyModels, comfySamplers, comfySchedulers, setOptions]);
+
+
+  useEffect(() => {
+    if (options.poseMode === 'random') {
+        randomImageCount.current = options.numImages;
+    }
+  }, [options.numImages, options.poseMode]);
+
+  const handleOptionChange = useCallback(<K extends keyof GenerationOptions>(
+    key: K,
+    value: GenerationOptions[K]
+  ) => {
+    setOptions((prev) => ({ ...prev, [key]: value }));
+  }, [setOptions]);
+  
+  const handlePoseModeChange = (mode: GenerationOptions['poseMode']) => {
+    setOptions(prev => {
+        const newOptions = { ...prev, poseMode: mode, poseSelection: [] };
+        if (mode === 'select' || mode === 'prompt') {
+            newOptions.numImages = 0;
+        } else {
+            newOptions.numImages = randomImageCount.current;
+        }
+        return newOptions;
+    });
+  };
+
+  const handlePoseSelectionChange = (selection: string[]) => {
+      setOptions(prev => ({
+        ...prev,
+        poseSelection: selection,
+        numImages: selection.length
+      }));
+  };
+  
+  const handleRandomizePreview = () => {
+    isManualTrigger.current = true;
+    setPreviewTrigger(p => p + 1);
+  };
+
+  const handleRandomizeClothing = () => {
+    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+    
+    const adjective = getRandom(CLOTHING_ADJECTIVES);
+    const color = getRandom(CLOTHING_COLORS);
+    const material = getRandom(CLOTHING_MATERIALS);
+    const item = getRandom(CLOTHING_ITEMS);
+    const detail = getRandom(CLOTHING_DETAILS);
+
+    const phraseStructures = [
+      `a ${adjective} ${color} ${material} ${item}`,
+      `a ${color} ${item} with ${detail}`,
+      `a ${adjective} ${item} made of ${material}`,
+      `a ${adjective} ${color} ${item} with ${detail}`,
+    ];
+    
+    const randomPrompt = getRandom(phraseStructures);
+    handleOptionChange('customClothingPrompt', randomPrompt);
+  };
+
+  const handleRandomizeBackgroundPrompt = () => {
+    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+    
+    const location = getRandom(BACKGROUND_LOCATIONS);
+    const style = getRandom(BACKGROUND_STYLES);
+    const time = getRandom(BACKGROUND_TIMES_OF_DAY);
+    const detail = getRandom(BACKGROUND_DETAILS);
+
+    const promptStructures = [
+      `${location} ${style} ${time}`,
+      `${location} ${time}, ${style}`,
+      `${location} ${style}, ${detail}`,
+      `A portrait background of ${location} ${time} ${style}`,
+    ];
+
+    const randomPrompt = getRandom(promptStructures);
+    handleOptionChange('customBackground', randomPrompt);
+  };
+
+  const handleRandomizeCustomPoses = () => {
+    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+    const numToGenerate = randomImageCount.current > 0 ? randomImageCount.current : 3;
+    const newPoses: string[] = [];
+
+    for (let i = 0; i < numToGenerate; i++) {
+        const action = getRandom(POSE_ACTIONS);
+        const modifier = getRandom(POSE_MODIFIERS);
+        const direction = getRandom(POSE_DIRECTIONS);
+        const detail = getRandom(POSE_DETAILS);
+
+        const structures = [
+            `${action} ${modifier} ${direction}`,
+            `${action} ${direction} ${detail}`,
+            `${modifier} ${action}, ${detail}`,
+            `A person ${action} ${modifier}, ${direction}, ${detail}`
+        ];
+        newPoses.push(getRandom(structures));
+    }
+    
+    handlePoseSelectionChange(newPoses);
+  };
+
+  useEffect(() => {
+    if (options.background !== 'prompt' || !options.customBackground?.trim() || options.provider !== 'gemini') {
+      setPreviewImage(null);
+      setPreviewError(null);
+      setIsPreviewLoading(false);
+      setPreviewedBackgroundImage(null); // Clear lifted state
+      return;
+    }
+    
+    const performGeneration = () => {
+      setIsPreviewLoading(true);
+      setPreviewError(null);
+      setPreviewImage(null);
+      setPreviewedBackgroundImage(null);
+      generateBackgroundImagePreview(options.customBackground!, options.aspectRatio)
+        .then(imageSrc => {
+          setPreviewImage(imageSrc);
+          setPreviewedBackgroundImage(imageSrc); // Lift state up
+        })
+        .catch(err => {
+          setPreviewError(err.message || 'Failed to generate preview.');
+          setPreviewedBackgroundImage(null); // Clear lifted state on error
+        })
+        .finally(() => {
+          setIsPreviewLoading(false);
+        });
+    };
+    
+    if (isManualTrigger.current) {
+        isManualTrigger.current = false;
+        performGeneration();
+        return; 
+    }
+
+    const handler = setTimeout(() => {
+        performGeneration();
+    }, 1000);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [options.customBackground, options.aspectRatio, options.background, options.provider, previewTrigger, setPreviewedBackgroundImage]);
 
   return (
     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
@@ -603,7 +729,32 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
       </div>
       
       {/* --- Provider-Specific Options --- */}
-      {options.provider === 'gemini' ? <GeminiOptions /> : <ComfyUIOptions />}
+      {options.provider === 'gemini' ? (
+        <GeminiOptions
+          options={options}
+          isDisabled={isDisabled}
+          handleOptionChange={handleOptionChange}
+          handleRandomizeBackgroundPrompt={handleRandomizeBackgroundPrompt}
+          isPreviewLoading={isPreviewLoading}
+          previewError={previewError}
+          previewImage={previewImage}
+          handleRandomizePreview={handleRandomizePreview}
+          handleRandomizeClothing={handleRandomizeClothing}
+        />
+      ) : (
+        <ComfyUIOptions
+          options={options}
+          isDisabled={isDisabled}
+          isGeneratingPrompt={isGeneratingPrompt}
+          handleOptionChange={handleOptionChange}
+          isComfyLoading={isComfyLoading}
+          comfyError={comfyError}
+          comfyModels={comfyModels}
+          comfySamplers={comfySamplers}
+          comfySchedulers={comfySchedulers}
+          comfyUIUrl={comfyUIUrl}
+        />
+      )}
       
       {/* --- Shared Options --- */}
       <div className="space-y-6 pt-6 border-t border-border-primary mt-6">

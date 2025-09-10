@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Login } from './components/Login';
 import { ImageUploader } from './components/ImageUploader';
@@ -12,7 +11,7 @@ import { HistoryPanel } from './components/HistoryPanel';
 import type { GenerationOptions, User, HistoryItem } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { generatePortraitSeries, generatePromptFromImage } from './services/geminiService';
-import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection } from './services/comfyUIService';
+import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo } from './services/comfyUIService';
 import { saveGenerationToHistory } from './services/historyService';
 import { fileToResizedDataUrl, dataUrlToThumbnail } from './utils/imageUtils';
 import { PHOTO_STYLE_OPTIONS, IMAGE_STYLE_OPTIONS, ASPECT_RATIO_OPTIONS, ERA_STYLE_OPTIONS } from './constants';
@@ -35,12 +34,15 @@ const initialOptions: GenerationOptions = {
   eraStyle: ERA_STYLE_OPTIONS[0].value,
   
   // ComfyUI defaults
+  comfyModelType: 'sdxl',
+  comfyFluxGuidance: 3.5,
   comfyModel: '',
   comfySteps: 25,
   comfyCfg: 7,
   comfySampler: 'euler',
   comfyScheduler: 'normal',
   comfyPrompt: '',
+  comfyFluxNodeName: null,
 };
 
 function App() {
@@ -72,29 +74,77 @@ function App() {
   const [adminTab, setAdminTab] = useState<'generate' | 'manage'>('generate');
   const [isComfyModalOpen, setIsComfyModalOpen] = useState(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
+  
+  // Refactored: Manage ComfyUI URL and connection status in state
+  const [comfyUIUrl, setComfyUIUrl] = useState<string>(() => localStorage.getItem('comfyui_url') || '');
   const [isComfyUIConnected, setIsComfyUIConnected] = useState<boolean | null>(null);
+  const [comfyUIObjectInfo, setComfyUIObjectInfo] = useState<any | null>(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
   
-  const checkComfyStatus = async () => {
-      setIsComfyUIConnected(null); // Set to checking state
-      const url = localStorage.getItem('comfyui_url');
+  // Refactored: Connection check is now a pure function
+  const checkComfyStatus = useCallback(async (url: string) => {
       if (!url) {
           setIsComfyUIConnected(false);
           return;
       }
+      setIsComfyUIConnected(null); // Set to checking state
       const result = await checkComfyUIConnection(url);
       setIsComfyUIConnected(result.success);
-  };
+  }, []);
 
+  // Refactored: Effect now declaratively handles connection status based on state
   useEffect(() => {
-      if (currentUser) {
-          checkComfyStatus();
+    if (currentUser && comfyUIUrl) {
+      checkComfyStatus(comfyUIUrl);
+    } else if (currentUser) {
+      // User is logged in, but no URL is set.
+      setIsComfyUIConnected(false);
+    }
+  }, [currentUser, comfyUIUrl, checkComfyStatus]);
+  
+  // Effect to fetch ComfyUI server capabilities (nodes, models, etc.)
+  useEffect(() => {
+    if (options.provider === 'comfyui' && comfyUIUrl) {
+      // Set to null to indicate loading
+      setComfyUIObjectInfo(null);
+      const fetchInfo = async () => {
+        try {
+          const info = await getComfyUIObjectInfo();
+          setComfyUIObjectInfo(info);
+        } catch (error) {
+          console.error("Failed to fetch ComfyUI info:", error);
+          setComfyUIObjectInfo({}); // Set to empty object on error to stop loading
+        }
+      };
+      fetchInfo();
+    }
+  }, [options.provider, comfyUIUrl]);
+
+  // Effect to detect the correct FLUX guidance node name from the server info
+  useEffect(() => {
+    if (options.provider === 'comfyui' && options.comfyModelType === 'flux' && comfyUIObjectInfo) {
+      const availableNodes = Object.keys(comfyUIObjectInfo);
+      
+      const foundNode = availableNodes.find(node => {
+          const lowerNode = node.toLowerCase();
+          const hasFlux = lowerNode.includes('flux');
+          const hasGuidance = lowerNode.includes('guidance') || lowerNode.includes('guidage');
+          return hasFlux && hasGuidance;
+      });
+      
+      // Update the options state with the found node name or null if not found
+      if (foundNode !== options.comfyFluxNodeName) {
+        setOptions(prev => ({ ...prev, comfyFluxNodeName: foundNode || null }));
       }
-  }, [currentUser]);
+    } else if (options.comfyFluxNodeName !== null) {
+      // Reset if not in flux mode or provider changed
+      setOptions(prev => ({ ...prev, comfyFluxNodeName: null }));
+    }
+  }, [options.provider, options.comfyModelType, comfyUIObjectInfo, options.comfyFluxNodeName, setOptions]);
 
   useEffect(() => {
     if (options.provider === 'comfyui' && sourceImage) {
@@ -124,6 +174,16 @@ function App() {
       return true;
     }
     if (options.provider === 'comfyui') {
+      // Not ready if capabilities are still loading
+      if (!comfyUIObjectInfo) return false;
+
+      if (options.comfyModelType === 'flux') {
+          // If in flux mode, we MUST have found the guidance node.
+          // The effect above handles setting this in the options state.
+          if (!options.comfyFluxNodeName) {
+              return false;
+          }
+      }
       return !!options.comfyModel && !!options.comfyPrompt?.trim();
     }
     return false;
@@ -134,10 +194,7 @@ function App() {
     if (user) {
       setCurrentUser(user);
       sessionStorage.setItem('currentUser', JSON.stringify(user));
-      // Explicitly trigger the connection check upon successful login.
-      // This ensures the status is updated immediately without relying solely on the useEffect,
-      // which handles subsequent page loads.
-      checkComfyStatus();
+      // The useEffect hook will now handle the connection check automatically upon state change.
       return true;
     }
     return 'Invalid username or password.';
@@ -176,8 +233,14 @@ function App() {
   };
 
   const handleGenerate = async () => {
-    if (!isReadyToGenerate || !sourceImage) {
-      setError("Please ensure a source image and all required options are set.");
+    if (!isReadyToGenerate) {
+      setError("Generation Failed\n\nPlease ensure a source image and all required options are set.");
+      return;
+    }
+    
+    // A source image is ONLY required for the Gemini provider.
+    if (options.provider === 'gemini' && !sourceImage) {
+      setError("Please ensure a source image is uploaded for Gemini generation.");
       return;
     }
     
@@ -200,8 +263,9 @@ function App() {
           onProgress
         );
       } else {
+        // We've already confirmed sourceImage is not null for gemini provider.
         images = await generatePortraitSeries(
-          sourceImage,
+          sourceImage!,
           clothingImage,
           backgroundImage,
           previewedBackgroundImage,
@@ -211,21 +275,28 @@ function App() {
       }
       setGeneratedImages(images);
 
-      // Save to history on success, with resized images to avoid storage limit
       onProgress("Saving to history...", 0.98);
       
-      const sourceImageDataUrl = await fileToResizedDataUrl(sourceImage, 1024);
-      const generatedThumbnails = await Promise.all(
-        images.map(imgDataUrl => dataUrlToThumbnail(imgDataUrl, 256))
-      );
+      // For ComfyUI runs without a source image, use the first generated image
+      // as the "source" for the history record. Otherwise, use the provided source image.
+      const sourceForHistoryDataUrl = sourceImage
+        ? await fileToResizedDataUrl(sourceImage, 1024)
+        : (images.length > 0 ? await dataUrlToThumbnail(images[0], 1024) : null);
 
-      const historyItem: Omit<HistoryItem, 'id'> = {
-        timestamp: new Date().toISOString(),
-        sourceImage: sourceImageDataUrl,
-        options,
-        generatedImages: generatedThumbnails,
-      };
-      saveGenerationToHistory(historyItem);
+      // Only save to history if we have a source and some results.
+      if (sourceForHistoryDataUrl && images.length > 0) {
+        const generatedThumbnails = await Promise.all(
+          images.map(imgDataUrl => dataUrlToThumbnail(imgDataUrl, 256))
+        );
+
+        const historyItem: Omit<HistoryItem, 'id'> = {
+          timestamp: new Date().toISOString(),
+          sourceImage: sourceForHistoryDataUrl,
+          options,
+          generatedImages: generatedThumbnails,
+        };
+        saveGenerationToHistory(historyItem);
+      }
 
     } catch (err: any) {
       setError(err.message || 'An unknown error occurred during image generation.');
@@ -269,9 +340,9 @@ function App() {
     }
   };
   
-  const handleComfyModalClose = () => {
-    setIsComfyModalOpen(false);
-    checkComfyStatus();
+  const handleSetComfyUIUrl = (url: string) => {
+    localStorage.setItem('comfyui_url', url);
+    setComfyUIUrl(url);
   };
 
   if (!currentUser) {
@@ -359,6 +430,8 @@ function App() {
                 isReady={isReadyToGenerate}
                 onExportWorkflow={handleExportWorkflow}
                 isGeneratingPrompt={isGeneratingPrompt}
+                comfyUIObjectInfo={comfyUIObjectInfo}
+                comfyUIUrl={comfyUIUrl}
               />
             </div>
 
@@ -370,7 +443,7 @@ function App() {
                 </div>
               ) : error ? (
                 <div className="flex items-center justify-center min-h-[60vh] bg-bg-secondary rounded-2xl shadow-lg p-8">
-                  <div className="bg-danger-bg text-danger text-center p-6 rounded-lg shadow-lg w-full">
+                  <div className="bg-danger-bg text-danger text-center p-6 rounded-lg shadow-lg w-full whitespace-pre-line">
                       <p className="font-bold text-lg">Generation Failed</p>
                       <p className="mt-2">{error}</p>
                   </div>
@@ -400,7 +473,9 @@ function App() {
       {isComfyModalOpen && (
         <ComfyUIConnection
           isOpen={isComfyModalOpen}
-          onClose={handleComfyModalClose}
+          onClose={() => setIsComfyModalOpen(false)}
+          initialUrl={comfyUIUrl}
+          onSaveUrl={handleSetComfyUIUrl}
         />
       )}
       

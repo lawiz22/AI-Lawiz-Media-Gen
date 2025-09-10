@@ -4,26 +4,6 @@ import { COMFYUI_WORKFLOW_TEMPLATE } from '../constants';
 const COMFYUI_URL_KEY = 'comfyui_url';
 
 /**
- * Checks if a connection can be established with the ComfyUI server.
- */
-export const checkConnection = async (url: string): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const response = await fetch(`${url}/system_stats`, { mode: 'cors' });
-    if (!response.ok) {
-        throw new Error(`Server responded with status: ${response.status}`);
-    }
-    await response.json(); // Ensure the body is valid JSON
-    return { success: true };
-  } catch (error: any) {
-    console.error("ComfyUI connection check failed:", error);
-    if (error.message.includes('Failed to fetch')) {
-        return { success: false, error: 'Network error. Check CORS settings on your ComfyUI server and ensure the URL is correct.' };
-    }
-    return { success: false, error: error.message };
-  }
-};
-
-/**
  * A wrapper around fetch that adds a timeout.
  */
 const fetchWithTimeout = async (resource: RequestInfo, options?: RequestInit, timeout = 8000): Promise<Response> => {
@@ -41,9 +21,39 @@ const fetchWithTimeout = async (resource: RequestInfo, options?: RequestInit, ti
 
 
 /**
- * Fetches available resources like checkpoints, samplers, or schedulers from ComfyUI.
+ * Checks if a connection can be established with the ComfyUI server.
  */
-export const getComfyUIResource = async (resourceType: 'checkpoints' | 'samplers' | 'schedulers'): Promise<string[]> => {
+export const checkConnection = async (url: string): Promise<{ success: boolean; error?: string }> => {
+  const cleanUrl = url.replace(/\/+$/, '');
+  try {
+    // Use a short timeout for the connection check
+    const response = await fetchWithTimeout(`${cleanUrl}/queue`, { mode: 'cors' }, 5000); // 5 second timeout
+    if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+    }
+    const data = await response.json();
+    if (typeof data.queue_running === 'undefined') {
+        throw new Error('Invalid response. Is this a ComfyUI server?');
+    }
+    return { success: true };
+  } catch (error: any) {
+    console.error("ComfyUI connection check failed:", error);
+    if (error.name === 'AbortError') {
+        return { success: false, error: 'Connection timed out. The server might be slow or unreachable.' };
+    }
+    if (error.message.includes('Failed to fetch')) {
+        return { success: false, error: 'Network error. Is the server running? Check URL and ensure ComfyUI has CORS enabled (use --enable-cors flag).' };
+    }
+    return { success: false, error: error.message };
+  }
+};
+
+
+/**
+ * Fetches the entire object_info payload from ComfyUI, which contains
+ * information about all available nodes, models, etc.
+ */
+export const getComfyUIObjectInfo = async (): Promise<any> => {
     const url = localStorage.getItem(COMFYUI_URL_KEY);
     if (!url) throw new Error("ComfyUI URL not set.");
     
@@ -52,20 +62,9 @@ export const getComfyUIResource = async (resourceType: 'checkpoints' | 'samplers
         if (!res.ok) {
             throw new Error(`Server responded with status: ${res.status}`);
         }
-        const data = await res.json();
-        
-        switch (resourceType) {
-            case 'checkpoints':
-                return data?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || [];
-            case 'samplers':
-                return data?.KSampler?.input?.required?.sampler_name?.[0] || [];
-            case 'schedulers':
-                return data?.KSampler?.input?.required?.scheduler?.[0] || [];
-            default:
-                return [];
-        }
+        return await res.json();
     } catch (e: any) {
-        console.error(`Failed to fetch ComfyUI ${resourceType}:`, e);
+        console.error(`Failed to fetch ComfyUI object info:`, e);
         if (e.name === 'AbortError') {
             throw new Error('Request to ComfyUI server timed out.');
         }
@@ -92,36 +91,73 @@ const queueComfyUIPrompt = async (prompt: object, serverUrl: string, clientId: s
  * Generates a ComfyUI API workflow JSON for text-to-image.
  */
 const buildTxt2ImgWorkflow = (options: GenerationOptions, seed: number): object => {
-    // Deep copy the template to avoid modifying the original constant
     const workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE));
 
-    // 1. Remove IPAdapter related nodes
+    // 1. Remove IPAdapter related nodes as we are doing Txt2Img
     delete workflow['10']; // Load Image
     delete workflow['12']; // IPAdapter Model Loader
     delete workflow['13']; // IPAdapter
 
-    // 2. Find key nodes to rewire
-    const checkPointLoaderNodeId = Object.keys(workflow).find(id => workflow[id].class_type === 'CheckpointLoaderSimple') || '4';
-    const kSamplerNodeId = Object.keys(workflow).find(id => workflow[id].class_type === 'KSampler') || '3';
-    const positivePromptNodeId = Object.keys(workflow).find(id => workflow[id].class_type === 'CLIPTextEncode' && workflow[id]._meta.title === 'Positive Prompt') || '6';
-    const negativePromptNodeId = Object.keys(workflow).find(id => workflow[id].class_type === 'CLIPTextEncode' && workflow[id]._meta.title === 'Negative Prompt') || '7';
-
-    // 3. Rewire nodes for a standard text-to-image workflow
-    // The KSampler's model now comes directly from the checkpoint loader
-    workflow[kSamplerNodeId].inputs.model = [ checkPointLoaderNodeId, 0 ];
-    // The CLIPTextEncode nodes' clip now comes directly from the checkpoint loader
+    // 2. Find key node IDs from the template
+    const checkPointLoaderNodeId = '4';
+    const kSamplerNodeId = '3';
+    const positivePromptNodeId = '6';
+    const negativePromptNodeId = '7';
+    const emptyLatentNodeId = '5';
+    
+    // 3. UNIVERSAL FIX: Re-wire the CLIP inputs for both encoders to the main checkpoint loader.
+    // This is necessary because the original template routes them through the IPAdapter, which we have deleted.
     workflow[positivePromptNodeId].inputs.clip = [ checkPointLoaderNodeId, 1 ];
     workflow[negativePromptNodeId].inputs.clip = [ checkPointLoaderNodeId, 1 ];
-    
-    // 4. Update node inputs with user options
-    workflow[checkPointLoaderNodeId].inputs.ckpt_name = options.comfyModel;
-    
-    // Combine the main prompt with other style options for a richer result
+
+    // 4. Combine prompts
     const fullPrompt = [
         `Style: ${options.photoStyle}, ${options.imageStyle}, ${options.eraStyle}.`,
         options.comfyPrompt,
     ].join(' ');
-    workflow[positivePromptNodeId].inputs.text = fullPrompt;
+
+    // 5. Configure nodes based on Model Architecture (SDXL vs FLUX)
+    if (options.comfyModelType === 'flux') {
+        // --- FLUX WORKFLOW ---
+        if (!options.comfyFluxNodeName) {
+            throw new Error('FLUX model was selected, but a compatible guidance node was not found or specified.');
+        }
+        const guidanceNodeId = '14'; // Assign a new, unused ID
+
+        // 5a. Add the FLUX Guidance node.
+        workflow[guidanceNodeId] = {
+            "inputs": {
+                "conditioning": [positivePromptNodeId, 0],
+                "guidance": options.comfyFluxGuidance,
+            },
+            "class_type": options.comfyFluxNodeName,
+            "_meta": { "title": "FLUX Guidance" }
+        };
+        
+        // 5b. Set prompt text. CLIP inputs are now wired correctly.
+        workflow[positivePromptNodeId].inputs.text = fullPrompt;
+        workflow[negativePromptNodeId].inputs.text = ""; // Flux doesn't use a negative prompt
+
+        // 5c. Rewire the KSampler for FLUX.
+        workflow[kSamplerNodeId].inputs.model = [checkPointLoaderNodeId, 0];
+        workflow[kSamplerNodeId].inputs.positive = [guidanceNodeId, 0];
+        workflow[kSamplerNodeId].inputs.negative = [negativePromptNodeId, 0];
+        
+    } else {
+        // --- SDXL WORKFLOW (Default) ---
+        // 5a. Wire KSampler model input directly to the loader
+        workflow[kSamplerNodeId].inputs.model = [ checkPointLoaderNodeId, 0 ];
+        
+        // 5b. Wire text encoders to the KSampler's positive/negative inputs
+        workflow[kSamplerNodeId].inputs.positive = [ positivePromptNodeId, 0 ];
+        workflow[kSamplerNodeId].inputs.negative = [ negativePromptNodeId, 0 ];
+        
+        // 5c. Set prompt text. CLIP inputs are now wired correctly.
+        workflow[positivePromptNodeId].inputs.text = fullPrompt;
+    }
+    
+    // 6. Apply shared settings
+    workflow[checkPointLoaderNodeId].inputs.ckpt_name = options.comfyModel;
     
     const [width, height] = options.aspectRatio.split(':').map(Number);
     const baseDimension = 1024;
@@ -139,7 +175,6 @@ const buildTxt2ImgWorkflow = (options: GenerationOptions, seed: number): object 
     finalWidth = Math.round(finalWidth / 8) * 8;
     finalHeight = Math.round(finalHeight / 8) * 8;
     
-    const emptyLatentNodeId = Object.keys(workflow).find(id => workflow[id].class_type === 'EmptyLatentImage') || '5';
     workflow[emptyLatentNodeId].inputs.width = finalWidth;
     workflow[emptyLatentNodeId].inputs.height = finalHeight;
 
@@ -193,7 +228,7 @@ export const generateComfyUIPortraits = async (
             const timeout = setTimeout(() => {
                 socket.close();
                 reject(new Error('ComfyUI generation timed out.'));
-            }, 180000); // 3 minute timeout
+            }, 600000); // 10 minute timeout
 
             socket.onmessage = async (event) => {
                 try {
