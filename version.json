@@ -1,6 +1,6 @@
 
 {
-  "version": "1.23",
-  "date": "2024-07-30T11:00:00Z",
-  "changes": "Updated the styling for section titles in the options panel to improve visual hierarchy and aesthetics."
+  "version": "1.27",
+  "date": "2024-07-31T11:05:00Z",
+  "changes": "Added a default negative prompt for ComfyUI models ('blurry, bad quality, low-res, ugly, deformed')."
 }

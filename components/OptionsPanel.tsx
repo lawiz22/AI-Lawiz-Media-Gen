@@ -85,10 +85,41 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     useEffect(() => {
         setOptions(prev => ({ ...prev, poseSelection: selectedPoses }));
     }, [selectedPoses, setOptions]);
+    
+    const comfyModels = useMemo(() => {
+        if (!comfyUIObjectInfo || !comfyUIObjectInfo.CheckpointLoaderSimple) return [];
+        return comfyUIObjectInfo.CheckpointLoaderSimple.input.required.ckpt_name[0];
+    }, [comfyUIObjectInfo]);
 
     const handleOptionChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
-        setOptions(prev => ({ ...prev, [field]: value }));
+        
+        if (field === 'comfyModelType') {
+            const newModelType = value as 'sdxl' | 'flux';
+            if (newModelType === 'flux') {
+                const specificFluxModel = comfyModels.find((m: string) => m === 'flux1-dev-fp8.safetensors');
+                const genericFluxModel = comfyModels.find((m: string) => m.toLowerCase().includes('flux'));
+                
+                setOptions(prev => ({
+                    ...prev,
+                    comfyModelType: 'flux',
+                    comfyModel: specificFluxModel || genericFluxModel || 'flux1-dev-fp8.safetensors',
+                    comfySteps: 20,
+                    comfyCfg: 1,
+                }));
+            } else { // Switching back to 'sdxl'
+                const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
+                setOptions(prev => ({
+                    ...prev,
+                    comfyModelType: 'sdxl',
+                    comfyModel: sdxlModel || (comfyModels.length > 0 ? comfyModels[0] : ''),
+                    comfySteps: 25, // Default for SDXL
+                    comfyCfg: 5.5, // Default for SDXL
+                }));
+            }
+        } else {
+            setOptions(prev => ({ ...prev, [field]: value }));
+        }
     };
 
     const handleSliderChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -146,11 +177,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             setIsPreviewingClothing(false);
         }
     };
-    
-    const comfyModels = useMemo(() => {
-        if (!comfyUIObjectInfo || !comfyUIObjectInfo.CheckpointLoaderSimple) return [];
-        return comfyUIObjectInfo.CheckpointLoaderSimple.input.required.ckpt_name[0];
-    }, [comfyUIObjectInfo]);
 
     const comfySamplers = useMemo(() => {
         if (!comfyUIObjectInfo || !comfyUIObjectInfo.KSampler) return [];
@@ -371,6 +397,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
                 <OptionSection title="Prompt">
                     <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea={true} placeholder="A photorealistic portrait of a person..." />
+                    <TextInput label="Negative Prompt" value={options.comfyNegativePrompt || ''} onChange={handleOptionChange('comfyNegativePrompt')} disabled={isDisabled} isTextArea={true} placeholder="blurry, bad quality, low-res, ugly, deformed..." />
                     <button onClick={onGeneratePrompt} disabled={!sourceImage || isGeneratingPrompt || isDisabled} className="w-full text-sm flex items-center justify-center gap-2 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         {isGeneratingPrompt ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <GenerateIcon className="w-4 h-4"/>}
                         {isGeneratingPrompt ? 'Generating...' : 'Generate from Source Image'}

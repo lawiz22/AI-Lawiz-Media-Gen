@@ -135,7 +135,9 @@ const buildWorkflow = (options: GenerationOptions): any => {
 
     checkPointLoader.inputs.ckpt_name = options.comfyModel!;
     positivePrompt.inputs.text = options.comfyPrompt!;
-    negativePrompt.inputs.text = "blurry, low quality, bad anatomy, worst quality, jpeg artifacts, ugly, deformed, disfigured, text, watermark, signature";
+    negativePrompt.inputs.text = options.comfyNegativePrompt?.trim() 
+        ? options.comfyNegativePrompt 
+        : "blurry, low quality, bad anatomy, worst quality, jpeg artifacts, ugly, deformed, disfigured, text, watermark, signature";
     kSampler.inputs.steps = options.comfySteps!;
     kSampler.inputs.cfg = options.comfyCfg!;
     kSampler.inputs.sampler_name = options.comfySampler!;

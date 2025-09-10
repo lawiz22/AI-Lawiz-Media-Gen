@@ -27,6 +27,7 @@ export interface GenerationOptions {
   comfySampler?: string;
   comfyScheduler?: string;
   comfyPrompt?: string;
+  comfyNegativePrompt?: string;
   comfyFluxNodeName?: string | null;
 }
 

@@ -45,10 +45,11 @@ const initialOptions: GenerationOptions = {
   comfyFluxGuidance: 3.5,
   comfyModel: '',
   comfySteps: 25,
-  comfyCfg: 7,
+  comfyCfg: 5.5,
   comfySampler: 'euler',
-  comfyScheduler: 'normal',
+  comfyScheduler: 'simple',
   comfyPrompt: '',
+  comfyNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed',
   comfyFluxNodeName: null,
 };
 
