@@ -1,4 +1,3 @@
-// Implemented OptionsPanel component to fix module resolution errors.
 import React, { useState, useEffect, useRef } from 'react';
 import type { GenerationOptions } from '../types';
 import { 
@@ -8,6 +7,7 @@ import {
     ASPECT_RATIO_OPTIONS,
     PHOTO_STYLE_OPTIONS,
     IMAGE_STYLE_OPTIONS,
+    ERA_STYLE_OPTIONS,
     CLOTHING_ADJECTIVES,
     CLOTHING_COLORS,
     CLOTHING_MATERIALS,
@@ -22,8 +22,9 @@ import {
     POSE_DIRECTIONS,
     POSE_DETAILS,
 } from '../constants';
-import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, TrashIcon } from './icons';
+import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, TrashIcon, WorkflowIcon } from './icons';
 import { generateBackgroundImagePreview } from '../services/geminiService';
+import { getComfyUIResource } from '../services/comfyUIService';
 
 interface OptionsPanelProps {
   options: GenerationOptions;
@@ -31,8 +32,10 @@ interface OptionsPanelProps {
   setPreviewedBackgroundImage: (image: string | null) => void;
   onGenerate: () => void;
   onReset: () => void;
+  onExportWorkflow: () => void;
   isDisabled: boolean;
   isReady: boolean;
+  isGeneratingPrompt?: boolean;
 }
 
 // Simple multi-select component for poses
@@ -123,8 +126,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   setPreviewedBackgroundImage,
   onGenerate,
   onReset,
+  onExportWorkflow,
   isDisabled,
   isReady,
+  isGeneratingPrompt,
 }) => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
@@ -132,6 +137,47 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   const [previewTrigger, setPreviewTrigger] = useState(0);
   const isManualTrigger = useRef(false);
   const randomImageCount = useRef(options.numImages);
+
+  const [comfyModels, setComfyModels] = useState<string[]>([]);
+  const [comfySamplers, setComfySamplers] = useState<string[]>([]);
+  const [comfySchedulers, setComfySchedulers] = useState<string[]>([]);
+  const [isComfyLoading, setIsComfyLoading] = useState(false);
+  const [comfyError, setComfyError] = useState<string | null>(null);
+
+  // Fetch ComfyUI resources when provider is selected
+  useEffect(() => {
+    if (options.provider === 'comfyui') {
+        setIsComfyLoading(true);
+        setComfyError(null);
+        Promise.all([
+            getComfyUIResource('checkpoints'),
+            getComfyUIResource('samplers'),
+            getComfyUIResource('schedulers'),
+        ]).then(([models, samplers, schedulers]) => {
+            if (models.length === 0) {
+                setComfyError('Could not load models. Check ComfyUI connection and ensure models are available.');
+            }
+            setComfyModels(models);
+            setComfySamplers(samplers);
+            setComfySchedulers(schedulers);
+            
+            if (!options.comfyModel && models.length > 0) {
+                handleOptionChange('comfyModel', models[0]);
+            }
+             if (!options.comfySampler && samplers.length > 0) {
+                handleOptionChange('comfySampler', 'euler');
+            }
+            if (!options.comfyScheduler && schedulers.length > 0) {
+                handleOptionChange('comfyScheduler', 'normal');
+            }
+        }).catch(() => {
+            setComfyError('Failed to fetch resources from ComfyUI server.');
+        }).finally(() => {
+            setIsComfyLoading(false);
+        });
+    }
+  }, [options.provider]);
+
 
   useEffect(() => {
     if (options.poseMode === 'random') {
@@ -234,7 +280,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   };
 
   useEffect(() => {
-    if (options.background !== 'prompt' || !options.customBackground?.trim()) {
+    if (options.background !== 'prompt' || !options.customBackground?.trim() || options.provider !== 'gemini') {
       setPreviewImage(null);
       setPreviewError(null);
       setIsPreviewLoading(false);
@@ -274,47 +320,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     return () => {
       clearTimeout(handler);
     };
-  }, [options.customBackground, options.aspectRatio, options.background, previewTrigger, setPreviewedBackgroundImage]);
+  }, [options.customBackground, options.aspectRatio, options.background, options.provider, previewTrigger, setPreviewedBackgroundImage]);
 
-  return (
-    <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-      <h2 className="text-xl font-bold mb-4 text-accent">2. Configure Options</h2>
-      <div className="space-y-6">
-        
-        <div>
-            <label htmlFor="numImages" className="block text-sm font-medium text-text-secondary">
-                Number of Images ({options.numImages})
-            </label>
-            <input
-                id="numImages"
-                type="range"
-                min="1"
-                max={MAX_IMAGES}
-                value={options.numImages}
-                onChange={(e) => handleOptionChange('numImages', parseInt(e.target.value, 10))}
-                className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer range-thumb"
-                style={{'--thumb-color': 'var(--color-accent)'} as React.CSSProperties}
-                disabled={isDisabled || options.poseMode === 'select' || options.poseMode === 'prompt'}
-            />
-             {(options.poseMode === 'select' || options.poseMode === 'prompt') && (
-                <p className="text-xs text-text-muted mt-1">Number of images is determined by your pose selection.</p>
-            )}
-        </div>
-
-        <div>
-            <label htmlFor="aspectRatio" className="block text-sm font-medium text-text-secondary mb-1">Aspect Ratio</label>
-            <select
-                id="aspectRatio"
-                value={options.aspectRatio}
-                onChange={(e) => handleOptionChange('aspectRatio', e.target.value)}
-                disabled={isDisabled}
-                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-            >
-                {ASPECT_RATIO_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-            </select>
-        </div>
-
-        <div>
+  const GeminiOptions = () => (
+    <div className="space-y-6">
+       <div>
             <label htmlFor="background" className="block text-sm font-medium text-text-secondary mb-1">Background</label>
             <select
                 id="background"
@@ -392,126 +402,338 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             checked={!!options.consistentBackground}
                             onChange={(e) => handleOptionChange('consistentBackground', e.target.checked)}
                             disabled={isDisabled}
-                            className="h-4 w-4 rounded border-border-primary bg-bg-tertiary text-accent focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-secondary"
+                            className="h-4 w-4 rounded border-border-primary bg-bg-tertiary text-accent focus:ring-accent"
                           />
-                          <span className="text-sm text-text-secondary">Use this background for all images</span>
+                          <span className="text-sm text-text-secondary">Enforce strict consistency</span>
                         </label>
+                        <p className="text-xs text-text-muted pl-1">Uses this exact background for all images. May increase generation time.</p>
                       </div>
                     )}
                 </div>
             )}
         </div>
-
         <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">Clothing Style</label>
-             <select
+            <label htmlFor="clothing" className="block text-sm font-medium text-text-secondary mb-1">Clothing</label>
+            <select
                 id="clothing"
                 value={options.clothing}
                 onChange={(e) => handleOptionChange('clothing', e.target.value as GenerationOptions['clothing'])}
                 disabled={isDisabled}
                 className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
             >
-                <option value="original">Original from Image</option>
-                <option value="image">From Uploaded Image</option>
+                <option value="original">Keep Original</option>
+                <option value="image">From Image</option>
                 <option value="prompt">From Text Prompt</option>
             </select>
             {options.clothing === 'prompt' && (
-                <div className="relative mt-2">
-                    <input
-                        type="text"
-                        placeholder="e.g., a stylish black leather jacket"
-                        value={options.customClothingPrompt}
-                        onChange={(e) => handleOptionChange('customClothingPrompt', e.target.value)}
-                        disabled={isDisabled}
-                        className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 pr-10 text-sm focus:ring-accent focus:border-accent"
-                    />
-                     <button
-                        onClick={handleRandomizeClothing}
-                        disabled={isDisabled}
-                        title="Randomize Clothing"
-                        aria-label="Randomize Clothing Description"
-                        className="absolute inset-y-0 right-0 flex items-center justify-center w-10 text-text-secondary hover:text-accent transition-colors disabled:opacity-50"
-                    >
-                        <RefreshIcon className="w-5 h-5" />
-                    </button>
+                <div className="mt-2 space-y-3">
+                    <div className="relative">
+                        <textarea
+                            placeholder="e.g., a stylish green silk dress"
+                            value={options.customClothingPrompt}
+                            onChange={(e) => handleOptionChange('customClothingPrompt', e.target.value)}
+                            disabled={isDisabled || options.randomizeClothing}
+                            className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 pr-10 text-sm focus:ring-accent focus:border-accent min-h-[60px] disabled:opacity-50"
+                            rows={2}
+                        />
+                        <button
+                            onClick={handleRandomizeClothing}
+                            disabled={isDisabled}
+                            title="Randomize Clothing Prompt"
+                            aria-label="Randomize Clothing Prompt"
+                            className="absolute top-2 right-2 flex items-center justify-center w-8 h-8 text-text-secondary hover:text-accent transition-colors disabled:opacity-50"
+                        >
+                            <RefreshIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+                    
+                    <div>
+                        <label className="flex items-center space-x-2 cursor-pointer p-1">
+                          <input
+                            type="checkbox"
+                            checked={!!options.randomizeClothing}
+                            onChange={(e) => handleOptionChange('randomizeClothing', e.target.checked)}
+                            disabled={isDisabled}
+                            className="h-4 w-4 rounded border-border-primary bg-bg-tertiary text-accent focus:ring-accent"
+                          />
+                          <span className="text-sm text-text-secondary">Generate a different random outfit for each image</span>
+                        </label>
+                    </div>
+
+                    {options.customClothingPrompt && options.customClothingPrompt.trim() && !options.randomizeClothing && (
+                         <div className="pt-1">
+                            <label className="flex items-center space-x-2 cursor-pointer p-1">
+                                <input
+                                    type="checkbox"
+                                    checked={options.clothingStyleConsistency === 'strict'}
+                                    onChange={(e) => handleOptionChange('clothingStyleConsistency', e.target.checked ? 'strict' : 'varied')}
+                                    disabled={isDisabled}
+                                    className="h-4 w-4 rounded border-border-primary bg-bg-tertiary text-accent focus:ring-accent"
+                                />
+                                <span className="text-sm text-text-secondary">Enforce strict consistency</span>
+                            </label>
+                            <p className="text-xs text-text-muted pl-7">
+                                {options.clothingStyleConsistency === 'strict' 
+                                    ? "Attempts to make the outfit identical in all photos."
+                                    : "Generates creative variations based on your prompt."
+                                }
+                            </p>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
-        
-        <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">Poses</label>
-            <div className="flex flex-col sm:flex-row items-center gap-2">
-                <button onClick={() => handlePoseModeChange('random')} className={`w-full text-center px-3 py-2 text-sm rounded-md transition-colors ${options.poseMode === 'random' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`} disabled={isDisabled}>Random</button>
-                <button onClick={() => handlePoseModeChange('select')} className={`w-full text-center px-3 py-2 text-sm rounded-md transition-colors ${options.poseMode === 'select' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`} disabled={isDisabled}>Select</button>
-                <button onClick={() => handlePoseModeChange('prompt')} className={`w-full text-center px-3 py-2 text-sm rounded-md transition-colors ${options.poseMode === 'prompt' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`} disabled={isDisabled}>Custom</button>
-            </div>
-            {options.poseMode === 'select' && (
-                <div className="mt-4">
-                    <p className="text-xs text-text-muted mb-2">Select one or more poses. The number of images will match your selection.</p>
-                    <PoseSelector selected={options.poseSelection} onChange={handlePoseSelectionChange} />
-                </div>
-            )}
-            {options.poseMode === 'prompt' && (
-                <div className="mt-4">
-                    <CustomPoseEditor
-                        poses={options.poseSelection}
-                        onChange={handlePoseSelectionChange}
-                        onRandomize={handleRandomizeCustomPoses}
-                        isDisabled={isDisabled}
+    </div>
+  );
+
+  const ComfyUIOptions = () => (
+    <div className="space-y-6">
+      {isComfyLoading && (
+        <div className="flex items-center justify-center gap-2 text-text-secondary p-4">
+            <SpinnerIcon className="w-5 h-5 animate-spin" />
+            <span>Loading ComfyUI options...</span>
+        </div>
+      )}
+      {comfyError && (
+        <div className="bg-danger-bg text-danger text-sm text-center p-3 rounded-md">
+            {comfyError}
+        </div>
+      )}
+      {!isComfyLoading && !comfyError && (
+        <>
+            <div>
+                <label htmlFor="comfyPrompt" className="block text-sm font-medium text-text-secondary mb-1">Prompt</label>
+                <div className="relative">
+                    <textarea
+                        id="comfyPrompt"
+                        placeholder={isGeneratingPrompt ? "Generating prompt from source image..." : "Describe the image you want to generate, or upload a source image to auto-generate a description."}
+                        value={options.comfyPrompt}
+                        onChange={(e) => handleOptionChange('comfyPrompt', e.target.value)}
+                        disabled={isDisabled}
+                        className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[100px]"
+                        rows={4}
                     />
+                    {isGeneratingPrompt && (
+                        <div className="absolute inset-0 bg-bg-secondary/50 flex items-center justify-center rounded-md">
+                            <SpinnerIcon className="w-6 h-6 animate-spin text-accent" />
+                        </div>
+                    )}
                 </div>
+            </div>
+            <div>
+                <label htmlFor="comfyModel" className="block text-sm font-medium text-text-secondary mb-1">Checkpoint Model</label>
+                <select
+                    id="comfyModel"
+                    value={options.comfyModel}
+                    onChange={(e) => handleOptionChange('comfyModel', e.target.value)}
+                    disabled={isDisabled || comfyModels.length === 0}
+                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                >
+                    {comfyModels.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+            </div>
+            <div>
+                <label htmlFor="comfySteps" className="block text-sm font-medium text-text-secondary">
+                    Steps ({options.comfySteps})
+                </label>
+                <input
+                    id="comfySteps" type="range" min="10" max="50"
+                    value={options.comfySteps}
+                    onChange={(e) => handleOptionChange('comfySteps', parseInt(e.target.value, 10))}
+                    className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer range-thumb"
+                    style={{'--thumb-color': 'var(--color-accent)'} as React.CSSProperties}
+                    disabled={isDisabled}
+                />
+            </div>
+             <div>
+                <label htmlFor="comfyCfg" className="block text-sm font-medium text-text-secondary">
+                    CFG Scale ({options.comfyCfg})
+                </label>
+                <input
+                    id="comfyCfg" type="range" min="1" max="20" step="0.5"
+                    value={options.comfyCfg}
+                    onChange={(e) => handleOptionChange('comfyCfg', parseFloat(e.target.value))}
+                    className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer range-thumb"
+                    style={{'--thumb-color': 'var(--color-accent)'} as React.CSSProperties}
+                    disabled={isDisabled}
+                />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label htmlFor="comfySampler" className="block text-sm font-medium text-text-secondary mb-1">Sampler</label>
+                    <select
+                        id="comfySampler"
+                        value={options.comfySampler}
+                        onChange={(e) => handleOptionChange('comfySampler', e.target.value)}
+                        disabled={isDisabled || comfySamplers.length === 0}
+                        className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                    >
+                        {comfySamplers.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                </div>
+                 <div>
+                    <label htmlFor="comfyScheduler" className="block text-sm font-medium text-text-secondary mb-1">Scheduler</label>
+                    <select
+                        id="comfyScheduler"
+                        value={options.comfyScheduler}
+                        onChange={(e) => handleOptionChange('comfyScheduler', e.target.value)}
+                        disabled={isDisabled || comfySchedulers.length === 0}
+                        className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                    >
+                        {comfySchedulers.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                </div>
+            </div>
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+      <h2 className="text-xl font-bold mb-4 text-accent">2. Configure Options</h2>
+      
+      {/* Provider Selector */}
+      <div className="mb-6">
+          <label className="block text-sm font-medium text-text-secondary mb-1">Generation Provider</label>
+          <div className="flex rounded-md border border-border-primary">
+              <button onClick={() => handleOptionChange('provider', 'gemini')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${options.provider === 'gemini' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Gemini AI</button>
+              <button onClick={() => handleOptionChange('provider', 'comfyui')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors border-l border-border-primary ${options.provider === 'comfyui' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>ComfyUI</button>
+          </div>
+      </div>
+      
+      {/* --- Provider-Specific Options --- */}
+      {options.provider === 'gemini' ? <GeminiOptions /> : <ComfyUIOptions />}
+      
+      {/* --- Shared Options --- */}
+      <div className="space-y-6 pt-6 border-t border-border-primary mt-6">
+         <div>
+            <label htmlFor="numImages" className="block text-sm font-medium text-text-secondary">
+                Number of Images ({options.numImages})
+            </label>
+            <input
+                id="numImages"
+                type="range"
+                min="1"
+                max={MAX_IMAGES}
+                value={options.numImages}
+                onChange={(e) => handleOptionChange('numImages', parseInt(e.target.value, 10))}
+                className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer range-thumb"
+                style={{'--thumb-color': 'var(--color-accent)'} as React.CSSProperties}
+                disabled={isDisabled || options.poseMode === 'select' || options.poseMode === 'prompt'}
+            />
+             {(options.poseMode === 'select' || options.poseMode === 'prompt') && (
+                <p className="text-xs text-text-muted mt-1">Number of images is determined by your pose selection.</p>
             )}
         </div>
 
         <div>
-            <label htmlFor="imageStyle" className="block text-sm font-medium text-text-secondary mb-1">Image Style</label>
+            <label htmlFor="aspectRatio" className="block text-sm font-medium text-text-secondary mb-1">Aspect Ratio</label>
             <select
-                id="imageStyle"
-                value={options.imageStyle}
-                onChange={(e) => handleOptionChange('imageStyle', e.target.value)}
+                id="aspectRatio"
+                value={options.aspectRatio}
+                onChange={(e) => handleOptionChange('aspectRatio', e.target.value)}
                 disabled={isDisabled}
                 className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
             >
-                {IMAGE_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                {ASPECT_RATIO_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
+        </div>
+
+        <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1">Pose</label>
+            <div className="flex rounded-md border border-border-primary">
+                <button onClick={() => handlePoseModeChange('random')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${options.poseMode === 'random' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Random</button>
+                <button onClick={() => handlePoseModeChange('select')} className={`flex-1 p-2 text-sm transition-colors border-l border-r border-border-primary ${options.poseMode === 'select' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Select</button>
+                <button onClick={() => handlePoseModeChange('prompt')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${options.poseMode === 'prompt' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Custom</button>
+            </div>
+            <div className="mt-2">
+                {options.poseMode === 'select' && (
+                    <PoseSelector selected={options.poseSelection} onChange={handlePoseSelectionChange} />
+                )}
+                {options.poseMode === 'prompt' && (
+                    <CustomPoseEditor 
+                        poses={options.poseSelection} 
+                        onChange={handlePoseSelectionChange} 
+                        onRandomize={handleRandomizeCustomPoses}
+                        isDisabled={isDisabled}
+                    />
+                )}
+            </div>
         </div>
         
         <div>
-            <label htmlFor="photoStyle" className="block text-sm font-medium text-text-secondary mb-1">Photo Style</label>
+            <label htmlFor="eraStyle" className="block text-sm font-medium text-text-secondary mb-1">Era / Medium Style</label>
             <select
-                id="photoStyle"
-                value={options.photoStyle}
-                onChange={(e) => handleOptionChange('photoStyle', e.target.value)}
-                disabled={isDisabled || options.imageStyle !== 'photorealistic'}
-                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                id="eraStyle"
+                value={options.eraStyle}
+                onChange={(e) => handleOptionChange('eraStyle', e.target.value)}
+                disabled={isDisabled}
+                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
             >
-                {PHOTO_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                {ERA_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
-            {options.imageStyle !== 'photorealistic' && (
-                <p className="text-xs text-text-muted mt-1">Photo Style is only available for the 'Photorealistic' Image Style.</p>
-            )}
         </div>
 
-        <div className="border-t border-border-primary pt-6 flex flex-col gap-3">
-            <button
-              onClick={onGenerate}
-              disabled={isDisabled || !isReady}
-              className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed"
-            >
-                <GenerateIcon className="w-5 h-5" />
-                Generate Portraits
-            </button>
-            <button
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label htmlFor="photoStyle" className="block text-sm font-medium text-text-secondary mb-1">Photo Style</label>
+                <select
+                    id="photoStyle"
+                    value={options.photoStyle}
+                    onChange={(e) => handleOptionChange('photoStyle', e.target.value)}
+                    disabled={isDisabled}
+                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                >
+                    {PHOTO_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+            </div>
+            <div>
+                <label htmlFor="imageStyle" className="block text-sm font-medium text-text-secondary mb-1">Artistic Style</label>
+                <select
+                    id="imageStyle"
+                    value={options.imageStyle}
+                    onChange={(e) => handleOptionChange('imageStyle', e.target.value)}
+                    disabled={isDisabled}
+                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                >
+                    {IMAGE_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+            </div>
+        </div>
+      </div>
+
+        <div className="mt-8 pt-6 border-t border-border-primary flex flex-col sm:flex-row gap-4">
+          <button
+            onClick={onGenerate}
+            disabled={isDisabled || !isReady}
+            title={!isReady ? "Please complete all required options to generate" : "Generate Portraits"}
+            style={isReady && !isDisabled ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+            className="flex-1 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
+          >
+            {isDisabled ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+            {isDisabled ? 'Generating...' : 'Generate Portraits'}
+          </button>
+          <div className="flex gap-4">
+              <button
+                onClick={onExportWorkflow}
+                disabled={isDisabled || !isReady}
+                title={!isReady ? "Please complete required options to enable export" : "Export ComfyUI Workflow"}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary"
+              >
+                <WorkflowIcon className="w-5 h-5" />
+                Export
+              </button>
+              <button
                 onClick={onReset}
                 disabled={isDisabled}
-                className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:bg-gray-500"
-            >
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50 bg-bg-tertiary"
+              >
                 <ResetIcon className="w-5 h-5" />
-                Reset All Options
-            </button>
+                Reset
+              </button>
+          </div>
         </div>
-
-      </div>
     </div>
   );
 };

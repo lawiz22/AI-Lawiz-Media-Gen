@@ -74,6 +74,15 @@ export const IMAGE_STYLE_OPTIONS = [
     { value: 'pixel art', label: 'Pixel Art' },
 ];
 
+export const ERA_STYLE_OPTIONS = [
+    { value: 'a modern digital photograph', label: 'Modern Digital' },
+    { value: 'a 1990s magazine ad', label: '1990s Magazine Ad' },
+    { value: 'a 1970s film look', label: '1970s Film Look' },
+    { value: 'a high-contrast film noir style photograph', label: 'Film Noir (B&W)' },
+    { value: 'a classical Dutch Master painting', label: 'Dutch Master Painting' },
+    { value: 'a high-fashion Vogue magazine shot', label: 'Vogue Fashion Shot' },
+];
+
 // --- For Clothing Randomization ---
 export const CLOTHING_ADJECTIVES = ['stylish', 'elegant', 'casual', 'formal', 'vintage', 'modern', 'cozy', 'rugged', 'chic', 'minimalist', 'bohemian', 'vibrant', 'dark', 'lightweight', 'tailored'];
 export const CLOTHING_COLORS = ['black', 'white', 'charcoal gray', 'navy blue', 'khaki', 'olive green', 'burgundy', 'crimson red', 'pastel pink', 'sky blue', 'sunflower yellow', 'cream', 'beige', 'forest green'];
@@ -92,3 +101,82 @@ export const POSE_ACTIONS = ['standing', 'sitting', 'leaning', 'looking', 'reach
 export const POSE_MODIFIERS = ['confidently', 'thoughtfully', 'playfully', 'serenely', 'dramatically', 'casually', 'elegantly', 'powerfully', 'gently', 'energetically'];
 export const POSE_DIRECTIONS = ['towards the camera', 'away from the camera', 'over the shoulder', 'to the side', 'upwards', 'downwards', 'with head tilted'];
 export const POSE_DETAILS = ['with arms crossed', 'with hands on hips', 'with one hand on their chin', 'with a slight smile', 'with a neutral expression', 'in mid-stride', 'with hands in pockets', 'tucking hair behind an ear'];
+
+// --- ComfyUI Workflow Template ---
+// Fix: Added the missing COMFYUI_WORKFLOW_TEMPLATE to resolve the import error.
+// This basic workflow uses IPAdapter for face consistency and is designed to be modified by the comfyUIService.
+export const COMFYUI_WORKFLOW_TEMPLATE = {
+  "3": {
+    "inputs": {
+      "seed": 8565685,
+      "steps": 25,
+      "cfg": 7,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1,
+      "model": [ "13", 0 ],
+      "positive": [ "6", 0 ],
+      "negative": [ "7", 0 ],
+      "latent_image": [ "5", 0 ]
+    },
+    "class_type": "KSampler",
+    "_meta": { "title": "KSampler" }
+  },
+  "4": {
+    "inputs": { "ckpt_name": "sd_xl_base_1.0.safetensors" },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": { "title": "Load Checkpoint" }
+  },
+  "5": {
+    "inputs": { "width": 1024, "height": 1024, "batch_size": 1 },
+    "class_type": "EmptyLatentImage",
+    "_meta": { "title": "Empty Latent Image" }
+  },
+  "6": {
+    "inputs": {
+      "text": "A photorealistic portrait of a person",
+      "clip": [ "13", 1 ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Positive Prompt" }
+  },
+  "7": {
+    "inputs": {
+      "text": "blurry, bad quality, low-res, ugly, deformed, disfigured",
+      "clip": [ "13", 1 ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Negative Prompt" }
+  },
+  "8": {
+    "inputs": { "samples": [ "3", 0 ], "vae": [ "4", 2 ] },
+    "class_type": "VAEDecode",
+    "_meta": { "title": "VAE Decode" }
+  },
+  "9": {
+    "inputs": { "images": [ "8", 0 ] },
+    "class_type": "PreviewImage",
+    "_meta": { "title": "Preview Image" }
+  },
+  "10": {
+    "inputs": { "image": "source_image.png", "upload": "image" },
+    "class_type": "LoadImage",
+    "_meta": { "title": "Load Source Image" }
+  },
+  "12": {
+    "inputs": { "ipadapter_file": "ip-adapter-plus_sdxl_vit-h.bin" },
+    "class_type": "IPAdapterModelLoader",
+    "_meta": { "title": "IPAdapter Model Loader" }
+  },
+  "13": {
+    "inputs": {
+      "model": [ "4", 0 ],
+      "ipadapter": [ "12", 0 ],
+      "image": [ "10", 0 ],
+      "weight": 0.85,
+      "clip": [ "4", 1 ]
+    },
+    "class_type": "IPAdapter",
+    "_meta": { "title": "IPAdapter" }
+  }
+};

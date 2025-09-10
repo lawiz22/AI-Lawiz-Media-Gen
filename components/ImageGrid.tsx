@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
-import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
+import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon } from './icons';
 import { enhanceImageResolution } from '../services/geminiService';
 
 interface ImageGridProps {
   images: string[];
+  onSetNewSource: (imageData: string) => void;
 }
 
-export const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
+export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource }) => {
   const [enhancedImages, setEnhancedImages] = useState<Record<number, string>>({});
   const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
   const [errorIndex, setErrorIndex] = useState<Record<number, string>>({});
@@ -36,6 +37,13 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
         setEnhancingIndex(null);
     }
   };
+  
+  const handleSetAsSource = () => {
+      if (zoomedImageIndex !== null && currentZoomedSrc) {
+        onSetNewSource(currentZoomedSrc);
+        handleCloseZoom();
+      }
+    };
 
   const handleDownloadAll = async () => {
     setIsZipping(true);
@@ -63,7 +71,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
       setIsZipping(false);
     }
   };
-
+  
   const handleOpenZoom = (index: number) => setZoomedImageIndex(index);
   const handleCloseZoom = useCallback(() => setZoomedImageIndex(null), []);
 
@@ -109,14 +117,17 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
       <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
               <h2 className="text-xl font-bold text-accent">3. Generated Portraits</h2>
-              <button
-                onClick={handleDownloadAll}
-                disabled={isZipping || images.length === 0}
-                className="flex items-center justify-center gap-2 border-2 border-accent text-accent font-semibold py-2 px-3 rounded-lg hover:bg-accent hover:text-accent-text transition-colors duration-200 disabled:opacity-50 disabled:cursor-wait"
-              >
-                  {isZipping ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <DownloadIcon className="w-5 h-5" />}
-                  {isZipping ? 'Zipping...' : 'Download All (.zip)'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleDownloadAll}
+                  disabled={isZipping || images.length === 0}
+                  style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                  className="flex items-center justify-center gap-2 font-semibold py-2 px-3 rounded-lg hover:opacity-80 transition-opacity duration-200 disabled:opacity-50 disabled:cursor-wait"
+                >
+                    {isZipping ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <DownloadIcon className="w-5 h-5" />}
+                    {isZipping ? 'Zipping...' : 'Download All (.zip)'}
+                </button>
+              </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {images.map((src, index) => {
@@ -182,19 +193,23 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
           aria-label="Zoomed image view"
           onClick={handleCloseZoom}
         >
-          <img 
-            src={currentZoomedSrc} 
-            alt={`Zoomed portrait ${zoomedImageIndex + 1}`} 
-            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-            onClick={e => e.stopPropagation()} // Prevent closing modal when clicking on image
-          />
-          <button
-            onClick={handleCloseZoom}
-            className="absolute top-4 right-4 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
-            aria-label="Close zoomed image"
+          <div 
+            className="relative"
+            onClick={e => e.stopPropagation()} // Prevent closing modal when clicking on image wrapper
           >
-            <CloseIcon className="w-6 h-6" />
-          </button>
+            <img 
+              src={currentZoomedSrc} 
+              alt={`Zoomed portrait ${zoomedImageIndex + 1}`} 
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            />
+            <button
+              onClick={(e) => { e.stopPropagation(); handleCloseZoom(); }}
+              className="absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75 transition-colors z-10"
+              aria-label="Close zoomed image"
+            >
+              <CloseIcon className="w-5 h-5" />
+            </button>
+          </div>
           
           {images.length > 1 && (
             <>
@@ -221,6 +236,14 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
             role="toolbar"
             aria-label="Image actions"
           >
+            <button
+                onClick={handleSetAsSource}
+                title="Use as New Source"
+                aria-label="Use this image as the new source for generation"
+                className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+            >
+                <AddAsSourceIcon className="w-6 h-6" />
+            </button>
             <button
                 onClick={() => handleDownload(currentZoomedSrc, zoomedImageIndex)}
                 title="Download Image"

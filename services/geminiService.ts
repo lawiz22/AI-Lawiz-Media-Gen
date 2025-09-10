@@ -1,23 +1,15 @@
 // Implemented Gemini API service to fix module resolution errors.
+// Fix: Removed HarmCategory and HarmBlockThreshold as they are no longer used after removing safety settings.
 import { GoogleGenAI, Modality, Part } from "@google/genai";
 import type { GenerationOptions } from "../types";
 import { fileToGenerativePart } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from "../utils/imageProcessing";
-import { POSES } from "../constants";
+import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
-// Helper to decode base64 poses
-const decodePose = (encoded: string): string => {
-  try {
-    // This will work in browser environments
-    return atob(encoded);
-  } catch (e) {
-    console.error("Failed to decode pose:", e);
-    // Fallback for non-browser env or error
-    return "a standard portrait pose";
-  }
-};
+// Fix: Removed the safetySettings constant as it's not a supported parameter
+// in the Gemini API calls used in this file and was causing errors.
 
 const dataUrlToGenerativePart = async (dataUrl: string): Promise<Part> => {
     const [header, base64Data] = dataUrl.split(',');
@@ -37,6 +29,32 @@ const dataUrlToGenerativePart = async (dataUrl: string): Promise<Part> => {
     };
 };
 
+export const generatePromptFromImage = async (imageFile: File): Promise<string> => {
+    try {
+        const imagePart = await fileToGenerativePart(imageFile);
+        const prompt = `Analyze this image. Generate a detailed, descriptive prompt for an AI image generator that captures the entire scene. Describe the person's appearance (facial features, hair, expression), their clothing, the background environment, the lighting, and the overall mood. The goal is a comprehensive prompt to recreate the whole picture. Start the prompt with "A photorealistic portrait of...".`;
+
+        const result = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: {
+                parts: [imagePart, { text: prompt }],
+            },
+        });
+
+        const text = result.text.trim();
+
+        if (!text) {
+            throw new Error('The AI did not return a description.');
+        }
+
+        return text;
+
+    } catch (error: any) {
+        console.error("Error generating prompt from image:", error);
+        throw new Error(error.message || "Failed to generate a prompt from the image.");
+    }
+};
+
 export const generateBackgroundImagePreview = async (
   prompt: string,
   aspectRatio: string
@@ -48,6 +66,7 @@ export const generateBackgroundImagePreview = async (
   const fullPrompt = `A high-quality, photorealistic background image for a portrait photography session. The background should be: ${prompt}. Do not include any people or prominent figures. Focus on creating a beautiful and believable environment.`;
 
   try {
+    // Fix: Removed the unsupported 'safetySettings' property from the generateImages call.
     const response = await ai.models.generateImages({
       model: 'imagen-4.0-generate-001',
       prompt: fullPrompt,
@@ -75,12 +94,13 @@ export const enhanceImageResolution = async (base64ImageData: string): Promise<s
     const imagePart = await dataUrlToGenerativePart(base64ImageData);
     
     // The model for image editing.
+    // Fix: Removed the unsupported 'safetySettings' property from the generateContent call.
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image-preview', 
         contents: {
             parts: [
                 imagePart,
-                { text: 'Upscale this image to a higher resolution, enhance its quality, sharpen details, and make it look photorealistic without altering the subject or style.' },
+                { text: 'Upscale this image to a higher resolution, enhance its quality, sharpen details, and make it look photorealistic without altering the subject or style. Ensure the result is a tasteful and high-quality photograph.' },
             ],
         },
         config: {
@@ -136,8 +156,8 @@ export const generatePortraitSeries = async (
     selectedPoses = options.poseSelection;
     posesAreEncoded = false; // Custom poses are plain text
   } else {
-    // 'random' mode or fallback
-    selectedPoses = [...POSES].sort(() => 0.5 - Math.random()).slice(0, options.numImages);
+    // 'random' mode or fallback, get a unique set of random poses
+    selectedPoses = Array.from({ length: options.numImages }, () => getRandomPose());
   }
   
   const totalImages = Math.min(options.numImages, selectedPoses.length);
@@ -150,47 +170,24 @@ export const generatePortraitSeries = async (
     const pose = posesAreEncoded ? decodePose(selectedPoses[i]) : selectedPoses[i];
     
     const parts: Part[] = [sourceImagePart];
-    const promptSegments: string[] = [`A person with the same face and features as in the reference image.`];
+    const promptSegments = buildPromptSegments(options, pose);
     
-    promptSegments.push(`Pose: ${pose}`);
-
-    // Clothing
+    // Handle clothing image part
     if (options.clothing === 'image' && clothingImagePart) {
         parts.push(clothingImagePart);
-        promptSegments.push(`Clothing: The person should be wearing an outfit identical to the one in the provided clothing image.`);
-    } else if (options.clothing === 'prompt' && options.customClothingPrompt) {
-        promptSegments.push(`Clothing: ${options.customClothingPrompt}`);
-    } else { // 'original'
-        promptSegments.push('Clothing: The person should wear the same outfit as in the reference image.');
     }
 
-    // Background
+    // Handle background image parts
     if (consistentBackgroundPart) {
         parts.push(consistentBackgroundPart);
-        promptSegments.push(`Background: Place the person in a setting identical to the provided background image.`);
     } else if (options.background === 'image' && backgroundImagePart) {
         parts.push(backgroundImagePart);
-        promptSegments.push(`Background: Place the person in a setting identical to the provided background image.`);
-    } else if (options.background === 'prompt' && options.customBackground) {
-        promptSegments.push(`Background: ${options.customBackground}`);
-    } else if (options.background !== 'original') {
-        promptSegments.push(`Background: A solid ${options.background} studio background.`);
-    } else {
-        promptSegments.push('Background: Keep the original background from the reference image.');
-    }
-
-    promptSegments.push(`Photo Style: ${options.photoStyle}.`);
-    promptSegments.push(`Artistic Style: Render the image in a ${options.imageStyle} style.`);
-    
-    if (options.imageStyle === 'photorealistic') {
-        promptSegments.push("Ensure the final image is a high-quality, realistic photograph.");
-    } else {
-        promptSegments.push(`Ensure the final result is a high-quality image in the specified artistic style.`);
     }
     
     parts.push({ text: promptSegments.join(' ') });
 
     try {
+        // Fix: Removed the unsupported 'safetySettings' property from the generateContent call.
         const result = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
             contents: { parts },
