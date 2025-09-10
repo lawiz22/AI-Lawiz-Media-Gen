@@ -1,19 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
-import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon } from './icons';
+import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon } from './icons';
 import { enhanceImageResolution } from '../services/geminiService';
 
 interface ImageGridProps {
   images: string[];
   onSetNewSource: (imageData: string) => void;
+  lastUsedPrompt?: string | null;
 }
 
-export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource }) => {
+export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, lastUsedPrompt }) => {
   const [enhancedImages, setEnhancedImages] = useState<Record<number, string>>({});
   const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
   const [errorIndex, setErrorIndex] = useState<Record<number, string>>({});
   const [zoomedImageIndex, setZoomedImageIndex] = useState<number | null>(null);
   const [isZipping, setIsZipping] = useState<boolean>(false);
+  const [copyButtonText, setCopyButtonText] = useState('Copy');
 
   const handleDownload = (imageSrc: string, index: number) => {
     const link = document.createElement('a');
@@ -70,6 +72,18 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource }) 
     } finally {
       setIsZipping(false);
     }
+  };
+  
+  const handleCopyPrompt = () => {
+    if (!lastUsedPrompt) return;
+    navigator.clipboard.writeText(lastUsedPrompt)
+      .then(() => {
+        setCopyButtonText('Copied!');
+        setTimeout(() => setCopyButtonText('Copy'), 2000);
+      })
+      .catch(err => {
+        console.error('Failed to copy prompt:', err);
+      });
   };
   
   const handleOpenZoom = (index: number) => setZoomedImageIndex(index);
@@ -129,6 +143,30 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource }) 
                 </button>
               </div>
           </div>
+
+          {lastUsedPrompt && (
+            <div className="mb-6">
+              <label htmlFor="final-prompt" className="block text-sm font-medium text-text-secondary mb-1">Final Prompt Used</label>
+              <div className="relative">
+                <textarea
+                  id="final-prompt"
+                  readOnly
+                  value={lastUsedPrompt}
+                  className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-xs text-text-secondary focus:ring-accent focus:border-accent"
+                  rows={3}
+                />
+                <button 
+                  onClick={handleCopyPrompt}
+                  title="Copy Prompt"
+                  className="absolute top-2 right-2 flex items-center gap-1.5 bg-bg-primary/80 backdrop-blur-sm text-text-secondary text-xs font-semibold py-1 px-2 rounded-full hover:bg-accent hover:text-accent-text transition-colors duration-200 shadow"
+                >
+                  <CopyIcon className="w-3 h-3" />
+                  {copyButtonText}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {images.map((src, index) => {
                   const isEnhancing = enhancingIndex === index;

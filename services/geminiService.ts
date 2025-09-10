@@ -1,6 +1,6 @@
 // Implemented Gemini API service to fix module resolution errors.
 // Fix: Removed HarmCategory and HarmBlockThreshold as they are no longer used after removing safety settings.
-import { GoogleGenAI, Modality, Part } from "@google/genai";
+import { GoogleGenAI, Modality, Part, GenerateContentConfig } from "@google/genai";
 import type { GenerationOptions } from "../types";
 import { fileToGenerativePart } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from "../utils/imageProcessing";
@@ -107,7 +107,7 @@ export const generatePortraitSeries = async (
   previewedBackground: string | null,
   options: GenerationOptions,
   onProgress: (message: string, progress: number) => void
-): Promise<string[]> => {
+): Promise<{ images: string[], firstPrompt: string }> => {
 
   onProgress("Preparing images...", 0.05);
   const croppedSourceImage = await cropImageToAspectRatio(sourceImage, options.aspectRatio);
@@ -136,6 +136,7 @@ export const generatePortraitSeries = async (
   
   const totalImages = Math.min(options.numImages, selectedPoses.length);
   const generatedImages: string[] = [];
+  let firstPrompt: string | null = null;
 
   for (let i = 0; i < totalImages; i++) {
     const progress = (i + 1) / totalImages;
@@ -158,16 +159,27 @@ export const generatePortraitSeries = async (
         parts.push(backgroundImagePart);
     }
     
-    parts.push({ text: promptSegments.join(' ') });
+    const finalPromptText = promptSegments.join(' ');
+    parts.push({ text: finalPromptText });
+    
+    if (i === 0) {
+      firstPrompt = finalPromptText;
+    }
 
     try {
-        // Fix: Removed the unsupported 'safetySettings' property from the generateContent call.
+        const genConfig: GenerateContentConfig = {
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
+        };
+
+        // Add temperature for non-photorealistic styles to control creativity
+        if (options.imageStyle !== 'photorealistic' && options.creativity !== undefined) {
+            genConfig.temperature = options.creativity;
+        }
+
         const result = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
             contents: { parts },
-            config: {
-                responseModalities: [Modality.IMAGE, Modality.TEXT],
-            },
+            config: genConfig,
         });
         
         let imageFound = false;
@@ -197,5 +209,5 @@ export const generatePortraitSeries = async (
     }
   }
 
-  return generatedImages;
+  return { images: generatedImages, firstPrompt: firstPrompt || "No prompt was generated." };
 };

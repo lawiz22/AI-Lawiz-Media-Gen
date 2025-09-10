@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Login } from './components/Login';
@@ -9,6 +10,7 @@ import { Loader } from './components/Loader';
 import { ComfyUIConnection } from './components/ComfyUIConnection';
 import { HistoryPanel } from './components/HistoryPanel';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
+import { GenerateIcon } from './components/icons';
 import type { GenerationOptions, User, HistoryItem } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { generatePortraitSeries } from './services/geminiService';
@@ -33,6 +35,10 @@ const initialOptions: GenerationOptions = {
   photoStyle: PHOTO_STYLE_OPTIONS[0].value,
   imageStyle: IMAGE_STYLE_OPTIONS[0].value,
   eraStyle: ERA_STYLE_OPTIONS[0].value,
+  creativity: 0.7,
+  addTextToImage: false,
+  textOnImagePrompt: '',
+  textObjectPrompt: "a sign in the background that reads '%s'",
   
   // ComfyUI defaults
   comfyModelType: 'sdxl',
@@ -70,6 +76,7 @@ function App() {
   const [progressValue, setProgressValue] = useState(0);
   
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [lastUsedPrompt, setLastUsedPrompt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   
   const [adminTab, setAdminTab] = useState<'generate' | 'prompt' | 'manage'>('generate');
@@ -97,89 +104,39 @@ function App() {
       setIsComfyUIConnected(result.success);
   }, []);
 
-  // Refactored: Effect now declaratively handles connection status based on state
+  // Effect to run the connection check on mount and when URL changes
   useEffect(() => {
-    if (currentUser && comfyUIUrl) {
       checkComfyStatus(comfyUIUrl);
-    } else if (currentUser) {
-      // User is logged in, but no URL is set.
-      setIsComfyUIConnected(false);
-    }
-  }, [currentUser, comfyUIUrl, checkComfyStatus]);
-  
-  // Effect to fetch ComfyUI server capabilities (nodes, models, etc.)
+  }, [comfyUIUrl, checkComfyStatus]);
+
   useEffect(() => {
-    if (options.provider === 'comfyui' && comfyUIUrl) {
-      // Set to null to indicate loading
-      setComfyUIObjectInfo(null);
-      const fetchInfo = async () => {
-        try {
-          const info = await getComfyUIObjectInfo();
+    if (isComfyUIConnected) {
+      getComfyUIObjectInfo()
+        .then(info => {
           setComfyUIObjectInfo(info);
-        } catch (error) {
-          console.error("Failed to fetch ComfyUI info:", error);
-          setComfyUIObjectInfo({}); // Set to empty object on error to stop loading
-        }
-      };
-      fetchInfo();
-    }
-  }, [options.provider, comfyUIUrl]);
-
-  // Effect to detect the correct FLUX guidance node name from the server info
-  useEffect(() => {
-    if (options.provider === 'comfyui' && options.comfyModelType === 'flux' && comfyUIObjectInfo) {
-      const availableNodes = Object.keys(comfyUIObjectInfo);
-      
-      const foundNode = availableNodes.find(node => {
-          const lowerNode = node.toLowerCase();
-          const hasFlux = lowerNode.includes('flux');
-          const hasGuidance = lowerNode.includes('guidance') || lowerNode.includes('guidage');
-          return hasFlux && hasGuidance;
-      });
-      
-      // Update the options state with the found node name or null if not found
-      if (foundNode !== options.comfyFluxNodeName) {
-        setOptions(prev => ({ ...prev, comfyFluxNodeName: foundNode || null }));
-      }
-    } else if (options.comfyFluxNodeName !== null) {
-      // Reset if not in flux mode or provider changed
-      setOptions(prev => ({ ...prev, comfyFluxNodeName: null }));
-    }
-  }, [options.provider, options.comfyModelType, comfyUIObjectInfo, options.comfyFluxNodeName, setOptions]);
-
-  const isReadyToGenerate = (() => {
-    if (isLoading || isGeneratingPrompt) return false;
-    if (options.provider === 'gemini') {
-      if (!sourceImage) return false;
-      if (options.clothing === 'image' && !clothingImage) return false;
-      if (options.background === 'image' && !backgroundImage) return false;
-      return true;
-    }
-    if (options.provider === 'comfyui') {
-      // Not ready if capabilities are still loading
-      if (!comfyUIObjectInfo) return false;
-
-      if (options.comfyModelType === 'flux') {
-          // If in flux mode, we MUST have found the guidance node.
-          // The effect above handles setting this in the options state.
-          if (!options.comfyFluxNodeName) {
-              return false;
+          // Auto-detect FLUX node
+          const fluxNode = Object.keys(info).find(key => key.toLowerCase().includes('fluxguidancesampler'));
+          if (fluxNode) {
+            setOptions(prev => ({...prev, comfyFluxNodeName: fluxNode}));
           }
-      }
-      return !!options.comfyModel && !!options.comfyPrompt?.trim();
+        })
+        .catch(err => {
+          console.error("Failed to get ComfyUI object info:", err);
+          setComfyUIObjectInfo({}); // Set to empty object on error
+        });
+    } else {
+        setComfyUIObjectInfo(null);
     }
-    return false;
-  })();
+  }, [isComfyUIConnected]);
 
-  const handleLogin = async (username: string, password: string): Promise<string | true> => {
+  const handleLogin = async (username: string, password: string): Promise<true | string> => {
     const user = await authenticateUser(username, password);
     if (user) {
       setCurrentUser(user);
       sessionStorage.setItem('currentUser', JSON.stringify(user));
-      // The useEffect hook will now handle the connection check automatically upon state change.
       return true;
     }
-    return 'Invalid username or password.';
+    return "Invalid username or password.";
   };
 
   const handleLogout = () => {
@@ -187,339 +144,250 @@ function App() {
     sessionStorage.removeItem('currentUser');
   };
   
-  const handleReset = () => {
+  const handleSaveComfyUrl = (newUrl: string) => {
+    localStorage.setItem('comfyui_url', newUrl);
+    setComfyUIUrl(newUrl);
+  };
+  
+  const handleReset = useCallback(() => {
     setOptions(initialOptions);
     setSourceImage(null);
     setClothingImage(null);
     setBackgroundImage(null);
+    setPreviewedBackgroundImage(null);
     setGeneratedImages([]);
     setError(null);
-    setIsLoading(false);
-  };
-  
-  const handleSetNewSource = async (imageDataUrl: string) => {
-    try {
-      // Convert data URL to File
-      const response = await fetch(imageDataUrl);
-      const blob = await response.blob();
-      const newFile = new File([blob], `generated-source-${Date.now()}.jpeg`, {
-        type: 'image/jpeg',
-      });
-      setSourceImage(newFile);
-      setGeneratedImages([]); // Clear the gallery to show the placeholder
-      setError(null);
-    } catch (e) {
-      console.error('Failed to set new source image:', e);
-      setError('Could not use the selected image as the new source.');
-    }
-  };
+    setLastUsedPrompt(null);
+  }, []);
 
-  const handleGenerateComfyUIPromptFromSource = async () => {
-    if (!sourceImage) {
-        setError('A source image must be uploaded to generate a prompt.');
-        return;
-    }
+  const handleGeneratePrompt = useCallback(async () => {
+    if (!sourceImage) return;
     setIsGeneratingPrompt(true);
     setError(null);
     try {
-        const prompt = await generateComfyUIPromptService(sourceImage);
+        const modelType = options.comfyModelType || 'sdxl';
+        const prompt = await generateComfyUIPromptService(sourceImage, modelType);
         setOptions(prev => ({ ...prev, comfyPrompt: prompt }));
     } catch (err: any) {
-        setError(`Failed to generate prompt from image: ${err.message}`);
-        setOptions(prev => ({ ...prev, comfyPrompt: '' }));
+        setError(err.message || "Failed to generate prompt.");
     } finally {
         setIsGeneratingPrompt(false);
     }
+  }, [sourceImage, options.comfyModelType]);
+
+  const handleSetNewSource = async (imageDataUrl: string) => {
+      try {
+        const response = await fetch(imageDataUrl);
+        const blob = await response.blob();
+        const file = new File([blob], "new_source.jpeg", { type: "image/jpeg" });
+        setSourceImage(file);
+        setGeneratedImages([]); // Clear previous results
+        setError(null);
+        setLastUsedPrompt(null);
+      } catch (err) {
+          console.error("Failed to set new source image:", err);
+          setError("Could not use this image as the new source.");
+      }
   };
 
+  const updateProgress = useCallback((message: string, value: number) => {
+    setProgressMessage(message);
+    setProgressValue(value);
+  }, []);
+
   const handleGenerate = async () => {
-    if (!isReadyToGenerate) {
-      setError("Generation Failed\n\nPlease ensure a source image and all required options are set.");
-      return;
-    }
-    
-    // A source image is ONLY required for the Gemini provider.
-    if (options.provider === 'gemini' && !sourceImage) {
-      setError("Please ensure a source image is uploaded for Gemini generation.");
-      return;
-    }
-    
     setIsLoading(true);
     setGeneratedImages([]);
     setError(null);
-    setProgressMessage("Starting generation...");
-    setProgressValue(0);
+    setLastUsedPrompt(null);
 
-    const onProgress = (message: string, progress: number) => {
-      setProgressMessage(message);
-      setProgressValue(progress);
-    };
+    let generationPromise;
 
     try {
-      let images: string[];
-      if (options.provider === 'comfyui') {
-        images = await generateComfyUIPortraits(
-          options,
-          onProgress
-        );
+      if (options.provider === 'gemini') {
+        if (!sourceImage) {
+          setError("Please upload a source image for Gemini generation.");
+          setIsLoading(false);
+          return;
+        }
+        generationPromise = generatePortraitSeries(sourceImage, clothingImage, backgroundImage, previewedBackgroundImage, options, updateProgress);
+      } else if (options.provider === 'comfyui') {
+        if (!options.comfyPrompt) {
+          setError("Please enter a prompt for ComfyUI or generate one from a source image.");
+          setIsLoading(false);
+          return;
+        }
+        setProgressMessage('Connecting to ComfyUI...');
+        generationPromise = generateComfyUIPortraits(options, updateProgress);
       } else {
-        // We've already confirmed sourceImage is not null for gemini provider.
-        images = await generatePortraitSeries(
-          sourceImage!,
-          clothingImage,
-          backgroundImage,
-          previewedBackgroundImage,
-          options,
-          onProgress
-        );
+        throw new Error("Invalid provider selected.");
+      }
+
+      const { images, finalPrompt } = await generationPromise;
+      
+      if (images.length > 0 && sourceImage) {
+        const sourceImageForHistory = await fileToResizedDataUrl(sourceImage, 512);
+        const thumbnail = await dataUrlToThumbnail(sourceImageForHistory, 128);
+
+        saveGenerationToHistory({
+          timestamp: new Date().toISOString(),
+          sourceImage: thumbnail,
+          options: options,
+          generatedImages: images,
+        });
       }
       setGeneratedImages(images);
-
-      onProgress("Saving to history...", 0.98);
-      
-      // For ComfyUI runs without a source image, use the first generated image
-      // as the "source" for the history record. Otherwise, use the provided source image.
-      const sourceForHistoryDataUrl = sourceImage
-        ? await fileToResizedDataUrl(sourceImage, 1024)
-        : (images.length > 0 ? await dataUrlToThumbnail(images[0], 1024) : null);
-
-      // Only save to history if we have a source and some results.
-      if (sourceForHistoryDataUrl && images.length > 0) {
-        const generatedThumbnails = await Promise.all(
-          images.map(imgDataUrl => dataUrlToThumbnail(imgDataUrl, 256))
-        );
-
-        const historyItem: Omit<HistoryItem, 'id'> = {
-          timestamp: new Date().toISOString(),
-          sourceImage: sourceForHistoryDataUrl,
-          options,
-          generatedImages: generatedThumbnails,
-        };
-        saveGenerationToHistory(historyItem);
-      }
+      setLastUsedPrompt(finalPrompt);
 
     } catch (err: any) {
-      setError(err.message || 'An unknown error occurred during image generation.');
+      console.error("Generation failed:", err);
+      setError(err.message || "An unknown error occurred during generation.");
     } finally {
       setIsLoading(false);
+      setProgressValue(0);
+      setProgressMessage('');
     }
   };
   
   const handleLoadHistoryItem = async (item: HistoryItem) => {
+    setOptions(item.options);
+    setGeneratedImages(item.generatedImages);
+    
+    // Try to reconstruct the source image File object
     try {
-      setOptions(item.options);
-      
       const response = await fetch(item.sourceImage);
       const blob = await response.blob();
-      const sourceFile = new File([blob], `history-source-${item.id}.jpeg`, { type: blob.type });
-      setSourceImage(sourceFile);
-      
-      // Reset other inputs and results
-      setClothingImage(null);
-      setBackgroundImage(null);
-      setGeneratedImages([]);
-      setError(null);
-      setIsHistoryPanelOpen(false);
+      const file = new File([blob], "history_source.jpeg", { type: blob.type });
+      setSourceImage(file);
+    } catch(e) {
+      console.error("Could not load source image from history", e);
+      setSourceImage(null); // clear if it fails
+    }
+    
+    setIsHistoryPanelOpen(false); // Close panel on load
+  };
 
-    } catch (err) {
-      console.error("Failed to load history item:", err);
-      setError("Could not load the selected history item.");
-    }
-  };
-  
   const handleExportWorkflow = () => {
-    if (options.provider === 'comfyui' && !options.comfyPrompt) {
-      setError("Cannot export ComfyUI workflow without a prompt.");
-      return;
-    }
     try {
-      exportComfyUIWorkflow(options);
-      alert(`ComfyUI workflow.json downloaded!\n\nThis is a text-to-image workflow. Just load it in ComfyUI and queue prompt!`);
-    } catch (e: any) {
-      setError(e.message || "Failed to export workflow.");
+        exportComfyUIWorkflow(options);
+    } catch (err: any) {
+        setError(err.message || "Failed to export workflow.");
     }
   };
-  
-  const handleSetComfyUIUrl = (url: string) => {
-    localStorage.setItem('comfyui_url', url);
-    setComfyUIUrl(url);
-  };
-  
-  const handleUsePromptForComfy = (prompt: string) => {
-    setOptions(prev => ({
-      ...prev,
-      provider: 'comfyui',
-      comfyPrompt: prompt,
-    }));
-    setAdminTab('generate');
-  };
+
+  const isGenerationReady = sourceImage !== null || (options.provider === 'comfyui' && !!options.comfyPrompt);
 
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
 
-  const renderAdminContent = () => {
-    switch (adminTab) {
-      case 'prompt':
-        return <PromptGeneratorPanel onUsePrompt={handleUsePromptForComfy} />;
-      case 'manage':
-        return <AdminPanel />;
-      case 'generate':
-      default:
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
-            {/* --- Left Column: Controls --- */}
-            <div className="lg:col-span-2 space-y-8">
-              <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                  <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Image</h2>
-                  <div className="space-y-4">
-                    <ImageUploader 
-                      label={options.provider === 'comfyui' ? "Source Image (to generate prompt)" : "Source Portrait"}
-                      id="source-image" 
-                      onImageUpload={setSourceImage} 
-                      sourceFile={sourceImage}
-                    />
-                    {options.provider === 'gemini' && options.clothing === 'image' && (
-                      <ImageUploader 
-                          label="Clothing Reference" 
-                          id="clothing-image" 
-                          onImageUpload={setClothingImage} 
-                          sourceFile={clothingImage}
-                      />
-                    )}
-                    {options.provider === 'gemini' && options.background === 'image' && (
-                        <ImageUploader 
-                            label="Background Image" 
-                            id="background-image" 
-                            onImageUpload={setBackgroundImage}
-                            sourceFile={backgroundImage}
-                        />
-                    )}
-                  </div>
-              </div>
-              <OptionsPanel 
-                options={options} 
-                setOptions={setOptions} 
-                setPreviewedBackgroundImage={setPreviewedBackgroundImage}
-                onGenerate={handleGenerate}
-                onReset={handleReset}
-                isDisabled={isLoading || isGeneratingPrompt}
-                isReady={isReadyToGenerate}
-                onExportWorkflow={handleExportWorkflow}
-                isGeneratingPrompt={isGeneratingPrompt}
-                comfyUIObjectInfo={comfyUIObjectInfo}
-                comfyUIUrl={comfyUIUrl}
-                sourceImage={sourceImage}
-                onGeneratePrompt={handleGenerateComfyUIPromptFromSource}
-              />
-            </div>
-
-            {/* --- Right Column: Results --- */}
-            <div className="lg:col-span-3 lg:sticky lg:top-24">
-              {isLoading ? (
-                <div className="flex items-center justify-center min-h-[60vh] bg-bg-secondary rounded-2xl shadow-lg p-8">
-                  <Loader message={progressMessage} progress={progressValue} />
-                </div>
-              ) : error ? (
-                <div className="flex items-center justify-center min-h-[60vh] bg-bg-secondary rounded-2xl shadow-lg p-8">
-                  <div className="bg-danger-bg text-danger text-center p-6 rounded-lg shadow-lg w-full whitespace-pre-line">
-                      <p className="font-bold text-lg">Generation Failed</p>
-                      <p className="mt-2">{error}</p>
-                  </div>
-                </div>
-              ) : generatedImages.length > 0 ? (
-                <ImageGrid 
-                  images={generatedImages} 
-                  onSetNewSource={handleSetNewSource} 
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center min-h-[60vh] bg-bg-secondary rounded-2xl shadow-lg p-8 text-center text-text-secondary">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-24 h-24 text-border-primary mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <h2 className="text-xl font-bold text-text-primary mb-2">Your Gallery Awaits</h2>
-                  <p>Configure your options on the left and click "Generate Portraits".</p>
-                  <p>Your masterpieces will appear here.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-bg-primary text-text-primary font-sans transition-colors duration-300">
+    <>
       <Header 
         theme={theme} 
         setTheme={setTheme} 
         onLogout={handleLogout} 
         currentUser={currentUser}
-        onOpenComfyModal={() => setIsComfyModalOpen(true)} 
+        onOpenComfyModal={() => setIsComfyModalOpen(true)}
         onOpenHistoryPanel={() => setIsHistoryPanelOpen(true)}
         isComfyUIConnected={isComfyUIConnected}
       />
-      
-      <main className="container mx-auto p-4 md:p-8 space-y-8">
+      <main className="container mx-auto p-4 md:p-8">
         {currentUser.role === 'admin' && (
-          <div className="flex border-b border-border-primary">
-            <button
-              onClick={() => setAdminTab('generate')}
-              className={`py-2 px-4 text-sm font-medium transition-colors duration-200 focus:outline-none ${
-                adminTab === 'generate'
-                  ? 'border-b-2 border-accent text-accent'
-                  : 'text-text-secondary hover:text-text-primary border-b-2 border-transparent'
-              }`}
-              aria-pressed={adminTab === 'generate'}
-            >
-              Generate Portraits
-            </button>
-            <button
-              onClick={() => setAdminTab('prompt')}
-              className={`py-2 px-4 text-sm font-medium transition-colors duration-200 focus:outline-none ${
-                adminTab === 'prompt'
-                  ? 'border-b-2 border-accent text-accent'
-                  : 'text-text-secondary hover:text-text-primary border-b-2 border-transparent'
-              }`}
-              aria-pressed={adminTab === 'prompt'}
-            >
-              Prompts from Photo
-            </button>
-            <button
-              onClick={() => setAdminTab('manage')}
-              className={`py-2 px-4 text-sm font-medium transition-colors duration-200 focus:outline-none ${
-                adminTab === 'manage'
-                  ? 'border-b-2 border-accent text-accent'
-                  : 'text-text-secondary hover:text-text-primary border-b-2 border-transparent'
-              }`}
-              aria-pressed={adminTab === 'manage'}
-            >
-              Manage Users
-            </button>
-          </div>
+            <div className="bg-bg-secondary p-4 rounded-2xl shadow-lg mb-8">
+                <div className="flex items-center justify-center border-b border-border-primary">
+                    <button onClick={() => setAdminTab('generate')} className={`px-4 py-2 text-sm font-bold transition-colors ${adminTab === 'generate' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                        Generator
+                    </button>
+                    <button onClick={() => setAdminTab('prompt')} className={`px-4 py-2 text-sm font-bold transition-colors ${adminTab === 'prompt' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                        Prompt Tool
+                    </button>
+                    <button onClick={() => setAdminTab('manage')} className={`px-4 py-2 text-sm font-bold transition-colors ${adminTab === 'manage' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                        Manage Users
+                    </button>
+                </div>
+            </div>
         )}
+
+        { (currentUser.role !== 'admin' || adminTab === 'generate') &&
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            {/* Left Column for Controls */}
+            <div className="lg:col-span-1 space-y-8">
+              <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                <h2 className="text-xl font-bold mb-4 text-accent">{options.provider === 'gemini' ? "1. Upload Images" : "1. Setup Prompt"}</h2>
+                <div className="space-y-4">
+                  <ImageUploader 
+                    label={options.provider === 'comfyui' ? "Source Image (to generate prompt)" : "1. Upload Source Image"}
+                    id="source-image" 
+                    onImageUpload={setSourceImage} 
+                    sourceFile={sourceImage}
+                  />
+                  {options.provider === 'gemini' && options.clothing === 'image' && (
+                    <ImageUploader label="Clothing Reference Image (Optional)" id="clothing-image" onImageUpload={setClothingImage} sourceFile={clothingImage} />
+                  )}
+                  {options.provider === 'gemini' && options.background === 'image' && (
+                    <ImageUploader label="Background Image (Optional)" id="background-image" onImageUpload={setBackgroundImage} sourceFile={backgroundImage} />
+                  )}
+                </div>
+              </div>
+              <OptionsPanel 
+                options={options} 
+                setOptions={setOptions}
+                setPreviewedBackgroundImage={setPreviewedBackgroundImage}
+                onGenerate={handleGenerate}
+                onReset={handleReset}
+                onGeneratePrompt={handleGeneratePrompt}
+                onExportWorkflow={handleExportWorkflow}
+                isDisabled={isLoading}
+                isReady={isGenerationReady && !isLoading}
+                isGeneratingPrompt={isGeneratingPrompt}
+                comfyUIObjectInfo={comfyUIObjectInfo}
+                comfyUIUrl={comfyUIUrl}
+                sourceImage={sourceImage}
+              />
+            </div>
+
+            {/* Right column for results */}
+            <div className="lg:col-span-2 sticky top-24">
+              {isLoading ? (
+                  <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg min-h-[500px]">
+                      <Loader message={progressMessage} progress={progressValue} />
+                  </div>
+              ) : error ? (
+                <div className="bg-danger-bg text-danger p-4 rounded-lg text-center">
+                  <h3 className="font-bold mb-2">Generation Failed</h3>
+                  <p className="text-sm">{error}</p>
+                </div>
+              ) : generatedImages.length > 0 ? (
+                <ImageGrid images={generatedImages} onSetNewSource={handleSetNewSource} lastUsedPrompt={lastUsedPrompt}/>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
+                    <GenerateIcon className="w-16 h-16 text-border-primary mb-4" />
+                    <h3 className="text-lg font-bold text-text-primary">Your generated images will appear here</h3>
+                    <p className="text-text-secondary max-w-xs">Configure your options on the left and click "Generate" to see the magic happen.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        }
         
-        {currentUser.role === 'user' ? renderAdminContent() : (currentUser.role === 'admin' && renderAdminContent())}
+        {currentUser.role === 'admin' && adminTab === 'prompt' && <PromptGeneratorPanel onUsePrompt={(p) => { setOptions(prev => ({...prev, comfyPrompt: p})); setAdminTab('generate'); }} />}
+        {currentUser.role === 'admin' && adminTab === 'manage' && <AdminPanel />}
 
       </main>
       
-      {isComfyModalOpen && (
-        <ComfyUIConnection
-          isOpen={isComfyModalOpen}
-          onClose={() => setIsComfyModalOpen(false)}
-          initialUrl={comfyUIUrl}
-          onSaveUrl={handleSetComfyUIUrl}
-        />
-      )}
-      
-      {isHistoryPanelOpen && (
-        <HistoryPanel
-          isOpen={isHistoryPanelOpen}
-          onClose={() => setIsHistoryPanelOpen(false)}
-          onLoadHistoryItem={handleLoadHistoryItem}
-        />
-      )}
-    </div>
+      <ComfyUIConnection 
+        isOpen={isComfyModalOpen}
+        onClose={() => setIsComfyModalOpen(false)}
+        initialUrl={comfyUIUrl}
+        onSaveUrl={handleSaveComfyUrl}
+      />
+      <HistoryPanel
+        isOpen={isHistoryPanelOpen}
+        onClose={() => setIsHistoryPanelOpen(false)}
+        onLoadHistoryItem={handleLoadHistoryItem}
+      />
+    </>
   );
 }
 

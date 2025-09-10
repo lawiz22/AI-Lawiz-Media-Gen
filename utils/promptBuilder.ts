@@ -44,8 +44,6 @@ const generateRandomClothingPrompt = (): string => {
 export const buildPromptSegments = (options: GenerationOptions, pose: string): string[] => {
     const promptSegments: string[] = [`Generate a high-quality, professional, and tasteful portrait. The subject is a person with the same face and features as in the reference image.`];
     
-    promptSegments.push(`Overall Style and Era: ${options.eraStyle}.`);
-    
     promptSegments.push(`Pose: ${pose}`);
 
     // Clothing
@@ -88,12 +86,30 @@ export const buildPromptSegments = (options: GenerationOptions, pose: string): s
         promptSegments.push('Background: Keep the original background from the reference image.');
     }
 
-    promptSegments.push(`Photo Style: ${options.photoStyle}.`);
-    promptSegments.push(`Artistic Style: Render the image in a ${options.imageStyle} style.`);
+    // Text on Image
+    if (options.addTextToImage && options.textOnImagePrompt?.trim() && options.textObjectPrompt?.trim()) {
+        let textPrompt = options.textObjectPrompt;
+        const userText = options.textOnImagePrompt;
+        
+        if (textPrompt.includes('%s')) {
+            textPrompt = textPrompt.replace('%s', userText);
+        } else {
+            // If no placeholder, append the user text. Assume user knows what they are doing.
+            textPrompt = `${textPrompt} ${userText}`;
+        }
+        
+        promptSegments.push(`Text Element: The image must include ${textPrompt}. Make sure the text is clearly legible and integrated naturally into the scene.`);
+    }
     
+    // Style Directives
     if (options.imageStyle === 'photorealistic') {
+        promptSegments.push(`Overall Style and Era: ${options.eraStyle}.`);
+        promptSegments.push(`Photo Style: ${options.photoStyle}.`);
+        promptSegments.push(`Artistic Style: Render the image in a photorealistic style.`);
         promptSegments.push("Ensure the final image is a high-quality, realistic photograph.");
     } else {
+        // For non-photorealistic styles, we only want the artistic style itself.
+        promptSegments.push(`Artistic Style: Render the image in a ${options.imageStyle} style.`);
         promptSegments.push(`Ensure the final result is a high-quality image in the specified artistic style.`);
     }
 

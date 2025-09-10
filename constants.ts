@@ -102,9 +102,20 @@ export const POSE_MODIFIERS = ['confidently', 'thoughtfully', 'playfully', 'sere
 export const POSE_DIRECTIONS = ['towards the camera', 'away from the camera', 'over the shoulder', 'to the side', 'upwards', 'downwards', 'with head tilted'];
 export const POSE_DETAILS = ['with arms crossed', 'with hands on hips', 'with one hand on their chin', 'with a slight smile', 'with a neutral expression', 'in mid-stride', 'with hands in pockets', 'tucking hair behind an ear'];
 
+// --- For Text on Image Randomization ---
+export const TEXT_OBJECT_PROMPTS = [
+    "a sign in the background that reads '%s'",
+    "a t-shirt with the text '%s' printed on the front",
+    "a coffee mug held by the person with '%s' written on it",
+    "a neon sign glowing in the background that says '%s'",
+    "a book with the title '%s' on the cover",
+    "graffiti on a wall behind the person that says '%s'",
+    "a handheld banner that reads '%s'",
+    "a newspaper with the headline '%s'",
+];
+
 // --- ComfyUI Workflow Template ---
-// Fix: Added the missing COMFYUI_WORKFLOW_TEMPLATE to resolve the import error.
-// This basic workflow uses IPAdapter for face consistency and is designed to be modified by the comfyUIService.
+// This is now a standard text-to-image workflow, without IPAdapter.
 export const COMFYUI_WORKFLOW_TEMPLATE = {
   "3": {
     "inputs": {
@@ -114,7 +125,7 @@ export const COMFYUI_WORKFLOW_TEMPLATE = {
       "sampler_name": "euler",
       "scheduler": "normal",
       "denoise": 1,
-      "model": [ "13", 0 ],
+      "model": [ "4", 0 ],
       "positive": [ "6", 0 ],
       "negative": [ "7", 0 ],
       "latent_image": [ "5", 0 ]
@@ -135,7 +146,7 @@ export const COMFYUI_WORKFLOW_TEMPLATE = {
   "6": {
     "inputs": {
       "text": "A photorealistic portrait of a person",
-      "clip": [ "13", 1 ]
+      "clip": [ "4", 1 ]
     },
     "class_type": "CLIPTextEncode",
     "_meta": { "title": "Positive Prompt" }
@@ -143,7 +154,7 @@ export const COMFYUI_WORKFLOW_TEMPLATE = {
   "7": {
     "inputs": {
       "text": "blurry, bad quality, low-res, ugly, deformed, disfigured",
-      "clip": [ "13", 1 ]
+      "clip": [ "4", 1 ]
     },
     "class_type": "CLIPTextEncode",
     "_meta": { "title": "Negative Prompt" }
@@ -157,26 +168,5 @@ export const COMFYUI_WORKFLOW_TEMPLATE = {
     "inputs": { "images": [ "8", 0 ] },
     "class_type": "PreviewImage",
     "_meta": { "title": "Preview Image" }
-  },
-  "10": {
-    "inputs": { "image": "source_image.png", "upload": "image" },
-    "class_type": "LoadImage",
-    "_meta": { "title": "Load Source Image" }
-  },
-  "12": {
-    "inputs": { "ipadapter_file": "ip-adapter-plus_sdxl_vit-h.bin" },
-    "class_type": "IPAdapterModelLoader",
-    "_meta": { "title": "IPAdapter Model Loader" }
-  },
-  "13": {
-    "inputs": {
-      "model": [ "4", 0 ],
-      "ipadapter": [ "12", 0 ],
-      "image": [ "10", 0 ],
-      "weight": 0.85,
-      "clip": [ "4", 1 ]
-    },
-    "class_type": "IPAdapter",
-    "_meta": { "title": "IPAdapter" }
   }
 };

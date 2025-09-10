@@ -9,6 +9,7 @@ interface PromptGeneratorPanelProps {
 
 export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({ onUsePrompt }) => {
     const [image, setImage] = useState<File | null>(null);
+    const [modelType, setModelType] = useState<'sdxl' | 'flux'>('sdxl');
     const [prompt, setPrompt] = useState<string>('');
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({ onUs
         setIsLoading(true);
         setError(null);
         try {
-            const generatedPrompt = await generateComfyUIPromptFromSource(image);
+            const generatedPrompt = await generateComfyUIPromptFromSource(image, modelType);
             setPrompt(generatedPrompt);
         } catch (err: any) {
             setError(err.message || 'An unknown error occurred.');
@@ -54,7 +55,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({ onUs
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto">
             <h2 className="text-xl font-bold text-accent mb-4">Generate Prompt from Image</h2>
             <p className="text-sm text-text-secondary mb-6">
-                Upload a photo to generate a detailed descriptive prompt using AI. This is useful for creating a base prompt for ComfyUI or other image generation tools.
+                Upload a photo to generate a descriptive prompt using AI. Choose a prompt type optimized for your target model.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                 {/* Left Column: Uploader & Generate Button */}
@@ -65,6 +66,13 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({ onUs
                         onImageUpload={setImage}
                         sourceFile={image}
                     />
+                    <div>
+                        <label className="block text-sm font-medium text-text-secondary mb-1">Prompt Type</label>
+                        <div className="flex rounded-md border border-border-primary">
+                            <button onClick={() => setModelType('sdxl')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${modelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
+                            <button onClick={() => setModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors border-l border-border-primary ${modelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
+                        </div>
+                    </div>
                      <button
                         onClick={handleGenerate}
                         disabled={!image || isLoading}
@@ -87,8 +95,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({ onUs
                             onChange={(e) => setPrompt(e.target.value)}
                             readOnly={isLoading}
                             placeholder="Your generated prompt will appear here..."
-                            className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[170px]"
-                            rows={8}
+                            className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px]"
+                            rows={10}
                         />
                     </div>
                      {error && (

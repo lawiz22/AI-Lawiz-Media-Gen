@@ -14,7 +14,11 @@ export interface GenerationOptions {
   photoStyle: string;
   imageStyle: string;
   eraStyle: string;
-  
+  creativity?: number;
+  addTextToImage?: boolean;
+  textOnImagePrompt?: string;
+  textObjectPrompt?: string;
+
   // ComfyUI specific options
   comfyModelType?: 'sdxl' | 'flux';
   comfyFluxGuidance?: number;
