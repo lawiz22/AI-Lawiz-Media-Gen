@@ -47,15 +47,24 @@ const fetchWithRetry = async (url: string, retries = 3, delay = 500): Promise<Re
 
 // --- API Functions ---
 export const checkConnection = async (url: string): Promise<{ success: boolean; error?: string }> => {
-    if (!url) return { success: false, error: 'URL is not provided.' };
+    if (!url || !url.startsWith('http')) {
+        return { success: false, error: 'A valid URL (http://... or https://...) is not provided.' };
+    }
     try {
-        const response = await fetch(url, { method: 'GET', mode: 'cors' });
-        // ComfyUI root might not return OK, but it should be reachable.
-        // A better check might be /system_stats
-        await fetch(`${url.endsWith('/') ? url.slice(0, -1) : url}/system_stats`);
+        const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+        const statsUrl = `${cleanUrl}/system_stats`;
+        const response = await fetch(statsUrl, { 
+            method: 'GET', 
+            mode: 'cors' 
+        });
+        if (!response.ok) {
+             throw new Error(`Server responded with status: ${response.statusText} (${response.status})`);
+        }
+        await response.json(); // Ensure the body is valid JSON as expected.
         return { success: true };
-    } catch (error) {
-        return { success: false, error: 'Could not connect. Check server status and CORS settings.' };
+    } catch (error: any) {
+        console.error("ComfyUI connection check failed:", error);
+        return { success: false, error: `Connection failed: ${error.message}. Check URL, server status, and CORS settings.` };
     }
 };
 

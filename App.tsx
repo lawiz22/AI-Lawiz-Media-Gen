@@ -83,32 +83,44 @@ function App() {
   const [isComfyModalOpen, setIsComfyModalOpen] = useState(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   
-  // Refactored: Manage ComfyUI URL and connection status in state
   const [comfyUIUrl, setComfyUIUrl] = useState<string>(() => localStorage.getItem('comfyui_url') || '');
   const [isComfyUIConnected, setIsComfyUIConnected] = useState<boolean | null>(null);
   const [comfyUIObjectInfo, setComfyUIObjectInfo] = useState<any | null>(null);
-
+  
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
   
-  // Refactored: Connection check is now a pure function
-  const checkComfyStatus = useCallback(async (url: string) => {
-      if (!url) {
-          setIsComfyUIConnected(false);
-          return;
-      }
-      setIsComfyUIConnected(null); // Set to checking state
-      const result = await checkComfyUIConnection(url);
-      setIsComfyUIConnected(result.success);
+  const updateAndTestConnection = useCallback(async (newUrl?: string) => {
+    // Fix: Added parentheses to resolve mixed '||' and '??' operator precedence.
+    const urlToUse = newUrl ?? (localStorage.getItem('comfyui_url') || '');
+
+    // "Save" part: update both localStorage and React state for consistency.
+    localStorage.setItem('comfyui_url', urlToUse);
+    setComfyUIUrl(urlToUse);
+
+    // "Test" part.
+    if (!urlToUse) {
+      setIsComfyUIConnected(false);
+      return;
+    }
+
+    setIsComfyUIConnected(null); // Set to "checking" state
+    const result = await checkComfyUIConnection(urlToUse);
+    setIsComfyUIConnected(result.success);
   }, []);
 
-  // Effect to run the connection check on mount and when URL changes
+  // Effect for initial mount (handles page refresh with a saved session)
   useEffect(() => {
-      checkComfyStatus(comfyUIUrl);
-  }, [comfyUIUrl, checkComfyStatus]);
-
+    if (currentUser) {
+      updateAndTestConnection();
+    } else {
+      setIsComfyUIConnected(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
+  
   useEffect(() => {
     if (isComfyUIConnected) {
       getComfyUIObjectInfo()
@@ -134,6 +146,8 @@ function App() {
     if (user) {
       setCurrentUser(user);
       sessionStorage.setItem('currentUser', JSON.stringify(user));
+      // Directly call the new function after successful login
+      await updateAndTestConnection();
       return true;
     }
     return "Invalid username or password.";
@@ -142,11 +156,12 @@ function App() {
   const handleLogout = () => {
     setCurrentUser(null);
     sessionStorage.removeItem('currentUser');
+    setIsComfyUIConnected(false);
   };
   
+  // The modal save function now just calls our central logic handler.
   const handleSaveComfyUrl = (newUrl: string) => {
-    localStorage.setItem('comfyui_url', newUrl);
-    setComfyUIUrl(newUrl);
+    updateAndTestConnection(newUrl);
   };
   
   const handleReset = useCallback(() => {
