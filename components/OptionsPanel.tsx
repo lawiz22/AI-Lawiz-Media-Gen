@@ -37,6 +37,8 @@ interface OptionsPanelProps {
   isGeneratingPrompt?: boolean;
   comfyUIObjectInfo: any | null;
   comfyUIUrl: string;
+  sourceImage: File | null;
+  onGeneratePrompt: () => void;
 }
 
 // --- Prop Interfaces for Extracted Components ---
@@ -63,6 +65,8 @@ interface ComfyUIOptionsProps {
   comfySamplers: string[];
   comfySchedulers: string[];
   comfyUIUrl: string;
+  sourceImage: File | null;
+  onGeneratePrompt: () => void;
 }
 
 
@@ -253,6 +257,8 @@ const ComfyUIOptions: React.FC<ComfyUIOptionsProps> = ({
   comfySamplers,
   comfySchedulers,
   comfyUIUrl,
+  sourceImage,
+  onGeneratePrompt,
 }) => {
     
     // Auto-adjust CFG when switching model type
@@ -295,18 +301,30 @@ const ComfyUIOptions: React.FC<ComfyUIOptionsProps> = ({
                 <div className="relative">
                     <textarea
                         id="comfyPrompt"
-                        placeholder={isGeneratingPrompt ? "Generating prompt from source image..." : "Describe the image you want to generate, or upload a source image to auto-generate a description."}
+                        placeholder="Describe the image you want to generate, or use the button below to generate a prompt from your source image."
                         value={options.comfyPrompt}
                         onChange={(e) => handleOptionChange('comfyPrompt', e.target.value)}
                         disabled={isDisabled}
                         className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[100px]"
                         rows={4}
                     />
-                    {isGeneratingPrompt && (
-                        <div className="absolute inset-0 bg-bg-secondary/50 flex items-center justify-center rounded-md">
-                            <SpinnerIcon className="w-6 h-6 animate-spin text-accent" />
-                        </div>
-                    )}
+                    <button 
+                        onClick={onGeneratePrompt}
+                        disabled={!sourceImage || isGeneratingPrompt || isDisabled}
+                        className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-bg-tertiary/80 backdrop-blur-sm text-text-secondary text-xs font-semibold py-1.5 px-3 rounded-full hover:bg-accent hover:text-accent-text transition-colors duration-200 shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isGeneratingPrompt ? (
+                            <>
+                                <SpinnerIcon className="w-4 h-4 animate-spin"/>
+                                <span>Generating...</span>
+                            </>
+                        ) : (
+                            <>
+                                <GenerateIcon className="w-4 h-4"/>
+                                <span>Generate from Source</span>
+                            </>
+                        )}
+                    </button>
                 </div>
             </div>
             <div>
@@ -499,6 +517,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   isGeneratingPrompt,
   comfyUIObjectInfo,
   comfyUIUrl,
+  sourceImage,
+  onGeneratePrompt,
 }) => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
@@ -753,6 +773,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
           comfySamplers={comfySamplers}
           comfySchedulers={comfySchedulers}
           comfyUIUrl={comfyUIUrl}
+          sourceImage={sourceImage}
+          onGeneratePrompt={onGeneratePrompt}
         />
       )}
       
@@ -814,41 +836,41 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         </div>
         
         <div>
-            <label htmlFor="eraStyle" className="block text-sm font-medium text-text-secondary mb-1">Era / Medium Style</label>
+            <label htmlFor="imageStyle" className="block text-sm font-medium text-text-secondary mb-1">Artistic Style</label>
             <select
-                id="eraStyle"
-                value={options.eraStyle}
-                onChange={(e) => handleOptionChange('eraStyle', e.target.value)}
+                id="imageStyle"
+                value={options.imageStyle}
+                onChange={(e) => handleOptionChange('imageStyle', e.target.value)}
                 disabled={isDisabled}
                 className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
             >
-                {ERA_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                {IMAGE_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             <div>
+                <label htmlFor="eraStyle" className="block text-sm font-medium text-text-secondary mb-1">Era / Medium Style</label>
+                <select
+                    id="eraStyle"
+                    value={options.eraStyle}
+                    onChange={(e) => handleOptionChange('eraStyle', e.target.value)}
+                    disabled={isDisabled || options.imageStyle !== 'photorealistic'}
+                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent disabled:opacity-50"
+                >
+                    {ERA_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+            </div>
             <div>
                 <label htmlFor="photoStyle" className="block text-sm font-medium text-text-secondary mb-1">Photo Style</label>
                 <select
                     id="photoStyle"
                     value={options.photoStyle}
                     onChange={(e) => handleOptionChange('photoStyle', e.target.value)}
-                    disabled={isDisabled}
-                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                    disabled={isDisabled || options.imageStyle !== 'photorealistic'}
+                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent disabled:opacity-50"
                 >
                     {PHOTO_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                </select>
-            </div>
-            <div>
-                <label htmlFor="imageStyle" className="block text-sm font-medium text-text-secondary mb-1">Artistic Style</label>
-                <select
-                    id="imageStyle"
-                    value={options.imageStyle}
-                    onChange={(e) => handleOptionChange('imageStyle', e.target.value)}
-                    disabled={isDisabled}
-                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                >
-                    {IMAGE_STYLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                 </select>
             </div>
         </div>

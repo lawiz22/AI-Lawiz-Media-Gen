@@ -29,32 +29,6 @@ const dataUrlToGenerativePart = async (dataUrl: string): Promise<Part> => {
     };
 };
 
-export const generatePromptFromImage = async (imageFile: File): Promise<string> => {
-    try {
-        const imagePart = await fileToGenerativePart(imageFile);
-        const prompt = `Analyze this image. Generate a detailed, descriptive prompt for an AI image generator that captures the entire scene. Describe the person's appearance (facial features, hair, expression), their clothing, the background environment, the lighting, and the overall mood. The goal is a comprehensive prompt to recreate the whole picture. Start the prompt with "A photorealistic portrait of...".`;
-
-        const result = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: {
-                parts: [imagePart, { text: prompt }],
-            },
-        });
-
-        const text = result.text.trim();
-
-        if (!text) {
-            throw new Error('The AI did not return a description.');
-        }
-
-        return text;
-
-    } catch (error: any) {
-        console.error("Error generating prompt from image:", error);
-        throw new Error(error.message || "Failed to generate a prompt from the image.");
-    }
-};
-
 export const generateBackgroundImagePreview = async (
   prompt: string,
   aspectRatio: string

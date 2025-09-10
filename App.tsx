@@ -8,10 +8,11 @@ import { AdminPanel } from './components/AdminPanel';
 import { Loader } from './components/Loader';
 import { ComfyUIConnection } from './components/ComfyUIConnection';
 import { HistoryPanel } from './components/HistoryPanel';
+import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import type { GenerationOptions, User, HistoryItem } from './types';
 import { authenticateUser } from './services/cloudUserService';
-import { generatePortraitSeries, generatePromptFromImage } from './services/geminiService';
-import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo } from './services/comfyUIService';
+import { generatePortraitSeries } from './services/geminiService';
+import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo, generateComfyUIPromptFromSource as generateComfyUIPromptService } from './services/comfyUIService';
 import { saveGenerationToHistory } from './services/historyService';
 import { fileToResizedDataUrl, dataUrlToThumbnail } from './utils/imageUtils';
 import { PHOTO_STYLE_OPTIONS, IMAGE_STYLE_OPTIONS, ASPECT_RATIO_OPTIONS, ERA_STYLE_OPTIONS } from './constants';
@@ -71,7 +72,7 @@ function App() {
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   
-  const [adminTab, setAdminTab] = useState<'generate' | 'manage'>('generate');
+  const [adminTab, setAdminTab] = useState<'generate' | 'prompt' | 'manage'>('generate');
   const [isComfyModalOpen, setIsComfyModalOpen] = useState(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   
@@ -146,25 +147,6 @@ function App() {
     }
   }, [options.provider, options.comfyModelType, comfyUIObjectInfo, options.comfyFluxNodeName, setOptions]);
 
-  useEffect(() => {
-    if (options.provider === 'comfyui' && sourceImage) {
-      const generatePrompt = async () => {
-        setIsGeneratingPrompt(true);
-        setError(null);
-        try {
-          const prompt = await generatePromptFromImage(sourceImage);
-          setOptions(prev => ({ ...prev, comfyPrompt: prompt }));
-        } catch (err: any) {
-          setError(`Failed to generate prompt from image: ${err.message}`);
-          setOptions(prev => ({ ...prev, comfyPrompt: '' }));
-        } finally {
-          setIsGeneratingPrompt(false);
-        }
-      };
-      generatePrompt();
-    }
-  }, [sourceImage, options.provider]);
-  
   const isReadyToGenerate = (() => {
     if (isLoading || isGeneratingPrompt) return false;
     if (options.provider === 'gemini') {
@@ -229,6 +211,24 @@ function App() {
     } catch (e) {
       console.error('Failed to set new source image:', e);
       setError('Could not use the selected image as the new source.');
+    }
+  };
+
+  const handleGenerateComfyUIPromptFromSource = async () => {
+    if (!sourceImage) {
+        setError('A source image must be uploaded to generate a prompt.');
+        return;
+    }
+    setIsGeneratingPrompt(true);
+    setError(null);
+    try {
+        const prompt = await generateComfyUIPromptService(sourceImage);
+        setOptions(prev => ({ ...prev, comfyPrompt: prompt }));
+    } catch (err: any) {
+        setError(`Failed to generate prompt from image: ${err.message}`);
+        setOptions(prev => ({ ...prev, comfyPrompt: '' }));
+    } finally {
+        setIsGeneratingPrompt(false);
     }
   };
 
@@ -344,52 +344,29 @@ function App() {
     localStorage.setItem('comfyui_url', url);
     setComfyUIUrl(url);
   };
+  
+  const handleUsePromptForComfy = (prompt: string) => {
+    setOptions(prev => ({
+      ...prev,
+      provider: 'comfyui',
+      comfyPrompt: prompt,
+    }));
+    setAdminTab('generate');
+  };
 
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
 
-  return (
-    <div className="min-h-screen bg-bg-primary text-text-primary font-sans transition-colors duration-300">
-      <Header 
-        theme={theme} 
-        setTheme={setTheme} 
-        onLogout={handleLogout} 
-        currentUser={currentUser}
-        onOpenComfyModal={() => setIsComfyModalOpen(true)} 
-        onOpenHistoryPanel={() => setIsHistoryPanelOpen(true)}
-        isComfyUIConnected={isComfyUIConnected}
-      />
-      
-      <main className="container mx-auto p-4 md:p-8 space-y-8">
-        {currentUser.role === 'admin' && (
-          <div className="flex border-b border-border-primary">
-            <button
-              onClick={() => setAdminTab('generate')}
-              className={`py-2 px-4 text-sm font-medium transition-colors duration-200 focus:outline-none ${
-                adminTab === 'generate'
-                  ? 'border-b-2 border-accent text-accent'
-                  : 'text-text-secondary hover:text-text-primary border-b-2 border-transparent'
-              }`}
-              aria-pressed={adminTab === 'generate'}
-            >
-              Generate Portraits
-            </button>
-            <button
-              onClick={() => setAdminTab('manage')}
-              className={`py-2 px-4 text-sm font-medium transition-colors duration-200 focus:outline-none ${
-                adminTab === 'manage'
-                  ? 'border-b-2 border-accent text-accent'
-                  : 'text-text-secondary hover:text-text-primary border-b-2 border-transparent'
-              }`}
-              aria-pressed={adminTab === 'manage'}
-            >
-              Manage Users
-            </button>
-          </div>
-        )}
-
-        {currentUser.role === 'user' || (currentUser.role === 'admin' && adminTab === 'generate') ? (
+  const renderAdminContent = () => {
+    switch (adminTab) {
+      case 'prompt':
+        return <PromptGeneratorPanel onUsePrompt={handleUsePromptForComfy} />;
+      case 'manage':
+        return <AdminPanel />;
+      case 'generate':
+      default:
+        return (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
             {/* --- Left Column: Controls --- */}
             <div className="lg:col-span-2 space-y-8">
@@ -432,6 +409,8 @@ function App() {
                 isGeneratingPrompt={isGeneratingPrompt}
                 comfyUIObjectInfo={comfyUIObjectInfo}
                 comfyUIUrl={comfyUIUrl}
+                sourceImage={sourceImage}
+                onGeneratePrompt={handleGenerateComfyUIPromptFromSource}
               />
             </div>
 
@@ -465,9 +444,63 @@ function App() {
               )}
             </div>
           </div>
-        ) : (
-          currentUser.role === 'admin' && adminTab === 'manage' && <AdminPanel />
+        );
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-bg-primary text-text-primary font-sans transition-colors duration-300">
+      <Header 
+        theme={theme} 
+        setTheme={setTheme} 
+        onLogout={handleLogout} 
+        currentUser={currentUser}
+        onOpenComfyModal={() => setIsComfyModalOpen(true)} 
+        onOpenHistoryPanel={() => setIsHistoryPanelOpen(true)}
+        isComfyUIConnected={isComfyUIConnected}
+      />
+      
+      <main className="container mx-auto p-4 md:p-8 space-y-8">
+        {currentUser.role === 'admin' && (
+          <div className="flex border-b border-border-primary">
+            <button
+              onClick={() => setAdminTab('generate')}
+              className={`py-2 px-4 text-sm font-medium transition-colors duration-200 focus:outline-none ${
+                adminTab === 'generate'
+                  ? 'border-b-2 border-accent text-accent'
+                  : 'text-text-secondary hover:text-text-primary border-b-2 border-transparent'
+              }`}
+              aria-pressed={adminTab === 'generate'}
+            >
+              Generate Portraits
+            </button>
+            <button
+              onClick={() => setAdminTab('prompt')}
+              className={`py-2 px-4 text-sm font-medium transition-colors duration-200 focus:outline-none ${
+                adminTab === 'prompt'
+                  ? 'border-b-2 border-accent text-accent'
+                  : 'text-text-secondary hover:text-text-primary border-b-2 border-transparent'
+              }`}
+              aria-pressed={adminTab === 'prompt'}
+            >
+              Prompts from Photo
+            </button>
+            <button
+              onClick={() => setAdminTab('manage')}
+              className={`py-2 px-4 text-sm font-medium transition-colors duration-200 focus:outline-none ${
+                adminTab === 'manage'
+                  ? 'border-b-2 border-accent text-accent'
+                  : 'text-text-secondary hover:text-text-primary border-b-2 border-transparent'
+              }`}
+              aria-pressed={adminTab === 'manage'}
+            >
+              Manage Users
+            </button>
+          </div>
         )}
+        
+        {currentUser.role === 'user' ? renderAdminContent() : (currentUser.role === 'admin' && renderAdminContent())}
+
       </main>
       
       {isComfyModalOpen && (

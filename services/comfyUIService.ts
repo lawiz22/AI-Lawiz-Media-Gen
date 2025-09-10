@@ -1,5 +1,9 @@
 import type { GenerationOptions } from '../types';
 import { COMFYUI_WORKFLOW_TEMPLATE } from '../constants';
+import { fileToGenerativePart } from '../utils/imageUtils';
+import { GoogleGenAI } from "@google/genai";
+
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 const COMFYUI_URL_KEY = 'comfyui_url';
 
@@ -186,6 +190,32 @@ const buildTxt2ImgWorkflow = (options: GenerationOptions, seed: number): object 
     kSampler.scheduler = options.comfyScheduler;
     
     return workflow;
+};
+
+export const generateComfyUIPromptFromSource = async (imageFile: File): Promise<string> => {
+    try {
+        const imagePart = await fileToGenerativePart(imageFile);
+        const prompt = `Analyze this image. Generate a detailed, descriptive prompt for an AI image generator that captures the entire scene. Describe the person's appearance (facial features, hair, expression), their clothing, the background environment, the lighting, and the overall mood. The goal is a comprehensive prompt to recreate the whole picture. Start the prompt with "A photorealistic portrait of...".`;
+
+        const result = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: {
+                parts: [imagePart, { text: prompt }],
+            },
+        });
+
+        const text = result.text.trim();
+
+        if (!text) {
+            throw new Error('The AI did not return a description.');
+        }
+
+        return text;
+
+    } catch (error: any) {
+        console.error("Error generating prompt from image:", error);
+        throw new Error(error.message || "Failed to generate a prompt from the image.");
+    }
 };
 
 export const generateComfyUIPortraits = async (
