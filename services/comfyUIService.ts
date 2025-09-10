@@ -244,6 +244,7 @@ export const generateComfyUIPortraits = async (
         const totalImagesToGenerate = options.numImages;
         let isCompleted = false;
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        let finalPromptForDisplay: string | null = null; // Variable to store the final prompt
 
         const cleanupAndEnd = (action: 'resolve' | 'reject', data: any) => {
             if (isCompleted) return;
@@ -271,7 +272,7 @@ export const generateComfyUIPortraits = async (
                     const imageDataUrls = await Promise.all(
                         imageMetadata.map(img => getImageAsDataUrl(img.filename, img.subfolder, img.type))
                     );
-                    cleanupAndEnd('resolve', { images: imageDataUrls, finalPrompt: options.comfyPrompt! });
+                    cleanupAndEnd('resolve', { images: imageDataUrls, finalPrompt: finalPromptForDisplay || options.comfyPrompt! });
                 } catch(e) {
                     cleanupAndEnd('reject', e as Error);
                 }
@@ -295,8 +296,18 @@ export const generateComfyUIPortraits = async (
                 onProgress(`Queuing ${totalImagesToGenerate} images...`, 0.10);
                 for (let i = 0; i < totalImagesToGenerate; i++) {
                     const workflow = buildWorkflow(options);
+                    
+                    if (i === 0) {
+                        // The positive prompt is in node '6' of our template
+                        finalPromptForDisplay = workflow['6']?.inputs?.text || options.comfyPrompt!;
+                    }
+
                     // Use a different seed for each image
-                    workflow[Object.keys(workflow).find(k => workflow[k].class_type.includes('Sampler'))!].inputs.seed = Math.floor(Math.random() * 1_000_000_000);
+                    const samplerNodeKey = Object.keys(workflow).find(k => workflow[k].class_type.includes('Sampler'));
+                    if (samplerNodeKey) {
+                        workflow[samplerNodeKey].inputs.seed = Math.floor(Math.random() * 1_000_000_000);
+                    }
+                    
                     const response = await queuePrompt(workflow);
                     if (response.prompt_id) {
                         queuedPromptIds.add(response.prompt_id);
