@@ -1,0 +1,5 @@
+{
+  "version": "1.2",
+  "date": "2024-07-29T18:30:00Z",
+  "changes": "Initialized the versioning system and added a version display to the application header."
+}

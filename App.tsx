@@ -10,7 +10,7 @@ import { ComfyUIConnection } from './components/ComfyUIConnection';
 import { HistoryPanel } from './components/HistoryPanel';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { GenerateIcon } from './components/icons';
-import type { GenerationOptions, User, HistoryItem } from './types';
+import type { GenerationOptions, User, HistoryItem, VersionInfo } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { generatePortraitSeries } from './services/geminiService';
 import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo, generateComfyUIPromptFromSource as generateComfyUIPromptService } from './services/comfyUIService';
@@ -86,11 +86,19 @@ function App() {
   const [comfyUIUrl, setComfyUIUrl] = useState<string>(() => localStorage.getItem('comfyui_url') || '');
   const [isComfyUIConnected, setIsComfyUIConnected] = useState<boolean | null>(null);
   const [comfyUIObjectInfo, setComfyUIObjectInfo] = useState<any | null>(null);
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
   
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    fetch('/version.json')
+      .then(res => res.json())
+      .then(data => setVersionInfo(data))
+      .catch(err => console.error("Failed to load version info:", err));
+  }, []);
   
   const updateAndTestConnection = useCallback(async (newUrl?: string) => {
     // Fix: Added parentheses to resolve mixed '||' and '??' operator precedence.
@@ -315,6 +323,7 @@ function App() {
         onOpenComfyModal={() => setIsComfyModalOpen(true)}
         onOpenHistoryPanel={() => setIsHistoryPanelOpen(true)}
         isComfyUIConnected={isComfyUIConnected}
+        versionInfo={versionInfo}
       />
       <main className="container mx-auto p-4 md:p-8">
         {currentUser.role === 'admin' && (

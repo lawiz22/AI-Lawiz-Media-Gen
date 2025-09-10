@@ -43,3 +43,9 @@ export interface HistoryItem {
   options: GenerationOptions;
   generatedImages: string[];
 }
+
+export interface VersionInfo {
+  version: string;
+  date: string;
+  changes: string;
+}
