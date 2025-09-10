@@ -134,7 +134,23 @@ const buildWorkflow = (options: GenerationOptions): any => {
     const emptyLatent = workflow['5'];
 
     checkPointLoader.inputs.ckpt_name = options.comfyModel!;
-    positivePrompt.inputs.text = options.comfyPrompt!;
+
+    // Build the positive prompt, including text overlay if needed
+    let finalPositivePrompt = options.comfyPrompt!;
+    if (options.addTextToImage && options.textOnImagePrompt?.trim() && options.textObjectPrompt?.trim()) {
+        let textInstruction = options.textObjectPrompt;
+        const userText = options.textOnImagePrompt;
+
+        if (textInstruction.includes('%s')) {
+            textInstruction = textInstruction.replace('%s', `'${userText}'`);
+        } else {
+            textInstruction = `${textInstruction} with the text '${userText}'`;
+        }
+        
+        finalPositivePrompt = `The image must include ${textInstruction}, clearly legible. ${finalPositivePrompt}`;
+    }
+    positivePrompt.inputs.text = finalPositivePrompt;
+    
     negativePrompt.inputs.text = options.comfyNegativePrompt?.trim() 
         ? options.comfyNegativePrompt 
         : "blurry, low quality, bad anatomy, worst quality, jpeg artifacts, ugly, deformed, disfigured, text, watermark, signature";
