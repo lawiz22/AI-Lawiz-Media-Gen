@@ -10,6 +10,10 @@ import {
   BACKGROUND_STYLES,
   BACKGROUND_TIMES_OF_DAY,
   BACKGROUND_DETAILS,
+  POSE_ACTIONS,
+  POSE_MODIFIERS,
+  POSE_DIRECTIONS,
+  POSE_DETAILS,
 } from '../constants';
 
 // Helper to decode base64 poses
@@ -60,6 +64,35 @@ export const generateRandomBackgroundPrompt = (): string => {
     ];
     
     return getRandom(phraseStructures);
+};
+
+export const generateRandomPosePrompts = (count: number): string[] => {
+    const generatedPoses = new Set<string>();
+
+    // Safety break to prevent infinite loops if combinations run out
+    let attempts = 0;
+    const maxAttempts = count * 10;
+
+    while (generatedPoses.size < count && attempts < maxAttempts) {
+        const action = getRandom(POSE_ACTIONS);
+        const modifier = getRandom(POSE_MODIFIERS);
+        const direction = getRandom(POSE_DIRECTIONS);
+        const detail = getRandom(POSE_DETAILS);
+
+        const structures = [
+            `${action} ${modifier} ${direction}`,
+            `${action} ${direction} ${detail}`,
+            `${action} ${modifier} ${detail}`,
+            `${modifier} ${action} ${direction}`,
+            `${action} ${direction}`,
+        ];
+        
+        const pose = getRandom(structures);
+        generatedPoses.add(pose);
+        attempts++;
+    }
+
+    return Array.from(generatedPoses);
 };
 
 

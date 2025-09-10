@@ -1,4 +1,3 @@
-
 // Fix: Implemented the full OptionsPanel component, which was missing.
 // This resolves the module resolution error and provides the necessary UI
 // for configuring image generation for both Gemini and ComfyUI providers.
@@ -14,7 +13,7 @@ import {
   TEXT_OBJECT_PROMPTS
 } from '../constants';
 import { generateBackgroundImagePreview, generateClothingPreview } from '../services/geminiService';
-import { generateRandomClothingPrompt, generateRandomBackgroundPrompt } from '../utils/promptBuilder';
+import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts } from '../utils/promptBuilder';
 import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon } from './icons';
 
 // --- Prop Types ---
@@ -139,6 +138,20 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 return [...prev, poseValue];
             }
         });
+    };
+
+    const handleCustomPoseChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const poses = e.target.value
+            .split('\n')
+            .map(p => p.trim())
+            .filter(Boolean)
+            .slice(0, 13); // Max 13 poses
+        setOptions(prev => ({ ...prev, poseSelection: poses }));
+    };
+
+    const handleRandomizeCustomPoses = () => {
+        const randomPoses = generateRandomPosePrompts(options.numImages);
+        setOptions(prev => ({ ...prev, poseSelection: randomPoses }));
     };
     
     const handleGenerateBgPreview = async () => {
@@ -324,9 +337,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         </OptionSection>
 
         <OptionSection title="Pose">
-             <SelectInput label="Pose Mode" value={options.poseMode} onChange={handleOptionChange('poseMode')} options={[
+            <SelectInput label="Pose Mode" value={options.poseMode} onChange={handleOptionChange('poseMode')} options={[
                 { value: 'random', label: 'Random' },
                 { value: 'select', label: 'Select from Presets' },
+                { value: 'prompt', label: 'Custom Poses' },
             ]} disabled={isDisabled} />
             {options.poseMode === 'select' && (
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2">
@@ -336,6 +350,35 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             {pose.label}
                         </button>
                     ))}
+                </div>
+            )}
+            {options.poseMode === 'prompt' && (
+                <div className="space-y-2 pl-4 border-l-2 border-border-primary">
+                    <div className="flex items-center justify-between">
+                        <label htmlFor="custom-poses" className="block text-sm font-medium text-text-secondary">
+                            Custom Poses (1 per line, max 13)
+                        </label>
+                        <button 
+                            onClick={handleRandomizeCustomPoses}
+                            disabled={isDisabled} 
+                            className="text-xs flex items-center gap-1 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-1 px-2 rounded-lg transition-colors"
+                            title="Generate random ideas"
+                        >
+                            <RefreshIcon className="w-3 h-3"/> Random Ideas
+                        </button>
+                    </div>
+                    <textarea 
+                        id="custom-poses"
+                        value={options.poseSelection.join('\n')}
+                        onChange={handleCustomPoseChange}
+                        placeholder="e.g., Leaning against a wall, looking thoughtfully to the side."
+                        disabled={isDisabled} 
+                        rows={5}
+                        className="block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                    />
+                    <p className="text-xs text-text-muted">
+                        {`Current poses: ${options.poseSelection.length}. The number of generated images will be capped by the number of poses.`}
+                    </p>
                 </div>
             )}
         </OptionSection>
