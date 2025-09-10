@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Banner } from './Banner';
 import { SpinnerIcon } from './icons';
 import { Logo } from './Logo';
+import type { VersionInfo } from '../types';
 
 interface LoginProps {
   onLogin: (username: string, password: string) => Promise<string | true>;
@@ -12,6 +13,14 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
+
+  useEffect(() => {
+    fetch('/version.json')
+      .then(res => res.json())
+      .then(data => setVersionInfo(data))
+      .catch(err => console.error("Failed to load version info:", err));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,7 +109,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </div>
 
         <footer className="text-center p-4 mt-8 text-text-muted text-xs">
-            <p>If you have any issues or want an app of your own make a request on our fb or our socials. We are ©zgenmedia everywhere and blkcosmo.com</p>
+            {versionInfo && <p className="mb-2">v{versionInfo.version}</p>}
+            <p>lawiz2222@gmail.com for info</p>
         </footer>
       </div>
     </div>

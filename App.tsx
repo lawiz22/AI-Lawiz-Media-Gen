@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Login } from './components/Login';
@@ -16,13 +17,13 @@ import { generatePortraitSeries } from './services/geminiService';
 import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo, generateComfyUIPromptFromSource as generateComfyUIPromptService } from './services/comfyUIService';
 import { saveGenerationToHistory } from './services/historyService';
 import { fileToResizedDataUrl, dataUrlToThumbnail } from './utils/imageUtils';
-import { PHOTO_STYLE_OPTIONS, IMAGE_STYLE_OPTIONS, ASPECT_RATIO_OPTIONS, ERA_STYLE_OPTIONS } from './constants';
+import { PHOTO_STYLE_OPTIONS, IMAGE_STYLE_OPTIONS, ERA_STYLE_OPTIONS } from './constants';
 
 const initialOptions: GenerationOptions = {
   provider: 'gemini',
-  numImages: 4,
-  background: 'gray',
-  aspectRatio: ASPECT_RATIO_OPTIONS[0].value,
+  numImages: 2,
+  background: 'original',
+  aspectRatio: '3:4',
   customBackground: '',
   consistentBackground: false,
   clothing: 'original',

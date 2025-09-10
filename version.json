@@ -1,5 +1,5 @@
 {
-  "version": "1.2",
-  "date": "2024-07-29T18:30:00Z",
-  "changes": "Initialized the versioning system and added a version display to the application header."
+  "version": "1.22",
+  "date": "2024-07-30T10:30:00Z",
+  "changes": "Added version number to the login screen and updated the footer contact information."
 }
