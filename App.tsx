@@ -69,6 +69,25 @@ const initialOptions: GenerationOptions = {
   comfyWanStockPhotoLoraNameHigh: 'stock_photography_wan22_HIGH_v1.safetensors',
   comfyWanStockPhotoLoraNameLow: 'stock_photography_wan22_LOW_v1.safetensors',
   comfyWanRefinerStartStep: 3,
+
+  // Nunchaku Kontext Flux defaults
+  comfyNunchakuModel: 'svdq-int4_r32-flux.1-kontext-dev.safetensors',
+  comfyNunchakuClipL: 'ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors',
+  comfyNunchakuT5XXL: 't5xxl_fp8_e4m3fn_scaled.safetensors',
+  comfyNunchakuVae: 'ae.safetensors',
+  comfyNunchakuUseTurboLora: true,
+  comfyNunchakuTurboLoraName: 'flux-turbo.safetensors',
+  comfyNunchakuTurboLoraStrength: 1.0,
+  comfyNunchakuUseNudifyLora: true,
+  comfyNunchakuNudifyLoraName: 'JD3s_Nudify_Kontext.safetensors',
+  comfyNunchakuNudifyLoraStrength: 1.0,
+  comfyNunchakuUseDetailLora: true,
+  comfyNunchakuDetailLoraName: 'flux_nipples_saggy_breasts.safetensors',
+  comfyNunchakuDetailLoraStrength: 1.0,
+  comfyFluxGuidanceKontext: 2.5,
+  comfyNunchakuCacheThreshold: 0.12,
+  comfyNunchakuCpuOffload: 'enable',
+  comfyNunchakuAttention: 'nunchaku-fp16',
 };
 
 function App() {
@@ -264,13 +283,18 @@ function App() {
           updateProgress
         );
       } else if (options.provider === 'comfyui') {
+        if (options.comfyModelType === 'nunchaku-kontext-flux' && !sourceImage) {
+          setError("Nunchaku Kontext Flux requires a source image.");
+          setIsLoading(false);
+          return;
+        }
         if (!options.comfyPrompt) {
           setError("Please enter a prompt for ComfyUI or generate one from a source image.");
           setIsLoading(false);
           return;
         }
         setProgressMessage('Connecting to ComfyUI...');
-        generationPromise = generateComfyUIPortraits(options, updateProgress);
+        generationPromise = generateComfyUIPortraits(sourceImage, options, updateProgress);
       } else {
         throw new Error("Invalid provider selected.");
       }
@@ -321,17 +345,34 @@ function App() {
 
   const handleExportWorkflow = () => {
     try {
-        exportComfyUIWorkflow(options);
+        exportComfyUIWorkflow(options, sourceImage);
     } catch (err: any) {
         setError(err.message || "Failed to export workflow.");
     }
   };
 
-  const isGenerationReady = sourceImage !== null || (options.provider === 'comfyui' && !!options.comfyPrompt);
+  const isGenerationReady = (options.provider === 'gemini' && sourceImage !== null) || 
+    (options.provider === 'comfyui' && !!options.comfyPrompt && (options.comfyModelType !== 'nunchaku-kontext-flux' || sourceImage !== null));
+
 
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
+  
+  const getUploaderSectionTitle = () => {
+      if (options.provider === 'gemini') return "1. Upload Images";
+      if (options.comfyModelType === 'nunchaku-kontext-flux') return "1. Upload Image & Set Prompt";
+      return "1. Setup Prompt";
+  };
+
+  const getSourceImageLabel = () => {
+    if (options.provider === 'comfyui') {
+        if (options.comfyModelType === 'nunchaku-kontext-flux') return "1. Upload Source Image";
+        return "Source Image (to generate prompt)";
+    }
+    return "1. Upload Source Image"; // Gemini
+  };
+
 
   return (
     <>
@@ -367,10 +408,10 @@ function App() {
             {/* Left Column for Controls */}
             <div className="lg:col-span-1 space-y-8">
               <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                <h2 className="text-xl font-bold mb-4 text-accent">{options.provider === 'gemini' ? "1. Upload Images" : "1. Setup Prompt"}</h2>
+                <h2 className="text-xl font-bold mb-4 text-accent">{getUploaderSectionTitle()}</h2>
                 <div className="space-y-4">
                   <ImageUploader 
-                    label={options.provider === 'comfyui' ? "Source Image (to generate prompt)" : "1. Upload Source Image"}
+                    label={getSourceImageLabel()}
                     id="source-image" 
                     onImageUpload={setSourceImage} 
                     sourceFile={sourceImage}

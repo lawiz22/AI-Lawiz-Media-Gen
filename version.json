@@ -1,5 +1,5 @@
 {
-  "version": "1.31",
-  "date": "2024-08-02T11:00:00Z",
-  "changes": "Fixed critical bugs in the ComfyUI WAN 2.2 workflow, improving stability with missing nodes and adding support for text input-based GGUF models."
+  "version": "1.32",
+  "date": "2024-08-03T10:00:00Z",
+  "changes": "Improved version tracking consistency for better release management and internal process adjustments."
 }

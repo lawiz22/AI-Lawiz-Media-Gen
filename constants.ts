@@ -1,3 +1,4 @@
+
 export const MAX_IMAGES = 13;
 
 // Obfuscated poses to protect intellectual property
@@ -259,4 +260,129 @@ export const COMFYUI_WAN22_WORKFLOW_TEMPLATE = {
     "class_type": "LoraLoaderModelOnly",
     "_meta": { "title": "Stock LoRA (Low)" }
   }
+};
+
+// --- ComfyUI Nunchaku Kontext Flux Workflow ---
+export const COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE = {
+    "1": {
+        "inputs": { "vae_name": "ae.safetensors" },
+        "class_type": "VAELoader",
+        "_meta": { "title": "VAELoader" }
+    },
+    "2": {
+        "inputs": {
+            "clip_name1": "ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors",
+            "clip_name2": "t5xxl_fp8_e4m3fn_scaled.safetensors",
+            "type": "flux",
+            "behavior": "default"
+        },
+        "class_type": "DualCLIPLoader",
+        "_meta": { "title": "DualCLIPLoader" }
+    },
+    "3": {
+        "inputs": { "conditioning": ["25", 0] },
+        "class_type": "ConditioningZeroOut",
+        "_meta": { "title": "ConditioningZeroOut" }
+    },
+    "5": {
+        "inputs": { "filename_prefix": "ComfyUI_Nunchaku", "images": ["7", 0] },
+        "class_type": "SaveImage",
+        "_meta": { "title": "Save Image" }
+    },
+    "7": {
+        "inputs": { "samples": ["20", 0], "vae": ["1", 0] },
+        "class_type": "VAEDecode",
+        "_meta": { "title": "VAEDecode" }
+    },
+    "8": {
+        "inputs": { "pixels": ["9", 0], "vae": ["1", 0] },
+        "class_type": "VAEEncode",
+        "_meta": { "title": "VAEEncode" }
+    },
+    "9": {
+        "inputs": { "image": ["99", 0] },
+        "class_type": "FluxKontextImageScale",
+        "_meta": { "title": "FluxKontextImageScale" }
+    },
+    "12": {
+        "inputs": { "guidance": 2.5, "conditioning": ["17", 0] },
+        "class_type": "FluxGuidance",
+        "_meta": { "title": "FluxGuidance" }
+    },
+    "17": {
+        "inputs": { "conditioning": ["25", 0], "latent": ["8", 0] },
+        "class_type": "ReferenceLatent",
+        "_meta": { "title": "ReferenceLatent" }
+    },
+    "20": {
+        "inputs": {
+            "seed": 123,
+            "control_after_generate": "randomize",
+            "steps": 10,
+            "cfg": 1,
+            "sampler_name": "euler",
+            "scheduler": "simple",
+            "denoise": 1,
+            "model": ["28", 0],
+            "positive": ["12", 0],
+            "negative": ["3", 0],
+            "latent_image": ["8", 0]
+        },
+        "class_type": "KSampler",
+        "_meta": { "title": "KSampler" }
+    },
+    "22": {
+        "inputs": {
+            "model_path": "svdq-int4_r32-flux.1-kontext-dev.safetensors",
+            "turbo": 0,
+            "precision": "nunchaku-fp16",
+            "cache_threshold": 0.12,
+            "device_id": 0,
+            "data_type": "bfloat16",
+            "cpu_offload": "enable",
+            "attention": "nunchaku-fp16"
+        },
+        "class_type": "NunchakuFluxDiTLoader",
+        "_meta": { "title": "NunchakuFluxDiTLoader" }
+    },
+    "25": {
+        "inputs": {
+            "text": "change the shirt to be red",
+            "clip": ["2", 0]
+        },
+        "class_type": "CLIPTextEncode",
+        "_meta": { "title": "Positive Prompt" }
+    },
+    "26": {
+        "inputs": {
+            "lora_name": "flux-turbo.safetensors",
+            "lora_strength": 1,
+            "model": ["22", 0]
+        },
+        "class_type": "NunchakuFluxLoraLoader",
+        "_meta": { "title": "Turbo LoRA" }
+    },
+    "27": {
+        "inputs": {
+            "lora_name": "JD3s_Nudify_Kontext.safetensors",
+            "lora_strength": 1,
+            "model": ["26", 0]
+        },
+        "class_type": "NunchakuFluxLoraLoader",
+        "_meta": { "title": "Nudify LoRA" }
+    },
+    "28": {
+        "inputs": {
+            "lora_name": "flux_nipples_saggy_breasts.safetensors",
+            "lora_strength": 1,
+            "model": ["27", 0]
+        },
+        "class_type": "NunchakuFluxLoraLoader",
+        "_meta": { "title": "Detail LoRA" }
+    },
+    "99": {
+        "inputs": { "image": "source_image.png", "upload": "image" },
+        "class_type": "LoadImage",
+        "_meta": { "title": "Load Source Image" }
+    }
 };

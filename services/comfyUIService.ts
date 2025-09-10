@@ -5,7 +5,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { GenerationOptions } from '../types';
 import { fileToGenerativePart } from "../utils/imageUtils";
-import { COMFYUI_WORKFLOW_TEMPLATE, COMFYUI_WAN22_WORKFLOW_TEMPLATE } from '../constants';
+import { COMFYUI_WORKFLOW_TEMPLATE, COMFYUI_WAN22_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE } from '../constants';
 
 // --- State Management ---
 let objectInfoCache: any | null = null;
@@ -43,6 +43,25 @@ const fetchWithRetry = async (url: string, retries = 3, delay = 500): Promise<Re
         }
     }
     throw new Error(`Failed to fetch from ${url} after ${retries} attempts. Check server logs and CORS settings.`);
+};
+
+const uploadImage = async (imageFile: File): Promise<{ name: string, subfolder: string, type: string }> => {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    formData.append('overwrite', 'true'); // Overwrite if file with same name exists
+
+    const baseUrl = getComfyUIUrl();
+    const response = await fetch(`${baseUrl}/upload/image`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to upload image: ${response.statusText} - ${errorText}`);
+    }
+
+    return await response.json();
 };
 
 // --- API Functions ---
@@ -194,9 +213,85 @@ const buildWan22Workflow = (options: GenerationOptions): any => {
     return workflow;
 };
 
-const buildWorkflow = (options: GenerationOptions): any => {
+const buildNunchakuWorkflow = (options: GenerationOptions, sourceImageFilename: string): any => {
+    const workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE));
+
+    // Models
+    const nunchakuLoader = workflow["22"].inputs;
+    nunchakuLoader.model_path = options.comfyNunchakuModel;
+    nunchakuLoader.cache_threshold = options.comfyNunchakuCacheThreshold;
+    nunchakuLoader.cpu_offload = options.comfyNunchakuCpuOffload;
+    nunchakuLoader.attention = options.comfyNunchakuAttention;
+
+    workflow["2"].inputs.clip_name1 = options.comfyNunchakuClipL;
+    workflow["2"].inputs.clip_name2 = options.comfyNunchakuT5XXL;
+    workflow["1"].inputs.vae_name = options.comfyNunchakuVae;
+
+    // Source Image
+    workflow["99"].inputs.image = sourceImageFilename;
+
+    // Prompt
+    workflow["25"].inputs.text = options.comfyPrompt;
+
+    // Parameters
+    workflow["20"].inputs.steps = options.comfySteps;
+    workflow["20"].inputs.cfg = options.comfyCfg;
+    workflow["20"].inputs.sampler_name = options.comfySampler;
+    workflow["20"].inputs.scheduler = options.comfyScheduler;
+    workflow["12"].inputs.guidance = options.comfyFluxGuidanceKontext;
+
+    // Dynamic LoRA Chaining
+    let currentModelNode = "22"; // Start with the base model loader
+    
+    // Turbo LoRA (Node 26)
+    if (options.comfyNunchakuUseTurboLora) {
+        workflow["26"].inputs.model = [currentModelNode, 0];
+        workflow["26"].inputs.lora_name = options.comfyNunchakuTurboLoraName;
+        workflow["26"].inputs.lora_strength = options.comfyNunchakuTurboLoraStrength;
+        currentModelNode = "26";
+    } else {
+        workflow["26"].inputs.model = [currentModelNode, 0];
+        workflow["26"].inputs.lora_strength = 0;
+        currentModelNode = "26";
+    }
+
+    // Nudify LoRA (Node 27)
+    if (options.comfyNunchakuUseNudifyLora) {
+        workflow["27"].inputs.model = [currentModelNode, 0];
+        workflow["27"].inputs.lora_name = options.comfyNunchakuNudifyLoraName;
+        workflow["27"].inputs.lora_strength = options.comfyNunchakuNudifyLoraStrength;
+        currentModelNode = "27";
+    } else {
+        workflow["27"].inputs.model = [currentModelNode, 0];
+        workflow["27"].inputs.lora_strength = 0;
+        currentModelNode = "27";
+    }
+    
+    // Detail LoRA (Node 28)
+    if (options.comfyNunchakuUseDetailLora) {
+        workflow["28"].inputs.model = [currentModelNode, 0];
+        workflow["28"].inputs.lora_name = options.comfyNunchakuDetailLoraName;
+        workflow["28"].inputs.lora_strength = options.comfyNunchakuDetailLoraStrength;
+        currentModelNode = "28";
+    } else {
+        workflow["28"].inputs.model = [currentModelNode, 0];
+        workflow["28"].inputs.lora_strength = 0;
+        currentModelNode = "28";
+    }
+
+    // Connect the final node in the model chain to the KSampler
+    workflow["20"].inputs.model = [currentModelNode, 0];
+
+    return workflow;
+};
+
+const buildWorkflow = (options: GenerationOptions, sourceImageFilename?: string | null): any => {
     if (options.comfyModelType === 'wan2.2') {
         return buildWan22Workflow(options);
+    }
+    if (options.comfyModelType === 'nunchaku-kontext-flux') {
+        if (!sourceImageFilename) throw new Error("Nunchaku workflow requires a source image filename.");
+        return buildNunchakuWorkflow(options, sourceImageFilename);
     }
 
     const workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE));
@@ -260,8 +355,12 @@ const buildWorkflow = (options: GenerationOptions): any => {
 };
 
 // --- Exported Service Functions ---
-export const exportComfyUIWorkflow = (options: GenerationOptions): void => {
-    const workflow = buildWorkflow(options);
+export const exportComfyUIWorkflow = (options: GenerationOptions, sourceImage?: File | null): void => {
+    let imageName = "source_image.png";
+    if (sourceImage) {
+        imageName = sourceImage.name;
+    }
+    const workflow = buildWorkflow(options, imageName);
     const jsonString = JSON.stringify(workflow, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -274,13 +373,13 @@ export const exportComfyUIWorkflow = (options: GenerationOptions): void => {
     URL.revokeObjectURL(url);
 };
 
-export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: 'sdxl' | 'flux' | 'wan2.2'): Promise<string> => {
+export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux'): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const imagePart = await fileToGenerativePart(sourceImage);
     const basePrompt = "Analyze this image of a person and generate a descriptive text prompt for a text-to-image AI model. Focus on subject, expression, clothing, and background style.";
     
     let systemInstruction;
-    if (modelType === 'flux') {
+    if (modelType === 'flux' || modelType === 'nunchaku-kontext-flux') {
         systemInstruction = "You are a prompt generator for the FLUX.1 image model. Create a highly detailed, narrative prompt. Do not use commas; instead, use natural language conjunctions like 'and', 'with', 'wearing a'. Describe the scene, mood, and lighting in a conversational style.";
     } else if (modelType === 'wan2.2') {
          systemInstruction = "You are a prompt generator for the WAN 2.2 image model. Create a detailed, artistic prompt focusing on atmosphere, color, and emotional tone. Describe the subject's appearance, clothing, and the environment with rich, evocative language. Mention camera angles and lighting styles like 'cinematic lighting' or 'soft focus'.";
@@ -307,6 +406,7 @@ export const generateComfyUIPromptFromSource = async (sourceImage: File, modelTy
 };
 
 export const generateComfyUIPortraits = async (
+    sourceImage: File | null,
     options: GenerationOptions,
     onProgress: (message: string, progress: number) => void
 ): Promise<{ images: string[], finalPrompt: string }> => {
@@ -372,13 +472,24 @@ export const generateComfyUIPortraits = async (
         ws.onerror = () => cleanupAndEnd('reject', new Error("WebSocket connection failed. Ensure your ComfyUI server is running and accessible."));
         
         ws.onopen = async () => {
+            let uploadedImageName: string | null = null;
+            
             try {
+                if (options.comfyModelType === 'nunchaku-kontext-flux') {
+                    if (!sourceImage) {
+                        return cleanupAndEnd('reject', new Error('Nunchaku Kontext Flux requires a source image.'));
+                    }
+                    onProgress('Uploading source image...', 0.05);
+                    const uploadResponse = await uploadImage(sourceImage);
+                    uploadedImageName = uploadResponse.name;
+                }
+
                 onProgress(`Queuing ${totalImagesToGenerate} images...`, 0.10);
                 for (let i = 0; i < totalImagesToGenerate; i++) {
-                    const workflow = buildWorkflow(options);
+                    const workflow = buildWorkflow(options, uploadedImageName);
                     
                     if (i === 0) {
-                        const positivePromptNodeKey = Object.keys(workflow).find(k => workflow[k]._meta?.title === "Positive Prompt" || k === '3' || k === '6');
+                        const positivePromptNodeKey = Object.keys(workflow).find(k => workflow[k]._meta?.title?.toLowerCase().includes("positive prompt"));
                         if (positivePromptNodeKey) {
                             finalPromptForDisplay = workflow[positivePromptNodeKey].inputs.text;
                         } else {
@@ -395,7 +506,10 @@ export const generateComfyUIPortraits = async (
                     const response = await queuePrompt(workflow);
                     if (response.prompt_id) {
                         queuedPromptIds.add(response.prompt_id);
-                    } else {
+                    } else if (response.error) {
+                        throw new Error(`ComfyUI error: ${response.error.type} - ${response.error.message}`);
+                    }
+                     else {
                         throw new Error("Failed to get prompt_id from queue response.");
                     }
                 }

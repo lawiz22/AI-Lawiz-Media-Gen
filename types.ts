@@ -19,7 +19,7 @@ export interface GenerationOptions {
   textObjectPrompt?: string;
 
   // ComfyUI specific options
-  comfyModelType?: 'sdxl' | 'flux' | 'wan2.2';
+  comfyModelType?: 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux';
   comfyFluxGuidance?: number;
   comfyModel?: string;
   comfySteps?: number;
@@ -47,6 +47,25 @@ export interface GenerationOptions {
   comfyWanStockPhotoLoraNameHigh?: string;
   comfyWanStockPhotoLoraNameLow?: string;
   comfyWanRefinerStartStep?: number;
+  
+  // ComfyUI Nunchaku Kontext Flux specific options
+  comfyNunchakuModel?: string;
+  comfyNunchakuClipL?: string;
+  comfyNunchakuT5XXL?: string;
+  comfyNunchakuVae?: string;
+  comfyNunchakuUseTurboLora?: boolean;
+  comfyNunchakuTurboLoraName?: string;
+  comfyNunchakuTurboLoraStrength?: number;
+  comfyNunchakuUseNudifyLora?: boolean;
+  comfyNunchakuNudifyLoraName?: string;
+  comfyNunchakuNudifyLoraStrength?: number;
+  comfyNunchakuUseDetailLora?: boolean;
+  comfyNunchakuDetailLoraName?: string;
+  comfyNunchakuDetailLoraStrength?: number;
+  comfyFluxGuidanceKontext?: number;
+  comfyNunchakuCacheThreshold?: number;
+  comfyNunchakuCpuOffload?: 'auto' | 'enable' | 'disable';
+  comfyNunchakuAttention?: string;
 }
 
 export interface User {
