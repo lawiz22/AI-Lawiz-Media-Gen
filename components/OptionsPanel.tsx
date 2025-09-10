@@ -1,4 +1,3 @@
-
 // Fix: Implemented the full OptionsPanel component, which was missing.
 // This resolves the module resolution error and provides the necessary UI
 // for configuring image generation for both Gemini and ComfyUI providers.
@@ -14,12 +13,14 @@ import {
   TEXT_OBJECT_PROMPTS
 } from '../constants';
 import { generateBackgroundImagePreview } from '../services/geminiService';
-import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon } from './icons';
+import { generateRandomClothingPrompt, generateRandomBackgroundPrompt } from '../utils/promptBuilder';
+import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon } from './icons';
 
 // --- Prop Types ---
 interface OptionsPanelProps {
   options: GenerationOptions;
   setOptions: React.Dispatch<React.SetStateAction<GenerationOptions>>;
+  previewedBackgroundImage: string | null;
   setPreviewedBackgroundImage: (url: string | null) => void;
   onGenerate: () => void;
   onReset: () => void;
@@ -65,7 +66,7 @@ const TextInput: React.FC<{ label: string, value: string, onChange: (e: ChangeEv
 
 // --- Main Component ---
 export const OptionsPanel: React.FC<OptionsPanelProps> = ({
-  options, setOptions, setPreviewedBackgroundImage,
+  options, setOptions, previewedBackgroundImage, setPreviewedBackgroundImage,
   onGenerate, onReset, onGeneratePrompt, onExportWorkflow,
   isDisabled, isReady, isGeneratingPrompt,
   comfyUIObjectInfo, comfyUIUrl, sourceImage,
@@ -113,6 +114,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         try {
             const imageUrl = await generateBackgroundImagePreview(options.customBackground, options.aspectRatio);
             setPreviewedBackgroundImage(imageUrl);
+            setOptions(prev => ({ ...prev, consistentBackground: true }));
         } catch (err: any) {
             setBgPreviewError(err.message || "Failed to generate preview.");
         } finally {
@@ -141,6 +143,28 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         }
     }, [options.provider, comfyModels, options.comfyModel, setOptions]);
 
+    const handleBackgroundTypeChange = (e: ChangeEvent<HTMLSelectElement>) => {
+        const newType = e.target.value;
+        if (newType === 'random') {
+            setOptions(prev => ({...prev, background: newType, customBackground: generateRandomBackgroundPrompt()}));
+        } else {
+            setOptions(prev => ({...prev, background: newType}));
+        }
+    };
+
+    const handleRerollBackground = () => setOptions(prev => ({...prev, customBackground: generateRandomBackgroundPrompt()}));
+
+    const handleClothingTypeChange = (e: ChangeEvent<HTMLSelectElement>) => {
+        const newType = e.target.value as GenerationOptions['clothing'];
+        if (newType === 'random') {
+            setOptions(prev => ({...prev, clothing: newType, customClothingPrompt: generateRandomClothingPrompt()}));
+        } else {
+            setOptions(prev => ({...prev, clothing: newType}));
+        }
+    };
+    
+    const handleRerollClothing = () => setOptions(prev => ({...prev, customClothingPrompt: generateRandomClothingPrompt()}));
+
     const renderProviderSwitch = () => (
         <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
             <button onClick={() => setOptions(prev => ({...prev, provider: 'gemini'}))} disabled={isDisabled}
@@ -165,12 +189,17 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         </OptionSection>
 
         <OptionSection title="Background">
-            <SelectInput label="Background Type" value={options.background} onChange={handleOptionChange('background')} options={BACKGROUND_OPTIONS} disabled={isDisabled} />
-            {options.background === 'prompt' && (
+            <SelectInput label="Background Type" value={options.background} onChange={handleBackgroundTypeChange} options={BACKGROUND_OPTIONS} disabled={isDisabled} />
+            {(options.background === 'prompt' || options.background === 'random') && (
                 <div className="space-y-2 pl-4 border-l-2 border-border-primary">
                     <TextInput label="Custom Background Prompt" value={options.customBackground || ''} onChange={handleOptionChange('customBackground')} placeholder="e.g., a futuristic neon city" disabled={isDisabled} />
                     <div className="flex items-center gap-2">
-                        <button onClick={handleGenerateBgPreview} disabled={isDisabled || isPreviewingBg} className="text-sm flex-1 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                         {options.background === 'random' && (
+                            <button onClick={handleRerollBackground} disabled={isDisabled} className="text-sm bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                               <RefreshIcon className="w-4 h-4"/> Re-roll
+                            </button>
+                        )}
+                        <button onClick={handleGenerateBgPreview} disabled={isDisabled || isPreviewingBg} className={`text-sm flex-1 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2`}>
                             {isPreviewingBg ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <RefreshIcon className="w-4 h-4"/>}
                             {isPreviewingBg ? 'Generating...' : 'Preview Background'}
                         </button>
@@ -180,26 +209,44 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         </label>
                     </div>
                     {bgPreviewError && <p className="text-xs text-danger">{bgPreviewError}</p>}
+                    {previewedBackgroundImage && (
+                        <div className="mt-4 relative">
+                            <p className="text-xs font-medium text-text-secondary mb-1">Background Preview:</p>
+                            <img src={previewedBackgroundImage} alt="Background Preview" className="rounded-lg w-full object-contain border border-border-primary" />
+                            <button 
+                                onClick={() => setPreviewedBackgroundImage(null)}
+                                className="absolute top-6 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-black/75 transition-colors"
+                                title="Clear Preview"
+                                aria-label="Clear background preview"
+                            >
+                                <CloseIcon className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </OptionSection>
         
         <OptionSection title="Clothing">
-            <SelectInput label="Clothing Source" value={options.clothing} onChange={handleOptionChange('clothing')} options={[
+            <SelectInput label="Clothing Source" value={options.clothing} onChange={handleClothingTypeChange} options={[
                 { value: 'original', label: 'Keep Original' },
                 { value: 'image', label: 'Use Reference Image' },
-                { value: 'prompt', label: 'Describe with Prompt' }
+                { value: 'prompt', label: 'Describe with Prompt' },
+                { value: 'random', label: 'Random Prompt' }
             ]} disabled={isDisabled} />
-             {options.clothing === 'prompt' && (
+             {(options.clothing === 'prompt' || options.clothing === 'random') && (
                 <div className="space-y-2 pl-4 border-l-2 border-border-primary">
-                    <TextInput label="Custom Clothing Prompt" value={options.customClothingPrompt || ''} onChange={handleOptionChange('customClothingPrompt')} placeholder="e.g., a stylish leather jacket" disabled={isDisabled || options.randomizeClothing} />
-                    <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
-                        <input type="checkbox" checked={options.randomizeClothing} onChange={handleOptionChange('randomizeClothing')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
-                        Randomize Clothing
-                    </label>
-                    <SelectInput label="Style Consistency" value={options.clothingStyleConsistency || 'varied'} onChange={handleOptionChange('clothingStyleConsistency')} options={[
-                        {value: 'varied', label: 'Varied Interpretations'}, {value: 'strict', label: 'Strictly Identical'},
-                    ]} disabled={isDisabled || options.randomizeClothing} />
+                    <TextInput label="Custom Clothing Prompt" value={options.customClothingPrompt || ''} onChange={handleOptionChange('customClothingPrompt')} placeholder="e.g., a stylish leather jacket" disabled={isDisabled} />
+                     {options.clothing === 'random' && (
+                        <button onClick={handleRerollClothing} disabled={isDisabled} className="text-sm w-full bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                           <RefreshIcon className="w-4 h-4"/> Re-roll Clothing
+                        </button>
+                    )}
+                    {(options.clothing === 'prompt' || options.clothing === 'random') && (
+                        <SelectInput label="Style Consistency" value={options.clothingStyleConsistency || 'varied'} onChange={handleOptionChange('clothingStyleConsistency')} options={[
+                            {value: 'varied', label: 'Varied Interpretations'}, {value: 'strict', label: 'Strictly Identical'},
+                        ]} disabled={isDisabled} />
+                    )}
                 </div>
             )}
         </OptionSection>

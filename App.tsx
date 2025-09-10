@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Login } from './components/Login';
@@ -28,7 +27,7 @@ const initialOptions: GenerationOptions = {
   consistentBackground: false,
   clothing: 'original',
   customClothingPrompt: '',
-  randomizeClothing: false,
+  // Fix: Removed the obsolete 'randomizeClothing' property, which is not defined in the GenerationOptions type.
   clothingStyleConsistency: 'varied',
   poseMode: 'random',
   poseSelection: [],
@@ -348,6 +347,7 @@ function App() {
               <OptionsPanel 
                 options={options} 
                 setOptions={setOptions}
+                previewedBackgroundImage={previewedBackgroundImage}
                 setPreviewedBackgroundImage={setPreviewedBackgroundImage}
                 onGenerate={handleGenerate}
                 onReset={handleReset}

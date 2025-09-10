@@ -40,6 +40,7 @@ export const BACKGROUND_OPTIONS = [
     { value: 'green screen', label: 'Green Screen' },
     { value: 'natural studio', label: 'Natural Studio' },
     { value: 'original', label: 'Original' },
+    { value: 'random', label: 'Random Prompt' },
     { value: 'prompt', label: 'Custom Prompt' },
     { value: 'image', label: 'Upload Image' },
 ];

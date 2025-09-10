@@ -5,9 +5,8 @@ export interface GenerationOptions {
   aspectRatio: string;
   customBackground?: string;
   consistentBackground?: boolean;
-  clothing: 'original' | 'image' | 'prompt';
+  clothing: 'original' | 'image' | 'prompt' | 'random';
   customClothingPrompt?: string;
-  randomizeClothing?: boolean;
   clothingStyleConsistency?: 'varied' | 'strict';
   poseMode: 'random' | 'select' | 'prompt';
   poseSelection: string[];

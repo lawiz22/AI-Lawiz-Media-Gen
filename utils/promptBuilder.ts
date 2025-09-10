@@ -6,6 +6,10 @@ import {
   CLOTHING_MATERIALS,
   CLOTHING_ITEMS,
   CLOTHING_DETAILS,
+  BACKGROUND_LOCATIONS,
+  BACKGROUND_STYLES,
+  BACKGROUND_TIMES_OF_DAY,
+  BACKGROUND_DETAILS,
 } from '../constants';
 
 // Helper to decode base64 poses
@@ -24,7 +28,7 @@ const getRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length
 
 export const getRandomPose = (): string => getRandom(POSES);
 
-const generateRandomClothingPrompt = (): string => {
+export const generateRandomClothingPrompt = (): string => {
     const adjective = getRandom(CLOTHING_ADJECTIVES);
     const color = getRandom(CLOTHING_COLORS);
     const material = getRandom(CLOTHING_MATERIALS);
@@ -41,6 +45,24 @@ const generateRandomClothingPrompt = (): string => {
     return getRandom(phraseStructures);
 };
 
+export const generateRandomBackgroundPrompt = (): string => {
+    const location = getRandom(BACKGROUND_LOCATIONS);
+    const style = getRandom(BACKGROUND_STYLES);
+    const time = getRandom(BACKGROUND_TIMES_OF_DAY);
+    const detail = getRandom(BACKGROUND_DETAILS);
+
+    const phraseStructures = [
+      `${location} ${time}`,
+      `${location} ${style}`,
+      `${location} ${time} ${style}`,
+      `${location} ${time} with ${detail}`,
+      `${location} ${style} with ${detail}`,
+    ];
+    
+    return getRandom(phraseStructures);
+};
+
+
 export const buildPromptSegments = (options: GenerationOptions, pose: string): string[] => {
     const promptSegments: string[] = [`Generate a high-quality, professional, and tasteful portrait. The subject is a person with the same face and features as in the reference image.`];
     
@@ -49,42 +71,31 @@ export const buildPromptSegments = (options: GenerationOptions, pose: string): s
     // Clothing
     if (options.clothing === 'image') {
         promptSegments.push(`Clothing: The person should be wearing an outfit identical to the one in the provided clothing image.`);
-    } else if (options.clothing === 'prompt') {
-        // Case 1: Fully Random - checkbox is checked
-        if (options.randomizeClothing) {
-            const randomClothingPrompt = generateRandomClothingPrompt();
-            promptSegments.push(`Clothing: ${randomClothingPrompt}`);
-        } 
-        // Case 2: User provided a prompt
-        else if (options.customClothingPrompt && options.customClothingPrompt.trim()) {
-            const basePrompt = options.customClothingPrompt;
-            // Sub-case 2a: Strict consistency
-            if (options.clothingStyleConsistency === 'strict') {
-                promptSegments.push(`Clothing: The person must be wearing this exact outfit in every detail: "${basePrompt}". The outfit should be identical across all images.`);
-            } 
-            // Sub-case 2b: Varied interpretations (default)
-            else {
-                promptSegments.push(`Clothing: The person is wearing a variation of "${basePrompt}". Each image should show a different interpretation or style of this outfit. For example, if the prompt is 'a green dress', show different styles of green dresses.`);
-            }
-        } 
-        // Case 3: Fallback if 'prompt' is selected but input is empty
-        else { 
-            promptSegments.push('Clothing: The person should wear the same outfit as in the reference image.');
+    } else if ((options.clothing === 'prompt' || options.clothing === 'random') && options.customClothingPrompt?.trim()) {
+        const basePrompt = options.customClothingPrompt;
+        if (options.clothingStyleConsistency === 'strict') {
+            promptSegments.push(`Clothing: The person must be wearing this exact outfit in every detail: "${basePrompt}". The outfit should be identical across all images.`);
+        } else {
+            promptSegments.push(`Clothing: The person is wearing a variation of "${basePrompt}". Each image should show a different interpretation or style of this outfit. For example, if the prompt is 'a green dress', show different styles of green dresses.`);
         }
-    } else { // 'original'
+    } else { // 'original' or fallback
         promptSegments.push('Clothing: The person should wear the same outfit as in the reference image.');
     }
 
     // Background
     if (options.background === 'image' || (options.background === 'prompt' && options.consistentBackground)) {
         promptSegments.push(`Background: Place the person in a setting identical to the provided background image.`);
-    } else if (options.background === 'prompt' && options.customBackground) {
+    } else if ((options.background === 'prompt' || options.background === 'random') && options.customBackground) {
         promptSegments.push(`Background: ${options.customBackground}`);
-    } else if (options.background !== 'original') {
+    } else if (options.background === 'original') {
+        promptSegments.push('Background: Keep the original background from the reference image.');
+    } else if (options.background !== 'image' && options.background !== 'prompt' && options.background !== 'random') {
         promptSegments.push(`Background: A solid ${options.background} studio background.`);
     } else {
+        // Fallback for prompt modes with no text
         promptSegments.push('Background: Keep the original background from the reference image.');
     }
+
 
     // Text on Image
     if (options.addTextToImage && options.textOnImagePrompt?.trim() && options.textObjectPrompt?.trim()) {
