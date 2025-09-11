@@ -140,8 +140,10 @@ export const generatePortraitSeries = async (
   onProgress: (message: string, progress: number) => void
 ): Promise<{ images: string[], firstPrompt: string }> => {
 
-  onProgress("Preparing images...", 0.05);
+  onProgress("Cropping source image...", 0.05);
   const croppedSourceImage = await cropImageToAspectRatio(sourceImage, options.aspectRatio);
+  
+  onProgress("Preparing image data...", 0.1);
   const sourceImagePart = await fileToGenerativePart(croppedSourceImage);
   
   const clothingImagePart = clothingImage ? await fileToGenerativePart(clothingImage) : null;
@@ -175,11 +177,10 @@ export const generatePortraitSeries = async (
   let firstPrompt: string | null = null;
 
   for (let i = 0; i < totalImages; i++) {
-    const progress = (i + 1) / totalImages;
-    onProgress(`Generating image ${i + 1} of ${totalImages}...`, progress);
-
+    const baseProgress = (i / totalImages) * 0.8 + 0.15; // Progress from 15% to 95%
     const pose = posesAreEncoded ? decodePose(selectedPoses[i]) : selectedPoses[i];
     
+    onProgress(`Building prompt for image ${i + 1}...`, baseProgress);
     const parts: Part[] = [sourceImagePart];
     const promptSegments = buildPromptSegments(options, pose, !!consistentClothingPart);
     
@@ -205,6 +206,7 @@ export const generatePortraitSeries = async (
     }
 
     try {
+        onProgress(`Sending request for image ${i + 1}...`, baseProgress + (0.4 / totalImages));
         const genConfig: GenerateContentConfig = {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
         };
@@ -220,6 +222,7 @@ export const generatePortraitSeries = async (
             config: genConfig,
         });
         
+        onProgress(`Processing response for image ${i + 1}...`, baseProgress + (0.8 / totalImages));
         let imageFound = false;
         if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts) {
             for (const part of result.candidates[0].content.parts) {
@@ -247,5 +250,6 @@ export const generatePortraitSeries = async (
     }
   }
 
+  onProgress("Finalizing results...", 0.98);
   return { images: generatedImages, firstPrompt: firstPrompt || "No prompt was generated." };
 };

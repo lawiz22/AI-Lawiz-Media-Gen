@@ -1,5 +1,5 @@
 {
-  "version": "1.36",
-  "date": "2024-08-05T10:00:00Z",
-  "changes": "Add 'Nunchaku Flux Image' text-to-image ComfyUI model."
+  "version": "1.37",
+  "date": "2024-08-05T11:00:00Z",
+  "changes": "Revamped the image generation loading bar for improved readability and a more thematic design. Added detailed progress messages from both Gemini and ComfyUI services to provide real-time status updates."
 }

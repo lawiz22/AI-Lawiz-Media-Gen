@@ -478,6 +478,7 @@ export const generateComfyUIPortraits = async (
     const baseUrl = getComfyUIUrl();
 
     return new Promise((resolve, reject) => {
+        onProgress("Establishing WebSocket connection...", 0.01);
         const url = new URL(baseUrl);
         const wsProtocol = url.protocol === 'https:' ? 'wss' : 'ws';
         const ws = new WebSocket(`${wsProtocol}://${url.host}/ws?clientId=${clientId}`);
@@ -511,7 +512,7 @@ export const generateComfyUIPortraits = async (
                     cleanupAndEnd('reject', new Error("Generation finished, but no images were produced. Check the ComfyUI console for errors, such as missing models."));
                     return;
                 }
-                onProgress("Fetching final images...", 0.98);
+                onProgress("All generations complete. Downloading results...", 0.98);
                 try {
                     const imageDataUrls = await Promise.all(
                         imageMetadata.map(img => getImageAsDataUrl(img.filename, img.subfolder, img.type))
@@ -548,7 +549,7 @@ export const generateComfyUIPortraits = async (
                     uploadedImageName = uploadResponse.name;
                 }
 
-                onProgress(`Queuing ${totalImagesToGenerate} images...`, 0.10);
+                onProgress(`Queueing ${totalImagesToGenerate} images...`, 0.10);
                 for (let i = 0; i < totalImagesToGenerate; i++) {
                     const workflow = buildWorkflow(options, uploadedImageName);
                     
@@ -603,21 +604,20 @@ export const generateComfyUIPortraits = async (
                     timeoutId = null;
                 }
 
+                const executedCount = executedPromptIds.size;
                 switch (data.type) {
                     case 'progress': {
                         const { value, max } = data.data;
-                        const executedCount = executedPromptIds.size;
                         const currentProgress = value / max;
                         const progressPercentage = 0.15 + (0.80 * ((executedCount + currentProgress) / totalImagesToGenerate));
-                        onProgress(`Generating image ${executedCount + 1}...`, Math.min(progressPercentage, 0.95));
+                        onProgress(`Image ${executedCount + 1}: Sampling step ${value}/${max}`, Math.min(progressPercentage, 0.95));
                         break;
                     }
                     case 'executing': {
                         const promptId = data.data.prompt_id;
                         if (queuedPromptIds.has(promptId)) {
-                             const executedCount = executedPromptIds.size;
                              const progress = 0.15 + (0.80 * (executedCount / totalImagesToGenerate));
-                             onProgress(`Generating image ${executedCount + 1}...`, Math.min(progress, 0.95));
+                             onProgress(`Image ${executedCount + 1}: Starting generation...`, Math.min(progress, 0.95));
                         }
                         break;
                     }
@@ -628,6 +628,11 @@ export const generateComfyUIPortraits = async (
                         if (queuedPromptIds.has(promptId) && data.data.output.images) {
                             executedPromptIds.add(promptId);
                             imageMetadata.push(...data.data.output.images);
+                            const newExecutedCount = executedPromptIds.size;
+                            if (newExecutedCount < totalImagesToGenerate) {
+                                const progress = 0.15 + (0.80 * (newExecutedCount / totalImagesToGenerate));
+                                onProgress(`Image ${newExecutedCount} complete. Waiting for next...`, progress);
+                            }
                             checkCompletion();
                         }
                         break;
