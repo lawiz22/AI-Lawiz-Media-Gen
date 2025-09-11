@@ -31,6 +31,8 @@
     --color-text-secondary: #9ca3af;
     --color-text-muted: #6b7280;
     --color-accent: #06b6d4;
+    --color-accent-light: #38c7e0;
+    --color-accent-lighter: #69d8eb;
     --color-accent-text: #ffffff;
     --color-accent-hover: #0891b2;
     --color-danger: #f87171;
@@ -38,6 +40,8 @@
     --color-banner-fill: #e0f2fe;
     --color-banner-glow-1: #0ea5e9;
     --color-banner-glow-2: #0284c7;
+    --color-highlight-green: #4ade80;
+    --color-highlight-yellow: #facc15;
   }
   :root[data-theme="synthwave"] {
     --color-bg-primary: #1a103c;
@@ -49,6 +53,8 @@
     --color-text-secondary: #d8b4fe;
     --color-text-muted: #a78bfa;
     --color-accent: #ec4899;
+    --color-accent-light: #f06bab;
+    --color-accent-lighter: #f48ecb;
     --color-accent-text: #ffffff;
     --color-accent-hover: #db2777;
     --color-danger: #fb923c;
@@ -56,6 +62,8 @@
     --color-banner-fill: #f5d0fe;
     --color-banner-glow-1: #ec4899;
     --color-banner-glow-2: #c026d3;
+    --color-highlight-green: #4ade80;
+    --color-highlight-yellow: #facc15;
   }
   :root[data-theme="studio-light"] {
     --color-bg-primary: #ffffff;
@@ -67,6 +75,8 @@
     --color-text-secondary: #4b5563;
     --color-text-muted: #6b7280;
     --color-accent: #2563eb;
+    --color-accent-light: #5182f0;
+    --color-accent-lighter: #7da1f5;
     --color-accent-text: #ffffff;
     --color-accent-hover: #1d4ed8;
     --color-danger: #ef4444;
@@ -74,6 +84,8 @@
     --color-banner-fill: #1e3a8a;
     --color-banner-glow-1: #2563eb;
     --color-banner-glow-2: #1e40af;
+    --color-highlight-green: #16a34a;
+    --color-highlight-yellow: #ca8a04;
   }
   :root[data-theme="70s-groove"] {
     --color-bg-primary: #3B2F2F;
@@ -85,6 +97,8 @@
     --color-text-secondary: #AED581;
     --color-text-muted: #BCAAA4;
     --color-accent: #FF7043;
+    --color-accent-light: #ff8d69;
+    --color-accent-lighter: #ffab8f;
     --color-accent-text: #FFFFFF;
     --color-accent-hover: #F4511E;
     --color-danger: #E57373;
@@ -92,6 +106,8 @@
     --color-banner-fill: #FFCC80;
     --color-banner-glow-1: #FF7043;
     --color-banner-glow-2: #E64A19;
+    --color-highlight-green: #4ade80;
+    --color-highlight-yellow: #facc15;
   }
   @keyframes fadeIn {
     from { opacity: 0; }
@@ -114,11 +130,15 @@
             'text-secondary': 'var(--color-text-secondary)',
             'text-muted': 'var(--color-text-muted)',
             'accent': 'var(--color-accent)',
+            'accent-light': 'var(--color-accent-light)',
+            'accent-lighter': 'var(--color-accent-lighter)',
             'accent-text': 'var(--color-accent-text)',
             'accent-hover': 'var(--color-accent-hover)',
             'border-primary': 'var(--color-border)',
             'danger': 'var(--color-danger)',
             'danger-bg': 'var(--color-danger-bg)',
+            'highlight-green': 'var(--color-highlight-green)',
+            'highlight-yellow': 'var(--color-highlight-yellow)',
           },
         },
       },

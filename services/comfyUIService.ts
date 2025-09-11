@@ -2,7 +2,7 @@
 // This service handles communication with a ComfyUI backend, including checking
 // connection status, fetching server info, generating prompts via Gemini,
 // and running portrait generation workflows.
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import type { GenerationOptions } from '../types';
 import { fileToGenerativePart } from "../utils/imageUtils";
 import { COMFYUI_SD15_WORKFLOW_TEMPLATE, COMFYUI_WORKFLOW_TEMPLATE, COMFYUI_WAN22_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE, COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE } from '../constants';
@@ -613,13 +613,13 @@ export const generateMagicalPromptSoup = async (
   subjectPrompt: string,
   modelType: 'sd1.5' | 'sdxl' | 'flux',
   creativity: number // 0 to 1
-): Promise<string> => {
+): Promise<{ text: string, source: number }[]> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     
     const availablePrompts = [
-        fullPrompt && `Full Scene Prompt: "${fullPrompt}"`,
-        backgroundPrompt && `Background-Only Prompt: "${backgroundPrompt}"`,
-        subjectPrompt && `Subject-Only Prompt: "${subjectPrompt}"`
+        fullPrompt && `1. Full Scene Prompt: "${fullPrompt}"`,
+        backgroundPrompt && `2. Background-Only Prompt: "${backgroundPrompt}"`,
+        subjectPrompt && `3. Subject-Only Prompt: "${subjectPrompt}"`
     ].filter(Boolean).join('\n');
 
     if (!availablePrompts) {
@@ -628,36 +628,89 @@ export const generateMagicalPromptSoup = async (
 
     const basePrompt = `
       You are an expert prompt creator for generative AI art models. Your task is to create a "Magical Prompt Soup".
-      This means you will take elements from the following source prompts and creatively mash them up into a single, new, and highly imaginative prompt.
-      The level of "mashup" or creativity is guided by the creativity slider. A higher value means a more unexpected and wild combination. A lower value means a more faithful but still interesting blend.
-      Do not simply concatenate the prompts. Intelligently select and merge concepts, subjects, styles, and settings to produce a cohesive but surprising result.
+      This means you will take elements from the provided source prompts and creatively mash them up into a single, new, and highly imaginative prompt.
+      The creativity level is ${creativity} (0 is faithful, 1 is wild).
 
-      Here are the source prompts:
+      **Your output MUST be a JSON array of objects, each with a "text" segment and its "source" number.**
+
+      **RULES FOR SOURCE ATTRIBUTION (VERY IMPORTANT):**
+      1.  **Tag Faithfully:** If a text segment is taken directly from or is a clear paraphrase of a source prompt, you MUST tag it with the correct source number.
+          - \`source: 1\`: From the "Full Scene Prompt".
+          - \`source: 2\`: From the "Background-Only Prompt".
+          - \`source: 3\`: From the "Subject-Only Prompt".
+      2.  **Use \`source: 0\` Sparingly:** Only use \`source: 0\` for completely new creative additions, simple connecting words (like 'and', 'with', 'in a style of'), or concepts that are a true fusion of multiple sources and cannot be attributed to a single one. **Do not default to \`source: 0\` for paraphrased content.**
+      3.  **Break It Down:** Break the final prompt down into many small, meaningful phrases for the 'text' values. This ensures accurate color-coding.
+      4.  **Coherency:** When all 'text' values are joined with a single space, they must form a coherent and grammatically correct final prompt.
+
+      **EXAMPLE:**
+      - Source 2: "a sunlit forest"
+      - Source 3: "a woman in a red dress"
+      - Good JSON Output:
+        [
+          {"text": "a woman in a red dress", "source": 3},
+          {"text": "in a", "source": 0},
+          {"text": "sun-drenched forest", "source": 2}
+        ]
+      - Bad JSON Output (loses color):
+        [
+          {"text": "a woman in a red dress in a sun-drenched forest", "source": 0}
+        ]
+
+
+      Here are your source prompts:
       ${availablePrompts}
     `;
 
     let systemInstruction;
     if (modelType === 'flux') {
-        systemInstruction = "You are a prompt generator for the FLUX.1 image model. Create a highly detailed, narrative prompt soup. Do not use commas; instead, use natural language conjunctions. The final prompt should be a single, flowing paragraph describing a unique scene.";
+        systemInstruction = "You are a prompt generator for the FLUX.1 image model. Create a highly detailed, narrative prompt soup. Do not use commas; use natural language conjunctions. The final prompt should be a single, flowing paragraph. Ensure your output is a valid JSON array as instructed.";
     } else if (modelType === 'sdxl') {
-        systemInstruction = "You are a prompt generator for the Stable Diffusion (SDXL) image model. Create a concise, keyword-driven prompt soup under 75 words. Use comma-separated keywords and phrases. Combine elements from the source prompts into a fresh set of keywords.";
+        systemInstruction = "You are a prompt generator for the Stable Diffusion (SDXL) image model. Create a concise, keyword-driven prompt soup under 75 words, using comma-separated phrases. Combine elements from the source prompts into a fresh set of keywords. Ensure your output is a valid JSON array as instructed.";
     } else { // 'sd1.5'
-        systemInstruction = "You are a prompt generator for Stable Diffusion 1.5. Create a very simple, direct, comma-separated keyword prompt soup. Be extremely concise and pick only the most impactful keywords from the source prompts to combine.";
+        systemInstruction = "You are a prompt generator for Stable Diffusion 1.5. Create a very simple, direct, comma-separated keyword prompt soup. Be extremely concise. Combine only the most impactful keywords. Ensure your output is a valid JSON array as instructed.";
     }
+    
+    const responseSchema = {
+        type: Type.ARRAY,
+        items: {
+            type: Type.OBJECT,
+            properties: {
+            text: {
+                type: Type.STRING,
+                description: 'A segment of the generated prompt.',
+            },
+            source: {
+                type: Type.INTEGER,
+                description: 'The source of inspiration for this text segment. Use 1 for the Full Scene Prompt, 2 for the Background-Only Prompt, 3 for the Subject-Only Prompt, and 0 for newly generated or heavily mixed content.',
+            },
+            },
+            required: ['text', 'source'],
+        },
+    };
 
     try {
-        const result = await ai.models.generateContent({
+        const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: { parts: [{ text: basePrompt }] },
             config: {
                 systemInstruction: systemInstruction,
                 temperature: creativity,
+                responseMimeType: "application/json",
+                responseSchema: responseSchema,
             },
         });
 
-        const text = result.text.trim();
-        if (!text) throw new Error("The AI did not return a prompt. Try adjusting creativity or source prompts.");
-        return text;
+        const jsonStr = response.text.trim();
+        if (!jsonStr) throw new Error("The AI did not return a prompt. Try adjusting creativity or source prompts.");
+        
+        const parsedJson = JSON.parse(jsonStr);
+        // Basic validation
+        if (!Array.isArray(parsedJson) || (parsedJson.length > 0 && (typeof parsedJson[0].text === 'undefined' || typeof parsedJson[0].source === 'undefined'))) {
+            throw new Error("AI returned an invalid JSON structure.");
+        }
+
+        return parsedJson;
+
     } catch (error: any) {
         console.error("Error generating prompt soup:", error);
         throw new Error(error.message || "Failed to generate Magical Prompt Soup.");

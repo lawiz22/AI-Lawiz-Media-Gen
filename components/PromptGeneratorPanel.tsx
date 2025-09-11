@@ -23,6 +23,11 @@ interface PromptGeneratorPanelProps {
     onAddSoupToHistory: (soup: string) => void;
 }
 
+interface PromptPart {
+  text: string;
+  source: number; // 0 for new, 1 for full, 2 for bg, 3 for subject
+}
+
 
 export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     onUsePrompt,
@@ -53,6 +58,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const [soupError, setSoupError] = useState<string | null>(null);
     const [soupCopyButtonText, setSoupCopyButtonText] = useState('Copy Prompt');
     const [historyCopyStates, setHistoryCopyStates] = useState<Record<number, string>>({});
+    const [soupPromptParts, setSoupPromptParts] = useState<PromptPart[]>([]);
 
     const handleGenerate = async () => {
         if (!image) {
@@ -170,14 +176,17 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setIsSoupLoading(true);
         setSoupError(null);
         try {
-            const generatedPrompt = await generateMagicalPromptSoup(
+            const generatedParts = await generateMagicalPromptSoup(
                 prompt,
                 bgPrompt,
                 subjectPrompt,
                 soupModelType,
                 soupCreativity
             );
-            onAddSoupToHistory(generatedPrompt);
+            const fullPromptString = generatedParts.map(p => p.text).join(' ');
+            setSoupPromptParts(generatedParts);
+            onAddSoupToHistory(fullPromptString);
+
         } catch (err: any) {
             setSoupError(err.message || 'An unknown error occurred.');
         } finally {
@@ -212,11 +221,20 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             }, 2000);
         });
     };
+    
+    const getSourceColor = (source: number): string => {
+        switch (source) {
+            case 1: return 'text-accent';
+            case 2: return 'text-highlight-green';
+            case 3: return 'text-highlight-yellow';
+            default: return 'text-text-primary'; // Source 0 or unknown
+        }
+    };
 
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto space-y-8">
             {/* --- Generate Prompt from Image Section --- */}
-            <div>
+            <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">
                 <h2 className="text-xl font-bold text-accent mb-4">Generate Prompt from Image</h2>
                 <p className="text-sm text-text-secondary mb-6">
                     Upload a photo to generate a descriptive prompt using AI. Choose a prompt type optimized for your target model.
@@ -233,16 +251,16 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div>
                             <label className="block text-sm font-medium text-text-secondary mb-1">Prompt Type</label>
                             <div className="flex rounded-md border border-border-primary">
-                                <button onClick={() => setModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${modelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Very Simple (SD 1.5)</button>
-                                <button onClick={() => setModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${modelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
-                                <button onClick={() => setModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${modelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
+                                <button onClick={() => setModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${modelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Very Simple (SD 1.5)</button>
+                                <button onClick={() => setModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${modelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
+                                <button onClick={() => setModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${modelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
                             </div>
                         </div>
                         <button
                             onClick={handleGenerate}
                             disabled={!image || isLoading}
                             style={image && !isLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
+                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary"
                         >
                             {isLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
                             {isLoading ? 'Generating...' : 'Generate Prompt'}
@@ -260,7 +278,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 onChange={(e) => setPrompt(e.target.value)}
                                 readOnly={isLoading}
                                 placeholder="Your generated prompt will appear here..."
-                                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px]"
+                                className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-accent font-medium"
                                 rows={10}
                             />
                         </div>
@@ -274,7 +292,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <button 
                                 onClick={handleCopy}
                                 disabled={!prompt || isLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <CopyIcon className="w-5 h-5" />
                                 {copyButtonText}
@@ -282,7 +300,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <button 
                                 onClick={handleUsePrompt}
                                 disabled={!prompt || isLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <SendIcon className="w-5 h-5" />
                                 Use Prompt for ComfyUI
@@ -292,11 +310,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                 </div>
             </div>
 
-            <hr className="border-t-2 border-border-primary/50" />
-
             {/* --- Extract Background from Image Section --- */}
-            <div>
-                <h2 className="text-xl font-bold text-accent mb-4">Extract Background from Image</h2>
+            <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-green">
+                <h2 className="text-xl font-bold text-highlight-green mb-4">Extract Background from Image</h2>
                 <p className="text-sm text-text-secondary mb-6">
                     Upload a photo to generate a prompt describing only the background. This is useful for creating consistent environments.
                 </p>
@@ -312,16 +328,16 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div>
                             <label className="block text-sm font-medium text-text-secondary mb-1">Prompt Type</label>
                             <div className="flex rounded-md border border-border-primary">
-                                <button onClick={() => setBgModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${bgModelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Very Simple (SD 1.5)</button>
-                                <button onClick={() => setBgModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${bgModelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
-                                <button onClick={() => setBgModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${bgModelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
+                                <button onClick={() => setBgModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${bgModelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Very Simple (SD 1.5)</button>
+                                <button onClick={() => setBgModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${bgModelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
+                                <button onClick={() => setBgModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${bgModelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
                             </div>
                         </div>
                          <button
                             onClick={handleBgGenerate}
                             disabled={!bgImage || isBgLoading}
                             style={bgImage && !isBgLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
+                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary"
                         >
                             {isBgLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
                             {isBgLoading ? 'Generating...' : 'Generate Background Prompt'}
@@ -339,7 +355,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 onChange={(e) => setBgPrompt(e.target.value)}
                                 readOnly={isBgLoading}
                                 placeholder="Your generated background prompt will appear here..."
-                                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px]"
+                                className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-green font-medium"
                                 rows={10}
                             />
                         </div>
@@ -353,7 +369,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <button 
                                 onClick={handleBgCopy}
                                 disabled={!bgPrompt || isBgLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <CopyIcon className="w-5 h-5" />
                                 {bgCopyButtonText}
@@ -361,7 +377,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                              <button 
                                 onClick={handleUseBgPrompt}
                                 disabled={!bgPrompt || isBgLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <SendIcon className="w-5 h-5" />
                                 Use Prompt for ComfyUI
@@ -371,11 +387,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                 </div>
             </div>
 
-            <hr className="border-t-2 border-border-primary/50" />
-
             {/* --- Extract Subject from Image Section --- */}
-            <div>
-                <h2 className="text-xl font-bold text-accent mb-4">Extract Subject from Image</h2>
+            <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-yellow">
+                <h2 className="text-xl font-bold text-highlight-yellow mb-4">Extract Subject from Image</h2>
                 <p className="text-sm text-text-secondary mb-6">
                     Upload a photo to generate a prompt describing only the main subject(s). This is useful for isolating characters or objects from their environment.
                 </p>
@@ -391,16 +405,16 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div>
                             <label className="block text-sm font-medium text-text-secondary mb-1">Prompt Type</label>
                             <div className="flex rounded-md border border-border-primary">
-                                <button onClick={() => setSubjectModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${subjectModelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Very Simple (SD 1.5)</button>
-                                <button onClick={() => setSubjectModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${subjectModelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
-                                <button onClick={() => setSubjectModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${subjectModelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
+                                <button onClick={() => setSubjectModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${subjectModelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Very Simple (SD 1.5)</button>
+                                <button onClick={() => setSubjectModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${subjectModelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
+                                <button onClick={() => setSubjectModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${subjectModelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
                             </div>
                         </div>
                          <button
                             onClick={handleSubjectGenerate}
                             disabled={!subjectImage || isSubjectLoading}
                             style={subjectImage && !isSubjectLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
+                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary"
                         >
                             {isSubjectLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
                             {isSubjectLoading ? 'Generating...' : 'Generate Subject Prompt'}
@@ -418,7 +432,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 onChange={(e) => setSubjectPrompt(e.target.value)}
                                 readOnly={isSubjectLoading}
                                 placeholder="Your generated subject prompt will appear here..."
-                                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px]"
+                                className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-yellow font-medium"
                                 rows={10}
                             />
                         </div>
@@ -432,7 +446,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <button 
                                 onClick={handleSubjectCopy}
                                 disabled={!subjectPrompt || isSubjectLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <CopyIcon className="w-5 h-5" />
                                 {subjectCopyButtonText}
@@ -440,7 +454,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                              <button 
                                 onClick={handleUseSubjectPrompt}
                                 disabled={!subjectPrompt || isSubjectLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <SendIcon className="w-5 h-5" />
                                 Use Prompt for ComfyUI
@@ -449,11 +463,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                     </div>
                 </div>
             </div>
-
-            <hr className="border-t-2 border-border-primary/50" />
-
+            
             {/* --- Magical Prompt Soup Section --- */}
             <div>
+                <hr className="border-t-2 border-border-primary/50 mb-8" />
                 <h2 className="text-xl font-bold text-accent mb-4">Magical Prompt Soup</h2>
                 <p className="text-sm text-text-secondary mb-6">
                     Mash up the prompts generated above into a new, unique, and often surprising creation. Adjust the creativity to control how wild the result is!
@@ -502,15 +515,22 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <label htmlFor="generated-soup-prompt" className="block text-sm font-medium text-text-secondary mb-1">
                                 Generated Soup Prompt
                             </label>
-                            <textarea
+                            <div
                                 id="generated-soup-prompt"
-                                value={soupPrompt}
-                                onChange={(e) => setSoupPrompt(e.target.value)}
-                                readOnly={isSoupLoading}
-                                placeholder="Your magical prompt soup will appear here..."
-                                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[184px]"
-                                rows={8}
-                            />
+                                className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent min-h-[184px] whitespace-pre-wrap"
+                            >
+                                {soupPromptParts.length > 0 ? (
+                                    soupPromptParts.map((part, index) => (
+                                        <span key={index} className={getSourceColor(part.source)}>
+                                            {part.text + ' '}
+                                        </span>
+                                    ))
+                                ) : soupPrompt ? (
+                                    <span className="text-text-primary">{soupPrompt}</span>
+                                ) : (
+                                    <span className="text-text-muted">Your magical prompt soup will appear here...</span>
+                                )}
+                            </div>
                         </div>
                         {soupError && (
                             <div className="bg-danger-bg text-danger text-sm p-3 rounded-md">
@@ -542,7 +562,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md border border-border-primary/50">
                                     {soupHistory.map((soup, index) => (
                                         <div key={index} className="group bg-bg-tertiary p-2 rounded-md flex items-center justify-between gap-2">
-                                            <p className="text-xs text-text-secondary truncate cursor-pointer hover:text-text-primary transition-colors" title={soup} onClick={() => setSoupPrompt(soup)}>
+                                            <p 
+                                                className="text-xs text-text-secondary truncate cursor-pointer hover:text-text-primary transition-colors" 
+                                                title={soup} 
+                                                onClick={() => { setSoupPrompt(soup); setSoupPromptParts([]); }}
+                                            >
                                                 {soup}
                                             </p>
                                             <button 
