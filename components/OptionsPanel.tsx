@@ -1,4 +1,3 @@
-
 // Fix: Implemented the full OptionsPanel component, which was missing.
 // This resolves the module resolution error and provides the necessary UI
 // for configuring image generation for both Gemini and ComfyUI providers.
@@ -167,9 +166,20 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         }
         
         if (field === 'comfyModelType') {
-            const newModelType = value as 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux';
-            if (newModelType === 'flux') {
-                const specificFluxModel = comfyModels.find((m: string) => m === 'flux1-dev-fp8.safensors');
+            const newModelType = value as 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux';
+            if (newModelType === 'sd1.5') {
+                 const sd15Model = comfyModels.find((m: string) => m.toLowerCase().includes('1.5') || m.toLowerCase().includes('15') || m.toLowerCase().includes('realisticvision')) || (comfyModels.length > 0 ? comfyModels[0] : '');
+                 setOptions(prev => ({
+                    ...prev,
+                    comfyModelType: 'sd1.5',
+                    comfyModel: sd15Model,
+                    comfySteps: 20,
+                    comfyCfg: 7,
+                    comfySampler: 'euler',
+                    comfyScheduler: 'normal',
+                }));
+            } else if (newModelType === 'flux') {
+                const specificFluxModel = comfyModels.find((m: string) => m === 'flux1-dev-fp8.safetensors');
                 const genericFluxModel = comfyModels.find((m: string) => m.toLowerCase().includes('flux'));
                 
                 setOptions(prev => ({
@@ -797,6 +807,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         value={options.comfyModelType || 'sdxl'} 
                         onChange={handleOptionChange('comfyModelType')} 
                         options={[
+                            {label: 'SD 1.5', value: 'sd1.5'},
                             {label: 'SDXL', value: 'sdxl'}, 
                             {label: 'FLUX', value: 'flux'},
                             {label: 'WAN 2.2 Image', value: 'wan2.2'},
@@ -874,7 +885,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         );
                     }
                     
-                    // For SDXL and FLUX
+                    // For SD1.5, SDXL and FLUX
                     return (
                          <>
                             {renderComfyUIBaseOptions()}

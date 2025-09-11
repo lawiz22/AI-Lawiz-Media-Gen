@@ -5,7 +5,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { GenerationOptions } from '../types';
 import { fileToGenerativePart } from "../utils/imageUtils";
-import { COMFYUI_WORKFLOW_TEMPLATE, COMFYUI_WAN22_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE } from '../constants';
+import { COMFYUI_SD15_WORKFLOW_TEMPLATE, COMFYUI_WORKFLOW_TEMPLATE, COMFYUI_WAN22_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE } from '../constants';
 
 // --- State Management ---
 let objectInfoCache: any | null = null;
@@ -77,13 +77,17 @@ export const checkConnection = async (url: string): Promise<{ success: boolean; 
             mode: 'cors' 
         });
         if (!response.ok) {
-             throw new Error(`Server responded with status: ${response.statusText} (${response.status})`);
+             const errorText = await response.text().catch(() => 'Could not read error response.');
+             const corsError = "If you see a 'Failed to fetch' or CORS error, you must start ComfyUI with the '--enable-cors' flag.";
+             throw new Error(`Server responded with status: ${response.statusText} (${response.status}). ${errorText.includes('Not Found') ? '' : corsError}`);
         }
         await response.json(); // Ensure the body is valid JSON as expected.
         return { success: true };
     } catch (error: any) {
         console.error("ComfyUI connection check failed:", error);
-        return { success: false, error: `Connection failed: ${error.message}. Check URL, server status, and CORS settings.` };
+        const corsError = "If you see a 'Failed to fetch' or CORS error, you must start ComfyUI with the '--enable-cors' flag.";
+        const finalMessage = error.message.includes('--enable-cors') ? error.message : `${error.message}. ${corsError}`;
+        return { success: false, error: `Connection failed: ${finalMessage}. Check URL and server status.` };
     }
 };
 
@@ -232,6 +236,7 @@ const buildNunchakuWorkflow = (options: GenerationOptions, sourceImageFilename: 
 
     // Prompt
     workflow["25"].inputs.text = options.comfyPrompt;
+    workflow["3"].inputs.text = options.comfyNegativePrompt || '';
 
     // Parameters
     workflow["20"].inputs.steps = options.comfySteps;
@@ -294,7 +299,11 @@ const buildWorkflow = (options: GenerationOptions, sourceImageFilename?: string 
         return buildNunchakuWorkflow(options, sourceImageFilename);
     }
 
-    const workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE));
+    const template = options.comfyModelType === 'sd1.5' 
+        ? COMFYUI_SD15_WORKFLOW_TEMPLATE 
+        : COMFYUI_WORKFLOW_TEMPLATE; // Default to SDXL
+    const workflow = JSON.parse(JSON.stringify(template));
+
     const checkPointLoader = workflow['4'];
     const positivePrompt = workflow['6'];
     const negativePrompt = workflow['7'];
@@ -329,7 +338,7 @@ const buildWorkflow = (options: GenerationOptions, sourceImageFilename?: string 
     kSampler.inputs.seed = Math.floor(Math.random() * 1_000_000_000);
 
     const [w, h] = options.aspectRatio.split(':').map(Number);
-    const baseRes = 1024;
+    const baseRes = options.comfyModelType === 'sd1.5' ? 512 : 1024;
     emptyLatent.inputs.width = w > h ? baseRes : Math.round(baseRes * (w / h));
     emptyLatent.inputs.height = h >= w ? baseRes : Math.round(baseRes * (h / w));
     emptyLatent.inputs.width = Math.round(emptyLatent.inputs.width / 8) * 8;
@@ -373,7 +382,7 @@ export const exportComfyUIWorkflow = (options: GenerationOptions, sourceImage?: 
     URL.revokeObjectURL(url);
 };
 
-export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux'): Promise<string> => {
+export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux'): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const imagePart = await fileToGenerativePart(sourceImage);
     const basePrompt = "Analyze this image of a person and generate a descriptive text prompt for a text-to-image AI model. Focus on subject, expression, clothing, and background style.";
@@ -383,8 +392,8 @@ export const generateComfyUIPromptFromSource = async (sourceImage: File, modelTy
         systemInstruction = "You are a prompt generator for the FLUX.1 image model. Create a highly detailed, narrative prompt. Do not use commas; instead, use natural language conjunctions like 'and', 'with', 'wearing a'. Describe the scene, mood, and lighting in a conversational style.";
     } else if (modelType === 'wan2.2') {
          systemInstruction = "You are a prompt generator for the WAN 2.2 image model. Create a detailed, artistic prompt focusing on atmosphere, color, and emotional tone. Describe the subject's appearance, clothing, and the environment with rich, evocative language. Mention camera angles and lighting styles like 'cinematic lighting' or 'soft focus'.";
-    } else { // 'sdxl'
-        systemInstruction = "You are a prompt generator for the SDXL image model. Create a concise, keyword-driven prompt under 75 words. Use comma-separated keywords and phrases. Prioritize key elements: subject, clothing, action, setting, and style. Be direct and specific.";
+    } else { // 'sdxl' or 'sd1.5'
+        systemInstruction = "You are a prompt generator for the Stable Diffusion image model. Create a concise, keyword-driven prompt under 75 words. Use comma-separated keywords and phrases. Prioritize key elements: subject, clothing, action, setting, and style. Be direct and specific.";
     }
 
     try {

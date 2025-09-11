@@ -1,5 +1,5 @@
 {
-  "version": "1.33",
+  "version": "1.35",
   "date": "2024-08-04T12:00:00Z",
-  "changes": "Update application version to 1.33."
+  "changes": "Add SD 1.5 COMFYUI"
 }

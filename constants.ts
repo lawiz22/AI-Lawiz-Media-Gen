@@ -1,4 +1,5 @@
 
+
 export const MAX_IMAGES = 13;
 
 // Obfuscated poses to protect intellectual property
@@ -116,8 +117,64 @@ export const TEXT_OBJECT_PROMPTS = [
     "a newspaper with the headline '%s'",
 ];
 
-// --- ComfyUI Workflow Template ---
-// This is now a standard text-to-image workflow, without IPAdapter.
+// --- ComfyUI Workflow Template (SD 1.5) ---
+export const COMFYUI_SD15_WORKFLOW_TEMPLATE = {
+  "3": {
+    "inputs": {
+      "seed": 8565685,
+      "steps": 20,
+      "cfg": 7,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1,
+      "model": [ "4", 0 ],
+      "positive": [ "6", 0 ],
+      "negative": [ "7", 0 ],
+      "latent_image": [ "5", 0 ]
+    },
+    "class_type": "KSampler",
+    "_meta": { "title": "KSampler" }
+  },
+  "4": {
+    "inputs": { "ckpt_name": "v1-5-pruned-emaonly.safetensors" },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": { "title": "Load Checkpoint" }
+  },
+  "5": {
+    "inputs": { "width": 512, "height": 512, "batch_size": 1 },
+    "class_type": "EmptyLatentImage",
+    "_meta": { "title": "Empty Latent Image" }
+  },
+  "6": {
+    "inputs": {
+      "text": "A photorealistic portrait of a person",
+      "clip": [ "4", 1 ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Positive Prompt" }
+  },
+  "7": {
+    "inputs": {
+      "text": "blurry, bad quality, low-res, ugly, deformed, disfigured",
+      "clip": [ "4", 1 ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Negative Prompt" }
+  },
+  "8": {
+    "inputs": { "samples": [ "3", 0 ], "vae": [ "4", 2 ] },
+    "class_type": "VAEDecode",
+    "_meta": { "title": "VAE Decode" }
+  },
+  "9": {
+    "inputs": { "images": [ "8", 0 ] },
+    "class_type": "PreviewImage",
+    "_meta": { "title": "Preview Image" }
+  }
+};
+
+
+// --- ComfyUI Workflow Template (SDXL) ---
 export const COMFYUI_WORKFLOW_TEMPLATE = {
   "3": {
     "inputs": {
@@ -280,9 +337,12 @@ export const COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE = {
         "_meta": { "title": "DualCLIPLoader" }
     },
     "3": {
-        "inputs": { "conditioning": ["25", 0] },
-        "class_type": "ConditioningZeroOut",
-        "_meta": { "title": "ConditioningZeroOut" }
+        "inputs": {
+            "text": "",
+            "clip": ["2", 0]
+        },
+        "class_type": "CLIPTextEncode",
+        "_meta": { "title": "Negative Prompt" }
     },
     "5": {
         "inputs": { "filename_prefix": "ComfyUI_Nunchaku", "images": ["7", 0] },

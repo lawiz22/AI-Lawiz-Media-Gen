@@ -19,7 +19,7 @@ export interface GenerationOptions {
   textObjectPrompt?: string;
 
   // ComfyUI specific options
-  comfyModelType?: 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux';
+  comfyModelType?: 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux';
   comfyFluxGuidance?: number;
   comfyModel?: string;
   comfySteps?: number;
