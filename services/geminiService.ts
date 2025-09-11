@@ -67,7 +67,7 @@ export const generateBackgroundImagePreview = async (
     throw new Error("Prompt cannot be empty.");
   }
   
-  const fullPrompt = `A high-quality, photorealistic background image for a portrait photography session. The background should be: ${prompt}. Do not include any people or prominent figures. Focus on creating a beautiful and believable environment.`;
+  const fullPrompt = `A high-quality, photorealistic background image for a photography session. The background should be: ${prompt}. Do not include any people or prominent figures. Focus on creating a beautiful and believable environment.`;
 
   try {
     // Fix: Removed the unsupported 'safetySettings' property from the generateImages call.

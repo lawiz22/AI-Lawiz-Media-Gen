@@ -25,7 +25,7 @@ export const decodePose = (encoded: string): string => {
   } catch (e) {
     console.error("Failed to decode pose:", e);
     // Fallback for non-browser env or error
-    return "a standard portrait pose";
+    return "a standard pose";
   }
 };
 
@@ -100,7 +100,7 @@ export const getRandomTextObjectPrompt = (): string => getRandom(TEXT_OBJECT_PRO
 
 
 export const buildPromptSegments = (options: GenerationOptions, pose: string, hasPreviewedClothing: boolean): string[] => {
-    const promptSegments: string[] = [`Generate a high-quality, professional, and tasteful portrait. The subject is a person with the same face and features as in the reference image.`];
+    const promptSegments: string[] = [`Generate a high-quality, professional, and tasteful image. The subject is a person with the same face and features as in the reference image.`];
     
     promptSegments.push(`Pose: ${pose}`);
 

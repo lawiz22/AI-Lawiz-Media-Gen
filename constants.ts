@@ -146,7 +146,7 @@ export const COMFYUI_SD15_WORKFLOW_TEMPLATE = {
   },
   "6": {
     "inputs": {
-      "text": "A photorealistic portrait of a person",
+      "text": "A photorealistic image of a person",
       "clip": [ "4", 1 ]
     },
     "class_type": "CLIPTextEncode",
@@ -203,7 +203,7 @@ export const COMFYUI_WORKFLOW_TEMPLATE = {
   },
   "6": {
     "inputs": {
-      "text": "A photorealistic portrait of a person",
+      "text": "A photorealistic image of a person",
       "clip": [ "4", 1 ]
     },
     "class_type": "CLIPTextEncode",

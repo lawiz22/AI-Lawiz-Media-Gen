@@ -5,7 +5,7 @@ export const Logo: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     {...props}
     viewBox="0 0 52 52" 
     xmlns="http://www.w3.org/2000/svg" 
-    aria-label="LAWIZ Logo"
+    aria-label="Lawiz's AI Media Generator Logo"
   >
     <defs>
       <clipPath id="clip0_lz_logo_v2">
@@ -24,9 +24,9 @@ export const Logo: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {/* The 'Z' shape - a dynamic, sharp Z */}
+      {/* The 'M' shape - representing "Media" */}
       <path 
-        d="M26 10 H 42 L 26 42 H 42" 
+        d="M28 42 V 10 L 35 26 L 42 10 V 42" 
         stroke="var(--color-text-primary)" 
         strokeWidth="6"
         fill="none"

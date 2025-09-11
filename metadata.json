@@ -1,5 +1,5 @@
 {
-  "name": "LAWIZ Portrait Series Generator",
-  "description": "Generate a series of portrait photos from a single source image. This application uses AI to create variations with different poses and backgrounds while maintaining the subject's identity.",
+  "name": "Lawiz's AI Media Generator",
+  "description": "Generate a series of images and videos from a single source image or text prompt. This application uses AI to create variations with different styles, poses, and backgrounds.",
   "requestFramePermissions": []
 }

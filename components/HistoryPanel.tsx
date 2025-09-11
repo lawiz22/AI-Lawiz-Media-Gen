@@ -94,7 +94,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ isOpen, onClose, onL
                 <div className="flex flex-col items-center justify-center h-full text-center text-text-secondary p-8">
                     <HistoryIcon className="w-16 h-16 text-border-primary mb-4" />
                     <h3 className="text-lg font-bold text-text-primary">No History Yet</h3>
-                    <p>Your generated portrait series will appear here automatically.</p>
+                    <p>Your generated media will appear here automatically.</p>
                 </div>
             ) : (
                 <div className="space-y-3">

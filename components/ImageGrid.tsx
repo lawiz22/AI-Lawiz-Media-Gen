@@ -20,7 +20,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
   const handleDownload = (imageSrc: string, index: number) => {
     const link = document.createElement('a');
     link.href = imageSrc;
-    link.download = `portrait-${index + 1}${enhancedImages[index] ? '-enhanced' : ''}.jpeg`;
+    link.download = `generated-${index + 1}${enhancedImages[index] ? '-enhanced' : ''}.jpeg`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -55,14 +55,14 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
         const finalSrc = enhancedImages[index] || src;
         const base64Data = finalSrc.split(',')[1];
         if (base64Data) {
-          const fileName = `portrait-${index + 1}${enhancedImages[index] ? '-enhanced' : ''}.jpeg`;
+          const fileName = `generated-${index + 1}${enhancedImages[index] ? '-enhanced' : ''}.jpeg`;
           zip.file(fileName, base64Data, { base64: true });
         }
       });
       const content = await zip.generateAsync({ type: 'blob' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(content);
-      link.download = 'LAWIZ-portraits.zip';
+      link.download = 'LAWIZ-generated.zip';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -130,7 +130,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
     <>
       <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-              <h2 className="text-xl font-bold text-accent">3. Generated Portraits</h2>
+              <h2 className="text-xl font-bold text-accent">3. Generated Content</h2>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={handleDownloadAll}
@@ -175,7 +175,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
 
                   return (
                       <div key={index} className="group relative aspect-w-1 aspect-h-1 bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
-                          <img src={finalSrc} alt={`Generated Portrait ${index + 1}`} className="object-cover w-full h-full" />
+                          <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="object-cover w-full h-full" />
                           
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2">
                                {isEnhancing ? (
@@ -237,7 +237,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
           >
             <img 
               src={currentZoomedSrc} 
-              alt={`Zoomed portrait ${zoomedImageIndex + 1}`} 
+              alt={`Zoomed content ${zoomedImageIndex + 1}`} 
               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
             />
             <button

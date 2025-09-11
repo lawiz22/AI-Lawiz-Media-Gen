@@ -8,7 +8,7 @@ export const Banner: React.FC = () => {
       className="w-64 sm:w-80 md:w-96 h-auto"
       aria-labelledby="bannerTitle"
     >
-      <title id="bannerTitle">LAWIZ'S Portrait Generator</title>
+      <title id="bannerTitle">Lawiz's AI Media Generator</title>
       <defs>
         <filter id="neon-glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
@@ -62,7 +62,7 @@ export const Banner: React.FC = () => {
         LAWIZ'S
       </text>
       <text x="0" y="55" fontSize="28" fontWeight="bold" className="subtitle-text">
-        Portrait Generator
+        AI Media Generator
       </text>
     </svg>
   );
