@@ -1,5 +1,5 @@
 {
-  "version": "1.37",
-  "date": "2024-08-05T11:00:00Z",
-  "changes": "Revamped the image generation loading bar for improved readability and a more thematic design. Added detailed progress messages from both Gemini and ComfyUI services to provide real-time status updates."
+  "version": "1.38",
+  "date": "2024-08-06T10:00:00Z",
+  "changes": "Fixed multiple validation errors and crashes in the 'Flux Krea' ComfyUI workflow caused by outdated custom node inputs. Updated the workflow template and service to use the correct input names for DualCLIPLoaderGGUF, UnetLoaderGGUF, and ImageScaleBy nodes, and corrected an invalid node connection."
 }
