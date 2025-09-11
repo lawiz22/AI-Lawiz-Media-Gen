@@ -89,6 +89,25 @@ const initialOptions: GenerationOptions = {
   comfyNunchakuAttention: 'nunchaku-fp16',
   comfyNunchakuBaseShift: 1.0,
   comfyNunchakuMaxShift: 1.15,
+
+  // Flux Krea defaults
+  comfyFluxKreaModel: 'flux1-krea-dev-Q5_K_M.gguf',
+  comfyFluxKreaClipT5: 't5-v1_1-xxl-encoder-Q5_K_M.gguf',
+  comfyFluxKreaClipL: 'clip_l.safetensors',
+  comfyFluxKreaVae: 'ae.safetensors',
+  comfyFluxKreaUpscaleModel: '4x_NMKD-Siax_200k.pth',
+  useP1x4r0maWomanLora: false,
+  p1x4r0maWomanLoraStrength: 0.9,
+  p1x4r0maWomanLoraName: 'p1x4r0ma_woman.safetensors',
+  useNippleDiffusionLora: true,
+  nippleDiffusionLoraStrength: 1.0,
+  nippleDiffusionLoraName: 'nipplediffusion-saggy-f1.safetensors',
+  usePussyDiffusionLora: false,
+  pussyDiffusionLoraStrength: 1.0,
+  pussyDiffusionLoraName: 'pussydiffusion-f1.safetensors',
+  comfyFluxKreaUseUpscaler: false,
+  comfyFluxKreaDenoise: 0.8,
+  comfyFluxKreaUpscalerSteps: 10,
 };
 
 function App() {
@@ -367,8 +386,8 @@ function App() {
   
   const getUploaderSectionTitle = () => {
       if (options.provider === 'gemini') return "1. Upload Images";
-      if (options.comfyModelType === 'nunchaku-kontext-flux') return "1. Upload Image & Set Prompt";
-      return "1. Setup Prompt";
+      if (options.comfyModelType === 'nunchaku-kontext-flux' || options.comfyModelType === 'flux-krea') return "1. Setup Prompt";
+      return "1. Upload Image & Set Prompt";
   };
 
   const getSourceImageLabel = () => {
@@ -378,6 +397,12 @@ function App() {
     }
     return "1. Upload Source Image"; // Gemini
   };
+
+  const showSourceImageUploader = () => {
+      if (options.provider === 'gemini') return true;
+      if (options.provider === 'comfyui' && (options.comfyModelType !== 'flux-krea')) return true;
+      return false;
+  }
 
 
   return (
@@ -416,12 +441,14 @@ function App() {
               <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                 <h2 className="text-xl font-bold mb-4 text-accent">{getUploaderSectionTitle()}</h2>
                 <div className="space-y-4">
-                  <ImageUploader 
-                    label={getSourceImageLabel()}
-                    id="source-image" 
-                    onImageUpload={setSourceImage} 
-                    sourceFile={sourceImage}
-                  />
+                  {showSourceImageUploader() && (
+                    <ImageUploader 
+                      label={getSourceImageLabel()}
+                      id="source-image" 
+                      onImageUpload={setSourceImage} 
+                      sourceFile={sourceImage}
+                    />
+                  )}
                   {options.provider === 'gemini' && options.clothing === 'image' && (
                     <ImageUploader label="Clothing Reference Image (Optional)" id="clothing-image" onImageUpload={setClothingImage} sourceFile={clothingImage} />
                   )}

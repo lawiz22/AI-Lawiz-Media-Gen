@@ -35,6 +35,15 @@ interface OptionsPanelProps {
   sourceImage: File | null;
 }
 
+// Helper function to safely extract model lists from ComfyUI's object_info
+const getModelListFromInfo = (widgetInfo: any): string[] => {
+    // The model list is expected to be in widgetInfo[0]
+    if (Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0])) {
+        return widgetInfo[0] || [];
+    }
+    return [];
+};
+
 // --- Helper Components ---
 const OptionSection: React.FC<{ title: string, children: React.ReactNode }> = ({ title, children }) => (
     <div className="space-y-4">
@@ -53,14 +62,14 @@ const SelectInput: React.FC<{ label: string, value: string, onChange: (e: Change
     </div>
 );
 
-const TextInput: React.FC<{ label: string, value: string, onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void, placeholder?: string, disabled?: boolean, isTextArea?: boolean }> =
-({ label, value, onChange, placeholder, disabled, isTextArea }) => (
-    <div>
-        <label className="block text-sm font-medium text-text-secondary">{label}</label>
+const TextInput: React.FC<{ label: string, value: string, onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void, placeholder?: string, disabled?: boolean, isTextArea?: boolean, tooltip?: string }> =
+({ label, value, onChange, placeholder, disabled, isTextArea, tooltip }) => (
+    <div className="relative">
+        <label className="block text-sm font-medium text-text-secondary" title={tooltip}>{label}</label>
         {isTextArea ? (
-            <textarea value={value} onChange={onChange} placeholder={placeholder} disabled={disabled} rows={3} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent" />
+            <textarea value={value} onChange={onChange} placeholder={placeholder} disabled={disabled} rows={3} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent disabled:opacity-50" />
         ) : (
-            <input type="text" value={value} onChange={onChange} placeholder={placeholder} disabled={disabled} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent" />
+            <input type="text" value={value} onChange={onChange} placeholder={placeholder} disabled={disabled} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent disabled:opacity-50" />
         )}
     </div>
 );
@@ -116,22 +125,99 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         setOptions(prev => ({ ...prev, poseSelection: selectedPoses }));
     }, [selectedPoses, setOptions]);
     
-    // Standard model lists
-    const comfyModels = useMemo(() => comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || [], [comfyUIObjectInfo]);
-    const comfySamplers = useMemo(() => comfyUIObjectInfo?.KSampler?.input?.required?.sampler_name?.[0] || comfyUIObjectInfo?.KSamplerSelect?.input?.required?.sampler_name?.[0] || [], [comfyUIObjectInfo]);
-    const comfySchedulers = useMemo(() => comfyUIObjectInfo?.KSampler?.input?.required?.scheduler?.[0] || comfyUIObjectInfo?.BasicScheduler?.input?.required?.scheduler?.[0] || [], [comfyUIObjectInfo]);
-    const comfyLoras = useMemo(() => comfyUIObjectInfo?.LoraLoader?.input?.required?.lora_name?.[0] || comfyUIObjectInfo?.NunchakuFluxLoraLoader?.input?.required?.lora_name?.[0] || [], [comfyUIObjectInfo]);
-    const comfyVaes = useMemo(() => comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name?.[0] || [], [comfyUIObjectInfo]);
-    const comfyClips = useMemo(() => comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name?.[0] || comfyUIObjectInfo?.DualCLIPLoader?.input?.required?.clip_name1?.[0] || comfyUIObjectInfo?.NunchakuTextEncoderLoader?.input?.required?.text_encoder1?.[0] || [], [comfyUIObjectInfo]);
+    // --- Memoized Model Lists from ComfyUI Object Info ---
+    const comfyModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name), [comfyUIObjectInfo]);
+    
+    const comfySamplers = useMemo(() => {
+        const list = getModelListFromInfo(comfyUIObjectInfo?.KSampler?.input?.required?.sampler_name);
+        return list.length ? list : getModelListFromInfo(comfyUIObjectInfo?.KSamplerSelect?.input?.required?.sampler_name);
+    }, [comfyUIObjectInfo]);
 
-    // WAN 2.2 specific logic to handle text inputs vs dropdowns for GGUF models
-    const ggufWidgetInfo = useMemo(() => comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name, [comfyUIObjectInfo]);
-    const isGgufDropdown = useMemo(() => Array.isArray(ggufWidgetInfo?.[0]), [ggufWidgetInfo]);
-    const comfyGgufModels = useMemo(() => isGgufDropdown ? (ggufWidgetInfo?.[0] || []) : [], [isGgufDropdown, ggufWidgetInfo]);
+    const comfySchedulers = useMemo(() => {
+        const list = getModelListFromInfo(comfyUIObjectInfo?.KSampler?.input?.required?.scheduler);
+        return list.length ? list : getModelListFromInfo(comfyUIObjectInfo?.BasicScheduler?.input?.required?.scheduler);
+    }, [comfyUIObjectInfo]);
+
+    const comfyLoras = useMemo(() => {
+        const sources = [
+            comfyUIObjectInfo?.LoraLoader?.input?.required?.lora_name,
+            comfyUIObjectInfo?.NunchakuFluxLoraLoader?.input?.required?.lora_name,
+            comfyUIObjectInfo?.["Power Lora Loader (rgthree)"]?.input?.required?.lora_name
+        ];
+        for (const source of sources) {
+            const list = getModelListFromInfo(source);
+            if (list.length > 0) return list;
+        }
+        return [];
+    }, [comfyUIObjectInfo]);
+
+    const comfyVaes = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name), [comfyUIObjectInfo]);
+
+    const comfyClips = useMemo(() => {
+        const sources = [
+            comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name,
+            comfyUIObjectInfo?.DualCLIPLoader?.input?.required?.clip_name1,
+            comfyUIObjectInfo?.NunchakuTextEncoderLoader?.input?.required?.text_encoder1,
+            comfyUIObjectInfo?.DualCLIPLoaderGGUF?.input?.required?.clip_l_name
+        ];
+        for (const source of sources) {
+            const list = getModelListFromInfo(source);
+            if (list.length > 0) return list;
+        }
+        return [];
+    }, [comfyUIObjectInfo]);
+    
+    // For Flux Krea: GGUF-based T5 Encoders
+    const t5GgufEncoderModels = useMemo(() => {
+        const sources = [
+            // Primary source for Flux Krea workflow
+            comfyUIObjectInfo?.DualCLIPLoaderGGUF?.input?.required?.clip_name,
+            // Alternative source if user has a different GGUF loader
+            comfyUIObjectInfo?.CLIPLoaderGGUF?.input?.required?.clip_name,
+        ];
+        const modelSet = new Set<string>();
+        for (const source of sources) {
+            const list = getModelListFromInfo(source);
+            if (list.length > 0) {
+                list.forEach(model => modelSet.add(model));
+            }
+        }
+        return Array.from(modelSet);
+    }, [comfyUIObjectInfo]);
+
+    // For Nunchaku Workflows: Safetensor-based T5 Encoders
+    const t5SafetensorEncoderModels = useMemo(() => {
+        const sources = [
+            // Source for older Nunchaku workflow
+            comfyUIObjectInfo?.DualCLIPLoader?.input?.required?.clip_name2,
+            // Source for newer Nunchaku workflow
+            comfyUIObjectInfo?.NunchakuTextEncoderLoader?.input?.required?.text_encoder2,
+        ];
+        const modelSet = new Set<string>();
+        for (const source of sources) {
+            const list = getModelListFromInfo(source);
+            if (list.length > 0) {
+                list.forEach(model => modelSet.add(model));
+            }
+        }
+        return Array.from(modelSet);
+    }, [comfyUIObjectInfo]);
+
+    const comfyUpscaleModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.UpscaleModelLoader?.input?.required?.model_name), [comfyUIObjectInfo]);
+
+    // GGUF model lists
+    const comfyGgufModels = useMemo(() => {
+        const widgetInfo = comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name || comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.gguf_name;
+        return getModelListFromInfo(widgetInfo);
+    }, [comfyUIObjectInfo]);
 
     // Nunchaku specific model lists
-    const nunchakuModels = useMemo(() => comfyUIObjectInfo?.NunchakuFluxDiTLoader?.input?.required?.model_path?.[0] || [], [comfyUIObjectInfo]);
-    const nunchakuAttentions = useMemo(() => comfyUIObjectInfo?.NunchakuFluxDiTLoader?.input?.required?.attention?.[0] || ['nunchaku-fp16', 'flash-attention2'], [comfyUIObjectInfo]);
+    const nunchakuModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.NunchakuFluxDiTLoader?.input?.required?.model_path), [comfyUIObjectInfo]);
+    
+    const nunchakuAttentions = useMemo(() => {
+        const list = getModelListFromInfo(comfyUIObjectInfo?.NunchakuFluxDiTLoader?.input?.required?.attention);
+        return list.length > 0 ? list : ['nunchaku-fp16', 'flash-attention2'];
+    }, [comfyUIObjectInfo]);
 
     const handleOptionChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
@@ -166,7 +252,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         }
         
         if (field === 'comfyModelType') {
-            const newModelType = value as 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image';
+            const newModelType = value as 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
             if (newModelType === 'sd1.5') {
                  const sd15Model = comfyModels.find((m: string) => m.toLowerCase().includes('1.5') || m.toLowerCase().includes('15') || m.toLowerCase().includes('realisticvision')) || (comfyModels.length > 0 ? comfyModels[0] : '');
                  setOptions(prev => ({
@@ -219,6 +305,16 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyNegativePrompt: '', // This workflow has no negative prompt
                     comfyNunchakuBaseShift: 1.0,
                     comfyNunchakuMaxShift: 1.15,
+                }));
+            } else if (newModelType === 'flux-krea') {
+                setOptions(prev => ({
+                    ...prev,
+                    comfyModelType: 'flux-krea',
+                    comfySteps: 20,
+                    comfyCfg: 1,
+                    comfySampler: 'res_2s',
+                    comfyScheduler: 'bong_tangent',
+                    comfyNegativePrompt: '', // This workflow uses ConditioningZeroOut
                 }));
             } else { // Switching back to 'sdxl'
                 const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
@@ -594,12 +690,12 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const renderWan22Options = () => (
         <>
             <OptionSection title="WAN 2.2 Models">
-                {isGgufDropdown ? (
+                {comfyGgufModels.length > 0 ? (
                     <SelectInput label="High-Noise GGUF" value={options.comfyWanHighNoiseModel || ''} onChange={handleOptionChange('comfyWanHighNoiseModel')} options={comfyGgufModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
                 ) : (
                     <TextInput label="High-Noise GGUF Filename" value={options.comfyWanHighNoiseModel || ''} onChange={handleOptionChange('comfyWanHighNoiseModel')} placeholder="e.g., Wan2.2-HighNoise.gguf" disabled={isDisabled} />
                 )}
-                {isGgufDropdown ? (
+                {comfyGgufModels.length > 0 ? (
                     <SelectInput label="Low-Noise GGUF" value={options.comfyWanLowNoiseModel || ''} onChange={handleOptionChange('comfyWanLowNoiseModel')} options={comfyGgufModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
                 ) : (
                     <TextInput label="Low-Noise GGUF Filename" value={options.comfyWanLowNoiseModel || ''} onChange={handleOptionChange('comfyWanLowNoiseModel')} placeholder="e.g., Wan2.2-LowNoise.gguf" disabled={isDisabled} />
@@ -703,7 +799,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 <SelectInput label="Main Model" value={options.comfyNunchakuModel || ''} onChange={handleOptionChange('comfyNunchakuModel')} options={nunchakuModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
                 <SelectInput label="VAE Model" value={options.comfyNunchakuVae || ''} onChange={handleOptionChange('comfyNunchakuVae')} options={comfyVaes.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
                 <SelectInput label="CLIP L Model" value={options.comfyNunchakuClipL || ''} onChange={handleOptionChange('comfyNunchakuClipL')} options={comfyClips.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
-                <SelectInput label="T5-XXL Model" value={options.comfyNunchakuT5XXL || ''} onChange={handleOptionChange('comfyNunchakuT5XXL')} options={comfyClips.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                <SelectInput label="T5-XXL Model" value={options.comfyNunchakuT5XXL || ''} onChange={handleOptionChange('comfyNunchakuT5XXL')} options={t5SafetensorEncoderModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
             </OptionSection>
 
              <OptionSection title="Edit Instruction">
@@ -806,7 +902,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 <SelectInput label="Main Model" value={options.comfyNunchakuModel || ''} onChange={handleOptionChange('comfyNunchakuModel')} options={nunchakuModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
                 <SelectInput label="VAE Model" value={options.comfyNunchakuVae || ''} onChange={handleOptionChange('comfyNunchakuVae')} options={comfyVaes.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
                 <SelectInput label="CLIP L Model" value={options.comfyNunchakuClipL || ''} onChange={handleOptionChange('comfyNunchakuClipL')} options={comfyClips.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
-                <SelectInput label="T5-XXL Model" value={options.comfyNunchakuT5XXL || ''} onChange={handleOptionChange('comfyNunchakuT5XXL')} options={comfyClips.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                <SelectInput label="T5-XXL Model" value={options.comfyNunchakuT5XXL || ''} onChange={handleOptionChange('comfyNunchakuT5XXL')} options={t5SafetensorEncoderModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
             </OptionSection>
 
              <OptionSection title="Prompt">
@@ -906,6 +1002,86 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             </OptionSection>
         </>
     );
+    
+    const renderFluxKreaOptions = () => (
+        <>
+            <OptionSection title="Flux Krea Models">
+                <SelectInput label="Main GGUF Model" value={options.comfyFluxKreaModel || ''} onChange={handleOptionChange('comfyFluxKreaModel')} options={comfyGgufModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                <SelectInput label="T5 Encoder GGUF" value={options.comfyFluxKreaClipT5 || ''} onChange={handleOptionChange('comfyFluxKreaClipT5')} options={t5GgufEncoderModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                <SelectInput label="CLIP L Model" value={options.comfyFluxKreaClipL || ''} onChange={handleOptionChange('comfyFluxKreaClipL')} options={comfyClips.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                <SelectInput label="VAE Model" value={options.comfyFluxKreaVae || ''} onChange={handleOptionChange('comfyFluxKreaVae')} options={comfyVaes.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+            </OptionSection>
+
+            <OptionSection title="Prompt & Core">
+                <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea={true} placeholder="A photorealistic portrait of a person..." />
+                <TextInput label="Negative Prompt" value={options.comfyNegativePrompt || ''} onChange={handleOptionChange('comfyNegativePrompt')} disabled={true} isTextArea={true} tooltip="This workflow uses a ConditioningZeroOut node, so a negative prompt is not used."/>
+                <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={ASPECT_RATIO_OPTIONS} disabled={isDisabled} />
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary">Number of Images: {options.numImages}</label>
+                    <input type="range" min="1" max="8" step="1" value={options.numImages} onChange={handleNumberInputChange('numImages')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+                 <div>
+                    <label className="block text-sm font-medium text-text-secondary">Steps (Initial Pass): {options.comfySteps}</label>
+                    <input type="range" min="10" max="40" step="1" value={options.comfySteps} onChange={handleSliderChange('comfySteps')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+            </OptionSection>
+            
+            {renderStyleSection()}
+
+            <OptionSection title="Flux Krea LoRAs">
+                <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                    <CheckboxSlider
+                        label="Use p1x4r0ma_woman LoRA"
+                        isChecked={!!options.useP1x4r0maWomanLora}
+                        onCheckboxChange={handleOptionChange('useP1x4r0maWomanLora')}
+                        sliderValue={options.p1x4r0maWomanLoraStrength || 0}
+                        onSliderChange={handleSliderChange('p1x4r0maWomanLoraStrength')}
+                        min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
+                    {options.useP1x4r0maWomanLora && <SelectInput label="" value={options.p1x4r0maWomanLoraName || ''} onChange={handleOptionChange('p1x4r0maWomanLoraName')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />}
+                </div>
+                 <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                    <CheckboxSlider
+                        label="Use nipplediffusion LoRA"
+                        isChecked={!!options.useNippleDiffusionLora}
+                        onCheckboxChange={handleOptionChange('useNippleDiffusionLora')}
+                        sliderValue={options.nippleDiffusionLoraStrength || 0}
+                        onSliderChange={handleSliderChange('nippleDiffusionLoraStrength')}
+                        min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
+                    {options.useNippleDiffusionLora && <SelectInput label="" value={options.nippleDiffusionLoraName || ''} onChange={handleOptionChange('nippleDiffusionLoraName')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />}
+                </div>
+                 <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                    <CheckboxSlider
+                        label="Use pussydiffusion LoRA"
+                        isChecked={!!options.usePussyDiffusionLora}
+                        onCheckboxChange={handleOptionChange('usePussyDiffusionLora')}
+                        sliderValue={options.pussyDiffusionLoraStrength || 0}
+                        onSliderChange={handleSliderChange('pussyDiffusionLoraStrength')}
+                        min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
+                    {options.usePussyDiffusionLora && <SelectInput label="" value={options.pussyDiffusionLoraName || ''} onChange={handleOptionChange('pussyDiffusionLoraName')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />}
+                </div>
+            </OptionSection>
+
+            <OptionSection title="Upscaler / Refiner">
+                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                    <input type="checkbox" checked={options.comfyFluxKreaUseUpscaler} onChange={handleOptionChange('comfyFluxKreaUseUpscaler')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
+                    Enable Upscaler
+                </label>
+                {options.comfyFluxKreaUseUpscaler && (
+                    <div className="space-y-4 pl-4 border-l-2 border-border-primary">
+                        <SelectInput label="Upscale Model" value={options.comfyFluxKreaUpscaleModel || ''} onChange={handleOptionChange('comfyFluxKreaUpscaleModel')} options={comfyUpscaleModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                         <div>
+                            <label className="block text-sm font-medium text-text-secondary">Steps (Upscaler Pass): {options.comfyFluxKreaUpscalerSteps}</label>
+                            <input type="range" min="5" max="25" step="1" value={options.comfyFluxKreaUpscalerSteps} onChange={handleSliderChange('comfyFluxKreaUpscalerSteps')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-text-secondary">Denoise Strength: {options.comfyFluxKreaDenoise}</label>
+                            <input type="range" min="0.1" max="1.0" step="0.05" value={options.comfyFluxKreaDenoise} onChange={handleSliderChange('comfyFluxKreaDenoise')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                        </div>
+                    </div>
+                )}
+            </OptionSection>
+        </>
+    );
 
     const renderComfyUIOptions = () => (
       <>
@@ -914,7 +1090,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 <SpinnerIcon className="w-8 h-8 animate-spin mr-2" />
                 <span>Loading ComfyUI models...</span>
             </div>
-        ) : comfyModels.length === 0 && nunchakuModels.length === 0 ? (
+        ) : comfyModels.length === 0 && nunchakuModels.length === 0 && comfyGgufModels.length === 0 ? (
             <div className="bg-danger-bg text-danger p-4 rounded-lg text-sm">
                 Could not load any ComfyUI models. Ensure your server is running and accessible. Check the connection in the header.
             </div>
@@ -929,6 +1105,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             {label: 'SD 1.5', value: 'sd1.5'},
                             {label: 'SDXL', value: 'sdxl'}, 
                             {label: 'FLUX', value: 'flux'},
+                            {label: 'Flux Krea', value: 'flux-krea'},
                             {label: 'WAN 2.2 Image', value: 'wan2.2'},
                             {label: 'Nunchaku Kontext Flux', value: 'nunchaku-kontext-flux'},
                             {label: 'Nunchaku Flux Image', value: 'nunchaku-flux-image'}
@@ -1014,6 +1191,20 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                 <p>Your ComfyUI server appears to be missing required custom nodes for this workflow.</p>
                                  <ul className="list-disc list-inside text-xs space-y-1">
                                     <li>Ensure the <strong>ComfyUI-nunchaku</strong> custom node (with all its nodes like NunchakuTextEncoderLoader) is installed via the ComfyUI Manager.</li>
+                                </ul>
+                            </div>
+                        );
+                    } else if (options.comfyModelType === 'flux-krea') {
+                         const isFluxKreaReady = !!comfyUIObjectInfo?.DualCLIPLoaderGGUF && !!comfyUIObjectInfo?.["Power Lora Loader (rgthree)"];
+                         if (isFluxKreaReady) {
+                            return renderFluxKreaOptions();
+                         }
+                         return (
+                            <div className="bg-danger-bg text-danger p-4 rounded-lg text-sm space-y-2 mt-4">
+                                <h4 className="font-bold flex items-center gap-2"><WarningIcon className="w-5 h-5"/>Flux Krea Workflow Not Available</h4>
+                                <p>Your ComfyUI server appears to be missing required custom nodes for this workflow.</p>
+                                 <ul className="list-disc list-inside text-xs space-y-1">
+                                    <li>Ensure <strong>ComfyUI-GGUF</strong> and <strong>rgthree-comfy</strong> nodes are installed via the ComfyUI Manager.</li>
                                 </ul>
                             </div>
                         );

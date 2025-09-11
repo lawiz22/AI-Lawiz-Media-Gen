@@ -1,4 +1,5 @@
-export const MAX_IMAGES = 13;
+// Fix: Removed circular dependency by defining MAX_IMAGES constant directly.
+export const MAX_IMAGES = 8;
 
 // Obfuscated poses to protect intellectual property
 export const POSES = [
@@ -540,5 +541,267 @@ export const COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE = {
     "inputs": { "images": ["8", 0] },
     "class_type": "PreviewImage",
     "_meta": { "title": "Preview Image" }
+  }
+};
+
+// --- ComfyUI Flux Krea Workflow ---
+export const COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE = {
+  "6": {
+    "inputs": {
+      "text": "a young woman",
+      "clip": [
+        "191",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "26": {
+    "inputs": {
+      "clip_name2": "t5-v1_1-xxl-encoder-Q5_K_M.gguf",
+      "clip_name1": "clip_l.safetensors",
+      "type": "flux"
+    },
+    "class_type": "DualCLIPLoaderGGUF"
+  },
+  "27": {
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "51": {
+    "inputs": {
+      "seed": 712880534045960,
+      "steps": 10,
+      "cfg": 1,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 0.8,
+      "model": [
+        "191",
+        0
+      ],
+      "positive": [
+        "217",
+        0
+      ],
+      "negative": [
+        "187",
+        0
+      ],
+      "latent_image": [
+        "110",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "mode": 2
+  },
+  "100": {
+    "inputs": {
+      "upscale_model": [
+        "101",
+        0
+      ],
+      "image": [
+        "164",
+        0
+      ]
+    },
+    "class_type": "ImageUpscaleWithModel",
+    "mode": 2
+  },
+  "101": {
+    "inputs": {
+      "model_name": "4x_NMKD-Siax_200k.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "mode": 2
+  },
+  "102": {
+    "inputs": {
+      "scale_by": 0.5,
+      "upscale_method": "lanczos",
+      "image": [
+        "100",
+        0
+      ]
+    },
+    "class_type": "ImageScaleBy",
+    "mode": 2
+  },
+  "110": {
+    "inputs": {
+      "pixels": [
+        "102",
+        0
+      ],
+      "vae": [
+        "27",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "mode": 2
+  },
+  "111": {
+    "inputs": {
+      "samples": [
+        "51",
+        0
+      ],
+      "vae": [
+        "27",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "mode": 2
+  },
+  "162": {
+    "inputs": {
+      "width": 896,
+      "height": 1216,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage"
+  },
+  "163": {
+    "inputs": {
+      "seed": 5000,
+      "steps": 20,
+      "cfg": 1,
+      "sampler_name": "res_2s",
+      "scheduler": "bong_tangent",
+      "denoise": 1,
+      "model": [
+        "191",
+        0
+      ],
+      "positive": [
+        "218",
+        0
+      ],
+      "negative": [
+        "187",
+        0
+      ],
+      "latent_image": [
+        "162",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "164": {
+    "inputs": {
+      "samples": [
+        "163",
+        0
+      ],
+      "vae": [
+        "27",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "170": {
+    "inputs": {
+      "filename_prefix": "UP",
+      "images": [
+        "111",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "title": "Save Image UPSCALED",
+    "mode": 2
+  },
+  "171": {
+    "inputs": {
+      "filename_prefix": "img",
+      "images": [
+        "164",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "title": "Save Image Original"
+  },
+  "186": {
+    "inputs": {
+      "unet_name": "flux1-krea-dev-Q5_K_M.gguf"
+    },
+    "class_type": "UnetLoaderGGUF"
+  },
+  "187": {
+    "inputs": {
+      "conditioning": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "191": {
+    "inputs": {
+      "model": [
+        "186",
+        0
+      ],
+      "clip": [
+        "26",
+        0
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "properties": {
+      "Show Strengths": "Single Strength"
+    },
+    "widgets_values": [
+      {},
+      {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      {
+        "on": false,
+        "lora": "p1x4r0ma_woman.safetensors",
+        "strength": 0.9
+      },
+      {
+        "on": true,
+        "lora": "nipplediffusion-saggy-f1.safetensors",
+        "strength": 1
+      },
+      {
+        "on": false,
+        "lora": "pussydiffusion-f1.safetensors",
+        "strength": 1
+      },
+      {},
+      ""
+    ]
+  },
+  "217": {
+    "inputs": {
+      "guidance": 3.5,
+      "conditioning": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "FluxGuidance"
+  },
+  "218": {
+    "inputs": {
+      "guidance": 3.5,
+      "conditioning": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "FluxGuidance"
   }
 };

@@ -5,7 +5,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { GenerationOptions } from '../types';
 import { fileToGenerativePart } from "../utils/imageUtils";
-import { COMFYUI_SD15_WORKFLOW_TEMPLATE, COMFYUI_WORKFLOW_TEMPLATE, COMFYUI_WAN22_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE } from '../constants';
+import { COMFYUI_SD15_WORKFLOW_TEMPLATE, COMFYUI_WORKFLOW_TEMPLATE, COMFYUI_WAN22_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE, COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE } from '../constants';
 
 // --- State Management ---
 let objectInfoCache: any | null = null;
@@ -341,6 +341,69 @@ const buildNunchakuFluxImageWorkflow = (options: GenerationOptions): any => {
     return workflow;
 };
 
+const buildFluxKreaWorkflow = (options: GenerationOptions): any => {
+    const workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE));
+
+    // Models
+    workflow["186"].inputs.unet_name = options.comfyFluxKreaModel;
+    workflow["26"].inputs.clip_name2 = options.comfyFluxKreaClipT5;
+    workflow["26"].inputs.clip_name1 = options.comfyFluxKreaClipL;
+    workflow["27"].inputs.vae_name = options.comfyFluxKreaVae;
+    workflow["101"].inputs.model_name = options.comfyFluxKreaUpscaleModel;
+
+    // Prompt
+    workflow["6"].inputs.text = options.comfyPrompt || '';
+
+    // Resolution
+    const [wRatio, hRatio] = options.aspectRatio.split(':').map(Number);
+    const megapixels = 1.0;
+    // Calculate resolution maintaining aspect ratio, aiming for ~1 megapixel total.
+    // Ensure final dimensions are divisible by 64 for compatibility.
+    const height = Math.round(Math.sqrt(megapixels * 1024 * 1024 / (wRatio / hRatio)) / 64) * 64;
+    const width = Math.round(height * (wRatio / hRatio) / 64) * 64;
+    workflow["162"].inputs.width = width;
+    workflow["162"].inputs.height = height;
+
+    // Parameters
+    workflow["163"].inputs.steps = options.comfySteps;
+
+    // LoRAs
+    const powerLoraNode = workflow["191"];
+    powerLoraNode.widgets_values[2].on = !!options.useP1x4r0maWomanLora;
+    powerLoraNode.widgets_values[2].strength = options.p1x4r0maWomanLoraStrength;
+    powerLoraNode.widgets_values[2].lora = options.p1x4r0maWomanLoraName;
+
+    powerLoraNode.widgets_values[3].on = !!options.useNippleDiffusionLora;
+    powerLoraNode.widgets_values[3].strength = options.nippleDiffusionLoraStrength;
+    powerLoraNode.widgets_values[3].lora = options.nippleDiffusionLoraName;
+    
+    powerLoraNode.widgets_values[4].on = !!options.usePussyDiffusionLora;
+    powerLoraNode.widgets_values[4].strength = options.pussyDiffusionLoraStrength;
+    powerLoraNode.widgets_values[4].lora = options.pussyDiffusionLoraName;
+    
+    // Upscaler Toggle Logic
+    const upscalerNodeIds = ["51", "100", "101", "102", "110", "111", "170"];
+    if (options.comfyFluxKreaUseUpscaler) {
+        // Enable upscaler path
+        for (const id of upscalerNodeIds) {
+            if (workflow[id]) workflow[id].mode = 0; // Set to "Always"
+        }
+        workflow["171"].mode = 2; // Mute original save
+        
+        // Set upscaler parameters
+        workflow["51"].inputs.steps = options.comfyFluxKreaUpscalerSteps;
+        workflow["51"].inputs.denoise = options.comfyFluxKreaDenoise;
+    } else {
+        // Disable upscaler path
+        for (const id of upscalerNodeIds) {
+            if (workflow[id]) workflow[id].mode = 2; // Set to "Muted"
+        }
+        workflow["171"].mode = 0; // Enable original save
+    }
+
+    return workflow;
+};
+
 
 const buildWorkflow = (options: GenerationOptions, sourceImageFilename?: string | null): any => {
     if (options.comfyModelType === 'wan2.2') {
@@ -352,6 +415,9 @@ const buildWorkflow = (options: GenerationOptions, sourceImageFilename?: string 
     }
     if (options.comfyModelType === 'nunchaku-flux-image') {
         return buildNunchakuFluxImageWorkflow(options);
+    }
+    if (options.comfyModelType === 'flux-krea') {
+        return buildFluxKreaWorkflow(options);
     }
 
     const template = options.comfyModelType === 'sd1.5' 
@@ -443,7 +509,7 @@ export const generateComfyUIPromptFromSource = async (sourceImage: File, modelTy
     const basePrompt = "Analyze this image of a person and generate a descriptive text prompt for a text-to-image AI model. Focus on subject, expression, clothing, and background style.";
     
     let systemInstruction;
-    if (modelType === 'flux' || modelType === 'nunchaku-kontext-flux' || modelType === 'nunchaku-flux-image') {
+    if (modelType === 'flux' || modelType === 'nunchaku-kontext-flux' || modelType === 'nunchaku-flux-image' || modelType === 'flux-krea') {
         systemInstruction = "You are a prompt generator for the FLUX.1 image model. Create a highly detailed, narrative prompt. Do not use commas; instead, use natural language conjunctions like 'and', 'with', 'wearing a'. Describe the scene, mood, and lighting in a conversational style.";
     } else if (modelType === 'wan2.2') {
          systemInstruction = "You are a prompt generator for the WAN 2.2 image model. Create a detailed, artistic prompt focusing on atmosphere, color, and emotional tone. Describe the subject's appearance, clothing, and the environment with rich, evocative language. Mention camera angles and lighting styles like 'cinematic lighting' or 'soft focus'.";
