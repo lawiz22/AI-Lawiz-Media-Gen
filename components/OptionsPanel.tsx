@@ -136,11 +136,40 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
     const handleOptionChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
+
+        const getStylePrefix = (opts: GenerationOptions) => {
+            if (opts.imageStyle === 'photorealistic') {
+                return `${opts.photoStyle}, ${opts.eraStyle}, `;
+            }
+            if (opts.imageStyle && opts.imageStyle !== 'photorealistic') {
+                return `${opts.imageStyle}, `;
+            }
+            return '';
+        };
+
+        if (options.provider === 'comfyui' && ['imageStyle', 'photoStyle', 'eraStyle'].includes(field)) {
+            setOptions(prev => {
+                const oldPrefix = getStylePrefix(prev);
+                const tempOptions = { ...prev, [field]: value as string };
+                const newPrefix = getStylePrefix(tempOptions);
+                
+                let currentPrompt = prev.comfyPrompt || '';
+                
+                if (oldPrefix && currentPrompt.startsWith(oldPrefix)) {
+                    currentPrompt = currentPrompt.substring(oldPrefix.length);
+                }
+                
+                const newPrompt = `${newPrefix}${currentPrompt}`;
+                
+                return { ...prev, [field]: value, comfyPrompt: newPrompt };
+            });
+            return;
+        }
         
         if (field === 'comfyModelType') {
             const newModelType = value as 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux';
             if (newModelType === 'flux') {
-                const specificFluxModel = comfyModels.find((m: string) => m === 'flux1-dev-fp8.safetensors');
+                const specificFluxModel = comfyModels.find((m: string) => m === 'flux1-dev-fp8.safensors');
                 const genericFluxModel = comfyModels.find((m: string) => m.toLowerCase().includes('flux'));
                 
                 setOptions(prev => ({
@@ -299,6 +328,23 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         </div>
     );
     
+    const renderStyleSection = () => (
+        <OptionSection title="Style">
+            <SelectInput label="Artistic Style" value={options.imageStyle} onChange={handleOptionChange('imageStyle')} options={IMAGE_STYLE_OPTIONS} disabled={isDisabled} />
+            {options.imageStyle === 'photorealistic' ? (
+                <>
+                    <SelectInput label="Photo Style" value={options.photoStyle} onChange={handleOptionChange('photoStyle')} options={PHOTO_STYLE_OPTIONS} disabled={isDisabled} />
+                    <SelectInput label="Era / Theme" value={options.eraStyle} onChange={handleOptionChange('eraStyle')} options={ERA_STYLE_OPTIONS} disabled={isDisabled} />
+                </>
+            ) : (
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary">Creativity: {options.creativity}</label>
+                    <input type="range" min="0" max="1" step="0.1" value={options.creativity} onChange={handleSliderChange('creativity')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+            )}
+        </OptionSection>
+    );
+
     const renderGeminiOptions = () => (
       <>
         <OptionSection title="Core Settings">
@@ -440,20 +486,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             )}
         </OptionSection>
 
-        <OptionSection title="Style">
-            <SelectInput label="Artistic Style" value={options.imageStyle} onChange={handleOptionChange('imageStyle')} options={IMAGE_STYLE_OPTIONS} disabled={isDisabled} />
-            {options.imageStyle === 'photorealistic' ? (
-                <>
-                    <SelectInput label="Photo Style" value={options.photoStyle} onChange={handleOptionChange('photoStyle')} options={PHOTO_STYLE_OPTIONS} disabled={isDisabled} />
-                    <SelectInput label="Era / Theme" value={options.eraStyle} onChange={handleOptionChange('eraStyle')} options={ERA_STYLE_OPTIONS} disabled={isDisabled} />
-                </>
-            ) : (
-                <div>
-                    <label className="block text-sm font-medium text-text-secondary">Creativity: {options.creativity}</label>
-                    <input type="range" min="0" max="1" step="0.1" value={options.creativity} onChange={handleSliderChange('creativity')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
-                </div>
-            )}
-        </OptionSection>
+        {renderStyleSection()}
         
         <OptionSection title="Text Overlay (Optional)">
              <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
@@ -514,6 +547,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     </button>
                 }
             </OptionSection>
+            
+            {renderStyleSection()}
 
             <OptionSection title="Parameters">
                 <div>
@@ -564,6 +599,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     <input type="range" min="1" max="8" step="1" value={options.numImages} onChange={handleNumberInputChange('numImages')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
                 </div>
             </OptionSection>
+            
+            {renderStyleSection()}
 
             <OptionSection title="WAN 2.2 LoRAs">
                 <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
@@ -655,6 +692,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     <input type="range" min="1" max="8" step="1" value={options.numImages} onChange={handleNumberInputChange('numImages')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
                 </div>
             </OptionSection>
+
+            {renderStyleSection()}
 
             <OptionSection title="Nunchaku LoRAs">
                 <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">

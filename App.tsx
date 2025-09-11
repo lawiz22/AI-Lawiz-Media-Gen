@@ -303,13 +303,18 @@ function App() {
       
       if (images.length > 0 && sourceImage) {
         const sourceImageForHistory = await fileToResizedDataUrl(sourceImage, 512);
-        const thumbnail = await dataUrlToThumbnail(sourceImageForHistory, 128);
+        const sourceThumbnail = await dataUrlToThumbnail(sourceImageForHistory, 128);
+
+        // Create thumbnails for all generated images to save space in localStorage
+        const generatedThumbnails = await Promise.all(
+          images.map(imgDataUrl => dataUrlToThumbnail(imgDataUrl, 128))
+        );
 
         saveGenerationToHistory({
           timestamp: new Date().toISOString(),
-          sourceImage: thumbnail,
+          sourceImage: sourceThumbnail,
           options: options,
-          generatedImages: images,
+          generatedImages: generatedThumbnails, // Save thumbnails instead of full images
         });
       }
       setGeneratedImages(images);
