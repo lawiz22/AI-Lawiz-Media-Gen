@@ -1,5 +1,5 @@
 {
-  "version": "1.39",
-  "date": "2024-08-07T10:00:00Z",
-  "changes": "Rebranded the application to 'Lawiz's AI Media Generator' to reflect a broader scope beyond portraits, in preparation for future video generation capabilities. This update includes a new logo, updated UI text, and revised internal prompts to use more general terms like 'media' and 'image'."
+  "version": "1.40",
+  "date": "2024-08-08T11:00:00Z",
+  "changes": "Prepared the UI for video generation by adding a new 'Video Generator' tab with a placeholder interface. The existing generator has been renamed to 'Image Generator' for clarity, setting the stage for future video features."
 }
