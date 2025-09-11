@@ -667,6 +667,22 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             </OptionSection>
             
             {renderStyleSection()}
+            
+            <OptionSection title="LoRA">
+                <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                    <CheckboxSlider
+                        label="Use LoRA"
+                        isChecked={!!options.comfySdxlUseLora}
+                        onCheckboxChange={handleOptionChange('comfySdxlUseLora')}
+                        sliderValue={options.comfySdxlLoraStrength || 0}
+                        onSliderChange={handleSliderChange('comfySdxlLoraStrength')}
+                        min={0} max={2} step={0.05}
+                        disabled={isDisabled}
+                        sliderLabel="Strength"
+                    />
+                    {options.comfySdxlUseLora && <SelectInput label="" value={options.comfySdxlLoraName || ''} onChange={handleOptionChange('comfySdxlLoraName')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />}
+                </div>
+            </OptionSection>
 
             <OptionSection title="Parameters">
                 <div>
@@ -906,7 +922,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             </OptionSection>
 
              <OptionSection title="Prompt">
-                <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea={true} placeholder="e.g., A photorealistic portrait of a person..." />
+                <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea={true} placeholder="A photorealistic portrait of a person..." />
                 <button onClick={onGeneratePrompt} disabled={!sourceImage || isGeneratingPrompt || isDisabled} className="w-full text-sm flex items-center justify-center gap-2 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     {isGeneratingPrompt ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <GenerateIcon className="w-4 h-4"/>}
                     {isGeneratingPrompt ? 'Generating...' : 'Generate from Source Image'}

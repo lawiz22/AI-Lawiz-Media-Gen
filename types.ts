@@ -29,6 +29,9 @@ export interface GenerationOptions {
   comfyPrompt?: string;
   comfyNegativePrompt?: string;
   comfyFluxNodeName?: string | null;
+  comfySdxlUseLora?: boolean;
+  comfySdxlLoraName?: string;
+  comfySdxlLoraStrength?: number;
 
   // ComfyUI WAN 2.2 specific options
   comfyWanHighNoiseModel?: string;

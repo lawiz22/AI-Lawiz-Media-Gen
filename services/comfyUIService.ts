@@ -480,6 +480,34 @@ const buildWorkflow = (options: GenerationOptions, sourceImageFilename?: string 
         };
         workflow['8'].inputs.samples = ["20", 0];
     }
+    
+    // --- LORA INJECTION ---
+    if (options.comfySdxlUseLora && options.comfySdxlLoraName) {
+        // 1. Create the LoRA Loader node
+        workflow['10'] = {
+            "inputs": {
+                "lora_name": options.comfySdxlLoraName,
+                "strength_model": options.comfySdxlLoraStrength,
+                "strength_clip": options.comfySdxlLoraStrength,
+                "model": ["4", 0], // Output of CheckpointLoader
+                "clip": ["4", 1]  // Output of CheckpointLoader
+            },
+            "class_type": "LoraLoader",
+            "_meta": { "title": "LoRA Loader" }
+        };
+
+        // 2. Re-wire the KSampler to use the LoRA's model output
+        if (workflow['3']) { // Standard KSampler
+            workflow['3'].inputs.model = ["10", 0];
+        } else if (workflow['20']) { // FLUX Sampler
+             workflow['20'].inputs.model = ["10", 0];
+        }
+
+        // 3. Re-wire the prompt encoders to use the LoRA's clip output
+        workflow['6'].inputs.clip = ["10", 1];
+        workflow['7'].inputs.clip = ["10", 1];
+    }
+
 
     return workflow;
 };

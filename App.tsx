@@ -51,6 +51,10 @@ const initialOptions: GenerationOptions = {
   comfyPrompt: '',
   comfyNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed',
   comfyFluxNodeName: null,
+  comfySdxlUseLora: false,
+  comfySdxlLoraName: '',
+  comfySdxlLoraStrength: 0.8,
+
 
   // ComfyUI WAN 2.2 defaults
   comfyWanHighNoiseModel: 'Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf',
