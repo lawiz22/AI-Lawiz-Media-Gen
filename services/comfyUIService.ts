@@ -570,6 +570,41 @@ export const extractBackgroundPromptFromImage = async (
     }
 };
 
+export const extractSubjectPromptFromImage = async (
+  sourceImage: File,
+  modelType: 'sd1.5' | 'sdxl' | 'flux'
+): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const imagePart = await fileToGenerativePart(sourceImage);
+    const basePrompt = "Analyze this image and generate a descriptive text prompt for a text-to-image AI model. Focus exclusively on the main subject(s) (people, animals, objects). Describe their appearance, clothing, pose, expression, and any objects they are interacting with. Completely ignore the background and environment.";
+    
+    let systemInstruction;
+    if (modelType === 'flux') {
+        systemInstruction = "You are a prompt generator for the FLUX.1 image model. Describe only the main subject(s) of the image in a highly detailed, narrative style. Do not use commas; use natural conjunctions. Focus on their appearance, clothing, pose, and expression.";
+    } else if (modelType === 'sdxl') {
+        systemInstruction = "You are a prompt generator for the Stable Diffusion (SDXL) image model. Describe only the main subject(s) of the image using concise, comma-separated keywords and phrases. Keep the prompt under 75 words and focus on key details like clothing, pose, and appearance.";
+    } else { // 'sd1.5'
+        systemInstruction = "You are a prompt generator for Stable Diffusion 1.5. Describe only the main subject(s) of the image using very simple, direct, comma-separated keywords. Be extremely concise and prioritize basic elements like clothing type and main action.";
+    }
+
+    try {
+        const result = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [imagePart, { text: basePrompt }] },
+            config: {
+                systemInstruction: systemInstruction,
+            },
+        });
+
+        const text = result.text.trim();
+        if (!text) throw new Error("The AI did not return a prompt. The image might be unsupported.");
+        return text;
+    } catch (error: any) {
+        console.error("Error extracting subject prompt:", error);
+        throw new Error(error.message || "Failed to extract subject prompt from image.");
+    }
+};
+
 export const generateComfyUIPortraits = async (
     sourceImage: File | null,
     options: GenerationOptions,
