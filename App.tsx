@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Login } from './components/Login';
@@ -88,6 +87,8 @@ const initialOptions: GenerationOptions = {
   comfyNunchakuCacheThreshold: 0.12,
   comfyNunchakuCpuOffload: 'enable',
   comfyNunchakuAttention: 'nunchaku-fp16',
+  comfyNunchakuBaseShift: 1.0,
+  comfyNunchakuMaxShift: 1.15,
 };
 
 function App() {

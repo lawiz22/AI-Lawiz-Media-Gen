@@ -1,5 +1,3 @@
-
-
 export const MAX_IMAGES = 13;
 
 // Obfuscated poses to protect intellectual property
@@ -445,4 +443,102 @@ export const COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE = {
         "class_type": "LoadImage",
         "_meta": { "title": "Load Source Image" }
     }
+};
+
+// --- ComfyUI Nunchaku Flux Image Workflow ---
+export const COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE = {
+  "6": {
+    "inputs": { "text": "a prompt", "clip": ["44", 0] },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Positive Prompt" }
+  },
+  "8": {
+    "inputs": { "samples": ["13", 0], "vae": ["10", 0] },
+    "class_type": "VAEDecode",
+    "_meta": { "title": "VAEDecode" }
+  },
+  "10": {
+    "inputs": { "vae_name": "ae.safetensors" },
+    "class_type": "VAELoader",
+    "_meta": { "title": "VAELoader" }
+  },
+  "13": {
+    "inputs": { "noise": ["25", 0], "guider": ["22", 0], "sampler": ["16", 0], "sigmas": ["17", 0], "latent_image": ["27", 0] },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": { "title": "SamplerCustomAdvanced" }
+  },
+  "16": {
+    "inputs": { "sampler_name": "res_2s" },
+    "class_type": "KSamplerSelect",
+    "_meta": { "title": "KSamplerSelect" }
+  },
+  "17": {
+    "inputs": { "scheduler": "bong_tangent", "steps": 10, "end_step": 1, "model": ["30", 0], "denoise": 1 },
+    "class_type": "BasicScheduler",
+    "_meta": { "title": "BasicScheduler" }
+  },
+  "22": {
+    "inputs": { "conditioning": ["26", 0], "model": ["30", 0] },
+    "class_type": "BasicGuider",
+    "_meta": { "title": "BasicGuider" }
+  },
+  "25": {
+    "inputs": { "noise_seed": 50998438702246, "control_after_generate": "randomize" },
+    "class_type": "RandomNoise",
+    "_meta": { "title": "RandomNoise" }
+  },
+  "26": {
+    "inputs": { "guidance": 3.5, "conditioning": ["6", 0] },
+    "class_type": "FluxGuidance",
+    "_meta": { "title": "FluxGuidance" }
+  },
+  "27": {
+    "inputs": { "width": 768, "height": 768, "batch_size": 1 },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": { "title": "EmptySD3LatentImage" }
+  },
+  "30": {
+    "inputs": { "base_shift": 1.0, "max_shift": 1.15, "gamma": 0.5, "width": 768, "height": 768, "model": ["47", 0] },
+    "class_type": "ModelSamplingFlux",
+    "_meta": { "title": "ModelSamplingFlux" }
+  },
+  "44": {
+    "inputs": {
+      "behavior": "disable",
+      "text_encoder1": "clip_l.safetensors",
+      "text_encoder2": "t5xxl_fp16.safetensors",
+      "text_projection_path": "none",
+      "model_type": "flux",
+      "t5_min_length": 512,
+      "use_4bit_t5": "disable",
+      "int4_model": "none"
+    },
+    "class_type": "NunchakuTextEncoderLoader",
+    "_meta": { "title": "NunchakuTextEncoderLoader" }
+  },
+  "45": {
+    "inputs": { "attention": "nunchaku-fp16", "cache_threshold": 0, "cpu_offload": "enable", "data_type": "bfloat16", "device_id": 0, "model_path": "svdq-int4_r32-flux.1-kontext-dev.safetensors", "precision": "nunchaku-fp16", "turbo": 0 },
+    "class_type": "NunchakuFluxDiTLoader",
+    "_meta": { "title": "NunchakuFluxDiTLoader" }
+  },
+  "46": {
+    "inputs": { "lora_name": "flux-turbo.safetensors", "lora_strength": 1, "model": ["45", 0] },
+    "class_type": "NunchakuFluxLoraLoader",
+    "_meta": { "title": "Turbo LoRA" }
+  },
+  "47": {
+    "inputs": { "lora_name": "flux_nipples_saggy_breasts.safetensors", "lora_strength": 1, "model": ["48", 0] },
+    "class_type": "NunchakuFluxLoraLoader",
+    "_meta": { "title": "Detail LoRA" }
+  },
+  "48": {
+    "inputs": { "lora_name": "JD3s_Nudify_Kontext.safetensors", "lora_strength": 1.12, "model": ["46", 0] },
+    "class_type": "NunchakuFluxLoraLoader",
+    "_meta": { "title": "Nudify LoRA" }
+  },
+  "99": {
+    "inputs": { "images": ["8", 0] },
+    "class_type": "PreviewImage",
+    "_meta": { "title": "Preview Image" }
+  }
 };

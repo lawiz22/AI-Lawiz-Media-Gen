@@ -19,7 +19,7 @@ export interface GenerationOptions {
   textObjectPrompt?: string;
 
   // ComfyUI specific options
-  comfyModelType?: 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux';
+  comfyModelType?: 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image';
   comfyFluxGuidance?: number;
   comfyModel?: string;
   comfySteps?: number;
@@ -66,6 +66,8 @@ export interface GenerationOptions {
   comfyNunchakuCacheThreshold?: number;
   comfyNunchakuCpuOffload?: 'auto' | 'enable' | 'disable';
   comfyNunchakuAttention?: string;
+  comfyNunchakuBaseShift?: number;
+  comfyNunchakuMaxShift?: number;
 }
 
 export interface User {

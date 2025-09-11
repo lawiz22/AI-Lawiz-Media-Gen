@@ -118,11 +118,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     
     // Standard model lists
     const comfyModels = useMemo(() => comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || [], [comfyUIObjectInfo]);
-    const comfySamplers = useMemo(() => comfyUIObjectInfo?.KSampler?.input?.required?.sampler_name?.[0] || [], [comfyUIObjectInfo]);
-    const comfySchedulers = useMemo(() => comfyUIObjectInfo?.KSampler?.input?.required?.scheduler?.[0] || [], [comfyUIObjectInfo]);
+    const comfySamplers = useMemo(() => comfyUIObjectInfo?.KSampler?.input?.required?.sampler_name?.[0] || comfyUIObjectInfo?.KSamplerSelect?.input?.required?.sampler_name?.[0] || [], [comfyUIObjectInfo]);
+    const comfySchedulers = useMemo(() => comfyUIObjectInfo?.KSampler?.input?.required?.scheduler?.[0] || comfyUIObjectInfo?.BasicScheduler?.input?.required?.scheduler?.[0] || [], [comfyUIObjectInfo]);
     const comfyLoras = useMemo(() => comfyUIObjectInfo?.LoraLoader?.input?.required?.lora_name?.[0] || comfyUIObjectInfo?.NunchakuFluxLoraLoader?.input?.required?.lora_name?.[0] || [], [comfyUIObjectInfo]);
     const comfyVaes = useMemo(() => comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name?.[0] || [], [comfyUIObjectInfo]);
-    const comfyClips = useMemo(() => comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name?.[0] || comfyUIObjectInfo?.DualCLIPLoader?.input?.required?.clip_name1?.[0] || [], [comfyUIObjectInfo]);
+    const comfyClips = useMemo(() => comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name?.[0] || comfyUIObjectInfo?.DualCLIPLoader?.input?.required?.clip_name1?.[0] || comfyUIObjectInfo?.NunchakuTextEncoderLoader?.input?.required?.text_encoder1?.[0] || [], [comfyUIObjectInfo]);
 
     // WAN 2.2 specific logic to handle text inputs vs dropdowns for GGUF models
     const ggufWidgetInfo = useMemo(() => comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name, [comfyUIObjectInfo]);
@@ -166,7 +166,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         }
         
         if (field === 'comfyModelType') {
-            const newModelType = value as 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux';
+            const newModelType = value as 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image';
             if (newModelType === 'sd1.5') {
                  const sd15Model = comfyModels.find((m: string) => m.toLowerCase().includes('1.5') || m.toLowerCase().includes('15') || m.toLowerCase().includes('realisticvision')) || (comfyModels.length > 0 ? comfyModels[0] : '');
                  setOptions(prev => ({
@@ -207,6 +207,18 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfySampler: 'euler',
                     comfyScheduler: 'simple',
                     comfyNegativePrompt: '',
+                }));
+            } else if (newModelType === 'nunchaku-flux-image') {
+                 setOptions(prev => ({
+                    ...prev,
+                    comfyModelType: 'nunchaku-flux-image',
+                    comfySteps: 10,
+                    comfySampler: 'res_2s',
+                    comfyScheduler: 'bong_tangent',
+                    comfyFluxGuidanceKontext: 3.5,
+                    comfyNegativePrompt: '', // This workflow has no negative prompt
+                    comfyNunchakuBaseShift: 1.0,
+                    comfyNunchakuMaxShift: 1.15,
                 }));
             } else { // Switching back to 'sdxl'
                 const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
@@ -788,6 +800,113 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         </>
     );
 
+    const renderNunchakuFluxImageOptions = () => (
+        <>
+            <OptionSection title="Nunchaku Flux Image Models">
+                <SelectInput label="Main Model" value={options.comfyNunchakuModel || ''} onChange={handleOptionChange('comfyNunchakuModel')} options={nunchakuModels.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                <SelectInput label="VAE Model" value={options.comfyNunchakuVae || ''} onChange={handleOptionChange('comfyNunchakuVae')} options={comfyVaes.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                <SelectInput label="CLIP L Model" value={options.comfyNunchakuClipL || ''} onChange={handleOptionChange('comfyNunchakuClipL')} options={comfyClips.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+                <SelectInput label="T5-XXL Model" value={options.comfyNunchakuT5XXL || ''} onChange={handleOptionChange('comfyNunchakuT5XXL')} options={comfyClips.map((m:string) => ({value: m, label: m}))} disabled={isDisabled} />
+            </OptionSection>
+
+             <OptionSection title="Prompt">
+                <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea={true} placeholder="e.g., A photorealistic portrait of a person..." />
+                <button onClick={onGeneratePrompt} disabled={!sourceImage || isGeneratingPrompt || isDisabled} className="w-full text-sm flex items-center justify-center gap-2 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isGeneratingPrompt ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <GenerateIcon className="w-4 h-4"/>}
+                    {isGeneratingPrompt ? 'Generating...' : 'Generate from Source Image'}
+                </button>
+                <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={ASPECT_RATIO_OPTIONS} disabled={isDisabled} />
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary">Number of Images: {options.numImages}</label>
+                    <input type="range" min="1" max="8" step="1" value={options.numImages} onChange={handleNumberInputChange('numImages')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+            </OptionSection>
+
+            {renderStyleSection()}
+
+            <OptionSection title="Nunchaku LoRAs">
+                <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                    <CheckboxSlider
+                        label="Use Turbo LoRA"
+                        isChecked={!!options.comfyNunchakuUseTurboLora}
+                        onCheckboxChange={handleOptionChange('comfyNunchakuUseTurboLora')}
+                        sliderValue={options.comfyNunchakuTurboLoraStrength || 0}
+                        onSliderChange={handleSliderChange('comfyNunchakuTurboLoraStrength')}
+                        min={0} max={2} step={0.1}
+                        disabled={isDisabled}
+                        sliderLabel="Strength"
+                    />
+                    {options.comfyNunchakuUseTurboLora && <SelectInput label="" value={options.comfyNunchakuTurboLoraName || ''} onChange={handleOptionChange('comfyNunchakuTurboLoraName')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />}
+                </div>
+                 <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                    <CheckboxSlider
+                        label="Use Nudify LoRA"
+                        isChecked={!!options.comfyNunchakuUseNudifyLora}
+                        onCheckboxChange={handleOptionChange('comfyNunchakuUseNudifyLora')}
+                        sliderValue={options.comfyNunchakuNudifyLoraStrength || 0}
+                        onSliderChange={handleSliderChange('comfyNunchakuNudifyLoraStrength')}
+                        min={0} max={2} step={0.1}
+                        disabled={isDisabled}
+                        sliderLabel="Strength"
+                    />
+                    {options.comfyNunchakuUseNudifyLora && <SelectInput label="" value={options.comfyNunchakuNudifyLoraName || ''} onChange={handleOptionChange('comfyNunchakuNudifyLoraName')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />}
+                </div>
+                <div className="space-y-4 p-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                    <CheckboxSlider
+                        label="Use Detail LoRA"
+                        isChecked={!!options.comfyNunchakuUseDetailLora}
+                        onCheckboxChange={handleOptionChange('comfyNunchakuUseDetailLora')}
+                        sliderValue={options.comfyNunchakuDetailLoraStrength || 0}
+                        onSliderChange={handleSliderChange('comfyNunchakuDetailLoraStrength')}
+                        min={0} max={2} step={0.1}
+                        disabled={isDisabled}
+                        sliderLabel="Strength"
+                    />
+                    {options.comfyNunchakuUseDetailLora && <SelectInput label="" value={options.comfyNunchakuDetailLoraName || ''} onChange={handleOptionChange('comfyNunchakuDetailLoraName')} options={comfyLoras.map((l:string) => ({value: l, label: l}))} disabled={isDisabled} />}
+                </div>
+            </OptionSection>
+
+            <OptionSection title="Nunchaku Parameters">
+                <SelectInput label="Sampler" value={options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={comfySamplers.map((s:string) => ({value: s, label: s}))} disabled={isDisabled} />
+                <SelectInput label="Scheduler" value={options.comfyScheduler || ''} onChange={handleOptionChange('comfyScheduler')} options={comfySchedulers.map((s:string) => ({value: s, label: s}))} disabled={isDisabled} />
+                 <div>
+                    <label className="block text-sm font-medium text-text-secondary">Steps: {options.comfySteps}</label>
+                    <input type="range" min="5" max="30" step="1" value={options.comfySteps} onChange={handleSliderChange('comfySteps')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+                 <div>
+                    <label className="block text-sm font-medium text-text-secondary">Flux Guidance: {options.comfyFluxGuidanceKontext}</label>
+                    <input type="range" min="1" max="10" step="0.1" value={options.comfyFluxGuidanceKontext} onChange={handleSliderChange('comfyFluxGuidanceKontext')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary">Base Shift: {options.comfyNunchakuBaseShift}</label>
+                    <input type="range" min="0" max="5" step="0.05" value={options.comfyNunchakuBaseShift} onChange={handleSliderChange('comfyNunchakuBaseShift')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary">Max Shift: {options.comfyNunchakuMaxShift}</label>
+                    <input type="range" min="0" max="5" step="0.05" value={options.comfyNunchakuMaxShift} onChange={handleSliderChange('comfyNunchakuMaxShift')} disabled={isDisabled} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                </div>
+                <SelectInput
+                    label="CPU Offload"
+                    value={options.comfyNunchakuCpuOffload || 'auto'}
+                    onChange={handleOptionChange('comfyNunchakuCpuOffload')}
+                    options={[
+                        { value: 'auto', label: 'Auto' },
+                        { value: 'enable', label: 'Enable' },
+                        { value: 'disable', label: 'Disable' },
+                    ]}
+                    disabled={isDisabled}
+                />
+                <SelectInput
+                    label="Attention"
+                    value={options.comfyNunchakuAttention || 'nunchaku-fp16'}
+                    onChange={handleOptionChange('comfyNunchakuAttention')}
+                    options={nunchakuAttentions.map((a: string) => ({ value: a, label: a }))}
+                    disabled={isDisabled}
+                />
+            </OptionSection>
+        </>
+    );
+
     const renderComfyUIOptions = () => (
       <>
         {comfyUIObjectInfo === null ? (
@@ -811,7 +930,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             {label: 'SDXL', value: 'sdxl'}, 
                             {label: 'FLUX', value: 'flux'},
                             {label: 'WAN 2.2 Image', value: 'wan2.2'},
-                            {label: 'Nunchaku Kontext Flux', value: 'nunchaku-kontext-flux'}
+                            {label: 'Nunchaku Kontext Flux', value: 'nunchaku-kontext-flux'},
+                            {label: 'Nunchaku Flux Image', value: 'nunchaku-flux-image'}
                         ]} 
                         disabled={isDisabled} 
                     />
@@ -880,6 +1000,20 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                 <p>Your ComfyUI server appears to be missing required custom nodes for this workflow.</p>
                                  <ul className="list-disc list-inside text-xs space-y-1">
                                     <li>Ensure the <strong>ComfyUI-nunchaku</strong> custom node is installed via the ComfyUI Manager.</li>
+                                </ul>
+                            </div>
+                        );
+                    } else if (options.comfyModelType === 'nunchaku-flux-image') {
+                         const isNunchakuReady = !!comfyUIObjectInfo?.NunchakuFluxDiTLoader && !!comfyUIObjectInfo?.NunchakuTextEncoderLoader;
+                         if (isNunchakuReady) {
+                            return renderNunchakuFluxImageOptions();
+                         }
+                         return (
+                            <div className="bg-danger-bg text-danger p-4 rounded-lg text-sm space-y-2 mt-4">
+                                <h4 className="font-bold flex items-center gap-2"><WarningIcon className="w-5 h-5"/>Nunchaku Workflow Not Available</h4>
+                                <p>Your ComfyUI server appears to be missing required custom nodes for this workflow.</p>
+                                 <ul className="list-disc list-inside text-xs space-y-1">
+                                    <li>Ensure the <strong>ComfyUI-nunchaku</strong> custom node (with all its nodes like NunchakuTextEncoderLoader) is installed via the ComfyUI Manager.</li>
                                 </ul>
                             </div>
                         );

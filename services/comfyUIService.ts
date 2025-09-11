@@ -5,7 +5,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { GenerationOptions } from '../types';
 import { fileToGenerativePart } from "../utils/imageUtils";
-import { COMFYUI_SD15_WORKFLOW_TEMPLATE, COMFYUI_WORKFLOW_TEMPLATE, COMFYUI_WAN22_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE } from '../constants';
+import { COMFYUI_SD15_WORKFLOW_TEMPLATE, COMFYUI_WORKFLOW_TEMPLATE, COMFYUI_WAN22_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE, COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE } from '../constants';
 
 // --- State Management ---
 let objectInfoCache: any | null = null;
@@ -290,6 +290,58 @@ const buildNunchakuWorkflow = (options: GenerationOptions, sourceImageFilename: 
     return workflow;
 };
 
+const buildNunchakuFluxImageWorkflow = (options: GenerationOptions): any => {
+    const workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE));
+
+    // --- Positive Prompt (Node 6) ---
+    workflow['6'].inputs.text = options.comfyPrompt || '';
+
+    // --- Models (Nodes 45, 44, 10) ---
+    workflow['45'].inputs.model_path = options.comfyNunchakuModel;
+    workflow['45'].inputs.attention = options.comfyNunchakuAttention;
+    workflow['45'].inputs.cpu_offload = options.comfyNunchakuCpuOffload;
+    workflow['44'].inputs.text_encoder1 = options.comfyNunchakuClipL;
+    workflow['44'].inputs.text_encoder2 = options.comfyNunchakuT5XXL;
+    workflow['10'].inputs.vae_name = options.comfyNunchakuVae;
+    
+    // --- LoRAs (Nodes 46, 48, 47) ---
+    workflow['46'].inputs.lora_name = options.comfyNunchakuTurboLoraName;
+    workflow['46'].inputs.lora_strength = options.comfyNunchakuUseTurboLora ? options.comfyNunchakuTurboLoraStrength : 0.0;
+    
+    workflow['48'].inputs.lora_name = options.comfyNunchakuNudifyLoraName;
+    workflow['48'].inputs.lora_strength = options.comfyNunchakuUseNudifyLora ? options.comfyNunchakuNudifyLoraStrength : 0.0;
+
+    workflow['47'].inputs.lora_name = options.comfyNunchakuDetailLoraName;
+    workflow['47'].inputs.lora_strength = options.comfyNunchakuUseDetailLora ? options.comfyNunchakuDetailLoraStrength : 0.0;
+
+    // --- Sampler Parameters ---
+    workflow['25'].inputs.noise_seed = Math.floor(Math.random() * 1_000_000_000);
+    workflow['17'].inputs.steps = options.comfySteps;
+    workflow['17'].inputs.scheduler = options.comfyScheduler;
+    workflow['16'].inputs.sampler_name = options.comfySampler;
+    workflow['26'].inputs.guidance = options.comfyFluxGuidanceKontext;
+
+    // --- ModelSamplingFlux Parameters (Node 30) ---
+    workflow['30'].inputs.base_shift = options.comfyNunchakuBaseShift;
+    workflow['30'].inputs.max_shift = options.comfyNunchakuMaxShift;
+
+    // --- Latent Image Size (Nodes 27, 30) ---
+    const [w, h] = options.aspectRatio.split(':').map(Number);
+    const baseRes = 768; // Based on original workflow
+    const width = w > h ? baseRes : Math.round(baseRes * (w / h));
+    const height = h >= w ? baseRes : Math.round(baseRes * (h / w));
+    const finalWidth = Math.round(width / 8) * 8;
+    const finalHeight = Math.round(height / 8) * 8;
+    
+    workflow['27'].inputs.width = finalWidth;
+    workflow['27'].inputs.height = finalHeight;
+    workflow['30'].inputs.width = finalWidth;
+    workflow['30'].inputs.height = finalHeight;
+    
+    return workflow;
+};
+
+
 const buildWorkflow = (options: GenerationOptions, sourceImageFilename?: string | null): any => {
     if (options.comfyModelType === 'wan2.2') {
         return buildWan22Workflow(options);
@@ -297,6 +349,9 @@ const buildWorkflow = (options: GenerationOptions, sourceImageFilename?: string 
     if (options.comfyModelType === 'nunchaku-kontext-flux') {
         if (!sourceImageFilename) throw new Error("Nunchaku workflow requires a source image filename.");
         return buildNunchakuWorkflow(options, sourceImageFilename);
+    }
+    if (options.comfyModelType === 'nunchaku-flux-image') {
+        return buildNunchakuFluxImageWorkflow(options);
     }
 
     const template = options.comfyModelType === 'sd1.5' 
@@ -382,13 +437,13 @@ export const exportComfyUIWorkflow = (options: GenerationOptions, sourceImage?: 
     URL.revokeObjectURL(url);
 };
 
-export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux'): Promise<string> => {
+export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: GenerationOptions['comfyModelType']): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const imagePart = await fileToGenerativePart(sourceImage);
     const basePrompt = "Analyze this image of a person and generate a descriptive text prompt for a text-to-image AI model. Focus on subject, expression, clothing, and background style.";
     
     let systemInstruction;
-    if (modelType === 'flux' || modelType === 'nunchaku-kontext-flux') {
+    if (modelType === 'flux' || modelType === 'nunchaku-kontext-flux' || modelType === 'nunchaku-flux-image') {
         systemInstruction = "You are a prompt generator for the FLUX.1 image model. Create a highly detailed, narrative prompt. Do not use commas; instead, use natural language conjunctions like 'and', 'with', 'wearing a'. Describe the scene, mood, and lighting in a conversational style.";
     } else if (modelType === 'wan2.2') {
          systemInstruction = "You are a prompt generator for the WAN 2.2 image model. Create a detailed, artistic prompt focusing on atmosphere, color, and emotional tone. Describe the subject's appearance, clothing, and the environment with rich, evocative language. Mention camera angles and lighting styles like 'cinematic lighting' or 'soft focus'.";
@@ -507,9 +562,14 @@ export const generateComfyUIPortraits = async (
                     }
 
                     // Use a different seed for each image
-                    const samplerNodeKeys = Object.keys(workflow).filter(k => workflow[k].class_type.includes('Sampler'));
+                    const samplerNodeKeys = Object.keys(workflow).filter(k => workflow[k].class_type.includes('Sampler') || workflow[k].class_type.includes('Noise'));
                     samplerNodeKeys.forEach(key => {
-                        workflow[key].inputs.seed = Math.floor(Math.random() * 1_000_000_000);
+                        if (workflow[key].inputs.seed !== undefined) {
+                            workflow[key].inputs.seed = Math.floor(Math.random() * 1_000_000_000);
+                        }
+                        if (workflow[key].inputs.noise_seed !== undefined) {
+                            workflow[key].inputs.noise_seed = Math.floor(Math.random() * 1_000_000_000);
+                        }
                     });
                     
                     const response = await queuePrompt(workflow);
