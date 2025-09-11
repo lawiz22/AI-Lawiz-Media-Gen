@@ -9,6 +9,7 @@ import { Loader } from './components/Loader';
 import { ComfyUIConnection } from './components/ComfyUIConnection';
 import { HistoryPanel } from './components/HistoryPanel';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
+import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
 import { GenerateIcon } from './components/icons';
 import type { GenerationOptions, User, HistoryItem, VersionInfo } from './types';
 import { authenticateUser } from './services/cloudUserService';
@@ -138,7 +139,7 @@ function App() {
   const [lastUsedPrompt, setLastUsedPrompt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  const [adminTab, setAdminTab] = useState<'generate' | 'prompt' | 'manage'>('generate');
+  const [activeTab, setActiveTab] = useState<'image' | 'video' | 'prompt' | 'manage'>('image');
   const [isComfyModalOpen, setIsComfyModalOpen] = useState(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   
@@ -386,7 +387,7 @@ function App() {
   
   const getUploaderSectionTitle = () => {
       if (options.provider === 'gemini') return "1. Upload Images";
-      if (options.comfyModelType === 'nunchaku-kontext-flux') return "1. Setup Prompt";
+      if (options.comfyModelType === 'nunchaku-kontext-flux' || options.comfyModelType === 'flux-krea') return "1. Setup Prompt";
       return "1. Upload Image & Set Prompt";
   };
 
@@ -418,23 +419,28 @@ function App() {
         versionInfo={versionInfo}
       />
       <main className="container mx-auto p-4 md:p-8">
-        {currentUser.role === 'admin' && (
-            <div className="bg-bg-secondary p-4 rounded-2xl shadow-lg mb-8">
-                <div className="flex items-center justify-center border-b border-border-primary">
-                    <button onClick={() => setAdminTab('generate')} className={`px-4 py-2 text-sm font-bold transition-colors ${adminTab === 'generate' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                        Generator
-                    </button>
-                    <button onClick={() => setAdminTab('prompt')} className={`px-4 py-2 text-sm font-bold transition-colors ${adminTab === 'prompt' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                        Prompt Tool
-                    </button>
-                    <button onClick={() => setAdminTab('manage')} className={`px-4 py-2 text-sm font-bold transition-colors ${adminTab === 'manage' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                        Manage Users
-                    </button>
-                </div>
+        <div className="bg-bg-secondary p-4 rounded-2xl shadow-lg mb-8">
+            <div className="flex items-center justify-center border-b border-border-primary">
+                <button onClick={() => setActiveTab('image')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'image' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                    Image Generator
+                </button>
+                <button onClick={() => setActiveTab('video')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'video' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                    Video Generator
+                </button>
+                {currentUser.role === 'admin' && (
+                    <>
+                        <button onClick={() => setActiveTab('prompt')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'prompt' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                            Prompt Tool
+                        </button>
+                        <button onClick={() => setActiveTab('manage')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'manage' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                            Manage Users
+                        </button>
+                    </>
+                )}
             </div>
-        )}
+        </div>
 
-        { (currentUser.role !== 'admin' || adminTab === 'generate') &&
+        { activeTab === 'image' &&
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             {/* Left Column for Controls */}
             <div className="lg:col-span-1 space-y-8">
@@ -501,8 +507,9 @@ function App() {
           </div>
         }
         
-        {currentUser.role === 'admin' && adminTab === 'prompt' && <PromptGeneratorPanel onUsePrompt={(p) => { setOptions(prev => ({...prev, comfyPrompt: p})); setAdminTab('generate'); }} />}
-        {currentUser.role === 'admin' && adminTab === 'manage' && <AdminPanel />}
+        {activeTab === 'video' && <VideoGeneratorPanel />}
+        {activeTab === 'prompt' && currentUser.role === 'admin' && <PromptGeneratorPanel onUsePrompt={(p) => { setOptions(prev => ({...prev, comfyPrompt: p})); setActiveTab('image'); }} />}
+        {activeTab === 'manage' && currentUser.role === 'admin' && <AdminPanel />}
 
       </main>
       
