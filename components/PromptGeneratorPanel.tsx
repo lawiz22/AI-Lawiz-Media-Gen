@@ -1,36 +1,58 @@
 import React, { useState } from 'react';
 import { ImageUploader } from './ImageUploader';
-import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage } from '../services/comfyUIService';
+import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup } from '../services/comfyUIService';
 import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon } from './icons';
 
 interface PromptGeneratorPanelProps {
     onUsePrompt: (prompt: string) => void;
+    image: File | null;
+    setImage: (file: File | null) => void;
+    prompt: string;
+    setPrompt: (prompt: string) => void;
+    bgImage: File | null;
+    setBgImage: (file: File | null) => void;
+    bgPrompt: string;
+    setBgPrompt: (prompt: string) => void;
+    subjectImage: File | null;
+    setSubjectImage: (file: File | null) => void;
+    subjectPrompt: string;
+    setSubjectPrompt: (prompt: string) => void;
+    soupPrompt: string;
+    setSoupPrompt: (prompt: string) => void;
+    soupHistory: string[];
+    onAddSoupToHistory: (soup: string) => void;
 }
 
-export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({ onUsePrompt }) => {
-    // --- State for "Generate Prompt from Image" ---
-    const [image, setImage] = useState<File | null>(null);
-    const [modelType, setModelType] = useState<'sdxl' | 'flux'>('sdxl');
-    const [prompt, setPrompt] = useState<string>('');
+
+export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
+    onUsePrompt,
+    image, setImage, prompt, setPrompt,
+    bgImage, setBgImage, bgPrompt, setBgPrompt,
+    subjectImage, setSubjectImage, subjectPrompt, setSubjectPrompt,
+    soupPrompt, setSoupPrompt, soupHistory, onAddSoupToHistory
+}) => {
+    // --- Ephemeral state (not persisted) ---
+    const [modelType, setModelType] = useState<'sd1.5' | 'sdxl' | 'flux'>('sdxl');
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [copyButtonText, setCopyButtonText] = useState('Copy Prompt');
 
-    // --- State for "Extract Background from Image" ---
-    const [bgImage, setBgImage] = useState<File | null>(null);
     const [bgModelType, setBgModelType] = useState<'sd1.5' | 'sdxl' | 'flux'>('sdxl');
-    const [bgPrompt, setBgPrompt] = useState<string>('');
     const [isBgLoading, setIsBgLoading] = useState<boolean>(false);
     const [bgError, setBgError] = useState<string | null>(null);
     const [bgCopyButtonText, setBgCopyButtonText] = useState('Copy Prompt');
 
-    // --- State for "Extract Subject from Image" ---
-    const [subjectImage, setSubjectImage] = useState<File | null>(null);
     const [subjectModelType, setSubjectModelType] = useState<'sd1.5' | 'sdxl' | 'flux'>('sdxl');
-    const [subjectPrompt, setSubjectPrompt] = useState<string>('');
     const [isSubjectLoading, setIsSubjectLoading] = useState<boolean>(false);
     const [subjectError, setSubjectError] = useState<string | null>(null);
     const [subjectCopyButtonText, setSubjectCopyButtonText] = useState('Copy Prompt');
+
+    const [soupModelType, setSoupModelType] = useState<'sd1.5' | 'sdxl' | 'flux'>('sdxl');
+    const [soupCreativity, setSoupCreativity] = useState<number>(0.7);
+    const [isSoupLoading, setIsSoupLoading] = useState<boolean>(false);
+    const [soupError, setSoupError] = useState<string | null>(null);
+    const [soupCopyButtonText, setSoupCopyButtonText] = useState('Copy Prompt');
+    const [historyCopyStates, setHistoryCopyStates] = useState<Record<number, string>>({});
 
     const handleGenerate = async () => {
         if (!image) {
@@ -139,6 +161,57 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({ onUs
             onUsePrompt(subjectPrompt);
         }
     };
+    
+    const handleGenerateSoup = async () => {
+        if (!prompt && !bgPrompt && !subjectPrompt) {
+            setSoupError("Generate at least one prompt above to create a soup!");
+            return;
+        }
+        setIsSoupLoading(true);
+        setSoupError(null);
+        try {
+            const generatedPrompt = await generateMagicalPromptSoup(
+                prompt,
+                bgPrompt,
+                subjectPrompt,
+                soupModelType,
+                soupCreativity
+            );
+            onAddSoupToHistory(generatedPrompt);
+        } catch (err: any) {
+            setSoupError(err.message || 'An unknown error occurred.');
+        } finally {
+            setIsSoupLoading(false);
+        }
+    };
+
+    const handleSoupCopy = () => {
+        if (!soupPrompt) return;
+        navigator.clipboard.writeText(soupPrompt)
+            .then(() => {
+                setSoupCopyButtonText('Copied!');
+                setTimeout(() => setSoupCopyButtonText('Copy Prompt'), 2000);
+            });
+    };
+
+    const handleUseSoupPrompt = () => {
+        if (soupPrompt) {
+            onUsePrompt(soupPrompt);
+        }
+    };
+
+    const handleHistoryItemCopy = (soup: string, index: number) => {
+        navigator.clipboard.writeText(soup).then(() => {
+            setHistoryCopyStates(prev => ({...prev, [index]: 'Copied!'}));
+            setTimeout(() => {
+                setHistoryCopyStates(prev => {
+                    const newStates = {...prev};
+                    delete newStates[index];
+                    return newStates;
+                });
+            }, 2000);
+        });
+    };
 
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto space-y-8">
@@ -160,8 +233,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({ onUs
                         <div>
                             <label className="block text-sm font-medium text-text-secondary mb-1">Prompt Type</label>
                             <div className="flex rounded-md border border-border-primary">
-                                <button onClick={() => setModelType('sdxl')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${modelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
-                                <button onClick={() => setModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors border-l border-border-primary ${modelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
+                                <button onClick={() => setModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${modelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Very Simple (SD 1.5)</button>
+                                <button onClick={() => setModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${modelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
+                                <button onClick={() => setModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${modelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
                             </div>
                         </div>
                         <button
@@ -375,6 +449,118 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({ onUs
                     </div>
                 </div>
             </div>
+
+            <hr className="border-t-2 border-border-primary/50" />
+
+            {/* --- Magical Prompt Soup Section --- */}
+            <div>
+                <h2 className="text-xl font-bold text-accent mb-4">Magical Prompt Soup</h2>
+                <p className="text-sm text-text-secondary mb-6">
+                    Mash up the prompts generated above into a new, unique, and often surprising creation. Adjust the creativity to control how wild the result is!
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    {/* Left Column: Controls */}
+                    <div className="space-y-6 bg-bg-tertiary p-6 rounded-lg border border-border-primary/50">
+                        <div>
+                            <label className="block text-sm font-medium text-text-secondary mb-1">Output Prompt Type</label>
+                            <div className="flex rounded-md border border-border-primary">
+                                <button onClick={() => setSoupModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${soupModelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary'}`}>Very Simple (SD 1.5)</button>
+                                <button onClick={() => setSoupModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${soupModelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary'}`}>Simplified (SDXL)</button>
+                                <button onClick={() => setSoupModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${soupModelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary'}`}>Detailed (FLUX)</button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-text-secondary">Creativity: {soupCreativity}</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.1"
+                                value={soupCreativity}
+                                onChange={(e) => setSoupCreativity(parseFloat(e.target.value))}
+                                disabled={isSoupLoading}
+                                className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer"
+                            />
+                             <p className="text-xs text-text-muted mt-1">Higher values lead to more unexpected combinations.</p>
+                        </div>
+                        
+                        <button
+                            onClick={handleGenerateSoup}
+                            disabled={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading}
+                            style={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading ? {} : { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
+                        >
+                            {isSoupLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                            {isSoupLoading ? 'Stirring...' : 'Create Soup'}
+                        </button>
+                    </div>
+
+                    {/* Right Column: Results & Actions */}
+                    <div className="space-y-4">
+                        <div>
+                            <label htmlFor="generated-soup-prompt" className="block text-sm font-medium text-text-secondary mb-1">
+                                Generated Soup Prompt
+                            </label>
+                            <textarea
+                                id="generated-soup-prompt"
+                                value={soupPrompt}
+                                onChange={(e) => setSoupPrompt(e.target.value)}
+                                readOnly={isSoupLoading}
+                                placeholder="Your magical prompt soup will appear here..."
+                                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[184px]"
+                                rows={8}
+                            />
+                        </div>
+                        {soupError && (
+                            <div className="bg-danger-bg text-danger text-sm p-3 rounded-md">
+                                <p className="font-bold">Error</p>
+                                <p>{soupError}</p>
+                            </div>
+                        )}
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <button 
+                                onClick={handleSoupCopy}
+                                disabled={!soupPrompt || isSoupLoading}
+                                className="flex-1 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                            >
+                                <CopyIcon className="w-5 h-5" />
+                                {soupCopyButtonText}
+                            </button>
+                             <button 
+                                onClick={handleUseSoupPrompt}
+                                disabled={!soupPrompt || isSoupLoading}
+                                className="flex-1 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                            >
+                                <SendIcon className="w-5 h-5" />
+                                Use Prompt for ComfyUI
+                            </button>
+                        </div>
+                        {soupHistory.length > 0 && (
+                            <div className="mt-4">
+                                <h4 className="text-md font-semibold text-text-secondary mb-2">Recent Soups</h4>
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md border border-border-primary/50">
+                                    {soupHistory.map((soup, index) => (
+                                        <div key={index} className="group bg-bg-tertiary p-2 rounded-md flex items-center justify-between gap-2">
+                                            <p className="text-xs text-text-secondary truncate cursor-pointer hover:text-text-primary transition-colors" title={soup} onClick={() => setSoupPrompt(soup)}>
+                                                {soup}
+                                            </p>
+                                            <button 
+                                                onClick={() => handleHistoryItemCopy(soup, index)}
+                                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full bg-bg-secondary text-text-secondary hover:bg-accent hover:text-accent-text"
+                                                title={historyCopyStates[index] || "Copy"}
+                                            >
+                                                <CopyIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
         </div>
     );
 };

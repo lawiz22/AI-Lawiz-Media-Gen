@@ -513,8 +513,10 @@ export const generateComfyUIPromptFromSource = async (sourceImage: File, modelTy
         systemInstruction = "You are a prompt generator for the FLUX.1 image model. Create a highly detailed, narrative prompt. Do not use commas; instead, use natural language conjunctions like 'and', 'with', 'wearing a'. Describe the scene, mood, and lighting in a conversational style.";
     } else if (modelType === 'wan2.2') {
          systemInstruction = "You are a prompt generator for the WAN 2.2 image model. Create a detailed, artistic prompt focusing on atmosphere, color, and emotional tone. Describe the subject's appearance, clothing, and the environment with rich, evocative language. Mention camera angles and lighting styles like 'cinematic lighting' or 'soft focus'.";
-    } else { // 'sdxl' or 'sd1.5'
-        systemInstruction = "You are a prompt generator for the Stable Diffusion image model. Create a concise, keyword-driven prompt under 75 words. Use comma-separated keywords and phrases. Prioritize key elements: subject, clothing, action, setting, and style. Be direct and specific.";
+    } else if (modelType === 'sd1.5') {
+        systemInstruction = "You are a prompt generator for Stable Diffusion 1.5. Describe the image using very simple, direct, comma-separated keywords. Be extremely concise and focus only on the most basic elements of the subject and scene.";
+    } else { // 'sdxl'
+        systemInstruction = "You are a prompt generator for the Stable Diffusion (SDXL) image model. Create a concise, keyword-driven prompt under 75 words. Use comma-separated keywords and phrases. Prioritize key elements: subject, clothing, action, setting, and style. Be direct and specific.";
     }
 
     try {
@@ -602,6 +604,63 @@ export const extractSubjectPromptFromImage = async (
     } catch (error: any) {
         console.error("Error extracting subject prompt:", error);
         throw new Error(error.message || "Failed to extract subject prompt from image.");
+    }
+};
+
+export const generateMagicalPromptSoup = async (
+  fullPrompt: string,
+  backgroundPrompt: string,
+  subjectPrompt: string,
+  modelType: 'sd1.5' | 'sdxl' | 'flux',
+  creativity: number // 0 to 1
+): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    
+    const availablePrompts = [
+        fullPrompt && `Full Scene Prompt: "${fullPrompt}"`,
+        backgroundPrompt && `Background-Only Prompt: "${backgroundPrompt}"`,
+        subjectPrompt && `Subject-Only Prompt: "${subjectPrompt}"`
+    ].filter(Boolean).join('\n');
+
+    if (!availablePrompts) {
+        throw new Error("At least one source prompt must be generated to create a soup.");
+    }
+
+    const basePrompt = `
+      You are an expert prompt creator for generative AI art models. Your task is to create a "Magical Prompt Soup".
+      This means you will take elements from the following source prompts and creatively mash them up into a single, new, and highly imaginative prompt.
+      The level of "mashup" or creativity is guided by the creativity slider. A higher value means a more unexpected and wild combination. A lower value means a more faithful but still interesting blend.
+      Do not simply concatenate the prompts. Intelligently select and merge concepts, subjects, styles, and settings to produce a cohesive but surprising result.
+
+      Here are the source prompts:
+      ${availablePrompts}
+    `;
+
+    let systemInstruction;
+    if (modelType === 'flux') {
+        systemInstruction = "You are a prompt generator for the FLUX.1 image model. Create a highly detailed, narrative prompt soup. Do not use commas; instead, use natural language conjunctions. The final prompt should be a single, flowing paragraph describing a unique scene.";
+    } else if (modelType === 'sdxl') {
+        systemInstruction = "You are a prompt generator for the Stable Diffusion (SDXL) image model. Create a concise, keyword-driven prompt soup under 75 words. Use comma-separated keywords and phrases. Combine elements from the source prompts into a fresh set of keywords.";
+    } else { // 'sd1.5'
+        systemInstruction = "You are a prompt generator for Stable Diffusion 1.5. Create a very simple, direct, comma-separated keyword prompt soup. Be extremely concise and pick only the most impactful keywords from the source prompts to combine.";
+    }
+
+    try {
+        const result = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [{ text: basePrompt }] },
+            config: {
+                systemInstruction: systemInstruction,
+                temperature: creativity,
+            },
+        });
+
+        const text = result.text.trim();
+        if (!text) throw new Error("The AI did not return a prompt. Try adjusting creativity or source prompts.");
+        return text;
+    } catch (error: any) {
+        console.error("Error generating prompt soup:", error);
+        throw new Error(error.message || "Failed to generate Magical Prompt Soup.");
     }
 };
 

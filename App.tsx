@@ -147,6 +147,22 @@ function App() {
   const [isComfyUIConnected, setIsComfyUIConnected] = useState<boolean | null>(null);
   const [comfyUIObjectInfo, setComfyUIObjectInfo] = useState<any | null>(null);
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
+
+  // --- State for PromptGeneratorPanel to persist across tab changes ---
+  const [promptToolImage, setPromptToolImage] = useState<File | null>(null);
+  const [promptToolPrompt, setPromptToolPrompt] = useState<string>('');
+  const [promptToolBgImage, setPromptToolBgImage] = useState<File | null>(null);
+  const [promptToolBgPrompt, setPromptToolBgPrompt] = useState<string>('');
+  const [promptToolSubjectImage, setPromptToolSubjectImage] = useState<File | null>(null);
+  const [promptToolSubjectPrompt, setPromptToolSubjectPrompt] = useState<string>('');
+  const [promptToolSoupPrompt, setPromptToolSoupPrompt] = useState<string>('');
+  const [promptToolSoupHistory, setPromptToolSoupHistory] = useState<string[]>([]);
+
+  const handleAddSoupToHistory = (soup: string) => {
+    // Add new soup to the front, prevent duplicates, and limit history size
+    setPromptToolSoupHistory(prev => [soup, ...prev.filter(s => s !== soup)].slice(0, 10));
+    setPromptToolSoupPrompt(soup);
+  };
   
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -508,7 +524,30 @@ function App() {
         }
         
         {activeTab === 'video' && <VideoGeneratorPanel />}
-        {activeTab === 'prompt' && currentUser.role === 'admin' && <PromptGeneratorPanel onUsePrompt={(p) => { setOptions(prev => ({...prev, comfyPrompt: p})); setActiveTab('image'); }} />}
+        {activeTab === 'prompt' && currentUser.role === 'admin' && 
+            <PromptGeneratorPanel
+                onUsePrompt={(p) => { 
+                    setOptions(prev => ({...prev, comfyPrompt: p})); 
+                    setActiveTab('image'); 
+                }}
+                image={promptToolImage}
+                setImage={setPromptToolImage}
+                prompt={promptToolPrompt}
+                setPrompt={setPromptToolPrompt}
+                bgImage={promptToolBgImage}
+                setBgImage={setPromptToolBgImage}
+                bgPrompt={promptToolBgPrompt}
+                setBgPrompt={setPromptToolBgPrompt}
+                subjectImage={promptToolSubjectImage}
+                setSubjectImage={setPromptToolSubjectImage}
+                subjectPrompt={promptToolSubjectPrompt}
+                setSubjectPrompt={setPromptToolSubjectPrompt}
+                soupPrompt={promptToolSoupPrompt}
+                setSoupPrompt={setPromptToolSoupPrompt}
+                soupHistory={promptToolSoupHistory}
+                onAddSoupToHistory={handleAddSoupToHistory}
+            />
+        }
         {activeTab === 'manage' && currentUser.role === 'admin' && <AdminPanel />}
 
       </main>
