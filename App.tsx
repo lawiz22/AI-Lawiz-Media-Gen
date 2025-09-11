@@ -386,7 +386,7 @@ function App() {
   
   const getUploaderSectionTitle = () => {
       if (options.provider === 'gemini') return "1. Upload Images";
-      if (options.comfyModelType === 'nunchaku-kontext-flux' || options.comfyModelType === 'flux-krea') return "1. Setup Prompt";
+      if (options.comfyModelType === 'nunchaku-kontext-flux') return "1. Setup Prompt";
       return "1. Upload Image & Set Prompt";
   };
 
@@ -400,7 +400,7 @@ function App() {
 
   const showSourceImageUploader = () => {
       if (options.provider === 'gemini') return true;
-      if (options.provider === 'comfyui' && (options.comfyModelType !== 'flux-krea')) return true;
+      if (options.provider === 'comfyui') return true;
       return false;
   }
 
