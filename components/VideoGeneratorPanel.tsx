@@ -1,8 +1,10 @@
-import React, { useState, useMemo, ChangeEvent } from 'react';
+
+import React, { useState, useMemo, ChangeEvent, useEffect } from 'react';
 import { GenerateIcon, ResetIcon, VideoIcon, SpinnerIcon, CopyIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { Loader } from './Loader';
 import type { GenerationOptions } from '../types';
+import { resizeImageFile } from '../utils/imageProcessing';
 
 // --- Prop Types ---
 interface VideoGeneratorPanelProps {
@@ -83,6 +85,10 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     progressMessage, progressValue, onReset
 }) => {
     const [copyButtonText, setCopyButtonText] = useState('Copy');
+    const [originalStartFrame, setOriginalStartFrame] = useState<File | null>(null);
+    const [originalEndFrame, setOriginalEndFrame] = useState<File | null>(null);
+    const [shouldResizeFrames, setShouldResizeFrames] = useState(false);
+    const [isResizing, setIsResizing] = useState(false);
     
     const comfyGgufModels = useMemo(() => {
         const widgetInfo = comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name || comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.gguf_name;
@@ -96,6 +102,66 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const comfySamplers = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.KSamplerAdvanced?.input?.required?.sampler_name), [comfyUIObjectInfo]);
     const comfySchedulers = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.KSamplerAdvanced?.input?.required?.scheduler), [comfyUIObjectInfo]);
 
+    const handleStartFrameUpload = (file: File | null) => {
+        setOriginalStartFrame(file);
+        if (!shouldResizeFrames) {
+            setStartFrame(file);
+        }
+    };
+
+    const handleEndFrameUpload = (file: File | null) => {
+        setOriginalEndFrame(file);
+        if (!shouldResizeFrames) {
+            setEndFrame(file);
+        }
+    };
+    
+    useEffect(() => {
+        const applyResize = async () => {
+            if (!originalStartFrame && !originalEndFrame) return;
+            
+            setIsResizing(true);
+            try {
+                if (shouldResizeFrames) {
+                    if (originalStartFrame) setStartFrame(await resizeImageFile(originalStartFrame, 0.5));
+                    else setStartFrame(null);
+                    if (originalEndFrame) setEndFrame(await resizeImageFile(originalEndFrame, 0.5));
+                    else setEndFrame(null);
+                } else {
+                    setStartFrame(originalStartFrame);
+                    setEndFrame(originalEndFrame);
+                }
+            } catch (e) {
+                console.error("Error during image resize:", e);
+                setStartFrame(originalStartFrame);
+                setEndFrame(originalEndFrame);
+            } finally {
+                setIsResizing(false);
+            }
+        };
+        applyResize();
+    }, [shouldResizeFrames, originalStartFrame, originalEndFrame, setStartFrame, setEndFrame]);
+
+    useEffect(() => {
+        const detectAndSetDimensions = (file: File) => {
+            try {
+                const img = new Image();
+                const objectUrl = URL.createObjectURL(file);
+                img.onload = () => {
+                    const width = Math.round(img.naturalWidth / 8) * 8;
+                    const height = Math.round(img.naturalHeight / 8) * 8;
+                    setOptions(prev => ({ ...prev, comfyVidWanI2VWidth: width, comfyVidWanI2VHeight: height }));
+                    URL.revokeObjectURL(objectUrl);
+                };
+                img.onerror = () => URL.revokeObjectURL(objectUrl);
+                img.src = objectUrl;
+            } catch (error) { console.error("Error detecting image dimensions:", error); }
+        };
+
+        if (startFrame) detectAndSetDimensions(startFrame);
+        else setOptions(prev => ({ ...prev, comfyVidWanI2VWidth: 848, comfyVidWanI2VHeight: 560 }));
+    }, [startFrame, setOptions]);
+
     const handleOptionChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
         setOptions(prev => ({ ...prev, [field]: value }));
@@ -108,11 +174,17 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const handleCopyPrompt = () => {
         if (!lastUsedPrompt) return;
         navigator.clipboard.writeText(lastUsedPrompt)
-          .then(() => {
-            setCopyButtonText('Copied!');
-            setTimeout(() => setCopyButtonText('Copy'), 2000);
-          })
+          .then(() => { setCopyButtonText('Copied!'); setTimeout(() => setCopyButtonText('Copy'), 2000); })
           .catch(err => console.error('Failed to copy prompt:', err));
+    };
+
+    const handleUseEndFrameChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const isChecked = e.target.checked;
+        setOptions(prev => ({ ...prev, comfyVidWanI2VUseEndFrame: isChecked }));
+        if (!isChecked) {
+            setEndFrame(null);
+            setOriginalEndFrame(null);
+        }
     };
 
     return (
@@ -122,59 +194,51 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                     <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Frames</h2>
                     <div className="space-y-4">
-                        <ImageUploader label="Start Frame" id="start-frame" onImageUpload={setStartFrame} sourceFile={startFrame} />
-                        <ImageUploader label="End Frame" id="end-frame" onImageUpload={setEndFrame} sourceFile={endFrame} />
+                        <ImageUploader label="Start Frame" id="start-frame" onImageUpload={handleStartFrameUpload} sourceFile={startFrame} />
+                        <div className="pt-2 space-y-2">
+                            <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                                <input type="checkbox" checked={options.comfyVidWanI2VUseEndFrame} onChange={handleUseEndFrameChange} disabled={isLoading} className="rounded text-accent focus:ring-accent" />
+                                Use End Frame
+                            </label>
+                            {options.comfyVidWanI2VUseEndFrame && (
+                                <ImageUploader label="End Frame" id="end-frame" onImageUpload={handleEndFrameUpload} sourceFile={endFrame} />
+                            )}
+                        </div>
+                        <div className="pt-2">
+                            <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                                <input type="checkbox" checked={shouldResizeFrames} onChange={(e) => setShouldResizeFrames(e.target.checked)} disabled={isLoading || isResizing} className="rounded text-accent focus:ring-accent" />
+                                Resize frames to 50% smaller (for lower VRAM)
+                                {isResizing && <SpinnerIcon className="w-4 h-4 animate-spin text-accent ml-2" />}
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-8">
                     <div>
                         <h2 className="text-xl font-bold mb-4 text-accent">2. Configure Generation</h2>
-                        <SelectInput 
-                            label="Video Workflow" 
-                            value={options.comfyVidModelType || 'wan-i2v'} 
-                            onChange={handleOptionChange('comfyVidModelType')}
-                            options={[{value: 'wan-i2v', label: 'Wan 2.2 First/Last Frame'}]}
-                            disabled={isLoading}
-                        />
+                        <SelectInput label="Video Workflow" value={options.comfyVidModelType || 'wan-i2v'} onChange={handleOptionChange('comfyVidModelType')} options={[{value: 'wan-i2v', label: 'Wan 2.2 First/Last Frame'}]} disabled={isLoading} />
                     </div>
                     
                     <OptionSection title="Prompts & Core Settings" defaultOpen>
                         <TextInput label="Positive Prompt" value={options.comfyVidWanI2VPositivePrompt || ''} onChange={handleOptionChange('comfyVidWanI2VPositivePrompt')} disabled={isLoading} isTextArea placeholder="A cinematic shot of..."/>
                         <TextInput label="Negative Prompt" value={options.comfyVidWanI2VNegativePrompt || ''} onChange={handleOptionChange('comfyVidWanI2VNegativePrompt')} disabled={isLoading} isTextArea />
+                        {options.comfyVidWanI2VUseEndFrame && (
+                            <NumberSlider label="End Frame Strength" value={options.comfyVidWanI2VEndFrameStrength || 1.0} onChange={handleSliderChange('comfyVidWanI2VEndFrameStrength')} min={0} max={2.0} step={0.05} disabled={isLoading} />
+                        )}
                         <NumberSlider label="Frame Count" value={options.comfyVidWanI2VFrameCount || 65} onChange={handleSliderChange('comfyVidWanI2VFrameCount')} min={16} max={128} step={1} disabled={isLoading} />
                         <NumberSlider label="Frame Rate" value={options.comfyVidWanI2VFrameRate || 24} onChange={handleSliderChange('comfyVidWanI2VFrameRate')} min={8} max={60} step={1} disabled={isLoading} />
+                        <div className="text-sm text-text-secondary p-2 bg-bg-tertiary rounded-md border border-border-primary/50">
+                            <p>Video Dimensions: <span className="font-semibold text-text-primary ml-2">{options.comfyVidWanI2VWidth}px × {options.comfyVidWanI2VHeight}px</span></p>
+                            <p className="text-xs text-text-muted mt-1">Dimensions are based on your start frame and rounded for model compatibility.</p>
+                        </div>
                     </OptionSection>
                     
                     <OptionSection title="Models & LoRAs">
-                        {comfyGgufModels.length > 0 ? (
-                            <SelectInput label="High-Noise Unet" value={options.comfyVidWanI2VHighNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
-                        ) : (
-                            <TextInput label="High-Noise Unet" value={options.comfyVidWanI2VHighNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseModel')} placeholder="e.g., Wan2.2-I2V-HighNoise.gguf" disabled={isLoading} />
-                        )}
-
-                        {comfyGgufModels.length > 0 ? (
-                            <SelectInput label="Low-Noise Unet" value={options.comfyVidWanI2VLowNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
-                        ) : (
-                            <TextInput label="Low-Noise Unet" value={options.comfyVidWanI2VLowNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseModel')} placeholder="e.g., Wan2.2-I2V-LowNoise.gguf" disabled={isLoading} />
-                        )}
-
-                        {comfyGgufClipModels.length > 0 ? (
-                            <SelectInput label="CLIP Model (GGUF)" value={options.comfyVidWanI2VClipModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipModel')} options={comfyGgufClipModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
-                        ) : (
-                            <TextInput label="CLIP Model (GGUF)" value={options.comfyVidWanI2VClipModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipModel')} placeholder="e.g., umt5-xxl-encoder.gguf" disabled={isLoading} />
-                        )}
-
-                        {comfyVaes.length > 0 ? (
-                            <SelectInput label="VAE Model" value={options.comfyVidWanI2VVaeModel || ''} onChange={handleOptionChange('comfyVidWanI2VVaeModel')} options={comfyVaes.map(m => ({value: m, label: m}))} disabled={isLoading} />
-                        ) : (
-                            <TextInput label="VAE Model" value={options.comfyVidWanI2VVaeModel || ''} onChange={handleOptionChange('comfyVidWanI2VVaeModel')} placeholder="e.g., wan_2.1_vae.safetensors" disabled={isLoading} />
-                        )}
-
-                        {comfyClipVision.length > 0 ? (
-                            <SelectInput label="CLIP Vision Model" value={options.comfyVidWanI2VClipVisionModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipVisionModel')} options={comfyClipVision.map(m => ({value: m, label: m}))} disabled={isLoading} />
-                        ) : (
-                            <TextInput label="CLIP Vision Model" value={options.comfyVidWanI2VClipVisionModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipVisionModel')} placeholder="e.g., clip_vision_h.safetensors" disabled={isLoading} />
-                        )}
+                        <SelectInput label="High-Noise Unet" value={options.comfyVidWanI2VHighNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                        <SelectInput label="Low-Noise Unet" value={options.comfyVidWanI2VLowNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                        <SelectInput label="CLIP Model (GGUF)" value={options.comfyVidWanI2VClipModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipModel')} options={comfyGgufClipModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                        <SelectInput label="VAE Model" value={options.comfyVidWanI2VVaeModel || ''} onChange={handleOptionChange('comfyVidWanI2VVaeModel')} options={comfyVaes.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                        <SelectInput label="CLIP Vision Model" value={options.comfyVidWanI2VClipVisionModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipVisionModel')} options={comfyClipVision.map(m => ({value: m, label: m}))} disabled={isLoading} />
                         
                         <div className="space-y-4 p-4 mt-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
                             <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
@@ -183,18 +247,9 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                             </label>
                             {options.comfyVidWanI2VUseLightningLora && (
                                 <div className="space-y-4 pl-4 border-l-2 border-border-primary">
-                                    {comfyLoras.length > 0 ? (
-                                        <SelectInput label="High-Noise LoRA" value={options.comfyVidWanI2VHighNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
-                                    ) : (
-                                        <TextInput label="High-Noise LoRA" value={options.comfyVidWanI2VHighNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseLora')} placeholder="e.g., Wan2.2-Lightning_HIGH.safetensors" disabled={isLoading} />
-                                    )}
+                                    <SelectInput label="High-Noise LoRA" value={options.comfyVidWanI2VHighNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
                                     <NumberSlider label="High-Noise Strength" value={options.comfyVidWanI2VHighNoiseLoraStrength || 2.0} onChange={handleSliderChange('comfyVidWanI2VHighNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
-
-                                    {comfyLoras.length > 0 ? (
-                                        <SelectInput label="Low-Noise LoRA" value={options.comfyVidWanI2VLowNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
-                                    ) : (
-                                        <TextInput label="Low-Noise LoRA" value={options.comfyVidWanI2VLowNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseLora')} placeholder="e.g., Wan2.2-Lightning_LOW.safetensors" disabled={isLoading} />
-                                    )}
+                                    <SelectInput label="Low-Noise LoRA" value={options.comfyVidWanI2VLowNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
                                     <NumberSlider label="Low-Noise Strength" value={options.comfyVidWanI2VLowNoiseLoraStrength || 1.0} onChange={handleSliderChange('comfyVidWanI2VLowNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
                                 </div>
                             )}

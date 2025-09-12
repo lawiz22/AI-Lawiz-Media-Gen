@@ -1,3 +1,4 @@
+
 // Fix: Implemented the full comfyUIService.ts module to resolve all module-not-found errors.
 import { GoogleGenAI } from "@google/genai";
 import { fileToGenerativePart } from "../utils/imageUtils";
@@ -371,33 +372,38 @@ export const generateComfyUIPortraits = async (
 
 export const generateComfyUIVideo = async (
     startFrame: File,
-    endFrame: File,
+    endFrame: File | null,
     options: GenerationOptions,
     updateProgress: (message: string, value: number) => void
 ): Promise<{ videoUrl: string, finalPrompt: string }> => {
-    // Deep copy the template to avoid side effects
     const workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE));
+    
+    const effectiveEndFrame = (endFrame && options.comfyVidWanI2VUseEndFrame) ? endFrame : startFrame;
     
     updateProgress("Uploading start frame...", 0.05);
     const startFrameInfo = await uploadImage(startFrame);
     updateProgress("Uploading end frame...", 0.1);
-    const endFrameInfo = await uploadImage(endFrame);
-
-    // --- Modify workflow nodes with all options from the UI ---
+    const endFrameInfo = await uploadImage(effectiveEndFrame);
     
     // 1. Loaders
-    workflow["105"].inputs.unet_name = options.comfyVidWanI2VHighNoiseModel; // High Noise Unet GGUF
-    workflow["106"].inputs.unet_name = options.comfyVidWanI2VLowNoiseModel;  // Low Noise Unet GGUF
-    workflow["107"].inputs.clip_name = options.comfyVidWanI2VClipModel;     // CLIP Loader GGUF
-    workflow["39"].inputs.vae_name = options.comfyVidWanI2VVaeModel;       // VAE Loader
-    workflow["49"].inputs.clip_name = options.comfyVidWanI2VClipVisionModel; // CLIP Vision Loader
+    workflow["105"].inputs.unet_name = options.comfyVidWanI2VHighNoiseModel;
+    workflow["106"].inputs.unet_name = options.comfyVidWanI2VLowNoiseModel;
+    workflow["107"].inputs.clip_name = options.comfyVidWanI2VClipModel;
+    workflow["39"].inputs.vae_name = options.comfyVidWanI2VVaeModel;
+    workflow["49"].inputs.clip_name = options.comfyVidWanI2VClipVisionModel;
 
-    // 2. Main Video Node (WanFirstLastFrameToVideo)
+    // 2. Main Video Node
     const mainVideoNode = workflow["83"];
     mainVideoNode.inputs.length = options.comfyVidWanI2VFrameCount;
     mainVideoNode.inputs.width = options.comfyVidWanI2VWidth;
     mainVideoNode.inputs.height = options.comfyVidWanI2VHeight;
-
+    // Add new strength parameter
+    if (options.comfyVidWanI2VUseEndFrame) {
+        mainVideoNode.inputs.end_frame_strength = options.comfyVidWanI2VEndFrameStrength;
+    } else {
+        mainVideoNode.inputs.end_frame_strength = 0;
+    }
+    
     // 3. Image Loaders
     workflow["52"].inputs.image = startFrameInfo.name;
     workflow["72"].inputs.image = endFrameInfo.name;
@@ -409,17 +415,11 @@ export const generateComfyUIVideo = async (
     // 5. KSamplers
     const highNoiseSampler = workflow["101"];
     const lowNoiseSampler = workflow["102"];
-
-    highNoiseSampler.inputs.steps = options.comfyVidWanI2VSteps;
-    highNoiseSampler.inputs.cfg = options.comfyVidWanI2VCfg;
-    highNoiseSampler.inputs.sampler_name = options.comfyVidWanI2VSampler;
-    highNoiseSampler.inputs.scheduler = options.comfyVidWanI2VScheduler;
+    highNoiseSampler.inputs.steps = lowNoiseSampler.inputs.steps = options.comfyVidWanI2VSteps;
+    highNoiseSampler.inputs.cfg = lowNoiseSampler.inputs.cfg = options.comfyVidWanI2VCfg;
+    highNoiseSampler.inputs.sampler_name = lowNoiseSampler.inputs.sampler_name = options.comfyVidWanI2VSampler;
+    highNoiseSampler.inputs.scheduler = lowNoiseSampler.inputs.scheduler = options.comfyVidWanI2VScheduler;
     highNoiseSampler.inputs.end_at_step = options.comfyVidWanI2VRefinerStartStep;
-
-    lowNoiseSampler.inputs.steps = options.comfyVidWanI2VSteps;
-    lowNoiseSampler.inputs.cfg = options.comfyVidWanI2VCfg;
-    lowNoiseSampler.inputs.sampler_name = options.comfyVidWanI2VSampler;
-    lowNoiseSampler.inputs.scheduler = options.comfyVidWanI2VScheduler;
     lowNoiseSampler.inputs.start_at_step = options.comfyVidWanI2VRefinerStartStep;
 
     // 6. Lightning LoRAs (Conditional)
@@ -431,11 +431,10 @@ export const generateComfyUIVideo = async (
         lowNoiseLora.inputs.lora_name = options.comfyVidWanI2VLowNoiseLora;
         lowNoiseLora.inputs.strength_model = options.comfyVidWanI2VLowNoiseLoraStrength;
     } else {
-        // Bypass LoRA loaders by connecting Unet Loaders directly to Model Samplers
-        workflow["79"].inputs.model = ["105", 0]; // High noise path
-        workflow["93"].inputs.model = ["106", 0]; // Low noise path
-        delete workflow["94"]; // Remove high noise LoRA node
-        delete workflow["95"]; // Remove low noise LoRA node
+        workflow["79"].inputs.model = ["105", 0];
+        workflow["93"].inputs.model = ["106", 0];
+        delete workflow["94"];
+        delete workflow["95"];
     }
     
     // 7. Post-processing (Conditional)
@@ -446,18 +445,15 @@ export const generateComfyUIVideo = async (
     if (options.comfyVidWanI2VUseFilmGrain) {
         const filmGrainNode = workflow["114"];
         filmGrainNode.inputs.grain_intensity = options.comfyVidWanI2VFilmGrainIntensity;
-        // The UI option 'FilmGrainSize' maps to 'saturation_mix' in the node
         filmGrainNode.inputs.saturation_mix = options.comfyVidWanI2VFilmGrainSize; 
     } else {
-        // Bypass Film Grain node by connecting VAEDecode directly to VideoCombine
         videoCombineNode.inputs.images = ["8", 0]; 
-        delete workflow["114"]; // Remove film grain node
+        delete workflow["114"];
     }
     
-    // 8. Execute the workflow
     const { videoUrl } = await executeWorkflow(workflow, updateProgress);
     if (!videoUrl) {
-        throw new Error("Generation finished, but no video file was found in the output. The VHS_VideoCombine node (ID 111) did not produce the expected result. Check ComfyUI console.");
+        throw new Error("Generation finished, but no video file was found in the output.");
     }
     
     return { videoUrl, finalPrompt: options.comfyVidWanI2VPositivePrompt || '' };

@@ -142,6 +142,8 @@ const initialOptions: GenerationOptions = {
   comfyVidWanI2VNegativePrompt: 'disney pixar 3d type, pixar type cartoon, worst quality, low quality, jpeg artifacts, ugly, deformed, blurry',
   comfyVidWanI2VWidth: 848,
   comfyVidWanI2VHeight: 560,
+  comfyVidWanI2VUseEndFrame: true,
+  comfyVidWanI2VEndFrameStrength: 1.0,
 };
 
 function App() {
@@ -400,8 +402,8 @@ function App() {
           setLastUsedPrompt(finalPrompt);
 
       } else if (activeTab === 'video') {
-        if (!startFrame || !endFrame) {
-          throw new Error("Please upload both a start and end frame for video generation.");
+        if (!startFrame) {
+          throw new Error("Please upload a start frame for video generation.");
         }
         setProgressMessage('Connecting to ComfyUI for video generation...');
         const { videoUrl, finalPrompt } = await generateComfyUIVideo(startFrame, endFrame, options, updateProgress);
@@ -586,7 +588,7 @@ function App() {
             endFrame={endFrame}
             setEndFrame={setEndFrame}
             onGenerate={handleGenerate}
-            isReady={!!startFrame && !!endFrame && !!options.comfyVidWanI2VPositivePrompt && !isLoading}
+            isReady={!!startFrame && (!options.comfyVidWanI2VUseEndFrame || !!endFrame) && !!options.comfyVidWanI2VPositivePrompt && !isLoading}
             isLoading={isLoading}
             error={error}
             generatedVideo={generatedVideo}
