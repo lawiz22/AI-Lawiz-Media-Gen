@@ -72,7 +72,7 @@ const TextInput: React.FC<{ label: string, value: string, onChange: (e: ChangeEv
 const NumberSlider: React.FC<{ label: string, value: number, onChange: (e: ChangeEvent<HTMLInputElement>) => void, min: number, max: number, step: number, disabled?: boolean }> =
 ({ label, value, onChange, min, max, step, disabled }) => (
     <div>
-        <label className="block text-sm font-medium text-text-secondary">{label}: {value}</label>
+        <label className="block text-sm font-medium text-text-secondary">{label}</label>
         <input type="range" min={min} max={max} step={step} value={value} onChange={onChange} disabled={disabled} className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
     </div>
 );
@@ -87,7 +87,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const [copyButtonText, setCopyButtonText] = useState('Copy');
     const [originalStartFrame, setOriginalStartFrame] = useState<File | null>(null);
     const [originalEndFrame, setOriginalEndFrame] = useState<File | null>(null);
-    const [shouldResizeFrames, setShouldResizeFrames] = useState(false);
+    const [frameResizeScale, setFrameResizeScale] = useState(1.0); // 1.0 = 100%
     const [isResizing, setIsResizing] = useState(false);
     
     const comfyGgufModels = useMemo(() => {
@@ -104,16 +104,10 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
 
     const handleStartFrameUpload = (file: File | null) => {
         setOriginalStartFrame(file);
-        if (!shouldResizeFrames) {
-            setStartFrame(file);
-        }
     };
 
     const handleEndFrameUpload = (file: File | null) => {
         setOriginalEndFrame(file);
-        if (!shouldResizeFrames) {
-            setEndFrame(file);
-        }
     };
     
     useEffect(() => {
@@ -122,10 +116,10 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
             
             setIsResizing(true);
             try {
-                if (shouldResizeFrames) {
-                    if (originalStartFrame) setStartFrame(await resizeImageFile(originalStartFrame, 0.5));
+                if (frameResizeScale < 1.0) {
+                    if (originalStartFrame) setStartFrame(await resizeImageFile(originalStartFrame, frameResizeScale));
                     else setStartFrame(null);
-                    if (originalEndFrame) setEndFrame(await resizeImageFile(originalEndFrame, 0.5));
+                    if (originalEndFrame) setEndFrame(await resizeImageFile(originalEndFrame, frameResizeScale));
                     else setEndFrame(null);
                 } else {
                     setStartFrame(originalStartFrame);
@@ -140,8 +134,8 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
             }
         };
         applyResize();
-    }, [shouldResizeFrames, originalStartFrame, originalEndFrame, setStartFrame, setEndFrame]);
-
+    }, [frameResizeScale, originalStartFrame, originalEndFrame, setStartFrame, setEndFrame]);
+    
     useEffect(() => {
         const detectAndSetDimensions = (file: File) => {
             try {
@@ -205,11 +199,19 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                             )}
                         </div>
                         <div className="pt-2">
-                            <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                <input type="checkbox" checked={shouldResizeFrames} onChange={(e) => setShouldResizeFrames(e.target.checked)} disabled={isLoading || isResizing} className="rounded text-accent focus:ring-accent" />
-                                Resize frames to 50% smaller (for lower VRAM)
-                                {isResizing && <SpinnerIcon className="w-4 h-4 animate-spin text-accent ml-2" />}
-                            </label>
+                             <NumberSlider 
+                                label={`Frame Size (${Math.round(frameResizeScale * 100)}%)`}
+                                value={frameResizeScale}
+                                onChange={(e) => setFrameResizeScale(parseFloat(e.target.value))}
+                                min={0.25}
+                                max={1.0}
+                                step={0.25}
+                                disabled={isLoading || isResizing}
+                            />
+                            <p className="text-xs text-text-muted mt-1 flex items-center gap-2">
+                                Resize frames to reduce VRAM usage. 100% is original size.
+                                {isResizing && <SpinnerIcon className="w-4 h-4 animate-spin text-accent" />}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -223,10 +225,10 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                         <TextInput label="Positive Prompt" value={options.comfyVidWanI2VPositivePrompt || ''} onChange={handleOptionChange('comfyVidWanI2VPositivePrompt')} disabled={isLoading} isTextArea placeholder="A cinematic shot of..."/>
                         <TextInput label="Negative Prompt" value={options.comfyVidWanI2VNegativePrompt || ''} onChange={handleOptionChange('comfyVidWanI2VNegativePrompt')} disabled={isLoading} isTextArea />
                         {options.comfyVidWanI2VUseEndFrame && (
-                            <NumberSlider label="End Frame Strength" value={options.comfyVidWanI2VEndFrameStrength || 1.0} onChange={handleSliderChange('comfyVidWanI2VEndFrameStrength')} min={0} max={2.0} step={0.05} disabled={isLoading} />
+                            <NumberSlider label={`End Frame Strength: ${options.comfyVidWanI2VEndFrameStrength || 1.0}`} value={options.comfyVidWanI2VEndFrameStrength || 1.0} onChange={handleSliderChange('comfyVidWanI2VEndFrameStrength')} min={0} max={2.0} step={0.05} disabled={isLoading} />
                         )}
-                        <NumberSlider label="Frame Count" value={options.comfyVidWanI2VFrameCount || 65} onChange={handleSliderChange('comfyVidWanI2VFrameCount')} min={16} max={128} step={1} disabled={isLoading} />
-                        <NumberSlider label="Frame Rate" value={options.comfyVidWanI2VFrameRate || 24} onChange={handleSliderChange('comfyVidWanI2VFrameRate')} min={8} max={60} step={1} disabled={isLoading} />
+                        <NumberSlider label={`Frame Count: ${options.comfyVidWanI2VFrameCount || 65}`} value={options.comfyVidWanI2VFrameCount || 65} onChange={handleSliderChange('comfyVidWanI2VFrameCount')} min={16} max={128} step={1} disabled={isLoading} />
+                        <NumberSlider label={`Frame Rate: ${options.comfyVidWanI2VFrameRate || 24}`} value={options.comfyVidWanI2VFrameRate || 24} onChange={handleSliderChange('comfyVidWanI2VFrameRate')} min={8} max={60} step={1} disabled={isLoading} />
                         <div className="text-sm text-text-secondary p-2 bg-bg-tertiary rounded-md border border-border-primary/50">
                             <p>Video Dimensions: <span className="font-semibold text-text-primary ml-2">{options.comfyVidWanI2VWidth}px × {options.comfyVidWanI2VHeight}px</span></p>
                             <p className="text-xs text-text-muted mt-1">Dimensions are based on your start frame and rounded for model compatibility.</p>
@@ -248,9 +250,9 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                             {options.comfyVidWanI2VUseLightningLora && (
                                 <div className="space-y-4 pl-4 border-l-2 border-border-primary">
                                     <SelectInput label="High-Noise LoRA" value={options.comfyVidWanI2VHighNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
-                                    <NumberSlider label="High-Noise Strength" value={options.comfyVidWanI2VHighNoiseLoraStrength || 2.0} onChange={handleSliderChange('comfyVidWanI2VHighNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
+                                    <NumberSlider label={`High-Noise Strength: ${options.comfyVidWanI2VHighNoiseLoraStrength || 2.0}`} value={options.comfyVidWanI2VHighNoiseLoraStrength || 2.0} onChange={handleSliderChange('comfyVidWanI2VHighNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
                                     <SelectInput label="Low-Noise LoRA" value={options.comfyVidWanI2VLowNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
-                                    <NumberSlider label="Low-Noise Strength" value={options.comfyVidWanI2VLowNoiseLoraStrength || 1.0} onChange={handleSliderChange('comfyVidWanI2VLowNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
+                                    <NumberSlider label={`Low-Noise Strength: ${options.comfyVidWanI2VLowNoiseLoraStrength || 1.0}`} value={options.comfyVidWanI2VLowNoiseLoraStrength || 1.0} onChange={handleSliderChange('comfyVidWanI2VLowNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
                                 </div>
                             )}
                         </div>
@@ -259,9 +261,9 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                     <OptionSection title="Sampler">
                         <SelectInput label="Sampler" value={options.comfyVidWanI2VSampler || 'euler'} onChange={handleOptionChange('comfyVidWanI2VSampler')} options={comfySamplers.map(s => ({value: s, label: s}))} disabled={isLoading} />
                         <SelectInput label="Scheduler" value={options.comfyVidWanI2VScheduler || 'simple'} onChange={handleOptionChange('comfyVidWanI2VScheduler')} options={comfySchedulers.map(s => ({value: s, label: s}))} disabled={isLoading} />
-                        <NumberSlider label="Steps" value={options.comfyVidWanI2VSteps || 6} onChange={handleSliderChange('comfyVidWanI2VSteps')} min={4} max={20} step={1} disabled={isLoading} />
-                        <NumberSlider label="CFG" value={options.comfyVidWanI2VCfg || 1} onChange={handleSliderChange('comfyVidWanI2VCfg')} min={1} max={5} step={0.1} disabled={isLoading} />
-                        <NumberSlider label="Refiner Start Step" value={options.comfyVidWanI2VRefinerStartStep || 3} onChange={handleSliderChange('comfyVidWanI2VRefinerStartStep')} min={1} max={(options.comfyVidWanI2VSteps || 6) - 1} step={1} disabled={isLoading} />
+                        <NumberSlider label={`Steps: ${options.comfyVidWanI2VSteps || 6}`} value={options.comfyVidWanI2VSteps || 6} onChange={handleSliderChange('comfyVidWanI2VSteps')} min={4} max={20} step={1} disabled={isLoading} />
+                        <NumberSlider label={`CFG: ${options.comfyVidWanI2VCfg || 1}`} value={options.comfyVidWanI2VCfg || 1} onChange={handleSliderChange('comfyVidWanI2VCfg')} min={1} max={5} step={0.1} disabled={isLoading} />
+                        <NumberSlider label={`Refiner Start Step: ${options.comfyVidWanI2VRefinerStartStep || 3}`} value={options.comfyVidWanI2VRefinerStartStep || 3} onChange={handleSliderChange('comfyVidWanI2VRefinerStartStep')} min={1} max={(options.comfyVidWanI2VSteps || 6) - 1} step={1} disabled={isLoading} />
                     </OptionSection>
                     
                     <OptionSection title="Post-Processing">
@@ -271,8 +273,8 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                         </label>
                         {options.comfyVidWanI2VUseFilmGrain && (
                             <div className="space-y-4 pl-4 border-l-2 border-border-primary">
-                                <NumberSlider label="Intensity" value={options.comfyVidWanI2VFilmGrainIntensity || 0.02} onChange={handleSliderChange('comfyVidWanI2VFilmGrainIntensity')} min={0} max={0.2} step={0.01} disabled={isLoading} />
-                                <NumberSlider label="Saturation Mix" value={options.comfyVidWanI2VFilmGrainSize || 0.3} onChange={handleSliderChange('comfyVidWanI2VFilmGrainSize')} min={0.1} max={1} step={0.05} disabled={isLoading} />
+                                <NumberSlider label={`Intensity: ${options.comfyVidWanI2VFilmGrainIntensity || 0.02}`} value={options.comfyVidWanI2VFilmGrainIntensity || 0.02} onChange={handleSliderChange('comfyVidWanI2VFilmGrainIntensity')} min={0} max={0.2} step={0.01} disabled={isLoading} />
+                                <NumberSlider label={`Saturation Mix: ${options.comfyVidWanI2VFilmGrainSize || 0.3}`} value={options.comfyVidWanI2VFilmGrainSize || 0.3} onChange={handleSliderChange('comfyVidWanI2VFilmGrainSize')} min={0.1} max={1} step={0.05} disabled={isLoading} />
                             </div>
                         )}
                     </OptionSection>
