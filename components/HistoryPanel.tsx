@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import type { HistoryItem } from '../types';
 import { getHistory, deleteHistoryItem, clearHistory } from '../services/historyService';
@@ -100,7 +101,13 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ isOpen, onClose, onL
                 <div className="space-y-3">
                     {history.map(item => (
                         <div key={item.id} className="bg-bg-tertiary p-3 rounded-lg flex items-center gap-4">
-                            <img src={item.sourceImage} alt="Source" className="w-16 h-16 object-cover rounded-md flex-shrink-0 bg-bg-primary"/>
+                            {item.sourceImage ? (
+                                <img src={item.sourceImage} alt="Source" className="w-16 h-16 object-cover rounded-md flex-shrink-0 bg-bg-primary"/>
+                            ) : (
+                                <div className="w-16 h-16 rounded-md flex-shrink-0 bg-bg-primary flex items-center justify-center">
+                                    <span className="text-xs text-text-muted font-mono" title="Text-to-Image Generation">T2I</span>
+                                </div>
+                            )}
                             <div className="flex-grow">
                                 <p className="text-sm font-semibold text-text-primary">
                                     {new Date(item.timestamp).toLocaleString()}

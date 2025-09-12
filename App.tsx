@@ -14,7 +14,7 @@ import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
 import { GenerateIcon } from './components/icons';
 import type { GenerationOptions, User, HistoryItem, VersionInfo } from './types';
 import { authenticateUser } from './services/cloudUserService';
-import { generatePortraitSeries } from './services/geminiService';
+import { generatePortraitSeries, generateImagesFromPrompt } from './services/geminiService';
 import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo, generateComfyUIPromptFromSource as generateComfyUIPromptService, generateComfyUIVideo } from './services/comfyUIService';
 import { saveGenerationToHistory } from './services/historyService';
 import { fileToResizedDataUrl, dataUrlToThumbnail } from './utils/imageUtils';
@@ -22,6 +22,8 @@ import { PHOTO_STYLE_OPTIONS, IMAGE_STYLE_OPTIONS, ERA_STYLE_OPTIONS } from './c
 
 const initialOptions: GenerationOptions = {
   provider: 'gemini',
+  geminiMode: 'i2i',
+  geminiPrompt: '',
   numImages: 2,
   background: 'original',
   aspectRatio: '3:4',
@@ -350,20 +352,29 @@ function App() {
     try {
       if (activeTab === 'image') {
           if (options.provider === 'gemini') {
-            if (!sourceImage) {
-              setError("Please upload a source image for Gemini generation.");
-              setIsLoading(false);
-              return;
+            if (options.geminiMode === 't2i') {
+                if (!options.geminiPrompt) {
+                  setError("Please enter a prompt for Gemini text-to-image generation.");
+                  setIsLoading(false);
+                  return;
+                }
+                generationPromise = generateImagesFromPrompt(options, updateProgress);
+            } else { // i2i mode
+                if (!sourceImage) {
+                  setError("Please upload a source image for Gemini image-to-image generation.");
+                  setIsLoading(false);
+                  return;
+                }
+                generationPromise = generatePortraitSeries(
+                  sourceImage,
+                  clothingImage,
+                  backgroundImage,
+                  previewedBackgroundImage,
+                  previewedClothingImage,
+                  options,
+                  updateProgress
+                );
             }
-            generationPromise = generatePortraitSeries(
-              sourceImage,
-              clothingImage,
-              backgroundImage,
-              previewedBackgroundImage,
-              previewedClothingImage,
-              options,
-              updateProgress
-            );
           } else if (options.provider === 'comfyui') {
             if (options.comfyModelType === 'nunchaku-kontext-flux' && !sourceImage) {
               setError("Nunchaku Kontext Flux requires a source image.");
@@ -383,20 +394,26 @@ function App() {
 
           const { images, finalPrompt } = await generationPromise;
           
-          if (images.length > 0 && sourceImage) {
-            const sourceImageForHistory = await fileToResizedDataUrl(sourceImage, 512);
-            const sourceThumbnail = await dataUrlToThumbnail(sourceImageForHistory, 128);
-
+          if (images.length > 0) {
             const generatedThumbnails = await Promise.all(
               images.map(imgDataUrl => dataUrlToThumbnail(imgDataUrl, 128))
             );
-
-            saveGenerationToHistory({
+            
+            const historyItem: Omit<HistoryItem, 'id'> = {
               timestamp: new Date().toISOString(),
-              sourceImage: sourceThumbnail,
               options: options,
               generatedImages: generatedThumbnails,
-            });
+              sourceImage: undefined,
+            };
+
+            const needsSourceImage = (options.provider === 'gemini' && options.geminiMode === 'i2i') || (options.provider === 'comfyui');
+
+            if (needsSourceImage && sourceImage) {
+              const sourceImageForHistory = await fileToResizedDataUrl(sourceImage, 512);
+              historyItem.sourceImage = await dataUrlToThumbnail(sourceImageForHistory, 128);
+            }
+            
+            saveGenerationToHistory(historyItem);
           }
           setGeneratedImages(images);
           setLastUsedPrompt(finalPrompt);
@@ -426,15 +443,18 @@ function App() {
     setOptions(item.options);
     setGeneratedImages(item.generatedImages);
     
-    // Try to reconstruct the source image File object
-    try {
-      const response = await fetch(item.sourceImage);
-      const blob = await response.blob();
-      const file = new File([blob], "history_source.jpeg", { type: blob.type });
-      setSourceImage(file);
-    } catch(e) {
-      console.error("Could not load source image from history", e);
-      setSourceImage(null); // clear if it fails
+    if (item.sourceImage) {
+      try {
+        const response = await fetch(item.sourceImage);
+        const blob = await response.blob();
+        const file = new File([blob], "history_source.jpeg", { type: blob.type });
+        setSourceImage(file);
+      } catch(e) {
+        console.error("Could not load source image from history", e);
+        setSourceImage(null);
+      }
+    } else {
+      setSourceImage(null);
     }
     
     setIsHistoryPanelOpen(false); // Close panel on load
@@ -448,7 +468,7 @@ function App() {
     }
   };
 
-  const isGenerationReady = (options.provider === 'gemini' && sourceImage !== null) || 
+  const isGenerationReady = (options.provider === 'gemini' && ((options.geminiMode === 'i2i' && sourceImage !== null) || (options.geminiMode === 't2i' && !!options.geminiPrompt))) || 
     (options.provider === 'comfyui' && !!options.comfyPrompt && (options.comfyModelType !== 'nunchaku-kontext-flux' || sourceImage !== null));
 
 
@@ -457,7 +477,9 @@ function App() {
   }
   
   const getUploaderSectionTitle = () => {
-      if (options.provider === 'gemini') return "1. Upload Images";
+      if (options.provider === 'gemini') {
+        return options.geminiMode === 't2i' ? "1. Configure Prompt" : "1. Upload Images";
+      }
       if (options.comfyModelType === 'nunchaku-kontext-flux' || options.comfyModelType === 'flux-krea') return "1. Setup Prompt";
       return "1. Upload Image & Set Prompt";
   };
@@ -471,8 +493,12 @@ function App() {
   };
 
   const showSourceImageUploader = () => {
-      if (options.provider === 'gemini') return true;
-      if (options.provider === 'comfyui') return true;
+      if (options.provider === 'gemini') {
+          return options.geminiMode === 'i2i';
+      }
+      if (options.provider === 'comfyui') {
+          return true;
+      }
       return false;
   }
 
@@ -515,25 +541,27 @@ function App() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             {/* Left Column for Controls */}
             <div className="lg:col-span-1 space-y-8">
-              <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                <h2 className="text-xl font-bold mb-4 text-accent">{getUploaderSectionTitle()}</h2>
-                <div className="space-y-4">
-                  {showSourceImageUploader() && (
-                    <ImageUploader 
-                      label={getSourceImageLabel()}
-                      id="source-image" 
-                      onImageUpload={setSourceImage} 
-                      sourceFile={sourceImage}
-                    />
-                  )}
-                  {options.provider === 'gemini' && options.clothing === 'image' && (
-                    <ImageUploader label="Clothing Reference Image (Optional)" id="clothing-image" onImageUpload={setClothingImage} sourceFile={clothingImage} />
-                  )}
-                  {options.provider === 'gemini' && options.background === 'image' && (
-                    <ImageUploader label="Background Image (Optional)" id="background-image" onImageUpload={setBackgroundImage} sourceFile={backgroundImage} />
-                  )}
+              {!(options.provider === 'gemini' && options.geminiMode === 't2i') &&
+                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                  <h2 className="text-xl font-bold mb-4 text-accent">{getUploaderSectionTitle()}</h2>
+                  <div className="space-y-4">
+                    {showSourceImageUploader() && (
+                      <ImageUploader 
+                        label={getSourceImageLabel()}
+                        id="source-image" 
+                        onImageUpload={setSourceImage} 
+                        sourceFile={sourceImage}
+                      />
+                    )}
+                    {options.provider === 'gemini' && options.geminiMode === 'i2i' && options.clothing === 'image' && (
+                      <ImageUploader label="Clothing Reference Image (Optional)" id="clothing-image" onImageUpload={setClothingImage} sourceFile={clothingImage} />
+                    )}
+                    {options.provider === 'gemini' && options.geminiMode === 'i2i' && options.background === 'image' && (
+                      <ImageUploader label="Background Image (Optional)" id="background-image" onImageUpload={setBackgroundImage} sourceFile={backgroundImage} />
+                    )}
+                  </div>
                 </div>
-              </div>
+              }
               <OptionsPanel 
                 options={options} 
                 setOptions={setOptions}

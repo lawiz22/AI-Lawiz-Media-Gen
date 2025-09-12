@@ -1,6 +1,8 @@
 
 export interface GenerationOptions {
   provider: 'gemini' | 'comfyui';
+  geminiMode?: 'i2i' | 't2i';
+  geminiPrompt?: string;
   numImages: number;
   background: string;
   aspectRatio: string;
@@ -134,7 +136,7 @@ export interface User {
 export interface HistoryItem {
   id: number; // Using timestamp for unique ID
   timestamp: string;
-  sourceImage: string; // as data URL
+  sourceImage?: string; // as data URL, optional for text-to-image
   options: GenerationOptions;
   generatedImages: string[];
 }

@@ -1,3 +1,4 @@
+
 // Fix: Implemented the full OptionsPanel component, which was missing.
 // This resolves the module resolution error and provides the necessary UI
 // for configuring image generation for both Gemini and ComfyUI providers.
@@ -465,6 +466,30 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
     const renderGeminiOptions = () => (
       <>
+        <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
+            <button onClick={() => setOptions(prev => ({...prev, geminiMode: 'i2i'}))} disabled={isDisabled}
+                    className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.geminiMode === 'i2i' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>
+                Image-to-Image
+            </button>
+            <button onClick={() => setOptions(prev => ({...prev, geminiMode: 't2i'}))} disabled={isDisabled}
+                    className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.geminiMode === 't2i' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>
+                Text-to-Image
+            </button>
+        </div>
+
+        {options.geminiMode === 't2i' &&
+            <OptionSection title="Prompt">
+                <TextInput 
+                    label="Prompt"
+                    value={options.geminiPrompt || ''}
+                    onChange={handleOptionChange('geminiPrompt')}
+                    placeholder="A photorealistic image of..."
+                    disabled={isDisabled}
+                    isTextArea
+                />
+            </OptionSection>
+        }
+
         <OptionSection title="Core Settings">
             <div>
                 <label className="block text-sm font-medium text-text-secondary">Number of Images: {options.numImages}</label>
@@ -473,137 +498,140 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={ASPECT_RATIO_OPTIONS} disabled={isDisabled} />
         </OptionSection>
 
-        <OptionSection title="Background">
-            <SelectInput label="Background Type" value={options.background} onChange={handleBackgroundTypeChange} options={BACKGROUND_OPTIONS} disabled={isDisabled} />
-            {(options.background === 'prompt' || options.background === 'random') && (
-                <div className="space-y-2 pl-4 border-l-2 border-border-primary">
-                    <TextInput label="Custom Background Prompt" value={options.customBackground || ''} onChange={handleOptionChange('customBackground')} placeholder="e.g., a futuristic neon city" disabled={isDisabled} />
-                    <div className="flex items-center gap-2">
-                         {options.background === 'random' && (
-                            <button onClick={handleRerollBackground} disabled={isDisabled} className="text-sm bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2">
-                               <RefreshIcon className="w-4 h-4"/> Re-roll
-                            </button>
-                        )}
-                        <button onClick={handleGenerateBgPreview} disabled={isDisabled || isPreviewingBg} className={`text-sm flex-1 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2`}>
-                            {isPreviewingBg ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <RefreshIcon className="w-4 h-4"/>}
-                            {isPreviewingBg ? 'Generating...' : 'Preview Background'}
-                        </button>
-                        <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
-                           <input type="checkbox" checked={options.consistentBackground} onChange={handleOptionChange('consistentBackground')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
-                           Use same BG
-                        </label>
-                    </div>
-                    {bgPreviewError && <p className="text-xs text-danger">{bgPreviewError}</p>}
-                    {previewedBackgroundImage && (
-                        <div className="mt-4 relative">
-                            <p className="text-xs font-medium text-text-secondary mb-1">Background Preview:</p>
-                            <img src={previewedBackgroundImage} alt="Background Preview" className="rounded-lg w-full object-contain border border-border-primary" />
-                            <button 
-                                onClick={() => setPreviewedBackgroundImage(null)}
-                                className="absolute top-6 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-black/75 transition-colors"
-                                title="Clear Preview"
-                                aria-label="Clear background preview"
-                            >
-                                <CloseIcon className="w-4 h-4" />
-                            </button>
+        {options.geminiMode === 'i2i' &&
+            <>
+                <OptionSection title="Background">
+                    <SelectInput label="Background Type" value={options.background} onChange={handleBackgroundTypeChange} options={BACKGROUND_OPTIONS} disabled={isDisabled} />
+                    {(options.background === 'prompt' || options.background === 'random') && (
+                        <div className="space-y-2 pl-4 border-l-2 border-border-primary">
+                            <TextInput label="Custom Background Prompt" value={options.customBackground || ''} onChange={handleOptionChange('customBackground')} placeholder="e.g., a futuristic neon city" disabled={isDisabled} />
+                            <div className="flex items-center gap-2">
+                                 {options.background === 'random' && (
+                                    <button onClick={handleRerollBackground} disabled={isDisabled} className="text-sm bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                                       <RefreshIcon className="w-4 h-4"/> Re-roll
+                                    </button>
+                                )}
+                                <button onClick={handleGenerateBgPreview} disabled={isDisabled || isPreviewingBg} className={`text-sm flex-1 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2`}>
+                                    {isPreviewingBg ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <RefreshIcon className="w-4 h-4"/>}
+                                    {isPreviewingBg ? 'Generating...' : 'Preview Background'}
+                                </button>
+                                <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+                                   <input type="checkbox" checked={options.consistentBackground} onChange={handleOptionChange('consistentBackground')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
+                                   Use same BG
+                                </label>
+                            </div>
+                            {bgPreviewError && <p className="text-xs text-danger">{bgPreviewError}</p>}
+                            {previewedBackgroundImage && (
+                                <div className="mt-4 relative">
+                                    <p className="text-xs font-medium text-text-secondary mb-1">Background Preview:</p>
+                                    <img src={previewedBackgroundImage} alt="Background Preview" className="rounded-lg w-full object-contain border border-border-primary" />
+                                    <button 
+                                        onClick={() => setPreviewedBackgroundImage(null)}
+                                        className="absolute top-6 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-black/75 transition-colors"
+                                        title="Clear Preview"
+                                        aria-label="Clear background preview"
+                                    >
+                                        <CloseIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
-                </div>
-            )}
-        </OptionSection>
-        
-        <OptionSection title="Clothing">
-            <SelectInput label="Clothing Source" value={options.clothing} onChange={handleClothingTypeChange} options={[
-                { value: 'original', label: 'Keep Original' },
-                { value: 'image', label: 'Use Reference Image' },
-                { value: 'prompt', label: 'Describe with Prompt' },
-                { value: 'random', label: 'Random Prompt' }
-            ]} disabled={isDisabled} />
-             {(options.clothing === 'prompt' || options.clothing === 'random') && (
-                <div className="space-y-2 pl-4 border-l-2 border-border-primary">
-                    <TextInput label="Custom Clothing Prompt" value={options.customClothingPrompt || ''} onChange={handleOptionChange('customClothingPrompt')} placeholder="e.g., a stylish leather jacket" disabled={isDisabled} />
-                    <div className="flex items-center gap-2">
-                         {options.clothing === 'random' && (
-                            <button onClick={handleRerollClothing} disabled={isDisabled} className="text-sm bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2">
-                               <RefreshIcon className="w-4 h-4"/> Re-roll
-                            </button>
-                        )}
-                        <button onClick={handleGenerateClothingPreview} disabled={isDisabled || isPreviewingClothing} className={`text-sm flex-1 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2`}>
-                            {isPreviewingClothing ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <RefreshIcon className="w-4 h-4"/>}
-                            {isPreviewingClothing ? 'Generating...' : 'Preview Clothing'}
-                        </button>
-                    </div>
-                     {clothingPreviewError && <p className="text-xs text-danger">{clothingPreviewError}</p>}
-                    {previewedClothingImage && (
-                        <div className="mt-4 relative">
-                            <p className="text-xs font-medium text-text-secondary mb-1">Clothing Preview:</p>
-                            <img src={previewedClothingImage} alt="Clothing Preview" className="rounded-lg w-full object-contain border border-border-primary" />
-                            <button 
-                                onClick={() => setPreviewedClothingImage(null)}
-                                className="absolute top-6 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-black/75 transition-colors"
-                                title="Clear Clothing Preview"
-                                aria-label="Clear clothing preview"
-                            >
-                                <CloseIcon className="w-4 h-4" />
-                            </button>
+                </OptionSection>
+                
+                <OptionSection title="Clothing">
+                    <SelectInput label="Clothing Source" value={options.clothing} onChange={handleClothingTypeChange} options={[
+                        { value: 'original', label: 'Keep Original' },
+                        { value: 'image', label: 'Use Reference Image' },
+                        { value: 'prompt', label: 'Describe with Prompt' },
+                        { value: 'random', label: 'Random Prompt' }
+                    ]} disabled={isDisabled} />
+                     {(options.clothing === 'prompt' || options.clothing === 'random') && (
+                        <div className="space-y-2 pl-4 border-l-2 border-border-primary">
+                            <TextInput label="Custom Clothing Prompt" value={options.customClothingPrompt || ''} onChange={handleOptionChange('customClothingPrompt')} placeholder="e.g., a stylish leather jacket" disabled={isDisabled} />
+                            <div className="flex items-center gap-2">
+                                 {options.clothing === 'random' && (
+                                    <button onClick={handleRerollClothing} disabled={isDisabled} className="text-sm bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                                       <RefreshIcon className="w-4 h-4"/> Re-roll
+                                    </button>
+                                )}
+                                <button onClick={handleGenerateClothingPreview} disabled={isDisabled || isPreviewingClothing} className={`text-sm flex-1 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2`}>
+                                    {isPreviewingClothing ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <RefreshIcon className="w-4 h-4"/>}
+                                    {isPreviewingClothing ? 'Generating...' : 'Preview Clothing'}
+                                </button>
+                            </div>
+                             {clothingPreviewError && <p className="text-xs text-danger">{clothingPreviewError}</p>}
+                            {previewedClothingImage && (
+                                <div className="mt-4 relative">
+                                    <p className="text-xs font-medium text-text-secondary mb-1">Clothing Preview:</p>
+                                    <img src={previewedClothingImage} alt="Clothing Preview" className="rounded-lg w-full object-contain border border-border-primary" />
+                                    <button 
+                                        onClick={() => setPreviewedClothingImage(null)}
+                                        className="absolute top-6 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-black/75 transition-colors"
+                                        title="Clear Clothing Preview"
+                                        aria-label="Clear clothing preview"
+                                    >
+                                        <CloseIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
+                            {(options.clothing === 'prompt' || options.clothing === 'random') && (
+                                <SelectInput label="Style Consistency" value={options.clothingStyleConsistency || 'varied'} onChange={handleOptionChange('clothingStyleConsistency')} options={[
+                                    {value: 'varied', label: 'Varied Interpretations'}, {value: 'strict', label: 'Strictly Identical'},
+                                ]} disabled={isDisabled} />
+                            )}
                         </div>
                     )}
-                    {(options.clothing === 'prompt' || options.clothing === 'random') && (
-                        <SelectInput label="Style Consistency" value={options.clothingStyleConsistency || 'varied'} onChange={handleOptionChange('clothingStyleConsistency')} options={[
-                            {value: 'varied', label: 'Varied Interpretations'}, {value: 'strict', label: 'Strictly Identical'},
-                        ]} disabled={isDisabled} />
+                </OptionSection>
+
+                <OptionSection title="Pose">
+                    <SelectInput label="Pose Mode" value={options.poseMode} onChange={handleOptionChange('poseMode')} options={[
+                        { value: 'random', label: 'Random' },
+                        { value: 'select', label: 'Select from Presets' },
+                        { value: 'prompt', label: 'Custom Poses' },
+                    ]} disabled={isDisabled} />
+                    {options.poseMode === 'select' && (
+                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2">
+                            {PRESET_POSES.map(pose => (
+                                <button key={pose.value} onClick={() => handlePoseSelection(pose.value)} disabled={isDisabled}
+                                    className={`p-2 text-xs text-left rounded-md transition-colors ${selectedPoses.includes(pose.value) ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>
+                                    {pose.label}
+                                </button>
+                            ))}
+                        </div>
                     )}
-                </div>
-            )}
-        </OptionSection>
-
-        <OptionSection title="Pose">
-            <SelectInput label="Pose Mode" value={options.poseMode} onChange={handleOptionChange('poseMode')} options={[
-                { value: 'random', label: 'Random' },
-                { value: 'select', label: 'Select from Presets' },
-                { value: 'prompt', label: 'Custom Poses' },
-            ]} disabled={isDisabled} />
-            {options.poseMode === 'select' && (
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2">
-                    {PRESET_POSES.map(pose => (
-                        <button key={pose.value} onClick={() => handlePoseSelection(pose.value)} disabled={isDisabled}
-                            className={`p-2 text-xs text-left rounded-md transition-colors ${selectedPoses.includes(pose.value) ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>
-                            {pose.label}
-                        </button>
-                    ))}
-                </div>
-            )}
-            {options.poseMode === 'prompt' && (
-                <div className="space-y-2 pl-4 border-l-2 border-border-primary">
-                    <div className="flex items-center justify-between">
-                        <label htmlFor="custom-poses" className="block text-sm font-medium text-text-secondary">
-                            Custom Poses (1 per line, max 13)
-                        </label>
-                        <button 
-                            onClick={handleRandomizeCustomPoses}
-                            disabled={isDisabled} 
-                            className="text-xs flex items-center gap-1 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-1 px-2 rounded-lg transition-colors"
-                            title="Generate random ideas"
-                        >
-                            <RefreshIcon className="w-3 h-3"/> Random Ideas
-                        </button>
-                    </div>
-                    <textarea 
-                        id="custom-poses"
-                        value={options.poseSelection.join('\n')}
-                        onChange={handleCustomPoseChange}
-                        placeholder="e.g., Leaning against a wall, looking thoughtfully to the side."
-                        disabled={isDisabled} 
-                        rows={5}
-                        className="block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                    />
-                    <p className="text-xs text-text-muted">
-                        {`Current poses: ${options.poseSelection.length}. The number of generated images will be capped by the number of poses.`}
-                    </p>
-                </div>
-            )}
-        </OptionSection>
-
+                    {options.poseMode === 'prompt' && (
+                        <div className="space-y-2 pl-4 border-l-2 border-border-primary">
+                            <div className="flex items-center justify-between">
+                                <label htmlFor="custom-poses" className="block text-sm font-medium text-text-secondary">
+                                    Custom Poses (1 per line, max 13)
+                                </label>
+                                <button 
+                                    onClick={handleRandomizeCustomPoses}
+                                    disabled={isDisabled} 
+                                    className="text-xs flex items-center gap-1 bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-1 px-2 rounded-lg transition-colors"
+                                    title="Generate random ideas"
+                                >
+                                    <RefreshIcon className="w-3 h-3"/> Random Ideas
+                                </button>
+                            </div>
+                            <textarea 
+                                id="custom-poses"
+                                value={options.poseSelection.join('\n')}
+                                onChange={handleCustomPoseChange}
+                                placeholder="e.g., Leaning against a wall, looking thoughtfully to the side."
+                                disabled={isDisabled} 
+                                rows={5}
+                                className="block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                            />
+                            <p className="text-xs text-text-muted">
+                                {`Current poses: ${options.poseSelection.length}. The number of generated images will be capped by the number of poses.`}
+                            </p>
+                        </div>
+                    )}
+                </OptionSection>
+            </>
+        }
         {renderStyleSection()}
         
         <OptionSection title="Text Overlay (Optional)">
@@ -1274,11 +1302,13 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         )}
       </>
     );
+    
+    const isGeminiT2I = options.provider === 'gemini' && options.geminiMode === 't2i';
 
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-8">
             <div>
-                <h2 className="text-xl font-bold mb-4 text-accent">2. Configure Generation</h2>
+                <h2 className="text-xl font-bold mb-4 text-accent">{isGeminiT2I ? "1." : "2."} Configure Generation</h2>
                 {renderProviderSwitch()}
             </div>
             

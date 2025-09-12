@@ -1,3 +1,4 @@
+
 // Implemented Gemini API service to fix module resolution errors.
 // Fix: Removed HarmCategory and HarmBlockThreshold as they are no longer used after removing safety settings.
 import { GoogleGenAI, Modality, Part, GenerateContentConfig } from "@google/genai";
@@ -129,6 +130,63 @@ export const enhanceImageResolution = async (base64ImageData: string): Promise<s
     throw new Error('Image enhancement failed. No image was returned from the API. The request may have been blocked.');
 };
 
+export const generateImagesFromPrompt = async (
+  options: GenerationOptions,
+  onProgress: (message: string, progress: number) => void
+): Promise<{ images: string[], firstPrompt: string }> => {
+  if (!options.geminiPrompt?.trim()) {
+    throw new Error("Prompt cannot be empty for text-to-image generation.");
+  }
+
+  const styleSegments = [];
+  if (options.imageStyle === 'photorealistic') {
+    styleSegments.push(options.eraStyle, options.photoStyle, 'photorealistic style');
+  } else {
+    styleSegments.push(`in a ${options.imageStyle} style`);
+  }
+
+  let fullPrompt = `${options.geminiPrompt}. ${styleSegments.join(', ')}.`;
+
+  if (options.addTextToImage && options.textOnImagePrompt?.trim() && options.textObjectPrompt?.trim()) {
+      let textPrompt = options.textObjectPrompt.replace('%s', options.textOnImagePrompt);
+      fullPrompt += ` The image must include ${textPrompt}.`;
+  }
+
+  const totalImages = options.numImages;
+  const generatedImages: string[] = [];
+
+  onProgress("Preparing for generation...", 0.1);
+
+  for (let i = 0; i < totalImages; i++) {
+    const progress = 0.1 + (i / totalImages) * 0.9;
+    onProgress(`Generating image ${i + 1} of ${totalImages}...`, progress);
+
+    try {
+      const response = await ai.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt: fullPrompt,
+        config: {
+          numberOfImages: 1,
+          outputMimeType: 'image/jpeg',
+          aspectRatio: options.aspectRatio as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
+        },
+      });
+
+      if (response.generatedImages && response.generatedImages.length > 0) {
+        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+        generatedImages.push(`data:image/jpeg;base64,${base64ImageBytes}`);
+      } else {
+        throw new Error(`The AI did not return an image for iteration ${i + 1}.`);
+      }
+    } catch (error: any) {
+      console.error(`Error generating image ${i + 1}:`, error);
+      throw new Error(error.message || `Failed to generate image ${i + 1} due to an unknown error.`);
+    }
+  }
+
+  onProgress("Finalizing results...", 0.99);
+  return { images: generatedImages, firstPrompt: fullPrompt };
+};
 
 export const generatePortraitSeries = async (
   sourceImage: File,
