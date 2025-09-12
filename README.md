@@ -1,20 +1,53 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Lawiz's AI Media Generator
 
-# Run and deploy your AI Studio app
+Welcome to Lawiz's AI Media Generator, a powerful and versatile web application designed for creating stunning images and videos using state-of-the-art AI models. This tool provides a unified interface to interact with both Google's Gemini API and a self-hosted ComfyUI backend, offering a wide range of creative possibilities for both novice and advanced users.
 
-This contains everything you need to run your app locally.
+## Key Features
 
-View your app in AI Studio: https://ai.studio/apps/drive/1bEe9uF6A5CoXCmNjXNOECS3dFca1HIOd
+### 1. Dual AI Backends
+- **Google Gemini:** Leverage Google's powerful `gemini-2.5-flash-image-preview` model for sophisticated image-to-image editing, including pose manipulation, clothing changes, background replacement, and style transfers. It also uses the `imagen` model for high-quality previews.
+- **ComfyUI Integration:** Connect directly to your local or remote ComfyUI instance to run complex, node-based workflows. The UI dynamically loads your installed models, samplers, and LoRAs.
 
-## Run Locally
+### 2. Advanced Image Generation
+- **Multi-Provider Support:** Seamlessly switch between Gemini and ComfyUI for image generation.
+- **Rich Configuration:** Fine-tune every aspect of your creation, including aspect ratio, artistic style, photo era, and number of images.
+- **Pose Control (Gemini):** Choose from a list of professional presets, write your own custom poses, or let the AI generate random ones.
+- **Clothing & Background Customization (Gemini):** Keep the original, replace from a reference image, or describe new clothing and backgrounds with text prompts. You can even preview AI-generated clothing and backgrounds before committing to a full generation.
+- **ComfyUI Workflow Support:** Out-of-the-box support for various popular ComfyUI workflows, including SD1.5, SDXL, FLUX, WAN 2.2, and Nunchaku.
+- **Post-Processing:** Enhance the resolution and quality of generated images with a single click using the Gemini API.
 
-**Prerequisites:**  Node.js
+### 3. AI-Powered Video Generation
+- **Image-to-Video:** Animate a static image by providing a start frame, an optional end frame, and a text prompt to guide the motion.
+- **WAN 2.2 I2V Workflow:** Utilizes the powerful WAN 2.2 Image-to-Video workflow in ComfyUI for high-quality, smooth video generation.
+- **Detailed Video Controls:** Configure frame count, frame rate, CFG, steps, and post-processing effects like film grain.
 
+### 4. Intelligent Prompting Tools (Admin)
+- **Prompt from Image:** Automatically generate a descriptive text prompt from an uploaded image, optimized for different model types (SD1.5, SDXL, FLUX).
+- **Element Extraction:** Isolate and generate prompts for just the background or the main subject of an image.
+- **Magical Prompt Soup:** Creatively merge multiple prompt ideas (e.g., a subject from one image, a background from another) into a unique, cohesive new prompt.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### 5. Robust User Experience
+- **User Authentication:** Secure login system with roles for regular users and administrators.
+- **Admin Panel:** Administrators can manage the user base by adding or deleting users.
+- **Generation History:** Automatically saves your generations (source image, settings, and results) to local storage, allowing you to review and reload previous sessions.
+- **Responsive & Thematic UI:** A sleek, modern interface that works across devices, with multiple themes (Cyberpunk, Synthwave, etc.) to customize your workspace.
+- **Real-Time Feedback:** Live progress bars and status messages keep you informed during the generation process.
+
+## How to Use
+
+1.  **Login:** Enter your credentials to access the application.
+2.  **Select a Generator:** Choose between the **Image Generator** and **Video Generator** tabs.
+3.  **Configure Backend (Image Generator):**
+    -   Select **Gemini** for powerful image editing and prompt-based generation.
+    -   Select **ComfyUI** to use your self-hosted workflows. Ensure your ComfyUI URL is configured correctly by clicking the workflow icon in the header.
+4.  **Provide Inputs:**
+    -   **Image Gen:** Upload a source image and any reference images for clothing or background. Write or generate a text prompt.
+    -   **Video Gen:** Upload a start frame and an optional end frame.
+5.  **Adjust Settings:** Use the left-hand panel to configure all generation parameters, from core settings like models and samplers to specific details like LoRA strength and post-processing effects.
+6.  **Generate:** Click the "Generate" button to start the process.
+7.  **View Results:** Your generated images or video will appear on the right. You can then download them, enhance them (for images), or use an image as a new source for another generation.
+
+## Setup Requirements
+
+-   **Google Gemini API Key:** The application requires a Google Gemini API key. This must be configured as an environment variable named `API_KEY` in the deployment environment.
+-   **ComfyUI Instance (Optional):** To use the ComfyUI features, you must have a running instance of ComfyUI accessible from your browser. You will need to configure the URL to your instance within this application's settings. For certain workflows (e.g., WAN 2.2, Nunchaku), you may need to install specific custom nodes via the ComfyUI Manager.
