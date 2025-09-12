@@ -95,6 +95,7 @@ export interface GenerationOptions {
   comfyFluxKreaUpscalerSteps?: number;
 
   // --- Video Generation ---
+  videoProvider?: 'comfyui' | 'gemini';
   comfyVidModelType?: 'wan-i2v';
 
   // WAN 2.2 Image-to-Video (First/Last Frame)
@@ -125,6 +126,11 @@ export interface GenerationOptions {
   comfyVidWanI2VHeight?: number;
   comfyVidWanI2VUseEndFrame?: boolean;
   comfyVidWanI2VEndFrameStrength?: number;
+
+  // Gemini Video Options
+  geminiVidModel?: string;
+  geminiVidPrompt?: string;
+  geminiVidUseEndFrame?: boolean;
 }
 
 export interface User {

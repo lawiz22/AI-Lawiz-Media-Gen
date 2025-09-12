@@ -14,7 +14,7 @@ import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
 import { GenerateIcon } from './components/icons';
 import type { GenerationOptions, User, HistoryItem, VersionInfo } from './types';
 import { authenticateUser } from './services/cloudUserService';
-import { generatePortraitSeries, generateImagesFromPrompt } from './services/geminiService';
+import { generatePortraitSeries, generateImagesFromPrompt, generateGeminiVideo } from './services/geminiService';
 import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo, generateComfyUIPromptFromSource as generateComfyUIPromptService, generateComfyUIVideo } from './services/comfyUIService';
 import { saveGenerationToHistory } from './services/historyService';
 import { fileToResizedDataUrl, dataUrlToThumbnail } from './utils/imageUtils';
@@ -118,6 +118,7 @@ const initialOptions: GenerationOptions = {
   comfyFluxKreaUpscalerSteps: 10,
 
   // Video options
+  videoProvider: 'comfyui',
   comfyVidModelType: 'wan-i2v',
   comfyVidWanI2VHighNoiseModel: 'Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf',
   comfyVidWanI2VLowNoiseModel: 'Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf',
@@ -146,6 +147,11 @@ const initialOptions: GenerationOptions = {
   comfyVidWanI2VHeight: 560,
   comfyVidWanI2VUseEndFrame: true,
   comfyVidWanI2VEndFrameStrength: 1.0,
+
+  // Gemini Video options
+  geminiVidModel: 'veo-2.0-generate-001',
+  geminiVidPrompt: '',
+  geminiVidUseEndFrame: false,
 };
 
 function App() {
@@ -291,7 +297,13 @@ function App() {
   };
   
   const handleReset = useCallback(() => {
-    setOptions(initialOptions);
+    const provider = options.provider; // Keep the current provider
+    const videoProvider = options.videoProvider; // Keep the current video provider
+    setOptions({
+        ...initialOptions,
+        provider: provider,
+        videoProvider: videoProvider
+    });
     setSourceImage(null);
     setClothingImage(null);
     setBackgroundImage(null);
@@ -303,7 +315,7 @@ function App() {
     setGeneratedVideo(null);
     setError(null);
     setLastUsedPrompt(null);
-  }, []);
+  }, [options.provider, options.videoProvider]);
 
   const handleGeneratePrompt = useCallback(async () => {
     if (!sourceImage) return;
@@ -347,23 +359,18 @@ function App() {
     setError(null);
     setLastUsedPrompt(null);
 
-    let generationPromise;
-
     try {
       if (activeTab === 'image') {
+          let generationPromise;
           if (options.provider === 'gemini') {
             if (options.geminiMode === 't2i') {
                 if (!options.geminiPrompt) {
-                  setError("Please enter a prompt for Gemini text-to-image generation.");
-                  setIsLoading(false);
-                  return;
+                  throw new Error("Please enter a prompt for Gemini text-to-image generation.");
                 }
                 generationPromise = generateImagesFromPrompt(options, updateProgress);
             } else { // i2i mode
                 if (!sourceImage) {
-                  setError("Please upload a source image for Gemini image-to-image generation.");
-                  setIsLoading(false);
-                  return;
+                  throw new Error("Please upload a source image for Gemini image-to-image generation.");
                 }
                 generationPromise = generatePortraitSeries(
                   sourceImage,
@@ -377,14 +384,10 @@ function App() {
             }
           } else if (options.provider === 'comfyui') {
             if (options.comfyModelType === 'nunchaku-kontext-flux' && !sourceImage) {
-              setError("Nunchaku Kontext Flux requires a source image.");
-              setIsLoading(false);
-              return;
+              throw new Error("Nunchaku Kontext Flux requires a source image.");
             }
             if (!options.comfyPrompt) {
-              setError("Please enter a prompt for ComfyUI or generate one from a source image.");
-              setIsLoading(false);
-              return;
+              throw new Error("Please enter a prompt for ComfyUI or generate one from a source image.");
             }
             setProgressMessage('Connecting to ComfyUI...');
             generationPromise = generateComfyUIPortraits(sourceImage, options, updateProgress);
@@ -419,13 +422,23 @@ function App() {
           setLastUsedPrompt(finalPrompt);
 
       } else if (activeTab === 'video') {
-        if (!startFrame) {
-          throw new Error("Please upload a start frame for video generation.");
+        if (options.videoProvider === 'gemini') {
+            if (!startFrame && !options.geminiVidPrompt?.trim()) {
+                throw new Error("Please upload an input image or provide a prompt for Gemini video generation.");
+            }
+            setProgressMessage('Connecting to Gemini for video generation...');
+            const { videoUrl, finalPrompt } = await generateGeminiVideo(startFrame, options, updateProgress);
+            setGeneratedVideo(videoUrl);
+            setLastUsedPrompt(finalPrompt);
+        } else { // ComfyUI
+            if (!startFrame) {
+              throw new Error("Please upload a start frame for ComfyUI video generation.");
+            }
+            setProgressMessage('Connecting to ComfyUI for video generation...');
+            const { videoUrl, finalPrompt } = await generateComfyUIVideo(startFrame, endFrame, options, updateProgress);
+            setGeneratedVideo(videoUrl);
+            setLastUsedPrompt(finalPrompt);
         }
-        setProgressMessage('Connecting to ComfyUI for video generation...');
-        const { videoUrl, finalPrompt } = await generateComfyUIVideo(startFrame, endFrame, options, updateProgress);
-        setGeneratedVideo(videoUrl);
-        setLastUsedPrompt(finalPrompt);
       } else {
         throw new Error("Invalid active tab for generation.");
       }
@@ -468,9 +481,24 @@ function App() {
     }
   };
 
-  const isGenerationReady = (options.provider === 'gemini' && ((options.geminiMode === 'i2i' && sourceImage !== null) || (options.geminiMode === 't2i' && !!options.geminiPrompt))) || 
-    (options.provider === 'comfyui' && !!options.comfyPrompt && (options.comfyModelType !== 'nunchaku-kontext-flux' || sourceImage !== null));
-
+  const isGenerationReady = () => {
+    if (isLoading) return false;
+    
+    if (activeTab === 'image') {
+        return (options.provider === 'gemini' && ((options.geminiMode === 'i2i' && sourceImage !== null) || (options.geminiMode === 't2i' && !!options.geminiPrompt))) || 
+               (options.provider === 'comfyui' && !!options.comfyPrompt && (options.comfyModelType !== 'nunchaku-kontext-flux' || sourceImage !== null));
+    }
+    
+    if (activeTab === 'video') {
+        if (options.videoProvider === 'gemini') {
+            return !!options.geminiVidPrompt?.trim();
+        } else { // comfyui
+            return !!startFrame && (!options.comfyVidWanI2VUseEndFrame || !!endFrame) && !!options.comfyVidWanI2VPositivePrompt;
+        }
+    }
+    
+    return false;
+  };
 
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
@@ -574,7 +602,7 @@ function App() {
                 onGeneratePrompt={handleGeneratePrompt}
                 onExportWorkflow={handleExportWorkflow}
                 isDisabled={isLoading}
-                isReady={isGenerationReady && !isLoading}
+                isReady={isGenerationReady()}
                 isGeneratingPrompt={isGeneratingPrompt}
                 comfyUIObjectInfo={comfyUIObjectInfo}
                 comfyUIUrl={comfyUIUrl}
@@ -616,7 +644,7 @@ function App() {
             endFrame={endFrame}
             setEndFrame={setEndFrame}
             onGenerate={handleGenerate}
-            isReady={!!startFrame && (!options.comfyVidWanI2VUseEndFrame || !!endFrame) && !!options.comfyVidWanI2VPositivePrompt && !isLoading}
+            isReady={isGenerationReady()}
             isLoading={isLoading}
             error={error}
             generatedVideo={generatedVideo}

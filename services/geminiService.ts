@@ -3,7 +3,7 @@
 // Fix: Removed HarmCategory and HarmBlockThreshold as they are no longer used after removing safety settings.
 import { GoogleGenAI, Modality, Part, GenerateContentConfig } from "@google/genai";
 import type { GenerationOptions } from "../types";
-import { fileToGenerativePart } from "../utils/imageUtils";
+import { fileToGenerativePart, fileToBase64 } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from "../utils/imageProcessing";
 import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
 
@@ -310,4 +310,103 @@ export const generatePortraitSeries = async (
 
   onProgress("Finalizing results...", 0.98);
   return { images: generatedImages, firstPrompt: firstPrompt || "No prompt was generated." };
+};
+
+export const generateGeminiVideo = async (
+  inputImage: File | null,
+  options: GenerationOptions,
+  onProgress: (message: string, progress: number) => void
+): Promise<{ videoUrl: string, finalPrompt: string }> => {
+    if (!options.geminiVidPrompt) {
+        throw new Error("A text prompt is required for video generation.");
+    }
+
+    onProgress("Preparing video generation request...", 0.05);
+
+    const videoRequest: any = {
+        model: options.geminiVidModel || 'veo-2.0-generate-001',
+        prompt: options.geminiVidPrompt,
+        config: {
+            numberOfVideos: 1,
+        }
+    };
+
+    if (inputImage) {
+        onProgress("Encoding input image...", 0.1);
+        const imageBytes = await fileToBase64(inputImage);
+        videoRequest.image = {
+            imageBytes: imageBytes,
+            mimeType: inputImage.type,
+        };
+    }
+
+    onProgress("Sending request to Gemini VEO...", 0.15);
+    let operation = await ai.models.generateVideos(videoRequest);
+    onProgress("Video generation started. This may take a few minutes...", 0.2);
+
+    const reassuringMessages = [
+        "Analyzing prompt and image...",
+        "Allocating creative resources...",
+        "Composing initial video frames...",
+        "Rendering motion vectors...",
+        "Applying visual styles...",
+        "Enhancing video details...",
+        "Finalizing video output...",
+        "Almost there, polishing the final cut...",
+    ];
+    let messageIndex = 0;
+    const startTime = Date.now();
+    
+    // Polling loop
+    while (!operation.done) {
+        // Wait for 10 seconds before checking status again
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        
+        const elapsedMinutes = ((Date.now() - startTime) / 60000).toFixed(1);
+        const progressMessage = reassuringMessages[messageIndex % reassuringMessages.length];
+        const progressValue = 0.2 + (messageIndex / (reassuringMessages.length * 2)); // Simulate slow progress
+        
+        onProgress(`${progressMessage} (${elapsedMinutes} mins elapsed)`, Math.min(progressValue, 0.9));
+        
+        try {
+            operation = await ai.operations.getVideosOperation({ operation: operation });
+        } catch (e: any) {
+             console.error("Error polling for video operation status:", e);
+             throw new Error(`Failed to get video status: ${e.message}`);
+        }
+        messageIndex++;
+    }
+
+    // Handle potential errors after the operation is "done".
+    if (operation.error) {
+        const errorMessage = (operation.error as any).message || JSON.stringify(operation.error);
+        console.error("Video generation operation failed with an error object:", operation.error);
+        throw new Error(`Video generation failed: ${errorMessage}`);
+    }
+
+    // Fix: Removed check for non-existent 'state' property on the video object.
+    // The logic now correctly verifies the presence of the download URI.
+    const generatedVideo = operation.response?.generatedVideos?.[0];
+    const downloadLink = generatedVideo?.video?.uri;
+
+    // Check if a video download link was provided after the operation completed.
+    if (!downloadLink) {
+        console.error("Video generation operation completed but returned no video URI:", operation.response);
+        throw new Error("Video generation finished, but no video was returned. This could be due to a content policy violation or an internal error.");
+    }
+
+    onProgress("Video processing complete. Downloading...", 0.95);
+    
+    // The response.body contains the MP4 bytes. You must append an API key when fetching from the download link.
+    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    if (!response.ok) {
+        throw new Error(`Failed to download the generated video. Status: ${response.status}`);
+    }
+
+    const videoBlob = await response.blob();
+    const videoUrl = URL.createObjectURL(videoBlob);
+    
+    onProgress("Video ready!", 1);
+
+    return { videoUrl, finalPrompt: options.geminiVidPrompt };
 };
