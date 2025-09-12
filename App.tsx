@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Login } from './components/Login';
@@ -14,7 +15,7 @@ import { GenerateIcon } from './components/icons';
 import type { GenerationOptions, User, HistoryItem, VersionInfo } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { generatePortraitSeries } from './services/geminiService';
-import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo, generateComfyUIPromptFromSource as generateComfyUIPromptService } from './services/comfyUIService';
+import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo, generateComfyUIPromptFromSource as generateComfyUIPromptService, generateComfyUIVideo } from './services/comfyUIService';
 import { saveGenerationToHistory } from './services/historyService';
 import { fileToResizedDataUrl, dataUrlToThumbnail } from './utils/imageUtils';
 import { PHOTO_STYLE_OPTIONS, IMAGE_STYLE_OPTIONS, ERA_STYLE_OPTIONS } from './constants';
@@ -113,6 +114,34 @@ const initialOptions: GenerationOptions = {
   comfyFluxKreaUseUpscaler: false,
   comfyFluxKreaDenoise: 0.8,
   comfyFluxKreaUpscalerSteps: 10,
+
+  // Video options
+  comfyVidModelType: 'wan-i2v',
+  comfyVidWanI2VHighNoiseModel: 'Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf',
+  comfyVidWanI2VLowNoiseModel: 'Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf',
+  comfyVidWanI2VClipModel: 'umt5-xxl-encoder-Q5_K_M.gguf',
+  comfyVidWanI2VVaeModel: 'wan_2.1_vae.safetensors',
+  comfyVidWanI2VClipVisionModel: 'clip_vision_h.safetensors',
+  comfyVidWanI2VUseLightningLora: true,
+  comfyVidWanI2VHighNoiseLora: 'Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors',
+  comfyVidWanI2VHighNoiseLoraStrength: 2.0,
+  comfyVidWanI2VLowNoiseLora: 'Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors',
+  comfyVidWanI2VLowNoiseLoraStrength: 1.0,
+  comfyVidWanI2VSteps: 6,
+  comfyVidWanI2VCfg: 1,
+  comfyVidWanI2VSampler: 'euler',
+  comfyVidWanI2VScheduler: 'simple',
+  comfyVidWanI2VFrameCount: 65,
+  comfyVidWanI2VRefinerStartStep: 3,
+  comfyVidWanI2VFrameRate: 24,
+  comfyVidWanI2VVideoFormat: 'video/nvenc_h264-mp4',
+  comfyVidWanI2VUseFilmGrain: true,
+  comfyVidWanI2VFilmGrainIntensity: 0.02,
+  comfyVidWanI2VFilmGrainSize: 0.3,
+  comfyVidWanI2VPositivePrompt: '',
+  comfyVidWanI2VNegativePrompt: 'disney pixar 3d type, pixar type cartoon, worst quality, low quality, jpeg artifacts, ugly, deformed, blurry',
+  comfyVidWanI2VWidth: 848,
+  comfyVidWanI2VHeight: 560,
 };
 
 function App() {
@@ -161,6 +190,11 @@ function App() {
   const [promptToolSubjectPrompt, setPromptToolSubjectPrompt] = useState<string>('');
   const [promptToolSoupPrompt, setPromptToolSoupPrompt] = useState<string>('');
   const [promptToolSoupHistory, setPromptToolSoupHistory] = useState<string[]>([]);
+
+  // --- State for VideoGeneratorPanel ---
+  const [startFrame, setStartFrame] = useState<File | null>(null);
+  const [endFrame, setEndFrame] = useState<File | null>(null);
+  const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
 
   const handleAddSoupToHistory = (soup: string) => {
     // Add new soup to the front, prevent duplicates, and limit history size
@@ -260,6 +294,9 @@ function App() {
     setPreviewedBackgroundImage(null);
     setPreviewedClothingImage(null);
     setGeneratedImages([]);
+    setStartFrame(null);
+    setEndFrame(null);
+    setGeneratedVideo(null);
     setError(null);
     setLastUsedPrompt(null);
   }, []);
@@ -302,65 +339,77 @@ function App() {
   const handleGenerate = async () => {
     setIsLoading(true);
     setGeneratedImages([]);
+    setGeneratedVideo(null);
     setError(null);
     setLastUsedPrompt(null);
 
     let generationPromise;
 
     try {
-      if (options.provider === 'gemini') {
-        if (!sourceImage) {
-          setError("Please upload a source image for Gemini generation.");
-          setIsLoading(false);
-          return;
+      if (activeTab === 'image') {
+          if (options.provider === 'gemini') {
+            if (!sourceImage) {
+              setError("Please upload a source image for Gemini generation.");
+              setIsLoading(false);
+              return;
+            }
+            generationPromise = generatePortraitSeries(
+              sourceImage,
+              clothingImage,
+              backgroundImage,
+              previewedBackgroundImage,
+              previewedClothingImage,
+              options,
+              updateProgress
+            );
+          } else if (options.provider === 'comfyui') {
+            if (options.comfyModelType === 'nunchaku-kontext-flux' && !sourceImage) {
+              setError("Nunchaku Kontext Flux requires a source image.");
+              setIsLoading(false);
+              return;
+            }
+            if (!options.comfyPrompt) {
+              setError("Please enter a prompt for ComfyUI or generate one from a source image.");
+              setIsLoading(false);
+              return;
+            }
+            setProgressMessage('Connecting to ComfyUI...');
+            generationPromise = generateComfyUIPortraits(sourceImage, options, updateProgress);
+          } else {
+            throw new Error("Invalid provider selected.");
+          }
+
+          const { images, finalPrompt } = await generationPromise;
+          
+          if (images.length > 0 && sourceImage) {
+            const sourceImageForHistory = await fileToResizedDataUrl(sourceImage, 512);
+            const sourceThumbnail = await dataUrlToThumbnail(sourceImageForHistory, 128);
+
+            const generatedThumbnails = await Promise.all(
+              images.map(imgDataUrl => dataUrlToThumbnail(imgDataUrl, 128))
+            );
+
+            saveGenerationToHistory({
+              timestamp: new Date().toISOString(),
+              sourceImage: sourceThumbnail,
+              options: options,
+              generatedImages: generatedThumbnails,
+            });
+          }
+          setGeneratedImages(images);
+          setLastUsedPrompt(finalPrompt);
+
+      } else if (activeTab === 'video') {
+        if (!startFrame || !endFrame) {
+          throw new Error("Please upload both a start and end frame for video generation.");
         }
-        generationPromise = generatePortraitSeries(
-          sourceImage,
-          clothingImage,
-          backgroundImage,
-          previewedBackgroundImage,
-          previewedClothingImage,
-          options,
-          updateProgress
-        );
-      } else if (options.provider === 'comfyui') {
-        if (options.comfyModelType === 'nunchaku-kontext-flux' && !sourceImage) {
-          setError("Nunchaku Kontext Flux requires a source image.");
-          setIsLoading(false);
-          return;
-        }
-        if (!options.comfyPrompt) {
-          setError("Please enter a prompt for ComfyUI or generate one from a source image.");
-          setIsLoading(false);
-          return;
-        }
-        setProgressMessage('Connecting to ComfyUI...');
-        generationPromise = generateComfyUIPortraits(sourceImage, options, updateProgress);
+        setProgressMessage('Connecting to ComfyUI for video generation...');
+        const { videoUrl, finalPrompt } = await generateComfyUIVideo(startFrame, endFrame, options, updateProgress);
+        setGeneratedVideo(videoUrl);
+        setLastUsedPrompt(finalPrompt);
       } else {
-        throw new Error("Invalid provider selected.");
+        throw new Error("Invalid active tab for generation.");
       }
-
-      const { images, finalPrompt } = await generationPromise;
-      
-      if (images.length > 0 && sourceImage) {
-        const sourceImageForHistory = await fileToResizedDataUrl(sourceImage, 512);
-        const sourceThumbnail = await dataUrlToThumbnail(sourceImageForHistory, 128);
-
-        // Create thumbnails for all generated images to save space in localStorage
-        const generatedThumbnails = await Promise.all(
-          images.map(imgDataUrl => dataUrlToThumbnail(imgDataUrl, 128))
-        );
-
-        saveGenerationToHistory({
-          timestamp: new Date().toISOString(),
-          sourceImage: sourceThumbnail,
-          options: options,
-          generatedImages: generatedThumbnails, // Save thumbnails instead of full images
-        });
-      }
-      setGeneratedImages(images);
-      setLastUsedPrompt(finalPrompt);
-
     } catch (err: any) {
       console.error("Generation failed:", err);
       setError(err.message || "An unknown error occurred during generation.");
@@ -527,7 +576,26 @@ function App() {
           </div>
         }
         
-        {activeTab === 'video' && <VideoGeneratorPanel />}
+        {activeTab === 'video' && 
+          <VideoGeneratorPanel
+            options={options}
+            setOptions={setOptions}
+            comfyUIObjectInfo={comfyUIObjectInfo}
+            startFrame={startFrame}
+            setStartFrame={setStartFrame}
+            endFrame={endFrame}
+            setEndFrame={setEndFrame}
+            onGenerate={handleGenerate}
+            isReady={!!startFrame && !!endFrame && !!options.comfyVidWanI2VPositivePrompt && !isLoading}
+            isLoading={isLoading}
+            error={error}
+            generatedVideo={generatedVideo}
+            lastUsedPrompt={lastUsedPrompt}
+            progressMessage={progressMessage}
+            progressValue={progressValue}
+            onReset={handleReset}
+          />
+        }
         {activeTab === 'prompt' && currentUser.role === 'admin' && 
             <PromptGeneratorPanel
                 onUsePrompt={(p) => { 
@@ -545,6 +613,7 @@ function App() {
                 subjectImage={promptToolSubjectImage}
                 setSubjectImage={setPromptToolSubjectImage}
                 subjectPrompt={promptToolSubjectPrompt}
+                // Fix: Corrected a typo in the PromptGeneratorPanel props, passing `setPromptToolSubjectPrompt` to `setSubjectPrompt` instead of an undefined variable.
                 setSubjectPrompt={setPromptToolSubjectPrompt}
                 soupPrompt={promptToolSoupPrompt}
                 setSoupPrompt={setPromptToolSoupPrompt}

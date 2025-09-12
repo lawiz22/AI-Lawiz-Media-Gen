@@ -805,3 +805,30 @@ export const COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE = {
     "class_type": "FluxGuidance"
   }
 };
+
+// --- ComfyUI WAN 2.2 Image-to-Video (First/Last Frame) Workflow ---
+export const COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE = {
+  "6": { "inputs": { "text": "positive prompt", "clip": [ "107", 0 ] }, "class_type": "CLIPTextEncode", "_meta": { "title": "CLIP Text Encode (Positive Prompt)" } },
+  "7": { "inputs": { "text": "negative prompt", "clip": [ "107", 0 ] }, "class_type": "CLIPTextEncode", "_meta": { "title": "CLIP Text Encode (Negative Prompt)" } },
+  "8": { "inputs": { "samples": [ "102", 0 ], "vae": [ "39", 0 ] }, "class_type": "VAEDecode", "_meta": { "title": "VAEDecode" } },
+  "39": { "inputs": { "vae_name": "wan_2.1_vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "VAELoader" } },
+  "49": { "inputs": { "clip_name": "clip_vision_h.safetensors" }, "class_type": "CLIPVisionLoader", "_meta": { "title": "CLIPVisionLoader" } },
+  "51": { "inputs": { "crop": "none", "clip_vision": [ "49", 0 ], "image": [ "52", 0 ] }, "class_type": "CLIPVisionEncode", "_meta": { "title": "CLIPVisionEncode" } },
+  "52": { "inputs": { "image": "start_image.png", "upload": "image" }, "class_type": "LoadImage", "_meta": { "title": "Load Start Image" } },
+  "72": { "inputs": { "image": "end_image.png", "upload": "image" }, "class_type": "LoadImage", "_meta": { "title": "Load End Image" } },
+  "79": { "inputs": { "shift": 8, "model": [ "94", 0 ] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModelSamplingSD3" } },
+  "83": { "inputs": { "width": 848, "height": 560, "length": 65, "batch_size": 1, "positive": [ "6", 0 ], "negative": [ "7", 0 ], "vae": [ "39", 0 ], "clip_vision_start_image": [ "51", 0 ], "clip_vision_end_image": [ "87", 0 ], "start_image": [ "52", 0 ], "end_image": [ "72", 0 ] }, "class_type": "WanFirstLastFrameToVideo", "_meta": { "title": "WanFirstLastFrameToVideo" } },
+  "87": { "inputs": { "crop": "none", "clip_vision": [ "49", 0 ], "image": [ "72", 0 ] }, "class_type": "CLIPVisionEncode", "_meta": { "title": "CLIPVisionEncode" } },
+  "93": { "inputs": { "shift": 8, "model": [ "95", 0 ] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModelSamplingSD3" } },
+  "94": { "inputs": { "lora_name": "Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors", "strength_model": 2, "model": [ "105", 0 ] }, "class_type": "LoraLoaderModelOnly", "_meta": { "title": "LoraLoaderModelOnly" } },
+  "95": { "inputs": { "lora_name": "Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors", "strength_model": 1, "model": [ "106", 0 ] }, "class_type": "LoraLoaderModelOnly", "_meta": { "title": "LoraLoaderModelOnly" } },
+  "96": { "inputs": { "sage_attention": "auto", "model": [ "79", 0 ] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "PathchSageAttentionKJ" } },
+  "98": { "inputs": { "sage_attention": "auto", "model": [ "93", 0 ] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "PathchSageAttentionKJ" } },
+  "101": { "inputs": { "add_noise": "enable", "noise_seed": 395665879778624, "control_after_generate": "randomize", "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 0, "end_at_step": 3, "return_with_leftover_noise": "enable", "model": [ "96", 0 ], "positive": [ "83", 0 ], "negative": [ "83", 1 ], "latent_image": [ "83", 2 ] }, "class_type": "KSamplerAdvanced", "_meta": { "title": "High Noise - KSampler (Advanced)" } },
+  "102": { "inputs": { "add_noise": "disable", "noise_seed": 0, "control_after_generate": "fixed", "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 3, "end_at_step": 10000, "return_with_leftover_noise": "disable", "model": [ "98", 0 ], "positive": [ "83", 0 ], "negative": [ "83", 1 ], "latent_image": [ "101", 0 ] }, "class_type": "KSamplerAdvanced", "_meta": { "title": "Low Noise - KSampler (Advanced)" } },
+  "105": { "inputs": { "unet_name": "Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf" }, "class_type": "UnetLoaderGGUF", "_meta": { "title": "UnetLoaderGGUF" } },
+  "106": { "inputs": { "unet_name": "Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf" }, "class_type": "UnetLoaderGGUF", "_meta": { "title": "UnetLoaderGGUF" } },
+  "107": { "inputs": { "clip_name": "umt5-xxl-encoder-Q5_K_M.gguf", "type": "wan" }, "class_type": "CLIPLoaderGGUF", "_meta": { "title": "CLIPLoaderGGUF" } },
+  "111": { "inputs": { "frame_rate": 24, "loop_count": 0, "filename_prefix": "GeneratedVideo_", "format": "video/nvenc_h264-mp4", "pix_fmt": "yuv420p", "bitrate": 10, "megabit": true, "save_metadata": true, "pingpong": false, "save_output": true, "images": [ "114", 0 ] }, "class_type": "VHS_VideoCombine", "_meta": { "title": "Video Final" } },
+  "114": { "inputs": { "grain_intensity": 0.02, "saturation_mix": 0.3, "images": [ "8", 0 ] }, "class_type": "FastFilmGrain", "_meta": { "title": "FastFilmGrain" } }
+};

@@ -90,6 +90,36 @@ export interface GenerationOptions {
   comfyFluxKreaUseUpscaler?: boolean;
   comfyFluxKreaDenoise?: number;
   comfyFluxKreaUpscalerSteps?: number;
+
+  // --- Video Generation ---
+  comfyVidModelType?: 'wan-i2v';
+
+  // WAN 2.2 Image-to-Video (First/Last Frame)
+  comfyVidWanI2VHighNoiseModel?: string;
+  comfyVidWanI2VLowNoiseModel?: string;
+  comfyVidWanI2VClipModel?: string;
+  comfyVidWanI2VVaeModel?: string;
+  comfyVidWanI2VClipVisionModel?: string;
+  comfyVidWanI2VUseLightningLora?: boolean;
+  comfyVidWanI2VHighNoiseLora?: string;
+  comfyVidWanI2VHighNoiseLoraStrength?: number;
+  comfyVidWanI2VLowNoiseLora?: string;
+  comfyVidWanI2VLowNoiseLoraStrength?: number;
+  comfyVidWanI2VSteps?: number;
+  comfyVidWanI2VCfg?: number;
+  comfyVidWanI2VSampler?: string;
+  comfyVidWanI2VScheduler?: string;
+  comfyVidWanI2VFrameCount?: number;
+  comfyVidWanI2VRefinerStartStep?: number;
+  comfyVidWanI2VFrameRate?: number;
+  comfyVidWanI2VVideoFormat?: string;
+  comfyVidWanI2VUseFilmGrain?: boolean;
+  comfyVidWanI2VFilmGrainIntensity?: number;
+  comfyVidWanI2VFilmGrainSize?: number;
+  comfyVidWanI2VPositivePrompt?: string;
+  comfyVidWanI2VNegativePrompt?: string;
+  comfyVidWanI2VWidth?: number;
+  comfyVidWanI2VHeight?: number;
 }
 
 export interface User {
