@@ -9,6 +9,7 @@ import { Loader } from './components/Loader';
 import { ComfyUIConnection } from './components/ComfyUIConnection';
 import { HistoryPanel } from './components/HistoryPanel';
 import { LibraryPanel } from './components/LibraryPanel';
+import { LibraryPickerModal } from './components/LibraryPickerModal';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
 import { ClothesExtractorPanel } from './components/ClothesExtractorPanel';
@@ -213,6 +214,37 @@ function App() {
   const [clothesExtractorFile, setClothesExtractorFile] = useState<File | null>(null);
   const [clothesExtractorDetails, setClothesExtractorDetails] = useState<string>('');
   const [clothesExtractorResults, setClothesExtractorResults] = useState<GeneratedClothing[]>([]);
+
+  // --- State for LibraryPickerModal ---
+  const [isLibraryPickerOpen, setIsLibraryPickerOpen] = useState(false);
+  const [libraryPickerConfig, setLibraryPickerConfig] = useState<{
+    target: 'sourceImage' | 'clothingImage' | null;
+    filter: 'image' | 'clothes' | null;
+  }>({ target: null, filter: null });
+
+  const handleOpenLibraryPicker = (target: 'sourceImage' | 'clothingImage', filter: 'image' | 'clothes') => {
+    setLibraryPickerConfig({ target, filter });
+    setIsLibraryPickerOpen(true);
+  };
+
+  const handleSelectFromLibrary = async (mediaDataUrl: string) => {
+    if (!libraryPickerConfig.target) return;
+
+    try {
+      const file = await dataUrlToFile(mediaDataUrl, `library_${libraryPickerConfig.target}.jpg`);
+      if (libraryPickerConfig.target === 'sourceImage') {
+        setSourceImage(file);
+      } else if (libraryPickerConfig.target === 'clothingImage') {
+        setClothingImage(file);
+      }
+    } catch (err) {
+      console.error("Failed to load from library", err);
+      setError("Failed to load the selected item.");
+    }
+
+    setIsLibraryPickerOpen(false);
+    setLibraryPickerConfig({ target: null, filter: null });
+  };
 
 
   const handleAddSoupToHistory = (soup: string) => {
@@ -518,8 +550,18 @@ function App() {
             setClothesExtractorFile(item.sourceImage ? await dataUrlToFile(item.sourceImage, 'library_source.jpg') : null);
             setClothesExtractorDetails(item.clothingDetails || '');
             try {
-                const parsedMedia = JSON.parse(item.media);
-                setClothesExtractorResults([{ name: item.name || 'Loaded Item', ...parsedMedia }]);
+                // Handle new (data URL) and old (JSON) formats
+                const isJson = item.media.trim().startsWith('{');
+                if (isJson) {
+                    const parsedMedia = JSON.parse(item.media);
+                    setClothesExtractorResults([{ name: item.name || 'Loaded Item', ...parsedMedia }]);
+                } else {
+                    // For single-image clothing items, we can't reconstruct the pair,
+                    // so we show a simplified result. A better UX might show just the single image.
+                    // For now, let's just create a placeholder state.
+                    const dummyItem = { name: item.name || 'Loaded Item', laidOutImage: item.media, foldedImage: item.media };
+                     setClothesExtractorResults([dummyItem]);
+                }
             } catch (e) {
                 console.error("Failed to parse media from clothes library item", e);
                 setClothesExtractorResults([]);
@@ -639,15 +681,30 @@ function App() {
                   <h2 className="text-xl font-bold mb-4 text-accent">{getUploaderSectionTitle()}</h2>
                   <div className="space-y-4">
                     {showSourceImageUploader() && (
-                      <ImageUploader 
-                        label={getSourceImageLabel()}
-                        id="source-image" 
-                        onImageUpload={setSourceImage} 
-                        sourceFile={sourceImage}
-                      />
+                       <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="block text-sm font-medium text-text-secondary">{getSourceImageLabel()}</span>
+                                <button onClick={() => handleOpenLibraryPicker('sourceImage', 'image')} className="flex items-center gap-1.5 text-xs bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-1 px-2 rounded-lg transition-colors">
+                                    <LibraryIcon className="w-4 h-4" /> From Library
+                                </button>
+                            </div>
+                            <ImageUploader 
+                                id="source-image" 
+                                onImageUpload={setSourceImage} 
+                                sourceFile={sourceImage}
+                            />
+                        </div>
                     )}
                     {options.provider === 'gemini' && options.geminiMode === 'i2i' && options.clothing === 'image' && (
-                      <ImageUploader label="Clothing Reference Image (Optional)" id="clothing-image" onImageUpload={setClothingImage} sourceFile={clothingImage} />
+                       <div>
+                           <div className="flex items-center justify-between mb-2">
+                                <span className="block text-sm font-medium text-text-secondary">Clothing Reference Image (Optional)</span>
+                                <button onClick={() => handleOpenLibraryPicker('clothingImage', 'clothes')} className="flex items-center gap-1.5 text-xs bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-1 px-2 rounded-lg transition-colors">
+                                    <LibraryIcon className="w-4 h-4" /> From Library
+                                </button>
+                            </div>
+                            <ImageUploader id="clothing-image" onImageUpload={setClothingImage} sourceFile={clothingImage} />
+                        </div>
                     )}
                     {options.provider === 'gemini' && options.geminiMode === 'i2i' && options.background === 'image' && (
                       <ImageUploader label="Background Image (Optional)" id="background-image" onImageUpload={setBackgroundImage} sourceFile={backgroundImage} />
@@ -781,6 +838,12 @@ function App() {
         isOpen={isHistoryPanelOpen}
         onClose={() => setIsHistoryPanelOpen(false)}
         onLoadHistoryItem={handleLoadHistoryItem}
+      />
+      <LibraryPickerModal
+        isOpen={isLibraryPickerOpen}
+        onClose={() => setIsLibraryPickerOpen(false)}
+        onSelectItem={handleSelectFromLibrary}
+        filter={libraryPickerConfig.filter}
       />
     </>
   );

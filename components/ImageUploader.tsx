@@ -2,7 +2,7 @@ import React, { useState, useCallback, ChangeEvent, DragEvent, useEffect } from 
 import { UploadIcon } from './icons';
 
 interface ImageUploaderProps {
-  label: string;
+  label?: string;
   id: string;
   onImageUpload: (file: File | null) => void;
   sourceFile?: File | null;
@@ -66,7 +66,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
 
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-text-secondary mb-2">{label}</label>
+      {label && <label htmlFor={id} className="block text-sm font-medium text-text-secondary mb-2">{label}</label>}
       <label
         htmlFor={disabled ? undefined : id}
         className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg transition-colors duration-200
