@@ -383,15 +383,23 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
                             <video src={selectedItem.media} controls autoPlay loop className="max-w-full max-h-full object-contain rounded-md" />
                          )}
                          {selectedItem.mediaType === 'clothes' && (() => {
+                            let mediaContent;
                             try {
+                                // Try to parse as JSON for old items (which stored both images)
                                 const media = JSON.parse(selectedItem.media);
-                                return (
+                                mediaContent = (
                                     <div className="flex flex-col gap-4 h-full w-full items-center justify-center">
                                         <div className="flex-1 w-full flex items-center justify-center"><img src={media.laidOutImage} alt="Laid out view" className="max-w-full max-h-full object-contain"/></div>
                                         <div className="flex-1 w-full flex items-center justify-center"><img src={media.foldedImage} alt="Folded view" className="max-w-full max-h-full object-contain"/></div>
                                     </div>
                                 );
-                            } catch(e) { return <p className="text-danger">Could not load clothing images.</p>}
+                            } catch(e) {
+                                // If parsing fails, it's a new item (single image data URL)
+                                mediaContent = (
+                                    <img src={selectedItem.media} alt={selectedItem.name || 'Clothing item'} className="max-w-full max-h-full object-contain rounded-md" />
+                                );
+                            }
+                            return mediaContent;
                          })()}
                     </div>
                     <div className="w-full md:w-72 flex-shrink-0 flex flex-col">
