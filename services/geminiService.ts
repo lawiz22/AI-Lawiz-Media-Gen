@@ -52,7 +52,7 @@ export const generateClothingPreview = async (prompt: string, aspectRatio: strin
       const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
       return `data:image/jpeg;base64,${base64ImageBytes}`;
     } else {
-      throw new Error("The AI did not return an image. Please try a different prompt.");
+      throw new Error("The AI did not return an image. This may be due to a safety policy violation. Please try a different prompt.");
     }
   } catch (error: any) {
     console.error("Error generating clothing preview:", error);
@@ -86,7 +86,7 @@ export const generateBackgroundImagePreview = async (
       const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
       return `data:image/jpeg;base64,${base64ImageBytes}`;
     } else {
-      throw new Error("The AI did not return an image. Please try a different prompt.");
+      throw new Error("The AI did not return an image. This may be due to a safety policy violation. Please try a different prompt.");
     }
   } catch (error: any) {
     console.error("Error generating background preview:", error);
@@ -176,7 +176,7 @@ export const generateImagesFromPrompt = async (
         const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
         generatedImages.push(`data:image/jpeg;base64,${base64ImageBytes}`);
       } else {
-        throw new Error(`The AI did not return an image for iteration ${i + 1}.`);
+        throw new Error(`The AI did not return an image for iteration ${i + 1}. The request may have been blocked due to safety policies. Please try modifying your prompt.`);
       }
     } catch (error: any) {
       console.error(`Error generating image ${i + 1}:`, error);

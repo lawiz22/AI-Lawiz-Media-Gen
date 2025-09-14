@@ -28,6 +28,9 @@ interface PromptPart {
   source: number; // 0 for new, 1 for full, 2 for bg, 3 for subject
 }
 
+// Fix: Corrected the 'wan 2.2' type to 'wan2.2' to match the service layer function signatures and fix the type error.
+type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2';
+
 
 export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     onUsePrompt,
@@ -37,22 +40,22 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     soupPrompt, setSoupPrompt, soupHistory, onAddSoupToHistory
 }) => {
     // --- Ephemeral state (not persisted) ---
-    const [modelType, setModelType] = useState<'sd1.5' | 'sdxl' | 'flux'>('sdxl');
+    const [modelType, setModelType] = useState<PromptModelType>('sdxl');
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [copyButtonText, setCopyButtonText] = useState('Copy Prompt');
 
-    const [bgModelType, setBgModelType] = useState<'sd1.5' | 'sdxl' | 'flux'>('sdxl');
+    const [bgModelType, setBgModelType] = useState<PromptModelType>('sdxl');
     const [isBgLoading, setIsBgLoading] = useState<boolean>(false);
     const [bgError, setBgError] = useState<string | null>(null);
     const [bgCopyButtonText, setBgCopyButtonText] = useState('Copy Prompt');
 
-    const [subjectModelType, setSubjectModelType] = useState<'sd1.5' | 'sdxl' | 'flux'>('sdxl');
+    const [subjectModelType, setSubjectModelType] = useState<PromptModelType>('sdxl');
     const [isSubjectLoading, setIsSubjectLoading] = useState<boolean>(false);
     const [subjectError, setSubjectError] = useState<string | null>(null);
     const [subjectCopyButtonText, setSubjectCopyButtonText] = useState('Copy Prompt');
 
-    const [soupModelType, setSoupModelType] = useState<'sd1.5' | 'sdxl' | 'flux'>('sdxl');
+    const [soupModelType, setSoupModelType] = useState<PromptModelType>('sdxl');
     const [soupCreativity, setSoupCreativity] = useState<number>(0.7);
     const [isSoupLoading, setIsSoupLoading] = useState<boolean>(false);
     const [soupError, setSoupError] = useState<string | null>(null);
@@ -231,6 +234,30 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         }
     };
 
+    const renderPromptTypeButtons = (currentType: PromptModelType, setType: (type: PromptModelType) => void) => {
+        // Fix: Corrected the 'wan 2.2' type to 'wan2.2' to match the service layer function signatures and fix the type error.
+        const types: { id: PromptModelType; label: string }[] = [
+            { id: 'gemini', label: 'Narrative (Gemini)' },
+            { id: 'wan2.2', label: 'Photographic (WAN 2.2)' },
+            { id: 'flux', label: 'Descriptive (FLUX)' },
+            { id: 'sdxl', label: 'Sentence (SDXL)' },
+            { id: 'sd1.5', label: 'Keywords (SD1.5)' },
+        ];
+        return (
+            <div className="flex flex-wrap gap-2">
+                {types.map(type => (
+                    <button
+                        key={type.id}
+                        onClick={() => setType(type.id)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${currentType === type.id ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}
+                    >
+                        {type.label}
+                    </button>
+                ))}
+            </div>
+        );
+    };
+
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto space-y-8">
             {/* --- Generate Prompt from Image Section --- */}
@@ -249,12 +276,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             sourceFile={image}
                         />
                         <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-1">Prompt Type</label>
-                            <div className="flex rounded-md border border-border-primary">
-                                <button onClick={() => setModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${modelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Very Simple (SD 1.5)</button>
-                                <button onClick={() => setModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${modelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
-                                <button onClick={() => setModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${modelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
-                            </div>
+                            <label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>
+                            {renderPromptTypeButtons(modelType, setModelType)}
                         </div>
                         <button
                             onClick={handleGenerate}
@@ -326,12 +349,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             sourceFile={bgImage}
                         />
                         <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-1">Prompt Type</label>
-                            <div className="flex rounded-md border border-border-primary">
-                                <button onClick={() => setBgModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${bgModelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Very Simple (SD 1.5)</button>
-                                <button onClick={() => setBgModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${bgModelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
-                                <button onClick={() => setBgModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${bgModelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
-                            </div>
+                            <label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>
+                            {renderPromptTypeButtons(bgModelType, setBgModelType)}
                         </div>
                          <button
                             onClick={handleBgGenerate}
@@ -403,12 +422,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             sourceFile={subjectImage}
                         />
                         <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-1">Prompt Type</label>
-                            <div className="flex rounded-md border border-border-primary">
-                                <button onClick={() => setSubjectModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${subjectModelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Very Simple (SD 1.5)</button>
-                                <button onClick={() => setSubjectModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${subjectModelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Simplified (SDXL)</button>
-                                <button onClick={() => setSubjectModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${subjectModelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>Detailed (FLUX)</button>
-                            </div>
+                            <label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>
+                            {renderPromptTypeButtons(subjectModelType, setSubjectModelType)}
                         </div>
                          <button
                             onClick={handleSubjectGenerate}
@@ -475,12 +490,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                     {/* Left Column: Controls */}
                     <div className="space-y-6 bg-bg-tertiary p-6 rounded-lg border border-border-primary/50">
                         <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-1">Output Prompt Type</label>
-                            <div className="flex rounded-md border border-border-primary">
-                                <button onClick={() => setSoupModelType('sd1.5')} className={`flex-1 p-2 text-sm rounded-l-md transition-colors ${soupModelType === 'sd1.5' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary'}`}>Very Simple (SD 1.5)</button>
-                                <button onClick={() => setSoupModelType('sdxl')} className={`flex-1 p-2 text-sm transition-colors border-x border-border-primary ${soupModelType === 'sdxl' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary'}`}>Simplified (SDXL)</button>
-                                <button onClick={() => setSoupModelType('flux')} className={`flex-1 p-2 text-sm rounded-r-md transition-colors ${soupModelType === 'flux' ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary'}`}>Detailed (FLUX)</button>
-                            </div>
+                            <label className="block text-sm font-medium text-text-secondary mb-2">Output Prompt Type</label>
+                            {renderPromptTypeButtons(soupModelType, setSoupModelType)}
                         </div>
 
                         <div>

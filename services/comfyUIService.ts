@@ -1,4 +1,3 @@
-
 // Fix: Implemented the full comfyUIService.ts module to resolve all module-not-found errors.
 import { GoogleGenAI } from "@google/genai";
 import { fileToGenerativePart } from "../utils/imageUtils";
@@ -28,13 +27,32 @@ const getClientId = (): string => `lawiz-app-${Math.random().toString(36).substr
 
 // --- Gemini-based Prompt Generation ---
 
+// Fix: Standardized 'wan2.2' model type string to align with GenerationOptions and fix type errors.
+const getPromptStyleInstruction = (modelType: 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2'): string => {
+    switch(modelType) {
+        case 'sd1.5':
+            return 'Your response MUST be a very simple, comma-separated list of keywords. Do not use sentences.';
+        case 'flux':
+            return 'Your response MUST be a single, detailed, artistic, and descriptive paragraph. Use rich vocabulary.';
+        case 'gemini':
+            return 'Your response MUST be a detailed, narrative paragraph written in natural language. Describe the scene as if you were writing a story or giving instructions to a human artist. Use full, descriptive sentences.';
+        case 'wan2.2':
+        case 'sdxl':
+        default:
+            return 'Your response MUST be a single, concise, natural language sentence.';
+    }
+};
+
 // Fix: Added 'nunchaku-kontext-flux' to the modelType union to match the GenerationOptions type and resolve the TypeScript error.
-export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea'): Promise<string> => {
+export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'gemini'): Promise<string> => {
     const imagePart = await fileToGenerativePart(sourceImage);
     let instruction = '';
     switch(modelType) {
         case 'sd1.5':
             instruction = 'Describe this image in a very simple, comma-separated list of keywords suitable for an SD1.5 model. Focus on the main subject and key visual elements. Avoid complex sentences. Example: "a woman smiling, portrait, studio lighting, professional photo".';
+            break;
+        case 'gemini':
+            instruction = 'You are a creative assistant. Describe this image in a detailed, narrative paragraph written in natural language, suitable for a Gemini image generation model. Describe the scene as if you were writing a story or giving instructions to a human artist. Use full, descriptive sentences focusing on mood, lighting, and composition.';
             break;
         case 'flux':
         case 'nunchaku-flux-image':
@@ -59,9 +77,11 @@ export const generateComfyUIPromptFromSource = async (sourceImage: File, modelTy
     return text;
 };
 
-export const extractBackgroundPromptFromImage = async (sourceImage: File, modelType: 'sd1.5' | 'sdxl' | 'flux'): Promise<string> => {
+// Fix: Standardized 'wan2.2' model type string to align with GenerationOptions and fix type errors.
+export const extractBackgroundPromptFromImage = async (sourceImage: File, modelType: 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2'): Promise<string> => {
     const imagePart = await fileToGenerativePart(sourceImage);
-    const instruction = `Analyze the background of this image, ignoring any people or foreground subjects. Describe the environment in detail. The description should be suitable for an image generation model of type '${modelType}'. For SD1.5, use simple keywords. For SDXL, use a natural sentence. For FLUX, use a detailed, artistic paragraph.`;
+    const styleInstruction = getPromptStyleInstruction(modelType);
+    const instruction = `Analyze ONLY the background of this image, ignoring any people or foreground subjects. Describe the environment in detail. ${styleInstruction}`;
 
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -74,9 +94,11 @@ export const extractBackgroundPromptFromImage = async (sourceImage: File, modelT
     return text;
 };
 
-export const extractSubjectPromptFromImage = async (sourceImage: File, modelType: 'sd1.5' | 'sdxl' | 'flux'): Promise<string> => {
+// Fix: Standardized 'wan2.2' model type string to align with GenerationOptions and fix type errors.
+export const extractSubjectPromptFromImage = async (sourceImage: File, modelType: 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2'): Promise<string> => {
     const imagePart = await fileToGenerativePart(sourceImage);
-    const instruction = `Analyze the main subject (person or object) of this image, ignoring the background. Describe the subject in detail, including appearance, clothing, and any defining features. The description should be suitable for an image generation model of type '${modelType}'. For SD1.5, use simple keywords. For SDXL, use a natural sentence. For FLUX, use a detailed, artistic paragraph.`;
+    const styleInstruction = getPromptStyleInstruction(modelType);
+    const instruction = `Analyze ONLY the main subject (person or object) of this image, ignoring the background. Describe the subject in detail, including appearance, clothing, and any defining features. ${styleInstruction}`;
 
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -93,7 +115,8 @@ export const generateMagicalPromptSoup = async (
     fullPrompt: string,
     bgPrompt: string,
     subjectPrompt: string,
-    modelType: 'sd1.5' | 'sdxl' | 'flux',
+    // Fix: Standardized 'wan2.2' model type string to align with GenerationOptions and fix type errors.
+    modelType: 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2',
     creativity: number
 ): Promise<{ text: string; source: number }[]> => {
     let instruction = `You are a creative assistant for generating image prompts. Combine the following elements into a new, cohesive, and imaginative prompt suitable for a '${modelType}' model.
@@ -181,7 +204,7 @@ const queuePrompt = async (prompt: any, clientId: string): Promise<string> => {
         throw new Error(`Failed to queue prompt: ${response.statusText} - ${errorText}`);
     }
     const data = await response.json();
-    if (data.error) throw new Error(`Error from ComfyUI: ${data.error.type} - ${data.error.message}`);
+    if (data.error) throw new Error(`Error from ComfyUI: ${data.error.type} - ${JSON.stringify(data.error.details || data.error.message)}`);
     return data.prompt_id;
 };
 
@@ -309,7 +332,6 @@ const executeWorkflow = async (
 };
 
 const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null): Promise<any> => {
-    // This is a simplified workflow builder. A full version would be much larger.
     let workflow;
     switch(options.comfyModelType) {
         case 'sd1.5': workflow = JSON.parse(JSON.stringify(COMFYUI_SD15_WORKFLOW_TEMPLATE)); break;
@@ -321,20 +343,274 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         case 'flux':
         default: workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE)); break;
     }
-    
-    // --- Generic Modifications ---
-    const posPromptNode = Object.values(workflow).find((n: any) => n._meta?.title?.includes("Positive Prompt")) as any;
-    const negPromptNode = Object.values(workflow).find((n: any) => n._meta?.title?.includes("Negative Prompt")) as any;
-    if (posPromptNode) posPromptNode.inputs.text = options.comfyPrompt;
-    if (negPromptNode) negPromptNode.inputs.text = options.comfyNegativePrompt;
 
-    if (options.comfyModelType === 'nunchaku-kontext-flux' && sourceFile) {
-        const uploadedImage = await uploadImage(sourceFile);
-        const loadImageNode = Object.values(workflow).find((n: any) => n.class_type === 'LoadImage') as any;
-        if(loadImageNode) loadImageNode.inputs.image = uploadedImage.name;
-    }
-    // More modifications would go here based on workflow type
+    // --- Helper to find node by various criteria ---
+    const findNodeKey = (identifier: string, by: 'title' | 'class_type' | 'key') => {
+        return Object.keys(workflow).find(k => {
+            const node = workflow[k];
+            if (by === 'title') return node._meta?.title?.toLowerCase().includes(identifier.toLowerCase());
+            if (by === 'class_type') return node.class_type.toLowerCase().startsWith(identifier.toLowerCase());
+            if (by === 'key') return k === identifier;
+            return false;
+        });
+    };
     
+    // --- Prompts (Common to most workflows) ---
+    const posPromptKey = findNodeKey("Positive Prompt", 'title');
+    if (posPromptKey) workflow[posPromptKey].inputs.text = options.comfyPrompt;
+    
+    const negPromptKey = findNodeKey("Negative Prompt", 'title');
+    if (negPromptKey) workflow[negPromptKey].inputs.text = options.comfyNegativePrompt;
+
+
+    // --- Apply Options Based on Workflow Type ---
+
+    if (['sd1.5', 'sdxl', 'flux'].includes(options.comfyModelType!)) {
+        const ckptLoaderKey = findNodeKey("CheckpointLoaderSimple", 'class_type');
+        if (ckptLoaderKey) workflow[ckptLoaderKey].inputs.ckpt_name = options.comfyModel;
+
+        const ksamplerKey = findNodeKey("KSampler", 'class_type');
+        if (ksamplerKey) {
+            const ksampler = workflow[ksamplerKey];
+            ksampler.inputs.steps = options.comfySteps;
+            ksampler.inputs.cfg = options.comfyCfg;
+            ksampler.inputs.sampler_name = options.comfySampler;
+            ksampler.inputs.scheduler = options.comfyScheduler;
+        }
+
+        const latentKey = findNodeKey("EmptyLatentImage", 'class_type');
+        if (latentKey) {
+            const [w, h] = options.aspectRatio.split(':').map(Number);
+            const isSD15 = options.comfyModelType === 'sd1.5';
+            const baseSize = isSD15 ? 512 : 1024;
+            const aspect = w / h;
+
+            let width, height;
+            if (aspect >= 1) { // Landscape or square
+                width = baseSize;
+                height = Math.round(baseSize / aspect / 8) * 8;
+            } else { // Portrait
+                height = baseSize;
+                width = Math.round(baseSize * aspect / 8) * 8;
+            }
+            workflow[latentKey].inputs.width = width;
+            workflow[latentKey].inputs.height = height;
+        }
+
+        if (options.comfyModelType === 'flux' && options.comfyFluxNodeName) {
+            const fluxGuidanceKey = findNodeKey(options.comfyFluxNodeName, 'class_type');
+            if(fluxGuidanceKey) workflow[fluxGuidanceKey].inputs.guidance = options.comfyFluxGuidance;
+        }
+
+        if (options.comfyModelType === 'sdxl' && options.comfySdxlUseLora && options.comfySdxlLoraName && ckptLoaderKey) {
+            const loraLoaderNode = {
+                "inputs": {
+                    "lora_name": options.comfySdxlLoraName,
+                    "strength_model": options.comfySdxlLoraStrength,
+                    "strength_clip": options.comfySdxlLoraStrength,
+                    "model": [ckptLoaderKey, 0],
+                    "clip": [ckptLoaderKey, 1]
+                },
+                "class_type": "LoraLoader",
+            };
+            const loraKey = "lora_loader";
+            workflow[loraKey] = loraLoaderNode;
+
+            if (ksamplerKey) workflow[ksamplerKey].inputs.model = [loraKey, 0];
+            if (posPromptKey) workflow[posPromptKey].inputs.clip = [loraKey, 1];
+            if (negPromptKey) workflow[negPromptKey].inputs.clip = [loraKey, 1];
+        }
+    }
+    else if (options.comfyModelType === 'wan2.2') {
+        // Models
+        workflow["38"].inputs.unet_name = options.comfyWanHighNoiseModel; // High noise
+        workflow["39"].inputs.unet_name = options.comfyWanLowNoiseModel; // Low noise
+        workflow["22"].inputs.clip_name = options.comfyWanClipModel;
+        workflow["8"].inputs.vae_name = options.comfyWanVaeModel;
+
+        // Latent
+        const [w, h] = options.aspectRatio.split(':').map(Number);
+        const latentNode = workflow["5"];
+        latentNode.inputs.width = w > h ? 1280 : 720;
+        latentNode.inputs.height = w > h ? 720 : 1280;
+
+        // Samplers
+        const sampler1 = workflow["35"];
+        const sampler2 = workflow["36"];
+        sampler1.inputs.steps = sampler2.inputs.steps = options.comfySteps;
+        sampler1.inputs.cfg = sampler2.inputs.cfg = options.comfyCfg;
+        sampler1.inputs.sampler_name = sampler2.inputs.sampler_name = options.comfySampler;
+        sampler1.inputs.scheduler = sampler2.inputs.scheduler = options.comfyScheduler;
+        sampler2.inputs.start_at_step = options.comfyWanRefinerStartStep;
+        sampler1.inputs.end_at_step = options.comfyWanRefinerStartStep;
+
+        // LoRAs
+        if(options.comfyWanUseFusionXLora) {
+            workflow["30"].inputs.lora_name = options.comfyWanFusionXLoraName;
+            workflow["30"].inputs.strength_model = workflow["30"].inputs.strength_clip = options.comfyWanFusionXLoraStrength;
+            workflow["43"].inputs.lora_name = options.comfyWanFusionXLoraName;
+            workflow["43"].inputs.strength_model = options.comfyWanFusionXLoraStrength;
+        } else {
+             workflow["29"].inputs.model = ["38", 0]; // Bypass FusionX for high noise
+             workflow["29"].inputs.clip = ["22", 0];
+             workflow["44"].inputs.model = ["39", 0]; // Bypass FusionX for low noise
+             delete workflow["30"];
+             delete workflow["43"];
+        }
+
+        if(options.comfyWanUseLightningLora) {
+            workflow["29"].inputs.lora_name = options.comfyWanLightningLoraNameHigh;
+            workflow["29"].inputs.strength_model = workflow["29"].inputs.strength_clip = options.comfyWanLightningLoraStrength;
+            workflow["44"].inputs.lora_name = options.comfyWanLightningLoraNameLow;
+            workflow["44"].inputs.strength_model = options.comfyWanLightningLoraStrength;
+        } else {
+            workflow["14"].inputs.model = options.comfyWanUseFusionXLora ? ["30", 0] : ["38", 0]; // Bypass Lightning for high noise
+            workflow["14"].inputs.clip = options.comfyWanUseFusionXLora ? ["30", 1] : ["22", 0];
+            workflow["45"].inputs.model = options.comfyWanUseFusionXLora ? ["43", 0] : ["39", 0]; // Bypass Lightning for low noise
+            delete workflow["29"];
+            delete workflow["44"];
+        }
+
+        if(options.comfyWanUseStockPhotoLora) {
+            workflow["14"].inputs.lora_name = options.comfyWanStockPhotoLoraNameHigh;
+            workflow["14"].inputs.strength_model = workflow["14"].inputs.strength_clip = options.comfyWanStockPhotoLoraStrength;
+            workflow["45"].inputs.lora_name = options.comfyWanStockPhotoLoraNameLow;
+            workflow["45"].inputs.strength_model = options.comfyWanStockPhotoLoraStrength;
+        } else {
+             sampler1.inputs.model = options.comfyWanUseLightningLora ? ["29", 0] : (options.comfyWanUseFusionXLora ? ["30", 0] : ["38", 0]);
+             sampler2.inputs.model = options.comfyWanUseLightningLora ? ["44", 0] : (options.comfyWanUseFusionXLora ? ["43", 0] : ["39", 0]);
+             delete workflow["14"];
+             delete workflow["45"];
+        }
+    }
+    else if (options.comfyModelType === 'nunchaku-kontext-flux') {
+        if (sourceFile) {
+            const uploadedImage = await uploadImage(sourceFile);
+            workflow["99"].inputs.image = uploadedImage.name;
+        }
+        // Models
+        workflow["22"].inputs.model_path = options.comfyNunchakuModel;
+        workflow["1"].inputs.vae_name = options.comfyNunchakuVae;
+        workflow["2"].inputs.clip_name1 = options.comfyNunchakuClipL;
+        workflow["2"].inputs.clip_name2 = options.comfyNunchakuT5XXL;
+        // Sampler
+        const ksampler = workflow["20"];
+        ksampler.inputs.steps = options.comfySteps;
+        ksampler.inputs.cfg = options.comfyCfg;
+        ksampler.inputs.sampler_name = options.comfySampler;
+        ksampler.inputs.scheduler = options.comfyScheduler;
+        // Params
+        workflow["12"].inputs.guidance = options.comfyFluxGuidanceKontext;
+        workflow["22"].inputs.cache_threshold = options.comfyNunchakuCacheThreshold;
+        workflow["22"].inputs.cpu_offload = options.comfyNunchakuCpuOffload;
+        workflow["22"].inputs.attention = options.comfyNunchakuAttention;
+        // LoRAs
+        let lastLoraNode = "22";
+        if(options.comfyNunchakuUseTurboLora) {
+            workflow["26"].inputs.lora_name = options.comfyNunchakuTurboLoraName;
+            workflow["26"].inputs.lora_strength = options.comfyNunchakuTurboLoraStrength;
+            workflow["26"].inputs.model = [lastLoraNode, 0];
+            lastLoraNode = "26";
+        } else { delete workflow["26"]; }
+
+        if(options.comfyNunchakuUseNudifyLora) {
+            workflow["27"].inputs.lora_name = options.comfyNunchakuNudifyLoraName;
+            workflow["27"].inputs.lora_strength = options.comfyNunchakuNudifyLoraStrength;
+            workflow["27"].inputs.model = [lastLoraNode, 0];
+            lastLoraNode = "27";
+        } else { delete workflow["27"]; }
+
+        if(options.comfyNunchakuUseDetailLora) {
+            workflow["28"].inputs.lora_name = options.comfyNunchakuDetailLoraName;
+            workflow["28"].inputs.lora_strength = options.comfyNunchakuDetailLoraStrength;
+            workflow["28"].inputs.model = [lastLoraNode, 0];
+            lastLoraNode = "28";
+        } else { delete workflow["28"]; }
+        ksampler.inputs.model = [lastLoraNode, 0];
+    }
+    else if (options.comfyModelType === 'nunchaku-flux-image') {
+        // Models
+        workflow["45"].inputs.model_path = options.comfyNunchakuModel;
+        workflow["10"].inputs.vae_name = options.comfyNunchakuVae;
+        workflow["44"].inputs.text_encoder1 = options.comfyNunchakuClipL;
+        workflow["44"].inputs.text_encoder2 = options.comfyNunchakuT5XXL;
+        // Sampler
+        workflow["17"].inputs.steps = options.comfySteps;
+        workflow["16"].inputs.sampler_name = options.comfySampler;
+        workflow["17"].inputs.scheduler = options.comfyScheduler;
+        // Params
+        workflow["26"].inputs.guidance = options.comfyFluxGuidanceKontext;
+        workflow["30"].inputs.base_shift = options.comfyNunchakuBaseShift;
+        workflow["30"].inputs.max_shift = options.comfyNunchakuMaxShift;
+        workflow["45"].inputs.cpu_offload = options.comfyNunchakuCpuOffload;
+        workflow["45"].inputs.attention = options.comfyNunchakuAttention;
+        
+        // LoRAs
+        let lastLoraNode = "45";
+        if (options.comfyNunchakuUseTurboLora) {
+            workflow["46"].inputs.lora_name = options.comfyNunchakuTurboLoraName;
+            workflow["46"].inputs.lora_strength = options.comfyNunchakuTurboLoraStrength;
+            workflow["46"].inputs.model = [lastLoraNode, 0];
+            lastLoraNode = "46";
+        } else { delete workflow["46"]; }
+
+        if (options.comfyNunchakuUseNudifyLora) {
+            workflow["48"].inputs.lora_name = options.comfyNunchakuNudifyLoraName;
+            workflow["48"].inputs.lora_strength = options.comfyNunchakuNudifyLoraStrength;
+            workflow["48"].inputs.model = [lastLoraNode, 0];
+            lastLoraNode = "48";
+        } else { delete workflow["48"]; }
+
+        if (options.comfyNunchakuUseDetailLora) {
+            workflow["47"].inputs.lora_name = options.comfyNunchakuDetailLoraName;
+            workflow["47"].inputs.lora_strength = options.comfyNunchakuDetailLoraStrength;
+            workflow["47"].inputs.model = [lastLoraNode, 0];
+            lastLoraNode = "47";
+        } else { delete workflow["47"]; }
+        workflow["30"].inputs.model = [lastLoraNode, 0];
+    }
+    else if (options.comfyModelType === 'flux-krea') {
+        // Models
+        workflow["186"].inputs.unet_name = options.comfyFluxKreaModel;
+        workflow["26"].inputs.clip_name2 = options.comfyFluxKreaClipT5;
+        workflow["26"].inputs.clip_name1 = options.comfyFluxKreaClipL;
+        workflow["27"].inputs.vae_name = options.comfyFluxKreaVae;
+        
+        // Sampler
+        workflow["163"].inputs.steps = options.comfySteps;
+        workflow["163"].inputs.sampler_name = options.comfySampler;
+        workflow["163"].inputs.scheduler = options.comfyScheduler;
+
+        // LoRAs
+        const loraLoader = workflow["191"];
+        loraLoader.widgets_values[2].on = options.useP1x4r0maWomanLora;
+        loraLoader.widgets_values[2].lora = options.p1x4r0maWomanLoraName;
+        loraLoader.widgets_values[2].strength = options.p1x4r0maWomanLoraStrength;
+        
+        loraLoader.widgets_values[3].on = options.useNippleDiffusionLora;
+        loraLoader.widgets_values[3].lora = options.nippleDiffusionLoraName;
+        loraLoader.widgets_values[3].strength = options.nippleDiffusionLoraStrength;
+        
+        loraLoader.widgets_values[4].on = options.usePussyDiffusionLora;
+        loraLoader.widgets_values[4].lora = options.pussyDiffusionLoraName;
+        loraLoader.widgets_values[4].strength = options.pussyDiffusionLoraStrength;
+
+        // Upscaler
+        if (options.comfyFluxKreaUseUpscaler) {
+            workflow["101"].inputs.model_name = options.comfyFluxKreaUpscaleModel;
+            workflow["51"].inputs.steps = options.comfyFluxKreaUpscalerSteps;
+            workflow["51"].inputs.denoise = options.comfyFluxKreaDenoise;
+        } else {
+            // Disable upscaling nodes by setting their mode to "Never"
+             workflow["51"].mode = 4;
+             workflow["100"].mode = 4;
+             workflow["102"].mode = 4;
+             workflow["110"].mode = 4;
+             workflow["111"].mode = 4;
+             workflow["170"].mode = 4;
+        }
+    }
+
     return workflow;
 };
 
@@ -348,9 +624,11 @@ export const generateComfyUIPortraits = async (
 
     for (let i = 0; i < options.numImages; i++) {
         const currentWorkflow = JSON.parse(JSON.stringify(baseWorkflow));
-        const ksamplerNode = Object.values(currentWorkflow).find((n: any) => n.class_type.startsWith('KSampler')) as any;
-        if (ksamplerNode) {
-            ksamplerNode.inputs.seed = Math.floor(Math.random() * 1e15);
+        
+        // Find any ksampler-like node to randomize seed
+        const samplerKey = Object.keys(currentWorkflow).find(k => currentWorkflow[k].class_type.toLowerCase().startsWith('ksampler'));
+        if (samplerKey) {
+            currentWorkflow[samplerKey].inputs.seed = Math.floor(Math.random() * 1e15);
         }
 
         const progressWrapper = (message: string, value: number) => {
