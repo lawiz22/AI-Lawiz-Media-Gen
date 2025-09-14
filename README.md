@@ -21,20 +21,25 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 - **WAN 2.2 I2V Workflow:** Utilizes the powerful WAN 2.2 Image-to-Video workflow in ComfyUI for high-quality, smooth video generation.
 - **Detailed Video Controls:** Configure frame count, frame rate, CFG, steps, and post-processing effects like film grain.
 
-### 4. Video Utilities
+### 4. Local Generation Library
+- **Save & Reload:** Save any generated image or video to a persistent local library in your browser.
+- **Complete State Capture:** The library stores not just the media, but also the exact prompts, models, and settings used.
+- **One-Click Restoration:** Load any item from the library to instantly restore the entire generation setup, making it easy to iterate or create variations.
+
+### 5. Video Utilities
 - **Frame Extractor:** Upload a video and use a precise slider to select and save any frame as a high-quality JPEG image. Includes a quick button to instantly save the very last frame, perfect for creating video continuations.
 
-### 5. Intelligent Prompting Tools (Admin)
+### 6. Intelligent Prompting Tools (Admin)
 - **Prompt from Image:** Automatically generate a descriptive text prompt from an uploaded image, optimized for different model types (SD1.5, SDXL, FLUX).
 - **Element Extraction:** Isolate and generate prompts for just the background or the main subject of an image.
 - **Magical Prompt Soup:** Creatively merge multiple prompt ideas (e.g., a subject from one image, a background from another) into a unique, cohesive new prompt.
 
-### 6. Clothes Extractor Utility
+### 7. Clothes Extractor Utility
 - **AI Clothing Identification:** Upload a photo and let the AI automatically detect all clothing items and accessories.
 - **E-commerce Product Shots:** For each item found, the AI generates two professional product shots: one laid out flat and one neatly folded, ready for online stores or catalogs.
 - **Accuracy Boost:** Provide optional text details to help the AI better identify specific or obscured items.
 
-### 7. Robust User Experience
+### 8. Robust User Experience
 - **User Authentication:** Secure login system with roles for regular users and administrators.
 - **Admin Panel:** Administrators can manage the user base by adding or deleting users.
 - **Generation History:** Automatically saves your generations (source image, settings, and results) to local storage, allowing you to review and reload previous sessions.
@@ -44,13 +49,13 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 ## How to Use
 
 1.  **Login:** Enter your credentials to access the application.
-2.  **Select a Tool:** Choose between the **Image Generator**, **Video Generator**, **Clothes Extractor**, or **Video Utilities** tabs.
+2.  **Select a Tool:** Choose between the **Image Generator**, **Video Generator**, **Library**, **Clothes Extractor**, or **Video Utilities** tabs.
 3.  **Configure & Provide Inputs:**
     -   **Image/Video Gen:** Upload source media, configure the AI backend (Gemini/ComfyUI), write prompts, and adjust detailed settings in the left-hand panel.
     -   **Clothes Extractor:** Upload a single photo and optionally add descriptive text to improve accuracy.
     -   **Video Utilities:** Upload a video to use the frame extractor.
 4.  **Generate:** Click the "Generate" or other relevant action button to begin processing.
-5.  **View Results:** Your generated media or extracted frames will appear on the right. You can then download them, enhance them (for images), or use an image as a new source for another generation.
+5.  **View & Save Results:** Your generated media will appear on the right. You can download them, enhance them (for images), save them to your library, or use an image as a new source.
 
 ## Setup Requirements
 

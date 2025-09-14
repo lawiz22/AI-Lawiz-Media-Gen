@@ -8,17 +8,18 @@ import { AdminPanel } from './components/AdminPanel';
 import { Loader } from './components/Loader';
 import { ComfyUIConnection } from './components/ComfyUIConnection';
 import { HistoryPanel } from './components/HistoryPanel';
+import { LibraryPanel } from './components/LibraryPanel';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
 import { ClothesExtractorPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
-import { GenerateIcon } from './components/icons';
-import type { GenerationOptions, User, HistoryItem, VersionInfo, GeneratedClothing } from './types';
+import { GenerateIcon, LibraryIcon } from './components/icons';
+import type { GenerationOptions, User, HistoryItem, VersionInfo, GeneratedClothing, LibraryItem } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { generatePortraitSeries, generateImagesFromPrompt, generateGeminiVideo } from './services/geminiService';
 import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo, generateComfyUIPromptFromSource as generateComfyUIPromptService, generateComfyUIVideo } from './services/comfyUIService';
 import { saveGenerationToHistory } from './services/historyService';
-import { fileToResizedDataUrl, dataUrlToThumbnail } from './utils/imageUtils';
+import { fileToResizedDataUrl, dataUrlToThumbnail, dataUrlToFile } from './utils/imageUtils';
 import { PHOTO_STYLE_OPTIONS, IMAGE_STYLE_OPTIONS, ERA_STYLE_OPTIONS } from './constants';
 
 const initialOptions: GenerationOptions = {
@@ -183,7 +184,7 @@ function App() {
   const [lastUsedPrompt, setLastUsedPrompt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'image' | 'video' | 'clothes' | 'video-utils' | 'prompt' | 'manage'>('image');
+  const [activeTab, setActiveTab] = useState<'image' | 'video' | 'library' | 'clothes' | 'video-utils' | 'prompt' | 'manage'>('image');
   const [isComfyModalOpen, setIsComfyModalOpen] = useState(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   
@@ -341,9 +342,7 @@ function App() {
 
   const handleSetNewSource = async (imageDataUrl: string) => {
       try {
-        const response = await fetch(imageDataUrl);
-        const blob = await response.blob();
-        const file = new File([blob], "new_source.jpeg", { type: "image/jpeg" });
+        const file = await dataUrlToFile(imageDataUrl, "new_source.jpeg");
         setSourceImage(file);
         setGeneratedImages([]); // Clear previous results
         setError(null);
@@ -465,9 +464,7 @@ function App() {
     
     if (item.sourceImage) {
       try {
-        const response = await fetch(item.sourceImage);
-        const blob = await response.blob();
-        const file = new File([blob], "history_source.jpeg", { type: blob.type });
+        const file = await dataUrlToFile(item.sourceImage, "history_source.jpeg");
         setSourceImage(file);
       } catch(e) {
         console.error("Could not load source image from history", e);
@@ -479,6 +476,27 @@ function App() {
     
     setIsHistoryPanelOpen(false); // Close panel on load
   };
+  
+  const handleLoadFromLibrary = async (item: LibraryItem) => {
+    setOptions(item.options);
+    
+    setSourceImage(item.sourceImage ? await dataUrlToFile(item.sourceImage, 'library_source.jpg') : null);
+    setStartFrame(item.startFrame ? await dataUrlToFile(item.startFrame, 'library_start.jpg') : null);
+    setEndFrame(item.endFrame ? await dataUrlToFile(item.endFrame, 'library_end.jpg') : null);
+    
+    if (item.mediaType === 'image') {
+      setGeneratedImages([item.media]);
+      setGeneratedVideo(null);
+      setActiveTab('image');
+    } else {
+      setGeneratedImages([]);
+      setGeneratedVideo(item.media);
+      setActiveTab('video');
+    }
+    setError(null);
+    setLastUsedPrompt(null);
+  };
+
 
   const handleExportWorkflow = () => {
     try {
@@ -559,6 +577,9 @@ function App() {
                 <button onClick={() => setActiveTab('video')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'video' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
                     Video Generator
                 </button>
+                <button onClick={() => setActiveTab('library')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'library' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                    Library
+                </button>
                 <button onClick={() => setActiveTab('clothes')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'clothes' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
                     Clothes Extractor
                 </button>
@@ -635,7 +656,13 @@ function App() {
                   <p className="text-sm">{error}</p>
                 </div>
               ) : generatedImages.length > 0 ? (
-                <ImageGrid images={generatedImages} onSetNewSource={handleSetNewSource} lastUsedPrompt={lastUsedPrompt}/>
+                <ImageGrid 
+                    images={generatedImages} 
+                    onSetNewSource={handleSetNewSource} 
+                    lastUsedPrompt={lastUsedPrompt}
+                    options={options}
+                    sourceImage={sourceImage}
+                />
               ) : (
                 <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
                     <GenerateIcon className="w-16 h-16 text-border-primary mb-4" />
@@ -667,6 +694,8 @@ function App() {
             onReset={handleReset}
           />
         }
+
+        {activeTab === 'library' && <LibraryPanel onLoadItem={handleLoadFromLibrary} />}
 
         {activeTab === 'clothes' &&
             <ClothesExtractorPanel 

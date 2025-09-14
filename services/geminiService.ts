@@ -1,4 +1,5 @@
 
+
 // Implemented Gemini API service to fix module resolution errors.
 // Fix: Removed HarmCategory and HarmBlockThreshold as they are no longer used after removing safety settings.
 import { GoogleGenAI, Modality, Part, GenerateContentConfig, Type } from "@google/genai";
@@ -481,7 +482,8 @@ export const generateClothingImage = async (
         model: 'gemini-2.5-flash-image-preview',
         contents: { parts: [imagePart, { text: prompt }] },
         config: {
-            responseModalities: [Modality.IMAGE],
+            // Fix: The 'gemini-2.5-flash-image-preview' model requires both IMAGE and TEXT modalities.
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
         },
     });
 

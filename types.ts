@@ -158,3 +158,14 @@ export interface GeneratedClothing {
   laidOutImage: string;
   foldedImage: string;
 }
+
+export interface LibraryItem {
+  id: number; // Timestamp
+  mediaType: 'image' | 'video';
+  thumbnail: string; // Small data URL for preview
+  media: string; // Full-size data URL for image or video
+  options: GenerationOptions;
+  sourceImage?: string; // data URL
+  startFrame?: string; // data URL
+  endFrame?: string; // data URL
+}

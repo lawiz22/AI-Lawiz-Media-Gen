@@ -1,10 +1,11 @@
-
 import React, { useState, useMemo, ChangeEvent, useEffect } from 'react';
-import { GenerateIcon, ResetIcon, VideoIcon, SpinnerIcon, CopyIcon } from './icons';
+import { GenerateIcon, ResetIcon, VideoIcon, SpinnerIcon, CopyIcon, SaveIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { Loader } from './Loader';
-import type { GenerationOptions } from '../types';
+import type { GenerationOptions, LibraryItem } from '../types';
 import { resizeImageFile } from '../utils/imageProcessing';
+import { saveToLibrary } from '../services/libraryService';
+import { fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 
 // --- Prop Types ---
 interface VideoGeneratorPanelProps {
@@ -89,6 +90,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const [originalEndFrame, setOriginalEndFrame] = useState<File | null>(null);
     const [frameResizeScale, setFrameResizeScale] = useState(1.0); // 1.0 = 100%
     const [isResizing, setIsResizing] = useState(false);
+    const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
     
     const comfyGgufModels = useMemo(() => {
         const widgetInfo = comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name || comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.gguf_name;
@@ -178,6 +180,27 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
         if (!isChecked) {
             setEndFrame(null);
             setOriginalEndFrame(null);
+        }
+    };
+    
+    const handleSaveToLibrary = async () => {
+        if (!generatedVideo || !startFrame) return;
+        setSavingState('saving');
+        try {
+            const item: Omit<LibraryItem, 'id'> = {
+                mediaType: 'video',
+                media: generatedVideo,
+                thumbnail: await dataUrlToThumbnail(await fileToResizedDataUrl(startFrame, 256), 256),
+                options: options,
+                startFrame: await fileToResizedDataUrl(startFrame, 512),
+                endFrame: endFrame ? await fileToResizedDataUrl(endFrame, 512) : undefined,
+            };
+            await saveToLibrary(item);
+            setSavingState('saved');
+            setTimeout(() => setSavingState('idle'), 2000);
+        } catch (err) {
+            console.error("Failed to save video to library:", err);
+            setSavingState('idle');
         }
     };
 
@@ -376,7 +399,22 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                     </div>
                 ) : generatedVideo ? (
                     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                        <h2 className="text-xl font-bold text-accent mb-4">Generated Video</h2>
+                        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                            <h2 className="text-xl font-bold text-accent">Generated Video</h2>
+                             <button
+                                onClick={handleSaveToLibrary}
+                                title={savingState === 'saved' ? 'Saved!' : 'Save to Library'}
+                                disabled={savingState !== 'idle'}
+                                className={`flex items-center justify-center gap-2 font-semibold py-2 px-3 rounded-lg transition-all duration-200 ${
+                                    savingState === 'saved' ? 'bg-green-500 text-white' :
+                                    savingState === 'saving' ? 'bg-bg-tertiary text-text-secondary cursor-wait' :
+                                    'bg-bg-tertiary text-text-secondary hover:bg-accent hover:text-accent-text'
+                                }`}
+                            >
+                                {savingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                {savingState === 'saving' ? 'Saving...' : savingState === 'saved' ? 'Saved!' : 'Save to Library'}
+                            </button>
+                        </div>
                         {lastUsedPrompt && (
                             <div className="mb-4">
                                 <label className="block text-sm font-medium text-text-secondary mb-1">Final Prompt Used</label>

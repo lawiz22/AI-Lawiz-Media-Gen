@@ -1,21 +1,28 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
-import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon } from './icons';
+import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon } from './icons';
 import { enhanceImageResolution } from '../services/geminiService';
+import { saveToLibrary } from '../services/libraryService';
+import type { GenerationOptions, LibraryItem } from '../types';
+import { fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
+
 
 interface ImageGridProps {
   images: string[];
   onSetNewSource: (imageData: string) => void;
   lastUsedPrompt?: string | null;
+  options: GenerationOptions;
+  sourceImage: File | null;
 }
 
-export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, lastUsedPrompt }) => {
+export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, lastUsedPrompt, options, sourceImage }) => {
   const [enhancedImages, setEnhancedImages] = useState<Record<number, string>>({});
   const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
   const [errorIndex, setErrorIndex] = useState<Record<number, string>>({});
   const [zoomedImageIndex, setZoomedImageIndex] = useState<number | null>(null);
   const [isZipping, setIsZipping] = useState<boolean>(false);
   const [copyButtonText, setCopyButtonText] = useState('Copy');
+  const [savingState, setSavingState] = useState<Record<number, 'idle' | 'saving' | 'saved'>>({});
 
   const handleDownload = (imageSrc: string, index: number) => {
     const link = document.createElement('a');
@@ -40,6 +47,26 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
     }
   };
   
+  const handleSaveToLibrary = async (imageSrc: string, index: number) => {
+    setSavingState(prev => ({ ...prev, [index]: 'saving' }));
+    try {
+      const item: Omit<LibraryItem, 'id'> = {
+        mediaType: 'image',
+        media: imageSrc,
+        thumbnail: await dataUrlToThumbnail(imageSrc, 256),
+        options: options,
+        sourceImage: sourceImage ? await fileToResizedDataUrl(sourceImage, 512) : undefined,
+      };
+      await saveToLibrary(item);
+      setSavingState(prev => ({ ...prev, [index]: 'saved' }));
+      setTimeout(() => setSavingState(prev => ({ ...prev, [index]: 'idle' })), 2000);
+    } catch (err) {
+      console.error("Failed to save to library:", err);
+      // Here you could set an error state
+      setSavingState(prev => ({ ...prev, [index]: 'idle' }));
+    }
+  };
+
   const handleSetAsSource = () => {
       if (zoomedImageIndex !== null && currentZoomedSrc) {
         onSetNewSource(currentZoomedSrc);
@@ -172,50 +199,73 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
                   const isEnhancing = enhancingIndex === index;
                   const finalSrc = enhancedImages[index] || src;
                   const hasError = !!errorIndex[index];
+                  const savingStatus = savingState[index] || 'idle';
 
                   return (
                       <div key={index} className="group relative aspect-w-1 aspect-h-1 bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
                           <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="object-cover w-full h-full" />
                           
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2">
-                               {isEnhancing ? (
-                                  <div className="text-center text-white">
-                                      <SpinnerIcon className="w-8 h-8 animate-spin mx-auto mb-2" />
-                                      <p className="text-sm font-semibold">Enhancing...</p>
-                                  </div>
-                              ) : hasError ? (
-                                  <div className="text-center text-danger p-2">
-                                      <p className="text-sm font-bold">Enhance Failed</p>
-                                      <p className="text-xs mt-1">{errorIndex[index]}</p>
-                                  </div>
-                              ) : (
-                                  <div className="flex items-center gap-2">
+                          {/* Unified hover overlay for all actions */}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="relative w-full h-full p-2">
+                                  {/* Save to Library Button (Top Right) */}
+                                  <div className="absolute top-2 right-2">
                                       <button
-                                          onClick={() => handleOpenZoom(index)}
-                                          title="Zoom In"
-                                          className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                                          onClick={() => handleSaveToLibrary(finalSrc, index)}
+                                          title={savingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
+                                          disabled={savingStatus !== 'idle'}
+                                          className={`p-2 rounded-full transition-all duration-200 ${
+                                              savingStatus === 'saved' ? 'bg-green-500 text-white' : 
+                                              savingStatus === 'saving' ? 'bg-bg-secondary text-text-secondary cursor-wait' :
+                                              'bg-bg-secondary/70 text-text-secondary hover:bg-accent hover:text-accent-text'
+                                          }`}
                                       >
-                                          <ZoomIcon className="w-5 h-5" />
+                                          {savingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
                                       </button>
-                                      <button
-                                          onClick={() => handleDownload(finalSrc, index)}
-                                          title="Download Image"
-                                          className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
-                                      >
-                                          <DownloadIcon className="w-5 h-5" />
-                                      </button>
-                                      {!enhancedImages[index] && (
-                                          <button
-                                              onClick={() => handleEnhance(src, index)}
-                                              disabled={enhancingIndex !== null}
-                                              title="Enhance Quality"
-                                              className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                          >
-                                              <EnhanceIcon className="w-5 h-5" />
-                                          </button>
+                                  </div>
+
+                                  {/* Main Action Buttons (Centered) */}
+                                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                                      {isEnhancing ? (
+                                          <div className="text-center text-white">
+                                              <SpinnerIcon className="w-8 h-8 animate-spin mx-auto mb-2" />
+                                              <p className="text-sm font-semibold">Enhancing...</p>
+                                          </div>
+                                      ) : hasError ? (
+                                          <div className="text-center text-danger p-2">
+                                              <p className="text-sm font-bold">Enhance Failed</p>
+                                              <p className="text-xs mt-1">{errorIndex[index]}</p>
+                                          </div>
+                                      ) : (
+                                          <div className="flex items-center gap-2">
+                                              <button
+                                                  onClick={() => handleOpenZoom(index)}
+                                                  title="Zoom In"
+                                                  className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                                              >
+                                                  <ZoomIcon className="w-5 h-5" />
+                                              </button>
+                                              <button
+                                                  onClick={() => handleDownload(finalSrc, index)}
+                                                  title="Download Image"
+                                                  className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                                              >
+                                                  <DownloadIcon className="w-5 h-5" />
+                                              </button>
+                                              {!enhancedImages[index] && (
+                                                  <button
+                                                      onClick={() => handleEnhance(src, index)}
+                                                      disabled={enhancingIndex !== null}
+                                                      title="Enhance Quality"
+                                                      className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                  >
+                                                      <EnhanceIcon className="w-5 h-5" />
+                                                  </button>
+                                              )}
+                                          </div>
                                       )}
                                   </div>
-                              )}
+                              </div>
                           </div>
                       </div>
                   );

@@ -1,4 +1,3 @@
-
 // Fix: The function was returning just the blob data, not a full Generative AI Part. Wrapped the result in `inlineData` and updated the return type to match the expected structure for the Gemini API.
 export const fileToGenerativePart = async (file: File): Promise<{inlineData: {mimeType: string; data: string}}> => {
   return new Promise((resolve, reject) => {
@@ -140,4 +139,13 @@ export const dataUrlToThumbnail = (dataUrl: string, maxSize: number): Promise<st
         img.onerror = reject;
         img.src = dataUrl;
     });
+};
+
+/**
+ * Converts a data URL string back to a File object.
+ */
+export const dataUrlToFile = async (dataUrl: string, filename: string): Promise<File> => {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: blob.type });
 };
