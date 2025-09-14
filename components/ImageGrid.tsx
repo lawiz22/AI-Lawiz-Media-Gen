@@ -4,7 +4,7 @@ import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLef
 import { enhanceImageResolution } from '../services/geminiService';
 import { saveToLibrary } from '../services/libraryService';
 import type { GenerationOptions, LibraryItem } from '../types';
-import { fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
+import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromDataUrl } from '../utils/imageUtils';
 
 
 interface ImageGridProps {
@@ -50,11 +50,14 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
   const handleSaveToLibrary = async (imageSrc: string, index: number) => {
     setSavingState(prev => ({ ...prev, [index]: 'saving' }));
     try {
+      const { width, height } = await getImageDimensionsFromDataUrl(imageSrc);
+      const optionsToSave = { ...options, width, height };
+
       const item: Omit<LibraryItem, 'id'> = {
         mediaType: 'image',
         media: imageSrc,
         thumbnail: await dataUrlToThumbnail(imageSrc, 256),
-        options: options,
+        options: optionsToSave,
         sourceImage: sourceImage ? await fileToResizedDataUrl(sourceImage, 512) : undefined,
       };
       await saveToLibrary(item);

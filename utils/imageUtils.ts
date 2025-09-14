@@ -149,3 +149,36 @@ export const dataUrlToFile = async (dataUrl: string, filename: string): Promise<
   const blob = await res.blob();
   return new File([blob], filename, { type: blob.type });
 };
+
+/**
+ * Gets the dimensions of an image from its data URL.
+ */
+export const getImageDimensionsFromDataUrl = (dataUrl: string): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        };
+        img.onerror = reject;
+        img.src = dataUrl;
+    });
+};
+
+/**
+ * Gets the dimensions of an image from a File object efficiently.
+ */
+export const getImageDimensionsFromFile = (file: File): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        };
+        img.onerror = (err) => {
+            URL.revokeObjectURL(url);
+            reject(err);
+        };
+        img.src = url;
+    });
+};

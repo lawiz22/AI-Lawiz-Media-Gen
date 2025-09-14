@@ -17,6 +17,7 @@ const formatOptionKey = (key: string): string => {
 
 const getRelevantOptionKeys = (options: GenerationOptions, mediaType: 'image' | 'video'): Set<string> => {
     const keys = new Set<string>();
+    keys.add('width').add('height');
 
     if (mediaType === 'image') {
         keys.add('provider');
@@ -197,6 +198,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<LibraryItem | null>(null);
   const [copyButtonText, setCopyButtonText] = useState('Copy Prompt');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'image' | 'video' | 'clothes'>('all');
 
   useEffect(() => {
     if (selectedItem) {
@@ -279,6 +281,11 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
       }
   };
 
+  const filteredItems = useMemo(() => {
+    if (activeFilter === 'all') return items;
+    return items.filter(item => item.mediaType === activeFilter);
+  }, [items, activeFilter]);
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-16">
@@ -311,24 +318,49 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
                 <p>Generated images and videos can be saved here for later use.</p>
             </div>
         ) : (
-             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {items.map(item => (
-                    <div 
-                        key={item.id} 
-                        className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer"
-                        onClick={() => setSelectedItem(item)}
-                    >
-                        <img src={item.thumbnail} alt={`Library item ${item.id}`} className="object-cover w-full h-full" />
-                        <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full" title={item.mediaType}>
-                            {getCategoryIcon(item.mediaType)}
-                        </div>
-                        <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center text-white text-xs font-semibold">
-                            <span className="capitalize font-bold text-sm">{item.mediaType}</span>
-                            <span>{new Date(item.id).toLocaleDateString()}</span>
-                        </div>
+            <>
+                <div className="flex items-center justify-center border-b border-border-primary mb-6">
+                    <button onClick={() => setActiveFilter('all')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeFilter === 'all' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                        All
+                    </button>
+                    <button onClick={() => setActiveFilter('image')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeFilter === 'image' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                        Images
+                    </button>
+                    <button onClick={() => setActiveFilter('video')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeFilter === 'video' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                        Videos
+                    </button>
+                    <button onClick={() => setActiveFilter('clothes')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeFilter === 'clothes' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                        Clothes
+                    </button>
+                </div>
+
+                {filteredItems.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center text-text-secondary p-16">
+                        <LibraryIcon className="w-20 h-20 text-border-primary mb-4" />
+                        <h3 className="text-lg font-bold text-text-primary">No Items in this Category</h3>
+                        <p className="capitalize">Your saved {activeFilter} will appear here.</p>
                     </div>
-                ))}
-            </div>
+                ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                        {filteredItems.map(item => (
+                            <div 
+                                key={item.id} 
+                                className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer"
+                                onClick={() => setSelectedItem(item)}
+                            >
+                                <img src={item.thumbnail} alt={`Library item ${item.id}`} className="object-cover w-full h-full" />
+                                <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full" title={item.mediaType}>
+                                    {getCategoryIcon(item.mediaType)}
+                                </div>
+                                <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center text-white text-xs font-semibold">
+                                    <span className="capitalize font-bold text-sm">{item.mediaType}</span>
+                                    <span>{new Date(item.id).toLocaleDateString()}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </>
         )}
 
         {selectedItem && (

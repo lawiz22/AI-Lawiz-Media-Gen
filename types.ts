@@ -1,3 +1,5 @@
+import { fileToDataUrl } from './utils/imageUtils';
+
 export interface GenerationOptions {
   provider: 'gemini' | 'comfyui';
   geminiMode?: 'i2i' | 't2i';
@@ -19,6 +21,8 @@ export interface GenerationOptions {
   addTextToImage?: boolean;
   textOnImagePrompt?: string;
   textObjectPrompt?: string;
+  width?: number;
+  height?: number;
 
   // ComfyUI specific options
   comfyModelType?: 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';

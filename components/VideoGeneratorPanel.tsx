@@ -5,7 +5,7 @@ import { Loader } from './Loader';
 import type { GenerationOptions, LibraryItem } from '../types';
 import { resizeImageFile } from '../utils/imageProcessing';
 import { saveToLibrary } from '../services/libraryService';
-import { fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
+import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromFile } from '../utils/imageUtils';
 
 // --- Prop Types ---
 interface VideoGeneratorPanelProps {
@@ -187,10 +187,19 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const handleSaveToLibrary = async () => {
         if (!generatedVideo || !startFrame) return;
         
-        const optionsToSave = generationOptionsForSave || options;
-
         setSavingState('saving');
         try {
+            const optionsToSave = { ...(generationOptionsForSave || options) };
+
+            if (optionsToSave.videoProvider === 'comfyui') {
+                optionsToSave.width = optionsToSave.comfyVidWanI2VWidth;
+                optionsToSave.height = optionsToSave.comfyVidWanI2VHeight;
+            } else if (startFrame) { // Covers Gemini with input image
+                const { width, height } = await getImageDimensionsFromFile(startFrame);
+                optionsToSave.width = width;
+                optionsToSave.height = height;
+            }
+
             const item: Omit<LibraryItem, 'id'> = {
                 mediaType: 'video',
                 media: generatedVideo,
