@@ -1,55 +1,81 @@
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import type { LibraryItem } from '../types';
+import * as idbService from './idbLibraryService';
+import { dataUrlToBlob } from '../utils/imageUtils';
 
-const DB_NAME = 'ai-media-generator-library';
-const DB_VERSION = 1;
-const STORE_NAME = 'library-items';
-
-interface MyDB extends DBSchema {
-  [STORE_NAME]: {
-    key: number;
-    value: LibraryItem;
-    indexes: { 'mediaType': string };
-  };
-}
-
-let dbPromise: Promise<IDBPDatabase<MyDB>> | null = null;
-
-const getDb = (): Promise<IDBPDatabase<MyDB>> => {
-  if (!dbPromise) {
-    dbPromise = openDB<MyDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        const store = db.createObjectStore(STORE_NAME, {
-          keyPath: 'id',
-        });
-        store.createIndex('mediaType', 'mediaType');
-      },
-    });
-  }
-  return dbPromise;
-};
+// This service now acts as a direct interface to the IndexedDB service.
+// The file system logic has been removed to simplify the architecture and
+// resolve issues with the File System Access API in sandboxed environments.
 
 export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void> => {
-  const db = await getDb();
-  const newItem: LibraryItem = {
-    ...item,
-    id: Date.now(),
-  };
-  await db.put(STORE_NAME, newItem);
+  return idbService.saveToLibrary(item);
 };
 
 export const getLibraryItems = async (): Promise<LibraryItem[]> => {
-  const db = await getDb();
-  const items = await db.getAll(STORE_NAME);
-  return items.sort((a, b) => b.id - a.id); // Sort by most recent
+  return idbService.getLibraryItems();
 };
 
 export const deleteLibraryItem = async (id: number): Promise<void> => {
-  const db = await getDb();
-  await db.delete(STORE_NAME, id);
+  return idbService.deleteLibraryItem(id);
 };
 
 export const clearLibrary = async (): Promise<void> => {
-  const db = await getDb();
-  await db.clear(STORE_NAME);
+  return idbService.clearLibrary();
+};
+
+export const saveLibraryItemToDisk = async (item: LibraryItem): Promise<void> => {
+  if (!window.showSaveFilePicker) {
+    throw new Error('Your browser does not support the File System Access API.');
+  }
+
+  let dataUrl: string;
+  let extension: string;
+
+  switch (item.mediaType) {
+    case 'video':
+      dataUrl = item.media;
+      extension = 'mp4';
+      break;
+    case 'clothes':
+      try {
+        const parsed = JSON.parse(item.media);
+        dataUrl = parsed.laidOutImage || parsed.foldedImage;
+      } catch (e) {
+        dataUrl = item.media;
+      }
+      extension = 'png';
+      break;
+    case 'image':
+    default:
+      dataUrl = item.media;
+      extension = 'jpeg';
+      break;
+  }
+
+  if (!dataUrl) {
+    throw new Error('No media data found for this item.');
+  }
+
+  const blob = await dataUrlToBlob(dataUrl);
+
+  const suggestedName = `lawiz_ai_${item.mediaType}_${item.id}.${extension}`;
+
+  try {
+    const handle = await window.showSaveFilePicker({
+      suggestedName,
+      types: [{
+        description: `${item.mediaType.charAt(0).toUpperCase() + item.mediaType.slice(1)} File`,
+        accept: { [blob.type]: [`.${extension}`] },
+      }],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+  } catch (error: any) {
+    // AbortError is thrown when the user cancels the file picker.
+    // We can safely ignore this.
+    if (error.name !== 'AbortError') {
+      console.error('Error saving file:', error);
+      throw error;
+    }
+  }
 };

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Login } from './components/Login';
@@ -14,6 +15,7 @@ import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
 import { ClothesExtractorPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
+import { LocalPathModal } from './components/LocalPathModal';
 import { GenerateIcon, LibraryIcon } from './components/icons';
 import type { GenerationOptions, User, HistoryItem, VersionInfo, GeneratedClothing, LibraryItem } from './types';
 import { authenticateUser } from './services/cloudUserService';
@@ -34,7 +36,6 @@ const initialOptions: GenerationOptions = {
   consistentBackground: false,
   clothing: 'original',
   customClothingPrompt: '',
-  // Fix: Removed the obsolete 'randomizeClothing' property, which is not defined in the GenerationOptions type.
   clothingStyleConsistency: 'varied',
   poseMode: 'random',
   poseSelection: [],
@@ -189,11 +190,15 @@ function App() {
   const [activeTab, setActiveTab] = useState<'image' | 'video' | 'library' | 'clothes' | 'video-utils' | 'prompt' | 'manage'>('image');
   const [isComfyModalOpen, setIsComfyModalOpen] = useState(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
+  const [isPathModalOpen, setIsPathModalOpen] = useState(false);
   
   const [comfyUIUrl, setComfyUIUrl] = useState<string>(() => localStorage.getItem('comfyui_url') || '');
   const [isComfyUIConnected, setIsComfyUIConnected] = useState<boolean | null>(null);
   const [comfyUIObjectInfo, setComfyUIObjectInfo] = useState<any | null>(null);
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
+
+  // --- State for Local Library Path ---
+  const [localLibraryPath, setLocalLibraryPath] = useState<string | null>(() => localStorage.getItem('localLibraryPath'));
 
   // --- State for PromptGeneratorPanel to persist across tab changes ---
   const [promptToolImage, setPromptToolImage] = useState<File | null>(null);
@@ -266,25 +271,18 @@ function App() {
   }, []);
   
   const updateAndTestConnection = useCallback(async (newUrl?: string) => {
-    // Fix: Added parentheses to resolve mixed '||' and '??' operator precedence.
     const urlToUse = newUrl ?? (localStorage.getItem('comfyui_url') || '');
-
-    // "Save" part: update both localStorage and React state for consistency.
     localStorage.setItem('comfyui_url', urlToUse);
     setComfyUIUrl(urlToUse);
-
-    // "Test" part.
     if (!urlToUse) {
       setIsComfyUIConnected(false);
       return;
     }
-
-    setIsComfyUIConnected(null); // Set to "checking" state
+    setIsComfyUIConnected(null);
     const result = await checkComfyUIConnection(urlToUse);
     setIsComfyUIConnected(result.success);
   }, []);
 
-  // Effect for initial mount (handles page refresh with a saved session)
   useEffect(() => {
     if (currentUser) {
       updateAndTestConnection();
@@ -299,7 +297,6 @@ function App() {
       getComfyUIObjectInfo()
         .then(info => {
           setComfyUIObjectInfo(info);
-          // Auto-detect FLUX node
           const fluxNode = Object.keys(info).find(key => key.toLowerCase().includes('fluxguidancesampler'));
           if (fluxNode) {
             setOptions(prev => ({...prev, comfyFluxNodeName: fluxNode}));
@@ -307,7 +304,7 @@ function App() {
         })
         .catch(err => {
           console.error("Failed to get ComfyUI object info:", err);
-          setComfyUIObjectInfo({}); // Set to empty object on error
+          setComfyUIObjectInfo({});
         });
     } else {
         setComfyUIObjectInfo(null);
@@ -319,7 +316,6 @@ function App() {
     if (user) {
       setCurrentUser(user);
       sessionStorage.setItem('currentUser', JSON.stringify(user));
-      // Directly call the new function after successful login
       await updateAndTestConnection();
       return true;
     }
@@ -332,14 +328,24 @@ function App() {
     setIsComfyUIConnected(false);
   };
   
-  // The modal save function now just calls our central logic handler.
   const handleSaveComfyUrl = (newUrl: string) => {
     updateAndTestConnection(newUrl);
   };
+
+  // --- Local Path Handlers ---
+  const handleSetLocalPath = (path: string) => {
+    localStorage.setItem('localLibraryPath', path);
+    setLocalLibraryPath(path);
+  };
+  
+  const handleDisconnectLocalPath = () => {
+    localStorage.removeItem('localLibraryPath');
+    setLocalLibraryPath(null);
+  };
   
   const handleReset = useCallback(() => {
-    const provider = options.provider; // Keep the current provider
-    const videoProvider = options.videoProvider; // Keep the current video provider
+    const provider = options.provider;
+    const videoProvider = options.videoProvider;
     setOptions({
         ...initialOptions,
         provider: provider,
@@ -378,7 +384,7 @@ function App() {
       try {
         const file = await dataUrlToFile(imageDataUrl, "new_source.jpeg");
         setSourceImage(file);
-        setGeneratedImages([]); // Clear previous results
+        setGeneratedImages([]);
         setError(null);
         setLastUsedPrompt(null);
         setLastGenerationOptions(null);
@@ -638,6 +644,8 @@ function App() {
         currentUser={currentUser}
         onOpenComfyModal={() => setIsComfyModalOpen(true)}
         onOpenHistoryPanel={() => setIsHistoryPanelOpen(true)}
+        onOpenPathModal={() => setIsPathModalOpen(true)}
+        localLibraryPath={localLibraryPath}
         isComfyUIConnected={isComfyUIConnected}
         versionInfo={versionInfo}
       />
@@ -816,7 +824,6 @@ function App() {
                 subjectImage={promptToolSubjectImage}
                 setSubjectImage={setPromptToolSubjectImage}
                 subjectPrompt={promptToolSubjectPrompt}
-                // Fix: Corrected a typo in the PromptGeneratorPanel props, passing `setPromptToolSubjectPrompt` to `setSubjectPrompt` instead of an undefined variable.
                 setSubjectPrompt={setPromptToolSubjectPrompt}
                 soupPrompt={promptToolSoupPrompt}
                 setSoupPrompt={setPromptToolSoupPrompt}
@@ -844,6 +851,13 @@ function App() {
         onClose={() => setIsLibraryPickerOpen(false)}
         onSelectItem={handleSelectFromLibrary}
         filter={libraryPickerConfig.filter}
+      />
+      <LocalPathModal
+        isOpen={isPathModalOpen}
+        onClose={() => setIsPathModalOpen(false)}
+        currentPath={localLibraryPath}
+        onSavePath={handleSetLocalPath}
+        onDisconnectPath={handleDisconnectLocalPath}
       />
     </>
   );

@@ -1,5 +1,13 @@
 import { fileToDataUrl } from './utils/imageUtils';
 
+declare global {
+  interface FileSystemFileHandle {
+    createWritable(): Promise<FileSystemWritableFileStream>;
+  }
+  interface Window {
+    showSaveFilePicker(options?: any): Promise<FileSystemFileHandle>;
+  }
+}
 export interface GenerationOptions {
   provider: 'gemini' | 'comfyui';
   geminiMode?: 'i2i' | 't2i';

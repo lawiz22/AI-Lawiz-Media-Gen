@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getLibraryItems, deleteLibraryItem, clearLibrary } from '../services/libraryService';
+import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk } from '../services/libraryService';
 import type { LibraryItem, GenerationOptions } from '../types';
-import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon } from './icons';
+import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon } from './icons';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -199,10 +199,13 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
   const [selectedItem, setSelectedItem] = useState<LibraryItem | null>(null);
   const [copyButtonText, setCopyButtonText] = useState('Copy Prompt');
   const [activeFilter, setActiveFilter] = useState<'all' | 'image' | 'video' | 'clothes'>('all');
+  const [isSavingToDisk, setIsSavingToDisk] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedItem) {
         setCopyButtonText('Copy Prompt'); // Reset button text when a new item is selected
+        setSaveError(null);
     }
   }, [selectedItem]);
   
@@ -269,6 +272,20 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
         } catch (error) {
              console.error("Failed to clear library:", error);
         }
+    }
+  };
+
+  const handleSaveToDisk = async () => {
+    if (!selectedItem) return;
+    setIsSavingToDisk(true);
+    setSaveError(null);
+    try {
+        await saveLibraryItemToDisk(selectedItem);
+    } catch (error: any) {
+        console.error("Failed to save item to disk:", error);
+        setSaveError(error.message || "An unknown error occurred.");
+    } finally {
+        setIsSavingToDisk(false);
     }
   };
 
@@ -394,7 +411,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
                                     </div>
                                 );
                             } catch(e) {
-                                // If parsing fails, it's a new item (single image data URL)
+                                // If parsing fails, it's a new item (a single data URL string).
                                 mediaContent = (
                                     <img src={selectedItem.media} alt={selectedItem.name || 'Clothing item'} className="max-w-full max-h-full object-contain rounded-md" />
                                 );
@@ -429,6 +446,17 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
                             )}
                         </div>
                         <div className="mt-4 flex flex-col gap-3">
+                            {saveError && (
+                                <p className="text-xs text-danger text-center bg-danger-bg p-2 rounded-md">{saveError}</p>
+                            )}
+                            <button
+                                onClick={handleSaveToDisk}
+                                disabled={isSavingToDisk}
+                                className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
+                            >
+                                {isSavingToDisk ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <DownloadIcon className="w-5 h-5"/>}
+                                {isSavingToDisk ? 'Saving...' : 'Save to Disk'}
+                            </button>
                             {relevantPrompt && (
                                 <button
                                     onClick={handleCopyPrompt}
@@ -440,7 +468,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
                             {(selectedItem.mediaType === 'image' || (selectedItem.mediaType === 'video' && selectedItem.options?.videoProvider !== 'gemini')) && (
                                 <button
                                     onClick={() => { onLoadItem(selectedItem); setSelectedItem(null); }}
-                                    className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"
+                                    className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
                                 >
                                     <LoadIcon className="w-5 h-5"/> Load Item
                                 </button>

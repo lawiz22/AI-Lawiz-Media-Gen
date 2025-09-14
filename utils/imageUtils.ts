@@ -151,6 +151,15 @@ export const dataUrlToFile = async (dataUrl: string, filename: string): Promise<
 };
 
 /**
+ * Converts a data URL string to a Blob object.
+ */
+export const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
+    const res = await fetch(dataUrl);
+    return res.blob();
+};
+
+
+/**
  * Gets the dimensions of an image from its data URL.
  */
 export const getImageDimensionsFromDataUrl = (dataUrl: string): Promise<{ width: number; height: number }> => {
