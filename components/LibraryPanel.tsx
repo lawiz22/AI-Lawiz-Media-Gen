@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getLibraryItems, deleteLibraryItem, clearLibrary } from '../services/libraryService';
 import type { LibraryItem, GenerationOptions } from '../types';
-import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon } from './icons';
+import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon } from './icons';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -196,7 +196,38 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<LibraryItem | null>(null);
+  const [copyButtonText, setCopyButtonText] = useState('Copy Prompt');
+
+  useEffect(() => {
+    if (selectedItem) {
+        setCopyButtonText('Copy Prompt'); // Reset button text when a new item is selected
+    }
+  }, [selectedItem]);
   
+  const relevantPrompt = useMemo(() => {
+    if (!selectedItem || !selectedItem.options) return null;
+    const opts = selectedItem.options;
+    if (selectedItem.mediaType === 'image') {
+        return opts.geminiPrompt || opts.comfyPrompt || null;
+    }
+    if (selectedItem.mediaType === 'video') {
+        return opts.geminiVidPrompt || opts.comfyVidWanI2VPositivePrompt || null;
+    }
+    return null;
+  }, [selectedItem]);
+
+  const handleCopyPrompt = useCallback(() => {
+    if (!relevantPrompt) return;
+    navigator.clipboard.writeText(relevantPrompt)
+        .then(() => {
+            setCopyButtonText('Copied!');
+            setTimeout(() => setCopyButtonText('Copy Prompt'), 2000);
+        })
+        .catch(err => {
+            console.error('Failed to copy prompt:', err);
+        });
+  }, [relevantPrompt]);
+
   const loadItems = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -358,12 +389,22 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
                             )}
                         </div>
                         <div className="mt-4 flex flex-col gap-3">
-                            <button
-                                onClick={() => { onLoadItem(selectedItem); setSelectedItem(null); }}
-                                className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"
-                            >
-                                <LoadIcon className="w-5 h-5"/> Load Item
-                            </button>
+                            {relevantPrompt && (
+                                <button
+                                    onClick={handleCopyPrompt}
+                                    className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
+                                >
+                                    <CopyIcon className="w-5 h-5" /> {copyButtonText}
+                                </button>
+                            )}
+                            {(selectedItem.mediaType === 'image' || (selectedItem.mediaType === 'video' && selectedItem.options?.videoProvider !== 'gemini')) && (
+                                <button
+                                    onClick={() => { onLoadItem(selectedItem); setSelectedItem(null); }}
+                                    className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"
+                                >
+                                    <LoadIcon className="w-5 h-5"/> Load Item
+                                </button>
+                            )}
                             <button
                                 onClick={() => handleDelete(selectedItem.id)}
                                 className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors"
