@@ -182,6 +182,7 @@ function App() {
   
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [lastUsedPrompt, setLastUsedPrompt] = useState<string | null>(null);
+  const [lastGenerationOptions, setLastGenerationOptions] = useState<GenerationOptions | null>(null);
   const [error, setError] = useState<string | null>(null);
   
   const [activeTab, setActiveTab] = useState<'image' | 'video' | 'library' | 'clothes' | 'video-utils' | 'prompt' | 'manage'>('image');
@@ -323,6 +324,7 @@ function App() {
     setGeneratedVideo(null);
     setError(null);
     setLastUsedPrompt(null);
+    setLastGenerationOptions(null);
   }, [options.provider, options.videoProvider]);
 
   const handleGeneratePrompt = useCallback(async () => {
@@ -347,6 +349,7 @@ function App() {
         setGeneratedImages([]); // Clear previous results
         setError(null);
         setLastUsedPrompt(null);
+        setLastGenerationOptions(null);
       } catch (err) {
           console.error("Failed to set new source image:", err);
           setError("Could not use this image as the new source.");
@@ -364,16 +367,18 @@ function App() {
     setGeneratedVideo(null);
     setError(null);
     setLastUsedPrompt(null);
+    setLastGenerationOptions(null);
+    const generationOptions = { ...options };
 
     try {
       if (activeTab === 'image') {
           let generationPromise;
-          if (options.provider === 'gemini') {
-            if (options.geminiMode === 't2i') {
-                if (!options.geminiPrompt) {
+          if (generationOptions.provider === 'gemini') {
+            if (generationOptions.geminiMode === 't2i') {
+                if (!generationOptions.geminiPrompt) {
                   throw new Error("Please enter a prompt for Gemini text-to-image generation.");
                 }
-                generationPromise = generateImagesFromPrompt(options, updateProgress);
+                generationPromise = generateImagesFromPrompt(generationOptions, updateProgress);
             } else { // i2i mode
                 if (!sourceImage) {
                   throw new Error("Please upload a source image for Gemini image-to-image generation.");
@@ -384,19 +389,19 @@ function App() {
                   backgroundImage,
                   previewedBackgroundImage,
                   previewedClothingImage,
-                  options,
+                  generationOptions,
                   updateProgress
                 );
             }
-          } else if (options.provider === 'comfyui') {
-            if (options.comfyModelType === 'nunchaku-kontext-flux' && !sourceImage) {
+          } else if (generationOptions.provider === 'comfyui') {
+            if (generationOptions.comfyModelType === 'nunchaku-kontext-flux' && !sourceImage) {
               throw new Error("Nunchaku Kontext Flux requires a source image.");
             }
-            if (!options.comfyPrompt) {
+            if (!generationOptions.comfyPrompt) {
               throw new Error("Please enter a prompt for ComfyUI or generate one from a source image.");
             }
             setProgressMessage('Connecting to ComfyUI...');
-            generationPromise = generateComfyUIPortraits(sourceImage, options, updateProgress);
+            generationPromise = generateComfyUIPortraits(sourceImage, generationOptions, updateProgress);
           } else {
             throw new Error("Invalid provider selected.");
           }
@@ -410,12 +415,12 @@ function App() {
             
             const historyItem: Omit<HistoryItem, 'id'> = {
               timestamp: new Date().toISOString(),
-              options: options,
+              options: generationOptions,
               generatedImages: generatedThumbnails,
               sourceImage: undefined,
             };
 
-            const needsSourceImage = (options.provider === 'gemini' && options.geminiMode === 'i2i') || (options.provider === 'comfyui');
+            const needsSourceImage = (generationOptions.provider === 'gemini' && generationOptions.geminiMode === 'i2i') || (generationOptions.provider === 'comfyui');
 
             if (needsSourceImage && sourceImage) {
               const sourceImageForHistory = await fileToResizedDataUrl(sourceImage, 512);
@@ -426,14 +431,15 @@ function App() {
           }
           setGeneratedImages(images);
           setLastUsedPrompt(finalPrompt);
+          setLastGenerationOptions(generationOptions);
 
       } else if (activeTab === 'video') {
-        if (options.videoProvider === 'gemini') {
-            if (!startFrame && !options.geminiVidPrompt?.trim()) {
+        if (generationOptions.videoProvider === 'gemini') {
+            if (!startFrame && !generationOptions.geminiVidPrompt?.trim()) {
                 throw new Error("Please upload an input image or provide a prompt for Gemini video generation.");
             }
             setProgressMessage('Connecting to Gemini for video generation...');
-            const { videoUrl, finalPrompt } = await generateGeminiVideo(startFrame, options, updateProgress);
+            const { videoUrl, finalPrompt } = await generateGeminiVideo(startFrame, generationOptions, updateProgress);
             setGeneratedVideo(videoUrl);
             setLastUsedPrompt(finalPrompt);
         } else { // ComfyUI
@@ -441,10 +447,11 @@ function App() {
               throw new Error("Please upload a start frame for ComfyUI video generation.");
             }
             setProgressMessage('Connecting to ComfyUI for video generation...');
-            const { videoUrl, finalPrompt } = await generateComfyUIVideo(startFrame, endFrame, options, updateProgress);
+            const { videoUrl, finalPrompt } = await generateComfyUIVideo(startFrame, endFrame, generationOptions, updateProgress);
             setGeneratedVideo(videoUrl);
             setLastUsedPrompt(finalPrompt);
         }
+        setLastGenerationOptions(generationOptions);
       } else {
         throw new Error("Invalid active tab for generation.");
       }
@@ -461,6 +468,7 @@ function App() {
   const handleLoadHistoryItem = async (item: HistoryItem) => {
     setOptions(item.options);
     setGeneratedImages(item.generatedImages);
+    setLastGenerationOptions(item.options);
     
     if (item.sourceImage) {
       try {
@@ -478,23 +486,46 @@ function App() {
   };
   
   const handleLoadFromLibrary = async (item: LibraryItem) => {
-    setOptions(item.options);
-    
-    setSourceImage(item.sourceImage ? await dataUrlToFile(item.sourceImage, 'library_source.jpg') : null);
-    setStartFrame(item.startFrame ? await dataUrlToFile(item.startFrame, 'library_start.jpg') : null);
-    setEndFrame(item.endFrame ? await dataUrlToFile(item.endFrame, 'library_end.jpg') : null);
-    
-    if (item.mediaType === 'image') {
-      setGeneratedImages([item.media]);
-      setGeneratedVideo(null);
-      setActiveTab('image');
-    } else {
-      setGeneratedImages([]);
-      setGeneratedVideo(item.media);
-      setActiveTab('video');
-    }
+    // Shared reset logic
+    setGeneratedImages([]);
+    setGeneratedVideo(null);
     setError(null);
     setLastUsedPrompt(null);
+    setLastGenerationOptions(null);
+
+    switch (item.mediaType) {
+        case 'image':
+        case 'video':
+            if (item.options) {
+                setOptions(item.options);
+                setLastGenerationOptions(item.options);
+            }
+            setSourceImage(item.sourceImage ? await dataUrlToFile(item.sourceImage, 'library_source.jpg') : null);
+            setStartFrame(item.startFrame ? await dataUrlToFile(item.startFrame, 'library_start.jpg') : null);
+            setEndFrame(item.endFrame ? await dataUrlToFile(item.endFrame, 'library_end.jpg') : null);
+
+            if (item.mediaType === 'image') {
+                setGeneratedImages([item.media]);
+                setActiveTab('image');
+            } else {
+                setGeneratedVideo(item.media);
+                setActiveTab('video');
+            }
+            break;
+        
+        case 'clothes':
+            setActiveTab('clothes');
+            setClothesExtractorFile(item.sourceImage ? await dataUrlToFile(item.sourceImage, 'library_source.jpg') : null);
+            setClothesExtractorDetails(item.clothingDetails || '');
+            try {
+                const parsedMedia = JSON.parse(item.media);
+                setClothesExtractorResults([{ name: item.name || 'Loaded Item', ...parsedMedia }]);
+            } catch (e) {
+                console.error("Failed to parse media from clothes library item", e);
+                setClothesExtractorResults([]);
+            }
+            break;
+    }
   };
 
 
@@ -655,12 +686,12 @@ function App() {
                   <h3 className="font-bold mb-2">Generation Failed</h3>
                   <p className="text-sm">{error}</p>
                 </div>
-              ) : generatedImages.length > 0 ? (
+              ) : generatedImages.length > 0 && lastGenerationOptions ? (
                 <ImageGrid 
                     images={generatedImages} 
                     onSetNewSource={handleSetNewSource} 
                     lastUsedPrompt={lastUsedPrompt}
-                    options={options}
+                    options={lastGenerationOptions}
                     sourceImage={sourceImage}
                 />
               ) : (
@@ -692,6 +723,7 @@ function App() {
             progressMessage={progressMessage}
             progressValue={progressValue}
             onReset={handleReset}
+            generationOptionsForSave={lastGenerationOptions}
           />
         }
 

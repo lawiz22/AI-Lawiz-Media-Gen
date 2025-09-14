@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { ImageUploader } from './ImageUploader';
 import { ResultsDisplay } from './ResultsDisplay';
@@ -218,6 +217,7 @@ export const ClothesExtractorPanel: React.FC<ClothesExtractorPanelProps> = ({
           originalImage={originalImage}
           generatedItems={generatedItems}
           onReset={handleReset}
+          details={details}
         />
       )}
 

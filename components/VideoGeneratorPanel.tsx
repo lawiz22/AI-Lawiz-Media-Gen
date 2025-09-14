@@ -25,6 +25,7 @@ interface VideoGeneratorPanelProps {
   progressMessage: string;
   progressValue: number;
   onReset: () => void;
+  generationOptionsForSave?: GenerationOptions | null;
 }
 
 // --- Helper Components ---
@@ -83,7 +84,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     options, setOptions, comfyUIObjectInfo,
     startFrame, setStartFrame, endFrame, setEndFrame,
     onGenerate, isReady, isLoading, error, generatedVideo, lastUsedPrompt,
-    progressMessage, progressValue, onReset
+    progressMessage, progressValue, onReset, generationOptionsForSave
 }) => {
     const [copyButtonText, setCopyButtonText] = useState('Copy');
     const [originalStartFrame, setOriginalStartFrame] = useState<File | null>(null);
@@ -185,13 +186,16 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     
     const handleSaveToLibrary = async () => {
         if (!generatedVideo || !startFrame) return;
+        
+        const optionsToSave = generationOptionsForSave || options;
+
         setSavingState('saving');
         try {
             const item: Omit<LibraryItem, 'id'> = {
                 mediaType: 'video',
                 media: generatedVideo,
                 thumbnail: await dataUrlToThumbnail(await fileToResizedDataUrl(startFrame, 256), 256),
-                options: options,
+                options: optionsToSave,
                 startFrame: await fileToResizedDataUrl(startFrame, 512),
                 endFrame: endFrame ? await fileToResizedDataUrl(endFrame, 512) : undefined,
             };

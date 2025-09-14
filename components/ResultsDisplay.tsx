@@ -1,17 +1,20 @@
-
 import React, { useState } from 'react';
 import JSZip from 'jszip';
-import type { GeneratedClothing } from '../types';
-import { DownloadIcon, ResetIcon, SpinnerIcon } from './icons';
+import type { GeneratedClothing, LibraryItem } from '../types';
+import { DownloadIcon, ResetIcon, SpinnerIcon, SaveIcon } from './icons';
+import { saveToLibrary } from '../services/libraryService';
+import { dataUrlToThumbnail } from '../utils/imageUtils';
 
 interface ResultsDisplayProps {
   originalImage: string;
   generatedItems: GeneratedClothing[];
   onReset: () => void;
+  details: string;
 }
 
-export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ originalImage, generatedItems, onReset }) => {
+export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ originalImage, generatedItems, onReset, details }) => {
     const [isZipping, setIsZipping] = useState(false);
+    const [savingStates, setSavingStates] = useState<Record<number, 'idle' | 'saving' | 'saved'>>({});
 
     const handleDownloadAll = async () => {
         setIsZipping(true);
@@ -50,6 +53,26 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ originalImage, g
         }
     };
 
+    const handleSaveToLibrary = async (item: GeneratedClothing, index: number) => {
+        setSavingStates(prev => ({ ...prev, [index]: 'saving' }));
+        try {
+            const libraryItem: Omit<LibraryItem, 'id'> = {
+                mediaType: 'clothes',
+                name: item.name,
+                thumbnail: await dataUrlToThumbnail(item.laidOutImage, 256),
+                media: JSON.stringify({ laidOutImage: item.laidOutImage, foldedImage: item.foldedImage }),
+                sourceImage: originalImage,
+                clothingDetails: details,
+            };
+            await saveToLibrary(libraryItem);
+            setSavingStates(prev => ({ ...prev, [index]: 'saved' }));
+            setTimeout(() => setSavingStates(prev => ({ ...prev, [index]: 'idle' })), 2000);
+        } catch (err) {
+            console.error("Failed to save clothing item to library:", err);
+            setSavingStates(prev => ({ ...prev, [index]: 'idle' }));
+        }
+    };
+
   return (
     <div>
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
@@ -81,21 +104,38 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ originalImage, g
             <div className="lg:col-span-2">
                 <h3 className="text-lg font-semibold text-text-primary mb-2">Extracted Items ({generatedItems.length})</h3>
                 <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-4 -mr-4 border border-border-primary rounded-lg p-4 bg-bg-primary/50">
-                    {generatedItems.map((item, index) => (
-                        <div key={index} className="bg-bg-tertiary p-4 rounded-lg shadow-sm">
-                            <h4 className="font-bold text-accent mb-3">{item.name}</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <p className="text-sm font-medium text-text-secondary mb-2 text-center">Laid Out</p>
-                                    <img src={item.laidOutImage} alt={`${item.name} laid out`} className="w-full aspect-square object-cover rounded-md bg-bg-secondary" />
+                    {generatedItems.map((item, index) => {
+                        const savingStatus = savingStates[index] || 'idle';
+                        return (
+                            <div key={index} className="bg-bg-tertiary p-4 rounded-lg shadow-sm relative">
+                                <div className="flex justify-between items-start">
+                                    <h4 className="font-bold text-accent mb-3">{item.name}</h4>
+                                    <button
+                                        onClick={() => handleSaveToLibrary(item, index)}
+                                        title={savingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
+                                        disabled={savingStatus !== 'idle'}
+                                        className={`p-2 rounded-full transition-all duration-200 ${
+                                            savingStatus === 'saved' ? 'bg-green-500 text-white' : 
+                                            savingStatus === 'saving' ? 'bg-bg-secondary text-text-secondary cursor-wait' :
+                                            'bg-bg-secondary/70 text-text-secondary hover:bg-accent hover:text-accent-text'
+                                        }`}
+                                    >
+                                        {savingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                    </button>
                                 </div>
-                                <div>
-                                    <p className="text-sm font-medium text-text-secondary mb-2 text-center">Folded</p>
-                                    <img src={item.foldedImage} alt={`${item.name} folded`} className="w-full aspect-square object-cover rounded-md bg-bg-secondary" />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-sm font-medium text-text-secondary mb-2 text-center">Laid Out</p>
+                                        <img src={item.laidOutImage} alt={`${item.name} laid out`} className="w-full aspect-square object-cover rounded-md bg-bg-secondary" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-text-secondary mb-2 text-center">Folded</p>
+                                        <img src={item.foldedImage} alt={`${item.name} folded`} className="w-full aspect-square object-cover rounded-md bg-bg-secondary" />
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         </div>

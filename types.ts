@@ -1,4 +1,3 @@
-
 export interface GenerationOptions {
   provider: 'gemini' | 'comfyui';
   geminiMode?: 'i2i' | 't2i';
@@ -161,10 +160,12 @@ export interface GeneratedClothing {
 
 export interface LibraryItem {
   id: number; // Timestamp
-  mediaType: 'image' | 'video';
+  mediaType: 'image' | 'video' | 'clothes';
   thumbnail: string; // Small data URL for preview
-  media: string; // Full-size data URL for image or video
-  options: GenerationOptions;
+  media: string; // Full-size data URL for image/video, or JSON string for clothes
+  name?: string; // For clothes items
+  options?: GenerationOptions; // For image/video generations
+  clothingDetails?: string; // For clothes items
   sourceImage?: string; // data URL
   startFrame?: string; // data URL
   endFrame?: string; // data URL
