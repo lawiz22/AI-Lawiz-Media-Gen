@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Login } from './components/Login';
@@ -11,8 +10,10 @@ import { ComfyUIConnection } from './components/ComfyUIConnection';
 import { HistoryPanel } from './components/HistoryPanel';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
+import { ClothesExtractorPanel } from './components/ClothesExtractorPanel';
+import { VideoUtilsPanel } from './components/VideoUtilsPanel';
 import { GenerateIcon } from './components/icons';
-import type { GenerationOptions, User, HistoryItem, VersionInfo } from './types';
+import type { GenerationOptions, User, HistoryItem, VersionInfo, GeneratedClothing } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { generatePortraitSeries, generateImagesFromPrompt, generateGeminiVideo } from './services/geminiService';
 import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo, generateComfyUIPromptFromSource as generateComfyUIPromptService, generateComfyUIVideo } from './services/comfyUIService';
@@ -182,7 +183,7 @@ function App() {
   const [lastUsedPrompt, setLastUsedPrompt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'image' | 'video' | 'prompt' | 'manage'>('image');
+  const [activeTab, setActiveTab] = useState<'image' | 'video' | 'clothes' | 'video-utils' | 'prompt' | 'manage'>('image');
   const [isComfyModalOpen, setIsComfyModalOpen] = useState(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   
@@ -205,6 +206,12 @@ function App() {
   const [startFrame, setStartFrame] = useState<File | null>(null);
   const [endFrame, setEndFrame] = useState<File | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
+  
+  // --- State for ClothesExtractorPanel ---
+  const [clothesExtractorFile, setClothesExtractorFile] = useState<File | null>(null);
+  const [clothesExtractorDetails, setClothesExtractorDetails] = useState<string>('');
+  const [clothesExtractorResults, setClothesExtractorResults] = useState<GeneratedClothing[]>([]);
+
 
   const handleAddSoupToHistory = (soup: string) => {
     // Add new soup to the front, prevent duplicates, and limit history size
@@ -552,6 +559,12 @@ function App() {
                 <button onClick={() => setActiveTab('video')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'video' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
                     Video Generator
                 </button>
+                <button onClick={() => setActiveTab('clothes')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'clothes' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                    Clothes Extractor
+                </button>
+                <button onClick={() => setActiveTab('video-utils')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'video-utils' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                    Video Utilities
+                </button>
                 {currentUser.role === 'admin' && (
                     <>
                         <button onClick={() => setActiveTab('prompt')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'prompt' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
@@ -654,6 +667,20 @@ function App() {
             onReset={handleReset}
           />
         }
+
+        {activeTab === 'clothes' &&
+            <ClothesExtractorPanel 
+                selectedFile={clothesExtractorFile}
+                setSelectedFile={setClothesExtractorFile}
+                details={clothesExtractorDetails}
+                setDetails={setClothesExtractorDetails}
+                generatedItems={clothesExtractorResults}
+                setGeneratedItems={setClothesExtractorResults}
+            />
+        }
+
+        {activeTab === 'video-utils' && <VideoUtilsPanel />}
+
         {activeTab === 'prompt' && currentUser.role === 'admin' && 
             <PromptGeneratorPanel
                 onUsePrompt={(p) => { 

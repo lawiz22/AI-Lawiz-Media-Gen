@@ -1,7 +1,7 @@
 
 // Implemented Gemini API service to fix module resolution errors.
 // Fix: Removed HarmCategory and HarmBlockThreshold as they are no longer used after removing safety settings.
-import { GoogleGenAI, Modality, Part, GenerateContentConfig } from "@google/genai";
+import { GoogleGenAI, Modality, Part, GenerateContentConfig, Type } from "@google/genai";
 import type { GenerationOptions } from "../types";
 import { fileToGenerativePart, fileToBase64 } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from "../utils/imageProcessing";
@@ -409,4 +409,90 @@ export const generateGeminiVideo = async (
     onProgress("Video ready!", 1);
 
     return { videoUrl, finalPrompt: options.geminiVidPrompt };
+};
+
+
+// --- Clothes Extractor Functions ---
+
+export const identifyClothing = async (
+  base64Image: string,
+  mimeType: string,
+  clothingDetails: string
+): Promise<{ name: string; description: string }[]> => {
+    const imagePart = { inlineData: { data: base64Image, mimeType } };
+    let prompt = `Analyze the provided image. Identify every distinct item of clothing and accessory worn by the person. 
+    For each item, provide a 'name' (e.g., 'Blue T-Shirt', 'Leather Belt') and a detailed 'description' suitable for generating a new image of that item alone. 
+    The description should include color, material, style, and any notable features.`;
+
+    if (clothingDetails) {
+        prompt += `\n\nPay close attention to these user-provided details: "${clothingDetails}". Use them to enhance accuracy and detail in your descriptions.`;
+    }
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    items: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                name: { type: Type.STRING },
+                                description: { type: Type.STRING }
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    });
+
+    try {
+        const json = JSON.parse(result.text);
+        if (json.items && Array.isArray(json.items)) {
+            return json.items;
+        }
+        throw new Error("Invalid JSON structure returned from AI.");
+    } catch (e) {
+        console.error("Failed to parse clothing identification from AI:", result.text, e);
+        throw new Error("AI returned an invalid response. Please try a clearer image or add details.");
+    }
+};
+
+export const generateClothingImage = async (
+  base64Image: string,
+  mimeType: string,
+  itemDescription: string,
+  view: 'laid out' | 'folded'
+): Promise<string> => {
+    const imagePart = { inlineData: { data: base64Image, mimeType } };
+    const viewStyle = view === 'laid out' ? 'laid out flat' : 'neatly folded';
+    
+    const prompt = `Using the provided image as a reference for the item's style, color, and texture, generate a photorealistic product shot of only the described item: "${itemDescription}".
+    The image must be on a clean, neutral light gray studio background.
+    Present the item as if for an e-commerce website, ${viewStyle}.
+    Do NOT include any people, mannequins, or other objects. The final image should contain only the single clothing item.`;
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    if (result.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+        return result.candidates[0].content.parts[0].inlineData.data;
+    }
+    
+    const textResponse = result.text?.trim();
+    if (textResponse) {
+        throw new Error(`AI returned text instead of an image: ${textResponse}`);
+    }
+
+    throw new Error('Image generation failed. No image was returned. The request may have been blocked by safety policies.');
 };

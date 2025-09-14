@@ -21,12 +21,20 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 - **WAN 2.2 I2V Workflow:** Utilizes the powerful WAN 2.2 Image-to-Video workflow in ComfyUI for high-quality, smooth video generation.
 - **Detailed Video Controls:** Configure frame count, frame rate, CFG, steps, and post-processing effects like film grain.
 
-### 4. Intelligent Prompting Tools (Admin)
+### 4. Video Utilities
+- **Frame Extractor:** Upload a video and use a precise slider to select and save any frame as a high-quality JPEG image. Includes a quick button to instantly save the very last frame, perfect for creating video continuations.
+
+### 5. Intelligent Prompting Tools (Admin)
 - **Prompt from Image:** Automatically generate a descriptive text prompt from an uploaded image, optimized for different model types (SD1.5, SDXL, FLUX).
 - **Element Extraction:** Isolate and generate prompts for just the background or the main subject of an image.
 - **Magical Prompt Soup:** Creatively merge multiple prompt ideas (e.g., a subject from one image, a background from another) into a unique, cohesive new prompt.
 
-### 5. Robust User Experience
+### 6. Clothes Extractor Utility
+- **AI Clothing Identification:** Upload a photo and let the AI automatically detect all clothing items and accessories.
+- **E-commerce Product Shots:** For each item found, the AI generates two professional product shots: one laid out flat and one neatly folded, ready for online stores or catalogs.
+- **Accuracy Boost:** Provide optional text details to help the AI better identify specific or obscured items.
+
+### 7. Robust User Experience
 - **User Authentication:** Secure login system with roles for regular users and administrators.
 - **Admin Panel:** Administrators can manage the user base by adding or deleting users.
 - **Generation History:** Automatically saves your generations (source image, settings, and results) to local storage, allowing you to review and reload previous sessions.
@@ -36,16 +44,13 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 ## How to Use
 
 1.  **Login:** Enter your credentials to access the application.
-2.  **Select a Generator:** Choose between the **Image Generator** and **Video Generator** tabs.
-3.  **Configure Backend (Image Generator):**
-    -   Select **Gemini** for powerful image editing and prompt-based generation.
-    -   Select **ComfyUI** to use your self-hosted workflows. Ensure your ComfyUI URL is configured correctly by clicking the workflow icon in the header.
-4.  **Provide Inputs:**
-    -   **Image Gen:** Upload a source image and any reference images for clothing or background. Write or generate a text prompt.
-    -   **Video Gen:** Upload a start frame and an optional end frame.
-5.  **Adjust Settings:** Use the left-hand panel to configure all generation parameters, from core settings like models and samplers to specific details like LoRA strength and post-processing effects.
-6.  **Generate:** Click the "Generate" button to start the process.
-7.  **View Results:** Your generated images or video will appear on the right. You can then download them, enhance them (for images), or use an image as a new source for another generation.
+2.  **Select a Tool:** Choose between the **Image Generator**, **Video Generator**, **Clothes Extractor**, or **Video Utilities** tabs.
+3.  **Configure & Provide Inputs:**
+    -   **Image/Video Gen:** Upload source media, configure the AI backend (Gemini/ComfyUI), write prompts, and adjust detailed settings in the left-hand panel.
+    -   **Clothes Extractor:** Upload a single photo and optionally add descriptive text to improve accuracy.
+    -   **Video Utilities:** Upload a video to use the frame extractor.
+4.  **Generate:** Click the "Generate" or other relevant action button to begin processing.
+5.  **View Results:** Your generated media or extracted frames will appear on the right. You can then download them, enhance them (for images), or use an image as a new source for another generation.
 
 ## Setup Requirements
 

@@ -152,3 +152,9 @@ export interface VersionInfo {
   date: string;
   changes: string;
 }
+
+export interface GeneratedClothing {
+  name: string;
+  laidOutImage: string;
+  foldedImage: string;
+}
