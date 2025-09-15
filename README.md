@@ -26,6 +26,7 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 - **Google Drive Sync:** Securely connect your Google Drive account to sync your entire library for persistent, cloud-based storage.
 - **Robust Architecture:** The Drive integration uses a central `library.json` file as an index for all media items, ensuring robust and efficient synchronization.
 - **Automatic Organization:** The app automatically creates and manages `images`, `videos`, and `clothes` subfolders within your selected Drive directory to keep your media organized.
+- **AI-Generated Previews:** Hover over any saved prompt to see a unique, AI-generated thumbnail that visually represents its content. Previews are generated on-demand, cached locally for instant access, and synced with Google Drive.
 - **Smart Syncing:** Download only new items from Drive to your local library, preventing duplicates and ensuring your collection is always up-to-date.
 - **Complete State Capture:** The library stores not just the media, but also the exact prompts, models, and settings used to create it.
 - **One-Click Restoration:** Load any item from the library to instantly restore the entire generation setup, making it easy to iterate or create variations.

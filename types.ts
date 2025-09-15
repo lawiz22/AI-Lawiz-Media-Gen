@@ -9,7 +9,7 @@ declare global {
         interface File {
           id?: string | null;
           name?: string | null;
-          appProperties?: { [key: string]: string } | null;
+          appProperties?: { [key:string]: string } | null;
         }
       }
     }
@@ -191,15 +191,18 @@ export interface GeneratedClothing {
 export interface LibraryItem {
   id: number; // Timestamp
   driveFileId?: string; // ID of the file on Google Drive
-  mediaType: 'image' | 'video' | 'clothes';
+  mediaType: 'image' | 'video' | 'clothes' | 'prompt';
   thumbnail: string; // Small data URL for preview
-  media: string; // Full-size data URL for image/video, or JSON string for clothes
-  name?: string; // For clothes items
+  media: string; // Full-size data URL for image/video, JSON for clothes, or the prompt text
+  name?: string; // For clothes items or prompts
   options?: GenerationOptions; // For image/video generations
   clothingDetails?: string; // For clothes items
   sourceImage?: string; // data URL
   startFrame?: string; // data URL
   endFrame?: string; // data URL
+  promptType?: 'image' | 'background' | 'subject' | 'soup'; // For prompt items
+  promptModelType?: 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2'; // For prompt items
+  previewThumbnail?: string; // Optional AI-generated thumbnail for prompt hover
 }
 
 // Type for Google Drive Folder representation

@@ -48,7 +48,8 @@ export async function initializeDriveSync(onProgress: (message: string) => void)
 export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void> => {
   const newItem = await idbService.saveToLibrary(item);
 
-  if (driveService?.isConnected()) {
+  // Only sync file-based media immediately. Prompts are synced via the manual sync button.
+  if (newItem.mediaType !== 'prompt' && driveService?.isConnected()) {
       try {
           // Update the central library.json index first
           const { index, fileId } = await driveService.getLibraryIndex();
@@ -75,7 +76,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
           // Final update to the index with the new driveFileId
           const finalIndex = (await driveService.getLibraryIndex()).index;
           if (finalIndex.items[newItem.id]) {
-            finalIndex.items[newItem.id].driveFileId = driveFileId;
+            (finalIndex.items[newItem.id] as LibraryItem).driveFileId = driveFileId;
           }
           await driveService.updateLibraryIndex(finalIndex, updatedFileId);
 
@@ -112,16 +113,27 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
     onProgress(`Downloading ${missingItems.length} new item(s)...`);
     for (let i = 0; i < missingItems.length; i++) {
         const itemMetadata = missingItems[i];
-        if (!itemMetadata.driveFileId) continue;
 
-        onProgress(`Downloading "${itemMetadata.name || itemMetadata.mediaType}" (${i + 1}/${missingItems.length})...`);
+        onProgress(`Processing "${itemMetadata.name || itemMetadata.mediaType}" (${i + 1}/${missingItems.length})...`);
         try {
-            const blob = await driveService.downloadMediaFile(itemMetadata.driveFileId);
-            const media = await fileToDataUrl(new File([blob], "file"));
-            const thumbnail = await dataUrlToThumbnail(media, 256);
+            let media: string;
+            let thumbnail: string;
+            
+            // Fix: Cast prompt item metadata to the full LibraryItem type to correctly access media and thumbnail properties, which are stored directly in the index for prompts.
+            if (itemMetadata.mediaType === 'prompt') {
+                const promptItem = itemMetadata as LibraryItem;
+                media = promptItem.media;
+                thumbnail = promptItem.thumbnail;
+            } else if ((itemMetadata as LibraryItem).driveFileId) {
+                const blob = await driveService.downloadMediaFile((itemMetadata as LibraryItem).driveFileId!);
+                media = await fileToDataUrl(new File([blob], "file"));
+                thumbnail = await dataUrlToThumbnail(media, 256);
+            } else {
+                continue; // Skip items without a way to retrieve media
+            }
 
             const newItem: LibraryItem = {
-                ...(itemMetadata as LibraryItem), // Trusting the structure from Drive
+                ...(itemMetadata as LibraryItem),
                 media,
                 thumbnail,
             };
@@ -140,56 +152,70 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
 
     onProgress("Checking for local items to upload...");
     const localItems = await idbService.getLibraryItems();
-    const itemsToUpload = localItems.filter(item => !item.driveFileId);
-
-    if (itemsToUpload.length === 0) {
-        onProgress("All local items are already synced to Drive.");
-        await new Promise(resolve => setTimeout(resolve, 1500)); 
-        return;
-    }
-
-    onProgress(`Uploading ${itemsToUpload.length} unsynced item(s)... This may take a while.`);
-    const uploadErrors: string[] = [];
-    
-    // Fetch the index once at the beginning
     const { index, fileId: initialFileId } = await driveService.getLibraryIndex();
     let currentFileId = initialFileId;
 
-    for (let i = 0; i < itemsToUpload.length; i++) {
-        const item = itemsToUpload[i];
-        const itemName = item.name || `${item.mediaType} #${item.id}`;
-        onProgress(`Uploading "${itemName}" (${i + 1}/${itemsToUpload.length})...`);
-        try {
-            const blob = await dataUrlToBlob(item.media);
-            let subfolderName: string;
-            switch (item.mediaType) {
-                case 'image': subfolderName = 'images'; break;
-                case 'video': subfolderName = 'videos'; break;
-                case 'clothes': subfolderName = 'clothes'; break;
-                default: subfolderName = 'misc';
-            }
-            const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
-            const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
-            const filename = `${item.mediaType}_${item.id}.${extension}`;
+    const itemsToUpload = localItems.filter(item => !item.driveFileId && item.mediaType !== 'prompt');
+    const promptsToSync = localItems.filter(item => item.mediaType === 'prompt' && !index.items[item.id]);
 
-            const driveFileId = await driveService.uploadMediaFile(blob, filename, parentFolderId);
-            await idbService.updateLibraryItem(item.id, { driveFileId });
-
-            // Add the new item to the in-memory index
-            const { media, thumbnail, ...metadata } = item;
-            index.items[item.id] = { ...metadata, driveFileId };
-            
-        } catch (e: any) {
-            console.error(`Failed to upload item ${item.id} to Drive:`, e);
-            uploadErrors.push(`- ${itemName}: ${e.message}`);
-        }
+    if (itemsToUpload.length === 0 && promptsToSync.length === 0) {
+        onProgress("All local items are already synced to Drive.");
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        return;
     }
 
-    onProgress("Finalizing by updating library index file...");
-    try {
-        await driveService.updateLibraryIndex(index, currentFileId);
-    } catch(e: any) {
-        uploadErrors.push(`- CRITICAL: Failed to update library.json index file. Some uploads may appear missing until next sync. Error: ${e.message}`);
+    let indexNeedsUpdate = false;
+    const uploadErrors: string[] = [];
+
+    if (itemsToUpload.length > 0) {
+        indexNeedsUpdate = true;
+        onProgress(`Uploading ${itemsToUpload.length} unsynced media file(s)... This may take a while.`);
+        for (let i = 0; i < itemsToUpload.length; i++) {
+            const item = itemsToUpload[i];
+            const itemName = item.name || `${item.mediaType} #${item.id}`;
+            onProgress(`Uploading "${itemName}" (${i + 1}/${itemsToUpload.length})...`);
+            try {
+                const blob = await dataUrlToBlob(item.media);
+                let subfolderName: string;
+                switch (item.mediaType) {
+                    case 'image': subfolderName = 'images'; break;
+                    case 'video': subfolderName = 'videos'; break;
+                    case 'clothes': subfolderName = 'clothes'; break;
+                    default: subfolderName = 'misc';
+                }
+                const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
+                const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
+                const filename = `${item.mediaType}_${item.id}.${extension}`;
+
+                const driveFileId = await driveService.uploadMediaFile(blob, filename, parentFolderId);
+                await idbService.updateLibraryItem(item.id, { driveFileId });
+
+                const { media, thumbnail, ...metadata } = item;
+                index.items[item.id] = { ...metadata, driveFileId };
+                
+            } catch (e: any) {
+                console.error(`Failed to upload item ${item.id} to Drive:`, e);
+                uploadErrors.push(`- ${itemName}: ${e.message}`);
+            }
+        }
+    }
+    
+    if (promptsToSync.length > 0) {
+        indexNeedsUpdate = true;
+        onProgress(`Syncing metadata for ${promptsToSync.length} new prompt(s)...`);
+        // Fix: Ensure the full item data, including 'media' (the prompt text) and 'thumbnail', is stored in the index for prompt items. The previous logic was incorrectly stripping these properties.
+        promptsToSync.forEach(item => {
+            index.items[item.id] = item;
+        });
+    }
+
+    if (indexNeedsUpdate) {
+        onProgress("Finalizing by updating library index file...");
+        try {
+            await driveService.updateLibraryIndex(index, currentFileId);
+        } catch(e: any) {
+            uploadErrors.push(`- CRITICAL: Failed to update library.json index file. Some uploads may appear missing until next sync. Error: ${e.message}`);
+        }
     }
     
     if (uploadErrors.length > 0) {
@@ -200,6 +226,30 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
     }
 };
 
+export const exportLibraryAsJson = async (): Promise<void> => {
+    try {
+        const items = await idbService.getLibraryItems();
+        if (items.length === 0) {
+            alert("Your library is empty. There is nothing to export.");
+            return;
+        }
+
+        // For backup/import, a simple array of the full items is best.
+        const jsonString = JSON.stringify(items, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'library.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error("Failed to export library:", error);
+        alert("An error occurred while exporting the library. Please check the console for details.");
+    }
+};
 
 export const getLibraryItems = async (): Promise<LibraryItem[]> => {
   return idbService.getLibraryItems();
@@ -211,13 +261,12 @@ export const deleteLibraryItem = async (id: number): Promise<void> => {
   await idbService.deleteLibraryItem(id);
 
   // Then, if synced, remove from Drive
-  if (driveService?.isConnected() && itemToDelete?.driveFileId) {
-      // This is a "soft delete" for simplicity. The file remains in Drive but is removed from the index.
-      // A full implementation would also delete the media file itself.
+  if (driveService?.isConnected() && itemToDelete) {
       try {
           const { index, fileId } = await driveService.getLibraryIndex();
           if (index.items[id]) {
               delete index.items[id];
+              // No need to delete the file for prompts as there isn't one.
               await driveService.updateLibraryIndex(index, fileId);
           }
       } catch (e) {
@@ -225,6 +274,8 @@ export const deleteLibraryItem = async (id: number): Promise<void> => {
       }
   }
 };
+
+export const updateLibraryItem = idbService.updateLibraryItem;
 
 export const clearLibrary = async (): Promise<void> => {
     await idbService.clearLibrary();
@@ -244,37 +295,41 @@ export const saveLibraryItemToDisk = async (item: LibraryItem): Promise<void> =>
     throw new Error('Your browser does not support the File System Access API.');
   }
 
-  let dataUrl: string;
+  let blob: Blob;
   let extension: string;
 
   switch (item.mediaType) {
     case 'video':
-      dataUrl = item.media;
+      blob = await dataUrlToBlob(item.media);
       extension = 'mp4';
       break;
     case 'clothes':
+      let clothesDataUrl: string;
       try {
         const parsed = JSON.parse(item.media);
-        dataUrl = parsed.laidOutImage || parsed.foldedImage;
+        clothesDataUrl = parsed.laidOutImage || parsed.foldedImage;
       } catch (e) {
-        dataUrl = item.media;
+        clothesDataUrl = item.media;
       }
+      blob = await dataUrlToBlob(clothesDataUrl);
       extension = 'png';
+      break;
+    case 'prompt':
+      blob = new Blob([item.media], { type: 'text/plain' });
+      extension = 'txt';
       break;
     case 'image':
     default:
-      dataUrl = item.media;
+      blob = await dataUrlToBlob(item.media);
       extension = 'jpeg';
       break;
   }
 
-  if (!dataUrl) {
+  if (!blob) {
     throw new Error('No media data found for this item.');
   }
 
-  const blob = await dataUrlToBlob(dataUrl);
-
-  const suggestedName = `lawiz_ai_${item.mediaType}_${item.id}.${extension}`;
+  const suggestedName = `lawiz_ai_${item.name || item.mediaType}_${item.id}.${extension}`;
 
   try {
     const handle = await window.showSaveFilePicker({

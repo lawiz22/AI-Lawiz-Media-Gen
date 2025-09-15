@@ -1,4 +1,3 @@
-
 // Implemented Gemini API service to fix module resolution errors.
 // Fix: Removed HarmCategory and HarmBlockThreshold as they are no longer used after removing safety settings.
 import { GoogleGenAI, Modality, Part, GenerateContentConfig, Type } from "@google/genai";
@@ -427,6 +426,37 @@ export const generateGeminiVideo = async (
     onProgress("Video ready!", 1);
 
     return { videoUrl, finalPrompt: options.geminiVidPrompt };
+};
+
+export const generateThumbnailForPrompt = async (prompt: string): Promise<string> => {
+  const ai = getAiInstance();
+  if (!prompt.trim()) {
+    throw new Error("Prompt cannot be empty for thumbnail generation.");
+  }
+  
+  const fullPrompt = `A small, clear, square thumbnail image that visually represents the following concept: "${prompt}"`;
+
+  try {
+    const response = await ai.models.generateImages({
+      model: 'imagen-4.0-generate-001',
+      prompt: fullPrompt,
+      config: {
+        numberOfImages: 1,
+        outputMimeType: 'image/jpeg',
+        aspectRatio: '1:1',
+      },
+    });
+
+    if (response.generatedImages && response.generatedImages.length > 0) {
+      const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+      return `data:image/jpeg;base64,${base64ImageBytes}`;
+    } else {
+      throw new Error("The AI did not return an image for the thumbnail.");
+    }
+  } catch (error: any) {
+    console.error("Error generating prompt thumbnail:", error);
+    throw new Error(error.message || "Failed to generate thumbnail due to an unknown error.");
+  }
 };
 
 

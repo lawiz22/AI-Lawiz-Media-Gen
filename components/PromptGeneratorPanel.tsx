@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { ImageUploader } from './ImageUploader';
 import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup } from '../services/comfyUIService';
-import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon } from './icons';
+import { saveToLibrary } from '../services/libraryService';
+import type { LibraryItem } from '../types';
+import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon } from './icons';
 
 interface PromptGeneratorPanelProps {
     onUsePrompt: (prompt: string) => void;
@@ -30,6 +32,46 @@ interface PromptPart {
 
 // Fix: Corrected the 'wan 2.2' type to 'wan2.2' to match the service layer function signatures and fix the type error.
 type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2';
+type PromptCategory = 'image' | 'background' | 'subject' | 'soup';
+
+const createPromptThumbnail = (text: string, type: PromptCategory, modelType: PromptModelType): string => {
+    const colors: Record<PromptCategory, string> = {
+        image: '#06b6d4',
+        background: '#4ade80',
+        subject: '#facc15',
+        soup: '#a78bfa'
+    };
+    const borderColor = colors[type] || '#374151';
+    const bgColor = '#1f2937';
+    const textColor = '#e5e7eb';
+    const modelTypeColor = '#9ca3af';
+
+    const cleanedText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    
+    const lines = [];
+    const charsPerLine = 35; 
+    for(let i = 0; i < cleanedText.length; i += charsPerLine) {
+        lines.push(cleanedText.substring(i, i + charsPerLine));
+    }
+
+    const tspan = lines.slice(0, 6).map((line, index) => `<tspan x="15" dy="${index === 0 ? 0 : '1.4em'}">${line}</tspan>`).join('');
+
+    const finalSvg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+        <rect width="256" height="256" fill="${bgColor}"/>
+        <rect x="2" y="2" width="252" height="252" fill="none" stroke="${borderColor}" stroke-width="4" rx="8"/>
+        
+        <text x="15" y="40" font-family="Orbitron, monospace" font-size="16px" font-weight="bold" fill="${borderColor}">${modelType.toUpperCase()}</text>
+        <text x="15" y="60" font-family="sans-serif" font-size="12px" fill="${modelTypeColor}" style="text-transform: uppercase; letter-spacing: 0.5px;">${type} Prompt</text>
+        
+        <text x="15" y="100" font-family="sans-serif" font-size="14px" fill="${textColor}">
+            ${tspan}${lines.length > 6 ? '<tspan x="15" dy="1.4em">...</tspan>' : ''}
+        </text>
+    </svg>
+    `;
+
+    return `data:image/svg+xml;base64,${btoa(finalSvg)}`;
+};
 
 
 export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
@@ -44,24 +86,56 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [copyButtonText, setCopyButtonText] = useState('Copy Prompt');
+    const [savingState, setSavingState] = useState<'idle'|'saving'|'saved'>('idle');
 
     const [bgModelType, setBgModelType] = useState<PromptModelType>('sdxl');
     const [isBgLoading, setIsBgLoading] = useState<boolean>(false);
     const [bgError, setBgError] = useState<string | null>(null);
     const [bgCopyButtonText, setBgCopyButtonText] = useState('Copy Prompt');
+    const [bgSavingState, setBgSavingState] = useState<'idle'|'saving'|'saved'>('idle');
 
     const [subjectModelType, setSubjectModelType] = useState<PromptModelType>('sdxl');
     const [isSubjectLoading, setIsSubjectLoading] = useState<boolean>(false);
     const [subjectError, setSubjectError] = useState<string | null>(null);
     const [subjectCopyButtonText, setSubjectCopyButtonText] = useState('Copy Prompt');
+    const [subjectSavingState, setSubjectSavingState] = useState<'idle'|'saving'|'saved'>('idle');
 
     const [soupModelType, setSoupModelType] = useState<PromptModelType>('sdxl');
     const [soupCreativity, setSoupCreativity] = useState<number>(0.7);
     const [isSoupLoading, setIsSoupLoading] = useState<boolean>(false);
     const [soupError, setSoupError] = useState<string | null>(null);
     const [soupCopyButtonText, setSoupCopyButtonText] = useState('Copy Prompt');
+    const [soupSavingState, setSoupSavingState] = useState<'idle'|'saving'|'saved'>('idle');
+    
     const [historyCopyStates, setHistoryCopyStates] = useState<Record<number, string>>({});
     const [soupPromptParts, setSoupPromptParts] = useState<PromptPart[]>([]);
+
+    const handleSavePrompt = async (
+        promptToSave: string, 
+        type: PromptCategory,
+        modelType: PromptModelType,
+        setSaveState: React.Dispatch<React.SetStateAction<'idle'|'saving'|'saved'>>
+    ) => {
+        if (!promptToSave.trim()) return;
+        setSaveState('saving');
+        try {
+            const item: Omit<LibraryItem, 'id'> = {
+                mediaType: 'prompt',
+                promptType: type,
+                promptModelType: modelType,
+                name: `${type.charAt(0).toUpperCase() + type.slice(1)} Prompt (${modelType.toUpperCase()})`,
+                media: promptToSave,
+                thumbnail: createPromptThumbnail(promptToSave, type, modelType),
+            };
+            await saveToLibrary(item);
+            setSaveState('saved');
+            setTimeout(() => setSaveState('idle'), 2000);
+        } catch (err) {
+            console.error("Failed to save prompt:", err);
+            // Optionally, set an error state to show in the UI
+            setSaveState('idle');
+        }
+    };
 
     const handleGenerate = async () => {
         if (!image) {
@@ -311,11 +385,19 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <p>{error}</p>
                             </div>
                         )}
-                        <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <button 
+                                onClick={() => handleSavePrompt(prompt, 'image', modelType, setSavingState)}
+                                disabled={!prompt || isLoading || savingState !== 'idle'}
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                            >
+                                {savingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                {savingState === 'saved' ? 'Saved!' : 'Save'}
+                            </button>
                             <button 
                                 onClick={handleCopy}
                                 disabled={!prompt || isLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <CopyIcon className="w-5 h-5" />
                                 {copyButtonText}
@@ -323,10 +405,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <button 
                                 onClick={handleUsePrompt}
                                 disabled={!prompt || isLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <SendIcon className="w-5 h-5" />
-                                Use Prompt for ComfyUI
+                                Use
                             </button>
                         </div>
                     </div>
@@ -384,11 +466,19 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <p>{bgError}</p>
                             </div>
                         )}
-                        <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <button 
+                                onClick={() => handleSavePrompt(bgPrompt, 'background', bgModelType, setBgSavingState)}
+                                disabled={!bgPrompt || isBgLoading || bgSavingState !== 'idle'}
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                            >
+                                {bgSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                {bgSavingState === 'saved' ? 'Saved!' : 'Save'}
+                            </button>
                             <button 
                                 onClick={handleBgCopy}
                                 disabled={!bgPrompt || isBgLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <CopyIcon className="w-5 h-5" />
                                 {bgCopyButtonText}
@@ -396,10 +486,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                              <button 
                                 onClick={handleUseBgPrompt}
                                 disabled={!bgPrompt || isBgLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <SendIcon className="w-5 h-5" />
-                                Use Prompt for ComfyUI
+                                Use
                             </button>
                         </div>
                     </div>
@@ -457,11 +547,19 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <p>{subjectError}</p>
                             </div>
                         )}
-                        <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <button 
+                                onClick={() => handleSavePrompt(subjectPrompt, 'subject', subjectModelType, setSubjectSavingState)}
+                                disabled={!subjectPrompt || isSubjectLoading || subjectSavingState !== 'idle'}
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                            >
+                                {subjectSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                {subjectSavingState === 'saved' ? 'Saved!' : 'Save'}
+                            </button>
                             <button 
                                 onClick={handleSubjectCopy}
                                 disabled={!subjectPrompt || isSubjectLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <CopyIcon className="w-5 h-5" />
                                 {subjectCopyButtonText}
@@ -469,10 +567,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                              <button 
                                 onClick={handleUseSubjectPrompt}
                                 disabled={!subjectPrompt || isSubjectLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <SendIcon className="w-5 h-5" />
-                                Use Prompt for ComfyUI
+                                Use
                             </button>
                         </div>
                     </div>
@@ -549,11 +647,19 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <p>{soupError}</p>
                             </div>
                         )}
-                        <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                             <button 
+                                onClick={() => handleSavePrompt(soupPrompt, 'soup', soupModelType, setSoupSavingState)}
+                                disabled={!soupPrompt || isSoupLoading || soupSavingState !== 'idle'}
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                            >
+                                {soupSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                {soupSavingState === 'saved' ? 'Saved!' : 'Save'}
+                            </button>
                             <button 
                                 onClick={handleSoupCopy}
                                 disabled={!soupPrompt || isSoupLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <CopyIcon className="w-5 h-5" />
                                 {soupCopyButtonText}
@@ -561,10 +667,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                              <button 
                                 onClick={handleUseSoupPrompt}
                                 disabled={!soupPrompt || isSoupLoading}
-                                className="flex-1 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
                             >
                                 <SendIcon className="w-5 h-5" />
-                                Use Prompt for ComfyUI
+                                Use
                             </button>
                         </div>
                         {soupHistory.length > 0 && (

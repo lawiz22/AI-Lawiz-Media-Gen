@@ -185,7 +185,12 @@ export const getOrCreateSubfolder = async (name: string): Promise<string> => {
 
 // --- Library Index (library.json) Management ---
 
-type LibraryIndex = { version: number; items: Record<string, Omit<LibraryItem, 'media' | 'thumbnail'>> };
+// Fix: Redefined the index type to correctly represent that prompt items contain all their data, while other media types only contain metadata. This resolves downstream type errors.
+// A type for the metadata stored in library.json.
+// For media files, we omit the large data properties.
+// For prompts, we include them as they are small.
+type LibraryItemMetadata = Omit<LibraryItem, 'media' | 'thumbnail'> | LibraryItem;
+type LibraryIndex = { version: number; items: Record<string, LibraryItemMetadata> };
 
 export async function getLibraryIndex(): Promise<{ index: LibraryIndex; fileId: string | null }> {
     if (!isConnected()) throw new Error("Not connected to Google Drive.");
@@ -209,7 +214,7 @@ export async function getLibraryIndex(): Promise<{ index: LibraryIndex; fileId: 
     return { index: { version: 1, items: {} }, fileId: null };
 }
 
-export async function updateLibraryIndex(index: LibraryIndex, fileId: string | null): Promise<string> {
+export async function updateLibraryIndex(index: any, fileId: string | null): Promise<string> {
     if (!isConnected()) throw new Error("Not connected to Google Drive.");
     await ensureClientsReady();
     

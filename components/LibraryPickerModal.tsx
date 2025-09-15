@@ -10,7 +10,8 @@ interface LibraryPickerModalProps {
   filter: 'image' | 'clothes' | null;
 }
 
-const getCategoryIcon = (mediaType: 'image' | 'video' | 'clothes') => {
+// Fix: The function's `mediaType` parameter was too restrictive. Widened the type to include all possible `LibraryItem` media types to satisfy the TypeScript compiler, even though the component's logic already filters for 'image' or 'clothes'.
+const getCategoryIcon = (mediaType: 'image' | 'video' | 'clothes' | 'prompt') => {
     switch(mediaType) {
         case 'image': return <PhotographIcon className="w-4 h-4 text-white" />;
         case 'video': return <VideoIcon className="w-4 h-4 text-white" />;

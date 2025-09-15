@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk, syncLibraryToDrive } from '../services/libraryService';
+import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk, syncLibraryToDrive, exportLibraryAsJson, updateLibraryItem } from '../services/libraryService';
+import { generateThumbnailForPrompt } from '../services/geminiService';
 import type { LibraryItem, GenerationOptions } from '../types';
-import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon } from './icons';
+import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon, FileExportIcon, DocumentTextIcon } from './icons';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -169,10 +170,10 @@ const isMeaningfulValue = (value: any): boolean => {
 };
 
 
-const OptionDisplay: React.FC<{ options: GenerationOptions; mediaType: 'image' | 'video' | 'clothes' }> = ({ options, mediaType }) => {
+const OptionDisplay: React.FC<{ options: GenerationOptions; mediaType: 'image' | 'video' }> = ({ options, mediaType }) => {
     // useMemo will prevent re-calculation on every render unless dependencies change
     const filteredOptions = useMemo(() => {
-        if (mediaType === 'clothes' || !options) return [];
+        if (!options) return [];
         
         const relevantKeys = getRelevantOptionKeys(options, mediaType);
         
@@ -205,12 +206,19 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<LibraryItem | null>(null);
   const [copyButtonText, setCopyButtonText] = useState('Copy Prompt');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'image' | 'video' | 'clothes'>('all');
+  // Fix: Add 'prompt' to the possible filter values to handle prompt media types.
+  const [activeFilter, setActiveFilter] = useState<'all' | 'image' | 'video' | 'clothes' | 'prompt'>('all');
   const [isSavingToDisk, setIsSavingToDisk] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
+  
+  const [thumbnailPreview, setThumbnailPreview] = useState<{
+    url: string | null;
+    loading: boolean;
+    position: { top: number; left: number };
+  } | null>(null);
 
   useEffect(() => {
     if (selectedItem) {
@@ -220,7 +228,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
   }, [selectedItem]);
   
   const relevantPrompt = useMemo(() => {
-    if (!selectedItem || !selectedItem.options) return null;
+    if (!selectedItem) return null;
+    if (selectedItem.mediaType === 'prompt') return selectedItem.media;
+    if (!selectedItem.options) return null;
+    
     const opts = selectedItem.options;
     if (selectedItem.mediaType === 'image') {
         return opts.geminiPrompt || opts.comfyPrompt || null;
@@ -314,12 +325,67 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
         loadItems(); // Reload items to show updated sync status
     }
   };
+  
+  const handleExportLibrary = async () => {
+    await exportLibraryAsJson();
+  };
 
-  const getCategoryIcon = (mediaType: 'image' | 'video' | 'clothes') => {
+  const handleItemMouseEnter = async (item: LibraryItem, e: React.MouseEvent) => {
+    if (item.mediaType !== 'prompt') return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const previewSize = 128; // w-32 or h-32
+    const gap = 10;
+    
+    let top = rect.top;
+    let left = rect.right + gap;
+
+    if (left + previewSize > window.innerWidth) {
+      left = rect.left - previewSize - gap;
+    }
+    if (top + previewSize > window.innerHeight) {
+      top = window.innerHeight - previewSize - gap;
+    }
+    if (top < gap) {
+      top = gap;
+    }
+
+    const position = { top, left };
+
+    if (item.previewThumbnail) {
+      setThumbnailPreview({ url: item.previewThumbnail, loading: false, position });
+      return;
+    }
+
+    setThumbnailPreview({ url: null, loading: true, position });
+
+    try {
+      const newThumbnailUrl = await generateThumbnailForPrompt(item.media);
+      await updateLibraryItem(item.id, { previewThumbnail: newThumbnailUrl });
+      
+      const updatedItems = items.map(i => i.id === item.id ? { ...i, previewThumbnail: newThumbnailUrl } : i);
+      setItems(updatedItems);
+      
+      setThumbnailPreview(current => (current?.loading ? { ...current, url: newThumbnailUrl, loading: false } : current));
+
+    } catch (error) {
+      console.error('Failed to generate preview thumbnail:', error);
+      const errorSvg = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>')}`;
+      setThumbnailPreview(current => (current?.loading ? { ...current, url: errorSvg, loading: false } : current));
+    }
+  };
+
+  const handleItemMouseLeave = () => {
+    setThumbnailPreview(null);
+  };
+
+  // Fix: Widened the function signature to accept 'prompt' and added a case to return a DocumentTextIcon, resolving a TypeScript error.
+  const getCategoryIcon = (mediaType: 'image' | 'video' | 'clothes' | 'prompt') => {
       switch(mediaType) {
           case 'image': return <PhotographIcon className="w-4 h-4 text-white" />;
           case 'video': return <VideoIcon className="w-4 h-4 text-white" />;
           case 'clothes': return <TshirtIcon className="w-4 h-4 text-white" />;
+          case 'prompt': return <DocumentTextIcon className="w-4 h-4 text-white" />;
           default: return null;
       }
   };
@@ -346,7 +412,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                 <LibraryIcon className="w-8 h-8"/>
                 My Library
             </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-end">
                 {isDriveConfigured && isDriveConnected && (
                     <>
                         <button
@@ -369,6 +435,15 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                         </button>
                     </>
                 )}
+                <button
+                    onClick={handleExportLibrary}
+                    disabled={items.length === 0}
+                    className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors disabled:opacity-50"
+                    title="Export the entire local library to a JSON file"
+                >
+                    <FileExportIcon className="w-5 h-5" />
+                    Export Library
+                </button>
                 {items.length > 0 && (
                     <button
                         onClick={handleClearAll}
@@ -405,6 +480,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                     <button onClick={() => setActiveFilter('clothes')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeFilter === 'clothes' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
                         Clothes
                     </button>
+                    {/* Fix: Added a filter button for prompts. */}
+                    <button onClick={() => setActiveFilter('prompt')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeFilter === 'prompt' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
+                        Prompts
+                    </button>
                 </div>
 
                 {filteredItems.length === 0 ? (
@@ -420,6 +499,8 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                                 key={item.id} 
                                 className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer"
                                 onClick={() => setSelectedItem(item)}
+                                onMouseEnter={(e) => handleItemMouseEnter(item, e)}
+                                onMouseLeave={handleItemMouseLeave}
                             >
                                 <img src={item.thumbnail} alt={`Library item ${item.id}`} className="object-cover w-full h-full" />
                                 <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full" title={item.mediaType}>
@@ -431,7 +512,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                                     </div>
                                 )}
                                 <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center text-white text-xs font-semibold">
-                                    <span className="capitalize font-bold text-sm">{item.mediaType}</span>
+                                    <span className="capitalize font-bold text-sm">{item.mediaType === 'prompt' ? item.promptType : item.mediaType}</span>
                                     <span>{new Date(item.id).toLocaleDateString()}</span>
                                 </div>
                             </div>
@@ -439,6 +520,21 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                     </div>
                 )}
             </>
+        )}
+        
+        {thumbnailPreview && (
+            <div
+                className="fixed z-50 w-32 h-32 bg-bg-tertiary border border-border-primary rounded-md shadow-lg p-1 animate-fade-in pointer-events-none"
+                style={{ top: `${thumbnailPreview.position.top}px`, left: `${thumbnailPreview.position.left}px` }}
+            >
+                {thumbnailPreview.loading ? (
+                    <div className="w-full h-full flex items-center justify-center">
+                        <SpinnerIcon className="w-8 h-8 text-accent animate-spin" />
+                    </div>
+                ) : thumbnailPreview.url ? (
+                    <img src={thumbnailPreview.url} alt="Prompt preview" className="w-full h-full object-cover rounded-sm" />
+                ) : null}
+            </div>
         )}
 
         {selectedItem && (
@@ -479,11 +575,16 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                             }
                             return mediaContent;
                          })()}
+                         {selectedItem.mediaType === 'prompt' && (
+                            <div className="w-full h-full p-2 flex items-center justify-center">
+                                <img src={selectedItem.thumbnail} alt="Prompt thumbnail" className="max-w-full max-h-full object-contain rounded-md" />
+                            </div>
+                         )}
                     </div>
-                    <div className="w-full md:w-72 flex-shrink-0 flex flex-col">
+                    <div className="w-full md:w-80 flex-shrink-0 flex flex-col">
                         <div className="flex justify-between items-start mb-4">
                             <div>
-                                <h3 id="library-item-title" className="text-lg font-bold text-accent capitalize">{selectedItem.mediaType} Details</h3>
+                                <h3 id="library-item-title" className="text-lg font-bold text-accent capitalize">{selectedItem.name || selectedItem.mediaType} Details</h3>
                                 <p className="text-xs text-text-muted">{new Date(selectedItem.id).toLocaleString()}</p>
                             </div>
                              <button onClick={() => setSelectedItem(null)} className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover transition-colors">
@@ -491,18 +592,37 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                              </button>
                         </div>
                         <div className="flex-grow overflow-y-auto pr-2 -mr-2 bg-bg-tertiary/50 p-3 rounded-md border border-border-primary/50">
-                             {selectedItem.mediaType !== 'clothes' && selectedItem.options ? (
+                             {(selectedItem.mediaType === 'image' || selectedItem.mediaType === 'video') && selectedItem.options ? (
                                 <OptionDisplay options={selectedItem.options} mediaType={selectedItem.mediaType} />
                             ) : (
                                 <div className="text-sm text-text-secondary space-y-3">
-                                    <div>
-                                        <span className="font-semibold text-text-primary">Item Name:</span>
-                                        <p className="break-words">{selectedItem.name || 'N/A'}</p>
-                                    </div>
-                                    <div>
-                                        <span className="font-semibold text-text-primary">Details Provided:</span>
-                                        <p className="whitespace-pre-wrap break-words text-xs">{selectedItem.clothingDetails || 'None'}</p>
-                                    </div>
+                                    {selectedItem.mediaType === 'prompt' ? (
+                                        <div className="space-y-3">
+                                            <div>
+                                                <span className="font-semibold text-text-primary">Prompt Source:</span>
+                                                <p className="break-words capitalize text-text-primary">{selectedItem.promptType || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <span className="font-semibold text-text-primary">Model Type:</span>
+                                                <p className="break-words uppercase text-text-primary">{selectedItem.promptModelType || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <span className="font-semibold text-text-primary">Full Prompt Text:</span>
+                                                <p className="whitespace-pre-wrap break-words text-xs bg-bg-primary p-2 rounded-md mt-1 text-text-primary">{selectedItem.media}</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div>
+                                                <span className="font-semibold text-text-primary">Item Name:</span>
+                                                <p className="break-words">{selectedItem.name || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <span className="font-semibold text-text-primary">Details Provided:</span>
+                                                <p className="whitespace-pre-wrap break-words text-xs">{selectedItem.clothingDetails || 'None'}</p>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -526,7 +646,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                                     <CopyIcon className="w-5 h-5" /> {copyButtonText}
                                 </button>
                             )}
-                            {(selectedItem.mediaType === 'image' || (selectedItem.mediaType === 'video' && selectedItem.options?.videoProvider !== 'gemini')) && (
+                            {(selectedItem.mediaType !== 'clothes') && (
                                 <button
                                     onClick={() => { onLoadItem(selectedItem); setSelectedItem(null); }}
                                     className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"

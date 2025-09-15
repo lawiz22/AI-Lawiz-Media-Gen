@@ -655,6 +655,11 @@ function App() {
                 setClothesExtractorResults([]);
             }
             break;
+        
+        case 'prompt':
+            setOptions(prev => ({ ...prev, provider: 'comfyui', comfyPrompt: item.media }));
+            setActiveTab('image');
+            break;
     }
   };
 
@@ -901,7 +906,7 @@ function App() {
         {activeTab === 'prompt' && currentUser.role === 'admin' && 
             <PromptGeneratorPanel
                 onUsePrompt={(p) => { 
-                    setOptions(prev => ({...prev, comfyPrompt: p})); 
+                    setOptions(prev => ({...prev, provider: 'comfyui', comfyPrompt: p})); 
                     setActiveTab('image'); 
                 }}
                 image={promptToolImage}
