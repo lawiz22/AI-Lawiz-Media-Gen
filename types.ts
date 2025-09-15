@@ -1,3 +1,16 @@
+// Fix: Added namespace declaration for `gapi` to provide types for `gapi.client.drive.File` and resolve namespace error.
+declare namespace gapi {
+  namespace client {
+    namespace drive {
+      interface File {
+        id?: string | null;
+        name?: string | null;
+        appProperties?: { [key: string]: string } | null;
+      }
+    }
+  }
+}
+
 import { fileToDataUrl } from './utils/imageUtils';
 
 declare global {

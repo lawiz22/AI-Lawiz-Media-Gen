@@ -125,6 +125,7 @@ export const connectAndPickFolder = async (): Promise<DriveFolder | null> => {
                     .setOAuthToken(tokenResponse.access_token)
                     .addView(view)
                     .setDeveloperKey(PICKER_API_KEY)
+                    .setOrigin(window.location.origin) // Explicitly set the origin for validation
                     .setCallback((data: any) => {
                         if (data.action === window.google.picker.Action.PICKED) {
                             const doc = data.docs[0];
@@ -184,26 +185,37 @@ export const uploadFile = async (item: LibraryItem): Promise<string> => {
         }
     };
     
-    const mediaFile = new File([blob], filename, { type: blob.type });
+    // Use XMLHttpRequest for robustness with Google's multipart upload API
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart');
+        const token = window.gapi.client.getToken().access_token;
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', mediaFile);
-    
-    const token = window.gapi.client.getToken().access_token;
-    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: new Headers({ 'Authorization': `Bearer ${token}` }),
-        body: form,
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                const result = JSON.parse(xhr.responseText);
+                resolve(result.id);
+            } else {
+                try {
+                    const error = JSON.parse(xhr.responseText);
+                    reject(new Error(`Google Drive upload failed: ${error.error.message}`));
+                } catch (e) {
+                    reject(new Error(`Google Drive upload failed with status: ${xhr.status}. ${xhr.statusText}`));
+                }
+            }
+        };
+
+        xhr.onerror = () => {
+            reject(new Error('Network error during Google Drive upload.'));
+        };
+
+        const formData = new FormData();
+        formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        formData.append('file', blob, filename);
+
+        xhr.send(formData);
     });
-    
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Google Drive upload failed: ${error.error.message}`);
-    }
-    
-    const result = await response.json();
-    return result.id;
 };
 
 
