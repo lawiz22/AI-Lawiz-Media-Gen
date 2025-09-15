@@ -1,13 +1,76 @@
-import type { LibraryItem } from '../types';
+import type { LibraryItem, DriveFolder } from '../types';
 import * as idbService from './idbLibraryService';
-import { dataUrlToBlob } from '../utils/imageUtils';
+import { dataUrlToBlob, dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
+import * as googleDriveService from './googleDriveService';
 
-// This service now acts as a direct interface to the IndexedDB service.
-// The file system logic has been removed to simplify the architecture and
-// resolve issues with the File System Access API in sandboxed environments.
+let driveService: typeof googleDriveService | null = null;
+
+export function setDriveService(service: typeof googleDriveService | null) {
+    driveService = service;
+}
 
 export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void> => {
-  return idbService.saveToLibrary(item);
+  // Always save to local DB first and get the new item with its ID
+  const newItem = await idbService.saveToLibrary(item);
+
+  // If Drive is connected, upload the file and update the local record with the Drive File ID
+  if (driveService?.isConnected()) {
+      try {
+          const driveFileId = await driveService.uploadFile(newItem);
+          if (driveFileId) {
+              await idbService.updateLibraryItem(newItem.id, { driveFileId });
+          }
+      } catch (e) {
+          console.error("Failed to upload to Google Drive, but saved locally.", e);
+          // Optionally, you could add a flag to the item indicating it needs to be synced later.
+      }
+  }
+};
+
+export const syncLibraryFromDrive = async (onProgress: (message: string) => void): Promise<void> => {
+    if (!driveService || !driveService.isConnected()) {
+        throw new Error("Not connected to Google Drive.");
+    }
+
+    onProgress("Fetching file list from Google Drive...");
+    const driveFiles = await driveService.listFiles();
+    onProgress(`Found ${driveFiles.length} files in Drive. Checking against local library...`);
+    const localItems = await idbService.getLibraryItems();
+    const localDriveIds = new Set(localItems.map(item => item.driveFileId).filter(Boolean));
+
+    const missingFiles = driveFiles.filter(file => file.id && !localDriveIds.has(file.id));
+
+    if (missingFiles.length === 0) {
+        onProgress("Local library is already up to date.");
+        return;
+    }
+
+    onProgress(`Downloading ${missingFiles.length} new items...`);
+    for (let i = 0; i < missingFiles.length; i++) {
+        const file = missingFiles[i];
+        if (!file.id) continue;
+
+        onProgress(`Downloading "${file.name}" (${i + 1}/${missingFiles.length})...`);
+        try {
+            const { metadata, blob } = await driveService.downloadFile(file.id);
+            if (metadata && blob) {
+                const media = await fileToDataUrl(new File([blob], file.name!));
+                const thumbnail = await dataUrlToThumbnail(media, 256);
+
+                const newItem: LibraryItem = {
+                    ...metadata,
+                    media,
+                    thumbnail,
+                    driveFileId: file.id,
+                };
+                await idbService.saveToLibrary(newItem, true); // Save with existing ID
+            }
+        } catch (e) {
+            console.error(`Failed to download or save file ${file.name} (ID: ${file.id})`, e);
+            // Continue to the next file
+        }
+    }
+    onProgress("Sync complete!");
 };
 
 export const getLibraryItems = async (): Promise<LibraryItem[]> => {

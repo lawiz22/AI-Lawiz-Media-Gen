@@ -7,7 +7,7 @@ import { OptionsPanel } from './components/OptionsPanel';
 import { ImageGrid } from './components/ImageGrid';
 import { AdminPanel } from './components/AdminPanel';
 import { Loader } from './components/Loader';
-import { ComfyUIConnection } from './components/ComfyUIConnection';
+import { ConnectionSettingsModal } from './components/ComfyUIConnection';
 import { HistoryPanel } from './components/HistoryPanel';
 import { LibraryPanel } from './components/LibraryPanel';
 import { LibraryPickerModal } from './components/LibraryPickerModal';
@@ -15,15 +15,17 @@ import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
 import { ClothesExtractorPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
-import { LocalPathModal } from './components/LocalPathModal';
 import { GenerateIcon, LibraryIcon } from './components/icons';
-import type { GenerationOptions, User, HistoryItem, VersionInfo, GeneratedClothing, LibraryItem } from './types';
+import type { GenerationOptions, User, HistoryItem, VersionInfo, GeneratedClothing, LibraryItem, DriveFolder } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { generatePortraitSeries, generateImagesFromPrompt, generateGeminiVideo } from './services/geminiService';
 import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo, generateComfyUIPromptFromSource as generateComfyUIPromptService, generateComfyUIVideo } from './services/comfyUIService';
 import { saveGenerationToHistory } from './services/historyService';
+import * as libraryService from './services/libraryService';
+import * as googleDriveService from './services/googleDriveService';
 import { fileToResizedDataUrl, dataUrlToThumbnail, dataUrlToFile } from './utils/imageUtils';
 import { PHOTO_STYLE_OPTIONS, IMAGE_STYLE_OPTIONS, ERA_STYLE_OPTIONS } from './constants';
+import { OAuthHelperModal } from './components/OAuthHelperModal';
 
 const initialOptions: GenerationOptions = {
   provider: 'gemini',
@@ -188,17 +190,25 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   
   const [activeTab, setActiveTab] = useState<'image' | 'video' | 'library' | 'clothes' | 'video-utils' | 'prompt' | 'manage'>('image');
-  const [isComfyModalOpen, setIsComfyModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
-  const [isPathModalOpen, setIsPathModalOpen] = useState(false);
+  const [isOAuthHelperOpen, setIsOAuthHelperOpen] = useState(false);
   
   const [comfyUIUrl, setComfyUIUrl] = useState<string>(() => localStorage.getItem('comfyui_url') || '');
   const [isComfyUIConnected, setIsComfyUIConnected] = useState<boolean | null>(null);
   const [comfyUIObjectInfo, setComfyUIObjectInfo] = useState<any | null>(null);
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
 
-  // --- State for Local Library Path ---
-  const [localLibraryPath, setLocalLibraryPath] = useState<string | null>(() => localStorage.getItem('localLibraryPath'));
+  // --- State for Google Drive ---
+  const [googleClientId, setGoogleClientId] = useState<string>(() => localStorage.getItem('google_client_id') || '');
+  const [isDriveConfigured, setIsDriveConfigured] = useState(() => googleDriveService.isDriveConfigured());
+  const [driveFolder, setDriveFolder] = useState<DriveFolder | null>(() => {
+    if (!googleDriveService.isDriveConfigured()) return null;
+    const savedFolder = localStorage.getItem('driveFolder');
+    return savedFolder ? JSON.parse(savedFolder) : null;
+  });
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
 
   // --- State for PromptGeneratorPanel to persist across tab changes ---
   const [promptToolImage, setPromptToolImage] = useState<File | null>(null);
@@ -311,6 +321,72 @@ function App() {
     }
   }, [isComfyUIConnected]);
 
+  // --- Google Drive Integration Effects ---
+  useEffect(() => {
+    const setupDriveService = () => {
+      if (currentUser && isDriveConfigured) {
+          libraryService.setDriveService(googleDriveService);
+          const savedFolder = localStorage.getItem('driveFolder');
+          if (savedFolder) {
+              try {
+                const folder: DriveFolder = JSON.parse(savedFolder);
+                googleDriveService.setFolder(folder);
+              } catch (e) {
+                console.error("Failed to parse saved drive folder.", e);
+                localStorage.removeItem('driveFolder');
+              }
+          }
+      }
+    };
+    setupDriveService();
+  }, [currentUser, isDriveConfigured]);
+
+
+  const handleDriveConnect = () => {
+    setError(null);
+    setIsOAuthHelperOpen(true);
+  };
+  
+  const proceedWithGoogleLogin = async () => {
+    setIsOAuthHelperOpen(false);
+    try {
+        const folder = await googleDriveService.connectAndPickFolder();
+        if (folder) {
+            setDriveFolder(folder);
+            localStorage.setItem('driveFolder', JSON.stringify(folder));
+            libraryService.setDriveService(googleDriveService);
+        }
+    } catch (e: any) {
+        console.error("Drive Connection Error:", e);
+        if (e.message && !e.message.includes('User cancelled')) {
+            setError(`Failed to connect to Google Drive. Please double-check your settings in the helper and try again. Error: ${e.message}`);
+        }
+    }
+  };
+
+
+  const handleDriveDisconnect = () => {
+    googleDriveService.disconnect();
+    setDriveFolder(null);
+    localStorage.removeItem('driveFolder');
+    libraryService.setDriveService(null);
+  };
+  
+  const handleSyncWithDrive = async () => {
+    setIsSyncing(true);
+    setError(null);
+    try {
+        await libraryService.syncLibraryFromDrive((msg) => setSyncMessage(msg));
+        alert("Sync complete!");
+    } catch (e: any) {
+        console.error("Sync Error:", e);
+        setError("Failed to sync with Google Drive: " + e.message);
+    } finally {
+        setIsSyncing(false);
+        setSyncMessage('');
+    }
+  };
+
   const handleLogin = async (username: string, password: string): Promise<true | string> => {
     const user = await authenticateUser(username, password);
     if (user) {
@@ -326,23 +402,16 @@ function App() {
     setCurrentUser(null);
     sessionStorage.removeItem('currentUser');
     setIsComfyUIConnected(false);
+    handleDriveDisconnect();
   };
   
-  const handleSaveComfyUrl = (newUrl: string) => {
-    updateAndTestConnection(newUrl);
+  const handleSaveSettings = (newComfyUrl: string, newClientId: string) => {
+    updateAndTestConnection(newComfyUrl);
+    localStorage.setItem('google_client_id', newClientId);
+    setGoogleClientId(newClientId);
+    setIsDriveConfigured(!!newClientId);
   };
 
-  // --- Local Path Handlers ---
-  const handleSetLocalPath = (path: string) => {
-    localStorage.setItem('localLibraryPath', path);
-    setLocalLibraryPath(path);
-  };
-  
-  const handleDisconnectLocalPath = () => {
-    localStorage.removeItem('localLibraryPath');
-    setLocalLibraryPath(null);
-  };
-  
   const handleReset = useCallback(() => {
     const provider = options.provider;
     const videoProvider = options.videoProvider;
@@ -562,9 +631,6 @@ function App() {
                     const parsedMedia = JSON.parse(item.media);
                     setClothesExtractorResults([{ name: item.name || 'Loaded Item', ...parsedMedia }]);
                 } else {
-                    // For single-image clothing items, we can't reconstruct the pair,
-                    // so we show a simplified result. A better UX might show just the single image.
-                    // For now, let's just create a placeholder state.
                     const dummyItem = { name: item.name || 'Loaded Item', laidOutImage: item.media, foldedImage: item.media };
                      setClothesExtractorResults([dummyItem]);
                 }
@@ -607,7 +673,7 @@ function App() {
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
-  
+
   const getUploaderSectionTitle = () => {
       if (options.provider === 'gemini') {
         return options.geminiMode === 't2i' ? "1. Configure Prompt" : "1. Upload Images";
@@ -642,12 +708,14 @@ function App() {
         setTheme={setTheme} 
         onLogout={handleLogout} 
         currentUser={currentUser}
-        onOpenComfyModal={() => setIsComfyModalOpen(true)}
+        onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
         onOpenHistoryPanel={() => setIsHistoryPanelOpen(true)}
-        onOpenPathModal={() => setIsPathModalOpen(true)}
-        localLibraryPath={localLibraryPath}
         isComfyUIConnected={isComfyUIConnected}
         versionInfo={versionInfo}
+        driveFolder={driveFolder}
+        onDriveConnect={handleDriveConnect}
+        onDriveDisconnect={handleDriveDisconnect}
+        isDriveConfigured={isDriveConfigured}
       />
       <main className="container mx-auto p-4 md:p-8">
         <div className="bg-bg-secondary p-4 rounded-2xl shadow-lg mb-8">
@@ -682,7 +750,6 @@ function App() {
 
         { activeTab === 'image' &&
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-            {/* Left Column for Controls */}
             <div className="lg:col-span-1 space-y-8">
               {!(options.provider === 'gemini' && options.geminiMode === 't2i') &&
                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
@@ -740,7 +807,6 @@ function App() {
               />
             </div>
 
-            {/* Right column for results */}
             <div className="lg:col-span-2 sticky top-24">
               {isLoading ? (
                   <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg min-h-[500px]">
@@ -792,7 +858,16 @@ function App() {
           />
         }
 
-        {activeTab === 'library' && <LibraryPanel onLoadItem={handleLoadFromLibrary} />}
+        {activeTab === 'library' && 
+            <LibraryPanel 
+                onLoadItem={handleLoadFromLibrary} 
+                isDriveConnected={!!driveFolder}
+                isDriveConfigured={isDriveConfigured}
+                onSyncWithDrive={handleSyncWithDrive}
+                isSyncing={isSyncing}
+                syncMessage={syncMessage}
+            />
+        }
 
         {activeTab === 'clothes' &&
             <ClothesExtractorPanel 
@@ -824,6 +899,7 @@ function App() {
                 subjectImage={promptToolSubjectImage}
                 setSubjectImage={setPromptToolSubjectImage}
                 subjectPrompt={promptToolSubjectPrompt}
+// Fix: Corrected the prop passed to PromptGeneratorPanel from the undefined 'setSubjectPrompt' to the correct state setter 'setPromptToolSubjectPrompt', resolving a reference error.
                 setSubjectPrompt={setPromptToolSubjectPrompt}
                 soupPrompt={promptToolSoupPrompt}
                 setSoupPrompt={setPromptToolSoupPrompt}
@@ -835,11 +911,12 @@ function App() {
 
       </main>
       
-      <ComfyUIConnection 
-        isOpen={isComfyModalOpen}
-        onClose={() => setIsComfyModalOpen(false)}
-        initialUrl={comfyUIUrl}
-        onSaveUrl={handleSaveComfyUrl}
+      <ConnectionSettingsModal 
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        initialComfyUIUrl={comfyUIUrl}
+        initialGoogleClientId={googleClientId}
+        onSave={handleSaveSettings}
       />
       <HistoryPanel
         isOpen={isHistoryPanelOpen}
@@ -852,12 +929,12 @@ function App() {
         onSelectItem={handleSelectFromLibrary}
         filter={libraryPickerConfig.filter}
       />
-      <LocalPathModal
-        isOpen={isPathModalOpen}
-        onClose={() => setIsPathModalOpen(false)}
-        currentPath={localLibraryPath}
-        onSavePath={handleSetLocalPath}
-        onDisconnectPath={handleDisconnectLocalPath}
+      <OAuthHelperModal
+        isOpen={isOAuthHelperOpen}
+        onClose={() => setIsOAuthHelperOpen(false)}
+        onProceed={proceedWithGoogleLogin}
+        clientId={googleClientId}
+        origin={typeof window !== 'undefined' ? window.location.origin : ''}
       />
     </>
   );

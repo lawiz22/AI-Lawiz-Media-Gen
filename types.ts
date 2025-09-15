@@ -6,6 +6,10 @@ declare global {
   }
   interface Window {
     showSaveFilePicker(options?: any): Promise<FileSystemFileHandle>;
+    gapi: any; // Google API Client
+    google: any; // Google Identity Services
+    gapiLoaded?: boolean;
+    gisLoaded?: boolean;
   }
 }
 export interface GenerationOptions {
@@ -172,6 +176,7 @@ export interface GeneratedClothing {
 
 export interface LibraryItem {
   id: number; // Timestamp
+  driveFileId?: string; // ID of the file on Google Drive
   mediaType: 'image' | 'video' | 'clothes';
   thumbnail: string; // Small data URL for preview
   media: string; // Full-size data URL for image/video, or JSON string for clothes
@@ -181,4 +186,10 @@ export interface LibraryItem {
   sourceImage?: string; // data URL
   startFrame?: string; // data URL
   endFrame?: string; // data URL
+}
+
+// Type for Google Drive Folder representation
+export interface DriveFolder {
+    id: string;
+    name: string;
 }

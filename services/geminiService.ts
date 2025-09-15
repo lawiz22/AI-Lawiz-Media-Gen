@@ -1,5 +1,4 @@
 
-
 // Implemented Gemini API service to fix module resolution errors.
 // Fix: Removed HarmCategory and HarmBlockThreshold as they are no longer used after removing safety settings.
 import { GoogleGenAI, Modality, Part, GenerateContentConfig, Type } from "@google/genai";
@@ -8,10 +7,23 @@ import { fileToGenerativePart, fileToBase64 } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from "../utils/imageProcessing";
 import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+let ai: GoogleGenAI | null = null;
 
-// Fix: Removed the safetySettings constant as it's not a supported parameter
-// in the Gemini API calls used in this file and was causing errors.
+const getApiKey = (): string => {
+    const key = process.env.API_KEY;
+    if (!key) {
+        throw new Error("Google AI API Key is not configured in the environment. The application cannot function without it.");
+    }
+    return key;
+};
+
+const getAiInstance = (): GoogleGenAI => {
+    if (!ai) {
+        ai = new GoogleGenAI({ apiKey: getApiKey() });
+    }
+    return ai;
+};
+
 
 const dataUrlToGenerativePart = async (dataUrl: string): Promise<Part> => {
     const [header, base64Data] = dataUrl.split(',');
@@ -32,6 +44,7 @@ const dataUrlToGenerativePart = async (dataUrl: string): Promise<Part> => {
 };
 
 export const generateClothingPreview = async (prompt: string, aspectRatio: string): Promise<string> => {
+  const ai = getAiInstance();
   if (!prompt.trim()) {
     throw new Error("Prompt cannot be empty.");
   }
@@ -65,6 +78,7 @@ export const generateBackgroundImagePreview = async (
   prompt: string,
   aspectRatio: string
 ): Promise<string> => {
+  const ai = getAiInstance();
   if (!prompt.trim()) {
     throw new Error("Prompt cannot be empty.");
   }
@@ -97,6 +111,7 @@ export const generateBackgroundImagePreview = async (
 };
 
 export const enhanceImageResolution = async (base64ImageData: string): Promise<string> => {
+    const ai = getAiInstance();
     const imagePart = await dataUrlToGenerativePart(base64ImageData);
     
     // The model for image editing.
@@ -135,6 +150,7 @@ export const generateImagesFromPrompt = async (
   options: GenerationOptions,
   onProgress: (message: string, progress: number) => void
 ): Promise<{ images: string[], firstPrompt: string }> => {
+  const ai = getAiInstance();
   if (!options.geminiPrompt?.trim()) {
     throw new Error("Prompt cannot be empty for text-to-image generation.");
   }
@@ -198,7 +214,7 @@ export const generatePortraitSeries = async (
   options: GenerationOptions,
   onProgress: (message: string, progress: number) => void
 ): Promise<{ images: string[], firstPrompt: string }> => {
-
+  const ai = getAiInstance();
   onProgress("Cropping source image...", 0.05);
   const croppedSourceImage = await cropImageToAspectRatio(sourceImage, options.aspectRatio);
   
@@ -318,6 +334,7 @@ export const generateGeminiVideo = async (
   options: GenerationOptions,
   onProgress: (message: string, progress: number) => void
 ): Promise<{ videoUrl: string, finalPrompt: string }> => {
+    const ai = getAiInstance();
     if (!options.geminiVidPrompt) {
         throw new Error("A text prompt is required for video generation.");
     }
@@ -399,7 +416,7 @@ export const generateGeminiVideo = async (
     onProgress("Video processing complete. Downloading...", 0.95);
     
     // The response.body contains the MP4 bytes. You must append an API key when fetching from the download link.
-    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    const response = await fetch(`${downloadLink}&key=${getApiKey()}`);
     if (!response.ok) {
         throw new Error(`Failed to download the generated video. Status: ${response.status}`);
     }
@@ -420,6 +437,7 @@ export const identifyClothing = async (
   mimeType: string,
   clothingDetails: string
 ): Promise<{ name: string; description: string }[]> => {
+    const ai = getAiInstance();
     const imagePart = { inlineData: { data: base64Image, mimeType } };
     let prompt = `Analyze the provided image. Identify every distinct item of clothing and accessory worn by the person. 
     For each item, provide a 'name' (e.g., 'Blue T-Shirt', 'Leather Belt') and a detailed 'description' suitable for generating a new image of that item alone. 
@@ -470,6 +488,7 @@ export const generateClothingImage = async (
   itemDescription: string,
   view: 'laid out' | 'folded'
 ): Promise<string> => {
+    const ai = getAiInstance();
     const imagePart = { inlineData: { data: base64Image, mimeType } };
     const viewStyle = view === 'laid out' ? 'laid out flat' : 'neatly folded';
     

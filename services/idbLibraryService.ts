@@ -9,7 +9,7 @@ interface MyDB extends DBSchema {
   [STORE_NAME]: {
     key: number;
     value: LibraryItem;
-    indexes: { 'mediaType': string };
+    indexes: { 'mediaType': string; 'driveFileId': string };
   };
 }
 
@@ -23,19 +23,35 @@ const getDb = (): Promise<IDBPDatabase<MyDB>> => {
           keyPath: 'id',
         });
         store.createIndex('mediaType', 'mediaType');
+        store.createIndex('driveFileId', 'driveFileId', { unique: false });
       },
     });
   }
   return dbPromise;
 };
 
-export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void> => {
+export const saveToLibrary = async (item: Omit<LibraryItem, 'id'> | LibraryItem, useExistingId = false): Promise<LibraryItem> => {
   const db = await getDb();
-  const newItem: LibraryItem = {
-    ...item,
-    id: Date.now(),
-  };
+  let newItem: LibraryItem;
+  if (useExistingId && 'id' in item) {
+    newItem = item as LibraryItem;
+  } else {
+    newItem = {
+      ...item,
+      id: Date.now(),
+    };
+  }
   await db.put(STORE_NAME, newItem);
+  return newItem;
+};
+
+export const updateLibraryItem = async (id: number, propsToUpdate: Partial<LibraryItem>): Promise<void> => {
+    const db = await getDb();
+    const item = await db.get(STORE_NAME, id);
+    if (item) {
+        const updatedItem = { ...item, ...propsToUpdate };
+        await db.put(STORE_NAME, updatedItem);
+    }
 };
 
 export const getLibraryItems = async (): Promise<LibraryItem[]> => {

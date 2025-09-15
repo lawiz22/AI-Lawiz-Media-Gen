@@ -3,53 +3,50 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { checkConnection } from '../services/comfyUIService';
 import { CloseIcon, SpinnerIcon } from './icons';
 
-interface ComfyUIConnectionProps {
+interface ConnectionSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialUrl: string;
-  onSaveUrl: (url: string) => void;
+  initialComfyUIUrl: string;
+  initialGoogleClientId: string;
+  onSave: (comfyUIUrl: string, googleClientId: string) => void;
 }
 
 type ConnectionStatus = 'idle' | 'testing' | 'success' | 'failed';
 
-export const ComfyUIConnection: React.FC<ComfyUIConnectionProps> = ({ isOpen, onClose, initialUrl, onSaveUrl }) => {
-  const [url, setUrl] = useState<string>(initialUrl || 'http://127.0.0.1:8188');
-  const [status, setStatus] = useState<ConnectionStatus>('idle');
-  const [statusMessage, setStatusMessage] = useState<string>('');
+export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = ({ isOpen, onClose, initialComfyUIUrl, initialGoogleClientId, onSave }) => {
+  const [comfyUrl, setComfyUrl] = useState<string>('');
+  const [googleClientId, setGoogleClientId] = useState<string>('');
+  const [comfyStatus, setComfyStatus] = useState<ConnectionStatus>('idle');
+  const [comfyStatusMessage, setComfyStatusMessage] = useState<string>('');
   
-  // Effect to sync the internal URL state if the modal is reopened
-  // with a different URL from the parent component.
   useEffect(() => {
     if (isOpen) {
-        setUrl(initialUrl || 'http://127.0.0.1:8188');
-        setStatus('idle'); // Reset status when opening
+        setComfyUrl(initialComfyUIUrl || 'http://127.0.0.1:8188');
+        setGoogleClientId(initialGoogleClientId || '');
+        setComfyStatus('idle'); // Reset status when opening
     }
-  }, [initialUrl, isOpen]);
+  }, [initialComfyUIUrl, initialGoogleClientId, isOpen]);
 
   const handleTestConnection = async () => {
-    setStatus('testing');
-    setStatusMessage('');
-    const result = await checkConnection(url);
+    setComfyStatus('testing');
+    setComfyStatusMessage('');
+    const result = await checkConnection(comfyUrl);
     if (result.success) {
-      setStatus('success');
-      setStatusMessage('Connection successful!');
+      setComfyStatus('success');
+      setComfyStatusMessage('Connection successful!');
     } else {
-      setStatus('failed');
-      setStatusMessage(result.error || 'Failed to connect.');
+      setComfyStatus('failed');
+      setComfyStatusMessage(result.error || 'Failed to connect.');
     }
   };
   
   const handleSave = () => {
-    onSaveUrl(url);
-    setStatus('success');
-    setStatusMessage('URL saved!');
-    setTimeout(() => {
-        onClose();
-    }, 1000); // Close modal automatically after 1 second
+    onSave(comfyUrl, googleClientId);
+    onClose();
   };
 
   const getStatusColor = () => {
-    switch (status) {
+    switch (comfyStatus) {
       case 'success': return 'text-green-400';
       case 'failed': return 'text-danger';
       case 'testing': return 'text-accent';
@@ -81,7 +78,7 @@ export const ComfyUIConnection: React.FC<ComfyUIConnectionProps> = ({ isOpen, on
       className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="comfy-modal-title"
+      aria-labelledby="settings-modal-title"
       onClick={onClose}
     >
       <div 
@@ -89,7 +86,7 @@ export const ComfyUIConnection: React.FC<ComfyUIConnectionProps> = ({ isOpen, on
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 id="comfy-modal-title" className="text-xl font-bold text-accent">ComfyUI Connection</h2>
+          <h2 id="settings-modal-title" className="text-xl font-bold text-accent">Connection Settings</h2>
           <button
             onClick={onClose}
             className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
@@ -99,48 +96,68 @@ export const ComfyUIConnection: React.FC<ComfyUIConnectionProps> = ({ isOpen, on
           </button>
         </div>
         
-        <p className="text-sm text-text-secondary mb-4">
-          Configure the address of your local or remote ComfyUI server to enable workflow exporting.
-        </p>
-
-        <div className="space-y-4">
+        <div className="space-y-6">
+            {/* ComfyUI Section */}
             <div>
-              <label htmlFor="comfyui-url" className="block text-sm font-medium text-text-secondary">
-                Server URL
-              </label>
-              <input
-                type="text"
-                id="comfyui-url"
-                value={url}
-                onChange={(e) => {
-                  setUrl(e.target.value);
-                  if (status !== 'testing') setStatus('idle');
-                }}
-                className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent shadow-sm"
-                placeholder="http://127.0.0.1:8188"
-              />
+                <h3 className="text-lg font-semibold text-text-primary mb-2">ComfyUI Server</h3>
+                <p className="text-sm text-text-secondary mb-4">
+                    Configure the address of your local or remote ComfyUI server.
+                </p>
+                <label htmlFor="comfyui-url" className="block text-sm font-medium text-text-secondary">
+                    Server URL
+                </label>
+                <div className="flex gap-2 items-center mt-1">
+                    <input
+                        type="text"
+                        id="comfyui-url"
+                        value={comfyUrl}
+                        onChange={(e) => {
+                        setComfyUrl(e.target.value);
+                        if (comfyStatus !== 'testing') setComfyStatus('idle');
+                        }}
+                        className="block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent shadow-sm"
+                        placeholder="http://127.0.0.1:8188"
+                    />
+                    <button
+                        onClick={handleTestConnection}
+                        disabled={comfyStatus === 'testing'}
+                        className="flex-shrink-0 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                    >
+                        {comfyStatus === 'testing' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : "Test"}
+                    </button>
+                </div>
+                {comfyStatus !== 'idle' && (
+                <p className={`text-sm text-center font-medium mt-2 ${getStatusColor()}`}>
+                    {comfyStatusMessage || (comfyStatus === 'testing' ? 'Testing connection...' : '')}
+                </p>
+                )}
+            </div>
+
+            {/* Google Drive Section */}
+            <div>
+                 <h3 className="text-lg font-semibold text-text-primary mb-2">Google Drive Integration</h3>
+                 <p className="text-sm text-text-secondary mb-4">
+                    Provide a Google Cloud OAuth Client ID to enable library syncing with Google Drive.
+                </p>
+                <label htmlFor="google-client-id" className="block text-sm font-medium text-text-secondary">
+                    Google Client ID
+                </label>
+                <input
+                    type="text"
+                    id="google-client-id"
+                    value={googleClientId}
+                    onChange={(e) => setGoogleClientId(e.target.value)}
+                    className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent shadow-sm"
+                    placeholder="xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
+                />
             </div>
             
-            {status !== 'idle' && (
-              <p className={`text-sm text-center font-medium ${getStatusColor()}`}>
-                {status === 'testing' ? <SpinnerIcon className="inline w-4 h-4 mr-2 animate-spin" /> : null}
-                {statusMessage || (status === 'testing' ? 'Testing connection...' : '')}
-              </p>
-            )}
-
-            <div className="flex flex-col sm:flex-row gap-4">
-              <button
-                onClick={handleTestConnection}
-                disabled={status === 'testing'}
-                className="flex-1 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
-              >
-                 {status === 'testing' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : null}
-                 Test Connection
-              </button>
+            {/* Save Button */}
+            <div className="pt-2">
               <button
                 onClick={handleSave}
                 style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
-                className="flex-1 font-bold py-2 px-4 rounded-lg transition-colors duration-200"
+                className="w-full font-bold py-3 px-4 rounded-lg transition-colors duration-200"
               >
                 Save and Close
               </button>

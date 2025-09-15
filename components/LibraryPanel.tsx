@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk } from '../services/libraryService';
 import type { LibraryItem, GenerationOptions } from '../types';
-import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon } from './icons';
+import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon } from './icons';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
+  isDriveConnected: boolean;
+  onSyncWithDrive: () => void;
+  isSyncing: boolean;
+  syncMessage: string;
+  isDriveConfigured: boolean;
 }
 
 // --- Helper Functions and Components for Option Display ---
@@ -193,7 +198,9 @@ const OptionDisplay: React.FC<{ options: GenerationOptions; mediaType: 'image' |
 };
 
 
-export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
+export const LibraryPanel: React.FC<LibraryPanelProps> = ({ 
+    onLoadItem, isDriveConnected, onSyncWithDrive, isSyncing, syncMessage, isDriveConfigured
+}) => {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<LibraryItem | null>(null);
@@ -318,16 +325,33 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem }) => {
                 <LibraryIcon className="w-8 h-8"/>
                 My Library
             </h2>
-            {items.length > 0 && (
-                <button
-                    onClick={handleClearAll}
-                    className="flex items-center gap-2 bg-danger-bg text-danger font-semibold py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors"
-                >
-                    <TrashIcon className="w-5 h-5" /> Clear All
-                </button>
-            )}
+            <div className="flex items-center gap-2">
+                {isDriveConfigured && isDriveConnected && (
+                    <button
+                        onClick={onSyncWithDrive}
+                        disabled={isSyncing}
+                        className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors disabled:opacity-50"
+                        title="Download new items from your Google Drive folder"
+                    >
+                        {isSyncing ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <GoogleDriveIcon className="w-5 h-5" />}
+                        {isSyncing ? 'Syncing...' : 'Sync with Drive'}
+                    </button>
+                )}
+                {items.length > 0 && (
+                    <button
+                        onClick={handleClearAll}
+                        className="flex items-center gap-2 bg-danger-bg text-danger font-semibold py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors"
+                    >
+                        <TrashIcon className="w-5 h-5" /> Clear All
+                    </button>
+                )}
+            </div>
         </div>
-
+        {isSyncing && (
+            <div className="text-center text-sm text-text-secondary mb-4 p-2 bg-bg-tertiary rounded-md">
+                {syncMessage || "Syncing with Google Drive..."}
+            </div>
+        )}
         {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center text-text-secondary p-16">
                 <LibraryIcon className="w-20 h-20 text-border-primary mb-4" />

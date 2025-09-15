@@ -170,3 +170,9 @@ export const FolderIcon: React.FC<IconProps> = (props) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.75h16.5m-16.5 0A2.25 2.25 0 015.25 7.5h13.5a2.25 2.25 0 012.25 2.25m-16.5 0v6.75a2.25 2.25 0 002.25 2.25h13.5a2.25 2.25 0 002.25-2.25V9.75" />
     </svg>
 );
+
+export const GoogleDriveIcon: React.FC<IconProps> = (props) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19.33 8.3L12.02 19.88L4.72 8.3H19.33M22.77 8.3L15.47 20.3L17.29 23.57L24.6 12L22.77 8.3M12.02 19.88L10.2 16.63L8.03 12.55L4.72 8.3H1.07L8.38 19.88L12.02 19.88M8.38 4L12.02 10.73L15.67 4H8.38Z" />
+    </svg>
+);
