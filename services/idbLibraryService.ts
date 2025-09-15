@@ -60,6 +60,11 @@ export const getLibraryItems = async (): Promise<LibraryItem[]> => {
   return items.sort((a, b) => b.id - a.id); // Sort by most recent
 };
 
+export const getItemById = async (id: number): Promise<LibraryItem | undefined> => {
+    const db = await getDb();
+    return db.get(STORE_NAME, id);
+};
+
 export const deleteLibraryItem = async (id: number): Promise<void> => {
   const db = await getDb();
   await db.delete(STORE_NAME, id);

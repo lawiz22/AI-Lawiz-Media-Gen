@@ -10,19 +10,34 @@ export function setDriveService(service: typeof googleDriveService | null) {
 }
 
 export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void> => {
-  // Always save to local DB first and get the new item with its ID
   const newItem = await idbService.saveToLibrary(item);
 
-  // If Drive is connected, upload the file and update the local record with the Drive File ID
   if (driveService?.isConnected()) {
       try {
-          const driveFileId = await driveService.uploadFile(newItem);
-          if (driveFileId) {
-              await idbService.updateLibraryItem(newItem.id, { driveFileId });
+          const blob = await dataUrlToBlob(newItem.media);
+          
+          let subfolderName: string;
+          switch (newItem.mediaType) {
+              case 'image': subfolderName = 'images'; break;
+              case 'video': subfolderName = 'videos'; break;
+              case 'clothes': subfolderName = 'clothes'; break;
+              default: subfolderName = 'misc';
           }
+          const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
+          const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
+          const filename = `${newItem.mediaType}_${newItem.id}.${extension}`;
+
+          const driveFileId = await driveService.uploadMediaFile(blob, filename, parentFolderId);
+          await idbService.updateLibraryItem(newItem.id, { driveFileId });
+          
+          // Update the central library.json index
+          const { index, fileId } = await driveService.getLibraryIndex();
+          const { media, thumbnail, ...metadata } = newItem;
+          index.items[newItem.id] = { ...metadata, driveFileId };
+          await driveService.updateLibraryIndex(index, fileId);
+
       } catch (e) {
-          console.error("Failed to upload to Google Drive, but saved locally.", e);
-          // Optionally, you could add a flag to the item indicating it needs to be synced later.
+          console.error("Failed to upload to Google Drive, but item is saved locally.", e);
       }
   }
 };
@@ -32,42 +47,40 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
         throw new Error("Not connected to Google Drive.");
     }
 
-    onProgress("Fetching file list from Google Drive...");
-    const driveFiles = await driveService.listFiles();
-    onProgress(`Found ${driveFiles.length} files in Drive. Checking against local library...`);
+    onProgress("Fetching library index from Google Drive...");
+    const { index: remoteIndex } = await driveService.getLibraryIndex();
+    const remoteItems = Object.values(remoteIndex.items);
+    
+    onProgress(`Found ${remoteItems.length} items in Drive index. Checking against local library...`);
     const localItems = await idbService.getLibraryItems();
-    const localDriveIds = new Set(localItems.map(item => item.driveFileId).filter(Boolean));
+    const localIds = new Set(localItems.map(item => item.id));
 
-    const missingFiles = driveFiles.filter(file => file.id && !localDriveIds.has(file.id));
+    const missingItems = remoteItems.filter(item => item.id && !localIds.has(item.id));
 
-    if (missingFiles.length === 0) {
+    if (missingItems.length === 0) {
         onProgress("Local library is already up to date.");
         return;
     }
 
-    onProgress(`Downloading ${missingFiles.length} new items...`);
-    for (let i = 0; i < missingFiles.length; i++) {
-        const file = missingFiles[i];
-        if (!file.id) continue;
+    onProgress(`Downloading ${missingItems.length} new item(s)...`);
+    for (let i = 0; i < missingItems.length; i++) {
+        const itemMetadata = missingItems[i];
+        if (!itemMetadata.driveFileId) continue;
 
-        onProgress(`Downloading "${file.name}" (${i + 1}/${missingFiles.length})...`);
+        onProgress(`Downloading "${itemMetadata.name || itemMetadata.mediaType}" (${i + 1}/${missingItems.length})...`);
         try {
-            const { metadata, blob } = await driveService.downloadFile(file.id);
-            if (metadata && blob) {
-                const media = await fileToDataUrl(new File([blob], file.name!));
-                const thumbnail = await dataUrlToThumbnail(media, 256);
+            const blob = await driveService.downloadMediaFile(itemMetadata.driveFileId);
+            const media = await fileToDataUrl(new File([blob], "file"));
+            const thumbnail = await dataUrlToThumbnail(media, 256);
 
-                const newItem: LibraryItem = {
-                    ...metadata,
-                    media,
-                    thumbnail,
-                    driveFileId: file.id,
-                };
-                await idbService.saveToLibrary(newItem, true); // Save with existing ID
-            }
+            const newItem: LibraryItem = {
+                ...(itemMetadata as LibraryItem), // Trusting the structure from Drive
+                media,
+                thumbnail,
+            };
+            await idbService.saveToLibrary(newItem, true);
         } catch (e) {
-            console.error(`Failed to download or save file ${file.name} (ID: ${file.id})`, e);
-            // Continue to the next file
+            console.error(`Failed to download or save file for item ${itemMetadata.id}`, e);
         }
     }
     onProgress("Sync complete!");
@@ -88,22 +101,48 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
         return;
     }
 
-    onProgress(`Found ${itemsToUpload.length} item(s) to upload...`);
+    onProgress(`Uploading ${itemsToUpload.length} unsynced item(s)... This may take a while.`);
     const uploadErrors: string[] = [];
+    
+    // Fetch the index once at the beginning
+    const { index, fileId: initialFileId } = await driveService.getLibraryIndex();
+    let currentFileId = initialFileId;
 
     for (let i = 0; i < itemsToUpload.length; i++) {
         const item = itemsToUpload[i];
         const itemName = item.name || `${item.mediaType} #${item.id}`;
         onProgress(`Uploading "${itemName}" (${i + 1}/${itemsToUpload.length})...`);
         try {
-            const driveFileId = await driveService.uploadFile(item);
-            if (driveFileId) {
-                await idbService.updateLibraryItem(item.id, { driveFileId });
+            const blob = await dataUrlToBlob(item.media);
+            let subfolderName: string;
+            switch (item.mediaType) {
+                case 'image': subfolderName = 'images'; break;
+                case 'video': subfolderName = 'videos'; break;
+                case 'clothes': subfolderName = 'clothes'; break;
+                default: subfolderName = 'misc';
             }
+            const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
+            const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
+            const filename = `${item.mediaType}_${item.id}.${extension}`;
+
+            const driveFileId = await driveService.uploadMediaFile(blob, filename, parentFolderId);
+            await idbService.updateLibraryItem(item.id, { driveFileId });
+
+            // Add the new item to the in-memory index
+            const { media, thumbnail, ...metadata } = item;
+            index.items[item.id] = { ...metadata, driveFileId };
+            
         } catch (e: any) {
             console.error(`Failed to upload item ${item.id} to Drive:`, e);
             uploadErrors.push(`- ${itemName}: ${e.message}`);
         }
+    }
+
+    onProgress("Finalizing by updating library index file...");
+    try {
+        await driveService.updateLibraryIndex(index, currentFileId);
+    } catch(e: any) {
+        uploadErrors.push(`- CRITICAL: Failed to update library.json index file. Some uploads may appear missing until next sync. Error: ${e.message}`);
     }
     
     if (uploadErrors.length > 0) {
@@ -120,11 +159,37 @@ export const getLibraryItems = async (): Promise<LibraryItem[]> => {
 };
 
 export const deleteLibraryItem = async (id: number): Promise<void> => {
-  return idbService.deleteLibraryItem(id);
+  // First, delete from local DB
+  const itemToDelete = await idbService.getItemById(id);
+  await idbService.deleteLibraryItem(id);
+
+  // Then, if synced, remove from Drive
+  if (driveService?.isConnected() && itemToDelete?.driveFileId) {
+      // This is a "soft delete" for simplicity. The file remains in Drive but is removed from the index.
+      // A full implementation would also delete the media file itself.
+      try {
+          const { index, fileId } = await driveService.getLibraryIndex();
+          if (index.items[id]) {
+              delete index.items[id];
+              await driveService.updateLibraryIndex(index, fileId);
+          }
+      } catch (e) {
+           console.error(`Failed to remove item ${id} from Google Drive index. It may reappear on next sync.`, e);
+      }
+  }
 };
 
 export const clearLibrary = async (): Promise<void> => {
-  return idbService.clearLibrary();
+    await idbService.clearLibrary();
+    // Also clear the remote index if connected
+    if (driveService?.isConnected()) {
+        try {
+            const { fileId } = await driveService.getLibraryIndex();
+            await driveService.updateLibraryIndex({ version: 1, items: {} }, fileId);
+        } catch (e) {
+            console.error("Failed to clear remote library index.", e);
+        }
+    }
 };
 
 export const saveLibraryItemToDisk = async (item: LibraryItem): Promise<void> => {
@@ -176,8 +241,6 @@ export const saveLibraryItemToDisk = async (item: LibraryItem): Promise<void> =>
     await writable.write(blob);
     await writable.close();
   } catch (error: any) {
-    // AbortError is thrown when the user cancels the file picker.
-    // We can safely ignore this.
     if (error.name !== 'AbortError') {
       console.error('Error saving file:', error);
       throw error;

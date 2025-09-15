@@ -24,7 +24,8 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 ### 4. Hybrid Local & Cloud Library
 - **Local Storage First:** Save any generated image, video, or clothing item to a persistent local library in your browser for fast access.
 - **Google Drive Sync:** Securely connect your Google Drive account to sync your entire library for persistent, cloud-based storage.
-- **Automatic Organization:** The app automatically creates and manages `images`, `videos`, and `clothes` subfolders within your selected Drive directory.
+- **Robust Architecture:** The Drive integration uses a central `library.json` file as an index for all media items, ensuring robust and efficient synchronization.
+- **Automatic Organization:** The app automatically creates and manages `images`, `videos`, and `clothes` subfolders within your selected Drive directory to keep your media organized.
 - **Smart Syncing:** Download only new items from Drive to your local library, preventing duplicates and ensuring your collection is always up-to-date.
 - **Complete State Capture:** The library stores not just the media, but also the exact prompts, models, and settings used to create it.
 - **One-Click Restoration:** Load any item from the library to instantly restore the entire generation setup, making it easy to iterate or create variations.
