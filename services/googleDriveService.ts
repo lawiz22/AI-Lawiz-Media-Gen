@@ -3,137 +3,140 @@ import type { LibraryItem, DriveFolder } from '../types';
 import { dataUrlToBlob } from '../utils/imageUtils';
 
 // --- Constants ---
-const GAPI_SCRIPT_ID = 'gapi-script';
-const GIS_SCRIPT_ID = 'gis-script';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
 const SCOPES = 'https://www.googleapis.com/auth/drive';
-// The API_KEY must be sourced from the environment for the Picker API.
 const PICKER_API_KEY = process.env.API_KEY!;
 
 // --- Module-level State ---
 let tokenClient: any = null;
 let driveFolder: DriveFolder | null = null;
-let isGapiInitialized = false;
-let isGisInitialized = false;
+let gapiInitializationPromise: Promise<void> | null = null;
+let gisInitializationPromise: Promise<void> | null = null;
 
 // --- Helper Functions ---
 const getClientId = (): string => localStorage.getItem('google_client_id') || '';
 
-const loadScript = (id: string, src: string, onLoad: () => void) => {
-    if (document.getElementById(id)) {
-        onLoad();
-        return;
-    }
-    const script = document.createElement('script');
-    script.id = id;
-    script.src = src;
-    script.async = true;
-    script.defer = true;
-    script.onload = onLoad;
-    document.body.appendChild(script);
-};
-
+// This function ensures the GAPI client (for Drive and Picker) is loaded and initialized.
+// It's designed to be called multiple times but will only execute the initialization once.
 const initializeGapiClient = (): Promise<void> => {
-    return new Promise((resolve, reject) => {
-        if (isGapiInitialized) {
-            resolve();
-            return;
-        }
-        window.gapi.load('client:picker', async () => {
-            try {
-                await window.gapi.client.init({
-                    apiKey: PICKER_API_KEY,
-                    discoveryDocs: [DISCOVERY_DOC],
-                });
-                isGapiInitialized = true;
-                resolve();
-            } catch (error) {
-                console.error("Error initializing GAPI client", error);
-                reject(error);
-            }
+    if (!gapiInitializationPromise) {
+        gapiInitializationPromise = new Promise((resolve, reject) => {
+            // Wait for the gapi script to be loaded by index.html
+            const checkGapi = () => {
+                if (window.gapi) {
+                    // gapi is available, now load the specific 'client' and 'picker' modules.
+                    window.gapi.load('client:picker', () => {
+                        window.gapi.client.init({
+                            apiKey: PICKER_API_KEY,
+                            discoveryDocs: [DISCOVERY_DOC],
+                        }).then(resolve).catch((err: any) => {
+                            console.error("Error initializing GAPI client modules.", err);
+                            gapiInitializationPromise = null; // Allow retry
+                            reject(new Error("Failed to initialize Google API client. Check API Key and enabled APIs."));
+                        });
+                    });
+                } else {
+                    // If gapi isn't on window yet, wait a bit and try again.
+                    setTimeout(checkGapi, 100);
+                }
+            };
+            checkGapi();
         });
-    });
+    }
+    return gapiInitializationPromise;
 };
 
+// This function ensures the GIS client (for authentication) is loaded and initialized.
 const initializeGisClient = (): Promise<void> => {
-    return new Promise((resolve) => {
-        if (isGisInitialized) {
-            resolve();
-            return;
-        }
-        tokenClient = window.google.accounts.oauth2.initTokenClient({
-            client_id: getClientId(),
-            scope: SCOPES,
-            callback: '', // Callback is handled by the promise
+    if (!gisInitializationPromise) {
+        gisInitializationPromise = new Promise((resolve) => {
+            const checkGis = () => {
+                if (window.google && window.google.accounts) {
+                    const clientId = getClientId();
+                    if (!clientId) {
+                        console.warn("Cannot initialize GIS client: Google Client ID is not configured.");
+                        // Resolve anyway so the app doesn't hang, checks later will prevent usage.
+                        resolve(); 
+                        return;
+                    }
+                    tokenClient = window.google.accounts.oauth2.initTokenClient({
+                        client_id: clientId,
+                        scope: SCOPES,
+                        callback: '', // Callback is handled dynamically by the promise in connectAndPickFolder
+                    });
+                    resolve();
+                } else {
+                    setTimeout(checkGis, 100);
+                }
+            };
+            checkGis();
         });
-        isGisInitialized = true;
-        resolve();
-    });
+    }
+    return gisInitializationPromise;
 };
 
 const ensureClientsReady = async (): Promise<void> => {
-    const gapiPromise = new Promise<void>((resolve) => {
-        if (window.gapi) initializeGapiClient().then(resolve);
-        else loadScript(GAPI_SCRIPT_ID, 'https://apis.google.com/js/api.js', () => initializeGapiClient().then(resolve));
-    });
-
-    const gisPromise = new Promise<void>((resolve) => {
-        if (window.google) initializeGisClient().then(resolve);
-        else loadScript(GIS_SCRIPT_ID, 'https://accounts.google.com/gsi/client', () => initializeGisClient().then(resolve));
-    });
-
-    await Promise.all([gapiPromise, gisPromise]);
+    await Promise.all([initializeGapiClient(), initializeGisClient()]);
 };
 
 // --- Exported Functions ---
 export const isDriveConfigured = (): boolean => !!getClientId();
-
 export const isConnected = (): boolean => !!window.gapi?.client?.getToken() && !!driveFolder;
-
-export const setFolder = (folder: DriveFolder) => {
-    driveFolder = folder;
-};
+export const setFolder = (folder: DriveFolder) => { driveFolder = folder; };
 
 export const disconnect = () => {
     const token = window.gapi?.client?.getToken();
     if (token) {
         window.google?.accounts.oauth2.revoke(token.access_token, () => {});
     }
-    window.gapi?.client?.setToken(null);
+    if (window.gapi?.client) {
+        window.gapi.client.setToken(null);
+    }
     driveFolder = null;
 };
 
 export const connectAndPickFolder = async (): Promise<DriveFolder | null> => {
-    if (!isDriveConfigured()) {
-        throw new Error('Google Drive Client ID is not configured.');
-    }
+    if (!isDriveConfigured()) throw new Error('Google Drive Client ID is not configured.');
+    if (!PICKER_API_KEY) throw new Error('Google API Key is not configured in the environment.');
+    
     await ensureClientsReady();
+    if (!tokenClient) throw new Error("Google Identity Service client not initialized. Check Client ID setting.");
 
     return new Promise((resolve, reject) => {
-        const callback = async (tokenResponse: any) => {
+        const tokenCallback = async (tokenResponse: any) => {
             if (tokenResponse.error) {
-                return reject(new Error(`Google Auth Error: ${tokenResponse.error}. Please check your OAuth Client ID configuration in the Google Cloud Console.`));
+                return reject(new Error(`Google Auth Error: ${tokenResponse.error}. Check your OAuth Client ID settings.`));
             }
             window.gapi.client.setToken(tokenResponse);
 
             try {
-                const view = new window.google.picker.View(window.google.picker.ViewId.FOLDERS);
-                view.setMimeTypes("application/vnd.google-apps.folder");
+                // Use a more robust view configuration specifically for folder selection.
+                const view = new window.google.picker.View(window.google.picker.ViewId.DOCS);
+                view.setIncludeFolders(true);
+                view.setSelectFolderEnabled(true);
+
                 const picker = new window.google.picker.PickerBuilder()
                     .enableFeature(window.google.picker.Feature.NAV_HIDDEN)
-                    .setAppId(getClientId().split('.')[0]) // App ID is the numeric part before the first dot
+                    .enableFeature(window.google.picker.Feature.SUPPORT_DRIVES) // Add support for Shared Drives
+                    .setAppId(getClientId().split('.')[0])
                     .setOAuthToken(tokenResponse.access_token)
                     .addView(view)
+                    // setSelectableMimeTypes is not needed when setSelectFolderEnabled is true
                     .setDeveloperKey(PICKER_API_KEY)
-                    .setOrigin(window.location.origin) // Explicitly set the origin for validation
+                    .setOrigin(window.location.origin)
                     .setCallback((data: any) => {
                         if (data.action === window.google.picker.Action.PICKED) {
                             const doc = data.docs[0];
-                            const folder: DriveFolder = { id: doc.id, name: doc.name };
-                            setFolder(folder);
-                            resolve(folder);
+                            // Ensure a folder was actually selected
+                            if (doc.mimeType === "application/vnd.google-apps.folder") {
+                                const folder: DriveFolder = { id: doc.id, name: doc.name };
+                                setFolder(folder);
+                                resolve(folder);
+                            } else {
+                                // This shouldn't happen with our view config, but handle it just in case.
+                                reject(new Error("Selection was not a folder. Please select a folder."));
+                            }
                         } else if (data.action === window.google.picker.Action.CANCEL) {
-                            // Don't reject, just resolve null for a cleaner UX
                             resolve(null);
                         }
                     })
@@ -141,17 +144,14 @@ export const connectAndPickFolder = async (): Promise<DriveFolder | null> => {
                 picker.setVisible(true);
             } catch (err: any) {
                  console.error("Error creating Google Picker:", err);
-                 reject(new Error(`Failed to create file picker. This may be due to an invalid API Key or Picker API not being enabled. Error: ${err.message}`));
+                 reject(new Error(`Failed to create file picker. Check API Key restrictions and ensure Picker API is enabled. Error: ${err.message}`));
             }
         };
         
-        // This pattern handles both initial login and token refresh
-        tokenClient.callback = callback;
+        tokenClient.callback = tokenCallback;
         if (window.gapi.client.getToken() === null) {
-            // First time, user needs to see the consent screen
             tokenClient.requestAccessToken({ prompt: 'consent' });
         } else {
-            // User is already logged in, just refresh token silently
             tokenClient.requestAccessToken({ prompt: '' });
         }
     });
@@ -159,6 +159,7 @@ export const connectAndPickFolder = async (): Promise<DriveFolder | null> => {
 
 export const listFiles = async (): Promise<gapi.client.drive.File[]> => {
     if (!isConnected()) throw new Error("Not connected to Google Drive.");
+    await ensureClientsReady();
     const response = await window.gapi.client.drive.files.list({
         q: `'${driveFolder!.id}' in parents and trashed = false`,
         fields: 'files(id, name, appProperties)',
@@ -169,10 +170,10 @@ export const listFiles = async (): Promise<gapi.client.drive.File[]> => {
 
 export const uploadFile = async (item: LibraryItem): Promise<string> => {
     if (!isConnected()) throw new Error("Not connected to Google Drive.");
+    await ensureClientsReady();
 
     const blob = await dataUrlToBlob(item.media);
     const { id, thumbnail, media, driveFileId, ...metadataToStore } = item;
-
     const extension = blob.type.split('/')[1] || 'bin';
     const filename = `${item.mediaType}_${item.id}.${extension}`;
 
@@ -180,80 +181,56 @@ export const uploadFile = async (item: LibraryItem): Promise<string> => {
         name: filename,
         mimeType: blob.type,
         parents: [driveFolder!.id],
-        appProperties: {
-            libraryItem: JSON.stringify(metadataToStore)
-        }
+        appProperties: { libraryItem: JSON.stringify(metadataToStore) }
     };
-    
-    // Use XMLHttpRequest for robustness with Google's multipart upload API
+
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart');
-        const token = window.gapi.client.getToken().access_token;
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-
+        xhr.setRequestHeader('Authorization', `Bearer ${window.gapi.client.getToken().access_token}`);
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-                const result = JSON.parse(xhr.responseText);
-                resolve(result.id);
+                resolve(JSON.parse(xhr.responseText).id);
             } else {
-                try {
-                    const error = JSON.parse(xhr.responseText);
-                    reject(new Error(`Google Drive upload failed: ${error.error.message}`));
-                } catch (e) {
-                    reject(new Error(`Google Drive upload failed with status: ${xhr.status}. ${xhr.statusText}`));
-                }
+                reject(new Error(`Google Drive upload failed: ${xhr.responseText}`));
             }
         };
-
-        xhr.onerror = () => {
-            reject(new Error('Network error during Google Drive upload.'));
-        };
+        xhr.onerror = () => reject(new Error('Network error during Google Drive upload.'));
 
         const formData = new FormData();
         formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
         formData.append('file', blob, filename);
-
         xhr.send(formData);
     });
 };
 
-
 export const downloadFile = async (fileId: string): Promise<{ metadata: LibraryItem | null, blob: Blob | null }> => {
     if (!window.gapi.client.getToken()) throw new Error("Not connected to Google Drive.");
+    await ensureClientsReady();
 
-    // First, get the metadata
     const metaResponse = await window.gapi.client.drive.files.get({
         fileId: fileId,
         fields: 'appProperties, mimeType, name, id',
     });
 
-    if (!metaResponse.result) {
-        throw new Error(`File metadata not found for ID: ${fileId}`);
-    }
+    if (!metaResponse.result) throw new Error(`File metadata not found for ID: ${fileId}`);
     
-    const appProperties = metaResponse.result.appProperties;
     let metadata: LibraryItem | null = null;
-    if (appProperties && appProperties.libraryItem) {
+    if (metaResponse.result.appProperties?.libraryItem) {
         try {
-            const parsedProps = JSON.parse(appProperties.libraryItem);
+            const parsedProps = JSON.parse(metaResponse.result.appProperties.libraryItem);
             const idTimestamp = parseInt(metaResponse.result.name?.split('_')[1]?.split('.')[0] || '0', 10);
-            metadata = { ...parsedProps, id: idTimestamp };
+            metadata = { ...parsedProps, id: idTimestamp > 0 ? idTimestamp : Date.now() };
         } catch (e) {
             console.error("Failed to parse appProperties from Drive file", e);
         }
     }
 
-    // Then, get the file content
     const fileResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-        headers: new Headers({ 'Authorization': `Bearer ${window.gapi.client.getToken().access_token}` })
+        headers: { 'Authorization': `Bearer ${window.gapi.client.getToken().access_token}` }
     });
 
-    if (!fileResponse.ok) {
-        throw new Error(`Failed to download file content for ID: ${fileId}`);
-    }
+    if (!fileResponse.ok) throw new Error(`Failed to download file content for ID: ${fileId}`);
     
-    const blob = await fileResponse.blob();
-    
-    return { metadata, blob };
+    return { metadata, blob: await fileResponse.blob() };
 };

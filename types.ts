@@ -1,19 +1,20 @@
-// Fix: Added namespace declaration for `gapi` to provide types for `gapi.client.drive.File` and resolve namespace error.
-declare namespace gapi {
-  namespace client {
-    namespace drive {
-      interface File {
-        id?: string | null;
-        name?: string | null;
-        appProperties?: { [key: string]: string } | null;
-      }
-    }
-  }
-}
-
 import { fileToDataUrl } from './utils/imageUtils';
 
 declare global {
+  // Fix: Moved namespace declaration for `gapi` into `declare global` to make it globally available
+  // in a module context, resolving the namespace error in other files.
+  namespace gapi {
+    namespace client {
+      namespace drive {
+        interface File {
+          id?: string | null;
+          name?: string | null;
+          appProperties?: { [key: string]: string } | null;
+        }
+      }
+    }
+  }
+  
   interface FileSystemFileHandle {
     createWritable(): Promise<FileSystemWritableFileStream>;
   }
