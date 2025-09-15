@@ -9,13 +9,55 @@ export function setDriveService(service: typeof googleDriveService | null) {
     driveService = service;
 }
 
+export async function initializeDriveSync(onProgress: (message: string) => void) {
+    if (!driveService || !driveService.isConnected()) {
+        throw new Error("Cannot initialize sync: not connected to Google Drive.");
+    }
+    
+    onProgress("Checking for existing library on Google Drive...");
+    const { index: remoteIndex, fileId } = await driveService.getLibraryIndex();
+
+    if (fileId === null) {
+        // No remote index exists. This is a first-time sync for this folder.
+        // We will treat the local library as the source of truth and create the index.
+        onProgress("No library found on Drive. Creating from local items...");
+        const localItems = await idbService.getLibraryItems();
+        
+        const newIndex: { version: number; items: Record<string, Omit<LibraryItem, 'media' | 'thumbnail'>> } = { version: 1, items: {} };
+        localItems.forEach(item => {
+            const { media, thumbnail, ...metadata } = item;
+            newIndex.items[item.id] = metadata;
+        });
+
+        await driveService.updateLibraryIndex(newIndex, null);
+        onProgress("Library index created on Drive. Now syncing local files...");
+        
+        // Now that the index exists, sync any local files that haven't been uploaded.
+        await syncLibraryToDrive(onProgress);
+
+    } else {
+        // Remote index exists. Sync both ways to merge local and remote.
+        onProgress("Library found on Drive. Merging with local library...");
+        await syncLibraryFromDrive(onProgress); // Download remote changes first
+        await syncLibraryToDrive(onProgress);   // Then upload local-only changes
+    }
+    
+    onProgress("Initial sync process complete.");
+}
+
 export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void> => {
   const newItem = await idbService.saveToLibrary(item);
 
   if (driveService?.isConnected()) {
       try {
+          // Update the central library.json index first
+          const { index, fileId } = await driveService.getLibraryIndex();
+          const { media, thumbnail, ...metadata } = newItem;
+          index.items[newItem.id] = metadata; // Add metadata without driveFileId initially
+          const updatedFileId = await driveService.updateLibraryIndex(index, fileId);
+
+          // Now upload the media file
           const blob = await dataUrlToBlob(newItem.media);
-          
           let subfolderName: string;
           switch (newItem.mediaType) {
               case 'image': subfolderName = 'images'; break;
@@ -30,11 +72,12 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
           const driveFileId = await driveService.uploadMediaFile(blob, filename, parentFolderId);
           await idbService.updateLibraryItem(newItem.id, { driveFileId });
           
-          // Update the central library.json index
-          const { index, fileId } = await driveService.getLibraryIndex();
-          const { media, thumbnail, ...metadata } = newItem;
-          index.items[newItem.id] = { ...metadata, driveFileId };
-          await driveService.updateLibraryIndex(index, fileId);
+          // Final update to the index with the new driveFileId
+          const finalIndex = (await driveService.getLibraryIndex()).index;
+          if (finalIndex.items[newItem.id]) {
+            finalIndex.items[newItem.id].driveFileId = driveFileId;
+          }
+          await driveService.updateLibraryIndex(finalIndex, updatedFileId);
 
       } catch (e) {
           console.error("Failed to upload to Google Drive, but item is saved locally.", e);
@@ -49,6 +92,10 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
 
     onProgress("Fetching library index from Google Drive...");
     const { index: remoteIndex } = await driveService.getLibraryIndex();
+    if (!remoteIndex || !remoteIndex.items) {
+        onProgress("Remote library is empty or invalid.");
+        return;
+    }
     const remoteItems = Object.values(remoteIndex.items);
     
     onProgress(`Found ${remoteItems.length} items in Drive index. Checking against local library...`);

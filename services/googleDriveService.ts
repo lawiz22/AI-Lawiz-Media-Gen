@@ -209,44 +209,46 @@ export async function getLibraryIndex(): Promise<{ index: LibraryIndex; fileId: 
     return { index: { version: 1, items: {} }, fileId: null };
 }
 
-export async function updateLibraryIndex(index: LibraryIndex, fileId: string | null): Promise<void> {
+export async function updateLibraryIndex(index: LibraryIndex, fileId: string | null): Promise<string> {
     if (!isConnected()) throw new Error("Not connected to Google Drive.");
     await ensureClientsReady();
     
     const blob = new Blob([JSON.stringify(index, null, 2)], { type: 'application/json' });
+    let idToUpdate = fileId;
 
-    if (fileId) {
-        // Update existing index file
-        const updateResponse = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-            method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${window.gapi.client.getToken().access_token}` },
-            body: blob
-        });
-        if (!updateResponse.ok) {
-            const errorBody = await updateResponse.text();
-            throw new Error(`Google Drive: Failed to update library index. Body: ${errorBody}`);
-        }
-    } else {
-        // Create new index file
-        const metadata = {
+    // If file doesn't exist, create it first using the GAPI client. This is more robust.
+    if (!idToUpdate) {
+        const fileMetadata = {
             name: LIBRARY_FILENAME,
             mimeType: 'application/json',
-            parents: [driveFolder!.id],
+            parents: [driveFolder!.id]
         };
-        const formData = new FormData();
-        formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        formData.append('file', blob);
-
-        const createResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${window.gapi.client.getToken().access_token}` },
-            body: formData
+        const createResponse = await window.gapi.client.drive.files.create({
+            resource: fileMetadata,
+            fields: 'id'
         });
-        if (!createResponse.ok) {
-            const errorBody = await createResponse.text();
-            throw new Error(`Google Drive: Failed to create library index. Body: ${errorBody}`);
+        idToUpdate = createResponse.result.id;
+        if (!idToUpdate) {
+            throw new Error(`Google Drive: Failed to create empty library index file.`);
         }
     }
+
+    // Now, update the file (either the existing one or the one we just created) with its content.
+    const updateResponse = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${idToUpdate}?uploadType=media`, {
+        method: 'PATCH',
+        headers: {
+            'Authorization': `Bearer ${window.gapi.client.getToken().access_token}`,
+            'Content-Type': 'application/json',
+        },
+        body: blob
+    });
+    if (!updateResponse.ok) {
+        const errorBody = await updateResponse.text();
+        throw new Error(`Google Drive: Failed to upload content to library index (ID: ${idToUpdate}). Body: ${errorBody}`);
+    }
+    
+    const result = await updateResponse.json();
+    return result.id;
 }
 
 

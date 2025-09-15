@@ -350,18 +350,33 @@ function App() {
   
   const proceedWithGoogleLogin = async () => {
     setIsOAuthHelperOpen(false);
+    setIsSyncing(true);
+    setSyncMessage('Connecting to Google Drive...');
+    setError(null);
     try {
         const folder = await googleDriveService.connectAndPickFolder();
         if (folder) {
             setDriveFolder(folder);
             localStorage.setItem('driveFolder', JSON.stringify(folder));
             libraryService.setDriveService(googleDriveService);
+            
+            // New robust initialization logic
+            setSyncMessage('Initializing library on Google Drive...');
+            await libraryService.initializeDriveSync(setSyncMessage);
+            alert("Google Drive library initialized and synced successfully!");
+
+        } else {
+            // User cancelled the picker
+            setSyncMessage('');
         }
     } catch (e: any) {
-        console.error("Drive Connection Error:", e);
+        console.error("Drive Connection/Initialization Error:", e);
         if (e.message && !e.message.includes('User cancelled')) {
-            setError(`Failed to connect to Google Drive. Please double-check your settings in the helper and try again. Error: ${e.message}`);
+            setError(`Failed to connect or initialize Google Drive library. Error: ${e.message}`);
         }
+    } finally {
+        setIsSyncing(false);
+        setSyncMessage('');
     }
   };
 
