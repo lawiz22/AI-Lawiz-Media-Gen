@@ -110,30 +110,28 @@ export const connectAndPickFolder = async (): Promise<DriveFolder | null> => {
             window.gapi.client.setToken(tokenResponse);
 
             try {
-                // Use a more robust view configuration specifically for folder selection.
-                const view = new window.google.picker.View(window.google.picker.ViewId.DOCS);
-                view.setIncludeFolders(true);
-                view.setSelectFolderEnabled(true);
-
+                // 1. Create and configure the view to show and allow selection of folders.
+                const view = new window.google.picker.DocsView();
+                view.setIncludeFolders(true);       // This tells the view to DISPLAY folders.
+                view.setSelectFolderEnabled(true);  // This tells the view to ENABLE the 'Select' button for folders.
+                
+                // 2. Create and configure the PickerBuilder.
                 const picker = new window.google.picker.PickerBuilder()
                     .enableFeature(window.google.picker.Feature.NAV_HIDDEN)
-                    .enableFeature(window.google.picker.Feature.SUPPORT_DRIVES) // Add support for Shared Drives
+                    .enableFeature(window.google.picker.Feature.SUPPORT_DRIVES)
                     .setAppId(getClientId().split('.')[0])
                     .setOAuthToken(tokenResponse.access_token)
-                    .addView(view)
-                    // setSelectableMimeTypes is not needed when setSelectFolderEnabled is true
                     .setDeveloperKey(PICKER_API_KEY)
                     .setOrigin(window.location.origin)
+                    .addView(view) // Add the fully configured view
                     .setCallback((data: any) => {
                         if (data.action === window.google.picker.Action.PICKED) {
                             const doc = data.docs[0];
-                            // Ensure a folder was actually selected
                             if (doc.mimeType === "application/vnd.google-apps.folder") {
                                 const folder: DriveFolder = { id: doc.id, name: doc.name };
                                 setFolder(folder);
                                 resolve(folder);
                             } else {
-                                // This shouldn't happen with our view config, but handle it just in case.
                                 reject(new Error("Selection was not a folder. Please select a folder."));
                             }
                         } else if (data.action === window.google.picker.Action.CANCEL) {
