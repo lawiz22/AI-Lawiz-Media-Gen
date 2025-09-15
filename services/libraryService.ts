@@ -73,6 +73,48 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
     onProgress("Sync complete!");
 };
 
+export const syncLibraryToDrive = async (onProgress: (message: string) => void): Promise<void> => {
+    if (!driveService || !driveService.isConnected()) {
+        throw new Error("Not connected to Google Drive.");
+    }
+
+    onProgress("Checking for local items to upload...");
+    const localItems = await idbService.getLibraryItems();
+    const itemsToUpload = localItems.filter(item => !item.driveFileId);
+
+    if (itemsToUpload.length === 0) {
+        onProgress("All local items are already synced to Drive.");
+        await new Promise(resolve => setTimeout(resolve, 1500)); 
+        return;
+    }
+
+    onProgress(`Found ${itemsToUpload.length} item(s) to upload...`);
+    const uploadErrors: string[] = [];
+
+    for (let i = 0; i < itemsToUpload.length; i++) {
+        const item = itemsToUpload[i];
+        const itemName = item.name || `${item.mediaType} #${item.id}`;
+        onProgress(`Uploading "${itemName}" (${i + 1}/${itemsToUpload.length})...`);
+        try {
+            const driveFileId = await driveService.uploadFile(item);
+            if (driveFileId) {
+                await idbService.updateLibraryItem(item.id, { driveFileId });
+            }
+        } catch (e: any) {
+            console.error(`Failed to upload item ${item.id} to Drive:`, e);
+            uploadErrors.push(`- ${itemName}: ${e.message}`);
+        }
+    }
+    
+    if (uploadErrors.length > 0) {
+        onProgress("Upload sync complete with some errors.");
+        throw new Error(`The following items failed to upload:\n${uploadErrors.join('\n')}`);
+    } else {
+        onProgress("Upload sync complete!");
+    }
+};
+
+
 export const getLibraryItems = async (): Promise<LibraryItem[]> => {
   return idbService.getLibraryItems();
 };

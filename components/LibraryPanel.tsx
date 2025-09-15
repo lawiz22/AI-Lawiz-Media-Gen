@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk } from '../services/libraryService';
+import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk, syncLibraryToDrive } from '../services/libraryService';
 import type { LibraryItem, GenerationOptions } from '../types';
-import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon } from './icons';
+import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon } from './icons';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -209,6 +209,9 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
   const [isSavingToDisk, setIsSavingToDisk] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState('');
+
   useEffect(() => {
     if (selectedItem) {
         setCopyButtonText('Copy Prompt'); // Reset button text when a new item is selected
@@ -295,6 +298,22 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
         setIsSavingToDisk(false);
     }
   };
+  
+  const handleSyncToDrive = async () => {
+    setIsUploading(true);
+    setUploadMessage('');
+    try {
+        await syncLibraryToDrive((msg) => setUploadMessage(msg));
+        alert("Upload sync complete!");
+    } catch (e: any) {
+        console.error("Upload sync error:", e);
+        alert(`Upload Sync Error:\n${e.message}`);
+    } finally {
+        setIsUploading(false);
+        setUploadMessage('');
+        loadItems(); // Reload items to show updated sync status
+    }
+  };
 
   const getCategoryIcon = (mediaType: 'image' | 'video' | 'clothes') => {
       switch(mediaType) {
@@ -309,6 +328,8 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
     if (activeFilter === 'all') return items;
     return items.filter(item => item.mediaType === activeFilter);
   }, [items, activeFilter]);
+
+  const syncStatusMessage = isSyncing ? syncMessage : isUploading ? uploadMessage : null;
 
   if (isLoading) {
     return (
@@ -327,15 +348,26 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
             </h2>
             <div className="flex items-center gap-2">
                 {isDriveConfigured && isDriveConnected && (
-                    <button
-                        onClick={onSyncWithDrive}
-                        disabled={isSyncing}
-                        className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors disabled:opacity-50"
-                        title="Download new items from your Google Drive folder"
-                    >
-                        {isSyncing ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <GoogleDriveIcon className="w-5 h-5" />}
-                        {isSyncing ? 'Syncing...' : 'Sync with Drive'}
-                    </button>
+                    <>
+                        <button
+                            onClick={onSyncWithDrive}
+                            disabled={isSyncing || isUploading}
+                            className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors disabled:opacity-50"
+                            title="Download new items from your Google Drive folder"
+                        >
+                            {isSyncing ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <DownloadIcon className="w-5 h-5" />}
+                            {isSyncing ? 'Syncing...' : 'Sync from Drive'}
+                        </button>
+                         <button
+                            onClick={handleSyncToDrive}
+                            disabled={isUploading || isSyncing}
+                            className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors disabled:opacity-50"
+                            title="Upload local-only items to your Google Drive folder"
+                        >
+                            {isUploading ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <UploadIcon className="w-5 h-5" />}
+                            {isUploading ? 'Uploading...' : 'Upload to Drive'}
+                        </button>
+                    </>
                 )}
                 {items.length > 0 && (
                     <button
@@ -347,9 +379,9 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                 )}
             </div>
         </div>
-        {isSyncing && (
+        {syncStatusMessage && (
             <div className="text-center text-sm text-text-secondary mb-4 p-2 bg-bg-tertiary rounded-md">
-                {syncMessage || "Syncing with Google Drive..."}
+                {syncStatusMessage}
             </div>
         )}
         {items.length === 0 ? (
@@ -393,6 +425,11 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                                 <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full" title={item.mediaType}>
                                     {getCategoryIcon(item.mediaType)}
                                 </div>
+                                {isDriveConnected && item.driveFileId && (
+                                    <div className="absolute top-2 left-2 bg-accent/80 p-1 rounded-full" title="Synced with Google Drive">
+                                        <GoogleDriveIcon className="w-5 h-5 text-white" />
+                                    </div>
+                                )}
                                 <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center text-white text-xs font-semibold">
                                     <span className="capitalize font-bold text-sm">{item.mediaType}</span>
                                     <span>{new Date(item.id).toLocaleDateString()}</span>
