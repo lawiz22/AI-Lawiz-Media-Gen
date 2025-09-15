@@ -1,5 +1,5 @@
 {
-  "version": "1.40",
-  "date": "2024-08-08T11:00:00Z",
-  "changes": "Prepared the UI for video generation by adding a new 'Video Generator' tab with a placeholder interface. The existing generator has been renamed to 'Image Generator' for clarity, setting the stage for future video features."
+  "version": "1.41",
+  "date": "2024-08-08T12:00:00Z",
+  "changes": "Implemented Google Drive integration for library synchronization. Users can connect a Google Drive account, select a folder, and sync media for persistent, cloud-based storage with automatic subfolder organization."
 }

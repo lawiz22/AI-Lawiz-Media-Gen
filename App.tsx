@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Login } from './components/Login';
@@ -899,7 +900,6 @@ function App() {
                 subjectImage={promptToolSubjectImage}
                 setSubjectImage={setPromptToolSubjectImage}
                 subjectPrompt={promptToolSubjectPrompt}
-// Fix: Corrected the prop passed to PromptGeneratorPanel from the undefined 'setSubjectPrompt' to the correct state setter 'setPromptToolSubjectPrompt', resolving a reference error.
                 setSubjectPrompt={setPromptToolSubjectPrompt}
                 soupPrompt={promptToolSoupPrompt}
                 setSoupPrompt={setPromptToolSoupPrompt}
