@@ -1,531 +1,174 @@
-import { GoogleGenAI, Modality, Part, GenerateContentConfig, Type } from "@google/genai";
-import type { GenerationOptions } from "../types";
-import { fileToGenerativePart, fileToBase64 } from "../utils/imageUtils";
-import { cropImageToAspectRatio } from "../utils/imageProcessing";
+import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
+import { fileToGenerativePart, fileToBase64, dataUrlToFile } from '../utils/imageUtils';
+// Fix: Import 'getRandomPose' to resolve reference error.
 import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
+import type { GenerationOptions, IdentifiedClothing, IdentifiedObject } from '../types';
 
-let ai: GoogleGenAI | null = null;
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
-const getApiKey = (): string => {
-    const key = process.env.API_KEY;
-    if (!key) {
-        throw new Error("Google AI API Key is not configured in the environment. The application cannot function without it.");
-    }
-    return key;
-};
+export const generatePortraits = async (
+    sourceImage: File | null, 
+    options: GenerationOptions, 
+    updateProgress: (message: string, value: number) => void,
+    clothingImage: File | null,
+    backgroundImage: File | null,
+    previewedBackgroundImage: string | null,
+    previewedClothingImage: string | null
+): Promise<{ images: string[], finalPrompt: string | null }> => {
 
-const getAiInstance = (): GoogleGenAI => {
-    if (!ai) {
-        ai = new GoogleGenAI({ apiKey: getApiKey() });
-    }
-    return ai;
-};
-
-
-const dataUrlToGenerativePart = async (dataUrl: string): Promise<Part> => {
-    const [header, base64Data] = dataUrl.split(',');
-    if (!header || !base64Data) {
-        throw new Error('Invalid data URL format');
-    }
-    const mimeMatch = header.match(/:(.*?);/);
-    if (!mimeMatch || !mimeMatch[1]) {
-        throw new Error('Could not extract MIME type from data URL');
-    }
-    const mimeType = mimeMatch[1];
-    return {
-        inlineData: {
-            mimeType: mimeType,
-            data: base64Data,
-        },
-    };
-};
-
-export const generateClothingPreview = async (prompt: string, aspectRatio: string): Promise<string> => {
-  const ai = getAiInstance();
-  if (!prompt.trim()) {
-    throw new Error("Prompt cannot be empty.");
-  }
-  
-  const fullPrompt = `A high-quality, photorealistic image of a single clothing item on a plain white background. The item is: ${prompt}. Do not include any person, mannequin, or body parts. The image should be a clean product shot of the clothing.`;
-
-  try {
-    const response = await ai.models.generateImages({
-      model: 'imagen-4.0-generate-001',
-      prompt: fullPrompt,
-      config: {
-        numberOfImages: 1,
-        outputMimeType: 'image/jpeg',
-        aspectRatio: aspectRatio as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
-      },
-    });
-
-    if (response.generatedImages && response.generatedImages.length > 0) {
-      const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-      return `data:image/jpeg;base64,${base64ImageBytes}`;
-    } else {
-      throw new Error("The AI did not return an image. This may be due to a safety policy violation. Please try a different prompt.");
-    }
-  } catch (error: any) {
-    console.error("Error generating clothing preview:", error);
-    throw new Error(error.message || "Failed to generate clothing preview due to an unknown error.");
-  }
-};
-
-export const generateBackgroundImagePreview = async (
-  prompt: string,
-  aspectRatio: string
-): Promise<string> => {
-  const ai = getAiInstance();
-  if (!prompt.trim()) {
-    throw new Error("Prompt cannot be empty.");
-  }
-  
-  const fullPrompt = `A high-quality, photorealistic background image for a photography session. The background should be: ${prompt}. Do not include any people or prominent figures. Focus on creating a beautiful and believable environment.`;
-
-  try {
-    const response = await ai.models.generateImages({
-      model: 'imagen-4.0-generate-001',
-      prompt: fullPrompt,
-      config: {
-        numberOfImages: 1,
-        outputMimeType: 'image/jpeg',
-        aspectRatio: aspectRatio as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
-      },
-    });
-
-    if (response.generatedImages && response.generatedImages.length > 0) {
-      const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-      return `data:image/jpeg;base64,${base64ImageBytes}`;
-    } else {
-      throw new Error("The AI did not return an image. This may be due to a safety policy violation. Please try a different prompt.");
-    }
-  } catch (error: any) {
-    console.error("Error generating background preview:", error);
-    throw new Error(error.message || "Failed to generate background preview due to an unknown error.");
-  }
-};
-
-export const enhanceImageResolution = async (base64ImageData: string): Promise<string> => {
-    const ai = getAiInstance();
-    const imagePart = await dataUrlToGenerativePart(base64ImageData);
-    
-    const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview', 
-        contents: {
-            parts: [
-                imagePart,
-                { text: 'Upscale this image to a higher resolution, enhance its quality, sharpen details, and make it look photorealistic without altering the subject or style. Ensure the result is a tasteful and high-quality photograph.' },
-            ],
-        },
-        config: {
-            responseModalities: [Modality.IMAGE, Modality.TEXT],
-        },
-    });
-
-    if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts) {
-        for (const part of result.candidates[0].content.parts) {
-            if (part.inlineData) {
-                const base64ImageBytes: string = part.inlineData.data;
-                return `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
-            }
-        }
-    }
-    
-    const textResponse = result.text?.trim();
-    if (textResponse) {
-        throw new Error(`AI returned text instead of an image: ${textResponse}`);
-    }
-
-    throw new Error('Image enhancement failed. No image was returned from the API. The request may have been blocked.');
-};
-
-export const generateImagesFromPrompt = async (
-  options: GenerationOptions,
-  onProgress: (message: string, progress: number) => void
-): Promise<{ images: string[], finalPrompt: string }> => {
-  const ai = getAiInstance();
-  if (!options.geminiPrompt?.trim()) {
-    throw new Error("Prompt cannot be empty for text-to-image generation.");
-  }
-
-  const styleSegments = [];
-  if (options.imageStyle === 'photorealistic') {
-    styleSegments.push(options.eraStyle, options.photoStyle, 'photorealistic style');
-  } else {
-    styleSegments.push(`in a ${options.imageStyle} style`);
-  }
-
-  let fullPrompt = `${options.geminiPrompt}. ${styleSegments.join(', ')}.`;
-
-  if (options.addTextToImage && options.textOnImagePrompt?.trim() && options.textObjectPrompt?.trim()) {
-      let textPrompt = options.textObjectPrompt.replace('%s', options.textOnImagePrompt);
-      fullPrompt += ` The image must include ${textPrompt}.`;
-  }
-
-  const totalImages = options.numImages;
-  const generatedImages: string[] = [];
-
-  onProgress("Preparing for generation...", 0.1);
-
-  const model = options.geminiT2IModel || 'imagen-4.0-generate-001';
-
-  for (let i = 0; i < totalImages; i++) {
-    const progress = 0.1 + (i / totalImages) * 0.9;
-    onProgress(`Generating with ${model}... (${i + 1}/${totalImages})`, progress);
-
-    try {
-      let imageDataUrl: string | null = null;
-      if (model === 'gemini-2.5-flash-image-preview') {
-          const result = await ai.models.generateContent({
-              model: 'gemini-2.5-flash-image-preview',
-              contents: {
-                  parts: [{ text: fullPrompt }],
-              },
-              config: {
-                  responseModalities: [Modality.IMAGE, Modality.TEXT],
-              },
-          });
-
-          let imageFound = false;
-          if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts) {
-              for (const part of result.candidates[0].content.parts) {
-                  if (part.inlineData) {
-                      const base64ImageBytes: string = part.inlineData.data;
-                      imageDataUrl = `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
-                      imageFound = true;
-                      break; 
-                  }
-              }
-          }
-          if (!imageFound) {
-              const textResponse = result.text?.trim();
-              if (textResponse) {
-                  throw new Error(`AI returned text instead of an image: ${textResponse}`);
-              }
-              throw new Error(`The AI did not return an image for iteration ${i + 1}. The request may have been blocked due to safety policies. Please try modifying your prompt.`);
-          }
-      } else { // 'imagen-4.0-generate-001'
-          const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
-            prompt: fullPrompt,
-            config: {
-              numberOfImages: 1,
-              outputMimeType: 'image/jpeg',
-              aspectRatio: options.aspectRatio as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
-            },
-          });
-    
-          if (response.generatedImages && response.generatedImages.length > 0) {
-            const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-            imageDataUrl = `data:image/jpeg;base64,${base64ImageBytes}`;
-          } else {
-            throw new Error(`The AI did not return an image for iteration ${i + 1}. The request may have been blocked due to safety policies. Please try modifying your prompt.`);
-          }
-      }
-
-      if (imageDataUrl) {
-          generatedImages.push(imageDataUrl);
-      }
-
-    } catch (error: any) {
-      console.error(`Error generating image ${i + 1}:`, error);
-      throw new Error(error.message || `Failed to generate image ${i + 1} due to an unknown error.`);
-    }
-  }
-
-  onProgress("Finalizing results...", 0.99);
-  return { images: generatedImages, finalPrompt: fullPrompt };
-};
-
-export const generatePortraitSeries = async (
-  sourceImage: File,
-  clothingImage: File | null,
-  backgroundImage: File | null,
-  previewedBackground: string | null,
-  previewedClothing: string | null,
-  options: GenerationOptions,
-  onProgress: (message: string, progress: number) => void
-): Promise<{ images: string[], firstPrompt: string }> => {
-  const ai = getAiInstance();
-  onProgress("Cropping source image...", 0.05);
-  const croppedSourceImage = await cropImageToAspectRatio(sourceImage, options.aspectRatio);
-  
-  onProgress("Preparing image data...", 0.1);
-  const sourceImagePart = await fileToGenerativePart(croppedSourceImage);
-  
-  const clothingImagePart = clothingImage ? await fileToGenerativePart(clothingImage) : null;
-  const backgroundImagePart = backgroundImage ? await fileToGenerativePart(backgroundImage) : null;
-
-  let consistentBackgroundPart: Part | null = null;
-  if (options.background === 'prompt' && options.consistentBackground && previewedBackground) {
-    consistentBackgroundPart = await dataUrlToGenerativePart(previewedBackground);
-  }
-  
-  let consistentClothingPart: Part | null = null;
-  if ((options.clothing === 'prompt' || options.clothing === 'random') && previewedClothing) {
-    consistentClothingPart = await dataUrlToGenerativePart(previewedClothing);
-  }
-
-  let selectedPoses: string[];
-  let posesAreEncoded = true; // Flag to check if poses need decoding
-
-  if (options.poseMode === 'select' && options.poseSelection.length > 0) {
-    selectedPoses = options.poseSelection;
-  } else if (options.poseMode === 'prompt' && options.poseSelection.length > 0) {
-    selectedPoses = options.poseSelection;
-    posesAreEncoded = false; // Custom poses are plain text
-  } else {
-    // 'random' mode or fallback, get a unique set of random poses
-    selectedPoses = Array.from({ length: options.numImages }, () => getRandomPose());
-  }
-  
-  const totalImages = Math.min(options.numImages, selectedPoses.length);
-  const generatedImages: string[] = [];
-  let firstPrompt: string | null = null;
-
-  for (let i = 0; i < totalImages; i++) {
-    const baseProgress = (i / totalImages) * 0.8 + 0.15; // Progress from 15% to 95%
-    const pose = posesAreEncoded ? decodePose(selectedPoses[i]) : selectedPoses[i];
-    
-    onProgress(`Building prompt for image ${i + 1}...`, baseProgress);
-    const parts: Part[] = [sourceImagePart];
-    const promptSegments = buildPromptSegments(options, pose, !!consistentClothingPart);
-    
-    // Handle clothing image parts
-    if (consistentClothingPart) {
-        parts.push(consistentClothingPart);
-    } else if (options.clothing === 'image' && clothingImagePart) {
-        parts.push(clothingImagePart);
-    }
-
-    // Handle background image parts
-    if (consistentBackgroundPart) {
-        parts.push(consistentBackgroundPart);
-    } else if (options.background === 'image' && backgroundImagePart) {
-        parts.push(backgroundImagePart);
-    }
-    
-    const finalPromptText = promptSegments.join(' ');
-    parts.push({ text: finalPromptText });
-    
-    if (i === 0) {
-      firstPrompt = finalPromptText;
-    }
-
-    try {
-        onProgress(`Sending request for image ${i + 1}...`, baseProgress + (0.4 / totalImages));
-        const genConfig: GenerateContentConfig = {
-            responseModalities: [Modality.IMAGE, Modality.TEXT],
-        };
-
-        if (options.imageStyle !== 'photorealistic' && options.creativity !== undefined) {
-            genConfig.temperature = options.creativity;
-        }
-
-        const result = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image-preview',
-            contents: { parts },
-            config: genConfig,
-        });
+    // --- TEXT-TO-IMAGE MODE ---
+    if (options.geminiMode === 't2i') {
+        updateProgress("Generating text-to-image...", 0.1);
+        const t2iModel = options.geminiT2IModel || 'imagen-4.0-generate-001';
         
-        onProgress(`Processing response for image ${i + 1}...`, baseProgress + (0.8 / totalImages));
-        let imageFound = false;
-        if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts) {
-            for (const part of result.candidates[0].content.parts) {
-                if (part.inlineData) {
-                    const base64ImageBytes: string = part.inlineData.data;
-                    generatedImages.push(`data:${part.inlineData.mimeType};base64,${base64ImageBytes}`);
-                    imageFound = true;
-                    break; 
+        if (t2iModel === 'imagen-4.0-generate-001') {
+            const response = await ai.models.generateImages({
+                model: t2iModel,
+                prompt: options.geminiPrompt!,
+                config: {
+                    numberOfImages: options.numImages,
+                    outputMimeType: 'image/jpeg',
+                    aspectRatio: options.aspectRatio,
+                },
+            });
+            updateProgress("Finalizing images...", 0.9);
+            const imageUrls = response.generatedImages.map(img => `data:image/jpeg;base64,${img.image.imageBytes}`);
+            return { images: imageUrls, finalPrompt: options.geminiPrompt || null };
+        } else { // gemini-2.5-flash-image-preview
+             const allImages = [];
+             for (let i = 0; i < options.numImages; i++) {
+                updateProgress(`Generating image ${i + 1}/${options.numImages}...`, (i + 1) / options.numImages);
+                const response: GenerateContentResponse = await ai.models.generateContent({
+                    model: t2iModel,
+                    contents: { parts: [{ text: options.geminiPrompt! }] },
+                    config: {
+                        responseMimeType: 'image/jpeg'
+                    }
+                });
+                const part = response.candidates?.[0]?.content?.parts[0];
+                if (part?.inlineData?.data) {
+                    allImages.push(`data:image/jpeg;base64,${part.inlineData.data}`);
                 }
-            }
-        }
-        
-        if (!imageFound) {
-             const textResponse = result.text?.trim();
-             if (textResponse) {
-                throw new Error(`AI returned text instead of an image: ${textResponse}`);
              }
-             throw new Error('Generation failed for one image: No image was returned. The request might have been blocked due to safety settings.');
+             updateProgress("Finalizing images...", 0.9);
+             return { images: allImages, finalPrompt: options.geminiPrompt || null };
+        }
+    }
+
+    // --- IMAGE-TO-IMAGE MODE ---
+    if (!sourceImage) {
+        throw new Error("Source image is required for image-to-image generation.");
+    }
+    
+    updateProgress("Preparing source images...", 0.05);
+    
+    const sourceImagePart = await fileToGenerativePart(sourceImage);
+    const clothingImagePart = clothingImage ? await fileToGenerativePart(clothingImage) : null;
+    let backgroundImagePart = backgroundImage ? await fileToGenerativePart(backgroundImage) : null;
+
+    if (previewedBackgroundImage && options.consistentBackground) {
+        const bgFile = await dataUrlToFile(previewedBackgroundImage, 'background.jpeg');
+        backgroundImagePart = await fileToGenerativePart(bgFile);
+    }
+
+    const previewedClothingFile = previewedClothingImage ? await dataUrlToFile(previewedClothingImage, 'clothing.jpeg') : null;
+    const previewedClothingImagePart = previewedClothingFile ? await fileToGenerativePart(previewedClothingFile) : null;
+
+    let posePrompts = options.poseSelection.map(decodePose);
+    if (options.poseMode === 'random') {
+        const randomPoses = new Set<string>();
+        while(randomPoses.size < options.numImages) {
+            randomPoses.add(decodePose(getRandomPose()));
+        }
+        posePrompts = Array.from(randomPoses);
+    }
+    
+    const allImages = [];
+    const promptsUsed: string[] = [];
+
+    for (let i = 0; i < Math.min(options.numImages, posePrompts.length); i++) {
+        const pose = posePrompts[i];
+        updateProgress(`Generating image ${i + 1}/${options.numImages} with pose: "${pose.substring(0, 30)}..."`, (i + 1) / options.numImages);
+        
+        const promptSegments = buildPromptSegments(options, pose, !!previewedClothingImagePart);
+        const finalPrompt = promptSegments.join('\n\n');
+        promptsUsed.push(finalPrompt);
+
+        const contents: any = { parts: [sourceImagePart] };
+
+        if (previewedClothingImagePart) {
+            contents.parts.push({text: 'Use this image as the exclusive reference for the subject\'s clothing:'}, previewedClothingImagePart);
+        } else if (clothingImagePart && options.clothing === 'image') {
+            contents.parts.push({text: 'Use this image as the exclusive reference for the subject\'s clothing:'}, clothingImagePart);
         }
 
-    } catch (error) {
-        console.error(`Error generating image ${i + 1}:`, error);
-        throw error;
-    }
-  }
-
-  onProgress("Finalizing results...", 0.98);
-  return { images: generatedImages, firstPrompt: firstPrompt || "No prompt was generated." };
-};
-
-export const generateGeminiVideo = async (
-  inputImage: File | null,
-  options: GenerationOptions,
-  onProgress: (message: string, progress: number) => void
-): Promise<{ videoUrl: string, finalPrompt: string }> => {
-    const ai = getAiInstance();
-    if (!options.geminiVidPrompt) {
-        throw new Error("A text prompt is required for video generation.");
-    }
-
-    onProgress("Preparing video generation request...", 0.05);
-
-    const videoRequest: any = {
-        model: options.geminiVidModel || 'veo-2.0-generate-001',
-        prompt: options.geminiVidPrompt,
-        config: {
-            numberOfVideos: 1,
+        if (backgroundImagePart && (options.background === 'image' || options.consistentBackground)) {
+             contents.parts.push({text: 'Use this image as the exclusive reference for the background:'}, backgroundImagePart);
         }
-    };
-
-    if (inputImage) {
-        onProgress("Encoding input image...", 0.1);
-        const imageBytes = await fileToBase64(inputImage);
-        videoRequest.image = {
-            imageBytes: imageBytes,
-            mimeType: inputImage.type,
-        };
-    }
-
-    onProgress("Sending request to Gemini VEO...", 0.15);
-    let operation = await ai.models.generateVideos(videoRequest);
-    onProgress("Video generation started. This may take a few minutes...", 0.2);
-
-    const reassuringMessages = [
-        "Analyzing prompt and image...",
-        "Allocating creative resources...",
-        "Composing initial video frames...",
-        "Rendering motion vectors...",
-        "Applying visual styles...",
-        "Enhancing video details...",
-        "Finalizing video output...",
-        "Almost there, polishing the final cut...",
-    ];
-    let messageIndex = 0;
-    const startTime = Date.now();
-    
-    while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 10000));
         
-        const elapsedMinutes = ((Date.now() - startTime) / 60000).toFixed(1);
-        const progressMessage = reassuringMessages[messageIndex % reassuringMessages.length];
-        const progressValue = 0.2 + (messageIndex / (reassuringMessages.length * 2));
-        
-        onProgress(`${progressMessage} (${elapsedMinutes} mins elapsed)`, Math.min(progressValue, 0.9));
-        
-        try {
-            operation = await ai.operations.getVideosOperation({ operation: operation });
-        } catch (e: any) {
-             console.error("Error polling for video operation status:", e);
-             throw new Error(`Failed to get video status: ${e.message}`);
+        contents.parts.push({text: finalPrompt});
+
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents,
+            config: {
+                responseModalities: [Modality.IMAGE, Modality.TEXT]
+            }
+        });
+
+        const part = response.candidates?.[0]?.content?.parts[0];
+        if (part?.inlineData?.data) {
+            allImages.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
         }
-        messageIndex++;
     }
-
-    if (operation.error) {
-        const errorMessage = (operation.error as any).message || JSON.stringify(operation.error);
-        console.error("Video generation operation failed with an error object:", operation.error);
-        throw new Error(`Video generation failed: ${errorMessage}`);
-    }
-
-    const generatedVideo = operation.response?.generatedVideos?.[0];
-    const downloadLink = generatedVideo?.video?.uri;
-
-    if (!downloadLink) {
-        console.error("Video generation operation completed but returned no video URI:", operation.response);
-        throw new Error("Video generation finished, but no video was returned. This could be due to a content policy violation or an internal error.");
-    }
-
-    onProgress("Video processing complete. Downloading...", 0.95);
     
-    const response = await fetch(`${downloadLink}&key=${getApiKey()}`);
-    if (!response.ok) {
-        throw new Error(`Failed to download the generated video. Status: ${response.status}`);
-    }
-
-    const videoBlob = await response.blob();
-    const videoUrl = URL.createObjectURL(videoBlob);
-    
-    onProgress("Video ready!", 1);
-
-    return { videoUrl, finalPrompt: options.geminiVidPrompt };
+    updateProgress("Finalizing images...", 0.95);
+    return { images: allImages, finalPrompt: promptsUsed[0] || null };
 };
 
-export const generateThumbnailForPrompt = async (prompt: string): Promise<string> => {
-  const ai = getAiInstance();
-  if (!prompt.trim()) {
-    throw new Error("Prompt cannot be empty for thumbnail generation.");
-  }
-  
-  const fullPrompt = `Create a beautiful, abstract digital painting that visually represents the theme of this concept: "${prompt.substring(0, 300)}"`;
+export const enhanceImageResolution = async (imageDataUrl: string): Promise<string> => {
+    const base64Data = imageDataUrl.split(',')[1];
+    const mimeType = imageDataUrl.match(/data:(.*);/)?.[1] || 'image/jpeg';
 
-  try {
-    const response = await ai.models.generateImages({
-      model: 'imagen-4.0-generate-001',
-      prompt: fullPrompt,
-      config: {
-        numberOfImages: 1,
-        outputMimeType: 'image/jpeg',
-        aspectRatio: '1:1',
-      },
-    });
-
-    if (response.generatedImages && response.generatedImages.length > 0) {
-      const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-      return `data:image/jpeg;base64,${base64ImageBytes}`;
-    } else {
-      throw new Error("The AI did not return an image for the thumbnail.");
-    }
-  } catch (error: any) {
-    console.error("Error generating prompt thumbnail:", error);
-    throw new Error(error.message || "Failed to generate thumbnail due to an unknown error.");
-  }
-};
-
-export const summarizePrompt = async (prompt: string): Promise<string> => {
-    const ai = getAiInstance();
-    const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Summarize the following creative prompt into a very short, descriptive title of 3-5 words. Capture the main subject and style. The original prompt is: "${prompt}"`,
-        config: { temperature: 0.1 }
-    });
-    return result.text.trim().replace(/["'.]/g, ''); // Clean up punctuation
-};
-
-export const generateTitleForImage = async (imageDataUrl: string): Promise<string> => {
-    const ai = getAiInstance();
-    const imagePart = await dataUrlToGenerativePart(imageDataUrl);
-    const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
         contents: {
             parts: [
-                imagePart,
-                { text: 'Analyze this image and create a very short, descriptive title of 3-5 words for it. Focus on the main subject, setting, and mood.' }
+                {
+                    inlineData: { data: base64Data, mimeType: mimeType },
+                },
+                {
+                    text: 'Enhance the resolution and quality of this image, making it sharper and more detailed without changing the content.',
+                },
             ],
         },
-        config: { temperature: 0.2 }
+        config: {
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
+        },
     });
-    return result.text.trim().replace(/["'.]/g, ''); // Clean up punctuation
+
+    for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+            const base64ImageBytes: string = part.inlineData.data;
+            return `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
+        }
+    }
+    throw new Error('Image enhancement failed to return an image.');
 };
 
-export const identifyClothing = async (
-  base64Image: string,
-  mimeType: string,
-  clothingDetails: string
-): Promise<{ name: string; description: string }[]> => {
-    const ai = getAiInstance();
-    const imagePart = { inlineData: { data: base64Image, mimeType } };
-    let prompt = `Analyze the provided image. Identify every distinct item of clothing and accessory worn by the person. 
-    For each item, provide a 'name' (e.g., 'Blue T-Shirt', 'Leather Belt') and a detailed 'description' suitable for generating a new image of that item alone. 
-    The description should include color, material, style, and any notable features.`;
-
-    if (clothingDetails) {
-        prompt += `\n\nPay close attention to these user-provided details: "${clothingDetails}". Use them to enhance accuracy and detail in your descriptions.`;
+export const identifyClothing = async (sourceImage: File, details: string, excludeAccessories: boolean): Promise<IdentifiedClothing[]> => {
+    const imagePart = await fileToGenerativePart(sourceImage);
+    let prompt = `Analyze the image and identify all distinct articles of clothing worn by the person.`;
+    if (excludeAccessories) {
+        prompt += ' Exclude accessories like jewelry, hats, glasses, and bags.';
     }
+    if (details) {
+        prompt += ` Pay special attention to: "${details}".`;
+    }
+    prompt += ' For each item, provide a short, descriptive name and a brief description.';
 
-    const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
         contents: { parts: [imagePart, { text: prompt }] },
         config: {
             responseMimeType: "application/json",
@@ -537,8 +180,8 @@ export const identifyClothing = async (
                         items: {
                             type: Type.OBJECT,
                             properties: {
-                                name: { type: Type.STRING },
-                                description: { type: Type.STRING }
+                                itemName: { type: Type.STRING, description: 'A short, descriptive name for the clothing item (e.g., "Blue Denim Jacket").' },
+                                description: { type: Type.STRING, description: 'A brief description of the clothing item.' },
                             },
                         },
                     },
@@ -548,33 +191,19 @@ export const identifyClothing = async (
     });
 
     try {
-        const json = JSON.parse(result.text);
-        if (json.items && Array.isArray(json.items)) {
-            return json.items;
-        }
-        throw new Error("Invalid JSON structure returned from AI.");
+        const json = JSON.parse(response.text);
+        return json.items || [];
     } catch (e) {
-        console.error("Failed to parse clothing identification from AI:", result.text, e);
-        throw new Error("AI returned an invalid response. Please try a clearer image or add details.");
+        console.error("Failed to parse clothing identification from AI:", response.text, e);
+        throw new Error("The AI returned an invalid response. Please try again.");
     }
 };
 
-export const generateClothingImage = async (
-  base64Image: string,
-  mimeType: string,
-  itemDescription: string,
-  view: 'laid out' | 'folded'
-): Promise<string> => {
-    const ai = getAiInstance();
-    const imagePart = { inlineData: { data: base64Image, mimeType } };
-    const viewStyle = view === 'laid out' ? 'laid out flat' : 'neatly folded';
-    
-    const prompt = `Using the provided image as a reference for the item's style, color, and texture, generate a photorealistic product shot of only the described item: "${itemDescription}".
-    The image must be on a clean, neutral light gray studio background.
-    Present the item as if for an e-commerce website, ${viewStyle}.
-    Do NOT include any people, mannequins, or other objects. The final image should contain only the single clothing item.`;
+export const generateClothingImage = async (sourceImage: File, itemName: string, style: 'laid out' | 'folded'): Promise<string> => {
+    const imagePart = await fileToGenerativePart(sourceImage);
+    const prompt = `From the reference image, isolate the "${itemName}". Generate a new, photorealistic image of just this item on a plain, solid white background, as if for an e-commerce product listing. The item should be ${style} neatly.`;
 
-    const result = await ai.models.generateContent({
+    const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image-preview',
         contents: { parts: [imagePart, { text: prompt }] },
         config: {
@@ -582,14 +211,141 @@ export const generateClothingImage = async (
         },
     });
 
-    if (result.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
-        return result.candidates[0].content.parts[0].inlineData.data;
+    for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
     }
-    
-    const textResponse = result.text?.trim();
-    if (textResponse) {
-        throw new Error(`AI returned text instead of an image: ${textResponse}`);
-    }
+    throw new Error(`Failed to generate a '${style}' image for ${itemName}.`);
+};
 
-    throw new Error('Image generation failed. No image was returned. The request may have been blocked by safety policies.');
+export const identifyObjects = async (sourceImage: File, maxObjects: number, hints: string): Promise<IdentifiedObject[]> => {
+    const imagePart = await fileToGenerativePart(sourceImage);
+    let prompt = `Analyze the image and identify up to ${maxObjects} distinct, prominent objects.`;
+    if (hints) {
+        prompt += ` Prioritize or pay special attention to objects related to: "${hints}".`;
+    }
+    prompt += ' For each object, provide its name and a brief description.';
+
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    objects: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                name: { type: Type.STRING, description: 'The name of the identified object.' },
+                                description: { type: Type.STRING, description: 'A brief description of the object.' },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    });
+
+    try {
+        const json = JSON.parse(response.text);
+        return json.objects || [];
+    } catch (e) {
+        console.error("Failed to parse object identification from AI:", response.text, e);
+        throw new Error("The AI returned an invalid response. Please try again.");
+    }
+};
+
+export const generateObjectImage = async (sourceImage: File, objectName: string): Promise<string> => {
+    const imagePart = await fileToGenerativePart(sourceImage);
+    const prompt = `From the reference image, your task is to precisely isolate the object named "${objectName}".
+Generate a new, photorealistic image of *only* this object, placed on a plain, solid white background.
+
+**Crucial requirements:**
+-   **Faithful Reproduction:** The generated object MUST be a faithful, photorealistic cutout of the original. Strictly preserve its exact shape, colors, textures, lighting, and any defining details like logos or text.
+-   **No Alterations:** Do NOT alter, enhance, or 'improve' the object itself. The goal is an accurate extraction.
+-   **Clean Background:** The background must be a completely uniform, neutral white, suitable for an e-commerce listing. Do not add any new shadows.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
+        },
+    });
+
+    for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+    }
+    throw new Error(`Failed to generate an image for ${objectName}.`);
+};
+
+export const generateBackgroundImagePreview = async (prompt: string, aspectRatio: string): Promise<string> => {
+    const response = await ai.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt: `A high-quality, photorealistic background image of: ${prompt}`,
+        config: {
+            numberOfImages: 1,
+            outputMimeType: 'image/jpeg',
+            aspectRatio: aspectRatio,
+        },
+    });
+    const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+    return `data:image/jpeg;base64,${base64ImageBytes}`;
+};
+
+export const generateClothingPreview = async (prompt: string, aspectRatio: string): Promise<string> => {
+    const response = await ai.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt: `A high-quality, photorealistic image of a piece of clothing on a plain white background, laid out flat. The clothing is: ${prompt}`,
+        config: {
+            numberOfImages: 1,
+            outputMimeType: 'image/jpeg',
+            aspectRatio: '1:1',
+        },
+    });
+    const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+    return `data:image/jpeg;base64,${base64ImageBytes}`;
+};
+
+export const generateTitleForImage = async (imageDataUrl: string): Promise<string> => {
+    const base64Data = imageDataUrl.split(',')[1];
+    const mimeType = imageDataUrl.match(/data:(.*);/)?.[1] || 'image/jpeg';
+    const imagePart = { inlineData: { data: base64Data, mimeType: mimeType } };
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, { text: 'Generate a short, descriptive, and appealing title for this image, no more than 6-8 words long. The title should be suitable for a gallery. Do not use quotes.' }] },
+        config: { temperature: 0.4 },
+    });
+
+    return response.text.trim().replace(/["']/g, ""); // Remove quotes
+};
+
+export const summarizePrompt = async (prompt: string): Promise<string> => {
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Summarize the following creative prompt into a short, descriptive title of no more than 6-8 words. The title should capture the essence of the prompt. Do not use quotes. Prompt: "${prompt}"`,
+        config: { temperature: 0.3 },
+    });
+    return response.text.trim().replace(/["']/g, "");
+};
+
+export const generateThumbnailForPrompt = async (prompt: string): Promise<string> => {
+    const response = await ai.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt: `An abstract, visually appealing conceptual image representing the following creative idea: ${prompt}`,
+        config: {
+            numberOfImages: 1,
+            outputMimeType: 'image/jpeg',
+            aspectRatio: '1:1',
+        },
+    });
+    const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+    return `data:image/jpeg;base64,${base64ImageBytes}`;
 };

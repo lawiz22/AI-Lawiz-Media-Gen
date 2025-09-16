@@ -127,7 +127,8 @@ export const buildPromptSegments = (options: GenerationOptions, pose: string, ha
         promptSegments.push(`Background: ${options.customBackground}`);
     } else if (options.background === 'original') {
         promptSegments.push('Background: Keep the original background from the reference image.');
-    } else if (options.background !== 'image' && options.background !== 'prompt' && options.background !== 'random') {
+    // Fix: Removed redundant `options.background !== 'image'` check which could cause a TypeScript error due to type narrowing.
+    } else if (options.background !== 'prompt' && options.background !== 'random') {
         promptSegments.push(`Background: A solid ${options.background} studio background.`);
     } else {
         // Fallback for prompt modes with no text

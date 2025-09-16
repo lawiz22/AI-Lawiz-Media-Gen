@@ -1,236 +1,353 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import { ImageUploader } from './ImageUploader';
-import { ResultsDisplay } from './ResultsDisplay';
 import { LoadingState } from './LoadingState';
-import { ErrorModal } from './ErrorModal';
-import type { GeneratedClothing } from '../types';
-import { identifyClothing, generateClothingImage } from '../services/geminiService';
-import { fileToDataUrl } from '../utils/imageUtils';
+import { ResultsDisplay } from './ResultsDisplay';
+import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage } from '../services/geminiService';
+import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState } from '../types';
+import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, DownloadIcon, SaveIcon, CheckIcon } from './icons';
+import { saveToLibrary } from '../services/libraryService';
+import { dataUrlToThumbnail } from '../utils/imageUtils';
 
-interface ClothesExtractorPanelProps {
-    selectedFile: File | null;
-    setSelectedFile: (file: File | null) => void;
-    details: string;
-    setDetails: (details: string) => void;
-    generatedItems: GeneratedClothing[];
-    setGeneratedItems: (items: GeneratedClothing[]) => void;
+// --- Helper Components ---
+
+const ToolHeader: React.FC<{ icon: React.ReactNode, title: string, description: string }> = ({ icon, title, description }) => (
+    <div className="border-b-2 border-accent/30 pb-4 mb-6">
+        <div className="flex items-center gap-3 mb-2">
+            <div className="bg-accent p-2 rounded-lg text-accent-text">{icon}</div>
+            <h2 className="text-2xl font-bold text-accent">{title}</h2>
+        </div>
+        <p className="text-sm text-text-secondary">{description}</p>
+    </div>
+);
+
+
+interface ExtractorToolsPanelProps {
+    state: ExtractorState;
+    setState: React.Dispatch<React.SetStateAction<ExtractorState>>;
 }
 
-export const ClothesExtractorPanel: React.FC<ClothesExtractorPanelProps> = ({
-    selectedFile,
-    setSelectedFile,
-    details,
-    setDetails,
-    generatedItems,
-    setGeneratedItems
-}) => {
-  const [originalImage, setOriginalImage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [loadingMessage, setLoadingMessage] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
-  const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+// --- Main Panel ---
+export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState }) => {
+    
+    const handleIdentify = async () => {
+        if (!state.clothesSourceFile) return;
+        setState(prev => ({
+            ...prev,
+            isIdentifying: true,
+            clothesError: null,
+            identifiedItems: [],
+            generatedClothes: []
+        }));
 
-  const handleImageSelected = useCallback(async (file: File | null) => {
-    if (!file) {
-        setSelectedFile(null);
-        setOriginalImage(null);
-        return;
-    }
-    setError(null);
-    setSelectedFile(file);
-    try {
-        const dataUrl = await fileToDataUrl(file);
-        setOriginalImage(dataUrl);
-    } catch (e) {
-      setError('Failed to read the image file.');
-      setIsLoading(false);
-    }
-  }, [setSelectedFile]);
-
-  const processImage = useCallback(async () => {
-    if (!selectedFile || !originalImage) {
-      setError("Please select an image first.");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    setGeneratedItems([]);
-
-    const base64Image = originalImage.split(',')[1];
-    const mimeType = selectedFile.type;
-
-    try {
-      setLoadingMessage('Identifying clothing items...');
-      const clothingDescriptions = await identifyClothing(base64Image, mimeType, details);
-      
-      if (!clothingDescriptions || clothingDescriptions.length === 0) {
-          throw new Error("Could not identify any clothing items. Please try a clearer image.");
-      }
-
-      const allGeneratedItems: GeneratedClothing[] = [];
-      const processingErrors: string[] = [];
-
-      const getPlaceholder = (text: string) => {
-          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" fill="#374151"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24px" fill="#9ca3af">${text}</text></svg>`;
-          return `data:image/svg+xml;base64,${btoa(svg)}`;
-      };
-
-      for (let i = 0; i < clothingDescriptions.length; i++) {
-        const item = clothingDescriptions[i];
-        setLoadingMessage(`Extracting: ${item.name} (${i + 1}/${clothingDescriptions.length})...`);
-        
-        const laidOutPromise = generateClothingImage(base64Image, mimeType, item.description, 'laid out');
-        const foldedPromise = generateClothingImage(base64Image, mimeType, item.description, 'folded');
-
-        const [laidOutResult, foldedResult] = await Promise.allSettled([laidOutPromise, foldedPromise]);
-
-        let laidOutImage: string;
-        if (laidOutResult.status === 'fulfilled') {
-            laidOutImage = `data:image/png;base64,${laidOutResult.value}`;
-        } else {
-            console.error(`Failed to generate 'laid out' image for ${item.name}:`, laidOutResult.reason);
-            processingErrors.push(`'Laid out' image for "${item.name}" failed.`);
-            laidOutImage = getPlaceholder('Generation Failed');
+        try {
+            const items = await identifyClothing(state.clothesSourceFile, state.clothesDetails, state.excludeAccessories);
+            setState(prev => ({ ...prev, identifiedItems: items }));
+        } catch (err: any) {
+            setState(prev => ({ ...prev, clothesError: err.message || 'Failed to identify clothing items.' }));
+        } finally {
+            setState(prev => ({ ...prev, isIdentifying: false }));
         }
+    };
 
-        let foldedImage: string;
-        if (foldedResult.status === 'fulfilled') {
-            foldedImage = `data:image/png;base64,${foldedResult.value}`;
-        } else {
-            console.error(`Failed to generate 'folded' image for ${item.name}:`, foldedResult.reason);
-            processingErrors.push(`'Folded' image for "${item.name}" failed.`);
-            foldedImage = getPlaceholder('Generation Failed');
+    const handleGenerate = async (itemName: string) => {
+        if (!state.clothesSourceFile) return;
+        setState(prev => ({ ...prev, isGenerating: true, clothesError: null }));
+        try {
+            const laidOutImage = await generateClothingImage(state.clothesSourceFile, itemName, 'laid out');
+            let foldedImage: string | undefined = undefined;
+            if (state.generateFolded) {
+                foldedImage = await generateClothingImage(state.clothesSourceFile, itemName, 'folded');
+            }
+            
+            setState(prev => ({ ...prev, generatedClothes: [...prev.generatedClothes, { itemName, laidOutImage, foldedImage, saved: 'idle' }] }));
+        } catch (err: any) {
+            setState(prev => ({ ...prev, clothesError: err.message || `Failed to generate images for ${itemName}.` }));
+        } finally {
+            setState(prev => ({ ...prev, isGenerating: false }));
         }
+    };
+    
+    const setGeneratedClothes = (items: GeneratedClothing[]) => {
+        setState(prev => ({ ...prev, generatedClothes: items }));
+    };
+
+    const handleIdentifyObjects = async () => {
+        if (!state.objectSourceFile) return;
+        setState(prev => ({
+            ...prev,
+            isIdentifyingObjects: true,
+            objectError: null,
+            identifiedObjects: [],
+            generatedObjects: [],
+        }));
+
+        try {
+            const items = await identifyObjects(state.objectSourceFile, state.maxObjects, state.objectHints);
+            setState(prev => ({ ...prev, identifiedObjects: items.map(item => ({ ...item, selected: false })) }));
+        } catch (err: any) {
+            setState(prev => ({ ...prev, objectError: err.message || 'Failed to identify objects.' }));
+        } finally {
+            setState(prev => ({ ...prev, isIdentifyingObjects: false }));
+        }
+    };
+
+    const handleToggleObjectSelection = (index: number) => {
+        setState(prev => ({
+            ...prev,
+            identifiedObjects: prev.identifiedObjects.map((item, i) => (i === index ? { ...item, selected: !item.selected } : item))
+        }));
+    };
+
+    const handleGenerateObjects = async () => {
+        if (!state.objectSourceFile || state.identifiedObjects.every(obj => !obj.selected)) return;
         
-        allGeneratedItems.push({
-          name: item.name,
-          laidOutImage,
-          foldedImage,
+        setState(prev => ({ ...prev, isGeneratingObjects: true, objectError: null, generatedObjects: [] }));
+        const selectedObjects = state.identifiedObjects.filter(obj => obj.selected);
+
+        for (const obj of selectedObjects) {
+            try {
+                const image = await generateObjectImage(state.objectSourceFile, obj.name);
+                setState(prev => ({ ...prev, generatedObjects: [...prev.generatedObjects, { name: obj.name, image, saved: 'idle' }] }));
+            } catch (err: any) {
+                console.error(`Failed to generate image for ${obj.name}:`, err);
+                setState(prev => ({ ...prev, objectError: `Error generating "${obj.name}". Skipping.` }));
+            }
+        }
+        setState(prev => ({ ...prev, isGeneratingObjects: false }));
+    };
+
+    const handleObjectSaveToLibrary = async (item: GeneratedObject, index: number) => {
+        setState(prev => {
+            const updatedObjects = [...prev.generatedObjects];
+            updatedObjects[index] = { ...item, saved: 'saving' };
+            return { ...prev, generatedObjects: updatedObjects };
         });
         
-        setGeneratedItems([...allGeneratedItems]);
-      }
-      
-      if (processingErrors.length > 0) {
-          const errorMsg = `Some images could not be generated and are shown as placeholders:\n• ${processingErrors.join('\n• ')}`;
-          setError(errorMsg);
-          setIsErrorModalOpen(true);
-      }
-
-    } catch (err) {
-      console.error(err);
-      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      setError(`Failed to process image. ${errorMessage}`);
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
-    }
-  }, [selectedFile, originalImage, details, setGeneratedItems]);
-
-  const handleReset = () => {
-    setOriginalImage(null);
-    setSelectedFile(null);
-    setGeneratedItems([]);
-    setError(null);
-    setIsLoading(false);
-    setDetails('');
-  };
-
-  const handleImageChange = () => {
-    setOriginalImage(null);
-    setSelectedFile(null);
-  };
-
-  return (
-    <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-      {!isLoading && generatedItems.length === 0 && (
-          <div className="max-w-3xl mx-auto">
-            {!originalImage ? (
-                <div>
-                    <h2 className="text-2xl font-semibold text-center text-text-primary mb-2">Upload an Image to Begin</h2>
-                    <p className="text-center text-text-secondary mb-6">
-                        Let AI transform your fashion photos into professional e-commerce product shots.
-                    </p>
-                    <ImageUploader onImageUpload={handleImageSelected} disabled={isLoading} id="clothes-extractor-upload" label="" />
-                </div>
-            ) : (
-                <div className="text-center">
-                    <h3 className="text-xl font-semibold text-text-primary mb-4">Image Preview</h3>
-                    <img src={originalImage} alt="Selected for processing" className="rounded-xl shadow-lg w-full max-w-lg mx-auto mb-4" />
-                </div>
-            )}
+        try {
+            await saveToLibrary({
+                mediaType: 'object',
+                name: item.name,
+                media: item.image,
+                thumbnail: await dataUrlToThumbnail(item.image, 256),
+                sourceImage: state.objectSourceFile ? await dataUrlToThumbnail(URL.createObjectURL(state.objectSourceFile), 512) : undefined,
+            });
+             setState(prev => {
+                const updatedObjects = [...prev.generatedObjects];
+                updatedObjects[index] = { ...item, saved: 'saved' };
+                return { ...prev, generatedObjects: updatedObjects };
+            });
+        } catch(e) {
+             console.error("Failed to save object to library", e);
+             setState(prev => {
+                const updatedObjects = [...prev.generatedObjects];
+                updatedObjects[index] = { ...item, saved: 'idle' }; // Revert on error
+                return { ...prev, generatedObjects: updatedObjects };
+            });
+        }
+    };
+    
+    return (
+        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto space-y-12">
             
-            <div className="mt-6">
-              <label htmlFor="clothing-details" className="block text-sm font-medium text-text-secondary">
-                  Clothing Details (Optional)
-              </label>
-              <textarea
-                  id="clothing-details"
-                  rows={4}
-                  className="mt-1 block w-full rounded-md border-border-primary shadow-sm focus:border-accent focus:ring-accent sm:text-sm text-text-primary placeholder-text-muted bg-bg-tertiary"
-                  placeholder="e.g., The shirt is a navy blue Prada polo made of cotton. The pants are beige wool trousers."
-                  value={details}
-                  onChange={(e) => setDetails(e.target.value)}
-                  disabled={isLoading}
-              />
-              <p className="mt-2 text-xs text-text-muted">
-                  Help the AI be more accurate. Describe materials, colors, brands, or hidden details.
-              </p>
-            </div>
-            <div className="mt-8 flex items-center justify-center gap-4">
-                {originalImage && (
-                    <button
-                        onClick={handleImageChange}
-                        className="bg-bg-tertiary text-text-secondary font-semibold py-2 px-5 border border-border-primary rounded-lg hover:bg-bg-tertiary-hover transition-colors"
-                    >
-                        Change Image
-                    </button>
-                )}
-                <button
-                    onClick={processImage}
-                    disabled={!selectedFile || isLoading}
-                    className="px-8 py-3 bg-accent text-accent-text font-bold text-lg rounded-lg shadow-md hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent-light disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-300"
-                >
-                    Start Extraction
-                </button>
-            </div>
-            {error && !isLoading && (
-                <div className="text-center max-w-2xl mx-auto my-10 p-6 bg-danger-bg border border-danger rounded-lg">
-                    <h3 className="text-xl font-semibold text-danger">An Error Occurred</h3>
-                    <p className="text-danger mt-2" style={{ whiteSpace: 'pre-wrap' }}>{error}</p>
-                    <button
-                        onClick={handleReset}
-                        className="mt-6 bg-danger text-white font-bold py-2 px-6 rounded-lg hover:opacity-80 transition-opacity"
-                    >
-                        Try Again
-                    </button>
+            {/* --- Clothes Extractor Tool --- */}
+            <section aria-labelledby="clothes-extractor-title">
+                <ToolHeader 
+                    icon={<TshirtIcon className="w-8 h-8"/>}
+                    title="Clothes Extractor"
+                    description="Automatically identify clothing in an image and generate professional, e-commerce style product shots."
+                />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="lg:col-span-1 space-y-6">
+                        <ImageUploader 
+                            label="Upload Photo" 
+                            id="clothes-extractor-image" 
+                            onImageUpload={(file) => setState(prev => ({ ...prev, clothesSourceFile: file }))}
+                            sourceFile={state.clothesSourceFile} 
+                        />
+                        <div>
+                            <label htmlFor="clothes-details" className="block text-sm font-medium text-text-secondary mb-1">
+                                Add Details (Optional)
+                            </label>
+                            <textarea
+                                id="clothes-details"
+                                value={state.clothesDetails}
+                                onChange={(e) => setState(prev => ({ ...prev, clothesDetails: e.target.value }))}
+                                placeholder="e.g., 'the red floral dress' or 'the jacket on the person on the left'"
+                                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                rows={3}
+                            />
+                        </div>
+                         <div className="space-y-3 pt-2">
+                            <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                                <input type="checkbox" checked={state.generateFolded} onChange={(e) => setState(prev => ({ ...prev, generateFolded: e.target.checked }))} className="rounded text-accent focus:ring-accent" />
+                                Generate folded version
+                            </label>
+                            <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                                <input type="checkbox" checked={state.excludeAccessories} onChange={(e) => setState(prev => ({ ...prev, excludeAccessories: e.target.checked }))} className="rounded text-accent focus:ring-accent" />
+                                Extract clothing only (no accessories)
+                            </label>
+                        </div>
+                        <button
+                            onClick={handleIdentify}
+                            disabled={!state.clothesSourceFile || state.isIdentifying || state.isGenerating}
+                            style={state.clothesSourceFile && !state.isIdentifying && !state.isGenerating ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
+                        >
+                            {state.isIdentifying ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                            {state.isIdentifying ? 'Identifying...' : '1. Identify Clothing'}
+                        </button>
+                    </div>
+
+                    <div className="lg:col-span-2">
+                        {state.clothesError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.clothesError}</p>}
+                        {state.isIdentifying && <LoadingState message="Analyzing your image to find clothing items..." />}
+
+                        {state.identifiedItems.length > 0 && (
+                            <div className="space-y-4">
+                                <h3 className="text-xl font-bold text-accent">Identified Items</h3>
+                                <p className="text-sm text-text-secondary">Click an item below to generate its product shots.</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {state.identifiedItems.map((item, index) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => handleGenerate(item.itemName)}
+                                            disabled={state.isGenerating}
+                                            className="bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50"
+                                        >
+                                            {state.isGenerating ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : item.itemName}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {state.isGenerating && <LoadingState message="Generating product shots... this can take a moment." />}
+                        <ResultsDisplay items={state.generatedClothes} onItemsChange={setGeneratedClothes} sourceImage={state.clothesSourceFile} />
+                    </div>
                 </div>
-            )}
-          </div>
-        )}
+            </section>
+            
+            {/* --- Object Extractor Tool --- */}
+            <section aria-labelledby="object-extractor-title">
+                 <ToolHeader 
+                    icon={<CubeIcon className="w-8 h-8"/>}
+                    title="Object Extractor"
+                    description="Find multiple objects in a complex image (like a garage sale) and extract them into individual product shots."
+                />
+                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="lg:col-span-1 space-y-6">
+                        <ImageUploader 
+                            label="Upload Photo" 
+                            id="object-extractor-image" 
+                            onImageUpload={(file) => setState(prev => ({...prev, objectSourceFile: file}))}
+                            sourceFile={state.objectSourceFile}
+                        />
+                        <div>
+                            <label htmlFor="object-details" className="block text-sm font-medium text-text-secondary mb-1">
+                                Specific objects to look for (Optional)
+                            </label>
+                            <textarea
+                                id="object-details"
+                                value={state.objectHints}
+                                onChange={(e) => setState(prev => ({ ...prev, objectHints: e.target.value }))}
+                                placeholder="e.g., 'any vintage cameras' or 'the blue vase'"
+                                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                rows={3}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-text-secondary">Max objects to identify: {state.maxObjects}</label>
+                            <input
+                                type="range" min="1" max="20" step="1"
+                                value={state.maxObjects}
+                                onChange={e => setState(prev => ({ ...prev, maxObjects: Number(e.target.value) }))}
+                                className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
+                            />
+                        </div>
+                         <button
+                            onClick={handleIdentifyObjects}
+                            disabled={!state.objectSourceFile || state.isIdentifyingObjects || state.isGeneratingObjects}
+                            style={state.objectSourceFile && !state.isIdentifyingObjects && !state.isGeneratingObjects ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
+                        >
+                            {state.isIdentifyingObjects ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                            {state.isIdentifyingObjects ? 'Identifying...' : '1. Identify Objects'}
+                        </button>
+                    </div>
 
-      {isLoading && <LoadingState message={loadingMessage} />}
-      
-      {!isLoading && generatedItems.length > 0 && originalImage && (
-        <ResultsDisplay 
-          originalImage={originalImage}
-          generatedItems={generatedItems}
-          onReset={handleReset}
-          details={details}
-        />
-      )}
+                    <div className="lg:col-span-2 space-y-6">
+                        {state.objectError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.objectError}</p>}
+                        {state.isIdentifyingObjects && <LoadingState message="Scanning your image for objects..." />}
+                        
+                        {state.identifiedObjects.length > 0 && (
+                            <div>
+                                <h3 className="text-xl font-bold text-accent mb-2">Select Objects to Extract</h3>
+                                <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
+                                    {state.identifiedObjects.map((obj, index) => (
+                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">
+                                            <input type="checkbox" checked={obj.selected} onChange={() => handleToggleObjectSelection(index)} className="mt-1 rounded text-accent focus:ring-accent" />
+                                            <div>
+                                                <span className="font-semibold text-text-primary">{obj.name}</span>
+                                                <p className="text-sm text-text-secondary">{obj.description}</p>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                                <button
+                                    onClick={handleGenerateObjects}
+                                    disabled={state.identifiedObjects.every(o => !o.selected) || state.isGeneratingObjects}
+                                    className="w-full mt-4 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 bg-accent text-accent-text disabled:opacity-50"
+                                >
+                                    {state.isGeneratingObjects ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                    2. Generate Product Shots
+                                </button>
+                            </div>
+                        )}
 
-      {isErrorModalOpen && error && (
-          <ErrorModal
-              title="Processing Notes"
-              message={error}
-              onClose={() => {
-                  setIsErrorModalOpen(false);
-                  setError(null);
-              }}
-          />
-      )}
-    </div>
-  );
+                        {state.isGeneratingObjects && <LoadingState message={`Generating images for selected objects... (${state.generatedObjects.length}/${state.identifiedObjects.filter(o => o.selected).length} done)`} />}
+                        
+                        {state.generatedObjects.length > 0 && (
+                            <div className="space-y-4">
+                                <h3 className="text-xl font-bold text-accent">Generated Object Shots</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {state.generatedObjects.map((item, index) => {
+                                        const savingStatus = item.saved || 'idle';
+                                        return (
+                                            <div key={index} className="text-center p-2 bg-bg-tertiary rounded-md">
+                                                <h4 className="text-sm font-medium text-text-primary mb-2 truncate" title={item.name}>{item.name}</h4>
+                                                <div className="aspect-square bg-white rounded-md flex items-center justify-center p-2">
+                                                    <img src={item.image} alt={item.name} className="max-w-full max-h-full object-contain" />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 mt-2">
+                                                    <button onClick={() => {
+                                                        const link = document.createElement('a');
+                                                        link.href = item.image;
+                                                        link.download = `${item.name.replace(/\s+/g, '_')}.png`;
+                                                        link.click();
+                                                    }} className="w-full flex items-center justify-center gap-2 text-xs bg-bg-primary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                                        <DownloadIcon className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleObjectSaveToLibrary(item, index)}
+                                                        disabled={savingStatus !== 'idle'}
+                                                        className={`w-full flex items-center justify-center gap-2 text-xs font-semibold py-2 px-3 rounded-lg transition-colors ${
+                                                            savingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 
+                                                            savingStatus === 'saving' ? 'bg-bg-primary text-text-secondary cursor-wait' : 
+                                                            'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
+                                                        }`}
+                                                    >
+                                                        {savingStatus === 'saving' ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : savingStatus === 'saved' ? <CheckIcon className="w-4 h-4" /> : <SaveIcon className="w-4 h-4" />}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                 </div>
+            </section>
+        </div>
+    );
 };

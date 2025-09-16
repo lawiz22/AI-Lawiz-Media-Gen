@@ -1,3 +1,4 @@
+
 // Fix: Implemented the full comfyUIService.ts module to resolve all module-not-found errors.
 import { GoogleGenAI } from "@google/genai";
 import { fileToGenerativePart } from "../utils/imageUtils";
@@ -357,10 +358,10 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
     
     // --- Prompts (Common to most workflows) ---
     const posPromptKey = findNodeKey("Positive Prompt", 'title');
-    if (posPromptKey) workflow[posPromptKey].inputs.text = options.comfyPrompt;
+    if (posPromptKey) workflow[posPromptKey].inputs.text = options.comfyPrompt || '';
     
     const negPromptKey = findNodeKey("Negative Prompt", 'title');
-    if (negPromptKey) workflow[negPromptKey].inputs.text = options.comfyNegativePrompt;
+    if (negPromptKey) workflow[negPromptKey].inputs.text = options.comfyNegativePrompt || '';
 
 
     // --- Apply Options Based on Workflow Type ---

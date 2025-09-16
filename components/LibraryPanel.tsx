@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk, syncLibraryToDrive, exportLibraryAsJson, updateLibraryItem } from '../services/libraryService';
 import { generateThumbnailForPrompt } from '../services/geminiService';
-import type { LibraryItem, GenerationOptions } from '../types';
-import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon, FileExportIcon, DocumentTextIcon, Squares2X2Icon, ListBulletIcon, ArrowUpIcon, ArrowDownIcon, FilmIcon } from './icons';
+import type { LibraryItem, GenerationOptions, LibraryItemType } from '../types';
+import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon, FileExportIcon, DocumentTextIcon, Squares2X2Icon, ListBulletIcon, ArrowUpIcon, ArrowDownIcon, FilmIcon, CubeIcon } from './icons';
 
-type FilterType = 'all' | 'image' | 'video' | 'clothes' | 'prompt' | 'extracted-frame';
+type FilterType = 'all' | 'image' | 'video' | 'clothes' | 'prompt' | 'extracted-frame' | 'object';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -270,14 +270,22 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
   }, []);
 
   useEffect(() => {
-    loadItems();
+    loadItems(); // Initial load when panel becomes active
+    
+    // Listen for custom event to refresh library
+    const handleLibraryUpdate = () => loadItems();
+    window.addEventListener('libraryUpdated', handleLibraryUpdate);
+
+    return () => {
+      window.removeEventListener('libraryUpdated', handleLibraryUpdate);
+    };
   }, [loadItems]);
 
   const handleDelete = async (id: number) => {
     if (window.confirm('Are you sure you want to delete this item from your library?')) {
       try {
         await deleteLibraryItem(id);
-        setItems(prev => prev.filter(item => item.id !== id));
+        // The event listener will handle updating the state, no need to call loadItems() here
         if (selectedItem?.id === id) {
           setSelectedItem(null);
         }
@@ -291,7 +299,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
      if (window.confirm('Are you sure you want to delete your entire library? This cannot be undone.')) {
         try {
             await clearLibrary();
-            setItems([]);
+            // The event listener will handle updating the state
             setSelectedItem(null);
         } catch (error) {
              console.error("Failed to clear library:", error);
@@ -382,13 +390,14 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
     setThumbnailPreview(null);
   };
 
-  const getCategoryIcon = (mediaType: 'image' | 'video' | 'clothes' | 'prompt' | 'extracted-frame') => {
+  const getCategoryIcon = (mediaType: LibraryItemType) => {
       switch(mediaType) {
           case 'image': return <PhotographIcon className="w-4 h-4 text-white" />;
           case 'video': return <VideoIcon className="w-4 h-4 text-white" />;
           case 'clothes': return <TshirtIcon className="w-4 h-4 text-white" />;
           case 'prompt': return <DocumentTextIcon className="w-4 h-4 text-white" />;
           case 'extracted-frame': return <FilmIcon className="w-4 h-4 text-white" />;
+          case 'object': return <CubeIcon className="w-4 h-4 text-white" />;
           default: return null;
       }
   };
@@ -478,7 +487,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                 {/* --- Toolbar --- */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 p-2 bg-bg-tertiary rounded-lg">
                     <div className="flex items-center gap-1 bg-bg-primary p-1 rounded-md">
-                        {(['all', 'image', 'video', 'clothes', 'prompt', 'extracted-frame'] as FilterType[]).map(filter => (
+                        {(['all', 'image', 'video', 'clothes', 'object', 'prompt', 'extracted-frame'] as FilterType[]).map(filter => (
                             <button key={filter} onClick={() => setActiveFilter(filter)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${activeFilter === filter ? 'bg-accent text-accent-text shadow' : 'hover:bg-bg-secondary'}`}>
                                 {filter.charAt(0).toUpperCase() + filter.slice(1)}
                             </button>
@@ -584,7 +593,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                     onClick={e => e.stopPropagation()}
                 >
                     <div className="flex-grow flex flex-col items-center justify-center bg-bg-primary rounded-lg p-2">
-                         {(selectedItem.mediaType === 'image' || selectedItem.mediaType === 'extracted-frame') && (
+                         {(selectedItem.mediaType === 'image' || selectedItem.mediaType === 'extracted-frame' || selectedItem.mediaType === 'object') && (
                             <img src={selectedItem.media} alt="Selected library item" className="max-w-full max-h-full object-contain rounded-md" />
                          )}
                          {selectedItem.mediaType === 'video' && (

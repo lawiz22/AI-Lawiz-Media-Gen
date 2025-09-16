@@ -1,3 +1,11 @@
+// Fix: Add global declarations for Google API scripts to resolve TypeScript errors.
+declare global {
+  interface Window {
+    gapi: any;
+    google: any;
+  }
+}
+
 import type { LibraryItem, DriveFolder } from '../types';
 
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';

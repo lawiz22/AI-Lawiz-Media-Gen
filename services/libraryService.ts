@@ -1,3 +1,10 @@
+// Fix: Add a global declaration for window.showSaveFilePicker to resolve TypeScript errors.
+declare global {
+  interface Window {
+    showSaveFilePicker: (options?: any) => Promise<any>;
+  }
+}
+
 import type { LibraryItem } from '../types';
 import * as idbService from './idbLibraryService';
 import { dataUrlToBlob, dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
@@ -31,13 +38,15 @@ export async function initializeDriveSync(onProgress: (message: string) => void)
 }
 
 export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void> => {
-  const itemWithName = { ...item };
-  if (!itemWithName.name && (item.mediaType === 'image' || item.mediaType === 'video')) {
-    let generatedName = `${item.mediaType.charAt(0).toUpperCase() + item.mediaType.slice(1)} Item`;
+  const itemToSave = { ...item };
+
+  // If a name is missing for an image or video, try to generate one.
+  if (!itemToSave.name && (item.mediaType === 'image' || item.mediaType === 'video')) {
     try {
         const options = item.options;
         const prompt = options?.geminiPrompt || options?.comfyPrompt || options?.geminiVidPrompt || options?.comfyVidWanI2VPositivePrompt;
         
+        let generatedName = '';
         if (item.mediaType === 'image') {
             // For ComfyUI or Gemini I2I, it's best to analyze the final image.
             if (options?.provider === 'comfyui' || (options?.provider === 'gemini' && options?.geminiMode === 'i2i')) {
@@ -57,13 +66,17 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
                 generatedName = await generateTitleForImage(item.startFrame);
             }
         }
+        // Use the generated name if successful, otherwise a fallback will be used.
+        itemToSave.name = generatedName || `${item.mediaType.charAt(0).toUpperCase() + item.mediaType.slice(1)} Item ${Date.now()}`;
     } catch (e) {
-        console.error("Failed to auto-generate title for library item:", e);
+        console.error("Failed to auto-generate title for library item, using default.", e);
+        // Assign a default name on any failure to ensure the save operation can proceed.
+        itemToSave.name = `${item.mediaType.charAt(0).toUpperCase() + item.mediaType.slice(1)} Item ${Date.now()}`;
     }
-    itemWithName.name = generatedName;
   }
   
-  const newItem = await idbService.saveToLibrary(itemWithName);
+  const newItem = await idbService.saveToLibrary(itemToSave);
+  window.dispatchEvent(new CustomEvent('libraryUpdated'));
 
   if (driveService?.isConnected()) {
     try {
@@ -82,6 +95,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
         case 'video': subfolderName = 'videos'; break;
         case 'clothes': subfolderName = 'clothes'; break;
         case 'extracted-frame': subfolderName = 'extracted-frames'; break;
+        case 'object': subfolderName = 'objects'; break;
         default: subfolderName = 'misc';
       }
       const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
@@ -161,6 +175,7 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
             console.error(`Failed to download or save file for item ${itemMetadata.id}`, e);
         }
     }
+    window.dispatchEvent(new CustomEvent('libraryUpdated'));
     onProgress("Sync from Drive complete!");
 };
 
@@ -199,6 +214,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
                     case 'video': subfolderName = 'videos'; break;
                     case 'clothes': subfolderName = 'clothes'; break;
                     case 'extracted-frame': subfolderName = 'extracted-frames'; break;
+                    case 'object': subfolderName = 'objects'; break;
                     default: subfolderName = 'misc';
                 }
                 const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
@@ -270,6 +286,7 @@ export const updateLibraryItem = idbService.updateLibraryItem;
 export const deleteLibraryItem = async (id: number): Promise<void> => {
   const itemToDelete = await idbService.getItemById(id);
   await idbService.deleteLibraryItem(id);
+  window.dispatchEvent(new CustomEvent('libraryUpdated'));
 
   if (driveService?.isConnected() && itemToDelete) {
       try {
@@ -291,6 +308,7 @@ export const deleteLibraryItem = async (id: number): Promise<void> => {
 
 export const clearLibrary = async (): Promise<void> => {
     await idbService.clearLibrary();
+    window.dispatchEvent(new CustomEvent('libraryUpdated'));
     if (driveService?.isConnected()) {
         try {
             const { fileId } = await driveService.getLibraryIndex();

@@ -1,931 +1,764 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Header } from './components/Header';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import type { User, GenerationOptions, HistoryItem, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject } from './types';
+import { authenticateUser } from './services/cloudUserService';
+import { fileToDataUrl, fileToResizedDataUrl } from './utils/imageUtils';
+import { decodePose, getRandomPose } from './utils/promptBuilder';
+import { generatePortraits } from './services/geminiService';
+// Fix: Import 'checkConnection' to resolve missing name error.
+import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection } from './services/comfyUIService';
+import { saveGenerationToHistory } from './services/historyService';
 import { Login } from './components/Login';
+import { AdminPanel } from './components/AdminPanel';
+import { Header } from './components/Header';
 import { ImageUploader } from './components/ImageUploader';
 import { OptionsPanel } from './components/OptionsPanel';
 import { ImageGrid } from './components/ImageGrid';
-import { AdminPanel } from './components/AdminPanel';
 import { Loader } from './components/Loader';
 import { ConnectionSettingsModal } from './components/ComfyUIConnection';
 import { HistoryPanel } from './components/HistoryPanel';
 import { LibraryPanel } from './components/LibraryPanel';
+import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
+import { VideoUtilsPanel } from './components/VideoUtilsPanel';
+import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
 import { LibraryPickerModal } from './components/LibraryPickerModal';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
-import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
-import { ClothesExtractorPanel } from './components/ClothesExtractorPanel';
-import { VideoUtilsPanel } from './components/VideoUtilsPanel';
-import { GenerateIcon, LibraryIcon } from './components/icons';
-import type { GenerationOptions, User, HistoryItem, VersionInfo, GeneratedClothing, LibraryItem, DriveFolder } from './types';
-import { authenticateUser } from './services/cloudUserService';
-import { generatePortraitSeries, generateImagesFromPrompt, generateGeminiVideo } from './services/geminiService';
-import { exportComfyUIWorkflow, generateComfyUIPortraits, checkConnection as checkComfyUIConnection, getComfyUIObjectInfo, generateComfyUIPromptFromSource as generateComfyUIPromptService, generateComfyUIVideo } from './services/comfyUIService';
-import { saveGenerationToHistory } from './services/historyService';
-import * as libraryService from './services/libraryService';
-import * as googleDriveService from './services/googleDriveService';
-import { fileToResizedDataUrl, dataUrlToThumbnail, dataUrlToFile } from './utils/imageUtils';
-import { PHOTO_STYLE_OPTIONS, IMAGE_STYLE_OPTIONS, ERA_STYLE_OPTIONS } from './constants';
+import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
+import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon } from './components/icons';
+import * as driveService from './services/googleDriveService';
+import { setDriveService, initializeDriveSync } from './services/libraryService';
 
-const initialOptions: GenerationOptions = {
-  provider: 'gemini',
-  geminiMode: 'i2i',
-  geminiT2IModel: 'imagen-4.0-generate-001',
-  geminiPrompt: '',
-  numImages: 2,
-  background: 'original',
-  aspectRatio: '3:4',
-  customBackground: '',
-  consistentBackground: false,
-  clothing: 'original',
-  customClothingPrompt: '',
-  clothingStyleConsistency: 'varied',
-  poseMode: 'random',
-  poseSelection: [],
-  photoStyle: PHOTO_STYLE_OPTIONS[0].value,
-  imageStyle: IMAGE_STYLE_OPTIONS[0].value,
-  eraStyle: ERA_STYLE_OPTIONS[0].value,
-  creativity: 0.7,
-  addTextToImage: false,
-  textOnImagePrompt: '',
-  textObjectPrompt: "a sign in the background that reads '%s'",
-  
-  comfyModelType: 'sdxl',
-  comfyFluxGuidance: 3.5,
-  comfyModel: '',
-  comfySteps: 25,
-  comfyCfg: 5.5,
-  comfySampler: 'euler',
-  comfyScheduler: 'simple',
-  comfyPrompt: '',
-  comfyNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed',
-  comfyFluxNodeName: null,
-  comfySdxlUseLora: false,
-  comfySdxlLoraName: '',
-  comfySdxlLoraStrength: 0.8,
+const App: React.FC = () => {
+    // --- App State ---
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [theme, setTheme] = useState<string>('cyberpunk');
+    const [activeTab, setActiveTab] = useState<string>('image-generator');
+    const [isComfyUIConnected, setIsComfyUIConnected] = useState<boolean | null>(null);
+    const [comfyUIObjectInfo, setComfyUIObjectInfo] = useState<any | null>(null);
+    const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
 
-  comfyWanHighNoiseModel: 'Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf',
-  comfyWanLowNoiseModel: 'Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf',
-  comfyWanClipModel: 'umt5_xxl_fp8_e4m3fn_scaled.safetensors',
-  comfyWanVaeModel: 'wan_2.1_vae.safetensors',
-  comfyWanUseFusionXLora: true,
-  comfyWanFusionXLoraStrength: 0.8,
-  comfyWanFusionXLoraName: 'Wan2.1_T2V_14B_FusionX_LoRA.safetensors',
-  comfyWanUseLightningLora: true,
-  comfyWanLightningLoraStrength: 0.6,
-  comfyWanLightningLoraNameHigh: 'Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors',
-  comfyWanLightningLoraNameLow: 'Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors',
-  comfyWanUseStockPhotoLora: true,
-  comfyWanStockPhotoLoraStrength: 1.5,
-  comfyWanStockPhotoLoraNameHigh: 'stock_photography_wan22_HIGH_v1.safetensors',
-  comfyWanStockPhotoLoraNameLow: 'stock_photography_wan22_LOW_v1.safetensors',
-  comfyWanRefinerStartStep: 3,
+    // --- Image Generation State ---
+    const [sourceImage, setSourceImage] = useState<File | null>(null);
+    const [clothingImage, setClothingImage] = useState<File | null>(null);
+    const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
+    const [previewedBackgroundImage, setPreviewedBackgroundImage] = useState<string | null>(null);
+    const [previewedClothingImage, setPreviewedClothingImage] = useState<string | null>(null);
+    const [options, setOptions] = useState<GenerationOptions>({
+        provider: 'gemini',
+        numImages: 4,
+        poseMode: 'random',
+        poseSelection: [],
+        background: 'original',
+        clothing: 'original',
+        aspectRatio: '3:4',
+        imageStyle: 'photorealistic',
+        photoStyle: 'professional photoshoot',
+        eraStyle: 'a modern digital photograph',
+        geminiMode: 'i2i',
+        // ComfyUI specific
+        comfyModelType: 'sdxl',
+        comfyPrompt: '',
+        comfyNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed, disfigured',
+        comfySteps: 25,
+        comfyCfg: 5.5,
+        comfySampler: 'euler',
+        comfyScheduler: 'normal',
+    });
+    const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [progressMessage, setProgressMessage] = useState<string>('');
+    const [progressValue, setProgressValue] = useState<number>(0);
+    const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+    const [lastUsedPrompt, setLastUsedPrompt] = useState<string | null>(null);
+    const [globalError, setGlobalError] = useState<{ title: string; message: string } | null>(null);
+    
+    // --- Prompt Generation State ---
+    const [promptGenState, setPromptGenState] = useState<PromptGenState>({
+        image: null,
+        prompt: '',
+        bgImage: null,
+        bgPrompt: '',
+        subjectImage: null,
+        subjectPrompt: '',
+        soupPrompt: '',
+        soupHistory: [],
+    });
 
-  comfyNunchakuModel: 'svdq-int4_r32-flux.1-kontext-dev.safetensors',
-  comfyNunchakuClipL: 'ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors',
-  comfyNunchakuT5XXL: 't5xxl_fp8_e4m3fn_scaled.safetensors',
-  comfyNunchakuVae: 'ae.safetensors',
-  comfyNunchakuUseTurboLora: true,
-  comfyNunchakuTurboLoraName: 'flux-turbo.safetensors',
-  comfyNunchakuTurboLoraStrength: 1.0,
-  comfyNunchakuUseNudifyLora: true,
-  comfyNunchakuNudifyLoraName: 'JD3s_Nudify_Kontext.safetensors',
-  comfyNunchakuNudifyLoraStrength: 1.0,
-  comfyNunchakuUseDetailLora: true,
-  comfyNunchakuDetailLoraName: 'flux_nipples_saggy_breasts.safetensors',
-  comfyNunchakuDetailLoraStrength: 1.0,
-  comfyFluxGuidanceKontext: 2.5,
-  comfyNunchakuCacheThreshold: 0.12,
-  comfyNunchakuCpuOffload: 'enable',
-  comfyNunchakuAttention: 'nunchaku-fp16',
-  comfyNunchakuBaseShift: 1.0,
-  comfyNunchakuMaxShift: 1.15,
+    // --- Video Generation State ---
+    const [videoStartFrame, setVideoStartFrame] = useState<File | null>(null);
+    const [videoEndFrame, setVideoEndFrame] = useState<File | null>(null);
+    const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
+    const [generationOptionsForSave, setGenerationOptionsForSave] = useState<GenerationOptions | null>(null);
 
-  comfyFluxKreaModel: 'flux1-krea-dev-Q5_K_M.gguf',
-  comfyFluxKreaClipT5: 't5-v1_1-xxl-encoder-Q5_K_M.gguf',
-  comfyFluxKreaClipL: 'clip_l.safetensors',
-  comfyFluxKreaVae: 'ae.safetensors',
-  comfyFluxKreaUpscaleModel: '4x_NMKD-Siax_200k.pth',
-  useP1x4r0maWomanLora: false,
-  p1x4r0maWomanLoraStrength: 0.9,
-  p1x4r0maWomanLoraName: 'p1x4r0ma_woman.safetensors',
-  useNippleDiffusionLora: true,
-  nippleDiffusionLoraStrength: 1.0,
-  nippleDiffusionLoraName: 'nipplediffusion-saggy-f1.safetensors',
-  usePussyDiffusionLora: false,
-  pussyDiffusionLoraStrength: 1.0,
-  pussyDiffusionLoraName: 'pussydiffusion-f1.safetensors',
-  comfyFluxKreaUseUpscaler: false,
-  comfyFluxKreaDenoise: 0.8,
-  comfyFluxKreaUpscalerSteps: 10,
+    // --- Video Utilities State ---
+    const [videoUtilsState, setVideoUtilsState] = useState<VideoUtilsState>({
+        videoFile: null,
+        extractedFrame: null,
+    });
+    
+    // --- Extractor Tools State ---
+    const [extractorState, setExtractorState] = useState<ExtractorState>({
+        clothesSourceFile: null,
+        clothesDetails: '',
+        isIdentifying: false,
+        identifiedItems: [],
+        isGenerating: false,
+        generatedClothes: [],
+        clothesError: null,
+        generateFolded: false,
+        excludeAccessories: true,
+        objectSourceFile: null,
+        objectHints: '',
+        maxObjects: 5,
+        isIdentifyingObjects: false,
+        identifiedObjects: [],
+        isGeneratingObjects: false,
+        generatedObjects: [],
+        objectError: null,
+    });
 
-  videoProvider: 'comfyui',
-  comfyVidModelType: 'wan-i2v',
-  comfyVidWanI2VHighNoiseModel: 'Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf',
-  comfyVidWanI2VLowNoiseModel: 'Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf',
-  comfyVidWanI2VClipModel: 'umt5-xxl-encoder-Q5_K_M.gguf',
-  comfyVidWanI2VVaeModel: 'wan_2.1_vae.safetensors',
-  comfyVidWanI2VClipVisionModel: 'clip_vision_h.safetensors',
-  comfyVidWanI2VUseLightningLora: true,
-  comfyVidWanI2VHighNoiseLora: 'Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors',
-  comfyVidWanI2VHighNoiseLoraStrength: 2.0,
-  comfyVidWanI2VLowNoiseLora: 'Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors',
-  comfyVidWanI2VLowNoiseLoraStrength: 1.0,
-  comfyVidWanI2VSteps: 6,
-  comfyVidWanI2VCfg: 1,
-  comfyVidWanI2VSampler: 'euler',
-  comfyVidWanI2VScheduler: 'simple',
-  comfyVidWanI2VFrameCount: 65,
-  comfyVidWanI2VRefinerStartStep: 3,
-  comfyVidWanI2VFrameRate: 24,
-  comfyVidWanI2VVideoFormat: 'video/nvenc_h264-mp4',
-  comfyVidWanI2VUseFilmGrain: true,
-  comfyVidWanI2VFilmGrainIntensity: 0.02,
-  comfyVidWanI2VFilmGrainSize: 0.3,
-  comfyVidWanI2VPositivePrompt: '',
-  comfyVidWanI2VNegativePrompt: 'disney pixar 3d type, pixar type cartoon, worst quality, low quality, jpeg artifacts, ugly, deformed, blurry',
-  comfyVidWanI2VWidth: 848,
-  comfyVidWanI2VHeight: 560,
-  comfyVidWanI2VUseEndFrame: true,
-  comfyVidWanI2VEndFrameStrength: 1.0,
 
-  geminiVidModel: 'veo-2.0-generate-001',
-  geminiVidPrompt: '',
-  geminiVidUseEndFrame: false,
-};
+    // --- UI Modals & Panels State ---
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+    const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
+    const [isClothingPickerOpen, setIsClothingPickerOpen] = useState(false);
+    const [isBackgroundPickerOpen, setIsBackgroundPickerOpen] = useState(false);
+    const [isStartFramePickerOpen, setIsStartFramePickerOpen] = useState(false);
+    const [isEndFramePickerOpen, setIsEndFramePickerOpen] = useState(false);
+    const [isOAuthHelperOpen, setIsOAuthHelperOpen] = useState(false);
+    
+    // --- Google Drive State ---
+    const [driveFolder, setDriveFolder] = useState<DriveFolder | null>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncMessage, setSyncMessage] = useState('');
+    const [isDriveConfigured, setIsDriveConfigured] = useState(false);
 
-function App() {
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'cyberpunk');
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const savedUser = sessionStorage.getItem('currentUser');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
-  const [options, setOptions] = useState<GenerationOptions>(initialOptions);
-  const [sourceImage, setSourceImage] = useState<File | null>(null);
-  const [clothingImage, setClothingImage] = useState<File | null>(null);
-  const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
-  const [previewedBackgroundImage, setPreviewedBackgroundImage] = useState<string | null>(null);
-  const [previewedClothingImage, setPreviewedClothingImage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
-  const [progressMessage, setProgressMessage] = useState('');
-  const [progressValue, setProgressValue] = useState(0);
-  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
-  const [lastUsedPrompt, setLastUsedPrompt] = useState<string | null>(null);
-  const [lastGenerationOptions, setLastGenerationOptions] = useState<GenerationOptions | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'image' | 'video' | 'library' | 'clothes' | 'video-utils' | 'prompt' | 'manage'>('image');
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
-  const [isOAuthHelperOpen, setIsOAuthHelperOpen] = useState(false);
-  const [comfyUIUrl, setComfyUIUrl] = useState<string>(() => localStorage.getItem('comfyui_url') || '');
-  const [isComfyUIConnected, setIsComfyUIConnected] = useState<boolean | null>(null);
-  const [comfyUIObjectInfo, setComfyUIObjectInfo] = useState<any | null>(null);
-  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
-  const [googleClientId, setGoogleClientId] = useState<string>(() => localStorage.getItem('google_client_id') || '');
-  const [isDriveConfigured, setIsDriveConfigured] = useState(() => googleDriveService.isDriveConfigured());
-  const [driveFolder, setDriveFolder] = useState<DriveFolder | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
-  const [promptToolImage, setPromptToolImage] = useState<File | null>(null);
-  const [promptToolPrompt, setPromptToolPrompt] = useState<string>('');
-  const [promptToolBgImage, setPromptToolBgImage] = useState<File | null>(null);
-  const [promptToolBgPrompt, setPromptToolBgPrompt] = useState<string>('');
-  const [promptToolSubjectImage, setPromptToolSubjectImage] = useState<File | null>(null);
-  const [promptToolSubjectPrompt, setPromptToolSubjectPrompt] = useState<string>('');
-  const [promptToolSoupPrompt, setPromptToolSoupPrompt] = useState<string>('');
-  const [promptToolSoupHistory, setPromptToolSoupHistory] = useState<string[]>([]);
-  const [startFrame, setStartFrame] = useState<File | null>(null);
-  const [endFrame, setEndFrame] = useState<File | null>(null);
-  const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
-  const [clothesExtractorFile, setClothesExtractorFile] = useState<File | null>(null);
-  const [clothesExtractorDetails, setClothesExtractorDetails] = useState<string>('');
-  const [clothesExtractorResults, setClothesExtractorResults] = useState<GeneratedClothing[]>([]);
-  const [isLibraryPickerOpen, setIsLibraryPickerOpen] = useState(false);
-  const [libraryPickerConfig, setLibraryPickerConfig] = useState<{
-    target: 'sourceImage' | 'clothingImage' | null;
-    filter: 'image' | 'clothes' | null;
-  }>({ target: null, filter: null });
-  const [videoUtilsFile, setVideoUtilsFile] = useState<File | null>(null);
-  const [videoUtilsExtractedFrame, setVideoUtilsExtractedFrame] = useState<string | null>(null);
+    // --- Computed State ---
+    const isReadyToGenerate = useMemo(() => {
+        if (isLoading) return false;
+        if (options.provider === 'gemini') {
+            if (options.geminiMode === 't2i') return !!options.geminiPrompt?.trim();
+            return !!sourceImage;
+        } else if (options.provider === 'comfyui') {
+            return !!isComfyUIConnected && !!options.comfyPrompt?.trim();
+        }
+        return false;
+    }, [sourceImage, options, isLoading, isComfyUIConnected]);
 
-  const handleOpenLibraryPicker = (target: 'sourceImage' | 'clothingImage', filter: 'image' | 'clothes') => {
-    setLibraryPickerConfig({ target, filter });
-    setIsLibraryPickerOpen(true);
-  };
+    // --- Effects ---
+    useEffect(() => {
+        fetch('/version.json').then(res => res.json()).then(setVersionInfo).catch(console.error);
+        const savedTheme = localStorage.getItem('theme') || 'cyberpunk';
+        setTheme(savedTheme);
+        document.documentElement.setAttribute('data-theme', savedTheme);
 
-  const handleSelectFromLibrary = async (mediaDataUrl: string) => {
-    if (!libraryPickerConfig.target) return;
-    try {
-      const file = await dataUrlToFile(mediaDataUrl, `library_${libraryPickerConfig.target}.jpg`);
-      if (libraryPickerConfig.target === 'sourceImage') setSourceImage(file);
-      else if (libraryPickerConfig.target === 'clothingImage') setClothingImage(file);
-    } catch (err) {
-      console.error("Failed to load from library", err);
-      setError("Failed to load the selected item.");
-    }
-    setIsLibraryPickerOpen(false);
-    setLibraryPickerConfig({ target: null, filter: null });
-  };
-
-  const handleAddSoupToHistory = (soup: string) => {
-    setPromptToolSoupHistory(prev => [soup, ...prev.filter(s => s !== soup)].slice(0, 10));
-    setPromptToolSoupPrompt(soup);
-  };
-  
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-  
-  const updateAndTestConnection = useCallback(async (newUrl?: string) => {
-    const urlToUse = newUrl ?? (localStorage.getItem('comfyui_url') || '');
-    localStorage.setItem('comfyui_url', urlToUse);
-    setComfyUIUrl(urlToUse);
-    if (!urlToUse) {
-      setIsComfyUIConnected(false);
-      return;
-    }
-    setIsComfyUIConnected(null);
-    const result = await checkComfyUIConnection(urlToUse);
-    setIsComfyUIConnected(result.success);
-  }, []);
-  
-  useEffect(() => {
-    fetch('/version.json')
-        .then(res => res.json())
-        .then(data => setVersionInfo(data))
-        .catch(err => console.error("Failed to load version info:", err));
-  }, []);
-
-  useEffect(() => {
-    if (!currentUser) {
-        setIsComfyUIConnected(false);
-        handleDriveDisconnect();
-        return;
-    }
-
-    const initializeUserSession = async () => {
-        await updateAndTestConnection();
-        if (googleDriveService.isDriveConfigured()) {
-            const restored = await googleDriveService.restoreConnection();
-            const savedFolderStr = localStorage.getItem('driveFolder');
-            if (restored && savedFolderStr) {
-                try {
-                    const folder: DriveFolder = JSON.parse(savedFolderStr);
-                    googleDriveService.setFolder(folder);
-                    libraryService.setDriveService(googleDriveService);
-                    setDriveFolder(folder);
-                } catch (e) {
-                    console.error("Failed to restore Drive folder from localStorage.", e);
-                    localStorage.removeItem('driveFolder');
+        const savedUser = sessionStorage.getItem('currentUser');
+        if (savedUser) setCurrentUser(JSON.parse(savedUser));
+        
+        const savedComfyUrl = localStorage.getItem('comfyui_url') || '';
+        if (savedComfyUrl) {
+            checkComfyUIConnection(savedComfyUrl);
+        } else {
+            setIsComfyUIConnected(false);
+        }
+        
+        const savedClientId = localStorage.getItem('google_client_id') || '';
+        setIsDriveConfigured(!!savedClientId);
+        
+        if (savedClientId) {
+            setDriveService(driveService);
+            driveService.restoreConnection().then(connected => {
+                if (connected) {
+                    const savedFolder = localStorage.getItem('drive_folder');
+                    if (savedFolder) {
+                        const folder = JSON.parse(savedFolder);
+                        setDriveFolder(folder);
+                        driveService.setFolder(folder);
+                    }
                 }
+            });
+        }
+        
+    }, []);
+
+    const checkComfyUIConnection = async (url: string) => {
+        setIsComfyUIConnected(null); // Set to loading state
+        const { success } = await checkConnection(url);
+        setIsComfyUIConnected(success);
+        if (success) {
+            try {
+                const info = await getComfyUIObjectInfo();
+                setComfyUIObjectInfo(info);
+            } catch (err) {
+                console.error("Failed to get ComfyUI object info:", err);
+                setGlobalError({ title: "ComfyUI Error", message: "Connected to ComfyUI, but failed to retrieve model information. Check the server console for errors." });
             }
         }
     };
-    initializeUserSession();
-  }, [currentUser, updateAndTestConnection]);
-  
-  useEffect(() => {
-    if (isComfyUIConnected) {
-      getComfyUIObjectInfo()
-        .then(info => {
-          setComfyUIObjectInfo(info);
-          const fluxNode = Object.keys(info).find(key => key.toLowerCase().includes('fluxguidancesampler'));
-          if (fluxNode) {
-            setOptions(prev => ({...prev, comfyFluxNodeName: fluxNode}));
-          }
-        })
-        .catch(err => {
-          console.error("Failed to get ComfyUI object info:", err);
-          setComfyUIObjectInfo({});
+    
+    const handleLogin = async (username: string, password: string): Promise<string | true> => {
+        const user = await authenticateUser(username, password);
+        if (user) {
+            setCurrentUser(user);
+            sessionStorage.setItem('currentUser', JSON.stringify(user));
+            return true;
+        }
+        return "Invalid username or password.";
+    };
+
+    const handleLogout = () => {
+        setCurrentUser(null);
+        sessionStorage.removeItem('currentUser');
+    };
+
+    const handleThemeChange = (newTheme: string) => {
+        setTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+        document.documentElement.setAttribute('data-theme', newTheme);
+    };
+
+    const updateProgress = (message: string, value: number) => {
+        setProgressMessage(message);
+        setProgressValue(value);
+    };
+    
+    const onAddSoupToHistory = (soup: string) => {
+        setPromptGenState(prev => ({
+            ...prev,
+            soupPrompt: soup,
+            soupHistory: [soup, ...prev.soupHistory].slice(0, 5)
+        }));
+    };
+    
+    const handleReset = () => {
+        setSourceImage(null);
+        setClothingImage(null);
+        setBackgroundImage(null);
+        setPreviewedBackgroundImage(null);
+        setPreviewedClothingImage(null);
+        setGeneratedImages([]);
+        setLastUsedPrompt(null);
+        setOptions(prev => ({
+            ...prev,
+            geminiPrompt: '',
+            comfyPrompt: '',
+            customBackground: '',
+            customClothingPrompt: '',
+        }));
+        setPromptGenState({
+            image: null, prompt: '', bgImage: null, bgPrompt: '',
+            subjectImage: null, subjectPrompt: '', soupPrompt: '',
+            soupHistory: [],
         });
-    } else {
-        setComfyUIObjectInfo(null);
-    }
-  }, [isComfyUIConnected]);
+    };
+    
+    const handleVideoReset = () => {
+        setVideoStartFrame(null);
+        setVideoEndFrame(null);
+        setGeneratedVideo(null);
+        setGenerationOptionsForSave(null);
+    };
 
-  const handleDriveConnect = () => {
-    setError(null);
-    setIsOAuthHelperOpen(true);
-  };
-  
-  const proceedWithGoogleLogin = async () => {
-    setIsOAuthHelperOpen(false);
-    setIsSyncing(true);
-    setSyncMessage('Connecting to Google Drive...');
-    setError(null);
-    try {
-        const folder = await googleDriveService.connectAndPickFolder();
-        if (folder) {
-            setDriveFolder(folder);
-            localStorage.setItem('driveFolder', JSON.stringify(folder));
-            libraryService.setDriveService(googleDriveService);
+    const handleGenerate = async () => {
+        setIsLoading(true);
+        setGeneratedImages([]);
+        setLastUsedPrompt(null);
+        setGlobalError(null);
+        
+        try {
+            let result: { images: string[]; finalPrompt: string | null } = { images: [], finalPrompt: null };
             
-            setSyncMessage('Initializing library on Google Drive...');
-            await libraryService.initializeDriveSync(setSyncMessage);
-            alert("Google Drive library initialized and synced successfully!");
+            if (options.provider === 'gemini') {
+                if (options.geminiMode === 't2i') {
+                    result = await generatePortraits(
+                        null, options, updateProgress, null, null,
+                        previewedBackgroundImage, previewedClothingImage
+                    );
+                } else {
+                    if (!sourceImage) throw new Error("Source image is required for Image-to-Image mode.");
+                    result = await generatePortraits(
+                        sourceImage, options, updateProgress, clothingImage, backgroundImage,
+                        previewedBackgroundImage, previewedClothingImage
+                    );
+                }
+            } else if (options.provider === 'comfyui') {
+                result = await generateComfyUIPortraits(sourceImage, options, updateProgress);
+            }
+            
+            setGeneratedImages(result.images);
+            setLastUsedPrompt(result.finalPrompt);
+            
+            if(result.images.length > 0) {
+                saveGenerationToHistory({
+                    timestamp: Date.now(),
+                    sourceImage: sourceImage ? await fileToResizedDataUrl(sourceImage, 256) : undefined,
+                    generatedImages: result.images,
+                    options: options,
+                });
+            }
 
+        } catch (err: any) {
+            console.error("Generation failed:", err);
+            setGlobalError({ title: "Generation Error", message: err.message || 'An unknown error occurred during generation.' });
+        } finally {
+            setIsLoading(false);
+            setProgressValue(0);
+            setProgressMessage('');
+        }
+    };
+    
+    const handleGenerateVideo = async () => {
+        setIsLoading(true);
+        setGeneratedVideo(null);
+        setLastUsedPrompt(null);
+        setGlobalError(null);
+        setGenerationOptionsForSave(options);
+
+        try {
+            if (options.videoProvider === 'comfyui') {
+                if (!videoStartFrame) throw new Error("A start frame is required for video generation.");
+                const { videoUrl, finalPrompt } = await generateComfyUIVideo(
+                    videoStartFrame, videoEndFrame, options, updateProgress
+                );
+                setGeneratedVideo(videoUrl);
+                setLastUsedPrompt(finalPrompt);
+            } else {
+                // Placeholder for Gemini video generation
+                throw new Error("Gemini video generation is not yet implemented in this handler.");
+            }
+        } catch (err: any) {
+            console.error("Video generation failed:", err);
+            setGlobalError({ title: "Video Generation Error", message: err.message || 'An unknown error occurred during video generation.' });
+        } finally {
+            setIsLoading(false);
+            setProgressValue(0);
+            setProgressMessage('');
+        }
+    };
+
+    const handleSaveSettings = (comfyUIUrl: string, googleClientId: string) => {
+        localStorage.setItem('comfyui_url', comfyUIUrl);
+        localStorage.setItem('google_client_id', googleClientId);
+        checkComfyUIConnection(comfyUIUrl);
+        setIsDriveConfigured(!!googleClientId);
+        if (googleClientId) {
+            setDriveService(driveService); // Re-initialize with new client ID
         } else {
+            setDriveService(null);
+            handleDriveDisconnect(); // Disconnect if ID is removed
+        }
+    };
+
+    const handleSetNewSource = async (imageDataUrl: string) => {
+        try {
+            const response = await fetch(imageDataUrl);
+            const blob = await response.blob();
+            const file = new File([blob], "new_source_image.jpeg", { type: "image/jpeg" });
+            setSourceImage(file);
+            setActiveTab('image-generator');
+        } catch (error) {
+            console.error("Error setting new source image:", error);
+            setGlobalError({ title: "File Error", message: "Could not use the selected image as a new source." });
+        }
+    };
+    
+    const handleLoadHistoryItem = async (item: HistoryItem) => {
+        setOptions(item.options);
+        setGeneratedImages(item.generatedImages);
+        // This is a simplification; a more robust solution would re-fetch the File object if needed
+        if (item.sourceImage) {
+           try {
+                const response = await fetch(item.sourceImage);
+                const blob = await response.blob();
+                const file = new File([blob], "history-source.jpeg", { type: "image/jpeg" });
+                setSourceImage(file);
+           } catch (e) {
+                console.error("Could not load history source image:", e);
+                setSourceImage(null);
+           }
+        } else {
+            setSourceImage(null);
+        }
+        setIsHistoryPanelOpen(false);
+        setActiveTab('image-generator');
+    };
+    
+    const handleLoadLibraryItem = async (item: LibraryItem) => {
+        if (item.options) {
+            setOptions(item.options);
+        }
+        
+        let sourceToSet: File | null = null;
+        if (item.mediaType === 'image' || item.mediaType === 'video') {
+            if (item.sourceImage || item.startFrame) {
+                try {
+                    const sourceDataUrl = item.sourceImage || item.startFrame;
+                    const response = await fetch(sourceDataUrl!);
+                    const blob = await response.blob();
+                    sourceToSet = new File([blob], "library-source.jpeg", { type: "image/jpeg" });
+                } catch(e) { console.error("Could not load library source image:", e); }
+            }
+        }
+
+        switch (item.mediaType) {
+            case 'image':
+                setSourceImage(sourceToSet);
+                setGeneratedImages([item.media]);
+                setActiveTab('image-generator');
+                break;
+            case 'video':
+                setVideoStartFrame(sourceToSet);
+                if (item.endFrame) {
+                    try {
+                         const response = await fetch(item.endFrame);
+                         const blob = await response.blob();
+                         setVideoEndFrame(new File([blob], "library-end-frame.jpeg", { type: "image/jpeg" }));
+                    } catch(e) { console.error("Could not load library end frame image:", e); }
+                } else {
+                    setVideoEndFrame(null);
+                }
+                setGeneratedVideo(item.media);
+                setActiveTab('video-generator');
+                break;
+            case 'clothes':
+            case 'prompt':
+            default:
+                break;
+        }
+    };
+    
+    const handleUsePrompt = (prompt: string) => {
+        setOptions(prev => ({ ...prev, comfyPrompt: prompt, provider: 'comfyui' }));
+        setActiveTab('image-generator');
+    };
+    
+    const handleDriveConnect = async () => {
+        try {
+            const folder = await driveService.connectAndPickFolder();
+            if (folder) {
+                setDriveFolder(folder);
+                localStorage.setItem('drive_folder', JSON.stringify(folder));
+                await handleSyncWithDrive();
+            }
+        } catch (error: any) {
+            if (error.message?.includes("popup_closed_by_user")) {
+              return; // User cancelled, do nothing.
+            }
+            if (error.message?.includes("invalid client") || error.message?.includes("Check your OAuth Client ID")) {
+                setIsOAuthHelperOpen(true);
+            } else if (error.message?.includes("Check API Key")) {
+                setIsOAuthHelperOpen(true);
+            }
+            else {
+                setGlobalError({ title: "Google Drive Connection Error", message: error.message || "An unknown error occurred." });
+            }
+        }
+    };
+    
+    const handleSyncWithDrive = async () => {
+        if (!driveFolder) {
+            setGlobalError({ title: "Sync Error", message: "You must connect to a Drive folder first." });
+            return;
+        }
+        setIsSyncing(true);
+        try {
+            await initializeDriveSync((msg) => setSyncMessage(msg));
+        } catch (error: any) {
+            setGlobalError({ title: "Google Drive Sync Error", message: error.message || "An unknown sync error occurred." });
+        } finally {
+            setIsSyncing(false);
             setSyncMessage('');
         }
-    } catch (e: any) {
-        console.error("Drive Connection/Initialization Error:", e);
-        if (e.message && !e.message.includes('User cancelled')) {
-            setError(`Failed to connect or initialize Google Drive library. Error: ${e.message}`);
+    };
+
+    const handleDriveDisconnect = () => {
+        driveService.disconnect();
+        setDriveFolder(null);
+        localStorage.removeItem('drive_folder');
+    };
+
+    const handleExport = async () => {
+        if (!options) return;
+        try {
+            await exportComfyUIWorkflow(options, sourceImage);
+        } catch (error: any) {
+            setGlobalError({ title: "Workflow Export Error", message: error.message || 'Failed to export workflow.' });
         }
-    } finally {
-        setIsSyncing(false);
-        setSyncMessage('');
+    };
+
+    if (!currentUser) {
+        return <Login onLogin={handleLogin} />;
     }
-  };
 
-  const handleDriveDisconnect = () => {
-    googleDriveService.disconnect();
-    setDriveFolder(null);
-    localStorage.removeItem('driveFolder');
-    libraryService.setDriveService(null);
-  };
-  
-  const handleSyncWithDrive = async () => {
-    setIsSyncing(true);
-    setError(null);
-    try {
-        await libraryService.syncLibraryFromDrive((msg) => setSyncMessage(msg));
-        await libraryService.syncLibraryToDrive((msg) => setSyncMessage(msg));
-        alert("Two-way sync complete!");
-    } catch (e: any) {
-        console.error("Sync Error:", e);
-        setError("Failed to sync with Google Drive: " + e.message);
-    } finally {
-        setIsSyncing(false);
-        setSyncMessage('');
-    }
-  };
+    const TABS = [
+        { id: 'image-generator', label: 'Image Generator', icon: <ImageGeneratorIcon className="w-5 h-5"/> },
+        { id: 'video-generator', label: 'Video Generator', icon: <VideoIcon className="w-5 h-5"/> },
+        { id: 'library', label: 'Library', icon: <LibraryIcon className="w-5 h-5"/> },
+        { id: 'prompt-generator', label: 'Prompt Tools', icon: <PromptIcon className="w-5 h-5"/>, adminOnly: true },
+        { id: 'extractor-tools', label: 'Extractor Tools', icon: <ExtractorIcon className="w-5 h-5"/> },
+        { id: 'video-utils', label: 'Video Utilities', icon: <VideoUtilsIcon className="w-5 h-5"/> },
+        { id: 'admin-panel', label: 'Admin Panel', icon: <AdminIcon className="w-5 h-5"/>, adminOnly: true },
+    ];
 
-  const handleLogin = async (username: string, password: string): Promise<true | string> => {
-    const user = await authenticateUser(username, password);
-    if (user) {
-      setCurrentUser(user);
-      sessionStorage.setItem('currentUser', JSON.stringify(user));
-      return true;
-    }
-    return "Invalid username or password.";
-  };
+    return (
+        <div className="min-h-screen bg-bg-primary text-text-primary font-sans">
+            <Header 
+                theme={theme} 
+                setTheme={handleThemeChange} 
+                onLogout={handleLogout} 
+                currentUser={currentUser}
+                onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+                onOpenHistoryPanel={() => setIsHistoryPanelOpen(true)}
+                isComfyUIConnected={isComfyUIConnected}
+                versionInfo={versionInfo}
+                driveFolder={driveFolder}
+                onDriveConnect={handleDriveConnect}
+                onDriveDisconnect={handleDriveDisconnect}
+                isDriveConfigured={isDriveConfigured}
+            />
+            <main className="container mx-auto p-4 md:p-8">
+                <div className="flex flex-wrap items-center justify-center border-b-2 border-border-primary mb-8">
+                    {TABS.map(tab => {
+                        if (tab.adminOnly && currentUser.role !== 'admin') {
+                            return null;
+                        }
+                        return (
+                             <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-2 px-4 py-3 text-sm font-bold transition-colors duration-200 border-b-4 ${
+                                    activeTab === tab.id
+                                    ? 'border-accent text-accent'
+                                    : 'border-transparent text-text-secondary hover:border-accent/50 hover:text-text-primary'
+                                }`}
+                            >
+                                {tab.icon}
+                                <span>{tab.label}</span>
+                            </button>
+                        )
+                    })}
+                </div>
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    sessionStorage.removeItem('currentUser');
-  };
-  
-  const handleSaveSettings = (newComfyUrl: string, newClientId: string) => {
-    updateAndTestConnection(newComfyUrl);
-    localStorage.setItem('google_client_id', newClientId);
-    setGoogleClientId(newClientId);
-    setIsDriveConfigured(!!newClientId);
-  };
-
-  const handleReset = useCallback(() => {
-    const provider = options.provider;
-    const videoProvider = options.videoProvider;
-    setOptions({
-        ...initialOptions,
-        provider: provider,
-        videoProvider: videoProvider
-    });
-    setSourceImage(null);
-    setClothingImage(null);
-    setBackgroundImage(null);
-    setPreviewedBackgroundImage(null);
-    setPreviewedClothingImage(null);
-    setGeneratedImages([]);
-    setStartFrame(null);
-    setEndFrame(null);
-    setGeneratedVideo(null);
-    setError(null);
-    setLastUsedPrompt(null);
-    setLastGenerationOptions(null);
-  }, [options.provider, options.videoProvider]);
-
-  const handleGeneratePrompt = useCallback(async () => {
-    if (!sourceImage) return;
-    setIsGeneratingPrompt(true);
-    setError(null);
-    try {
-        const modelType = options.comfyModelType || 'sdxl';
-        const prompt = await generateComfyUIPromptService(sourceImage, modelType);
-        setOptions(prev => ({ ...prev, comfyPrompt: prompt }));
-    } catch (err: any) {
-        setError(err.message || "Failed to generate prompt.");
-    } finally {
-        setIsGeneratingPrompt(false);
-    }
-  }, [sourceImage, options.comfyModelType]);
-
-  const handleSetNewSource = async (imageDataUrl: string) => {
-      try {
-        const file = await dataUrlToFile(imageDataUrl, "new_source.jpeg");
-        setSourceImage(file);
-        setGeneratedImages([]);
-        setError(null);
-        setLastUsedPrompt(null);
-        setLastGenerationOptions(null);
-      } catch (err) {
-          console.error("Failed to set new source image:", err);
-          setError("Could not use this image as the new source.");
-      }
-  };
-
-  const updateProgress = useCallback((message: string, value: number) => {
-    setProgressMessage(message);
-    setProgressValue(value);
-  }, []);
-
-  const handleGenerate = async () => {
-    setIsLoading(true);
-    setGeneratedImages([]);
-    setGeneratedVideo(null);
-    setError(null);
-    setLastUsedPrompt(null);
-    setLastGenerationOptions(null);
-    const generationOptions = { ...options };
-
-    try {
-      if (activeTab === 'image') {
-          let generationPromise;
-          if (generationOptions.provider === 'gemini') {
-            if (generationOptions.geminiMode === 't2i') {
-                if (!generationOptions.geminiPrompt) {
-                  throw new Error("Please enter a prompt for Gemini text-to-image generation.");
-                }
-                generationPromise = generateImagesFromPrompt(generationOptions, updateProgress);
-            } else { // i2i mode
-                if (!sourceImage) {
-                  throw new Error("Please upload a source image for Gemini image-to-image generation.");
-                }
-                generationPromise = generatePortraitSeries(
-                  sourceImage,
-                  clothingImage,
-                  backgroundImage,
-                  previewedBackgroundImage,
-                  previewedClothingImage,
-                  generationOptions,
-                  updateProgress
-                );
-            }
-          } else if (generationOptions.provider === 'comfyui') {
-            if (generationOptions.comfyModelType === 'nunchaku-kontext-flux' && !sourceImage) {
-              throw new Error("Nunchaku Kontext Flux requires a source image.");
-            }
-            if (!generationOptions.comfyPrompt) {
-              throw new Error("Please enter a prompt for ComfyUI or generate one from a source image.");
-            }
-            setProgressMessage('Connecting to ComfyUI...');
-            generationPromise = generateComfyUIPortraits(sourceImage, generationOptions, updateProgress);
-          } else {
-            throw new Error("Invalid provider selected.");
-          }
-
-          const { images, finalPrompt } = await generationPromise;
-          
-          if (images.length > 0) {
-            const generatedThumbnails = await Promise.all(
-              images.map(imgDataUrl => dataUrlToThumbnail(imgDataUrl, 128))
-            );
-            
-            const historyItem: Omit<HistoryItem, 'id'> = {
-              timestamp: new Date().toISOString(),
-              options: generationOptions,
-              generatedImages: generatedThumbnails,
-              sourceImage: undefined,
-            };
-
-            const needsSourceImage = (generationOptions.provider === 'gemini' && generationOptions.geminiMode === 'i2i') || (generationOptions.provider === 'comfyui');
-
-            if (needsSourceImage && sourceImage) {
-              const sourceImageForHistory = await fileToResizedDataUrl(sourceImage, 512);
-              historyItem.sourceImage = await dataUrlToThumbnail(sourceImageForHistory, 128);
-            }
-            
-            saveGenerationToHistory(historyItem);
-          }
-          setGeneratedImages(images);
-          setLastUsedPrompt(finalPrompt);
-          setLastGenerationOptions(generationOptions);
-
-      } else if (activeTab === 'video') {
-        if (generationOptions.videoProvider === 'gemini') {
-            if (!startFrame && !generationOptions.geminiVidPrompt?.trim()) {
-                throw new Error("Please upload an input image or provide a prompt for Gemini video generation.");
-            }
-            setProgressMessage('Connecting to Gemini for video generation...');
-            const { videoUrl, finalPrompt } = await generateGeminiVideo(startFrame, generationOptions, updateProgress);
-            setGeneratedVideo(videoUrl);
-            setLastUsedPrompt(finalPrompt);
-        } else { // ComfyUI
-            if (!startFrame) {
-              throw new Error("Please upload a start frame for ComfyUI video generation.");
-            }
-            setProgressMessage('Connecting to ComfyUI for video generation...');
-            const { videoUrl, finalPrompt } = await generateComfyUIVideo(startFrame, endFrame, generationOptions, updateProgress);
-            setGeneratedVideo(videoUrl);
-            setLastUsedPrompt(finalPrompt);
-        }
-        setLastGenerationOptions(generationOptions);
-      } else {
-        throw new Error("Invalid active tab for generation.");
-      }
-    } catch (err: any) {
-      console.error("Generation failed:", err);
-      setError(err.message || "An unknown error occurred during generation.");
-    } finally {
-      setIsLoading(false);
-      setProgressValue(0);
-      setProgressMessage('');
-    }
-  };
-  
-  const handleLoadHistoryItem = async (item: HistoryItem) => {
-    setOptions(item.options);
-    setGeneratedImages(item.generatedImages);
-    setLastGenerationOptions(item.options);
-    
-    if (item.sourceImage) {
-      try {
-        const file = await dataUrlToFile(item.sourceImage, "history_source.jpeg");
-        setSourceImage(file);
-      } catch(e) {
-        console.error("Could not load source image from history", e);
-        setSourceImage(null);
-      }
-    } else {
-      setSourceImage(null);
-    }
-    
-    setIsHistoryPanelOpen(false); // Close panel on load
-  };
-  
-  const handleLoadFromLibrary = async (item: LibraryItem) => {
-    setGeneratedImages([]);
-    setGeneratedVideo(null);
-    setError(null);
-    setLastUsedPrompt(null);
-    setLastGenerationOptions(null);
-
-    switch (item.mediaType) {
-        case 'image':
-        case 'video':
-        case 'extracted-frame':
-            if (item.options) {
-                setOptions(item.options);
-                setLastGenerationOptions(item.options);
-            }
-            setSourceImage(item.sourceImage ? await dataUrlToFile(item.sourceImage, 'library_source.jpg') : null);
-            setStartFrame(item.startFrame ? await dataUrlToFile(item.startFrame, 'library_start.jpg') : null);
-            setEndFrame(item.endFrame ? await dataUrlToFile(item.endFrame, 'library_end.jpg') : null);
-
-            if (item.mediaType === 'image' || item.mediaType === 'extracted-frame') {
-                setGeneratedImages([item.media]);
-                setActiveTab('image');
-            } else { // video
-                setGeneratedVideo(item.media);
-                setActiveTab('video');
-            }
-            break;
-        
-        case 'clothes':
-            setActiveTab('clothes');
-            setClothesExtractorFile(item.sourceImage ? await dataUrlToFile(item.sourceImage, 'library_source.jpg') : null);
-            setClothesExtractorDetails(item.clothingDetails || '');
-            try {
-                const isJson = item.media.trim().startsWith('{');
-                if (isJson) {
-                    const parsedMedia = JSON.parse(item.media);
-                    setClothesExtractorResults([{ name: item.name || 'Loaded Item', ...parsedMedia }]);
-                } else {
-                    const dummyItem = { name: item.name || 'Loaded Item', laidOutImage: item.media, foldedImage: item.media };
-                     setClothesExtractorResults([dummyItem]);
-                }
-            } catch (e) {
-                console.error("Failed to parse media from clothes library item", e);
-                setClothesExtractorResults([]);
-            }
-            break;
-        
-        case 'prompt':
-            setOptions(prev => ({ ...prev, provider: 'comfyui', comfyPrompt: item.media }));
-            setActiveTab('image');
-            break;
-    }
-  };
-
-
-  const handleExportWorkflow = () => {
-    try {
-        exportComfyUIWorkflow(options, sourceImage);
-    } catch (err: any) {
-        setError(err.message || "Failed to export workflow.");
-    }
-  };
-
-  const isGenerationReady = () => {
-    if (isLoading) return false;
-    
-    if (activeTab === 'image') {
-        return (options.provider === 'gemini' && ((options.geminiMode === 'i2i' && sourceImage !== null) || (options.geminiMode === 't2i' && !!options.geminiPrompt))) || 
-               (options.provider === 'comfyui' && !!options.comfyPrompt && (options.comfyModelType !== 'nunchaku-kontext-flux' || sourceImage !== null));
-    }
-    
-    if (activeTab === 'video') {
-        if (options.videoProvider === 'gemini') {
-            return !!options.geminiVidPrompt?.trim() || !!startFrame;
-        } else { // comfyui
-            return !!startFrame && !!options.comfyVidWanI2VPositivePrompt;
-        }
-    }
-    
-    return false;
-  };
-
-  if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
-  }
-
-  const getUploaderSectionTitle = () => {
-      if (options.provider === 'gemini') {
-        return options.geminiMode === 't2i' ? "1. Configure Prompt" : "1. Upload Images";
-      }
-      if (options.comfyModelType === 'nunchaku-kontext-flux' || options.comfyModelType === 'flux-krea') return "1. Setup Prompt";
-      return "1. Upload Image & Set Prompt";
-  };
-
-  const getSourceImageLabel = () => {
-    if (options.provider === 'comfyui') {
-        if (options.comfyModelType === 'nunchaku-kontext-flux') return "1. Upload Source Image";
-        return "Source Image (to generate prompt)";
-    }
-    return "1. Upload Source Image"; // Gemini
-  };
-
-  const showSourceImageUploader = () => {
-      if (options.provider === 'gemini') {
-          return options.geminiMode === 'i2i';
-      }
-      if (options.provider === 'comfyui') {
-          return true;
-      }
-      return false;
-  }
-
-
-  return (
-    <>
-      <Header 
-        theme={theme} 
-        setTheme={setTheme} 
-        onLogout={handleLogout} 
-        currentUser={currentUser}
-        onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
-        onOpenHistoryPanel={() => setIsHistoryPanelOpen(true)}
-        isComfyUIConnected={isComfyUIConnected}
-        versionInfo={versionInfo}
-        driveFolder={driveFolder}
-        onDriveConnect={handleDriveConnect}
-        onDriveDisconnect={handleDriveDisconnect}
-        isDriveConfigured={isDriveConfigured}
-      />
-      <main className="container mx-auto p-4 md:p-8">
-        <div className="bg-bg-secondary p-4 rounded-2xl shadow-lg mb-8">
-            <div className="flex items-center justify-center border-b border-border-primary">
-                <button onClick={() => setActiveTab('image')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'image' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                    Image Generator
-                </button>
-                <button onClick={() => setActiveTab('video')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'video' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                    Video Generator
-                </button>
-                <button onClick={() => setActiveTab('library')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'library' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                    Library
-                </button>
-                <button onClick={() => setActiveTab('clothes')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'clothes' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                    Clothes Extractor
-                </button>
-                <button onClick={() => setActiveTab('video-utils')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'video-utils' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                    Video Utilities
-                </button>
-                {currentUser.role === 'admin' && (
-                    <>
-                        <button onClick={() => setActiveTab('prompt')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'prompt' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                            Prompt Tool
-                        </button>
-                        <button onClick={() => setActiveTab('manage')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'manage' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                            Manage Users
-                        </button>
-                    </>
-                )}
-            </div>
-        </div>
-
-        { activeTab === 'image' &&
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-            <div className="lg:col-span-1 space-y-8">
-              {!(options.provider === 'gemini' && options.geminiMode === 't2i') &&
-                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                  <h2 className="text-xl font-bold mb-4 text-accent">{getUploaderSectionTitle()}</h2>
-                  <div className="space-y-4">
-                    {showSourceImageUploader() && (
-                       <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="block text-sm font-medium text-text-secondary">{getSourceImageLabel()}</span>
-                                <button onClick={() => handleOpenLibraryPicker('sourceImage', 'image')} className="flex items-center gap-1.5 text-xs bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-1 px-2 rounded-lg transition-colors">
-                                    <LibraryIcon className="w-4 h-4" /> From Library
-                                </button>
+                <div className={activeTab === 'image-generator' ? 'block' : 'hidden'}>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                        {/* --- Controls Column (Left) --- */}
+                        <div className="lg:col-span-1 space-y-8 sticky top-24">
+                            <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                                <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Source Image</h2>
+                                <ImageUploader 
+                                    label="Source Face / Pose" 
+                                    id="source-image" 
+                                    onImageUpload={setSourceImage} 
+                                    sourceFile={sourceImage}
+                                />
                             </div>
-                            <ImageUploader 
-                                id="source-image" 
-                                onImageUpload={setSourceImage} 
-                                sourceFile={sourceImage}
+                            
+                            {/* --- Conditional Reference Image Uploaders --- */}
+                            {(options.provider === 'gemini' && options.geminiMode === 'i2i' && (options.clothing === 'image' || options.background === 'image')) && (
+                                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                                    <h2 className="text-xl font-bold mb-4 text-accent">Optional Reference Images</h2>
+                                    <div className="space-y-4">
+                                        {options.clothing === 'image' && (
+                                            <div className="flex items-center gap-2">
+                                                <ImageUploader label="Clothing" id="clothing-image" onImageUpload={setClothingImage} sourceFile={clothingImage} />
+                                                <button onClick={() => setIsClothingPickerOpen(true)} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
+                                                    <LibraryIcon className="w-6 h-6"/>
+                                                </button>
+                                            </div>
+                                        )}
+                                        {options.background === 'image' && (
+                                            <div className="flex items-center gap-2">
+                                                <ImageUploader label="Background" id="background-image" onImageUpload={setBackgroundImage} sourceFile={backgroundImage}/>
+                                                <button onClick={() => setIsBackgroundPickerOpen(true)} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
+                                                    <LibraryIcon className="w-6 h-6"/>
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            <OptionsPanel 
+                                options={options} 
+                                setOptions={setOptions}
+                                onGenerate={handleGenerate}
+                                onReset={handleReset}
+                                onGeneratePrompt={() => {}}
+                                onExportWorkflow={handleExport}
+                                isDisabled={isLoading}
+                                isReady={isReadyToGenerate}
+                                isGeneratingPrompt={false}
+                                previewedBackgroundImage={previewedBackgroundImage}
+                                setPreviewedBackgroundImage={setPreviewedBackgroundImage}
+                                previewedClothingImage={previewedClothingImage}
+                                setPreviewedClothingImage={setPreviewedClothingImage}
+                                comfyUIObjectInfo={comfyUIObjectInfo}
+                                comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
+                                sourceImage={sourceImage}
                             />
                         </div>
-                    )}
-                    {options.provider === 'gemini' && options.geminiMode === 'i2i' && options.clothing === 'image' && (
-                       <div>
-                           <div className="flex items-center justify-between mb-2">
-                                <span className="block text-sm font-medium text-text-secondary">Clothing Reference Image (Optional)</span>
-                                <button onClick={() => handleOpenLibraryPicker('clothingImage', 'clothes')} className="flex items-center gap-1.5 text-xs bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-1 px-2 rounded-lg transition-colors">
-                                    <LibraryIcon className="w-4 h-4" /> From Library
-                                </button>
-                            </div>
-                            <ImageUploader id="clothing-image" onImageUpload={setClothingImage} sourceFile={clothingImage} />
+
+                        {/* --- Results Column (Right) --- */}
+                        <div className="lg:col-span-2">
+                           <ImageGrid 
+                                images={generatedImages} 
+                                onSetNewSource={handleSetNewSource}
+                                lastUsedPrompt={lastUsedPrompt}
+                                options={options}
+                                sourceImage={sourceImage}
+                            />
+                             {generatedImages.length === 0 && !isLoading && (
+                                <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
+                                    <ImageGeneratorIcon className="w-16 h-16 text-border-primary mb-4" />
+                                    <h3 className="text-lg font-bold text-text-primary">Your generated images will appear here</h3>
+                                    <p className="text-text-secondary max-w-xs">Configure your options and click "Generate".</p>
+                                </div>
+                            )}
                         </div>
-                    )}
-                    {options.provider === 'gemini' && options.geminiMode === 'i2i' && options.background === 'image' && (
-                      <ImageUploader label="Background Image (Optional)" id="background-image" onImageUpload={setBackgroundImage} sourceFile={backgroundImage} />
-                    )}
-                  </div>
+                    </div>
                 </div>
-              }
-              <OptionsPanel 
-                options={options} 
-                setOptions={setOptions}
-                previewedBackgroundImage={previewedBackgroundImage}
-                setPreviewedBackgroundImage={setPreviewedBackgroundImage}
-                previewedClothingImage={previewedClothingImage}
-                setPreviewedClothingImage={setPreviewedClothingImage}
-                onGenerate={handleGenerate}
-                onReset={handleReset}
-                onGeneratePrompt={handleGeneratePrompt}
-                onExportWorkflow={handleExportWorkflow}
-                isDisabled={isLoading}
-                isReady={isGenerationReady()}
-                isGeneratingPrompt={isGeneratingPrompt}
-                comfyUIObjectInfo={comfyUIObjectInfo}
-                comfyUIUrl={comfyUIUrl}
-                sourceImage={sourceImage}
-              />
-            </div>
+                
+                <div className={activeTab === 'video-generator' ? 'block' : 'hidden'}>
+                     <VideoGeneratorPanel
+                        options={options}
+                        setOptions={setOptions}
+                        comfyUIObjectInfo={comfyUIObjectInfo}
+                        startFrame={videoStartFrame}
+                        setStartFrame={setVideoStartFrame}
+                        endFrame={videoEndFrame}
+                        setEndFrame={setVideoEndFrame}
+                        onGenerate={handleGenerateVideo}
+                        isReady={!!videoStartFrame && !isLoading}
+                        isLoading={isLoading}
+                        error={globalError ? globalError.message : null}
+                        generatedVideo={generatedVideo}
+                        lastUsedPrompt={lastUsedPrompt}
+                        progressMessage={progressMessage}
+                        progressValue={progressValue}
+                        onReset={handleVideoReset}
+                        generationOptionsForSave={generationOptionsForSave}
+                    />
+                </div>
 
-            <div className="lg:col-span-2 sticky top-24">
-              {isLoading ? (
-                  <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg min-h-[500px]">
-                      <Loader message={progressMessage} progress={progressValue} />
-                  </div>
-              ) : error ? (
-                <div className="bg-danger-bg text-danger p-4 rounded-lg text-center">
-                  <h3 className="font-bold mb-2">Generation Failed</h3>
-                  <p className="text-sm">{error}</p>
+                <div className={activeTab === 'library' ? 'block' : 'hidden'}>
+                    <LibraryPanel 
+                        onLoadItem={handleLoadLibraryItem} 
+                        isDriveConnected={!!driveFolder}
+                        onSyncWithDrive={handleSyncWithDrive}
+                        isSyncing={isSyncing}
+                        syncMessage={syncMessage}
+                        isDriveConfigured={isDriveConfigured}
+                    />
                 </div>
-              ) : generatedImages.length > 0 && lastGenerationOptions ? (
-                <ImageGrid 
-                    images={generatedImages} 
-                    onSetNewSource={handleSetNewSource} 
-                    lastUsedPrompt={lastUsedPrompt}
-                    options={lastGenerationOptions}
-                    sourceImage={sourceImage}
+                
+                {currentUser.role === 'admin' && (
+                    <div className={activeTab === 'prompt-generator' ? 'block' : 'hidden'}>
+                        <PromptGeneratorPanel 
+                            onUsePrompt={handleUsePrompt}
+                            image={promptGenState.image} setImage={file => setPromptGenState(prev => ({...prev, image: file}))}
+                            prompt={promptGenState.prompt} setPrompt={p => setPromptGenState(prev => ({...prev, prompt: p}))}
+                            bgImage={promptGenState.bgImage} setBgImage={file => setPromptGenState(prev => ({...prev, bgImage: file}))}
+                            bgPrompt={promptGenState.bgPrompt} setBgPrompt={p => setPromptGenState(prev => ({...prev, bgPrompt: p}))}
+                            subjectImage={promptGenState.subjectImage} setSubjectImage={file => setPromptGenState(prev => ({...prev, subjectImage: file}))}
+                            subjectPrompt={promptGenState.subjectPrompt} setSubjectPrompt={p => setPromptGenState(prev => ({...prev, subjectPrompt: p}))}
+                            soupPrompt={promptGenState.soupPrompt} setSoupPrompt={p => setPromptGenState(prev => ({...prev, soupPrompt: p}))}
+                            soupHistory={promptGenState.soupHistory} onAddSoupToHistory={onAddSoupToHistory}
+                        />
+                    </div>
+                )}
+                
+                <div className={activeTab === 'extractor-tools' ? 'block' : 'hidden'}>
+                    <ExtractorToolsPanel state={extractorState} setState={setExtractorState} />
+                </div>
+                
+                 <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
+                    <VideoUtilsPanel
+                        setStartFrame={setVideoStartFrame}
+                        // Fix: The prop 'setEndFrame' was incorrectly passed its own undefined value instead of the state setter `setVideoEndFrame`.
+                        setEndFrame={setVideoEndFrame}
+                        videoFile={videoUtilsState.videoFile}
+                        setVideoFile={(file) => setVideoUtilsState(prev => ({...prev, videoFile: file}))}
+                        extractedFrame={videoUtilsState.extractedFrame}
+                        setExtractedFrame={(frame) => setVideoUtilsState(prev => ({...prev, extractedFrame: frame}))}
+                    />
+                </div>
+
+                {currentUser.role === 'admin' && (
+                    <div className={activeTab === 'admin-panel' ? 'block' : 'hidden'}>
+                        <AdminPanel />
+                    </div>
+                )}
+            </main>
+
+            {/* --- Global Loader --- */}
+            {isLoading && (activeTab === 'image-generator' || activeTab === 'video-generator') && (
+                <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                    <Loader message={progressMessage} progress={progressValue} />
+                </div>
+            )}
+
+
+            {/* --- Modals & Panels --- */}
+            {isSettingsModalOpen && (
+                <ConnectionSettingsModal
+                    isOpen={isSettingsModalOpen}
+                    onClose={() => setIsSettingsModalOpen(false)}
+                    initialComfyUIUrl={localStorage.getItem('comfyui_url') || ''}
+                    initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
+                    onSave={handleSaveSettings}
                 />
-              ) : (
-                <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
-                    <GenerateIcon className="w-16 h-16 text-border-primary mb-4" />
-                    <h3 className="text-lg font-bold text-text-primary">Your generated images will appear here</h3>
-                    <p className="text-text-secondary max-w-xs">Configure your options on the left and click "Generate" to see the magic happen.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        }
-        
-        {activeTab === 'video' && 
-          <VideoGeneratorPanel
-            options={options}
-            setOptions={setOptions}
-            comfyUIObjectInfo={comfyUIObjectInfo}
-            startFrame={startFrame}
-            setStartFrame={setStartFrame}
-            endFrame={endFrame}
-            setEndFrame={setEndFrame}
-            onGenerate={handleGenerate}
-            isReady={isGenerationReady()}
-            isLoading={isLoading}
-            error={error}
-            generatedVideo={generatedVideo}
-            lastUsedPrompt={lastUsedPrompt}
-            progressMessage={progressMessage}
-            progressValue={progressValue}
-            onReset={handleReset}
-            generationOptionsForSave={lastGenerationOptions}
-          />
-        }
-
-        {activeTab === 'library' && 
-            <LibraryPanel 
-                onLoadItem={handleLoadFromLibrary} 
-                isDriveConnected={!!driveFolder}
-                isDriveConfigured={isDriveConfigured}
-                onSyncWithDrive={handleSyncWithDrive}
-                isSyncing={isSyncing}
-                syncMessage={syncMessage}
-            />
-        }
-
-        {activeTab === 'clothes' &&
-            <ClothesExtractorPanel 
-                selectedFile={clothesExtractorFile}
-                setSelectedFile={setClothesExtractorFile}
-                details={clothesExtractorDetails}
-                setDetails={setClothesExtractorDetails}
-                generatedItems={clothesExtractorResults}
-                setGeneratedItems={setClothesExtractorResults}
-            />
-        }
-
-        {activeTab === 'video-utils' && <VideoUtilsPanel 
-            setStartFrame={(file: File) => {
-                setStartFrame(file);
-                setActiveTab('video');
-            }}
-            setEndFrame={(file: File) => {
-                setEndFrame(file);
-                setActiveTab('video');
-            }}
-            videoFile={videoUtilsFile}
-            setVideoFile={setVideoUtilsFile}
-            extractedFrame={videoUtilsExtractedFrame}
-            setExtractedFrame={setVideoUtilsExtractedFrame}
-        />}
-
-        {activeTab === 'prompt' && currentUser.role === 'admin' && 
-            <PromptGeneratorPanel
-                onUsePrompt={(p) => { 
-                    setOptions(prev => ({...prev, provider: 'comfyui', comfyPrompt: p})); 
-                    setActiveTab('image'); 
-                }}
-                image={promptToolImage}
-                setImage={setPromptToolImage}
-                prompt={promptToolPrompt}
-                setPrompt={setPromptToolPrompt}
-                bgImage={promptToolBgImage}
-                setBgImage={setPromptToolBgImage}
-                bgPrompt={promptToolBgPrompt}
-                setBgPrompt={setPromptToolBgPrompt}
-                subjectImage={promptToolSubjectImage}
-                setSubjectImage={setPromptToolSubjectImage}
-                subjectPrompt={promptToolSubjectPrompt}
-                setSubjectPrompt={setPromptToolSubjectPrompt}
-                soupPrompt={promptToolSoupPrompt}
-                setSoupPrompt={setPromptToolSoupPrompt}
-                soupHistory={promptToolSoupHistory}
-                onAddSoupToHistory={handleAddSoupToHistory}
-            />
-        }
-        {activeTab === 'manage' && currentUser.role === 'admin' && <AdminPanel />}
-
-      </main>
-      
-      <ConnectionSettingsModal 
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        initialComfyUIUrl={comfyUIUrl}
-        initialGoogleClientId={googleClientId}
-        onSave={handleSaveSettings}
-      />
-      <HistoryPanel
-        isOpen={isHistoryPanelOpen}
-        onClose={() => setIsHistoryPanelOpen(false)}
-        onLoadHistoryItem={handleLoadHistoryItem}
-      />
-      <LibraryPickerModal
-        isOpen={isLibraryPickerOpen}
-        onClose={() => setIsLibraryPickerOpen(false)}
-        onSelectItem={handleSelectFromLibrary}
-        filter={libraryPickerConfig.filter}
-      />
-      <OAuthHelperModal
-        isOpen={isOAuthHelperOpen}
-        onClose={() => setIsOAuthHelperOpen(false)}
-        onProceed={proceedWithGoogleLogin}
-        clientId={googleClientId}
-        origin={typeof window !== 'undefined' ? window.location.origin : ''}
-      />
-    </>
-  );
-}
+            )}
+            {isHistoryPanelOpen && (
+                <HistoryPanel 
+                    isOpen={isHistoryPanelOpen}
+                    onClose={() => setIsHistoryPanelOpen(false)}
+                    onLoadHistoryItem={handleLoadHistoryItem}
+                />
+            )}
+            {isClothingPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isClothingPickerOpen}
+                    onClose={() => setIsClothingPickerOpen(false)}
+                    onSelectItem={async (dataUrl) => {
+                        const res = await fetch(dataUrl);
+                        const blob = await res.blob();
+                        setClothingImage(new File([blob], "library_clothing.jpeg", { type: blob.type }));
+                    }}
+                    filter="clothes"
+                />
+            )}
+            {isBackgroundPickerOpen && (
+                 <LibraryPickerModal
+                    isOpen={isBackgroundPickerOpen}
+                    onClose={() => setIsBackgroundPickerOpen(false)}
+                    onSelectItem={async (dataUrl) => {
+                        const res = await fetch(dataUrl);
+                        const blob = await res.blob();
+                        setBackgroundImage(new File([blob], "library_background.jpeg", { type: blob.type }));
+                    }}
+                    filter="image"
+                />
+            )}
+            {globalError && (
+                <ErrorModal 
+                    title={globalError.title}
+                    message={globalError.message}
+                    onClose={() => setGlobalError(null)}
+                />
+            )}
+            {isOAuthHelperOpen && (
+                <OAuthHelperModal
+                    isOpen={isOAuthHelperOpen}
+                    onClose={() => setIsOAuthHelperOpen(false)}
+                    onProceed={() => {
+                        setIsOAuthHelperOpen(false);
+                        handleDriveConnect();
+                    }}
+                    clientId={localStorage.getItem('google_client_id') || ''}
+                    origin={window.location.origin}
+                />
+            )}
+        </div>
+    );
+};
 
 export default App;

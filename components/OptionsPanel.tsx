@@ -1,3 +1,4 @@
+
 // Fix: Implemented the full OptionsPanel component, which was missing.
 // This resolves the module resolution error and provides the necessary UI
 // for configuring image generation for both Gemini and ComfyUI providers.
@@ -258,11 +259,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             return;
         }
 
+        // Fix: Refactor to use a clearer if/else if structure to avoid TS comparison error.
         const getStylePrefix = (opts: GenerationOptions) => {
             if (opts.imageStyle === 'photorealistic') {
                 return `${opts.photoStyle}, ${opts.eraStyle}, `;
-            }
-            if (opts.imageStyle && opts.imageStyle !== 'photorealistic') {
+            } else if (opts.imageStyle) {
                 return `${opts.imageStyle}, `;
             }
             return '';
@@ -310,6 +311,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyModel: specificFluxModel || genericFluxModel || 'flux1-dev-fp8.safetensors',
                     comfySteps: 20,
                     comfyCfg: 1,
+                    comfySampler: 'euler',
+                    comfyScheduler: 'normal',
                 }));
             } else if (newModelType === 'wan2.2') {
                  setOptions(prev => ({
@@ -360,6 +363,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyModel: sdxlModel || (comfyModels.length > 0 ? comfyModels[0] : ''),
                     comfySteps: 25, // Default for SDXL
                     comfyCfg: 5.5, // Default for SDXL
+                    comfySampler: 'euler',
+                    comfyScheduler: 'normal',
                 }));
             }
         } else {

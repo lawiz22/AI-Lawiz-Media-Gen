@@ -504,11 +504,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
 
                 {/* Right column for results */}
                 <div className="lg:col-span-2 sticky top-24">
-                    {isLoading ? (
-                        <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg min-h-[500px]">
-                            <Loader message={progressMessage} progress={progressValue} />
-                        </div>
-                    ) : error ? (
+                    { !isLoading && error ? (
                         <div className="bg-danger-bg text-danger p-4 rounded-lg text-center">
                             <h3 className="font-bold mb-2">Generation Failed</h3>
                             <p className="text-sm">{error}</p>
@@ -616,7 +612,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                                     'bg-bg-tertiary hover:bg-accent hover:text-accent-text'
                                                 }`}
                                             >
-                                                {frameSavingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : frameSavingStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5"/>}
+                                                {frameSavingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : frameSavingStatus === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
                                                 {frameSavingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
                                             </button>
                                         </div>
