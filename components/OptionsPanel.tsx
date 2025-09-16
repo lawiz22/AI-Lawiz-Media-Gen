@@ -624,13 +624,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             ) : (
                 <NumberSlider label="Creativity" value={options.creativity || 0.7} onChange={handleSliderChange('creativity')} min={0} max={1} step={0.1} disabled={isDisabled} />
             )}
-             <SelectInput
-                label="Aspect Ratio"
-                value={options.aspectRatio}
-                onChange={handleOptionChange('aspectRatio')}
-                options={ASPECT_RATIO_OPTIONS}
-                disabled={isDisabled || (options.geminiMode === 't2i' && options.geminiT2IModel === 'gemini-2.5-flash-image-preview')}
-            />
             <div>
                  <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
                     <input type="checkbox" checked={options.addTextToImage} onChange={handleOptionChange('addTextToImage')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
@@ -936,6 +929,15 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             step={1}
             disabled={isDisabled}
         />
+        {(options.provider === 'gemini' || (options.provider === 'comfyui' && ['sd1.5', 'sdxl', 'flux'].includes(options.comfyModelType || ''))) && (
+            <SelectInput
+                label="Aspect Ratio"
+                value={options.aspectRatio}
+                onChange={handleOptionChange('aspectRatio')}
+                options={ASPECT_RATIO_OPTIONS}
+                disabled={isDisabled || (options.provider === 'gemini' && options.geminiMode === 't2i' && options.geminiT2IModel === 'gemini-2.5-flash-image-preview')}
+            />
+        )}
       </OptionSection>
 
       {options.provider === 'gemini' ? renderGeminiOptions() : renderComfyUIOptions()}
