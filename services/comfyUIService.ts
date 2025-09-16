@@ -1,4 +1,5 @@
 
+
 // Fix: Implemented the full comfyUIService.ts module to resolve all module-not-found errors.
 import { GoogleGenAI } from "@google/genai";
 import { fileToGenerativePart } from "../utils/imageUtils";
@@ -334,43 +335,61 @@ const executeWorkflow = async (
 
 const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null): Promise<any> => {
     let workflow;
-    switch(options.comfyModelType) {
-        case 'sd1.5': workflow = JSON.parse(JSON.stringify(COMFYUI_SD15_WORKFLOW_TEMPLATE)); break;
-        case 'wan2.2': workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_WORKFLOW_TEMPLATE)); break;
-        case 'nunchaku-kontext-flux': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE)); break;
-        case 'nunchaku-flux-image': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE)); break;
-        case 'flux-krea': workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE)); break;
-        case 'sdxl':
-        case 'flux':
-        default: workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE)); break;
-    }
 
     // --- Helper to find node by various criteria ---
-    const findNodeKey = (identifier: string, by: 'title' | 'class_type' | 'key') => {
-        return Object.keys(workflow).find(k => {
-            const node = workflow[k];
+    const findNodeKey = (wf: any, identifier: string, by: 'title' | 'class_type' | 'key') => {
+        return Object.keys(wf).find(k => {
+            const node = wf[k];
             if (by === 'title') return node._meta?.title?.toLowerCase().includes(identifier.toLowerCase());
             if (by === 'class_type') return node.class_type.toLowerCase().startsWith(identifier.toLowerCase());
             if (by === 'key') return k === identifier;
             return false;
         });
     };
+
+    switch(options.comfyModelType) {
+        case 'sd1.5': workflow = JSON.parse(JSON.stringify(COMFYUI_SD15_WORKFLOW_TEMPLATE)); break;
+        case 'wan2.2': workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_WORKFLOW_TEMPLATE)); break;
+        case 'nunchaku-kontext-flux': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE)); break;
+        case 'nunchaku-flux-image': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE)); break;
+        case 'flux-krea': workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE)); break;
+        case 'flux': {
+            workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE));
+            const ksamplerKey = findNodeKey(workflow, "KSampler", 'class_type');
+            const posPromptKey = findNodeKey(workflow, "Positive Prompt", 'title');
+            if (ksamplerKey && posPromptKey) {
+                const fluxGuidanceNode = {
+                    "inputs": {
+                        "guidance": options.comfyFluxGuidance || 3.5,
+                        "conditioning": [ posPromptKey, 0 ]
+                    },
+                    "class_type": "FluxGuidance",
+                    "_meta": { "title": "FluxGuidance" }
+                };
+                workflow["flux_guidance_node"] = fluxGuidanceNode;
+                workflow[ksamplerKey].inputs.positive = [ "flux_guidance_node", 0 ];
+            }
+            break;
+        }
+        case 'sdxl':
+        default: workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE)); break;
+    }
     
     // --- Prompts (Common to most workflows) ---
-    const posPromptKey = findNodeKey("Positive Prompt", 'title');
+    const posPromptKey = findNodeKey(workflow, "Positive Prompt", 'title');
     if (posPromptKey) workflow[posPromptKey].inputs.text = options.comfyPrompt || '';
     
-    const negPromptKey = findNodeKey("Negative Prompt", 'title');
+    const negPromptKey = findNodeKey(workflow, "Negative Prompt", 'title');
     if (negPromptKey) workflow[negPromptKey].inputs.text = options.comfyNegativePrompt || '';
 
 
     // --- Apply Options Based on Workflow Type ---
 
     if (['sd1.5', 'sdxl', 'flux'].includes(options.comfyModelType!)) {
-        const ckptLoaderKey = findNodeKey("CheckpointLoaderSimple", 'class_type');
+        const ckptLoaderKey = findNodeKey(workflow, "CheckpointLoaderSimple", 'class_type');
         if (ckptLoaderKey) workflow[ckptLoaderKey].inputs.ckpt_name = options.comfyModel;
 
-        const ksamplerKey = findNodeKey("KSampler", 'class_type');
+        const ksamplerKey = findNodeKey(workflow, "KSampler", 'class_type');
         if (ksamplerKey) {
             const ksampler = workflow[ksamplerKey];
             ksampler.inputs.steps = options.comfySteps;
@@ -379,7 +398,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             ksampler.inputs.scheduler = options.comfyScheduler;
         }
 
-        const latentKey = findNodeKey("EmptyLatentImage", 'class_type');
+        const latentKey = findNodeKey(workflow, "EmptyLatentImage", 'class_type');
         if (latentKey) {
             const [w, h] = options.aspectRatio.split(':').map(Number);
             const isSD15 = options.comfyModelType === 'sd1.5';
@@ -398,11 +417,6 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             workflow[latentKey].inputs.height = height;
         }
 
-        if (options.comfyModelType === 'flux' && options.comfyFluxNodeName) {
-            const fluxGuidanceKey = findNodeKey(options.comfyFluxNodeName, 'class_type');
-            if(fluxGuidanceKey) workflow[fluxGuidanceKey].inputs.guidance = options.comfyFluxGuidance;
-        }
-
         if (options.comfyModelType === 'sdxl' && options.comfySdxlUseLora && options.comfySdxlLoraName && ckptLoaderKey) {
             const loraLoaderNode = {
                 "inputs": {
@@ -417,6 +431,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             const loraKey = "lora_loader";
             workflow[loraKey] = loraLoaderNode;
 
+            const ksamplerKey = findNodeKey(workflow, "KSampler", 'class_type');
             if (ksamplerKey) workflow[ksamplerKey].inputs.model = [loraKey, 0];
             if (posPromptKey) workflow[posPromptKey].inputs.clip = [loraKey, 1];
             if (negPromptKey) workflow[negPromptKey].inputs.clip = [loraKey, 1];

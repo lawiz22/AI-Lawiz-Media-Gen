@@ -5,7 +5,7 @@ import { LoadingState } from './LoadingState';
 import { ExtractorResultsGrid } from './ExtractorResultsGrid';
 import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage } from '../services/geminiService';
 import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState } from '../types';
-import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, SaveIcon, CheckIcon } from './icons';
+import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, SaveIcon, CheckIcon, ResetIcon } from './icons';
 import { saveToLibrary } from '../services/libraryService';
 import { dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 
@@ -25,10 +25,11 @@ const ToolHeader: React.FC<{ icon: React.ReactNode, title: string, description: 
 interface ExtractorToolsPanelProps {
     state: ExtractorState;
     setState: React.Dispatch<React.SetStateAction<ExtractorState>>;
+    onReset: () => void;
 }
 
 // --- Main Panel ---
-export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState }) => {
+export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState, onReset }) => {
     
     const handleIdentify = async () => {
         if (!state.clothesSourceFile) return;
@@ -54,6 +55,20 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
         setState(prev => ({
             ...prev,
             identifiedItems: prev.identifiedItems.map((item, i) => (i === index ? { ...item, selected: !item.selected } : item))
+        }));
+    };
+
+    const handleSelectAllClothes = () => {
+        setState(prev => ({
+            ...prev,
+            identifiedItems: prev.identifiedItems.map(item => ({ ...item, selected: true }))
+        }));
+    };
+
+    const handleUnselectAllClothes = () => {
+        setState(prev => ({
+            ...prev,
+            identifiedItems: prev.identifiedItems.map(item => ({ ...item, selected: false }))
         }));
     };
 
@@ -104,6 +119,20 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
         setState(prev => ({
             ...prev,
             identifiedObjects: prev.identifiedObjects.map((item, i) => (i === index ? { ...item, selected: !item.selected } : item))
+        }));
+    };
+    
+    const handleSelectAllObjects = () => {
+        setState(prev => ({
+            ...prev,
+            identifiedObjects: prev.identifiedObjects.map(obj => ({ ...obj, selected: true }))
+        }));
+    };
+
+    const handleUnselectAllObjects = () => {
+        setState(prev => ({
+            ...prev,
+            identifiedObjects: prev.identifiedObjects.map(obj => ({ ...obj, selected: false }))
         }));
     };
 
@@ -187,7 +216,15 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
     };
     
     return (
-        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto space-y-12">
+        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto space-y-8">
+            <div className="flex justify-end">
+                <button
+                    onClick={onReset}
+                    className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200"
+                >
+                    <ResetIcon className="w-5 h-5" /> Reset All Fields
+                </button>
+            </div>
             
             {/* --- Clothes Extractor Tool --- */}
             <section aria-labelledby="clothes-extractor-title">
@@ -244,7 +281,13 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
 
                         {state.identifiedItems.length > 0 && (
                              <div>
-                                <h3 className="text-xl font-bold text-accent mb-2">Select Items to Extract</h3>
+                                <div className="flex justify-between items-center mb-2">
+                                    <h3 className="text-xl font-bold text-accent">Select Items to Extract</h3>
+                                    <div className="flex gap-2">
+                                        <button onClick={handleSelectAllClothes} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Select All</button>
+                                        <button onClick={handleUnselectAllClothes} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Unselect All</button>
+                                    </div>
+                                </div>
                                 <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
                                     {state.identifiedItems.map((item, index) => (
                                         <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">
@@ -329,7 +372,13 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                         
                         {state.identifiedObjects.length > 0 && (
                             <div>
-                                <h3 className="text-xl font-bold text-accent mb-2">Select Objects to Extract</h3>
+                                <div className="flex justify-between items-center mb-2">
+                                    <h3 className="text-xl font-bold text-accent">Select Objects to Extract</h3>
+                                    <div className="flex gap-2">
+                                        <button onClick={handleSelectAllObjects} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Select All</button>
+                                        <button onClick={handleUnselectAllObjects} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Unselect All</button>
+                                    </div>
+                                </div>
                                 <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
                                     {state.identifiedObjects.map((obj, index) => (
                                         <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">

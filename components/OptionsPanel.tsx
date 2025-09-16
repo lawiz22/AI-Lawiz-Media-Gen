@@ -1,9 +1,9 @@
-
 // Fix: Implemented the full OptionsPanel component, which was missing.
 // This resolves the module resolution error and provides the necessary UI
 // for configuring image generation for both Gemini and ComfyUI providers.
 import React, { useState, useEffect, useMemo, ChangeEvent } from 'react';
-import type { GenerationOptions } from '../types';
+// Fix: Import `NunchakuAttention` type to be used for casting.
+import type { GenerationOptions, NunchakuAttention } from '../types';
 import {
   BACKGROUND_OPTIONS,
   ASPECT_RATIO_OPTIONS,
@@ -313,6 +313,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyCfg: 1,
                     comfySampler: 'euler',
                     comfyScheduler: 'normal',
+                    comfyFluxGuidance: 3.5,
                 }));
             } else if (newModelType === 'wan2.2') {
                  setOptions(prev => ({
@@ -322,6 +323,22 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyCfg: 1,
                     comfySampler: 'res_2s',
                     comfyScheduler: 'bong_tangent',
+                    comfyWanRefinerStartStep: 3,
+                    comfyWanHighNoiseModel: comfyGgufModels.find(m => m.includes('HighNoise')) || comfyGgufModels[0] || 'Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf',
+                    comfyWanLowNoiseModel: comfyGgufModels.find(m => m.includes('LowNoise')) || comfyGgufModels[1] || 'Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf',
+                    comfyWanClipModel: t5SafetensorEncoderModels.find(t => t.includes('umt5')) || t5SafetensorEncoderModels[0] || 'umt5_xxl_fp8_e4m3fn_scaled.safetensors',
+                    comfyWanVaeModel: comfyVaes.find(v => v.includes('wan_2.1')) || comfyVaes[0] || 'wan_2.1_vae.safetensors',
+                    comfyWanUseFusionXLora: true,
+                    comfyWanFusionXLoraStrength: 0.8,
+                    comfyWanFusionXLoraName: comfyLoras.find(l => l.includes('FusionX')) || comfyLoras[0] || 'Wan2.1_T2V_14B_FusionX_LoRA.safetensors',
+                    comfyWanUseLightningLora: true,
+                    comfyWanLightningLoraStrength: 0.6,
+                    comfyWanLightningLoraNameHigh: comfyLoras.find(l => l.includes('Lightning') && l.includes('HIGH')) || comfyLoras[0] || 'Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors',
+                    comfyWanLightningLoraNameLow: comfyLoras.find(l => l.includes('Lightning') && l.includes('LOW')) || comfyLoras[1] || 'Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors',
+                    comfyWanUseStockPhotoLora: true,
+                    comfyWanStockPhotoLoraStrength: 1.5,
+                    comfyWanStockPhotoLoraNameHigh: comfyLoras.find(l => l.includes('stock') && l.includes('HIGH')) || comfyLoras[0] || 'stock_photography_wan22_HIGH_v1.safetensors',
+                    comfyWanStockPhotoLoraNameLow: comfyLoras.find(l => l.includes('stock') && l.includes('LOW')) || comfyLoras[1] || 'stock_photography_wan22_LOW_v1.safetensors',
                 }));
             } else if (newModelType === 'nunchaku-kontext-flux') {
                  setOptions(prev => ({
@@ -332,6 +349,23 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfySampler: 'euler',
                     comfyScheduler: 'simple',
                     comfyNegativePrompt: '',
+                    comfyFluxGuidanceKontext: 2.5,
+                    comfyNunchakuModel: nunchakuModels.find(m => m.includes('kontext-dev')) || nunchakuModels[0] || 'svdq-int4_r32-flux.1-kontext-dev.safetensors',
+                    comfyNunchakuVae: comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors',
+                    comfyNunchakuClipL: comfyClips.find(c => c.includes('ViT-L')) || comfyClips[0] || 'ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors',
+                    comfyNunchakuT5XXL: t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp8_e4m3fn_scaled.safetensors',
+                    comfyNunchakuCpuOffload: 'enable',
+                    // Fix: Cast the string value to the NunchakuAttention type to resolve TypeScript error.
+                    comfyNunchakuAttention: (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention,
+                    comfyNunchakuUseTurboLora: true,
+                    comfyNunchakuTurboLoraName: comfyLoras.find(l => l.includes('turbo')) || comfyLoras[0] || 'flux-turbo.safetensors',
+                    comfyNunchakuTurboLoraStrength: 1.0,
+                    comfyNunchakuUseNudifyLora: true,
+                    comfyNunchakuNudifyLoraName: comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors',
+                    comfyNunchakuNudifyLoraStrength: 1.0,
+                    comfyNunchakuUseDetailLora: true,
+                    comfyNunchakuDetailLoraName: comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors',
+                    comfyNunchakuDetailLoraStrength: 1.0,
                 }));
             } else if (newModelType === 'nunchaku-flux-image') {
                  setOptions(prev => ({
@@ -341,9 +375,25 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfySampler: 'res_2s',
                     comfyScheduler: 'bong_tangent',
                     comfyFluxGuidanceKontext: 3.5,
-                    comfyNegativePrompt: '', // This workflow has no negative prompt
+                    comfyNegativePrompt: '',
                     comfyNunchakuBaseShift: 1.0,
                     comfyNunchakuMaxShift: 1.15,
+                    comfyNunchakuModel: nunchakuModels.find(m => m.includes('kontext-dev')) || nunchakuModels[0] || 'svdq-int4_r32-flux.1-kontext-dev.safetensors',
+                    comfyNunchakuVae: comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors',
+                    comfyNunchakuClipL: comfyClips.find(c => c.includes('clip_l')) || comfyClips[0] || 'clip_l.safetensors',
+                    comfyNunchakuT5XXL: t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp16.safetensors',
+                    comfyNunchakuCpuOffload: 'enable',
+                    // Fix: Cast the string value to the NunchakuAttention type to resolve TypeScript error.
+                    comfyNunchakuAttention: (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention,
+                    comfyNunchakuUseTurboLora: true,
+                    comfyNunchakuTurboLoraName: comfyLoras.find(l => l.includes('turbo')) || comfyLoras[0] || 'flux-turbo.safetensors',
+                    comfyNunchakuTurboLoraStrength: 1.0,
+                    comfyNunchakuUseNudifyLora: true,
+                    comfyNunchakuNudifyLoraName: comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors',
+                    comfyNunchakuNudifyLoraStrength: 1.12,
+                    comfyNunchakuUseDetailLora: true,
+                    comfyNunchakuDetailLoraName: comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors',
+                    comfyNunchakuDetailLoraStrength: 1.0,
                 }));
             } else if (newModelType === 'flux-krea') {
                 setOptions(prev => ({
@@ -353,7 +403,25 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyCfg: 1,
                     comfySampler: 'res_2s',
                     comfyScheduler: 'bong_tangent',
-                    comfyNegativePrompt: '', // This workflow uses ConditioningZeroOut
+                    comfyNegativePrompt: '',
+                    comfyFluxGuidance: 3.5,
+                    comfyFluxKreaModel: comfyGgufModels.find(m => m.includes('krea')) || comfyGgufModels[0] || 'flux1-krea-dev-Q5_K_M.gguf',
+                    comfyFluxKreaClipT5: t5GgufEncoderModels.find(t => t.includes('t5-v1_1')) || t5GgufEncoderModels[0] || 't5-v1_1-xxl-encoder-Q5_K_M.gguf',
+                    comfyFluxKreaClipL: comfyClips.find(c => c.includes('clip_l')) || comfyClips[0] || 'clip_l.safetensors',
+                    comfyFluxKreaVae: comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors',
+                    useP1x4r0maWomanLora: false,
+                    p1x4r0maWomanLoraName: comfyLoras.find(l => l.includes('p1x4r0ma')) || comfyLoras[0] || 'p1x4r0ma_woman.safetensors',
+                    p1x4r0maWomanLoraStrength: 0.9,
+                    useNippleDiffusionLora: true,
+                    nippleDiffusionLoraName: comfyLoras.find(l => l.includes('nipple')) || comfyLoras[0] || 'nipplediffusion-saggy-f1.safetensors',
+                    nippleDiffusionLoraStrength: 1.0,
+                    usePussyDiffusionLora: false,
+                    pussyDiffusionLoraName: comfyLoras.find(l => l.includes('pussy')) || comfyLoras[0] || 'pussydiffusion-f1.safetensors',
+                    pussyDiffusionLoraStrength: 1.0,
+                    comfyFluxKreaUseUpscaler: true,
+                    comfyFluxKreaUpscaleModel: comfyUpscaleModels.find(m => m.includes('Siax')) || comfyUpscaleModels[0] || '4x_NMKD-Siax_200k.pth',
+                    comfyFluxKreaDenoise: 0.8,
+                    comfyFluxKreaUpscalerSteps: 10,
                 }));
             } else { // Switching back to 'sdxl'
                 const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
@@ -838,6 +906,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         <OptionSection title="FLUX Krea Sampler">
                             {renderSamplerOptions()}
                              <NumberSlider label="Steps" value={options.comfySteps || 20} onChange={handleSliderChange('comfySteps')} min={4} max={30} step={1} disabled={isDisabled}/>
+                             <NumberSlider label="FLUX Guidance" value={options.comfyFluxGuidance || 3.5} onChange={handleSliderChange('comfyFluxGuidance')} min={0} max={10} step={0.1} disabled={isDisabled}/>
                         </OptionSection>
                         <OptionSection title="FLUX Krea LoRAs">
                               <CheckboxSlider

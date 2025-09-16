@@ -62,7 +62,6 @@ export interface GenerationOptions {
     comfySdxlLoraStrength?: number;
     
     comfyFluxGuidance?: number;
-    comfyFluxNodeName?: string;
     
     // WAN 2.2 specific
     comfyWanHighNoiseModel?: string;

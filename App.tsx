@@ -29,6 +29,26 @@ import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, Extr
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
 
+const initialExtractorState: ExtractorState = {
+    clothesSourceFile: null,
+    clothesDetails: '',
+    isIdentifying: false,
+    identifiedItems: [],
+    isGenerating: false,
+    generatedClothes: [],
+    clothesError: null,
+    generateFolded: false,
+    excludeAccessories: true,
+    objectSourceFile: null,
+    objectHints: '',
+    maxObjects: 5,
+    isIdentifyingObjects: false,
+    identifiedObjects: [],
+    isGeneratingObjects: false,
+    generatedObjects: [],
+    objectError: null,
+};
+
 const App: React.FC = () => {
     // --- App State ---
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -97,25 +117,7 @@ const App: React.FC = () => {
     });
     
     // --- Extractor Tools State ---
-    const [extractorState, setExtractorState] = useState<ExtractorState>({
-        clothesSourceFile: null,
-        clothesDetails: '',
-        isIdentifying: false,
-        identifiedItems: [],
-        isGenerating: false,
-        generatedClothes: [],
-        clothesError: null,
-        generateFolded: false,
-        excludeAccessories: true,
-        objectSourceFile: null,
-        objectHints: '',
-        maxObjects: 5,
-        isIdentifyingObjects: false,
-        identifiedObjects: [],
-        isGeneratingObjects: false,
-        generatedObjects: [],
-        objectError: null,
-    });
+    const [extractorState, setExtractorState] = useState<ExtractorState>(initialExtractorState);
 
 
     // --- UI Modals & Panels State ---
@@ -257,6 +259,10 @@ const App: React.FC = () => {
         setVideoEndFrame(null);
         setGeneratedVideo(null);
         setGenerationOptionsForSave(null);
+    };
+
+    const handleExtractorReset = () => {
+        setExtractorState(initialExtractorState);
     };
 
     const handleGenerate = async () => {
@@ -668,7 +674,7 @@ const App: React.FC = () => {
                 )}
                 
                 <div className={activeTab === 'extractor-tools' ? 'block' : 'hidden'}>
-                    <ExtractorToolsPanel state={extractorState} setState={setExtractorState} />
+                    <ExtractorToolsPanel state={extractorState} setState={setExtractorState} onReset={handleExtractorReset} />
                 </div>
                 
                  <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
