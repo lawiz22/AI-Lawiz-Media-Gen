@@ -1,5 +1,5 @@
 import React, { useState, useMemo, ChangeEvent, useEffect, useRef } from 'react';
-import { GenerateIcon, ResetIcon, VideoIcon, SpinnerIcon, CopyIcon, SaveIcon, FilmIcon, DownloadIcon, StartFrameIcon, EndFrameIcon } from './icons';
+import { GenerateIcon, ResetIcon, VideoIcon, SpinnerIcon, CopyIcon, SaveIcon, FilmIcon, DownloadIcon, StartFrameIcon, EndFrameIcon, CheckIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { Loader } from './Loader';
 import type { GenerationOptions, LibraryItem } from '../types';
@@ -111,12 +111,17 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [frameSavingState, setFrameSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-    // Reset frame extractor when a new video is generated
+    // Reset frame extractor and save states when a new video is generated
     useEffect(() => {
         setExtractedFrame(null);
         setCurrentTime(0);
         setDuration(0);
+        setSavingState('idle');
     }, [generatedVideo]);
+
+    useEffect(() => {
+        setFrameSavingState('idle');
+    }, [extractedFrame]);
 
     const comfyGgufModels = useMemo(() => {
         const widgetInfo = comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name || comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.gguf_name;
@@ -231,15 +236,13 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                 thumbnail: await dataUrlToThumbnail(await fileToResizedDataUrl(startFrame, 256), 256),
                 options: optionsToSave,
                 startFrame: await fileToResizedDataUrl(startFrame, 512),
-                // Fix: Use the `endFrame` prop instead of `options.endFrame` when saving to the library.
                 endFrame: endFrame ? await fileToResizedDataUrl(endFrame, 512) : undefined,
             };
             await saveToLibrary(item);
             setSavingState('saved');
-            setTimeout(() => setSavingState('idle'), 2000);
         } catch (err) {
             console.error("Failed to save video to library:", err);
-            setSavingState('idle');
+            setSavingState('idle'); // Allow retry on error
         }
     };
 
@@ -307,12 +310,14 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
             };
             await saveToLibrary(item);
             setFrameSavingState('saved');
-            setTimeout(() => setFrameSavingState('idle'), 2000);
         } catch (err) {
             console.error("Failed to save frame to library:", err);
-            setFrameSavingState('idle');
+            setFrameSavingState('idle'); // Allow retry on error
         }
     };
+    
+    const videoSavingStatus = savingState;
+    const frameSavingStatus = frameSavingState;
 
     const renderProviderSwitch = () => (
         <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1 mb-6">
@@ -393,7 +398,6 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                         Use End Frame
                                     </label>
                                     {options.comfyVidWanI2VUseEndFrame && (
-                                        // Fix: Use the `endFrame` prop for the source file instead of `options.endFrame`.
                                         <ImageUploader label="End Frame" id="end-frame" onImageUpload={handleEndFrameUpload} sourceFile={endFrame} />
                                     )}
                                 </div>
@@ -516,16 +520,16 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                     <h2 className="text-xl font-bold text-accent">Generated Video</h2>
                                     <button
                                         onClick={handleSaveToLibrary}
-                                        title={savingState === 'saved' ? 'Saved!' : 'Save to Library'}
-                                        disabled={savingState !== 'idle'}
+                                        title={videoSavingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
+                                        disabled={videoSavingStatus !== 'idle'}
                                         className={`flex items-center justify-center gap-2 font-semibold py-2 px-3 rounded-lg transition-all duration-200 ${
-                                            savingState === 'saved' ? 'bg-green-500 text-white' :
-                                            savingState === 'saving' ? 'bg-bg-tertiary text-text-secondary cursor-wait' :
+                                            videoSavingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' :
+                                            videoSavingStatus === 'saving' ? 'bg-bg-tertiary text-text-secondary cursor-wait' :
                                             'bg-bg-tertiary text-text-secondary hover:bg-accent hover:text-accent-text'
                                         }`}
                                     >
-                                        {savingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
-                                        {savingState === 'saving' ? 'Saving...' : savingState === 'saved' ? 'Saved!' : 'Save to Library'}
+                                        {videoSavingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : videoSavingStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                        {videoSavingStatus === 'saving' ? 'Saving...' : videoSavingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
                                     </button>
                                 </div>
                                 {lastUsedPrompt && (
@@ -603,9 +607,17 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                             <button onClick={handleSetAsEndFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
                                                 <EndFrameIcon className="w-5 h-5"/> Set as End
                                             </button>
-                                            <button onClick={handleSaveFrameToLibrary} disabled={frameSavingState !== 'idle'} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50">
-                                                {frameSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <SaveIcon className="w-5 h-5"/>}
-                                                {frameSavingState === 'saved' ? 'Saved!' : 'Save to Library'}
+                                            <button
+                                                onClick={handleSaveFrameToLibrary}
+                                                disabled={frameSavingStatus !== 'idle'}
+                                                className={`flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors ${
+                                                    frameSavingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 
+                                                    frameSavingStatus === 'saving' ? 'bg-bg-tertiary cursor-wait' :
+                                                    'bg-bg-tertiary hover:bg-accent hover:text-accent-text'
+                                                }`}
+                                            >
+                                                {frameSavingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : frameSavingStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5"/>}
+                                                {frameSavingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
                                             </button>
                                         </div>
                                     </div>

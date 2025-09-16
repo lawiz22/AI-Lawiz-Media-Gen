@@ -1,5 +1,5 @@
-import React, { useState, useRef, ChangeEvent } from 'react';
-import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon } from './icons';
+import React, { useState, useRef, ChangeEvent, useMemo, useEffect } from 'react';
+import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon } from './icons';
 import { dataUrlToFile, dataUrlToThumbnail } from '../utils/imageUtils';
 import { saveToLibrary } from '../services/libraryService';
 import type { LibraryItem } from '../types';
@@ -18,12 +18,20 @@ const formatTime = (seconds: number): string => {
 interface VideoUtilsPanelProps {
     setStartFrame: (file: File) => void;
     setEndFrame: (file: File) => void;
+    videoFile: File | null;
+    setVideoFile: (file: File | null) => void;
+    extractedFrame: string | null;
+    setExtractedFrame: (frame: string | null) => void;
 }
 
-export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({ setStartFrame, setEndFrame }) => {
-    const [videoFile, setVideoFile] = useState<File | null>(null);
-    const [videoSrc, setVideoSrc] = useState<string | null>(null);
-    const [extractedFrame, setExtractedFrame] = useState<string | null>(null);
+export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({ 
+    setStartFrame, 
+    setEndFrame,
+    videoFile,
+    setVideoFile,
+    extractedFrame,
+    setExtractedFrame
+}) => {
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -31,18 +39,37 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({ setStartFrame,
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
+    const videoSrc = useMemo(() => {
+        if (!videoFile) return null;
+        return URL.createObjectURL(videoFile);
+    }, [videoFile]);
+
+    useEffect(() => {
+        // Cleanup the object URL when the component unmounts or the src changes
+        return () => {
+            if (videoSrc) {
+                URL.revokeObjectURL(videoSrc);
+            }
+        };
+    }, [videoSrc]);
+
+    useEffect(() => {
+        // Reset save state if a new frame is extracted
+        setSavingState('idle');
+    }, [extractedFrame]);
+
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file && file.type.startsWith('video/')) {
             setVideoFile(file);
-            const url = URL.createObjectURL(file);
-            setVideoSrc(url);
-            setExtractedFrame(null);
+            setExtractedFrame(null); // Reset on new video
         } else {
             setVideoFile(null);
-            setVideoSrc(null);
-            alert('Please select a valid video file.');
+            setExtractedFrame(null);
+            if (file) alert('Please select a valid video file.');
         }
+         // Clear the input value to allow re-uploading the same file
+        e.target.value = '';
     };
 
     const handleExtractFrame = (time: number) => {
@@ -105,12 +132,13 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({ setStartFrame,
             };
             await saveToLibrary(item);
             setSavingState('saved');
-            setTimeout(() => setSavingState('idle'), 2000);
         } catch (err) {
             console.error("Failed to save frame to library:", err);
-            setSavingState('idle');
+            setSavingState('idle'); // Allow retry on error
         }
     };
+    
+    const savingStatus = savingState;
 
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto space-y-8">
@@ -200,9 +228,17 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({ setStartFrame,
                                     <button onClick={handleSetAsEndFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
                                         <EndFrameIcon className="w-5 h-5"/> Set as End
                                     </button>
-                                    <button onClick={handleSaveFrameToLibrary} disabled={savingState !== 'idle'} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50">
-                                        {savingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <SaveIcon className="w-5 h-5"/>}
-                                        {savingState === 'saved' ? 'Saved!' : 'Save to Library'}
+                                    <button
+                                        onClick={handleSaveFrameToLibrary}
+                                        disabled={savingStatus !== 'idle'}
+                                        className={`flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors ${
+                                            savingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 
+                                            savingStatus === 'saving' ? 'bg-bg-tertiary cursor-wait' :
+                                            'bg-bg-tertiary hover:bg-accent hover:text-accent-text'
+                                        }`}
+                                    >
+                                        {savingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : savingStatus === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
+                                        {savingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
                                     </button>
                                 </div>
                             </div>

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import JSZip from 'jszip';
 import type { GeneratedClothing, LibraryItem } from '../types';
-import { DownloadIcon, ResetIcon, SpinnerIcon, SaveIcon } from './icons';
+import { DownloadIcon, ResetIcon, SpinnerIcon, SaveIcon, CheckIcon } from './icons';
 import { saveToLibrary } from '../services/libraryService';
 import { dataUrlToThumbnail } from '../utils/imageUtils';
 
@@ -15,6 +15,10 @@ interface ResultsDisplayProps {
 export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ originalImage, generatedItems, onReset, details }) => {
     const [isZipping, setIsZipping] = useState(false);
     const [savingStates, setSavingStates] = useState<Record<string, 'idle' | 'saving' | 'saved'>>({});
+
+    useEffect(() => {
+        setSavingStates({});
+    }, [generatedItems]);
 
     const handleDownloadAll = async () => {
         setIsZipping(true);
@@ -70,10 +74,9 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ originalImage, g
             };
             await saveToLibrary(libraryItem);
             setSavingStates(prev => ({ ...prev, [stateKey]: 'saved' }));
-            setTimeout(() => setSavingStates(prev => ({ ...prev, [stateKey]: 'idle' })), 2000);
         } catch (err) {
             console.error("Failed to save clothing item to library:", err);
-            setSavingStates(prev => ({ ...prev, [stateKey]: 'idle' }));
+            setSavingStates(prev => ({ ...prev, [stateKey]: 'idle' })); // Allow retry on error
         }
     };
 
@@ -129,12 +132,12 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ originalImage, g
                                                 title={laidOutSavingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
                                                 disabled={laidOutSavingStatus !== 'idle'}
                                                 className={`flex items-center gap-2 p-3 rounded-full transition-all duration-200 ${
-                                                    laidOutSavingStatus === 'saved' ? 'bg-green-500 text-white' : 
+                                                    laidOutSavingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 
                                                     laidOutSavingStatus === 'saving' ? 'bg-bg-secondary text-text-secondary cursor-wait' :
                                                     'bg-bg-secondary/70 text-text-secondary hover:bg-accent hover:text-accent-text'
                                                 }`}
                                             >
-                                                {laidOutSavingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                                {laidOutSavingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : laidOutSavingStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                                 {laidOutSavingStatus === 'idle' && <span className="text-sm font-bold">Save</span>}
                                             </button>
                                         </div>
@@ -149,12 +152,12 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ originalImage, g
                                                 title={foldedSavingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
                                                 disabled={foldedSavingStatus !== 'idle'}
                                                 className={`flex items-center gap-2 p-3 rounded-full transition-all duration-200 ${
-                                                    foldedSavingStatus === 'saved' ? 'bg-green-500 text-white' : 
+                                                    foldedSavingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 
                                                     foldedSavingStatus === 'saving' ? 'bg-bg-secondary text-text-secondary cursor-wait' :
                                                     'bg-bg-secondary/70 text-text-secondary hover:bg-accent hover:text-accent-text'
                                                 }`}
                                             >
-                                                {foldedSavingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                                {foldedSavingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : foldedSavingStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                                 {foldedSavingStatus === 'idle' && <span className="text-sm font-bold">Save</span>}
                                             </button>
                                         </div>

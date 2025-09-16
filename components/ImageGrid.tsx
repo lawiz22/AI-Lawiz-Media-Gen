@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
-import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon } from './icons';
+import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon, CheckIcon } from './icons';
 import { enhanceImageResolution } from '../services/geminiService';
 import { saveToLibrary } from '../services/libraryService';
 import type { GenerationOptions, LibraryItem } from '../types';
@@ -23,6 +23,10 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
   const [isZipping, setIsZipping] = useState<boolean>(false);
   const [copyButtonText, setCopyButtonText] = useState('Copy');
   const [savingState, setSavingState] = useState<Record<number, 'idle' | 'saving' | 'saved'>>({});
+
+  useEffect(() => {
+    setSavingState({});
+  }, [images]);
 
   const handleDownload = (imageSrc: string, index: number) => {
     const link = document.createElement('a');
@@ -62,11 +66,9 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
       };
       await saveToLibrary(item);
       setSavingState(prev => ({ ...prev, [index]: 'saved' }));
-      setTimeout(() => setSavingState(prev => ({ ...prev, [index]: 'idle' })), 2000);
     } catch (err) {
       console.error("Failed to save to library:", err);
-      // Here you could set an error state
-      setSavingState(prev => ({ ...prev, [index]: 'idle' }));
+      setSavingState(prev => ({ ...prev, [index]: 'idle' })); // Allow retry on error
     }
   };
 
@@ -218,12 +220,12 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
                                           title={savingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
                                           disabled={savingStatus !== 'idle'}
                                           className={`p-2 rounded-full transition-all duration-200 ${
-                                              savingStatus === 'saved' ? 'bg-green-500 text-white' : 
+                                              savingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 
                                               savingStatus === 'saving' ? 'bg-bg-secondary text-text-secondary cursor-wait' :
                                               'bg-bg-secondary/70 text-text-secondary hover:bg-accent hover:text-accent-text'
                                           }`}
                                       >
-                                          {savingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                          {savingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : savingStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                       </button>
                                   </div>
 

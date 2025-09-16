@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ImageUploader } from './ImageUploader';
 import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup } from '../services/comfyUIService';
 import { saveToLibrary } from '../services/libraryService';
 import type { LibraryItem } from '../types';
-import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon } from './icons';
+import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon } from './icons';
 
 interface PromptGeneratorPanelProps {
     onUsePrompt: (prompt: string) => void;
@@ -110,6 +110,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const [historyCopyStates, setHistoryCopyStates] = useState<Record<number, string>>({});
     const [soupPromptParts, setSoupPromptParts] = useState<PromptPart[]>([]);
 
+    useEffect(() => { setSavingState('idle'); }, [prompt]);
+    useEffect(() => { setBgSavingState('idle'); }, [bgPrompt]);
+    useEffect(() => { setSubjectSavingState('idle'); }, [subjectPrompt]);
+    useEffect(() => { setSoupSavingState('idle'); }, [soupPrompt]);
+
     const handleSavePrompt = async (
         promptToSave: string, 
         type: PromptCategory,
@@ -129,11 +134,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             };
             await saveToLibrary(item);
             setSaveState('saved');
-            setTimeout(() => setSaveState('idle'), 2000);
         } catch (err) {
             console.error("Failed to save prompt:", err);
-            // Optionally, set an error state to show in the UI
-            setSaveState('idle');
+            setSaveState('idle'); // Allow retry on error
         }
     };
 
@@ -309,7 +312,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     };
 
     const renderPromptTypeButtons = (currentType: PromptModelType, setType: (type: PromptModelType) => void) => {
-        // Fix: Corrected the 'wan 2.2' type to 'wan2.2' to match the service layer function signatures and fix the type error.
         const types: { id: PromptModelType; label: string }[] = [
             { id: 'gemini', label: 'Narrative (Gemini)' },
             { id: 'wan2.2', label: 'Photographic (WAN 2.2)' },
@@ -389,9 +391,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <button 
                                 onClick={() => handleSavePrompt(prompt, 'image', modelType, setSavingState)}
                                 disabled={!prompt || isLoading || savingState !== 'idle'}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
+                                    savingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
+                                }`}
                             >
-                                {savingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                {savingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : savingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                 {savingState === 'saved' ? 'Saved!' : 'Save'}
                             </button>
                             <button 
@@ -470,9 +474,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <button 
                                 onClick={() => handleSavePrompt(bgPrompt, 'background', bgModelType, setBgSavingState)}
                                 disabled={!bgPrompt || isBgLoading || bgSavingState !== 'idle'}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
+                                    bgSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
+                                }`}
                             >
-                                {bgSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                {bgSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : bgSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                 {bgSavingState === 'saved' ? 'Saved!' : 'Save'}
                             </button>
                             <button 
@@ -551,9 +557,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <button 
                                 onClick={() => handleSavePrompt(subjectPrompt, 'subject', subjectModelType, setSubjectSavingState)}
                                 disabled={!subjectPrompt || isSubjectLoading || subjectSavingState !== 'idle'}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
+                                    subjectSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
+                                }`}
                             >
-                                {subjectSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                {subjectSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : subjectSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                 {subjectSavingState === 'saved' ? 'Saved!' : 'Save'}
                             </button>
                             <button 
@@ -651,9 +659,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                              <button 
                                 onClick={() => handleSavePrompt(soupPrompt, 'soup', soupModelType, setSoupSavingState)}
                                 disabled={!soupPrompt || isSoupLoading || soupSavingState !== 'idle'}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
+                                className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
+                                    soupSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
+                                }`}
                             >
-                                {soupSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <SaveIcon className="w-5 h-5" />}
+                                {soupSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : soupSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                 {soupSavingState === 'saved' ? 'Saved!' : 'Save'}
                             </button>
                             <button 

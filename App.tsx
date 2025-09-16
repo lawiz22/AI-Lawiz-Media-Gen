@@ -205,6 +205,8 @@ function App() {
     target: 'sourceImage' | 'clothingImage' | null;
     filter: 'image' | 'clothes' | null;
   }>({ target: null, filter: null });
+  const [videoUtilsFile, setVideoUtilsFile] = useState<File | null>(null);
+  const [videoUtilsExtractedFrame, setVideoUtilsExtractedFrame] = useState<string | null>(null);
 
   const handleOpenLibraryPicker = (target: 'sourceImage' | 'clothingImage', filter: 'image' | 'clothes') => {
     setLibraryPickerConfig({ target, filter });
@@ -863,6 +865,10 @@ function App() {
                 setEndFrame(file);
                 setActiveTab('video');
             }}
+            videoFile={videoUtilsFile}
+            setVideoFile={setVideoUtilsFile}
+            extractedFrame={videoUtilsExtractedFrame}
+            setExtractedFrame={setVideoUtilsExtractedFrame}
         />}
 
         {activeTab === 'prompt' && currentUser.role === 'admin' && 
