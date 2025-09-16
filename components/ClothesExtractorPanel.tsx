@@ -1,12 +1,13 @@
+
 import React from 'react';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
-import { ResultsDisplay } from './ResultsDisplay';
+import { ExtractorResultsGrid } from './ExtractorResultsGrid';
 import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage } from '../services/geminiService';
 import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState } from '../types';
-import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, DownloadIcon, SaveIcon, CheckIcon } from './icons';
+import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, SaveIcon, CheckIcon } from './icons';
 import { saveToLibrary } from '../services/libraryService';
-import { dataUrlToThumbnail } from '../utils/imageUtils';
+import { dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 
 // --- Helper Components ---
 
@@ -41,34 +42,42 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
 
         try {
             const items = await identifyClothing(state.clothesSourceFile, state.clothesDetails, state.excludeAccessories);
-            setState(prev => ({ ...prev, identifiedItems: items }));
+            setState(prev => ({ ...prev, identifiedItems: items.map(item => ({ ...item, selected: true })) }));
         } catch (err: any) {
             setState(prev => ({ ...prev, clothesError: err.message || 'Failed to identify clothing items.' }));
         } finally {
             setState(prev => ({ ...prev, isIdentifying: false }));
         }
     };
-
-    const handleGenerate = async (itemName: string) => {
-        if (!state.clothesSourceFile) return;
-        setState(prev => ({ ...prev, isGenerating: true, clothesError: null }));
-        try {
-            const laidOutImage = await generateClothingImage(state.clothesSourceFile, itemName, 'laid out');
-            let foldedImage: string | undefined = undefined;
-            if (state.generateFolded) {
-                foldedImage = await generateClothingImage(state.clothesSourceFile, itemName, 'folded');
-            }
-            
-            setState(prev => ({ ...prev, generatedClothes: [...prev.generatedClothes, { itemName, laidOutImage, foldedImage, saved: 'idle' }] }));
-        } catch (err: any) {
-            setState(prev => ({ ...prev, clothesError: err.message || `Failed to generate images for ${itemName}.` }));
-        } finally {
-            setState(prev => ({ ...prev, isGenerating: false }));
-        }
-    };
     
-    const setGeneratedClothes = (items: GeneratedClothing[]) => {
-        setState(prev => ({ ...prev, generatedClothes: items }));
+    const handleToggleClothingSelection = (index: number) => {
+        setState(prev => ({
+            ...prev,
+            identifiedItems: prev.identifiedItems.map((item, i) => (i === index ? { ...item, selected: !item.selected } : item))
+        }));
+    };
+
+    const handleGenerateSelectedClothes = async () => {
+        if (!state.clothesSourceFile || state.identifiedItems.every(i => !i.selected)) return;
+        
+        setState(prev => ({ ...prev, isGenerating: true, clothesError: null, generatedClothes: [] }));
+        const selectedItems = state.identifiedItems.filter(item => item.selected);
+        
+        for (const item of selectedItems) {
+            try {
+                const laidOutImage = await generateClothingImage(state.clothesSourceFile, item.itemName, 'laid out');
+                let foldedImage: string | undefined = undefined;
+                if (state.generateFolded) {
+                    foldedImage = await generateClothingImage(state.clothesSourceFile, item.itemName, 'folded');
+                }
+                
+                setState(prev => ({ ...prev, generatedClothes: [...prev.generatedClothes, { itemName: item.itemName, laidOutImage, foldedImage, saved: 'idle' }] }));
+            } catch (err: any) {
+                 console.error(`Failed to generate image for ${item.itemName}:`, err);
+                setState(prev => ({ ...prev, clothesError: `Error generating "${item.itemName}". Skipping.` }));
+            }
+        }
+        setState(prev => ({ ...prev, isGenerating: false }));
     };
 
     const handleIdentifyObjects = async () => {
@@ -83,7 +92,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
 
         try {
             const items = await identifyObjects(state.objectSourceFile, state.maxObjects, state.objectHints);
-            setState(prev => ({ ...prev, identifiedObjects: items.map(item => ({ ...item, selected: false })) }));
+            setState(prev => ({ ...prev, identifiedObjects: items.map(item => ({ ...item, selected: true })) }));
         } catch (err: any) {
             setState(prev => ({ ...prev, objectError: err.message || 'Failed to identify objects.' }));
         } finally {
@@ -115,6 +124,37 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
         }
         setState(prev => ({ ...prev, isGeneratingObjects: false }));
     };
+    
+    const handleClothesSaveToLibrary = async (item: GeneratedClothing, index: number) => {
+        setState(prev => {
+            const updatedItems = [...prev.generatedClothes];
+            updatedItems[index] = { ...item, saved: 'saving' };
+            return { ...prev, generatedClothes: updatedItems };
+        });
+
+        try {
+            await saveToLibrary({
+                mediaType: 'clothes',
+                name: item.itemName,
+                media: item.laidOutImage,
+                thumbnail: await dataUrlToThumbnail(item.laidOutImage, 256),
+                sourceImage: state.clothesSourceFile ? await fileToResizedDataUrl(state.clothesSourceFile, 512) : undefined,
+            });
+            setState(prev => {
+                const updatedItems = [...prev.generatedClothes];
+                updatedItems[index] = { ...item, saved: 'saved' };
+                return { ...prev, generatedClothes: updatedItems };
+            });
+        } catch (e) {
+            console.error("Failed to save clothing to library", e);
+            setState(prev => {
+                const updatedItems = [...prev.generatedClothes];
+                updatedItems[index] = { ...item, saved: 'idle' };
+                return { ...prev, generatedClothes: updatedItems };
+            });
+        }
+    };
+
 
     const handleObjectSaveToLibrary = async (item: GeneratedObject, index: number) => {
         setState(prev => {
@@ -129,7 +169,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                 name: item.name,
                 media: item.image,
                 thumbnail: await dataUrlToThumbnail(item.image, 256),
-                sourceImage: state.objectSourceFile ? await dataUrlToThumbnail(URL.createObjectURL(state.objectSourceFile), 512) : undefined,
+                sourceImage: state.objectSourceFile ? await fileToResizedDataUrl(state.objectSourceFile, 512) : undefined,
             });
              setState(prev => {
                 const updatedObjects = [...prev.generatedObjects];
@@ -198,31 +238,39 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                         </button>
                     </div>
 
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 space-y-6">
                         {state.clothesError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.clothesError}</p>}
                         {state.isIdentifying && <LoadingState message="Analyzing your image to find clothing items..." />}
 
                         {state.identifiedItems.length > 0 && (
-                            <div className="space-y-4">
-                                <h3 className="text-xl font-bold text-accent">Identified Items</h3>
-                                <p className="text-sm text-text-secondary">Click an item below to generate its product shots.</p>
-                                <div className="flex flex-wrap gap-2">
+                             <div>
+                                <h3 className="text-xl font-bold text-accent mb-2">Select Items to Extract</h3>
+                                <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
                                     {state.identifiedItems.map((item, index) => (
-                                        <button
-                                            key={index}
-                                            onClick={() => handleGenerate(item.itemName)}
-                                            disabled={state.isGenerating}
-                                            className="bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50"
-                                        >
-                                            {state.isGenerating ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : item.itemName}
-                                        </button>
+                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">
+                                            <input type="checkbox" checked={item.selected} onChange={() => handleToggleClothingSelection(index)} className="mt-1 rounded text-accent focus:ring-accent" />
+                                            <div>
+                                                <span className="font-semibold text-text-primary">{item.itemName}</span>
+                                                <p className="text-sm text-text-secondary">{item.description}</p>
+                                            </div>
+                                        </label>
                                     ))}
                                 </div>
+                                <button
+                                    onClick={handleGenerateSelectedClothes}
+                                    disabled={state.identifiedItems.every(o => !o.selected) || state.isGenerating}
+                                    className="w-full mt-4 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 bg-accent text-accent-text disabled:opacity-50"
+                                >
+                                    {state.isGenerating ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                    2. Generate Product Shots
+                                </button>
                             </div>
                         )}
 
-                        {state.isGenerating && <LoadingState message="Generating product shots... this can take a moment." />}
-                        <ResultsDisplay items={state.generatedClothes} onItemsChange={setGeneratedClothes} sourceImage={state.clothesSourceFile} />
+                        {state.isGenerating && <LoadingState message={`Generating images for selected items... (${state.generatedClothes.length}/${state.identifiedItems.filter(i => i.selected).length} done)`} />}
+                        
+                        <ExtractorResultsGrid items={state.generatedClothes} onSave={handleClothesSaveToLibrary} title="Generated Product Shots" />
+
                     </div>
                 </div>
             </section>
@@ -306,45 +354,8 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
 
                         {state.isGeneratingObjects && <LoadingState message={`Generating images for selected objects... (${state.generatedObjects.length}/${state.identifiedObjects.filter(o => o.selected).length} done)`} />}
                         
-                        {state.generatedObjects.length > 0 && (
-                            <div className="space-y-4">
-                                <h3 className="text-xl font-bold text-accent">Generated Object Shots</h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {state.generatedObjects.map((item, index) => {
-                                        const savingStatus = item.saved || 'idle';
-                                        return (
-                                            <div key={index} className="text-center p-2 bg-bg-tertiary rounded-md">
-                                                <h4 className="text-sm font-medium text-text-primary mb-2 truncate" title={item.name}>{item.name}</h4>
-                                                <div className="aspect-square bg-white rounded-md flex items-center justify-center p-2">
-                                                    <img src={item.image} alt={item.name} className="max-w-full max-h-full object-contain" />
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-2 mt-2">
-                                                    <button onClick={() => {
-                                                        const link = document.createElement('a');
-                                                        link.href = item.image;
-                                                        link.download = `${item.name.replace(/\s+/g, '_')}.png`;
-                                                        link.click();
-                                                    }} className="w-full flex items-center justify-center gap-2 text-xs bg-bg-primary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-bg-tertiary-hover transition-colors">
-                                                        <DownloadIcon className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleObjectSaveToLibrary(item, index)}
-                                                        disabled={savingStatus !== 'idle'}
-                                                        className={`w-full flex items-center justify-center gap-2 text-xs font-semibold py-2 px-3 rounded-lg transition-colors ${
-                                                            savingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 
-                                                            savingStatus === 'saving' ? 'bg-bg-primary text-text-secondary cursor-wait' : 
-                                                            'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
-                                                        }`}
-                                                    >
-                                                        {savingStatus === 'saving' ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : savingStatus === 'saved' ? <CheckIcon className="w-4 h-4" /> : <SaveIcon className="w-4 h-4" />}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                        )}
+                        <ExtractorResultsGrid items={state.generatedObjects} onSave={handleObjectSaveToLibrary} title="Generated Object Shots" />
+
                     </div>
                  </div>
             </section>

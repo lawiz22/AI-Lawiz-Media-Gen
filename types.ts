@@ -199,7 +199,7 @@ export interface ExtractorState {
     clothesSourceFile: File | null;
     clothesDetails: string;
     isIdentifying: boolean;
-    identifiedItems: IdentifiedClothing[];
+    identifiedItems: (IdentifiedClothing & { selected: boolean })[];
     isGenerating: boolean;
     generatedClothes: GeneratedClothing[];
     clothesError: string | null;
