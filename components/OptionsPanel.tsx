@@ -1,3 +1,4 @@
+
 // Fix: Implemented the full OptionsPanel component, which was missing.
 // This resolves the module resolution error and provides the necessary UI
 // for configuring image generation for both Gemini and ComfyUI providers.
@@ -316,6 +317,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyFluxGuidance: 3.5,
                 }));
             } else if (newModelType === 'wan2.2') {
+                 const allT5Models = [...t5GgufEncoderModels, ...t5SafetensorEncoderModels];
                  setOptions(prev => ({
                     ...prev,
                     comfyModelType: 'wan2.2',
@@ -326,7 +328,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyWanRefinerStartStep: 3,
                     comfyWanHighNoiseModel: comfyGgufModels.find(m => m.includes('HighNoise')) || comfyGgufModels[0] || 'Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf',
                     comfyWanLowNoiseModel: comfyGgufModels.find(m => m.includes('LowNoise')) || comfyGgufModels[1] || 'Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf',
-                    comfyWanClipModel: t5SafetensorEncoderModels.find(t => t.includes('umt5')) || t5SafetensorEncoderModels[0] || 'umt5_xxl_fp8_e4m3fn_scaled.safetensors',
+                    comfyWanClipModel: allT5Models.find(t => t.includes('umt5')) || allT5Models[0] || 'umt5-xxl-encoder-Q5_K_M.gguf',
                     comfyWanVaeModel: comfyVaes.find(v => v.includes('wan_2.1')) || comfyVaes[0] || 'wan_2.1_vae.safetensors',
                     comfyWanUseFusionXLora: true,
                     comfyWanFusionXLoraStrength: 0.8,
@@ -786,7 +788,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                          <OptionSection title="WAN 2.2 Models">
                             <SelectInput label="High-Noise Unet" value={options.comfyWanHighNoiseModel || ''} onChange={handleOptionChange('comfyWanHighNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isDisabled}/>
                             <SelectInput label="Low-Noise Unet" value={options.comfyWanLowNoiseModel || ''} onChange={handleOptionChange('comfyWanLowNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isDisabled}/>
-                            <SelectInput label="CLIP Model (T5)" value={options.comfyWanClipModel || ''} onChange={handleOptionChange('comfyWanClipModel')} options={t5SafetensorEncoderModels.map(m => ({value: m, label: m}))} disabled={isDisabled}/>
+                            <SelectInput label="CLIP Model (T5)" value={options.comfyWanClipModel || ''} onChange={handleOptionChange('comfyWanClipModel')} options={[...t5GgufEncoderModels, ...t5SafetensorEncoderModels].map(m => ({value: m, label: m}))} disabled={isDisabled}/>
                             <SelectInput label="VAE Model" value={options.comfyWanVaeModel || ''} onChange={handleOptionChange('comfyWanVaeModel')} options={comfyVaes.map(m => ({value: m, label: m}))} disabled={isDisabled}/>
                         </OptionSection>
                          <OptionSection title="WAN 2.2 Sampler">

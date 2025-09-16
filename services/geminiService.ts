@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
 import { fileToGenerativePart, fileToBase64, dataUrlToFile } from '../utils/imageUtils';
 // Fix: Import 'getRandomPose' to resolve reference error.
@@ -124,6 +125,84 @@ export const generatePortraits = async (
     
     updateProgress("Finalizing images...", 0.95);
     return { images: allImages, finalPrompt: promptsUsed[0] || null };
+};
+
+export const generateGeminiVideo = async (
+    options: GenerationOptions,
+    startFrame: File | null,
+    updateProgress: (message: string, value: number) => void
+): Promise<{ videoUrl: string, finalPrompt: string }> => {
+    if (!options.geminiVidPrompt?.trim()) {
+        throw new Error("A prompt is required for Gemini video generation.");
+    }
+
+    const model = options.geminiVidModel || 'veo-2.0-generate-001';
+    
+    const requestPayload: any = {
+        model,
+        prompt: options.geminiVidPrompt,
+        config: {
+            numberOfVideos: 1
+        }
+    };
+
+    if (startFrame) {
+        updateProgress("Preparing input image...", 0.05);
+        requestPayload.image = {
+            imageBytes: await fileToBase64(startFrame),
+            mimeType: startFrame.type,
+        };
+    }
+
+    updateProgress("Sending request to Gemini...", 0.1);
+    let operation = await ai.models.generateVideos(requestPayload);
+
+    updateProgress("Video generation started. This may take several minutes...", 0.2);
+    
+    const pollingInterval = 10000; // 10 seconds
+    const maxAttempts = 60; // 10 minutes timeout
+    let attempt = 0;
+
+    while (!operation.done && attempt < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, pollingInterval));
+        attempt++;
+        const progress = 0.2 + (attempt / maxAttempts) * 0.7; // Progress from 20% to 90%
+        updateProgress(`Processing video... (Attempt ${attempt}/${maxAttempts})`, progress);
+        try {
+            operation = await ai.operations.getVideosOperation({ operation });
+        } catch (e: any) {
+            console.warn(`Polling attempt ${attempt} failed, retrying... Error:`, e.message);
+        }
+    }
+
+    if (!operation.done) {
+        throw new Error("Video generation timed out after 10 minutes.");
+    }
+
+    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!downloadLink) {
+        const opError = (operation as any).error;
+        if (opError) {
+             throw new Error(`Video generation failed with an error: ${opError.message} (Code: ${opError.code})`);
+        }
+        throw new Error("Video generation completed, but no download link was returned.");
+    }
+
+    updateProgress("Downloading generated video...", 0.95);
+    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    if (!response.ok) {
+        throw new Error(`Failed to download video file. Status: ${response.statusText}`);
+    }
+
+    const videoBlob = await response.blob();
+    const videoDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(videoBlob);
+    });
+
+    return { videoUrl: videoDataUrl, finalPrompt: options.geminiVidPrompt };
 };
 
 export const enhanceImageResolution = async (imageDataUrl: string): Promise<string> => {

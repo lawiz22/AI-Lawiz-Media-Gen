@@ -4,7 +4,7 @@ import type { User, GenerationOptions, HistoryItem, GeneratedClothing, LibraryIt
 import { authenticateUser } from './services/cloudUserService';
 import { fileToDataUrl, fileToResizedDataUrl } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
-import { generatePortraits } from './services/geminiService';
+import { generatePortraits, generateGeminiVideo } from './services/geminiService';
 // Fix: Import 'checkConnection' to resolve missing name error.
 import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection } from './services/comfyUIService';
 import { saveGenerationToHistory } from './services/historyService';
@@ -84,6 +84,9 @@ const App: React.FC = () => {
         comfyCfg: 5.5,
         comfySampler: 'euler',
         comfyScheduler: 'normal',
+        // Video Generation defaults
+        videoProvider: 'comfyui',
+        comfyVidModelType: 'wan-i2v',
     });
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [progressMessage, setProgressMessage] = useState<string>('');
@@ -146,6 +149,15 @@ const App: React.FC = () => {
         }
         return false;
     }, [sourceImage, options, isLoading, isComfyUIConnected]);
+    
+    const isVideoReady = useMemo(() => {
+        if (isLoading) return false;
+        if (options.videoProvider === 'gemini') {
+            return !!options.geminiVidPrompt?.trim();
+        } else { // comfyui
+            return !!videoStartFrame;
+        }
+    }, [isLoading, options.videoProvider, options.geminiVidPrompt, videoStartFrame]);
 
     // --- Effects ---
     useEffect(() => {
@@ -328,9 +340,16 @@ const App: React.FC = () => {
                 );
                 setGeneratedVideo(videoUrl);
                 setLastUsedPrompt(finalPrompt);
+            } else if (options.videoProvider === 'gemini') {
+                const { videoUrl, finalPrompt } = await generateGeminiVideo(
+                    options,
+                    videoStartFrame, // This is optional for the service
+                    updateProgress
+                );
+                setGeneratedVideo(videoUrl);
+                setLastUsedPrompt(finalPrompt);
             } else {
-                // Placeholder for Gemini video generation
-                throw new Error("Gemini video generation is not yet implemented in this handler.");
+                 throw new Error("Selected video provider is not implemented.");
             }
         } catch (err: any) {
             console.error("Video generation failed:", err);
@@ -634,7 +653,7 @@ const App: React.FC = () => {
                         endFrame={videoEndFrame}
                         setEndFrame={setVideoEndFrame}
                         onGenerate={handleGenerateVideo}
-                        isReady={!!videoStartFrame && !isLoading}
+                        isReady={isVideoReady}
                         isLoading={isLoading}
                         error={globalError ? globalError.message : null}
                         generatedVideo={generatedVideo}

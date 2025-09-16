@@ -442,6 +442,13 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         workflow["38"].inputs.unet_name = options.comfyWanHighNoiseModel; // High noise
         workflow["39"].inputs.unet_name = options.comfyWanLowNoiseModel; // Low noise
         workflow["22"].inputs.clip_name = options.comfyWanClipModel;
+        if (options.comfyWanClipModel?.toLowerCase().endsWith('.gguf')) {
+            workflow["22"].class_type = 'CLIPLoaderGGUF';
+            workflow["22"]._meta.title = 'CLIPLoaderGGUF';
+        } else {
+            workflow["22"].class_type = 'CLIPLoader';
+            workflow["22"]._meta.title = 'CLIP Loader';
+        }
         workflow["8"].inputs.vae_name = options.comfyWanVaeModel;
 
         // Latent
