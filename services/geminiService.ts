@@ -1,6 +1,3 @@
-
-// Implemented Gemini API service to fix module resolution errors.
-// Fix: Removed HarmCategory and HarmBlockThreshold as they are no longer used after removing safety settings.
 import { GoogleGenAI, Modality, Part, GenerateContentConfig, Type } from "@google/genai";
 import type { GenerationOptions } from "../types";
 import { fileToGenerativePart, fileToBase64 } from "../utils/imageUtils";
@@ -86,7 +83,6 @@ export const generateBackgroundImagePreview = async (
   const fullPrompt = `A high-quality, photorealistic background image for a photography session. The background should be: ${prompt}. Do not include any people or prominent figures. Focus on creating a beautiful and believable environment.`;
 
   try {
-    // Fix: Removed the unsupported 'safetySettings' property from the generateImages call.
     const response = await ai.models.generateImages({
       model: 'imagen-4.0-generate-001',
       prompt: fullPrompt,
@@ -105,7 +101,6 @@ export const generateBackgroundImagePreview = async (
     }
   } catch (error: any) {
     console.error("Error generating background preview:", error);
-    // Re-throw a more user-friendly error message
     throw new Error(error.message || "Failed to generate background preview due to an unknown error.");
   }
 };
@@ -114,8 +109,6 @@ export const enhanceImageResolution = async (base64ImageData: string): Promise<s
     const ai = getAiInstance();
     const imagePart = await dataUrlToGenerativePart(base64ImageData);
     
-    // The model for image editing.
-    // Fix: Removed the unsupported 'safetySettings' property from the generateContent call.
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image-preview', 
         contents: {
@@ -325,7 +318,6 @@ export const generatePortraitSeries = async (
             responseModalities: [Modality.IMAGE, Modality.TEXT],
         };
 
-        // Add temperature for non-photorealistic styles to control creativity
         if (options.imageStyle !== 'photorealistic' && options.creativity !== undefined) {
             genConfig.temperature = options.creativity;
         }
@@ -359,7 +351,6 @@ export const generatePortraitSeries = async (
 
     } catch (error) {
         console.error(`Error generating image ${i + 1}:`, error);
-        // Rethrow to be caught by the UI
         throw error;
     }
   }
@@ -414,14 +405,12 @@ export const generateGeminiVideo = async (
     let messageIndex = 0;
     const startTime = Date.now();
     
-    // Polling loop
     while (!operation.done) {
-        // Wait for 10 seconds before checking status again
         await new Promise(resolve => setTimeout(resolve, 10000));
         
         const elapsedMinutes = ((Date.now() - startTime) / 60000).toFixed(1);
         const progressMessage = reassuringMessages[messageIndex % reassuringMessages.length];
-        const progressValue = 0.2 + (messageIndex / (reassuringMessages.length * 2)); // Simulate slow progress
+        const progressValue = 0.2 + (messageIndex / (reassuringMessages.length * 2));
         
         onProgress(`${progressMessage} (${elapsedMinutes} mins elapsed)`, Math.min(progressValue, 0.9));
         
@@ -434,19 +423,15 @@ export const generateGeminiVideo = async (
         messageIndex++;
     }
 
-    // Handle potential errors after the operation is "done".
     if (operation.error) {
         const errorMessage = (operation.error as any).message || JSON.stringify(operation.error);
         console.error("Video generation operation failed with an error object:", operation.error);
         throw new Error(`Video generation failed: ${errorMessage}`);
     }
 
-    // Fix: Removed check for non-existent 'state' property on the video object.
-    // The logic now correctly verifies the presence of the download URI.
     const generatedVideo = operation.response?.generatedVideos?.[0];
     const downloadLink = generatedVideo?.video?.uri;
 
-    // Check if a video download link was provided after the operation completed.
     if (!downloadLink) {
         console.error("Video generation operation completed but returned no video URI:", operation.response);
         throw new Error("Video generation finished, but no video was returned. This could be due to a content policy violation or an internal error.");
@@ -454,7 +439,6 @@ export const generateGeminiVideo = async (
 
     onProgress("Video processing complete. Downloading...", 0.95);
     
-    // The response.body contains the MP4 bytes. You must append an API key when fetching from the download link.
     const response = await fetch(`${downloadLink}&key=${getApiKey()}`);
     if (!response.ok) {
         throw new Error(`Failed to download the generated video. Status: ${response.status}`);
@@ -499,8 +483,31 @@ export const generateThumbnailForPrompt = async (prompt: string): Promise<string
   }
 };
 
+export const summarizePrompt = async (prompt: string): Promise<string> => {
+    const ai = getAiInstance();
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Summarize the following creative prompt into a very short, descriptive title of 3-5 words. Capture the main subject and style. The original prompt is: "${prompt}"`,
+        config: { temperature: 0.1 }
+    });
+    return result.text.trim().replace(/["'.]/g, ''); // Clean up punctuation
+};
 
-// --- Clothes Extractor Functions ---
+export const generateTitleForImage = async (imageDataUrl: string): Promise<string> => {
+    const ai = getAiInstance();
+    const imagePart = await dataUrlToGenerativePart(imageDataUrl);
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: {
+            parts: [
+                imagePart,
+                { text: 'Analyze this image and create a very short, descriptive title of 3-5 words for it. Focus on the main subject, setting, and mood.' }
+            ],
+        },
+        config: { temperature: 0.2 }
+    });
+    return result.text.trim().replace(/["'.]/g, ''); // Clean up punctuation
+};
 
 export const identifyClothing = async (
   base64Image: string,
@@ -571,7 +578,6 @@ export const generateClothingImage = async (
         model: 'gemini-2.5-flash-image-preview',
         contents: { parts: [imagePart, { text: prompt }] },
         config: {
-            // Fix: The 'gemini-2.5-flash-image-preview' model requires both IMAGE and TEXT modalities.
             responseModalities: [Modality.IMAGE, Modality.TEXT],
         },
     });

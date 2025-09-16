@@ -49,7 +49,6 @@ const initialOptions: GenerationOptions = {
   textOnImagePrompt: '',
   textObjectPrompt: "a sign in the background that reads '%s'",
   
-  // ComfyUI defaults
   comfyModelType: 'sdxl',
   comfyFluxGuidance: 3.5,
   comfyModel: '',
@@ -64,8 +63,6 @@ const initialOptions: GenerationOptions = {
   comfySdxlLoraName: '',
   comfySdxlLoraStrength: 0.8,
 
-
-  // ComfyUI WAN 2.2 defaults
   comfyWanHighNoiseModel: 'Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf',
   comfyWanLowNoiseModel: 'Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf',
   comfyWanClipModel: 'umt5_xxl_fp8_e4m3fn_scaled.safetensors',
@@ -83,7 +80,6 @@ const initialOptions: GenerationOptions = {
   comfyWanStockPhotoLoraNameLow: 'stock_photography_wan22_LOW_v1.safetensors',
   comfyWanRefinerStartStep: 3,
 
-  // Nunchaku Kontext Flux defaults
   comfyNunchakuModel: 'svdq-int4_r32-flux.1-kontext-dev.safetensors',
   comfyNunchakuClipL: 'ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors',
   comfyNunchakuT5XXL: 't5xxl_fp8_e4m3fn_scaled.safetensors',
@@ -104,7 +100,6 @@ const initialOptions: GenerationOptions = {
   comfyNunchakuBaseShift: 1.0,
   comfyNunchakuMaxShift: 1.15,
 
-  // Flux Krea defaults
   comfyFluxKreaModel: 'flux1-krea-dev-Q5_K_M.gguf',
   comfyFluxKreaClipT5: 't5-v1_1-xxl-encoder-Q5_K_M.gguf',
   comfyFluxKreaClipL: 'clip_l.safetensors',
@@ -123,7 +118,6 @@ const initialOptions: GenerationOptions = {
   comfyFluxKreaDenoise: 0.8,
   comfyFluxKreaUpscalerSteps: 10,
 
-  // Video options
   videoProvider: 'comfyui',
   comfyVidModelType: 'wan-i2v',
   comfyVidWanI2VHighNoiseModel: 'Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf',
@@ -154,63 +148,44 @@ const initialOptions: GenerationOptions = {
   comfyVidWanI2VUseEndFrame: true,
   comfyVidWanI2VEndFrameStrength: 1.0,
 
-  // Gemini Video options
   geminiVidModel: 'veo-2.0-generate-001',
   geminiVidPrompt: '',
   geminiVidUseEndFrame: false,
 };
 
 function App() {
-  const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('theme');
-    return savedTheme || 'cyberpunk';
-  });
-  
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'cyberpunk');
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const savedUser = sessionStorage.getItem('currentUser');
     return savedUser ? JSON.parse(savedUser) : null;
   });
-
   const [options, setOptions] = useState<GenerationOptions>(initialOptions);
-  
   const [sourceImage, setSourceImage] = useState<File | null>(null);
   const [clothingImage, setClothingImage] = useState<File | null>(null);
   const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
   const [previewedBackgroundImage, setPreviewedBackgroundImage] = useState<string | null>(null);
   const [previewedClothingImage, setPreviewedClothingImage] = useState<string | null>(null);
-  
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [progressMessage, setProgressMessage] = useState('');
   const [progressValue, setProgressValue] = useState(0);
-  
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [lastUsedPrompt, setLastUsedPrompt] = useState<string | null>(null);
   const [lastGenerationOptions, setLastGenerationOptions] = useState<GenerationOptions | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
   const [activeTab, setActiveTab] = useState<'image' | 'video' | 'library' | 'clothes' | 'video-utils' | 'prompt' | 'manage'>('image');
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   const [isOAuthHelperOpen, setIsOAuthHelperOpen] = useState(false);
-  
   const [comfyUIUrl, setComfyUIUrl] = useState<string>(() => localStorage.getItem('comfyui_url') || '');
   const [isComfyUIConnected, setIsComfyUIConnected] = useState<boolean | null>(null);
   const [comfyUIObjectInfo, setComfyUIObjectInfo] = useState<any | null>(null);
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
-
-  // --- State for Google Drive ---
   const [googleClientId, setGoogleClientId] = useState<string>(() => localStorage.getItem('google_client_id') || '');
   const [isDriveConfigured, setIsDriveConfigured] = useState(() => googleDriveService.isDriveConfigured());
-  const [driveFolder, setDriveFolder] = useState<DriveFolder | null>(() => {
-    if (!googleDriveService.isDriveConfigured()) return null;
-    const savedFolder = localStorage.getItem('driveFolder');
-    return savedFolder ? JSON.parse(savedFolder) : null;
-  });
+  const [driveFolder, setDriveFolder] = useState<DriveFolder | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
-
-  // --- State for PromptGeneratorPanel to persist across tab changes ---
   const [promptToolImage, setPromptToolImage] = useState<File | null>(null);
   const [promptToolPrompt, setPromptToolPrompt] = useState<string>('');
   const [promptToolBgImage, setPromptToolBgImage] = useState<File | null>(null);
@@ -219,18 +194,12 @@ function App() {
   const [promptToolSubjectPrompt, setPromptToolSubjectPrompt] = useState<string>('');
   const [promptToolSoupPrompt, setPromptToolSoupPrompt] = useState<string>('');
   const [promptToolSoupHistory, setPromptToolSoupHistory] = useState<string[]>([]);
-
-  // --- State for VideoGeneratorPanel ---
   const [startFrame, setStartFrame] = useState<File | null>(null);
   const [endFrame, setEndFrame] = useState<File | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
-  
-  // --- State for ClothesExtractorPanel ---
   const [clothesExtractorFile, setClothesExtractorFile] = useState<File | null>(null);
   const [clothesExtractorDetails, setClothesExtractorDetails] = useState<string>('');
   const [clothesExtractorResults, setClothesExtractorResults] = useState<GeneratedClothing[]>([]);
-
-  // --- State for LibraryPickerModal ---
   const [isLibraryPickerOpen, setIsLibraryPickerOpen] = useState(false);
   const [libraryPickerConfig, setLibraryPickerConfig] = useState<{
     target: 'sourceImage' | 'clothingImage' | null;
@@ -244,26 +213,19 @@ function App() {
 
   const handleSelectFromLibrary = async (mediaDataUrl: string) => {
     if (!libraryPickerConfig.target) return;
-
     try {
       const file = await dataUrlToFile(mediaDataUrl, `library_${libraryPickerConfig.target}.jpg`);
-      if (libraryPickerConfig.target === 'sourceImage') {
-        setSourceImage(file);
-      } else if (libraryPickerConfig.target === 'clothingImage') {
-        setClothingImage(file);
-      }
+      if (libraryPickerConfig.target === 'sourceImage') setSourceImage(file);
+      else if (libraryPickerConfig.target === 'clothingImage') setClothingImage(file);
     } catch (err) {
       console.error("Failed to load from library", err);
       setError("Failed to load the selected item.");
     }
-
     setIsLibraryPickerOpen(false);
     setLibraryPickerConfig({ target: null, filter: null });
   };
 
-
   const handleAddSoupToHistory = (soup: string) => {
-    // Add new soup to the front, prevent duplicates, and limit history size
     setPromptToolSoupHistory(prev => [soup, ...prev.filter(s => s !== soup)].slice(0, 10));
     setPromptToolSoupPrompt(soup);
   };
@@ -272,13 +234,6 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
-
-  useEffect(() => {
-    fetch('/version.json')
-      .then(res => res.json())
-      .then(data => setVersionInfo(data))
-      .catch(err => console.error("Failed to load version info:", err));
-  }, []);
   
   const updateAndTestConnection = useCallback(async (newUrl?: string) => {
     const urlToUse = newUrl ?? (localStorage.getItem('comfyui_url') || '');
@@ -292,15 +247,41 @@ function App() {
     const result = await checkComfyUIConnection(urlToUse);
     setIsComfyUIConnected(result.success);
   }, []);
+  
+  useEffect(() => {
+    fetch('/version.json')
+        .then(res => res.json())
+        .then(data => setVersionInfo(data))
+        .catch(err => console.error("Failed to load version info:", err));
+  }, []);
 
   useEffect(() => {
-    if (currentUser) {
-      updateAndTestConnection();
-    } else {
-      setIsComfyUIConnected(false);
+    if (!currentUser) {
+        setIsComfyUIConnected(false);
+        handleDriveDisconnect();
+        return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+
+    const initializeUserSession = async () => {
+        await updateAndTestConnection();
+        if (googleDriveService.isDriveConfigured()) {
+            const restored = await googleDriveService.restoreConnection();
+            const savedFolderStr = localStorage.getItem('driveFolder');
+            if (restored && savedFolderStr) {
+                try {
+                    const folder: DriveFolder = JSON.parse(savedFolderStr);
+                    googleDriveService.setFolder(folder);
+                    libraryService.setDriveService(googleDriveService);
+                    setDriveFolder(folder);
+                } catch (e) {
+                    console.error("Failed to restore Drive folder from localStorage.", e);
+                    localStorage.removeItem('driveFolder');
+                }
+            }
+        }
+    };
+    initializeUserSession();
+  }, [currentUser, updateAndTestConnection]);
   
   useEffect(() => {
     if (isComfyUIConnected) {
@@ -320,27 +301,6 @@ function App() {
         setComfyUIObjectInfo(null);
     }
   }, [isComfyUIConnected]);
-
-  // --- Google Drive Integration Effects ---
-  useEffect(() => {
-    const setupDriveService = () => {
-      if (currentUser && isDriveConfigured) {
-          libraryService.setDriveService(googleDriveService);
-          const savedFolder = localStorage.getItem('driveFolder');
-          if (savedFolder) {
-              try {
-                const folder: DriveFolder = JSON.parse(savedFolder);
-                googleDriveService.setFolder(folder);
-              } catch (e) {
-                console.error("Failed to parse saved drive folder.", e);
-                localStorage.removeItem('driveFolder');
-              }
-          }
-      }
-    };
-    setupDriveService();
-  }, [currentUser, isDriveConfigured]);
-
 
   const handleDriveConnect = () => {
     setError(null);
@@ -377,7 +337,6 @@ function App() {
     }
   };
 
-
   const handleDriveDisconnect = () => {
     googleDriveService.disconnect();
     setDriveFolder(null);
@@ -406,7 +365,6 @@ function App() {
     if (user) {
       setCurrentUser(user);
       sessionStorage.setItem('currentUser', JSON.stringify(user));
-      await updateAndTestConnection();
       return true;
     }
     return "Invalid username or password.";
@@ -415,8 +373,6 @@ function App() {
   const handleLogout = () => {
     setCurrentUser(null);
     sessionStorage.removeItem('currentUser');
-    setIsComfyUIConnected(false);
-    handleDriveDisconnect();
   };
   
   const handleSaveSettings = (newComfyUrl: string, newClientId: string) => {
@@ -607,7 +563,6 @@ function App() {
   };
   
   const handleLoadFromLibrary = async (item: LibraryItem) => {
-    // Shared reset logic
     setGeneratedImages([]);
     setGeneratedVideo(null);
     setError(null);
@@ -639,7 +594,6 @@ function App() {
             setClothesExtractorFile(item.sourceImage ? await dataUrlToFile(item.sourceImage, 'library_source.jpg') : null);
             setClothesExtractorDetails(item.clothingDetails || '');
             try {
-                // Handle new (data URL) and old (JSON) formats
                 const isJson = item.media.trim().startsWith('{');
                 if (isJson) {
                     const parsedMedia = JSON.parse(item.media);
@@ -680,9 +634,9 @@ function App() {
     
     if (activeTab === 'video') {
         if (options.videoProvider === 'gemini') {
-            return !!options.geminiVidPrompt?.trim();
+            return !!options.geminiVidPrompt?.trim() || !!startFrame;
         } else { // comfyui
-            return !!startFrame && (!options.comfyVidWanI2VUseEndFrame || !!endFrame) && !!options.comfyVidWanI2VPositivePrompt;
+            return !!startFrame && !!options.comfyVidWanI2VPositivePrompt;
         }
     }
     

@@ -2,6 +2,7 @@ import type { LibraryItem } from '../types';
 import * as idbService from './idbLibraryService';
 import { dataUrlToBlob, dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import * as googleDriveService from './googleDriveService';
+import { generateTitleForImage, summarizePrompt } from './geminiService';
 
 let driveService: typeof googleDriveService | null = null;
 
@@ -30,7 +31,26 @@ export async function initializeDriveSync(onProgress: (message: string) => void)
 }
 
 export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void> => {
-  const newItem = await idbService.saveToLibrary(item);
+  const itemWithName = { ...item };
+  if (!itemWithName.name && (item.mediaType === 'image' || item.mediaType === 'video')) {
+    let generatedName = `${item.mediaType.charAt(0).toUpperCase() + item.mediaType.slice(1)} Item`;
+    try {
+        const options = item.options;
+        const prompt = options?.geminiPrompt || options?.comfyPrompt || options?.geminiVidPrompt || options?.comfyVidWanI2VPositivePrompt;
+        
+        // For I2I or ComfyUI images, analyze the output image for a title.
+        if ((options?.provider === 'gemini' && options?.geminiMode === 'i2i') || (options?.provider === 'comfyui' && item.mediaType === 'image')) {
+            generatedName = await generateTitleForImage(item.media);
+        } else if (prompt) { // For T2I, summarize the prompt.
+            generatedName = await summarizePrompt(prompt);
+        }
+    } catch (e) {
+        console.error("Failed to auto-generate title for library item:", e);
+    }
+    itemWithName.name = generatedName;
+  }
+  
+  const newItem = await idbService.saveToLibrary(itemWithName);
 
   if (driveService?.isConnected()) {
     try {
@@ -58,7 +78,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
       
       await idbService.updateLibraryItem(newItem.id, { driveFileId });
 
-      const { media, thumbnail, ...metadata } = newItem;
+      const { media, ...metadata } = newItem;
       index.items[newItem.id] = { ...metadata, driveFileId };
       
       await driveService.updateLibraryIndex(index, indexFileId);
@@ -104,7 +124,17 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
             } else if (itemMetadata.driveFileId) {
                 const blob = await driveService.downloadMediaFile(itemMetadata.driveFileId);
                 const media = await fileToDataUrl(new File([blob], "file", { type: blob.type }));
-                const thumbnail = await dataUrlToThumbnail(media, 256);
+                
+                let thumbnail: string;
+                if (itemMetadata.mediaType === 'video' && itemMetadata.startFrame) {
+                    thumbnail = await dataUrlToThumbnail(itemMetadata.startFrame, 256);
+                } else if (itemMetadata.mediaType === 'video') {
+                    // SVG placeholder for a video thumbnail if startFrame is missing
+                    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#6b7280"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>`;
+                    thumbnail = `data:image/svg+xml;base64,${btoa(svg)}`;
+                } else {
+                    thumbnail = await dataUrlToThumbnail(media, 256);
+                }
 
                 const newItem: LibraryItem = {
                     ...(itemMetadata as Omit<LibraryItem, 'media' | 'thumbnail'>),
@@ -162,7 +192,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
 
                 const driveFileId = await driveService.uploadMediaFile(blob, filename, parentFolderId);
                 await idbService.updateLibraryItem(item.id, { driveFileId });
-                const { media, thumbnail, ...metadata } = item;
+                const { media, ...metadata } = item;
                 index.items[item.id] = { ...metadata, driveFileId };
             } catch (e: any) {
                 console.error(`Failed to upload item ${item.id} to Drive:`, e);
@@ -230,13 +260,16 @@ export const deleteLibraryItem = async (id: number): Promise<void> => {
       try {
           const { index, fileId } = await driveService.getLibraryIndex();
           if (index.items[id]) {
+              const fileToDeleteId = index.items[id].driveFileId;
               delete index.items[id];
-              // Note: This does not delete the actual file from Drive to prevent accidental data loss.
-              // It just removes the item from the library's index.
               await driveService.updateLibraryIndex(index, fileId);
+              // We now also delete the actual file from Drive.
+              if (fileToDeleteId) {
+                  await driveService.deleteMediaFile(fileToDeleteId);
+              }
           }
       } catch (e) {
-           console.error(`Failed to remove item ${id} from Google Drive index. It may reappear on next sync.`, e);
+           console.error(`Failed to remove item ${id} from Google Drive. It may need to be deleted manually.`, e);
       }
   }
 };
@@ -246,7 +279,6 @@ export const clearLibrary = async (): Promise<void> => {
     if (driveService?.isConnected()) {
         try {
             const { fileId } = await driveService.getLibraryIndex();
-            // Note: This does not delete media files, only the index.
             await driveService.updateLibraryIndex({ version: 1, items: {} }, fileId);
         } catch (e) {
             console.error("Failed to clear remote library index.", e);

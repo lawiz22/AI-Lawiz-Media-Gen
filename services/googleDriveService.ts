@@ -1,23 +1,19 @@
 import type { LibraryItem, DriveFolder } from '../types';
 
-// --- Constants ---
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
 const SCOPES = 'https://www.googleapis.com/auth/drive';
 const PICKER_API_KEY = process.env.API_KEY!;
 const LIBRARY_FILENAME = 'library.json';
 
-// --- Module-level State ---
 let tokenClient: any = null;
 let driveFolder: DriveFolder | null = null;
 let gapiInitializationPromise: Promise<void> | null = null;
 let gisInitializationPromise: Promise<void> | null = null;
 const subfolderCache: Record<string, string> = {};
 
-// --- Helper Types ---
 type LibraryItemMetadata = Omit<LibraryItem, 'media' | 'thumbnail'> | LibraryItem;
 type LibraryIndex = { version: number; items: Record<string, LibraryItemMetadata> };
 
-// --- Helper Functions ---
 const getClientId = (): string => localStorage.getItem('google_client_id') || '';
 
 const initializeGapiClient = (): Promise<void> => {
@@ -76,10 +72,31 @@ const ensureClientsReady = async (): Promise<void> => {
     await Promise.all([initializeGapiClient(), initializeGisClient()]);
 };
 
-// --- Exported Functions ---
 export const isDriveConfigured = (): boolean => !!getClientId();
 export const isConnected = (): boolean => !!window.gapi?.client?.getToken() && !!driveFolder;
 export const setFolder = (folder: DriveFolder) => { driveFolder = folder; };
+
+export const restoreConnection = async (): Promise<boolean> => {
+    if (!isDriveConfigured()) return false;
+    await ensureClientsReady();
+    if (!tokenClient) return false;
+
+    return new Promise((resolve) => {
+        if (window.gapi.client.getToken() !== null) {
+            resolve(true);
+            return;
+        }
+        tokenClient.callback = (tokenResponse: any) => {
+            if (tokenResponse && !tokenResponse.error) {
+                window.gapi.client.setToken(tokenResponse);
+                resolve(true);
+            } else {
+                resolve(false);
+            }
+        };
+        tokenClient.requestAccessToken({ prompt: 'none' });
+    });
+};
 
 export const disconnect = () => {
     const token = window.gapi?.client?.getToken();
@@ -185,8 +202,6 @@ export const getOrCreateSubfolder = async (name: string): Promise<string> => {
     return folderId;
 };
 
-// --- Library Index (library.json) Management ---
-
 export async function getLibraryIndex(): Promise<{ index: LibraryIndex; fileId: string | null }> {
     if (!isConnected()) throw new Error("Not connected to Google Drive.");
     await ensureClientsReady();
@@ -253,9 +268,6 @@ export async function updateLibraryIndex(index: LibraryIndex, fileId: string | n
     return result.id;
 }
 
-
-// --- Media File Management ---
-
 export async function uploadMediaFile(blob: Blob, filename: string, parentFolderId: string): Promise<string> {
     if (!isConnected()) throw new Error("Not connected to Google Drive.");
     await ensureClientsReady();
@@ -307,4 +319,13 @@ export const downloadMediaFile = async (fileId: string): Promise<Blob> => {
     if (!fileResponse.ok) throw new Error(`Failed to download file content for ID: ${fileId}. Status: ${fileResponse.statusText}`);
     
     return fileResponse.blob();
+};
+
+export const deleteMediaFile = async (fileId: string): Promise<void> => {
+    if (!window.gapi.client.getToken()) throw new Error("Not connected to Google Drive.");
+    await ensureClientsReady();
+
+    await window.gapi.client.drive.files.delete({
+        fileId: fileId
+    });
 };
