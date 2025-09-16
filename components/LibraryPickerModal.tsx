@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getLibraryItems } from '../services/libraryService';
 import type { LibraryItem } from '../types';
-import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon } from './icons';
+import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon, DocumentTextIcon, FilmIcon } from './icons';
 
 interface LibraryPickerModalProps {
   isOpen: boolean;
@@ -10,12 +10,14 @@ interface LibraryPickerModalProps {
   filter: 'image' | 'clothes' | null;
 }
 
-// Fix: The function's `mediaType` parameter was too restrictive. Widened the type to include all possible `LibraryItem` media types to satisfy the TypeScript compiler, even though the component's logic already filters for 'image' or 'clothes'.
-const getCategoryIcon = (mediaType: 'image' | 'video' | 'clothes' | 'prompt') => {
+// Fix: Widened the type of `mediaType` to include all possible values from `LibraryItem` and added cases for 'prompt' and 'extracted-frame' to resolve the TypeScript error.
+const getCategoryIcon = (mediaType: 'image' | 'video' | 'clothes' | 'prompt' | 'extracted-frame') => {
     switch(mediaType) {
         case 'image': return <PhotographIcon className="w-4 h-4 text-white" />;
         case 'video': return <VideoIcon className="w-4 h-4 text-white" />;
         case 'clothes': return <TshirtIcon className="w-4 h-4 text-white" />;
+        case 'prompt': return <DocumentTextIcon className="w-4 h-4 text-white" />;
+        case 'extracted-frame': return <FilmIcon className="w-4 h-4 text-white" />;
         default: return null;
     }
 };

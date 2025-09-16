@@ -1,4 +1,3 @@
-
 import { fileToDataUrl } from './utils/imageUtils';
 
 declare global {
@@ -193,7 +192,7 @@ export interface GeneratedClothing {
 export interface LibraryItem {
   id: number; // Timestamp
   driveFileId?: string; // ID of the file on Google Drive
-  mediaType: 'image' | 'video' | 'clothes' | 'prompt';
+  mediaType: 'image' | 'video' | 'clothes' | 'prompt' | 'extracted-frame';
   thumbnail: string; // Small data URL for preview
   media: string; // Full-size data URL for image/video, JSON for clothes, or the prompt text
   name?: string; // For clothes items or prompts

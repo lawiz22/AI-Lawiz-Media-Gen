@@ -572,6 +572,7 @@ function App() {
     switch (item.mediaType) {
         case 'image':
         case 'video':
+        case 'extracted-frame':
             if (item.options) {
                 setOptions(item.options);
                 setLastGenerationOptions(item.options);
@@ -580,10 +581,10 @@ function App() {
             setStartFrame(item.startFrame ? await dataUrlToFile(item.startFrame, 'library_start.jpg') : null);
             setEndFrame(item.endFrame ? await dataUrlToFile(item.endFrame, 'library_end.jpg') : null);
 
-            if (item.mediaType === 'image') {
+            if (item.mediaType === 'image' || item.mediaType === 'extracted-frame') {
                 setGeneratedImages([item.media]);
                 setActiveTab('image');
-            } else {
+            } else { // video
                 setGeneratedVideo(item.media);
                 setActiveTab('video');
             }
@@ -853,7 +854,16 @@ function App() {
             />
         }
 
-        {activeTab === 'video-utils' && <VideoUtilsPanel />}
+        {activeTab === 'video-utils' && <VideoUtilsPanel 
+            setStartFrame={(file: File) => {
+                setStartFrame(file);
+                setActiveTab('video');
+            }}
+            setEndFrame={(file: File) => {
+                setEndFrame(file);
+                setActiveTab('video');
+            }}
+        />}
 
         {activeTab === 'prompt' && currentUser.role === 'admin' && 
             <PromptGeneratorPanel

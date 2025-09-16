@@ -1,5 +1,8 @@
 import React, { useState, useRef, ChangeEvent } from 'react';
-import { FilmIcon, DownloadIcon } from './icons';
+import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon } from './icons';
+import { dataUrlToFile, dataUrlToThumbnail } from '../utils/imageUtils';
+import { saveToLibrary } from '../services/libraryService';
+import type { LibraryItem } from '../types';
 
 // Helper to format time in HH:MM:SS.ms
 const formatTime = (seconds: number): string => {
@@ -12,12 +15,18 @@ const formatTime = (seconds: number): string => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
 };
 
-export const VideoUtilsPanel: React.FC = () => {
+interface VideoUtilsPanelProps {
+    setStartFrame: (file: File) => void;
+    setEndFrame: (file: File) => void;
+}
+
+export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({ setStartFrame, setEndFrame }) => {
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [videoSrc, setVideoSrc] = useState<string | null>(null);
     const [extractedFrame, setExtractedFrame] = useState<string | null>(null);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
     
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -70,6 +79,37 @@ export const VideoUtilsPanel: React.FC = () => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const handleSetAsStartFrame = async () => {
+        if (!extractedFrame) return;
+        const file = await dataUrlToFile(extractedFrame, 'start_frame.jpeg');
+        setStartFrame(file);
+    };
+
+    const handleSetAsEndFrame = async () => {
+        if (!extractedFrame) return;
+        const file = await dataUrlToFile(extractedFrame, 'end_frame.jpeg');
+        setEndFrame(file);
+    };
+
+    const handleSaveFrameToLibrary = async () => {
+        if (!extractedFrame) return;
+        setSavingState('saving');
+        try {
+            const item: Omit<LibraryItem, 'id'> = {
+                mediaType: 'extracted-frame',
+                media: extractedFrame,
+                thumbnail: await dataUrlToThumbnail(extractedFrame, 256),
+                name: `Frame at ${formatTime(currentTime)} from ${videoFile?.name || 'Uploaded Video'}`,
+            };
+            await saveToLibrary(item);
+            setSavingState('saved');
+            setTimeout(() => setSavingState('idle'), 2000);
+        } catch (err) {
+            console.error("Failed to save frame to library:", err);
+            setSavingState('idle');
+        }
     };
 
     return (
@@ -125,7 +165,6 @@ export const VideoUtilsPanel: React.FC = () => {
                                 />
                                 <div className="text-center text-sm font-mono text-text-secondary mt-2">
                                     {formatTime(currentTime)} / {formatTime(duration)}
-                                <h3>Post-Processing</h3>
                                 </div>
                             </div>
                         </div>
@@ -148,17 +187,24 @@ export const VideoUtilsPanel: React.FC = () => {
                         
                         {/* --- Extracted Frame Preview --- */}
                         {extractedFrame && (
-                            <div className="text-center p-4 bg-bg-primary/50 rounded-lg">
-                                <h3 className="text-lg font-semibold text-text-primary mb-2">Frame Preview</h3>
+                             <div className="text-center p-4 bg-bg-primary/50 rounded-lg space-y-4">
+                                <h3 className="text-lg font-semibold text-text-primary">Frame Preview</h3>
                                 <img src={extractedFrame} alt="Extracted Frame" className="max-w-full mx-auto rounded-md shadow-lg" />
-                                <button
-                                    onClick={handleDownloadFrame}
-                                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
-                                    className="mt-4 inline-flex items-center gap-2 font-bold py-2 px-6 rounded-lg transition-colors"
-                                >
-                                    <DownloadIcon className="w-5 h-5" />
-                                    Download Frame
-                                </button>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                    <button onClick={handleDownloadFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
+                                        <DownloadIcon className="w-5 h-5"/> Download
+                                    </button>
+                                    <button onClick={handleSetAsStartFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
+                                        <StartFrameIcon className="w-5 h-5"/> Set as Start
+                                    </button>
+                                    <button onClick={handleSetAsEndFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
+                                        <EndFrameIcon className="w-5 h-5"/> Set as End
+                                    </button>
+                                    <button onClick={handleSaveFrameToLibrary} disabled={savingState !== 'idle'} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50">
+                                        {savingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <SaveIcon className="w-5 h-5"/>}
+                                        {savingState === 'saved' ? 'Saved!' : 'Save to Library'}
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>

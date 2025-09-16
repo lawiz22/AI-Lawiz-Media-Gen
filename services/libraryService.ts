@@ -38,11 +38,24 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
         const options = item.options;
         const prompt = options?.geminiPrompt || options?.comfyPrompt || options?.geminiVidPrompt || options?.comfyVidWanI2VPositivePrompt;
         
-        // For I2I or ComfyUI images, analyze the output image for a title.
-        if ((options?.provider === 'gemini' && options?.geminiMode === 'i2i') || (options?.provider === 'comfyui' && item.mediaType === 'image')) {
-            generatedName = await generateTitleForImage(item.media);
-        } else if (prompt) { // For T2I, summarize the prompt.
-            generatedName = await summarizePrompt(prompt);
+        if (item.mediaType === 'image') {
+            // For ComfyUI or Gemini I2I, it's best to analyze the final image.
+            if (options?.provider === 'comfyui' || (options?.provider === 'gemini' && options?.geminiMode === 'i2i')) {
+                generatedName = await generateTitleForImage(item.media);
+            } 
+            // For Gemini T2I, a prompt must exist, so summarize it.
+            else if (prompt) {
+                generatedName = await summarizePrompt(prompt);
+            }
+        } else if (item.mediaType === 'video') {
+            // If a video prompt exists, it's the source of truth.
+            if (prompt) {
+                generatedName = await summarizePrompt(prompt);
+            } 
+            // If no prompt (e.g., Gemini Image-to-Video), but there's a start frame, analyze the image.
+            else if (item.startFrame) {
+                generatedName = await generateTitleForImage(item.startFrame);
+            }
         }
     } catch (e) {
         console.error("Failed to auto-generate title for library item:", e);
@@ -68,6 +81,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
         case 'image': subfolderName = 'images'; break;
         case 'video': subfolderName = 'videos'; break;
         case 'clothes': subfolderName = 'clothes'; break;
+        case 'extracted-frame': subfolderName = 'extracted-frames'; break;
         default: subfolderName = 'misc';
       }
       const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
@@ -184,6 +198,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
                     case 'image': subfolderName = 'images'; break;
                     case 'video': subfolderName = 'videos'; break;
                     case 'clothes': subfolderName = 'clothes'; break;
+                    case 'extracted-frame': subfolderName = 'extracted-frames'; break;
                     default: subfolderName = 'misc';
                 }
                 const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
