@@ -1,9 +1,10 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk, syncLibraryToDrive, exportLibraryAsJson, updateLibraryItem } from '../services/libraryService';
 import { generateThumbnailForPrompt } from '../services/geminiService';
 import type { LibraryItem, GenerationOptions } from '../types';
-import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon, FileExportIcon, DocumentTextIcon } from './icons';
+import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon, FileExportIcon, DocumentTextIcon, Squares2X2Icon, ListBulletIcon, ArrowUpIcon, ArrowDownIcon } from './icons';
+
+type FilterType = 'all' | 'image' | 'video' | 'clothes' | 'prompt';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -14,7 +15,7 @@ interface LibraryPanelProps {
   isDriveConfigured: boolean;
 }
 
-// --- Helper Functions and Components for Option Display ---
+// --- Helper Components for Option Display ---
 
 const formatOptionKey = (key: string): string => {
   return key
@@ -208,13 +209,13 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<LibraryItem | null>(null);
   const [copyButtonText, setCopyButtonText] = useState('Copy Prompt');
-  // Fix: Add 'prompt' to the possible filter values to handle prompt media types.
-  const [activeFilter, setActiveFilter] = useState<'all' | 'image' | 'video' | 'clothes' | 'prompt'>('all');
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [isSavingToDisk, setIsSavingToDisk] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc'); // desc = newest first
   
   const [thumbnailPreview, setThumbnailPreview] = useState<{
     url: string | null;
@@ -381,7 +382,6 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
     setThumbnailPreview(null);
   };
 
-  // Fix: Widened the function signature to accept 'prompt' and added a case to return a DocumentTextIcon, resolving a TypeScript error.
   const getCategoryIcon = (mediaType: 'image' | 'video' | 'clothes' | 'prompt') => {
       switch(mediaType) {
           case 'image': return <PhotographIcon className="w-4 h-4 text-white" />;
@@ -392,10 +392,15 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
       }
   };
 
-  const filteredItems = useMemo(() => {
-    if (activeFilter === 'all') return items;
-    return items.filter(item => item.mediaType === activeFilter);
-  }, [items, activeFilter]);
+  const displayedItems = useMemo(() => {
+    const filtered = activeFilter === 'all' ? items : items.filter(item => item.mediaType === activeFilter);
+    return filtered.sort((a, b) => {
+        if (sortOrder === 'desc') {
+            return b.id - a.id;
+        }
+        return a.id - b.id;
+    });
+  }, [items, activeFilter, sortOrder]);
 
   const syncStatusMessage = isSyncing ? syncMessage : isUploading ? uploadMessage : null;
 
@@ -469,34 +474,40 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
             </div>
         ) : (
             <>
-                <div className="flex items-center justify-center border-b border-border-primary mb-6">
-                    <button onClick={() => setActiveFilter('all')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeFilter === 'all' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                        All
-                    </button>
-                    <button onClick={() => setActiveFilter('image')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeFilter === 'image' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                        Images
-                    </button>
-                    <button onClick={() => setActiveFilter('video')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeFilter === 'video' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                        Videos
-                    </button>
-                    <button onClick={() => setActiveFilter('clothes')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeFilter === 'clothes' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                        Clothes
-                    </button>
-                    {/* Fix: Added a filter button for prompts. */}
-                    <button onClick={() => setActiveFilter('prompt')} className={`px-4 py-2 text-sm font-bold transition-colors ${activeFilter === 'prompt' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>
-                        Prompts
-                    </button>
+                {/* --- Toolbar --- */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 p-2 bg-bg-tertiary rounded-lg">
+                    <div className="flex items-center gap-1 bg-bg-primary p-1 rounded-md">
+                        {(['all', 'image', 'video', 'clothes', 'prompt'] as FilterType[]).map(filter => (
+                            <button key={filter} onClick={() => setActiveFilter(filter)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${activeFilter === filter ? 'bg-accent text-accent-text shadow' : 'hover:bg-bg-secondary'}`}>
+                                {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                         <button onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')} className="flex items-center gap-2 bg-bg-primary text-text-secondary font-semibold p-2 rounded-md hover:bg-bg-secondary transition-colors" title={sortOrder === 'desc' ? 'Sort by oldest first' : 'Sort by newest first'}>
+                            {sortOrder === 'desc' ? <ArrowDownIcon className="w-4 h-4"/> : <ArrowUpIcon className="w-4 h-4" />}
+                            <span className="text-xs hidden sm:inline">{sortOrder === 'desc' ? 'Newest' : 'Oldest'}</span>
+                        </button>
+                        <div className="flex items-center gap-1 bg-bg-primary p-1 rounded-md">
+                             <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`} title="Grid View">
+                                <Squares2X2Icon className="w-5 h-5" />
+                            </button>
+                            <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`} title="List View">
+                                <ListBulletIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                {filteredItems.length === 0 ? (
+                {displayedItems.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center text-text-secondary p-16">
                         <LibraryIcon className="w-20 h-20 text-border-primary mb-4" />
                         <h3 className="text-lg font-bold text-text-primary">No Items in this Category</h3>
                         <p className="capitalize">Your saved {activeFilter} will appear here.</p>
                     </div>
-                ) : (
+                ) : viewMode === 'grid' ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                        {filteredItems.map(item => (
+                        {displayedItems.map(item => (
                             <div 
                                 key={item.id} 
                                 className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer"
@@ -514,8 +525,28 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                                     </div>
                                 )}
                                 <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center text-white text-xs font-semibold">
-                                    <span className="capitalize font-bold text-sm">{item.mediaType === 'prompt' ? item.promptType : item.mediaType}</span>
+                                    <span className="capitalize font-bold text-sm">{item.name || (item.mediaType === 'prompt' ? item.promptType : item.mediaType)}</span>
                                     <span>{new Date(item.id).toLocaleDateString()}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {displayedItems.map(item => (
+                            <div key={item.id} className="group flex items-center gap-4 p-2 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors" onMouseEnter={(e) => handleItemMouseEnter(item, e)} onMouseLeave={handleItemMouseLeave}>
+                                <img src={item.thumbnail} alt="Thumbnail" className="w-12 h-12 object-cover rounded-md flex-shrink-0 cursor-pointer" onClick={() => setSelectedItem(item)} />
+                                <div className="flex-grow cursor-pointer" onClick={() => setSelectedItem(item)}>
+                                    <p className="font-semibold text-text-primary truncate">{item.name || `${item.mediaType.charAt(0).toUpperCase() + item.mediaType.slice(1)} Item`}</p>
+                                    <p className="text-xs text-text-muted">{new Date(item.id).toLocaleString()}</p>
+                                </div>
+                                <div className="flex-shrink-0 flex items-center gap-2">
+                                     <button onClick={() => onLoadItem(item)} title="Load Item" className="p-2 rounded-full text-text-secondary hover:bg-accent hover:text-accent-text transition-colors opacity-0 group-hover:opacity-100">
+                                        <LoadIcon className="w-5 h-5" />
+                                    </button>
+                                    <button onClick={() => handleDelete(item.id)} title="Delete Item" className="p-2 rounded-full text-text-secondary hover:bg-danger hover:text-white transition-colors opacity-0 group-hover:opacity-100">
+                                        <TrashIcon className="w-5 h-5" />
+                                    </button>
                                 </div>
                             </div>
                         ))}

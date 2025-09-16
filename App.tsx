@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Login } from './components/Login';
@@ -361,13 +359,11 @@ function App() {
             localStorage.setItem('driveFolder', JSON.stringify(folder));
             libraryService.setDriveService(googleDriveService);
             
-            // New robust initialization logic
             setSyncMessage('Initializing library on Google Drive...');
             await libraryService.initializeDriveSync(setSyncMessage);
             alert("Google Drive library initialized and synced successfully!");
 
         } else {
-            // User cancelled the picker
             setSyncMessage('');
         }
     } catch (e: any) {
@@ -394,7 +390,8 @@ function App() {
     setError(null);
     try {
         await libraryService.syncLibraryFromDrive((msg) => setSyncMessage(msg));
-        alert("Sync complete!");
+        await libraryService.syncLibraryToDrive((msg) => setSyncMessage(msg));
+        alert("Two-way sync complete!");
     } catch (e: any) {
         console.error("Sync Error:", e);
         setError("Failed to sync with Google Drive: " + e.message);
@@ -921,7 +918,6 @@ function App() {
                 subjectImage={promptToolSubjectImage}
                 setSubjectImage={setPromptToolSubjectImage}
                 subjectPrompt={promptToolSubjectPrompt}
-// Fix: Corrected typo in prop value from `setSubjectPrompt` to `setPromptToolSubjectPrompt`.
                 setSubjectPrompt={setPromptToolSubjectPrompt}
                 soupPrompt={promptToolSoupPrompt}
                 setSoupPrompt={setPromptToolSoupPrompt}

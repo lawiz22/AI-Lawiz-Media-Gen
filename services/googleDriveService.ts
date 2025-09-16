@@ -1,5 +1,4 @@
 import type { LibraryItem, DriveFolder } from '../types';
-import { dataUrlToBlob } from '../utils/imageUtils';
 
 // --- Constants ---
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
@@ -14,6 +13,9 @@ let gapiInitializationPromise: Promise<void> | null = null;
 let gisInitializationPromise: Promise<void> | null = null;
 const subfolderCache: Record<string, string> = {};
 
+// --- Helper Types ---
+type LibraryItemMetadata = Omit<LibraryItem, 'media' | 'thumbnail'> | LibraryItem;
+type LibraryIndex = { version: number; items: Record<string, LibraryItemMetadata> };
 
 // --- Helper Functions ---
 const getClientId = (): string => localStorage.getItem('google_client_id') || '';
@@ -185,13 +187,6 @@ export const getOrCreateSubfolder = async (name: string): Promise<string> => {
 
 // --- Library Index (library.json) Management ---
 
-// Fix: Redefined the index type to correctly represent that prompt items contain all their data, while other media types only contain metadata. This resolves downstream type errors.
-// A type for the metadata stored in library.json.
-// For media files, we omit the large data properties.
-// For prompts, we include them as they are small.
-type LibraryItemMetadata = Omit<LibraryItem, 'media' | 'thumbnail'> | LibraryItem;
-type LibraryIndex = { version: number; items: Record<string, LibraryItemMetadata> };
-
 export async function getLibraryIndex(): Promise<{ index: LibraryIndex; fileId: string | null }> {
     if (!isConnected()) throw new Error("Not connected to Google Drive.");
     await ensureClientsReady();
@@ -206,22 +201,25 @@ export async function getLibraryIndex(): Promise<{ index: LibraryIndex; fileId: 
             headers: { 'Authorization': `Bearer ${window.gapi.client.getToken().access_token}` }
         });
         if (!fileResponse.ok) throw new Error("Could not download library index from Google Drive.");
-        const index = await fileResponse.json();
-        return { index, fileId: file.id };
+        try {
+            const index = await fileResponse.json();
+            return { index, fileId: file.id };
+        } catch (e) {
+             console.error("Failed to parse library.json from Drive. It might be corrupted.", e);
+             return { index: { version: 1, items: {} }, fileId: file.id };
+        }
     }
 
-    // If no index file exists, return a default structure
     return { index: { version: 1, items: {} }, fileId: null };
 }
 
-export async function updateLibraryIndex(index: any, fileId: string | null): Promise<string> {
+export async function updateLibraryIndex(index: LibraryIndex, fileId: string | null): Promise<string> {
     if (!isConnected()) throw new Error("Not connected to Google Drive.");
     await ensureClientsReady();
     
     const blob = new Blob([JSON.stringify(index, null, 2)], { type: 'application/json' });
     let idToUpdate = fileId;
 
-    // If file doesn't exist, create it first using the GAPI client. This is more robust.
     if (!idToUpdate) {
         const fileMetadata = {
             name: LIBRARY_FILENAME,
@@ -238,7 +236,6 @@ export async function updateLibraryIndex(index: any, fileId: string | null): Pro
         }
     }
 
-    // Now, update the file (either the existing one or the one we just created) with its content.
     const updateResponse = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${idToUpdate}?uploadType=media`, {
         method: 'PATCH',
         headers: {
@@ -269,7 +266,6 @@ export async function uploadMediaFile(blob: Blob, filename: string, parentFolder
         parents: [parentFolderId]
     };
 
-    // --- Resumable Upload Flow for large media files ---
     const initResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
         method: 'POST',
         headers: {
