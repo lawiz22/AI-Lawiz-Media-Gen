@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk, syncLibraryToDrive, exportLibraryAsJson, updateLibraryItem } from '../services/libraryService';
 import { generateThumbnailForPrompt } from '../services/geminiService';
@@ -48,6 +49,7 @@ const getRelevantOptionKeys = (options: GenerationOptions, mediaType: 'image' | 
             keys.add('geminiMode');
             if (options.geminiMode === 't2i') {
                 keys.add('geminiPrompt');
+                keys.add('geminiT2IModel');
             } else { // i2i
                 keys.add('background');
                 if (options.background === 'prompt' || options.background === 'random') {
@@ -600,66 +602,45 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                                         <div className="space-y-3">
                                             <div>
                                                 <span className="font-semibold text-text-primary">Prompt Source:</span>
-                                                <p className="break-words capitalize text-text-primary">{selectedItem.promptType || 'N/A'}</p>
+                                                <p className="break-words capitalize text-text-primary">{selectedItem.promptType}</p>
                                             </div>
                                             <div>
                                                 <span className="font-semibold text-text-primary">Model Type:</span>
-                                                <p className="break-words uppercase text-text-primary">{selectedItem.promptModelType || 'N/A'}</p>
+                                                <p className="break-words uppercase text-text-primary">{selectedItem.promptModelType}</p>
                                             </div>
-                                            <div>
-                                                <span className="font-semibold text-text-primary">Full Prompt Text:</span>
-                                                <p className="whitespace-pre-wrap break-words text-xs bg-bg-primary p-2 rounded-md mt-1 text-text-primary">{selectedItem.media}</p>
+                                             <div>
+                                                <span className="font-semibold text-text-primary">Prompt Text:</span>
+                                                <p className="break-words text-text-primary">{selectedItem.media}</p>
                                             </div>
                                         </div>
                                     ) : (
-                                        <>
-                                            <div>
-                                                <span className="font-semibold text-text-primary">Item Name:</span>
-                                                <p className="break-words">{selectedItem.name || 'N/A'}</p>
-                                            </div>
-                                            <div>
-                                                <span className="font-semibold text-text-primary">Details Provided:</span>
-                                                <p className="whitespace-pre-wrap break-words text-xs">{selectedItem.clothingDetails || 'None'}</p>
-                                            </div>
-                                        </>
+                                        <p>No options were saved for this item.</p>
                                     )}
                                 </div>
                             )}
                         </div>
-                        <div className="mt-4 flex flex-col gap-3">
-                            {saveError && (
-                                <p className="text-xs text-danger text-center bg-danger-bg p-2 rounded-md">{saveError}</p>
-                            )}
-                            <button
-                                onClick={handleSaveToDisk}
-                                disabled={isSavingToDisk}
-                                className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
-                            >
+                        <div className="mt-4 pt-4 border-t border-border-primary flex-shrink-0 space-y-2">
+                             {relevantPrompt && (
+                                <div className="relative">
+                                    <textarea readOnly value={relevantPrompt} className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-xs text-text-secondary" rows={3}/>
+                                    <button onClick={handleCopyPrompt} title="Copy Prompt" className="absolute top-2 right-2 bg-bg-primary/80 text-text-secondary text-xs font-semibold py-1 px-2 rounded-full hover:bg-accent hover:text-accent-text transition-colors">
+                                        <CopyIcon className="w-3 h-3" /> {copyButtonText}
+                                    </button>
+                                </div>
+                             )}
+                             <button onClick={handleSaveToDisk} disabled={isSavingToDisk} className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                 {isSavingToDisk ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <DownloadIcon className="w-5 h-5"/>}
-                                {isSavingToDisk ? 'Saving...' : 'Save to Disk'}
+                                Save to Disk
                             </button>
-                            {relevantPrompt && (
-                                <button
-                                    onClick={handleCopyPrompt}
-                                    className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
-                                >
-                                    <CopyIcon className="w-5 h-5" /> {copyButtonText}
+                             {saveError && <p className="text-xs text-danger text-center">{saveError}</p>}
+                             <div className="grid grid-cols-2 gap-2">
+                                <button onClick={() => handleDelete(selectedItem.id)} className="flex items-center justify-center gap-2 bg-danger-bg text-danger font-semibold py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
+                                    <TrashIcon className="w-4 h-4"/> Delete
                                 </button>
-                            )}
-                            {(selectedItem.mediaType !== 'clothes') && (
-                                <button
-                                    onClick={() => { onLoadItem(selectedItem); setSelectedItem(null); }}
-                                    className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
-                                >
-                                    <LoadIcon className="w-5 h-5"/> Load Item
+                                <button onClick={() => onLoadItem(selectedItem)} className="flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors">
+                                    <LoadIcon className="w-4 h-4"/> Load
                                 </button>
-                            )}
-                            <button
-                                onClick={() => handleDelete(selectedItem.id)}
-                                className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors"
-                            >
-                                <TrashIcon className="w-5 h-5"/> Delete
-                            </button>
+                             </div>
                         </div>
                     </div>
                 </div>

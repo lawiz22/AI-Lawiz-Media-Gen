@@ -1,3 +1,4 @@
+
 import { fileToDataUrl } from './utils/imageUtils';
 
 declare global {
@@ -29,6 +30,7 @@ declare global {
 export interface GenerationOptions {
   provider: 'gemini' | 'comfyui';
   geminiMode?: 'i2i' | 't2i';
+  geminiT2IModel?: 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image-preview';
   geminiPrompt?: string;
   numImages: number;
   background: string;

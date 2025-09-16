@@ -31,6 +31,7 @@ import { OAuthHelperModal } from './components/OAuthHelperModal';
 const initialOptions: GenerationOptions = {
   provider: 'gemini',
   geminiMode: 'i2i',
+  geminiT2IModel: 'imagen-4.0-generate-001',
   geminiPrompt: '',
   numImages: 2,
   background: 'original',
@@ -920,6 +921,7 @@ function App() {
                 subjectImage={promptToolSubjectImage}
                 setSubjectImage={setPromptToolSubjectImage}
                 subjectPrompt={promptToolSubjectPrompt}
+// Fix: Corrected typo in prop value from `setSubjectPrompt` to `setPromptToolSubjectPrompt`.
                 setSubjectPrompt={setPromptToolSubjectPrompt}
                 soupPrompt={promptToolSoupPrompt}
                 setSoupPrompt={setPromptToolSoupPrompt}

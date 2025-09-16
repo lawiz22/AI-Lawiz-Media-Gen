@@ -1,3 +1,4 @@
+
 // Implemented Gemini API service to fix module resolution errors.
 // Fix: Removed HarmCategory and HarmBlockThreshold as they are no longer used after removing safety settings.
 import { GoogleGenAI, Modality, Part, GenerateContentConfig, Type } from "@google/genai";
@@ -148,7 +149,7 @@ export const enhanceImageResolution = async (base64ImageData: string): Promise<s
 export const generateImagesFromPrompt = async (
   options: GenerationOptions,
   onProgress: (message: string, progress: number) => void
-): Promise<{ images: string[], firstPrompt: string }> => {
+): Promise<{ images: string[], finalPrompt: string }> => {
   const ai = getAiInstance();
   if (!options.geminiPrompt?.trim()) {
     throw new Error("Prompt cannot be empty for text-to-image generation.");
@@ -173,27 +174,66 @@ export const generateImagesFromPrompt = async (
 
   onProgress("Preparing for generation...", 0.1);
 
+  const model = options.geminiT2IModel || 'imagen-4.0-generate-001';
+
   for (let i = 0; i < totalImages; i++) {
     const progress = 0.1 + (i / totalImages) * 0.9;
-    onProgress(`Generating image ${i + 1} of ${totalImages}...`, progress);
+    onProgress(`Generating with ${model}... (${i + 1}/${totalImages})`, progress);
 
     try {
-      const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: fullPrompt,
-        config: {
-          numberOfImages: 1,
-          outputMimeType: 'image/jpeg',
-          aspectRatio: options.aspectRatio as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
-        },
-      });
+      let imageDataUrl: string | null = null;
+      if (model === 'gemini-2.5-flash-image-preview') {
+          const result = await ai.models.generateContent({
+              model: 'gemini-2.5-flash-image-preview',
+              contents: {
+                  parts: [{ text: fullPrompt }],
+              },
+              config: {
+                  responseModalities: [Modality.IMAGE, Modality.TEXT],
+              },
+          });
 
-      if (response.generatedImages && response.generatedImages.length > 0) {
-        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-        generatedImages.push(`data:image/jpeg;base64,${base64ImageBytes}`);
-      } else {
-        throw new Error(`The AI did not return an image for iteration ${i + 1}. The request may have been blocked due to safety policies. Please try modifying your prompt.`);
+          let imageFound = false;
+          if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts) {
+              for (const part of result.candidates[0].content.parts) {
+                  if (part.inlineData) {
+                      const base64ImageBytes: string = part.inlineData.data;
+                      imageDataUrl = `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
+                      imageFound = true;
+                      break; 
+                  }
+              }
+          }
+          if (!imageFound) {
+              const textResponse = result.text?.trim();
+              if (textResponse) {
+                  throw new Error(`AI returned text instead of an image: ${textResponse}`);
+              }
+              throw new Error(`The AI did not return an image for iteration ${i + 1}. The request may have been blocked due to safety policies. Please try modifying your prompt.`);
+          }
+      } else { // 'imagen-4.0-generate-001'
+          const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: fullPrompt,
+            config: {
+              numberOfImages: 1,
+              outputMimeType: 'image/jpeg',
+              aspectRatio: options.aspectRatio as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
+            },
+          });
+    
+          if (response.generatedImages && response.generatedImages.length > 0) {
+            const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+            imageDataUrl = `data:image/jpeg;base64,${base64ImageBytes}`;
+          } else {
+            throw new Error(`The AI did not return an image for iteration ${i + 1}. The request may have been blocked due to safety policies. Please try modifying your prompt.`);
+          }
       }
+
+      if (imageDataUrl) {
+          generatedImages.push(imageDataUrl);
+      }
+
     } catch (error: any) {
       console.error(`Error generating image ${i + 1}:`, error);
       throw new Error(error.message || `Failed to generate image ${i + 1} due to an unknown error.`);
@@ -201,7 +241,7 @@ export const generateImagesFromPrompt = async (
   }
 
   onProgress("Finalizing results...", 0.99);
-  return { images: generatedImages, firstPrompt: fullPrompt };
+  return { images: generatedImages, finalPrompt: fullPrompt };
 };
 
 export const generatePortraitSeries = async (
@@ -434,7 +474,7 @@ export const generateThumbnailForPrompt = async (prompt: string): Promise<string
     throw new Error("Prompt cannot be empty for thumbnail generation.");
   }
   
-  const fullPrompt = `A small, clear, square thumbnail image that visually represents the following concept: "${prompt}"`;
+  const fullPrompt = `Create a beautiful, abstract digital painting that visually represents the theme of this concept: "${prompt.substring(0, 300)}"`;
 
   try {
     const response = await ai.models.generateImages({

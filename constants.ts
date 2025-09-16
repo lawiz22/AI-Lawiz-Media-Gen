@@ -1,6 +1,5 @@
-
 // Fix: Removed circular dependency by defining MAX_IMAGES constant directly.
-export const MAX_IMAGES = 8;
+export const MAX_IMAGES = 12;
 
 // Obfuscated poses to protect intellectual property
 export const POSES = [
