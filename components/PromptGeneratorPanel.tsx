@@ -4,6 +4,7 @@ import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extr
 import { saveToLibrary } from '../services/libraryService';
 import type { LibraryItem } from '../types';
 import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon } from './icons';
+import { fileToDataUrl, fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 
 interface PromptGeneratorPanelProps {
     onUsePrompt: (prompt: string) => void;
@@ -125,7 +126,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         promptToSave: string, 
         type: PromptCategory,
         modelType: PromptModelType,
-        setSaveState: React.Dispatch<React.SetStateAction<'idle'|'saving'|'saved'>>
+        setSaveState: React.Dispatch<React.SetStateAction<'idle'|'saving'|'saved'>>,
+        sourceFile: File | null
     ) => {
         if (!promptToSave.trim()) return;
         setSaveState('saving');
@@ -137,6 +139,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                 name: `${type.charAt(0).toUpperCase() + type.slice(1)} Prompt (${modelType.toUpperCase()})`,
                 media: promptToSave,
                 thumbnail: createPromptThumbnail(promptToSave, type, modelType),
+                sourceImage: sourceFile
+                    ? await fileToResizedDataUrl(sourceFile, 512)
+                    : undefined,
             };
             await saveToLibrary(item);
             setSaveState('saved');
@@ -406,7 +411,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             <button 
-                                onClick={() => handleSavePrompt(prompt, 'image', modelType, setSavingState)}
+                                onClick={() => handleSavePrompt(prompt, 'image', modelType, setSavingState, image)}
                                 disabled={!prompt || isLoading || savingState !== 'idle'}
                                 className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
                                     savingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
@@ -500,7 +505,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             <button 
-                                onClick={() => handleSavePrompt(bgPrompt, 'background', bgModelType, setBgSavingState)}
+                                onClick={() => handleSavePrompt(bgPrompt, 'background', bgModelType, setBgSavingState, bgImage)}
                                 disabled={!bgPrompt || isBgLoading || bgSavingState !== 'idle'}
                                 className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
                                     bgSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
@@ -594,7 +599,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             <button 
-                                onClick={() => handleSavePrompt(subjectPrompt, 'subject', subjectModelType, setSubjectSavingState)}
+                                onClick={() => handleSavePrompt(subjectPrompt, 'subject', subjectModelType, setSubjectSavingState, subjectImage)}
                                 disabled={!subjectPrompt || isSubjectLoading || subjectSavingState !== 'idle'}
                                 className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
                                     subjectSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
@@ -696,7 +701,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                              <button 
-                                onClick={() => handleSavePrompt(soupPrompt, 'soup', soupModelType, setSoupSavingState)}
+                                onClick={() => handleSavePrompt(soupPrompt, 'soup', soupModelType, setSoupSavingState, null)}
                                 disabled={!soupPrompt || isSoupLoading || soupSavingState !== 'idle'}
                                 className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
                                     soupSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'

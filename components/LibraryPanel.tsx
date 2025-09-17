@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk, syncLibraryToDrive, exportLibraryAsJson, updateLibraryItem } from '../services/libraryService';
-import { generateThumbnailForPrompt } from '../services/geminiService';
+import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk, syncLibraryToDrive, exportLibraryAsJson } from '../services/libraryService';
 import type { LibraryItem, GenerationOptions, LibraryItemType, PaletteColor } from '../types';
 import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon, FileExportIcon, DocumentTextIcon, Squares2X2Icon, ListBulletIcon, ArrowUpIcon, ArrowDownIcon, FilmIcon, CubeIcon, PaletteIcon, LogoIconSimple, CharacterIcon } from './icons';
 
@@ -353,65 +352,29 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
     await exportLibraryAsJson();
   };
 
-  const handleItemMouseEnter = async (item: LibraryItem, e: React.MouseEvent) => {
-    // Determine what to show.
-    let imageUrl: string | null = null;
-    let needsGeneration = false;
-    
-    if (item.mediaType === 'color-palette' && item.sourceImage) {
-      imageUrl = item.sourceImage;
-    } else if (item.mediaType === 'prompt') {
-      if (item.previewThumbnail) {
-        imageUrl = item.previewThumbnail;
-      } else {
-        needsGeneration = true;
-      }
-    } else {
-      // Not a hoverable item type.
-      return;
-    }
-
-    // Common positioning logic.
-    const rect = e.currentTarget.getBoundingClientRect();
-    const previewSize = 128;
-    const gap = 10;
-    
-    let top = rect.top;
-    let left = rect.right + gap;
-
-    if (left + previewSize > window.innerWidth) {
-      left = rect.left - previewSize - gap;
-    }
-    if (top + previewSize > window.innerHeight) {
-      top = window.innerHeight - previewSize - gap;
-    }
-    if (top < gap) {
-      top = gap;
-    }
-    const position = { top, left };
-
-    // Show existing image.
-    if (imageUrl) {
-      setThumbnailPreview({ url: imageUrl, loading: false, position });
-      return;
-    }
-
-    // Generate and show new image.
-    if (needsGeneration) {
-      setThumbnailPreview({ url: null, loading: true, position });
-      try {
-        const newThumbnailUrl = await generateThumbnailForPrompt(item.media);
-        await updateLibraryItem(item.id, { previewThumbnail: newThumbnailUrl });
+  const handleItemMouseEnter = (item: LibraryItem, e: React.MouseEvent) => {
+    // Show a preview only for prompts and palettes that have a source image.
+    if ((item.mediaType === 'prompt' || item.mediaType === 'color-palette') && item.sourceImage) {
+        const imageUrl = item.sourceImage;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const previewSize = 128;
+        const gap = 10;
         
-        const updatedItems = items.map(i => i.id === item.id ? { ...i, previewThumbnail: newThumbnailUrl } : i);
-        setItems(updatedItems);
-        
-        setThumbnailPreview(current => (current?.loading ? { ...current, url: newThumbnailUrl, loading: false } : current));
-      } catch (error) {
-        console.error('Failed to generate preview thumbnail:', error);
-        const errorSvg = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>')}`;
-        setThumbnailPreview(current => (current?.loading ? { ...current, url: errorSvg, loading: false } : current));
-      }
+        let top = rect.top;
+        let left = rect.right + gap;
+
+        if (left + previewSize > window.innerWidth) {
+            left = rect.left - previewSize - gap;
+        }
+        if (top + previewSize > window.innerHeight) {
+            top = window.innerHeight - previewSize - gap;
+        }
+        if (top < gap) {
+            top = gap;
+        }
+        const position = { top, left };
+
+        setThumbnailPreview({ url: imageUrl, loading: false, position });
     }
   };
 
@@ -653,7 +616,11 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                          })()}
                          {selectedItem.mediaType === 'prompt' && (
                             <div className="w-full h-full p-2 flex items-center justify-center">
-                                <img src={selectedItem.thumbnail} alt="Prompt thumbnail" className="max-w-full max-h-full object-contain rounded-md" />
+                                <img 
+                                    src={selectedItem.sourceImage || selectedItem.thumbnail} 
+                                    alt="Prompt visual" 
+                                    className="max-w-full max-h-full object-contain rounded-md" 
+                                />
                             </div>
                          )}
                          {selectedItem.mediaType === 'color-palette' && selectedPalette && (
