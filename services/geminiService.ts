@@ -36,18 +36,19 @@ export const generatePortraits = async (
             return { images: imageUrls, finalPrompt: options.geminiPrompt || null };
         } else { // gemini-2.5-flash-image-preview
              const allImages = [];
+             const finalPromptForModel = `Generate a single, high-quality image based on this description: ${options.geminiPrompt!}`;
              for (let i = 0; i < options.numImages; i++) {
                 updateProgress(`Generating image ${i + 1}/${options.numImages}...`, (i + 1) / options.numImages);
                 const response: GenerateContentResponse = await ai.models.generateContent({
                     model: t2iModel,
-                    contents: { parts: [{ text: options.geminiPrompt! }] },
+                    contents: { parts: [{ text: finalPromptForModel }] },
                     config: {
-                        responseMimeType: 'image/jpeg'
+                        responseModalities: [Modality.IMAGE, Modality.TEXT]
                     }
                 });
-                const part = response.candidates?.[0]?.content?.parts[0];
-                if (part?.inlineData?.data) {
-                    allImages.push(`data:image/jpeg;base64,${part.inlineData.data}`);
+                const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+                if (imagePart?.inlineData?.data) {
+                    allImages.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
                 }
              }
              updateProgress("Finalizing images...", 0.9);
