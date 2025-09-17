@@ -283,3 +283,9 @@ export const PaletteIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 10.5a.75.75 0 01.75-.75h.01a.75.75 0 01.75.75v.01a.75.75 0 01-.75.75h-.01a.75.75 0 01-.75-.75v-.01zM14.25 10.5a.75.75 0 01.75-.75h.01a.75.75 0 01.75.75v.01a.75.75 0 01-.75.75h-.01a.75.75 0 01-.75-.75v-.01z" />
     </svg>
 );
+
+export const SwatchIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.47 2.118v-.054a2.25 2.25 0 011.13-2.231l5.408-3.318a3 3 0 001.128-5.78 3 3 0 00-5.78 1.128v.054a2.25 2.25 0 01-2.118 2.47m5.408 0a3 3 0 001.128-5.78l3.318-5.408a2.25 2.25 0 012.231-1.13v.054a2.25 2.25 0 01-2.47 2.118l-3.318 5.408a3 3 0 00-1.128 5.78z" />
+  </svg>
+);

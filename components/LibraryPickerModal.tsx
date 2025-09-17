@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getLibraryItems } from '../services/libraryService';
 import type { LibraryItem, LibraryItemType } from '../types';
-import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon, DocumentTextIcon, FilmIcon, CubeIcon } from './icons';
+import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon, DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon } from './icons';
 
 interface LibraryPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectItem: (item: LibraryItem) => void;
   filter: LibraryItemType | LibraryItemType[] | null;
+  multiSelect?: boolean;
+  onSelectMultiple?: (items: LibraryItem[]) => void;
 }
 
 // Fix: Widened the type of `mediaType` to `LibraryItemType` to include all possible values from `LibraryItem` and added a case for 'object' to resolve the TypeScript error.
@@ -23,13 +25,15 @@ const getCategoryIcon = (mediaType: LibraryItemType) => {
     }
 };
 
-export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, onClose, onSelectItem, filter }) => {
+export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, onClose, onSelectItem, filter, multiSelect = false, onSelectMultiple }) => {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedItems, setSelectedItems] = useState<LibraryItem[]>([]);
 
   useEffect(() => {
     if (isOpen) {
       setIsLoading(true);
+      setSelectedItems([]); // Reset selection when opening
       getLibraryItems()
         .then(setItems)
         .catch(console.error)
@@ -60,10 +64,28 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
   }, [items, filter]);
 
   const handleSelect = (item: LibraryItem) => {
-    onSelectItem(item);
-    onClose();
+    if (multiSelect) {
+      setSelectedItems(prev => {
+        const isSelected = prev.some(selected => selected.id === item.id);
+        if (isSelected) {
+          return prev.filter(selected => selected.id !== item.id);
+        } else {
+          return [...prev, item];
+        }
+      });
+    } else {
+      onSelectItem(item);
+      onClose();
+    }
   };
   
+  const handleConfirmMultiSelect = () => {
+    if (multiSelect && onSelectMultiple) {
+      onSelectMultiple(selectedItems);
+      onClose();
+    }
+  };
+
   const filterText = useMemo(() => {
     if (!filter) return 'items';
     const filters = Array.isArray(filter) ? filter : [filter];
@@ -110,28 +132,49 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              {filteredItems.map(item => (
-                <div
-                  key={item.id}
-                  className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer"
-                  onClick={() => handleSelect(item)}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`Select ${item.name || item.mediaType}`}
-                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSelect(item)}
-                >
-                  <img src={item.thumbnail} alt={item.name || `Library item ${item.id}`} className="object-cover w-full h-full" />
-                   <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full" title={item.mediaType}>
-                        {getCategoryIcon(item.mediaType)}
+              {filteredItems.map(item => {
+                const isSelected = multiSelect && selectedItems.some(selected => selected.id === item.id);
+                return (
+                  <div
+                    key={item.id}
+                    className={`group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer transition-all duration-200 ${isSelected ? 'ring-4 ring-accent' : ''}`}
+                    onClick={() => handleSelect(item)}
+                    tabIndex={0}
+                    role="button"
+                    aria-pressed={isSelected}
+                    aria-label={`Select ${item.name || item.mediaType}`}
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSelect(item)}
+                  >
+                    <img src={item.thumbnail} alt={item.name || `Library item ${item.id}`} className="object-cover w-full h-full" />
+                    <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full" title={item.mediaType}>
+                          {getCategoryIcon(item.mediaType)}
+                      </div>
+                    <div className={`absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2 text-center text-white text-sm font-semibold`}>
+                      {multiSelect ? (isSelected ? 'Selected' : 'Select') : 'Select'}
                     </div>
-                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2 text-center text-white text-sm font-semibold">
-                    Select
+                    {isSelected && (
+                      <div className="absolute bottom-2 right-2 bg-accent text-accent-text p-1 rounded-full">
+                        <CheckIcon className="w-4 h-4" />
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
+        
+        {multiSelect && (
+          <div className="mt-4 pt-4 border-t border-border-primary flex-shrink-0 flex justify-end">
+            <button
+              onClick={handleConfirmMultiSelect}
+              disabled={selectedItems.length === 0}
+              className="bg-accent text-accent-text font-bold py-2 px-6 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
+            >
+              Select {selectedItems.length > 0 ? `${selectedItems.length} Item(s)` : ''}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

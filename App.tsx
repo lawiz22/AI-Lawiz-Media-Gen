@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { User, GenerationOptions, HistoryItem, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject } from './types';
+import type { User, GenerationOptions, HistoryItem, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { fileToDataUrl, fileToResizedDataUrl } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
@@ -22,9 +22,10 @@ import { VideoUtilsPanel } from './components/VideoUtilsPanel';
 import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
 import { LibraryPickerModal } from './components/LibraryPickerModal';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
+import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
-import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon } from './components/icons';
+import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon } from './components/icons';
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
 
@@ -62,6 +63,21 @@ const initialVideoUtilsState: VideoUtilsState = {
         pickingColorIndex: null,
     },
 };
+
+const initialLogoThemeState: LogoThemeState = {
+    logoPrompt: '',
+    brandName: '',
+    slogan: '',
+    logoStyle: 'symbolic',
+    referenceItems: [],
+    selectedPalette: null,
+    numLogos: 4,
+    backgroundColor: 'transparent',
+    isGeneratingLogos: false,
+    generatedLogos: [],
+    logoError: null,
+};
+
 
 const App: React.FC = () => {
     // --- App State ---
@@ -132,6 +148,9 @@ const App: React.FC = () => {
     
     // --- Extractor Tools State ---
     const [extractorState, setExtractorState] = useState<ExtractorState>(initialExtractorState);
+    
+    // --- Logo & Theme State ---
+    const [logoThemeState, setLogoThemeState] = useState<LogoThemeState>(initialLogoThemeState);
 
 
     // --- UI Modals & Panels State ---
@@ -142,6 +161,8 @@ const App: React.FC = () => {
     const [isColorImagePickerOpen, setIsColorImagePickerOpen] = useState(false);
     const [isStartFramePickerOpen, setIsStartFramePickerOpen] = useState(false);
     const [isEndFramePickerOpen, setIsEndFramePickerOpen] = useState(false);
+    const [isLogoRefPickerOpen, setIsLogoRefPickerOpen] = useState(false);
+    const [isLogoPalettePickerOpen, setIsLogoPalettePickerOpen] = useState(false);
     const [isOAuthHelperOpen, setIsOAuthHelperOpen] = useState(false);
     
     // --- Google Drive State ---
@@ -530,6 +551,7 @@ const App: React.FC = () => {
     const TABS = [
         { id: 'image-generator', label: 'Image Generator', icon: <ImageGeneratorIcon className="w-5 h-5"/> },
         { id: 'video-generator', label: 'Video Generator', icon: <VideoIcon className="w-5 h-5"/> },
+        { id: 'logo-theme-generator', label: 'Logo/Theme Generator', icon: <SwatchIcon className="w-5 h-5"/> },
         { id: 'library', label: 'Library', icon: <LibraryIcon className="w-5 h-5"/> },
         { id: 'prompt-generator', label: 'Prompt Tools', icon: <PromptIcon className="w-5 h-5"/>, adminOnly: true },
         { id: 'extractor-tools', label: 'Extractor Tools', icon: <ExtractorIcon className="w-5 h-5"/> },
@@ -677,6 +699,15 @@ const App: React.FC = () => {
                     />
                 </div>
 
+                <div className={activeTab === 'logo-theme-generator' ? 'block' : 'hidden'}>
+                    <LogoThemeGeneratorPanel
+                        state={logoThemeState}
+                        setState={setLogoThemeState}
+                        onOpenLibraryForReferences={() => setIsLogoRefPickerOpen(true)}
+                        onOpenLibraryForPalette={() => setIsLogoPalettePickerOpen(true)}
+                    />
+                </div>
+
                 <div className={activeTab === 'library' ? 'block' : 'hidden'}>
                     <LibraryPanel 
                         onLoadItem={handleLoadLibraryItem} 
@@ -795,6 +826,28 @@ const App: React.FC = () => {
                         }));
                     }}
                     filter={['image', 'clothes', 'extracted-frame', 'object']}
+                />
+            )}
+             {isLogoRefPickerOpen && (
+                 <LibraryPickerModal
+                    isOpen={isLogoRefPickerOpen}
+                    onClose={() => setIsLogoRefPickerOpen(false)}
+                    onSelectItem={() => {}} // Single select not used here
+                    onSelectMultiple={(items) => {
+                        setLogoThemeState(prev => ({ ...prev, referenceItems: [...(prev.referenceItems || []), ...items] }));
+                    }}
+                    filter={['image', 'clothes', 'object']}
+                    multiSelect
+                />
+            )}
+            {isLogoPalettePickerOpen && (
+                 <LibraryPickerModal
+                    isOpen={isLogoPalettePickerOpen}
+                    onClose={() => setIsLogoPalettePickerOpen(false)}
+                    onSelectItem={(item) => {
+                        setLogoThemeState(prev => ({ ...prev, selectedPalette: item }));
+                    }}
+                    filter="color-palette"
                 />
             )}
             {globalError && (

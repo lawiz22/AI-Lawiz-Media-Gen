@@ -1,10 +1,11 @@
 
 
+
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
 import { fileToGenerativePart, fileToBase64, dataUrlToFile } from '../utils/imageUtils';
 // Fix: Import 'getRandomPose' to resolve reference error.
 import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
-import type { GenerationOptions, IdentifiedClothing, IdentifiedObject } from '../types';
+import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, LogoThemeState, PaletteColor } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
@@ -127,6 +128,83 @@ export const generatePortraits = async (
     updateProgress("Finalizing images...", 0.95);
     return { images: allImages, finalPrompt: promptsUsed[0] || null };
 };
+
+export const generateLogos = async (state: LogoThemeState): Promise<string[]> => {
+    const { logoPrompt, brandName, slogan, logoStyle, referenceItems, selectedPalette, numLogos, backgroundColor } = state;
+
+    if (!logoPrompt?.trim() && !brandName?.trim() && (!referenceItems || referenceItems.length === 0)) {
+        throw new Error("Please provide a prompt, brand name, or at least one reference image.");
+    }
+
+    const promptSegments = ["Your task is to generate a professional, clean, and modern logo."];
+    
+    // Style
+    promptSegments.push(`The logo style must be: ${logoStyle}.`);
+
+    // Core Concept
+    if (logoPrompt) {
+        promptSegments.push(`The core concept of the logo is: "${logoPrompt}".`);
+    }
+
+    // Text
+    if (brandName) {
+        promptSegments.push(`The logo must incorporate the brand name "${brandName}". The text should be clear, legible, and well-integrated into the design.`);
+    }
+    if (slogan) {
+        promptSegments.push(`If appropriate for the style, include the slogan: "${slogan}".`);
+    }
+
+    // Color Palette
+    if (selectedPalette) {
+        try {
+            const palette: PaletteColor[] = JSON.parse(selectedPalette.media);
+            const hexCodes = palette.map(p => p.hex).join(', ');
+            promptSegments.push(`Strictly use the following color palette: ${hexCodes}. You may use shades and tints, but do not introduce new hues.`);
+        } catch (e) { console.error("Could not parse color palette for prompt."); }
+    }
+
+    // Background
+    promptSegments.push(`The logo must be generated on a ${backgroundColor} background. If transparent, ensure the output is a clean PNG with an alpha channel.`);
+    
+    // Final instructions
+    promptSegments.push("The final design should be simple, memorable, and scalable (vector-like). Avoid overly complex details or photorealism.");
+
+    const finalPrompt = promptSegments.join('\n');
+    const contents: any = { parts: [{ text: finalPrompt }] };
+
+    // Reference Images
+    if (referenceItems && referenceItems.length > 0) {
+        contents.parts.unshift({ text: "Use the following images as visual inspiration for the logo's style, shapes, or concepts. Combine elements from them into a new, unique design:" });
+        for (const item of referenceItems) {
+            const file = await dataUrlToFile(item.media, item.name || 'reference');
+            const imagePart = await fileToGenerativePart(file);
+            contents.parts.push(imagePart);
+        }
+    }
+
+    const allLogos: string[] = [];
+    for (let i = 0; i < (numLogos || 1); i++) {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents,
+            config: {
+                responseMimeType: 'image/png', // Request PNG for transparency
+            }
+        });
+
+        const part = response.candidates?.[0]?.content?.parts[0];
+        if (part?.inlineData?.data) {
+            allLogos.push(`data:image/png;base64,${part.inlineData.data}`);
+        }
+    }
+
+    if (allLogos.length === 0) {
+        throw new Error("The AI failed to generate any logos. Please try adjusting your prompt.");
+    }
+
+    return allLogos;
+};
+
 
 export const generateGeminiVideo = async (
     options: GenerationOptions,

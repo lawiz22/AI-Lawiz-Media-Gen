@@ -277,3 +277,21 @@ export interface PromptGenState {
     soupPrompt: string;
     soupHistory: string[];
 }
+
+export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination';
+export type LogoBackground = 'transparent' | 'white' | 'black';
+
+export interface LogoThemeState {
+    // Logo Generator State
+    logoPrompt?: string;
+    brandName?: string;
+    slogan?: string;
+    logoStyle?: LogoStyle;
+    referenceItems?: LibraryItem[];
+    selectedPalette?: LibraryItem | null;
+    numLogos?: number;
+    backgroundColor?: LogoBackground;
+    isGeneratingLogos?: boolean;
+    generatedLogos?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
+    logoError?: string | null;
+}
