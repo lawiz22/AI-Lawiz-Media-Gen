@@ -1,5 +1,5 @@
 import React, { useState, useRef, ChangeEvent, useMemo, useEffect, useCallback } from 'react';
-import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon } from './icons';
+import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import { dataUrlToFile, dataUrlToThumbnail, createPaletteThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 import { saveToLibrary } from '../services/libraryService';
 import type { LibraryItem, VideoUtilsState, PaletteColor, ColorPickerState } from '../types';
@@ -186,6 +186,7 @@ interface VideoUtilsPanelProps {
     videoUtilsState: VideoUtilsState;
     setVideoUtilsState: React.Dispatch<React.SetStateAction<VideoUtilsState>>;
     onOpenLibrary: () => void;
+    onOpenVideoLibrary: () => void;
 }
 
 export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({ 
@@ -194,6 +195,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     videoUtilsState,
     setVideoUtilsState,
     onOpenLibrary,
+    onOpenVideoLibrary,
 }) => {
     const { videoFile, extractedFrame, colorPicker } = videoUtilsState;
 
@@ -228,6 +230,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [frameSavingState, setFrameSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
+    const [frameRate, setFrameRate] = useState<number>(24);
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoSrc = useMemo(() => videoFile ? URL.createObjectURL(videoFile) : null, [videoFile]);
@@ -284,6 +287,14 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
         }
     };
     
+    const handleFrameStep = (direction: 'forward' | 'backward') => {
+        if (!videoRef.current) return;
+        const validFrameRate = frameRate > 0 ? frameRate : 24;
+        const frameDuration = 1 / validFrameRate;
+        const newTime = videoRef.current.currentTime + (direction === 'forward' ? frameDuration : -frameDuration);
+        videoRef.current.currentTime = Math.max(0, Math.min(duration, newTime));
+    };
+
     const handleDownloadFrame = () => {
         if (!extractedFrame) return;
         const link = document.createElement('a');
@@ -456,7 +467,18 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                     <div className="space-y-4">
-                        <VideoUploader onVideoUpload={setVideoFile} sourceFile={videoFile} />
+                        <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                                <VideoUploader onVideoUpload={setVideoFile} sourceFile={videoFile} />
+                            </div>
+                             <button
+                                onClick={onOpenVideoLibrary}
+                                className="self-center mt-8 bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                title="Select video from Library"
+                            >
+                                <LibraryIcon className="w-6 h-6"/>
+                            </button>
+                        </div>
                         {videoSrc && (
                              <div className="space-y-4 pt-4">
                                 <video 
@@ -467,16 +489,52 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                                     onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
                                     onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                                 />
-                                 <div>
-                                    <input
-                                        type="range"
-                                        min="0" max={duration || 0} step="0.01"
-                                        value={currentTime}
-                                        onChange={(e) => { if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value); }}
-                                        className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
-                                    />
-                                    <div className="text-center text-sm font-mono text-text-secondary mt-2">
-                                        {formatTime(currentTime)} / {formatTime(duration)}
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => handleFrameStep('backward')}
+                                            className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors"
+                                            title="Previous Frame"
+                                        >
+                                            <ChevronLeftIcon className="w-5 h-5" />
+                                        </button>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max={duration || 0}
+                                            step="0.01"
+                                            value={currentTime}
+                                            onChange={(e) => {
+                                                if (videoRef.current) {
+                                                    videoRef.current.currentTime = parseFloat(e.target.value);
+                                                }
+                                            }}
+                                            className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
+                                        />
+                                        <button
+                                            onClick={() => handleFrameStep('forward')}
+                                            className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors"
+                                            title="Next Frame"
+                                        >
+                                            <ChevronRightIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm font-mono text-text-secondary">
+                                            {formatTime(currentTime)} / {formatTime(duration)}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <label htmlFor="frame-rate-input" className="text-xs text-text-muted">FPS:</label>
+                                            <input
+                                                id="frame-rate-input"
+                                                type="number"
+                                                value={frameRate}
+                                                onChange={(e) => setFrameRate(Number(e.target.value) || 24)}
+                                                min="1"
+                                                className="w-16 bg-bg-primary p-1 text-sm rounded-md border border-border-primary text-center"
+                                                title="Set the video's frames per second for accurate stepping"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

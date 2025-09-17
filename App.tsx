@@ -160,6 +160,7 @@ const App: React.FC = () => {
     const [isClothingPickerOpen, setIsClothingPickerOpen] = useState(false);
     const [isBackgroundPickerOpen, setIsBackgroundPickerOpen] = useState(false);
     const [isColorImagePickerOpen, setIsColorImagePickerOpen] = useState(false);
+    const [isVideoUtilsPickerOpen, setIsVideoUtilsPickerOpen] = useState(false);
     const [isStartFramePickerOpen, setIsStartFramePickerOpen] = useState(false);
     const [isEndFramePickerOpen, setIsEndFramePickerOpen] = useState(false);
     const [isLogoRefPickerOpen, setIsLogoRefPickerOpen] = useState(false);
@@ -882,6 +883,7 @@ const App: React.FC = () => {
                         videoUtilsState={videoUtilsState}
                         setVideoUtilsState={setVideoUtilsState}
                         onOpenLibrary={() => setIsColorImagePickerOpen(true)}
+                        onOpenVideoLibrary={() => setIsVideoUtilsPickerOpen(true)}
                     />
                 </div>
 
@@ -966,6 +968,23 @@ const App: React.FC = () => {
                         }));
                     }}
                     filter={['image', 'clothes', 'extracted-frame', 'object']}
+                />
+            )}
+            {isVideoUtilsPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isVideoUtilsPickerOpen}
+                    onClose={() => setIsVideoUtilsPickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], item.name || "library_video.mp4", { type: blob.type });
+                        setVideoUtilsState(prev => ({
+                            ...prev,
+                            videoFile: file,
+                            extractedFrame: null,
+                        }));
+                    }}
+                    filter="video"
                 />
             )}
              {isLogoRefPickerOpen && (
