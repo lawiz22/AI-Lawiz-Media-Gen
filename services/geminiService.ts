@@ -500,6 +500,28 @@ export const summarizePrompt = async (prompt: string): Promise<string> => {
     return response.text.trim().replace(/["']/g, "");
 };
 
+export const generateCharacterNameForImage = async (imageDataUrl: string): Promise<string> => {
+    const base64Data = imageDataUrl.split(',')[1];
+    const mimeType = imageDataUrl.match(/data:(.*);/)?.[1] || 'image/jpeg';
+    const imagePart = { inlineData: { data: base64Data, mimeType: mimeType } };
+
+    const prompt = `Analyze the person in this image and generate a single, plausible, and unique first name for them. The name can be common or slightly uncommon, but should fit the person's appearance.
+
+    **CRITICAL INSTRUCTIONS:**
+    - Respond with ONLY the name.
+    - Do NOT include any extra text, explanation, quotation marks, or labels.
+    - Example of a good response: "Eleanor"
+    - Example of a bad response: "A fitting name would be: 'Eleanor'"`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: { temperature: 0.8 },
+    });
+
+    return response.text.trim().replace(/["']/g, ""); // Remove quotes just in case
+};
+
 export const generateThumbnailForPrompt = async (prompt: string): Promise<string> => {
     const response = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',

@@ -13,9 +13,11 @@ interface ImageGridProps {
   lastUsedPrompt?: string | null;
   options: GenerationOptions;
   sourceImage: File | null;
+  characterName?: string;
+  activeTab: string;
 }
 
-export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, lastUsedPrompt, options, sourceImage }) => {
+export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, lastUsedPrompt, options, sourceImage, characterName, activeTab }) => {
   const [enhancedImages, setEnhancedImages] = useState<Record<number, string>>({});
   const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
   const [errorIndex, setErrorIndex] = useState<Record<number, string>>({});
@@ -56,14 +58,20 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
     try {
       const { width, height } = await getImageDimensionsFromDataUrl(imageSrc);
       const optionsToSave = { ...options, width, height };
+      const isCharacter = activeTab === 'character-generator';
 
       const item: Omit<LibraryItem, 'id'> = {
-        mediaType: 'image',
+        mediaType: isCharacter ? 'character' : 'image',
         media: imageSrc,
         thumbnail: await dataUrlToThumbnail(imageSrc, 256),
         options: optionsToSave,
         sourceImage: sourceImage ? await fileToResizedDataUrl(sourceImage, 512) : undefined,
       };
+
+      if (isCharacter) {
+        item.name = characterName || `Character ${Date.now()}`;
+      }
+
       await saveToLibrary(item);
       setSavingState(prev => ({ ...prev, [index]: 'saved' }));
     } catch (err) {

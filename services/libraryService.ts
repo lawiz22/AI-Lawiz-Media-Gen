@@ -40,14 +40,14 @@ export async function initializeDriveSync(onProgress: (message: string) => void)
 export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void> => {
   const itemToSave = { ...item };
 
-  // If a name is missing for an image or video, try to generate one.
-  if (!itemToSave.name && (item.mediaType === 'image' || item.mediaType === 'video')) {
+  // If a name is missing for an image, video, or character, try to generate one.
+  if (!itemToSave.name && (item.mediaType === 'image' || item.mediaType === 'video' || item.mediaType === 'character')) {
     try {
         const options = item.options;
         const prompt = options?.geminiPrompt || options?.comfyPrompt || options?.geminiVidPrompt || options?.comfyVidWanI2VPositivePrompt;
         
         let generatedName = '';
-        if (item.mediaType === 'image') {
+        if (item.mediaType === 'image' || item.mediaType === 'character') {
             // For ComfyUI or Gemini I2I, it's best to analyze the final image.
             if (options?.provider === 'comfyui' || (options?.provider === 'gemini' && options?.geminiMode === 'i2i')) {
                 generatedName = await generateTitleForImage(item.media);

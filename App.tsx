@@ -3,7 +3,7 @@ import type { User, GenerationOptions, HistoryItem, GeneratedClothing, LibraryIt
 import { authenticateUser } from './services/cloudUserService';
 import { fileToDataUrl, fileToResizedDataUrl } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
-import { generatePortraits, generateGeminiVideo } from './services/geminiService';
+import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage } from './services/geminiService';
 // Fix: Import 'checkConnection' to resolve missing name error.
 import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution } from './services/comfyUIService';
 import { saveGenerationToHistory } from './services/historyService';
@@ -90,6 +90,7 @@ const App: React.FC = () => {
 
     // --- Image Generation State ---
     const [sourceImage, setSourceImage] = useState<File | null>(null);
+    const [characterName, setCharacterName] = useState<string>('');
     const [clothingImage, setClothingImage] = useState<File | null>(null);
     const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
     const [previewedBackgroundImage, setPreviewedBackgroundImage] = useState<string | null>(null);
@@ -288,6 +289,7 @@ const App: React.FC = () => {
         setPreviewedClothingImage(null);
         setGeneratedImages([]);
         setLastUsedPrompt(null);
+        setCharacterName('');
         setOptions(prev => ({
             ...prev,
             geminiPrompt: '',
@@ -318,6 +320,7 @@ const App: React.FC = () => {
         setGeneratedImages([]);
         setLastUsedPrompt(null);
         setGlobalError(null);
+        setCharacterName('');
         
         try {
             let result: { images: string[]; finalPrompt: string | null } = { images: [], finalPrompt: null };
@@ -343,6 +346,16 @@ const App: React.FC = () => {
             setLastUsedPrompt(result.finalPrompt);
             
             if(result.images.length > 0) {
+                if (activeTab === 'character-generator') {
+                    updateProgress("Generating character name...", 0.96);
+                    try {
+                        const name = await generateCharacterNameForImage(result.images[0]);
+                        setCharacterName(name);
+                    } catch (nameError) {
+                        console.warn("Could not generate character name:", nameError);
+                        setCharacterName(''); // Clear on error
+                    }
+                }
                 saveGenerationToHistory({
                     timestamp: Date.now(),
                     sourceImage: sourceImage ? await fileToResizedDataUrl(sourceImage, 256) : undefined,
@@ -424,6 +437,7 @@ const App: React.FC = () => {
             const blob = await response.blob();
             const file = new File([blob], "new_source_image.jpeg", { type: "image/jpeg" });
             setSourceImage(file);
+            setCharacterName('');
             setActiveTab('character-generator');
         } catch (error) {
             console.error("Error setting new source image:", error);
@@ -434,6 +448,7 @@ const App: React.FC = () => {
     const handleLoadHistoryItem = async (item: HistoryItem) => {
         setOptions(item.options);
         setGeneratedImages(item.generatedImages);
+        setCharacterName('');
         // This is a simplification; a more robust solution would re-fetch the File object if needed
         if (item.sourceImage) {
            try {
@@ -461,7 +476,7 @@ const App: React.FC = () => {
         }
         
         let sourceToSet: File | null = null;
-        if (item.mediaType === 'image' || item.mediaType === 'video') {
+        if (item.mediaType === 'image' || item.mediaType === 'video' || item.mediaType === 'character') {
             if (item.sourceImage || item.startFrame) {
                 try {
                     const sourceDataUrl = item.sourceImage || item.startFrame;
@@ -473,10 +488,17 @@ const App: React.FC = () => {
         }
 
         switch (item.mediaType) {
+            case 'character':
+                setSourceImage(sourceToSet);
+                setGeneratedImages([item.media]);
+                setCharacterName(item.name || '');
+                setActiveTab('character-generator');
+                break;
             case 'image':
                 setSourceImage(sourceToSet);
                 setGeneratedImages([item.media]);
-                 const isI2I = !!sourceToSet || item.options?.geminiMode === 'i2i';
+                setCharacterName('');
+                const isI2I = !!sourceToSet || item.options?.geminiMode === 'i2i';
                 setActiveTab(isI2I ? 'character-generator' : 'image-generator');
                 break;
             case 'video':
@@ -678,6 +700,8 @@ const App: React.FC = () => {
                                 lastUsedPrompt={lastUsedPrompt}
                                 options={options}
                                 sourceImage={sourceImage}
+                                characterName={characterName}
+                                activeTab={activeTab}
                             />
                              {generatedImages.length === 0 && !isLoading && (
                                 <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
@@ -702,6 +726,18 @@ const App: React.FC = () => {
                                     onImageUpload={setSourceImage} 
                                     sourceFile={sourceImage}
                                 />
+                                 <div className="mt-4">
+                                    <label htmlFor="character-name" className="block text-sm font-medium text-text-secondary">Character Name</label>
+                                    <input
+                                        type="text"
+                                        id="character-name"
+                                        value={characterName}
+                                        onChange={(e) => setCharacterName(e.target.value)}
+                                        placeholder="AI will suggest a name after generation..."
+                                        className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                        disabled={isLoading}
+                                    />
+                                </div>
                             </div>
                             
                             {(options.clothing === 'image' || options.background === 'image') && (
@@ -758,6 +794,8 @@ const App: React.FC = () => {
                                 lastUsedPrompt={lastUsedPrompt}
                                 options={options}
                                 sourceImage={sourceImage}
+                                characterName={characterName}
+                                activeTab={activeTab}
                             />
                              {generatedImages.length === 0 && !isLoading && (
                                 <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
