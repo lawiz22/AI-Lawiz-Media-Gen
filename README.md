@@ -1,4 +1,4 @@
-# Lawiz's AI Media Generator
+# Lawiz's AI Media Generator v1.44
 
 Welcome to Lawiz's AI Media Generator, a powerful and versatile web application designed for creating stunning images and videos using state-of-the-art AI models. This tool provides a unified interface to interact with both Google's Gemini API and a self-hosted ComfyUI backend, offering a wide range of creative possibilities for both novice and advanced users.
 
@@ -11,9 +11,7 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 ### 2. Advanced Image Generation
 - **Multi-Provider Support:** Seamlessly switch between Gemini and ComfyUI for image generation.
 - **Rich Configuration:** Fine-tune every aspect of your creation, including aspect ratio, artistic style, photo era, and number of images.
-- **Pose Control (Gemini):** Choose from a list of professional presets, write your own custom poses, or let the AI generate random ones.
-- **Clothing & Background Customization (Gemini):** Keep the original, replace from a reference image, or describe new clothing and backgrounds with text prompts. You can even preview AI-generated clothing and backgrounds before committing to a full generation.
-- **ComfyUI Workflow Support:** Out-of-the-box support for various popular ComfyUI workflows, including SD1.5, SDXL, FLUX, WAN 2.2, and Nunchaku.
+- **ComfyUI Workflow Support:** The UI dynamically loads your installed models, samplers, and LoRAs, with out-of-the-box support for popular workflows including SD 1.5, SDXL, FLUX, WAN 2.2, Nunchaku Kontext FLUX (i2i), Nunchaku FLUX Image, and FLUX Krea.
 - **Post-Processing:** Enhance the resolution and quality of generated images with a single click using the Gemini API.
 
 ### 3. AI-Powered Video Generation
@@ -22,25 +20,18 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 - **Detailed Video Controls:** Configure frame count, frame rate, CFG, steps, and post-processing effects like film grain.
 - **Improved Reliability:** Fixed a critical bug that caused the video generator to fail on load. The workflow now initializes with correct, sensible defaults, making it more reliable and user-friendly.
 
-### 4. Hybrid Local & Cloud Library
-- **Local Storage First:** Save any generated image, video, or clothing item to a persistent local library in your browser for fast access.
-- **Google Drive Sync:** Securely connect your Google Drive account to sync your entire library for persistent, cloud-based storage.
-- **Robust Architecture:** The Drive integration uses a central `library.json` file as an index for all media items, ensuring robust and efficient synchronization.
-- **Automatic Organization:** The app automatically creates and manages `images`, `videos`, and `clothes` subfolders within your selected Drive directory to keep your media organized.
-- **AI-Generated Previews:** Hover over any saved prompt to see a unique, AI-generated thumbnail that visually represents its content. Previews are generated on-demand, cached locally for instant access, and synced with Google Drive.
-- **Smart Syncing:** Download only new items from Drive to your local library, preventing duplicates and ensuring your collection is always up-to-date.
-- **Complete State Capture:** The library stores not just the media, but also the exact prompts, models, and settings used to create it.
-- **One-Click Restoration:** Load any item from the library to instantly restore the entire generation setup, making it easy to iterate or create variations.
+### 4. Dedicated Character/Poses Generator
+- **Focused Workflow:** A dedicated tab for creating and iterating on characters using Gemini's powerful Image-to-Image capabilities.
+- **AI Name Suggestion:** After generating a character, the AI can suggest a fitting name, adding a creative touch to your creations.
+- **Advanced Pose Control (Gemini):** Choose from a list of professional presets, write your own custom poses, or let the AI generate random ones.
+- **Clothing & Background Customization (Gemini):** Keep the original, replace from a reference image, or describe new clothing and backgrounds with text prompts. You can even preview AI-generated clothing and backgrounds before committing to a full generation.
 
-### 5. Video Utilities
-- **Frame Extractor:** Upload a video and use a precise slider to select and save any frame as a high-quality JPEG image. Includes a quick button to instantly save the very last frame, perfect for creating video continuations.
+### 5. Logo & Theme Generator
+- **AI Logo Creation:** Generate unique, professional logos from text descriptions, brand names, and slogans.
+- **Advanced Customization:** Fine-tune your logo by selecting from various styles (e.g., Symbolic, Wordmark, 3D Clay, Vaporwave), providing visual inspiration images, and applying color palettes saved in your library.
+- **Future-Ready:** Includes placeholders for upcoming tools like a Banner Generator, Album Cover Generator, and a comprehensive Theme Generator to create full brand kits.
 
-### 6. Intelligent Prompting Tools (Admin)
-- **Prompt from Image:** Automatically generate a descriptive text prompt from an uploaded image, optimized for different model types (SD1.5, SDXL, FLUX).
-- **Element Extraction:** Isolate and generate prompts for just the background or the main subject of an image.
-- **Magical Prompt Soup:** Creatively merge multiple prompt ideas (e.g., a subject from one image, a background from another) into a unique, cohesive new prompt.
-
-### 7. AI-Powered Extractor Tools
+### 6. AI-Powered Extractor Tools
 This versatile tab combines two powerful AI utilities for isolating and recreating elements from within a source image.
 
 - **Clothes Extractor:**
@@ -53,7 +44,28 @@ This versatile tab combines two powerful AI utilities for isolating and recreati
   - **Photorealistic Cutouts:** Generate clean, photorealistic images of each selected object on a plain white background.
   - **Controlled Extraction:** Specify the maximum number of objects to find and provide hints to guide the AI's focus.
 
-### 8. Robust User Experience
+### 7. Video & Color Utilities
+- **Frame Extractor:** Upload any video and use a precise slider to select and save any frame as a high-quality JPEG image. Includes a quick button to instantly save the very last frame, perfect for creating video continuations.
+- **Color Palette Extractor:** Upload an image to automatically extract a beautiful color palette. You can customize the number of colors, re-shuffle the palette from a pool of dominant colors, or use an eyedropper to manually pick new colors from the source image. Palettes can be named and saved directly to the library.
+
+### 8. Hybrid Local & Cloud Library
+- **Auto-Naming:** Generated items are now intelligently named by AI before being saved. Prompts are summarized, and images/videos are given descriptive titles, keeping your library effortlessly organized.
+- **Expanded Item Support:** The library now supports new types, including `logo`, `object`, `extracted-frame`, and `color-palette`, in addition to images, videos, characters, and clothes.
+- **Local Storage First:** Save any generated item to a persistent local library in your browser for fast access.
+- **Google Drive Sync:** Securely connect your Google Drive account to sync your entire library for persistent, cloud-based storage.
+- **Robust Architecture:** The Drive integration uses a central `library.json` file as an index for all media items, ensuring robust and efficient synchronization.
+- **Automatic Organization:** The app automatically creates and manages subfolders within your selected Drive directory to keep your media organized.
+- **AI-Generated Previews:** Hover over any saved prompt to see a unique, AI-generated thumbnail that visually represents its content. Previews are generated on-demand, cached locally, and synced with Google Drive.
+- **Smart Syncing:** Download only new items from Drive to your local library, preventing duplicates and ensuring your collection is always up-to-date.
+- **Complete State Capture:** The library stores not just the media, but also the exact prompts, models, and settings used to create it.
+- **One-Click Restoration:** Load any item from the library to instantly restore the entire generation setup, making it easy to iterate or create variations.
+
+### 9. Intelligent Prompting Tools (Admin)
+- **Prompt from Image:** Automatically generate a descriptive text prompt from an uploaded image, optimized for different model types (SD1.5, SDXL, FLUX).
+- **Element Extraction:** Isolate and generate prompts for just the background or the main subject of an image.
+- **Magical Prompt Soup:** Creatively merge multiple prompt ideas (e.g., a subject from one image, a background from another) into a unique, cohesive new prompt.
+
+### 10. Robust User Experience
 - **User Authentication:** Secure login system with roles for regular users and administrators.
 - **Admin Panel:** Administrators can manage the user base by adding or deleting users.
 - **Generation History:** Automatically saves your generations (source image, settings, and results) to local storage, allowing you to review and reload previous sessions.
@@ -63,11 +75,11 @@ This versatile tab combines two powerful AI utilities for isolating and recreati
 ## How to Use
 
 1.  **Login:** Enter your credentials to access the application.
-2.  **Select a Tool:** Choose between the **Image Generator**, **Video Generator**, **Library**, **Extractor Tools**, or **Video Utilities** tabs.
+2.  **Select a Tool:** Choose between the various generator tabs, the Library, Extractor Tools, or Video Utilities.
 3.  **Configure & Provide Inputs:**
-    -   **Image/Video Gen:** Upload source media, configure the AI backend (Gemini/ComfyUI), write prompts, and adjust detailed settings in the left-hand panel.
+    -   **Generators:** Upload source media, configure the AI backend (Gemini/ComfyUI), write prompts, and adjust detailed settings in the left-hand panel.
     -   **Extractor Tools:** Upload a single photo for either the Clothes or Object Extractor, and optionally add descriptive text to improve accuracy.
-    -   **Video Utilities:** Upload a video to use the frame extractor.
+    -   **Video Utilities:** Upload a video to use the frame extractor or an image for the color palette extractor.
 4.  **Generate:** Click the "Generate" or other relevant action button to begin processing.
 5.  **View & Save Results:** Your generated media will appear on the right. You can download them, enhance them (for images), save them to your library, or use an image as a new source.
 

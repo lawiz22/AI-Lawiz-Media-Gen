@@ -1,5 +1,5 @@
 {
-  "version": "1.43",
-  "date": "2024-08-10T11:00:00Z",
-  "changes": "Fixed a critical bug where the video generator would fail on load due to missing default parameters. The panel now initializes correctly, ensuring a smoother user experience."
+  "version": "1.44",
+  "date": "2024-08-11T12:00:00Z",
+  "changes": "Added Logo & Theme Generator and Color Palette Extractor. Enhanced the library with auto-naming and support for new item types. Added a dedicated Character Generator tab with AI name suggestions."
 }
