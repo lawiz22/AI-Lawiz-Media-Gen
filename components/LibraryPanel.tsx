@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk, syncLibraryToDrive, exportLibraryAsJson, updateLibraryItem } from '../services/libraryService';
 import { generateThumbnailForPrompt } from '../services/geminiService';
 import type { LibraryItem, GenerationOptions, LibraryItemType, PaletteColor } from '../types';
-import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon, FileExportIcon, DocumentTextIcon, Squares2X2Icon, ListBulletIcon, ArrowUpIcon, ArrowDownIcon, FilmIcon, CubeIcon, PaletteIcon } from './icons';
+import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon, FileExportIcon, DocumentTextIcon, Squares2X2Icon, ListBulletIcon, ArrowUpIcon, ArrowDownIcon, FilmIcon, CubeIcon, PaletteIcon, LogoIconSimple } from './icons';
 
-type FilterType = 'all' | 'image' | 'video' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette';
+type FilterType = 'all' | 'image' | 'video' | 'logo' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -406,6 +406,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
       switch(mediaType) {
           case 'image': return <PhotographIcon className="w-4 h-4 text-white" />;
           case 'video': return <VideoIcon className="w-4 h-4 text-white" />;
+          case 'logo': return <LogoIconSimple className="w-4 h-4 text-white" />;
           case 'clothes': return <TshirtIcon className="w-4 h-4 text-white" />;
           case 'prompt': return <DocumentTextIcon className="w-4 h-4 text-white" />;
           case 'extracted-frame': return <FilmIcon className="w-4 h-4 text-white" />;
@@ -500,7 +501,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                 {/* --- Toolbar --- */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 p-2 bg-bg-tertiary rounded-lg">
                     <div className="flex items-center gap-1 bg-bg-primary p-1 rounded-md flex-wrap justify-center">
-                        {(['all', 'image', 'video', 'clothes', 'object', 'prompt', 'extracted-frame', 'color-palette'] as FilterType[]).map(filter => (
+                        {(['all', 'image', 'video', 'logo', 'clothes', 'object', 'prompt', 'extracted-frame', 'color-palette'] as FilterType[]).map(filter => (
                             <button key={filter} onClick={() => setActiveFilter(filter)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${activeFilter === filter ? 'bg-accent text-accent-text shadow' : 'hover:bg-bg-secondary'}`}>
                                 {filter.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                             </button>
@@ -606,7 +607,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                     onClick={e => e.stopPropagation()}
                 >
                     <div className="flex-grow flex flex-col items-center justify-center bg-bg-primary rounded-lg p-2">
-                         {(selectedItem.mediaType === 'image' || selectedItem.mediaType === 'extracted-frame' || selectedItem.mediaType === 'object') && (
+                         {(selectedItem.mediaType === 'image' || selectedItem.mediaType === 'logo' || selectedItem.mediaType === 'extracted-frame' || selectedItem.mediaType === 'object') && (
                             <img src={selectedItem.media} alt="Selected library item" className="max-w-full max-h-full object-contain rounded-md" />
                          )}
                          {selectedItem.mediaType === 'video' && (

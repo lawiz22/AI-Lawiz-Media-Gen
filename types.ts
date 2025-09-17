@@ -215,7 +215,7 @@ export interface ExtractorState {
     objectError: string | null;
 }
 
-export type LibraryItemType = 'image' | 'video' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette';
+export type LibraryItemType = 'image' | 'video' | 'logo' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup';
 
 export interface LibraryItem {

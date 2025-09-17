@@ -100,7 +100,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
 
         try {
             await saveToLibrary({
-                mediaType: 'image',
+                mediaType: 'logo',
                 name: state.brandName || `Logo for ${state.logoPrompt?.substring(0, 20)}...`,
                 media: logoSrc,
                 thumbnail: await dataUrlToThumbnail(logoSrc, 256),
@@ -248,10 +248,25 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                 {state.generatedLogos.map((logo, index) => (
                                     <div key={index} className="group relative aspect-square bg-bg-primary p-2 rounded-lg flex items-center justify-center">
                                         <img src={logo.src} alt={`Generated Logo ${index + 1}`} className="max-w-full max-h-full object-contain" />
-                                        <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                            <button onClick={() => handleDownloadLogo(logo.src, index)} title="Download" className="p-3 rounded-full bg-bg-tertiary/80 text-white hover:bg-accent"><DownloadIcon className="w-5 h-5"/></button>
-                                            <button onClick={() => handleSaveLogo(logo.src, index)} disabled={logo.saved !== 'idle'} title="Save to Library" className="p-3 rounded-full bg-bg-tertiary/80 text-white hover:bg-accent disabled:opacity-50">
-                                                 {logo.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : logo.saved === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5"/>}
+                                        <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
+                                            <button 
+                                                onClick={() => handleDownloadLogo(logo.src, index)} 
+                                                className="w-full flex items-center justify-center gap-2 text-sm bg-bg-tertiary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-accent hover:text-accent-text transition-colors duration-200"
+                                            >
+                                                <DownloadIcon className="w-4 h-4"/>
+                                                <span>Download</span>
+                                            </button>
+                                            <button 
+                                                onClick={() => handleSaveLogo(logo.src, index)} 
+                                                disabled={logo.saved !== 'idle'}
+                                                className={`w-full flex items-center justify-center gap-2 text-sm font-semibold py-2 px-3 rounded-lg transition-colors duration-200 ${
+                                                    logo.saved === 'saved' ? 'bg-green-500 text-white cursor-default' :
+                                                    logo.saved === 'saving' ? 'bg-bg-tertiary text-text-secondary cursor-wait' :
+                                                    'bg-bg-tertiary text-text-secondary hover:bg-accent hover:text-accent-text'
+                                                }`}
+                                            >
+                                                {logo.saved === 'saving' ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : logo.saved === 'saved' ? <CheckIcon className="w-4 h-4" /> : <SaveIcon className="w-4 h-4" />}
+                                                <span>{logo.saved === 'saving' ? 'Saving...' : logo.saved === 'saved' ? 'Saved' : 'Save to Library'}</span>
                                             </button>
                                         </div>
                                     </div>
