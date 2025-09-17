@@ -150,24 +150,18 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const comfySamplers = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.KSamplerAdvanced?.input?.required?.sampler_name), [comfyUIObjectInfo]);
     const comfySchedulers = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.KSamplerAdvanced?.input?.required?.scheduler), [comfyUIObjectInfo]);
     
-    // Pre-filter models and LoRAs to only include I2V (Image-to-Video) types.
-    // This is the core of the fix to prevent incorrect T2V models from being selected.
-    const comfyI2VGgufModels = useMemo(() => comfyGgufModels.filter(m => m.toLowerCase().includes('i2v')), [comfyGgufModels]);
-    const comfyI2VLoras = useMemo(() => comfyLoras.filter(l => l.toLowerCase().includes('i2v')), [comfyLoras]);
-
-
     // This effect populates the WAN 2.2 I2V workflow with sensible defaults
     // whenever it's selected, ensuring it's ready to use immediately.
     useEffect(() => {
         if (options.videoProvider === 'comfyui' && options.comfyVidModelType === 'wan-i2v' && comfyUIObjectInfo) {
-            // Guard against running if no I2V models are found, which would set incorrect fallbacks.
-            if (comfyI2VGgufModels.length === 0) return;
+            // Guard against running if no models are found, which would set incorrect fallbacks.
+            if (comfyGgufModels.length === 0) return;
 
             setOptions(prev => ({
                 ...prev,
                 // --- Models ---
-                comfyVidWanI2VHighNoiseModel: comfyI2VGgufModels.find(m => m.toLowerCase().includes('highnoise')) || comfyI2VGgufModels[0],
-                comfyVidWanI2VLowNoiseModel: comfyI2VGgufModels.find(m => m.toLowerCase().includes('lownoise')) || (comfyI2VGgufModels.length > 1 ? comfyI2VGgufModels[1] : comfyI2VGgufModels[0]),
+                comfyVidWanI2VHighNoiseModel: comfyGgufModels.find(m => m.toLowerCase().includes('highnoise')) || comfyGgufModels[0],
+                comfyVidWanI2VLowNoiseModel: comfyGgufModels.find(m => m.toLowerCase().includes('lownoise')) || (comfyGgufModels.length > 1 ? comfyGgufModels[1] : comfyGgufModels[0]),
                 comfyVidWanI2VClipModel: comfyGgufClipModels.find(m => m.includes('umt5')) || comfyGgufClipModels[0],
                 comfyVidWanI2VVaeModel: comfyVaes.find(v => v.includes('wan_2.1')) || comfyVaes[0],
                 comfyVidWanI2VClipVisionModel: comfyClipVision.find(cv => cv.includes('clip_vision_h')) || comfyClipVision[0],
@@ -184,11 +178,17 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                 comfyVidWanI2VFrameCount: 65,
                 comfyVidWanI2VRefinerStartStep: 3,
 
-                // --- LoRAs (Lightning enabled by default as requested) ---
+                // --- LoRAs (Lightning enabled by default for speed) ---
                 comfyVidWanI2VUseLightningLora: true,
-                comfyVidWanI2VHighNoiseLora: comfyI2VLoras.find(l => l.toLowerCase().includes('high')) || comfyI2VLoras[0],
+                comfyVidWanI2VHighNoiseLora: 
+                    comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('high')) 
+                    || comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('high')) 
+                    || comfyLoras[0],
                 comfyVidWanI2VHighNoiseLoraStrength: 2.0,
-                comfyVidWanI2VLowNoiseLora: comfyI2VLoras.find(l => l.toLowerCase().includes('low')) || (comfyI2VLoras.length > 1 ? comfyI2VLoras[1] : comfyI2VLoras[0]),
+                comfyVidWanI2VLowNoiseLora: 
+                    comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('low')) 
+                    || comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('low')) 
+                    || (comfyLoras.length > 1 ? comfyLoras[1] : comfyLoras[0]),
                 comfyVidWanI2VLowNoiseLoraStrength: 1.0,
 
                 // --- Post-Processing ---
@@ -209,8 +209,8 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
         options.videoProvider, 
         options.comfyVidModelType, 
         comfyUIObjectInfo, 
-        comfyI2VGgufModels, 
-        comfyI2VLoras,
+        comfyGgufModels, 
+        comfyLoras,
         comfyGgufClipModels, 
         comfyVaes, 
         comfyClipVision, 
@@ -525,8 +525,8 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                             </OptionSection>
                             
                             <OptionSection title="Models & LoRAs">
-                                <SelectInput label="High-Noise Unet" value={options.comfyVidWanI2VHighNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseModel')} options={comfyI2VGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
-                                <SelectInput label="Low-Noise Unet" value={options.comfyVidWanI2VLowNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseModel')} options={comfyI2VGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                                <SelectInput label="High-Noise Unet" value={options.comfyVidWanI2VHighNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                                <SelectInput label="Low-Noise Unet" value={options.comfyVidWanI2VLowNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
                                 <SelectInput label="CLIP Model (GGUF)" value={options.comfyVidWanI2VClipModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipModel')} options={comfyGgufClipModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
                                 <SelectInput label="VAE Model" value={options.comfyVidWanI2VVaeModel || ''} onChange={handleOptionChange('comfyVidWanI2VVaeModel')} options={comfyVaes.map(m => ({value: m, label: m}))} disabled={isLoading} />
                                 <SelectInput label="CLIP Vision Model" value={options.comfyVidWanI2VClipVisionModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipVisionModel')} options={comfyClipVision.map(m => ({value: m, label: m}))} disabled={isLoading} />
@@ -538,9 +538,9 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                     </label>
                                     {options.comfyVidWanI2VUseLightningLora && (
                                         <div className="space-y-4 pl-4 border-l-2 border-border-primary">
-                                            <SelectInput label="High-Noise LoRA" value={options.comfyVidWanI2VHighNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseLora')} options={comfyI2VLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
+                                            <SelectInput label="High-Noise LoRA" value={options.comfyVidWanI2VHighNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
                                             <NumberSlider label={`High-Noise Strength`} value={options.comfyVidWanI2VHighNoiseLoraStrength || 2.0} onChange={handleSliderChange('comfyVidWanI2VHighNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
-                                            <SelectInput label="Low-Noise LoRA" value={options.comfyVidWanI2VLowNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseLora')} options={comfyI2VLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
+                                            <SelectInput label="Low-Noise LoRA" value={options.comfyVidWanI2VLowNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
                                             <NumberSlider label={`Low-Noise Strength`} value={options.comfyVidWanI2VLowNoiseLoraStrength || 1.0} onChange={handleSliderChange('comfyVidWanI2VLowNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
                                         </div>
                                     )}
@@ -688,15 +688,15 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                             </button>
                                             <button
                                                 onClick={handleSaveFrameToLibrary}
-                                                disabled={frameSavingStatus !== 'idle'}
+                                                disabled={frameSavingState !== 'idle'}
                                                 className={`flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors ${
-                                                    frameSavingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 
-                                                    frameSavingStatus === 'saving' ? 'bg-bg-tertiary cursor-wait' :
+                                                    frameSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 
+                                                    frameSavingState === 'saving' ? 'bg-bg-tertiary cursor-wait' :
                                                     'bg-bg-tertiary hover:bg-accent hover:text-accent-text'
                                                 }`}
                                             >
-                                                {frameSavingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : frameSavingStatus === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
-                                                {frameSavingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
+                                                {frameSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : frameSavingState === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
+                                                {frameSavingState === 'saved' ? 'Saved!' : 'Save to Library'}
                                             </button>
                                         </div>
                                     </div>

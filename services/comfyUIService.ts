@@ -25,6 +25,24 @@ const getComfyUIUrl = (): string => {
 
 const getClientId = (): string => `lawiz-app-${Math.random().toString(36).substring(2, 15)}`;
 
+const sanitizeFilename = (filename: string): string => {
+  if (!filename) return "image.png";
+
+  const extensionMatch = filename.match(/\.[0-9a-z]+$/i);
+  const extension = extensionMatch ? extensionMatch[0] : '.png';
+  let baseName = extension ? filename.substring(0, filename.length - extension.length) : filename;
+
+  // Replace invalid characters and multiple spaces/underscores
+  baseName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_{2,}/g, '_');
+
+  const maxLength = 100 - extension.length;
+  if (baseName.length > maxLength) {
+    baseName = baseName.substring(0, maxLength);
+  }
+  
+  return baseName + extension;
+}
+
 // --- Module state for cancellation ---
 let currentExecution: { clientId: string; ws: WebSocket } | null = null;
 
@@ -214,12 +232,28 @@ export const getComfyUIObjectInfo = async (): Promise<any> => {
 const uploadImage = async (file: File): Promise<{ name: string; subfolder: string; type: string }> => {
     const url = getComfyUIUrl();
     if (!url) throw new Error('ComfyUI URL not set');
+
+    const fileBuffer = await file.arrayBuffer();
+    const originalFilename = file.name || "image.png";
+    // Sanitize the filename to remove problematic characters and limit length, preventing upload errors.
+    const sanitizedFilename = sanitizeFilename(originalFilename);
+    const normalizedFile = new File([fileBuffer], sanitizedFilename, { type: file.type });
     
     const formData = new FormData();
-    formData.append('image', file);
+    formData.append('image', normalizedFile); 
     formData.append('overwrite', 'true');
-    const response = await fetch(`${url}/upload/image`, { method: 'POST', body: formData });
-    if (!response.ok) throw new Error(`Failed to upload image: ${response.statusText}`);
+
+    const response = await fetch(`${url}/upload/image`, {
+        method: 'POST',
+        body: formData,
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error("ComfyUI image upload failed. Server response:", errorText);
+        throw new Error(`Failed to upload image to ComfyUI: ${response.statusText}`);
+    }
+    
     return response.json();
 };
 
@@ -242,7 +276,8 @@ const queuePrompt = async (prompt: any, clientId: string): Promise<string> => {
 
 const executeWorkflow = async (
     workflow: any,
-    onProgress: (message: string, value: number) => void
+    onProgress: (message: string, value: number) => void,
+    isLongJob: boolean = false
 ): Promise<{ images: string[], videoUrl: string | null }> => {
     const url = getComfyUIUrl();
     if (!url) throw new Error("ComfyUI URL not set");
@@ -291,7 +326,10 @@ const executeWorkflow = async (
                     onProgress("Fetching results...", 0.95);
                     const promptId = data.data.prompt_id;
 
-                    const fetchHistoryWithRetries = async (retries = 15, delay = 3000): Promise<any> => {
+                    const retries = isLongJob ? 60 : 15; // Increased retries for long jobs (e.g., video)
+                    const delay = 3000;
+
+                    const fetchHistoryWithRetries = async (retries: number, delay: number): Promise<any> => {
                         for (let i = 0; i < retries; i++) {
                             try {
                                 const historyRes = await fetch(`${url}/history/${promptId}`);
@@ -309,7 +347,7 @@ const executeWorkflow = async (
                     };
 
                     try {
-                        const history = await fetchHistoryWithRetries();
+                        const history = await fetchHistoryWithRetries(retries, delay);
                         const outputs = history.outputs;
                         const imageOutputs = [];
                         let videoUrl = null;
@@ -800,7 +838,7 @@ export const generateComfyUIVideo = async (
         delete workflow["114"];
     }
     
-    const { videoUrl } = await executeWorkflow(workflow, updateProgress);
+    const { videoUrl } = await executeWorkflow(workflow, updateProgress, true); // Pass true for long job
     if (!videoUrl) {
         throw new Error("Generation finished, but no video file was found in the output.");
     }
