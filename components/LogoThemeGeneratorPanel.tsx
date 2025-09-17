@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import type { LogoThemeState, LibraryItem, LogoStyle, LogoBackground, PaletteColor } from '../types';
-import { GenerateIcon, ResetIcon, SpinnerIcon, LibraryIcon, CloseIcon, SaveIcon, CheckIcon, DownloadIcon, UploadIconSimple } from './icons';
+import { GenerateIcon, ResetIcon, SpinnerIcon, LibraryIcon, CloseIcon, SaveIcon, CheckIcon, DownloadIcon, UploadIconSimple, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import { generateLogos } from '../services/geminiService';
 import { saveToLibrary } from '../services/libraryService';
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
@@ -37,6 +37,7 @@ const BACKGROUND_OPTIONS: { id: LogoBackground; label: string }[] = [
 ];
 
 export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = ({ state, setState, onOpenLibraryForReferences, onOpenLibraryForPalette }) => {
+    const [zoomedLogoIndex, setZoomedLogoIndex] = useState<number | null>(null);
     
     const handleInputChange = (field: keyof LogoThemeState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setState(prev => ({ ...prev, [field]: e.target.value }));
@@ -160,194 +161,280 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
 
     const selectedPaletteColors = state.selectedPalette ? JSON.parse(state.selectedPalette.media) as PaletteColor[] : [];
 
-    return (
-        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto space-y-12">
-            <Section 
-                title="Logo Generator"
-                description="Create unique, professional logos from a text description. Specify style, colors, and content to generate the perfect brand identity."
-                borderColor="var(--color-accent)"
-            >
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                    {/* --- Left Column: Controls --- */}
-                    <div className="space-y-6">
-                        <textarea
-                            value={state.logoPrompt}
-                            onChange={handleInputChange('logoPrompt')}
-                            placeholder="Describe the logo's core concept, e.g., 'a majestic lion head combined with a shield'"
-                            className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent"
-                            rows={3}
-                        />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <input type="text" value={state.brandName} onChange={handleInputChange('brandName')} placeholder="Brand Name" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" />
-                            <input type="text" value={state.slogan} onChange={handleInputChange('slogan')} placeholder="Slogan (Optional)" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" />
-                        </div>
-                        
-                        <div>
-                            <h3 className="text-md font-semibold text-text-secondary mb-2">Logo Style</h3>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                {LOGO_STYLES.map(style => (
-                                    <button key={style.id} onClick={() => handleStyleChange(style.id)} title={style.description}
-                                        className={`p-3 text-center rounded-lg text-sm transition-colors ${state.logoStyle === style.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}
-                                    >
-                                        {style.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+    // --- Zoom Modal Logic ---
+    const handleCloseZoom = useCallback(() => {
+        setZoomedLogoIndex(null);
+    }, []);
 
+    const handleNextLogo = useCallback(() => {
+        if (zoomedLogoIndex !== null && state.generatedLogos && state.generatedLogos.length > 1) {
+          setZoomedLogoIndex(prev => (prev! + 1) % state.generatedLogos!.length);
+        }
+    }, [zoomedLogoIndex, state.generatedLogos]);
+
+    const handlePrevLogo = useCallback(() => {
+        if (zoomedLogoIndex !== null && state.generatedLogos && state.generatedLogos.length > 1) {
+          setZoomedLogoIndex(prev => (prev! - 1 + state.generatedLogos!.length) % state.generatedLogos!.length);
+        }
+    }, [zoomedLogoIndex, state.generatedLogos]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+          if (zoomedLogoIndex === null) return;
+          if (e.key === 'Escape') handleCloseZoom();
+          if (e.key === 'ArrowRight') handleNextLogo();
+          if (e.key === 'ArrowLeft') handlePrevLogo();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [zoomedLogoIndex, handleCloseZoom, handleNextLogo, handlePrevLogo]);
+
+    const currentZoomedLogo = zoomedLogoIndex !== null ? state.generatedLogos?.[zoomedLogoIndex] : null;
+
+    return (
+        <>
+            <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto space-y-12">
+                <Section 
+                    title="Logo Generator"
+                    description="Create unique, professional logos from a text description. Specify style, colors, and content to generate the perfect brand identity."
+                    borderColor="var(--color-accent)"
+                >
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                        {/* --- Left Column: Controls --- */}
                         <div className="space-y-6">
+                            <textarea
+                                value={state.logoPrompt}
+                                onChange={handleInputChange('logoPrompt')}
+                                placeholder="Describe the logo's core concept, e.g., 'a majestic lion head combined with a shield'"
+                                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent"
+                                rows={3}
+                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <input type="text" value={state.brandName} onChange={handleInputChange('brandName')} placeholder="Brand Name" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" />
+                                <input type="text" value={state.slogan} onChange={handleInputChange('slogan')} placeholder="Slogan (Optional)" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" />
+                            </div>
+                            
                             <div>
-                                <h3 className="text-md font-semibold text-text-secondary mb-2">Inspiration Images</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <button onClick={onOpenLibraryForReferences} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                <h3 className="text-md font-semibold text-text-secondary mb-2">Logo Style</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    {LOGO_STYLES.map(style => (
+                                        <button key={style.id} onClick={() => handleStyleChange(style.id)} title={style.description}
+                                            className={`p-3 text-center rounded-lg text-sm transition-colors ${state.logoStyle === style.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}
+                                        >
+                                            {style.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Inspiration Images</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button onClick={onOpenLibraryForReferences} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                            <LibraryIcon className="w-5 h-5"/> From Library
+                                        </button>
+                                        <label htmlFor="logo-ref-upload" className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors cursor-pointer">
+                                            <UploadIconSimple className="w-5 h-5"/> Upload File(s)
+                                            <input id="logo-ref-upload" type="file" multiple accept="image/*" className="hidden" onChange={handleReferenceUpload} />
+                                        </label>
+                                    </div>
+                                    {(state.referenceItems && state.referenceItems.length > 0) && (
+                                        <div className="mt-4 p-2 bg-bg-primary/50 rounded-md">
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {state.referenceItems.map(item => (
+                                                    <div key={item.id} className="relative group">
+                                                        <img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/>
+                                                        <button onClick={() => handleRemoveReference(item.id)} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <CloseIcon className="w-3 h-3"/>
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Color Palette</h3>
+                                    <button onClick={onOpenLibraryForPalette} className="w-full flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors">
                                         <LibraryIcon className="w-5 h-5"/> From Library
                                     </button>
-                                    <label htmlFor="logo-ref-upload" className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors cursor-pointer">
-                                        <UploadIconSimple className="w-5 h-5"/> Upload File(s)
-                                        <input id="logo-ref-upload" type="file" multiple accept="image/*" className="hidden" onChange={handleReferenceUpload} />
-                                    </label>
-                                </div>
-                                {(state.referenceItems && state.referenceItems.length > 0) && (
-                                    <div className="mt-4 p-2 bg-bg-primary/50 rounded-md">
-                                        <div className="grid grid-cols-4 gap-2">
-                                            {state.referenceItems.map(item => (
-                                                <div key={item.id} className="relative group">
-                                                    <img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/>
-                                                    <button onClick={() => handleRemoveReference(item.id)} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <CloseIcon className="w-3 h-3"/>
-                                                    </button>
+                                    {state.selectedPalette && (
+                                        <div className="mt-4 p-3 bg-bg-primary/50 rounded-md flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex -space-x-2">
+                                                    {selectedPaletteColors.slice(0, 5).map(c => <div key={c.hex} className="w-6 h-6 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}
                                                 </div>
+                                                <p className="text-sm font-semibold truncate">{state.selectedPalette.name}</p>
+                                            </div>
+                                            <button onClick={handleClearPalette} className="p-1 text-text-secondary hover:text-white"><CloseIcon className="w-4 h-4"/></button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 className="text-md font-semibold text-text-secondary mb-2">Settings</h3>
+                                <div className="p-4 bg-bg-tertiary rounded-lg space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-text-secondary">Number of Logos: {state.numLogos}</label>
+                                        <input type="range" min="1" max="4" step="1" value={state.numLogos} onChange={handleSliderChange} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-text-secondary mb-2">Background</label>
+                                        <div className="flex items-center gap-2">
+                                            {BACKGROUND_OPTIONS.map(bg => (
+                                                <button key={bg.id} onClick={() => handleBgChange(bg.id)} className={`flex-1 p-2 text-xs rounded-md ${state.backgroundColor === bg.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{bg.label}</button>
                                             ))}
                                         </div>
                                     </div>
-                                )}
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="text-md font-semibold text-text-secondary mb-2">Color Palette</h3>
-                                <button onClick={onOpenLibraryForPalette} className="w-full flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors">
-                                    <LibraryIcon className="w-5 h-5"/> From Library
+
+                            <div className="grid grid-cols-2 gap-4 pt-4">
+                                <button onClick={handleReset} disabled={state.isGeneratingLogos} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                    <ResetIcon className="w-5 h-5"/> Reset
                                 </button>
-                                {state.selectedPalette && (
-                                    <div className="mt-4 p-3 bg-bg-primary/50 rounded-md flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex -space-x-2">
-                                                {selectedPaletteColors.slice(0, 5).map(c => <div key={c.hex} className="w-6 h-6 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}
-                                            </div>
-                                            <p className="text-sm font-semibold truncate">{state.selectedPalette.name}</p>
+                                <button onClick={handleGenerate} disabled={state.isGeneratingLogos} style={!state.isGeneratingLogos ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
+                                    {state.isGeneratingLogos ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <GenerateIcon className="w-5 h-5"/>}
+                                    {state.isGeneratingLogos ? 'Generating...' : 'Generate Logos'}
+                                </button>
+                            </div>
+                        </div>
+                        {/* --- Right Column: Results --- */}
+                        <div className="space-y-4">
+                            {state.logoError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.logoError}</p>}
+
+                            {state.isGeneratingLogos ? (
+                                <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl shadow-inner h-full min-h-[400px]">
+                                    <SpinnerIcon className="w-16 h-16 text-accent animate-spin mb-4" />
+                                    <h3 className="text-lg font-bold text-text-primary">Generating your logos...</h3>
+                                </div>
+                            ) : (state.generatedLogos && state.generatedLogos.length > 0) ? (
+                                <div className="grid grid-cols-2 gap-4">
+                                    {state.generatedLogos.map((logo, index) => (
+                                        <div key={index} 
+                                            className="group relative aspect-square bg-bg-primary p-2 rounded-lg flex items-center justify-center cursor-pointer"
+                                            onClick={() => setZoomedLogoIndex(index)}
+                                        >
+                                            <img src={logo.src} alt={`Generated Logo ${index + 1}`} className="max-w-full max-h-full object-contain" />
+                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </div>
-                                        <button onClick={handleClearPalette} className="p-1 text-text-secondary hover:text-white"><CloseIcon className="w-4 h-4"/></button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div>
-                            <h3 className="text-md font-semibold text-text-secondary mb-2">Settings</h3>
-                            <div className="p-4 bg-bg-tertiary rounded-lg space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-text-secondary">Number of Logos: {state.numLogos}</label>
-                                    <input type="range" min="1" max="4" step="1" value={state.numLogos} onChange={handleSliderChange} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" />
+                                    ))}
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-text-secondary mb-2">Background</label>
-                                    <div className="flex items-center gap-2">
-                                        {BACKGROUND_OPTIONS.map(bg => (
-                                            <button key={bg.id} onClick={() => handleBgChange(bg.id)} className={`flex-1 p-2 text-xs rounded-md ${state.backgroundColor === bg.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{bg.label}</button>
-                                        ))}
-                                    </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl shadow-inner h-full min-h-[400px]">
+                                    <GenerateIcon className="w-16 h-16 text-border-primary mb-4" />
+                                    <h3 className="text-lg font-bold text-text-primary">Your generated logos will appear here</h3>
+                                    <p className="text-text-secondary max-w-xs">Configure your options and click "Generate Logos".</p>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 pt-4">
-                            <button onClick={handleReset} disabled={state.isGeneratingLogos} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
-                                <ResetIcon className="w-5 h-5"/> Reset
-                            </button>
-                             <button onClick={handleGenerate} disabled={state.isGeneratingLogos} style={!state.isGeneratingLogos ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
-                                {state.isGeneratingLogos ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <GenerateIcon className="w-5 h-5"/>}
-                                {state.isGeneratingLogos ? 'Generating...' : 'Generate Logos'}
-                            </button>
+                            )}
                         </div>
                     </div>
-                    {/* --- Right Column: Results --- */}
-                    <div className="space-y-4">
-                        {state.logoError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.logoError}</p>}
+                </Section>
 
-                        {state.isGeneratingLogos ? (
-                            <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl shadow-inner h-full min-h-[400px]">
-                                <SpinnerIcon className="w-16 h-16 text-accent animate-spin mb-4" />
-                                <h3 className="text-lg font-bold text-text-primary">Generating your logos...</h3>
-                            </div>
-                        ) : (state.generatedLogos && state.generatedLogos.length > 0) ? (
-                            <div className="grid grid-cols-2 gap-4">
-                                {state.generatedLogos.map((logo, index) => (
-                                    <div key={index} className="group relative aspect-square bg-bg-primary p-2 rounded-lg flex items-center justify-center">
-                                        <img src={logo.src} alt={`Generated Logo ${index + 1}`} className="max-w-full max-h-full object-contain" />
-                                        <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
-                                            <button 
-                                                onClick={() => handleDownloadLogo(logo.src, index)} 
-                                                className="w-full flex items-center justify-center gap-2 text-sm bg-bg-tertiary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-accent hover:text-accent-text transition-colors duration-200"
-                                            >
-                                                <DownloadIcon className="w-4 h-4"/>
-                                                <span>Download</span>
-                                            </button>
-                                            <button 
-                                                onClick={() => handleSaveLogo(logo.src, index)} 
-                                                disabled={logo.saved !== 'idle'}
-                                                className={`w-full flex items-center justify-center gap-2 text-sm font-semibold py-2 px-3 rounded-lg transition-colors duration-200 ${
-                                                    logo.saved === 'saved' ? 'bg-green-500 text-white cursor-default' :
-                                                    logo.saved === 'saving' ? 'bg-bg-tertiary text-text-secondary cursor-wait' :
-                                                    'bg-bg-tertiary text-text-secondary hover:bg-accent hover:text-accent-text'
-                                                }`}
-                                            >
-                                                {logo.saved === 'saving' ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : logo.saved === 'saved' ? <CheckIcon className="w-4 h-4" /> : <SaveIcon className="w-4 h-4" />}
-                                                <span>{logo.saved === 'saving' ? 'Saving...' : logo.saved === 'saved' ? 'Saved' : 'Save to Library'}</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl shadow-inner h-full min-h-[400px]">
-                                <GenerateIcon className="w-16 h-16 text-border-primary mb-4" />
-                                <h3 className="text-lg font-bold text-text-primary">Your generated logos will appear here</h3>
-                                <p className="text-text-secondary max-w-xs">Configure your options and click "Generate Logos".</p>
-                            </div>
-                        )}
+                <Section 
+                    title="Banner Generator"
+                    description="Design eye-catching banners for social media, websites, or advertisements. Combine text and imagery for impactful visuals."
+                    borderColor="var(--color-highlight-green)"
+                >
+                    <div className="text-center text-text-muted p-8 bg-bg-tertiary rounded-md">
+                        <p>Banner Generator controls will be here.</p>
+                    </div>
+                </Section>
+
+                <Section 
+                    title="Album Cover Generator"
+                    description="Produce stunning album art that captures the essence of your music. Generate visuals based on genre, mood, and artist name."
+                    borderColor="var(--color-highlight-yellow)"
+                >
+                    <div className="text-center text-text-muted p-8 bg-bg-tertiary rounded-md">
+                        <p>Album Cover Generator controls will be here.</p>
+                    </div>
+                </Section>
+
+                <Section 
+                    title="Theme Generator"
+                    description="Generate a cohesive color palette and style guide for your project. Describe a concept to get hex codes, font suggestions, and mood boards."
+                    borderColor="#ec4899" // Synthwave accent for variety
+                >
+                    <div className="text-center text-text-muted p-8 bg-bg-tertiary rounded-md">
+                        <p>Theme Generator controls will be here.</p>
+                    </div>
+                </Section>
+            </div>
+            
+            {currentZoomedLogo && (
+                <div 
+                    className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-fade-in"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Zoomed logo view"
+                    onClick={handleCloseZoom}
+                >
+                    <div 
+                        className="relative"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <img 
+                            src={currentZoomedLogo.src} 
+                            alt={`Zoomed logo ${zoomedLogoIndex! + 1}`} 
+                            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                            style={{ maxHeight: '80vh', maxWidth: '80vw' }}
+                        />
+                        <button
+                            onClick={handleCloseZoom}
+                            className="absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75 transition-colors z-10"
+                            aria-label="Close zoomed image"
+                        >
+                            <CloseIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+                    
+                    {state.generatedLogos && state.generatedLogos.length > 1 && (
+                        <>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handlePrevLogo(); }}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                            aria-label="Previous logo"
+                        >
+                            <ChevronLeftIcon className="w-8 h-8" />
+                        </button>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleNextLogo(); }}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                            aria-label="Next logo"
+                        >
+                            <ChevronRightIcon className="w-8 h-8" />
+                        </button>
+                        </>
+                    )}
+
+                    <div
+                        className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-bg-secondary/80 backdrop-blur-sm p-3 rounded-full shadow-lg"
+                        onClick={e => e.stopPropagation()}
+                        role="toolbar"
+                        aria-label="Logo actions"
+                    >
+                        <button
+                            onClick={() => handleDownloadLogo(currentZoomedLogo.src, zoomedLogoIndex!)}
+                            title="Download Logo"
+                            aria-label="Download this logo"
+                            className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                        >
+                            <DownloadIcon className="w-6 h-6" />
+                        </button>
+                        <button
+                            onClick={() => handleSaveLogo(currentZoomedLogo.src, zoomedLogoIndex!)}
+                            disabled={currentZoomedLogo.saved !== 'idle'}
+                            title={currentZoomedLogo.saved === 'saved' ? 'Saved!' : 'Save to Library'}
+                            className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50"
+                        >
+                            {currentZoomedLogo.saved === 'saving' ? <SpinnerIcon className="w-6 h-6 animate-spin" /> : currentZoomedLogo.saved === 'saved' ? <CheckIcon className="w-6 h-6" /> : <SaveIcon className="w-6 h-6" />}
+                        </button>
                     </div>
                 </div>
-
-            </Section>
-
-            <Section 
-                title="Banner Generator"
-                description="Design eye-catching banners for social media, websites, or advertisements. Combine text and imagery for impactful visuals."
-                borderColor="var(--color-highlight-green)"
-            >
-                <div className="text-center text-text-muted p-8 bg-bg-tertiary rounded-md">
-                    <p>Banner Generator controls will be here.</p>
-                </div>
-            </Section>
-
-            <Section 
-                title="Album Cover Generator"
-                description="Produce stunning album art that captures the essence of your music. Generate visuals based on genre, mood, and artist name."
-                borderColor="var(--color-highlight-yellow)"
-            >
-                <div className="text-center text-text-muted p-8 bg-bg-tertiary rounded-md">
-                    <p>Album Cover Generator controls will be here.</p>
-                </div>
-            </Section>
-
-            <Section 
-                title="Theme Generator"
-                description="Generate a cohesive color palette and style guide for your project. Describe a concept to get hex codes, font suggestions, and mood boards."
-                borderColor="#ec4899" // Synthwave accent for variety
-            >
-                <div className="text-center text-text-muted p-8 bg-bg-tertiary rounded-md">
-                    <p>Theme Generator controls will be here.</p>
-                </div>
-            </Section>
-        </div>
+            )}
+        </>
     );
 };
