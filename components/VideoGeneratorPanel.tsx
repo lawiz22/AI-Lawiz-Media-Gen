@@ -5,7 +5,7 @@ import { Loader } from './Loader';
 import type { GenerationOptions, LibraryItem } from '../types';
 import { resizeImageFile } from '../utils/imageProcessing';
 import { saveToLibrary } from '../services/libraryService';
-import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromFile, dataUrlToFile } from '../utils/imageUtils';
+import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromFile, dataUrlToFile, createVideoPlaceholderThumbnail } from '../utils/imageUtils';
 
 // --- Prop Types ---
 interface VideoGeneratorPanelProps {
@@ -298,11 +298,19 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     };
     
     const handleSaveToLibrary = async () => {
-        if (!generatedVideo || !startFrame) return;
+        if (!generatedVideo) return;
         
         setSavingState('saving');
         try {
             const optionsToSave = { ...(generationOptionsForSave || options) };
+            
+            let thumbnail: string;
+            if (startFrame) {
+                thumbnail = await dataUrlToThumbnail(await fileToResizedDataUrl(startFrame, 256), 256);
+            } else {
+                // No start frame (e.g., Gemini text-to-video), create a placeholder.
+                thumbnail = createVideoPlaceholderThumbnail();
+            }
 
             if (optionsToSave.videoProvider === 'comfyui') {
                 optionsToSave.width = optionsToSave.comfyVidWanI2VWidth;
@@ -316,9 +324,9 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
             const item: Omit<LibraryItem, 'id'> = {
                 mediaType: 'video',
                 media: generatedVideo,
-                thumbnail: await dataUrlToThumbnail(await fileToResizedDataUrl(startFrame, 256), 256),
+                thumbnail: thumbnail,
                 options: optionsToSave,
-                startFrame: await fileToResizedDataUrl(startFrame, 512),
+                startFrame: startFrame ? await fileToResizedDataUrl(startFrame, 512) : undefined,
                 endFrame: endFrame ? await fileToResizedDataUrl(endFrame, 512) : undefined,
             };
             await saveToLibrary(item);

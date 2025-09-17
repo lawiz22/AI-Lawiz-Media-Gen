@@ -212,3 +212,20 @@ export const createPaletteThumbnail = (palette: PaletteColor[]): string => {
     `;
     return `data:image/svg+xml;base64,${btoa(finalSvg)}`;
 };
+
+export const createVideoPlaceholderThumbnail = (): string => {
+    const width = 256;
+    const height = 256;
+
+    const iconPath = "M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z";
+
+    const finalSvg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 256 256">
+        <rect width="256" height="256" fill="#1f2937"/>
+        <svg x="50%" y="50%" width="128" height="128" viewBox="0 0 24 24" style="transform: translate(-50%, -50%);">
+             <path d="${iconPath}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </svg>
+    `;
+    return `data:image/svg+xml;base64,${btoa(finalSvg)}`;
+};
