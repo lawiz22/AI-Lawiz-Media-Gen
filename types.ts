@@ -278,7 +278,7 @@ export interface PromptGenState {
     soupHistory: string[];
 }
 
-export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination';
+export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';
 export type LogoBackground = 'transparent' | 'white' | 'black';
 
 export interface LogoThemeState {

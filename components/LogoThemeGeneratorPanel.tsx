@@ -28,6 +28,13 @@ const LOGO_STYLES: { id: LogoStyle; label: string; description: string }[] = [
     { id: 'emblem', label: 'Emblem', description: 'Text integrated within a symbol or badge.' },
     { id: 'abstract', label: 'Abstract', description: 'A unique, non-representational geometric shape.' },
     { id: 'combination', label: 'Combination', description: 'An icon paired with a wordmark.' },
+    { id: 'pixel-art', label: 'Pixel Art', description: '8-bit retro video game style.' },
+    { id: 'vaporwave', label: 'Vaporwave', description: 'Neon, retro-futuristic 80s/90s aesthetic.' },
+    { id: 'grunge', label: 'Grunge', description: 'Distressed, textured, and edgy look.' },
+    { id: 'vintage-badge', label: 'Vintage Badge', description: 'Classic circular or shaped badge design.' },
+    { id: '3d-clay', label: '3D Clay', description: 'Playful, soft, 3D claymation effect.' },
+    { id: 'hand-drawn', label: 'Hand-Drawn', description: 'Organic, sketchy, and artistic feel.' },
+    { id: 'geometric', label: 'Geometric', description: 'Made of clean lines and basic shapes.' },
 ];
 
 const BACKGROUND_OPTIONS: { id: LogoBackground; label: string }[] = [
@@ -126,9 +133,20 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         });
 
         try {
+            let logoName = 'Logo';
+            const styleLabel = LOGO_STYLES.find(s => s.id === state.logoStyle)?.label || state.logoStyle;
+
+            if (state.brandName) {
+                logoName = `${state.brandName} - ${styleLabel} Logo`;
+            } else if (state.logoPrompt) {
+                logoName = `Logo for "${state.logoPrompt.substring(0, 25)}..." - ${styleLabel}`;
+            } else {
+                logoName = `${styleLabel} Logo Concept`;
+            }
+
             await saveToLibrary({
                 mediaType: 'logo',
-                name: state.brandName || `Logo for ${state.logoPrompt?.substring(0, 20)}...`,
+                name: logoName,
                 media: logoSrc,
                 thumbnail: await dataUrlToThumbnail(logoSrc, 256),
                 options: {
