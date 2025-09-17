@@ -491,7 +491,9 @@ const App: React.FC = () => {
             case 'character':
                 setSourceImage(sourceToSet);
                 setGeneratedImages([item.media]);
-                setCharacterName(item.name || '');
+                // When loading a character, parse the name to separate it from the description
+                const [namePart] = (item.name || '').split(':');
+                setCharacterName(namePart.trim());
                 setActiveTab('character-generator');
                 break;
             case 'image':

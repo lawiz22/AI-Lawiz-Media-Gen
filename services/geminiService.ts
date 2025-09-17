@@ -65,20 +65,28 @@ export const generatePortraits = async (
     updateProgress("Preparing source images...", 0.05);
     
     // The gemini-2.5-flash-image-preview model inherits the aspect ratio from the source image.
-    // To enforce the user's selection, we must pre-crop the source image before sending it.
+    // To enforce the user's selection, we must pre-crop all input images before sending them.
     const croppedSourceImage = await cropImageToAspectRatio(sourceImage, options.aspectRatio);
-
     const sourceImagePart = await fileToGenerativePart(croppedSourceImage);
-    const clothingImagePart = clothingImage ? await fileToGenerativePart(clothingImage) : null;
-    let backgroundImagePart = backgroundImage ? await fileToGenerativePart(backgroundImage) : null;
 
+    // Crop uploaded reference images
+    const croppedClothingImage = clothingImage ? await cropImageToAspectRatio(clothingImage, options.aspectRatio) : null;
+    const clothingImagePart = croppedClothingImage ? await fileToGenerativePart(croppedClothingImage) : null;
+    const croppedBackgroundImage = backgroundImage ? await cropImageToAspectRatio(backgroundImage, options.aspectRatio) : null;
+    let backgroundImagePart = croppedBackgroundImage ? await fileToGenerativePart(croppedBackgroundImage) : null;
+    
+    // Handle AI-generated preview images
     if (previewedBackgroundImage && options.consistentBackground) {
         const bgFile = await dataUrlToFile(previewedBackgroundImage, 'background.jpeg');
+        // Background preview is already generated with the correct aspect ratio, so no cropping needed.
         backgroundImagePart = await fileToGenerativePart(bgFile);
     }
 
     const previewedClothingFile = previewedClothingImage ? await dataUrlToFile(previewedClothingImage, 'clothing.jpeg') : null;
-    const previewedClothingImagePart = previewedClothingFile ? await fileToGenerativePart(previewedClothingFile) : null;
+    // Clothing preview is generated at 1:1, so it MUST be cropped to the target ratio.
+    const croppedPreviewedClothingFile = previewedClothingFile ? await cropImageToAspectRatio(previewedClothingFile, options.aspectRatio) : null;
+    const previewedClothingImagePart = croppedPreviewedClothingFile ? await fileToGenerativePart(croppedPreviewedClothingFile) : null;
+
 
     let posePrompts = options.poseSelection.map(decodePose);
     if (options.poseMode === 'random') {

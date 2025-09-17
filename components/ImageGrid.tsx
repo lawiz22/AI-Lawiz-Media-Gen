@@ -6,6 +6,38 @@ import { saveToLibrary } from '../services/libraryService';
 import type { GenerationOptions, LibraryItem } from '../types';
 import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromDataUrl } from '../utils/imageUtils';
 
+/**
+ * Creates a simple, readable description of the character generation settings.
+ * @param options The generation options used.
+ * @returns A string like "random pose; clothing original; bg natural studio; photorealistic".
+ */
+const generateCharacterDescription = (options: GenerationOptions): string => {
+    const parts = [];
+    // Pose
+    parts.push(`${options.poseMode} pose`);
+    
+    // Clothing
+    // Fix: Explicitly type `clothing` as `string` to allow assigning a descriptive string. This resolves a TypeScript error where the variable was inferred as the strict literal type `ClothingMode`.
+    let clothing: string = options.clothing;
+    if ((clothing === 'prompt' || clothing === 'random') && options.customClothingPrompt) {
+         clothing = `'${options.customClothingPrompt.substring(0, 15).trim()}...'`;
+    }
+    parts.push(`clothing ${clothing}`);
+    
+    // Background
+    // Fix: Explicitly type `bg` as `string` to allow assigning a descriptive string. This resolves a TypeScript error where the variable was inferred as the strict literal type `BackgroundMode`.
+    let bg: string = options.background;
+    if ((bg === 'prompt' || bg === 'random') && options.customBackground) {
+        bg = `'${options.customBackground.substring(0, 15).trim()}...'`;
+    }
+    parts.push(`bg ${bg}`);
+    
+    // Style
+    parts.push(options.imageStyle);
+    
+    return parts.join('; ');
+};
+
 
 interface ImageGridProps {
   images: string[];
@@ -69,7 +101,8 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
       };
 
       if (isCharacter) {
-        item.name = characterName || `Character ${Date.now()}`;
+        const description = generateCharacterDescription(optionsToSave);
+        item.name = `${characterName || 'Character'}: ${description}`;
       }
 
       await saveToLibrary(item);
