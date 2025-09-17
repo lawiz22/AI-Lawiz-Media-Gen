@@ -25,7 +25,7 @@ import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
-import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon } from './components/icons';
+import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon } from './components/icons';
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
 
@@ -105,7 +105,7 @@ const App: React.FC = () => {
         imageStyle: 'photorealistic',
         photoStyle: 'professional photoshoot',
         eraStyle: 'a modern digital photograph',
-        geminiMode: 'i2i',
+        geminiMode: 't2i', // Default to T2I for the first tab
         // ComfyUI specific
         comfyModelType: 'sdxl',
         comfyPrompt: '',
@@ -424,7 +424,7 @@ const App: React.FC = () => {
             const blob = await response.blob();
             const file = new File([blob], "new_source_image.jpeg", { type: "image/jpeg" });
             setSourceImage(file);
-            setActiveTab('image-generator');
+            setActiveTab('character-generator');
         } catch (error) {
             console.error("Error setting new source image:", error);
             setGlobalError({ title: "File Error", message: "Could not use the selected image as a new source." });
@@ -449,7 +449,10 @@ const App: React.FC = () => {
             setSourceImage(null);
         }
         setIsHistoryPanelOpen(false);
-        setActiveTab('image-generator');
+
+        // Determine which tab to switch to
+        const isI2I = !!item.sourceImage || item.options.geminiMode === 'i2i';
+        setActiveTab(isI2I ? 'character-generator' : 'image-generator');
     };
     
     const handleLoadLibraryItem = async (item: LibraryItem) => {
@@ -473,7 +476,8 @@ const App: React.FC = () => {
             case 'image':
                 setSourceImage(sourceToSet);
                 setGeneratedImages([item.media]);
-                setActiveTab('image-generator');
+                 const isI2I = !!sourceToSet || item.options?.geminiMode === 'i2i';
+                setActiveTab(isI2I ? 'character-generator' : 'image-generator');
                 break;
             case 'video':
                 setVideoStartFrame(sourceToSet);
@@ -573,12 +577,26 @@ const App: React.FC = () => {
         setProgressMessage('');
     };
 
+    const handleTabClick = (tabId: string) => {
+        if (tabId === 'character-generator') {
+            // This tab is Gemini I2I only
+            setOptions(prev => ({ ...prev, provider: 'gemini', geminiMode: 'i2i' }));
+        } else if (tabId === 'image-generator') {
+            // This tab is T2I only for Gemini
+            if (options.provider === 'gemini') {
+                setOptions(prev => ({ ...prev, geminiMode: 't2i' }));
+            }
+        }
+        setActiveTab(tabId);
+    };
+
     if (!currentUser) {
         return <Login onLogin={handleLogin} />;
     }
 
     const TABS = [
         { id: 'image-generator', label: 'Image Generator', icon: <ImageGeneratorIcon className="w-5 h-5"/> },
+        { id: 'character-generator', label: 'Character/Poses Generator', icon: <CharacterIcon className="w-5 h-5"/> },
         { id: 'video-generator', label: 'Video Generator', icon: <VideoIcon className="w-5 h-5"/> },
         { id: 'logo-theme-generator', label: 'Logo/Theme Generator', icon: <SwatchIcon className="w-5 h-5"/> },
         { id: 'library', label: 'Library', icon: <LibraryIcon className="w-5 h-5"/> },
@@ -613,7 +631,7 @@ const App: React.FC = () => {
                         return (
                              <button
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
+                                onClick={() => handleTabClick(tab.id)}
                                 className={`flex items-center gap-2 px-4 py-3 text-sm font-bold transition-colors duration-200 border-b-4 ${
                                     activeTab === tab.id
                                     ? 'border-accent text-accent'
@@ -631,6 +649,51 @@ const App: React.FC = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                         {/* --- Controls Column (Left) --- */}
                         <div className="lg:col-span-1 space-y-8 sticky top-24">
+                            <OptionsPanel 
+                                options={options} 
+                                setOptions={setOptions}
+                                onGenerate={handleGenerate}
+                                onReset={handleReset}
+                                onGeneratePrompt={() => {}}
+                                onExportWorkflow={handleExport}
+                                isDisabled={isLoading}
+                                isReady={isReadyToGenerate}
+                                isGeneratingPrompt={false}
+                                previewedBackgroundImage={previewedBackgroundImage}
+                                setPreviewedBackgroundImage={setPreviewedBackgroundImage}
+                                previewedClothingImage={previewedClothingImage}
+                                setPreviewedClothingImage={setPreviewedClothingImage}
+                                comfyUIObjectInfo={comfyUIObjectInfo}
+                                comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
+                                sourceImage={sourceImage}
+                                hideGeminiModeSwitch={true}
+                            />
+                        </div>
+
+                        {/* --- Results Column (Right) --- */}
+                        <div className="lg:col-span-2">
+                           <ImageGrid 
+                                images={generatedImages} 
+                                onSetNewSource={handleSetNewSource}
+                                lastUsedPrompt={lastUsedPrompt}
+                                options={options}
+                                sourceImage={sourceImage}
+                            />
+                             {generatedImages.length === 0 && !isLoading && (
+                                <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
+                                    <ImageGeneratorIcon className="w-16 h-16 text-border-primary mb-4" />
+                                    <h3 className="text-lg font-bold text-text-primary">Your generated images will appear here</h3>
+                                    <p className="text-text-secondary max-w-xs">Configure your options and click "Generate".</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className={activeTab === 'character-generator' ? 'block' : 'hidden'}>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                        {/* --- Controls Column (Left) --- */}
+                        <div className="lg:col-span-1 space-y-8 sticky top-24">
                             <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                 <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Source Image</h2>
                                 <ImageUploader 
@@ -641,8 +704,7 @@ const App: React.FC = () => {
                                 />
                             </div>
                             
-                            {/* --- Conditional Reference Image Uploaders --- */}
-                            {(options.provider === 'gemini' && options.geminiMode === 'i2i' && (options.clothing === 'image' || options.background === 'image')) && (
+                            {(options.clothing === 'image' || options.background === 'image') && (
                                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                     <h2 className="text-xl font-bold mb-4 text-accent">Optional Reference Images</h2>
                                     <div className="space-y-4">
@@ -683,6 +745,8 @@ const App: React.FC = () => {
                                 comfyUIObjectInfo={comfyUIObjectInfo}
                                 comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                                 sourceImage={sourceImage}
+                                hideProviderSwitch={true}
+                                hideGeminiModeSwitch={true}
                             />
                         </div>
 
@@ -697,9 +761,9 @@ const App: React.FC = () => {
                             />
                              {generatedImages.length === 0 && !isLoading && (
                                 <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
-                                    <ImageGeneratorIcon className="w-16 h-16 text-border-primary mb-4" />
-                                    <h3 className="text-lg font-bold text-text-primary">Your generated images will appear here</h3>
-                                    <p className="text-text-secondary max-w-xs">Configure your options and click "Generate".</p>
+                                    <CharacterIcon className="w-16 h-16 text-border-primary mb-4" />
+                                    <h3 className="text-lg font-bold text-text-primary">Your generated characters will appear here</h3>
+                                    <p className="text-text-secondary max-w-xs">Upload a source image, configure options, and click "Generate".</p>
                                 </div>
                             )}
                         </div>
@@ -789,7 +853,7 @@ const App: React.FC = () => {
             </main>
 
             {/* --- Global Loader --- */}
-            {isLoading && (activeTab === 'image-generator' || activeTab === 'video-generator') && (
+            {isLoading && (activeTab === 'image-generator' || activeTab === 'video-generator' || activeTab === 'character-generator') && (
                 <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
                     <Loader 
                         message={progressMessage} 

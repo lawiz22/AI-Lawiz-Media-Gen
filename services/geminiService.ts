@@ -2,6 +2,7 @@ import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/ge
 import { fileToGenerativePart, fileToBase64, dataUrlToFile } from '../utils/imageUtils';
 // Fix: Import 'getRandomPose' to resolve reference error.
 import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
+import { cropImageToAspectRatio } from '../utils/imageProcessing';
 import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, LogoThemeState, PaletteColor } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
@@ -63,7 +64,11 @@ export const generatePortraits = async (
     
     updateProgress("Preparing source images...", 0.05);
     
-    const sourceImagePart = await fileToGenerativePart(sourceImage);
+    // The gemini-2.5-flash-image-preview model inherits the aspect ratio from the source image.
+    // To enforce the user's selection, we must pre-crop the source image before sending it.
+    const croppedSourceImage = await cropImageToAspectRatio(sourceImage, options.aspectRatio);
+
+    const sourceImagePart = await fileToGenerativePart(croppedSourceImage);
     const clothingImagePart = clothingImage ? await fileToGenerativePart(clothingImage) : null;
     let backgroundImagePart = backgroundImage ? await fileToGenerativePart(backgroundImage) : null;
 

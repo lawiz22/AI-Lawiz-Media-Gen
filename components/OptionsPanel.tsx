@@ -1,4 +1,3 @@
-
 // Fix: Implemented the full OptionsPanel component, which was missing.
 // This resolves the module resolution error and provides the necessary UI
 // for configuring image generation for both Gemini and ComfyUI providers.
@@ -36,6 +35,8 @@ interface OptionsPanelProps {
   comfyUIObjectInfo: any | null;
   comfyUIUrl: string;
   sourceImage: File | null;
+  hideProviderSwitch?: boolean;
+  hideGeminiModeSwitch?: boolean;
 }
 
 // Helper function to safely extract model lists from ComfyUI's object_info
@@ -142,6 +143,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   onGenerate, onReset, onGeneratePrompt, onExportWorkflow,
   isDisabled, isReady, isGeneratingPrompt,
   comfyUIObjectInfo, comfyUIUrl, sourceImage,
+  hideProviderSwitch = false, hideGeminiModeSwitch = false
 }) => {
     const [isPreviewingBg, setIsPreviewingBg] = useState(false);
     const [bgPreviewError, setBgPreviewError] = useState<string | null>(null);
@@ -527,24 +529,26 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
     const renderGeminiOptions = () => (
       <>
-        <OptionSection title="Generation Mode">
-            <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
-                 <button 
-                    onClick={() => setOptions(prev => ({...prev, geminiMode: 'i2i'}))} 
-                    disabled={isDisabled}
-                    className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.geminiMode === 'i2i' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
-                 >
-                    Image-to-Image
-                </button>
-                 <button 
-                    onClick={() => setOptions(prev => ({...prev, geminiMode: 't2i'}))} 
-                    disabled={isDisabled}
-                    className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.geminiMode === 't2i' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
-                 >
-                    Text-to-Image
-                </button>
-            </div>
-        </OptionSection>
+        {!hideGeminiModeSwitch &&
+            <OptionSection title="Generation Mode">
+                <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
+                    <button 
+                        onClick={() => setOptions(prev => ({...prev, geminiMode: 'i2i'}))} 
+                        disabled={isDisabled}
+                        className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.geminiMode === 'i2i' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
+                    >
+                        Image-to-Image
+                    </button>
+                    <button 
+                        onClick={() => setOptions(prev => ({...prev, geminiMode: 't2i'}))} 
+                        disabled={isDisabled}
+                        className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.geminiMode === 't2i' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
+                    >
+                        Text-to-Image
+                    </button>
+                </div>
+            </OptionSection>
+        }
 
         {options.geminiMode === 't2i' ? (
             <OptionSection title="Prompt Options">
@@ -977,22 +981,24 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-8">
       <div>
         <h2 className="text-xl font-bold mb-4 text-accent">2. Configure Options</h2>
-        <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
-             <button 
-                onClick={() => setOptions(prev => ({...prev, provider: 'gemini'}))} 
-                disabled={isDisabled}
-                className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'gemini' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
-             >
-                Gemini
-            </button>
-             <button 
-                onClick={() => setOptions(prev => ({...prev, provider: 'comfyui'}))} 
-                disabled={isDisabled || !comfyUIUrl}
-                className={`px-4 py-2 text-sm font-bold rounded-full transition-colors disabled:opacity-50 ${options.provider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
-             >
-                ComfyUI
-            </button>
-        </div>
+        {!hideProviderSwitch && (
+            <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
+                <button 
+                    onClick={() => setOptions(prev => ({...prev, provider: 'gemini'}))} 
+                    disabled={isDisabled}
+                    className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'gemini' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
+                >
+                    Gemini
+                </button>
+                <button 
+                    onClick={() => setOptions(prev => ({...prev, provider: 'comfyui'}))} 
+                    disabled={isDisabled || !comfyUIUrl}
+                    className={`px-4 py-2 text-sm font-bold rounded-full transition-colors disabled:opacity-50 ${options.provider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
+                >
+                    ComfyUI
+                </button>
+            </div>
+        )}
       </div>
       
       <OptionSection title="General Settings">
