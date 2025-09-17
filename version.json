@@ -1,5 +1,5 @@
 {
-  "version": "1.42",
-  "date": "2024-08-09T10:00:00Z",
-  "changes": "Added AI-generated thumbnail previews on hover for saved prompts in the library. These visual previews are cached locally for instant display and synced via Google Drive."
+  "version": "1.43",
+  "date": "2024-08-10T11:00:00Z",
+  "changes": "Fixed a critical bug where the video generator would fail on load due to missing default parameters. The panel now initializes correctly, ensuring a smoother user experience."
 }

@@ -20,6 +20,7 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 - **Image-to-Video:** Animate a static image by providing a start frame, an optional end frame, and a text prompt to guide the motion.
 - **WAN 2.2 I2V Workflow:** Utilizes the powerful WAN 2.2 Image-to-Video workflow in ComfyUI for high-quality, smooth video generation.
 - **Detailed Video Controls:** Configure frame count, frame rate, CFG, steps, and post-processing effects like film grain.
+- **Improved Reliability:** Fixed a critical bug that caused the video generator to fail on load. The workflow now initializes with correct, sensible defaults, making it more reliable and user-friendly.
 
 ### 4. Hybrid Local & Cloud Library
 - **Local Storage First:** Save any generated image, video, or clothing item to a persistent local library in your browser for fast access.
@@ -39,10 +40,18 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 - **Element Extraction:** Isolate and generate prompts for just the background or the main subject of an image.
 - **Magical Prompt Soup:** Creatively merge multiple prompt ideas (e.g., a subject from one image, a background from another) into a unique, cohesive new prompt.
 
-### 7. Clothes Extractor Utility
-- **AI Clothing Identification:** Upload a photo and let the AI automatically detect all clothing items and accessories.
-- **E-commerce Product Shots:** For each item found, the AI generates two professional product shots: one laid out flat and one neatly folded, ready for online stores or catalogs.
-- **Accuracy Boost:** Provide optional text details to help the AI better identify specific or obscured items.
+### 7. AI-Powered Extractor Tools
+This versatile tab combines two powerful AI utilities for isolating and recreating elements from within a source image.
+
+- **Clothes Extractor:**
+  - **AI Clothing Identification:** Upload a photo and let the AI automatically detect all clothing items.
+  - **E-commerce Product Shots:** For each item found, generate professional product shots: one laid out flat and an optional neatly folded version, perfect for online stores or catalogs.
+  - **Fine-Tuning:** Provide optional text hints to improve accuracy and choose to exclude accessories for more focused results.
+
+- **Object Extractor:**
+  - **AI Object Detection:** Identify multiple distinct objects within a complex scene (like a garage sale or a busy room).
+  - **Photorealistic Cutouts:** Generate clean, photorealistic images of each selected object on a plain white background.
+  - **Controlled Extraction:** Specify the maximum number of objects to find and provide hints to guide the AI's focus.
 
 ### 8. Robust User Experience
 - **User Authentication:** Secure login system with roles for regular users and administrators.
@@ -54,10 +63,10 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 ## How to Use
 
 1.  **Login:** Enter your credentials to access the application.
-2.  **Select a Tool:** Choose between the **Image Generator**, **Video Generator**, **Library**, **Clothes Extractor**, or **Video Utilities** tabs.
+2.  **Select a Tool:** Choose between the **Image Generator**, **Video Generator**, **Library**, **Extractor Tools**, or **Video Utilities** tabs.
 3.  **Configure & Provide Inputs:**
     -   **Image/Video Gen:** Upload source media, configure the AI backend (Gemini/ComfyUI), write prompts, and adjust detailed settings in the left-hand panel.
-    -   **Clothes Extractor:** Upload a single photo and optionally add descriptive text to improve accuracy.
+    -   **Extractor Tools:** Upload a single photo for either the Clothes or Object Extractor, and optionally add descriptive text to improve accuracy.
     -   **Video Utilities:** Upload a video to use the frame extractor.
 4.  **Generate:** Click the "Generate" or other relevant action button to begin processing.
 5.  **View & Save Results:** Your generated media will appear on the right. You can download them, enhance them (for images), save them to your library, or use an image as a new source.
