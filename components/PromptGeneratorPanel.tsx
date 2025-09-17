@@ -3,7 +3,7 @@ import { ImageUploader } from './ImageUploader';
 import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup } from '../services/comfyUIService';
 import { saveToLibrary } from '../services/libraryService';
 import type { LibraryItem } from '../types';
-import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon } from './icons';
+import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon } from './icons';
 
 interface PromptGeneratorPanelProps {
     onUsePrompt: (prompt: string) => void;
@@ -23,6 +23,9 @@ interface PromptGeneratorPanelProps {
     setSoupPrompt: (prompt: string) => void;
     soupHistory: string[];
     onAddSoupToHistory: (soup: string) => void;
+    onOpenLibraryForImage: () => void;
+    onOpenLibraryForBg: () => void;
+    onOpenLibraryForSubject: () => void;
 }
 
 interface PromptPart {
@@ -79,7 +82,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     image, setImage, prompt, setPrompt,
     bgImage, setBgImage, bgPrompt, setBgPrompt,
     subjectImage, setSubjectImage, subjectPrompt, setSubjectPrompt,
-    soupPrompt, setSoupPrompt, soupHistory, onAddSoupToHistory
+    soupPrompt, setSoupPrompt, soupHistory, onAddSoupToHistory,
+    onOpenLibraryForImage,
+    onOpenLibraryForBg,
+    onOpenLibraryForSubject
 }) => {
     // --- Ephemeral state (not persisted) ---
     const [modelType, setModelType] = useState<PromptModelType>('sdxl');
@@ -345,12 +351,23 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                     {/* Left Column: Uploader & Generate Button */}
                     <div className="space-y-4">
-                        <ImageUploader 
-                            label="Upload Photo"
-                            id="prompt-gen-image"
-                            onImageUpload={setImage}
-                            sourceFile={image}
-                        />
+                        <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                                <ImageUploader 
+                                    label="Upload Photo"
+                                    id="prompt-gen-image"
+                                    onImageUpload={setImage}
+                                    sourceFile={image}
+                                />
+                            </div>
+                            <button
+                                onClick={onOpenLibraryForImage}
+                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                title="Select from Library"
+                            >
+                                <LibraryIcon className="w-6 h-6"/>
+                            </button>
+                        </div>
                         <div>
                             <label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>
                             {renderPromptTypeButtons(modelType, setModelType)}
@@ -428,12 +445,23 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                     {/* Left Column */}
                     <div className="space-y-4">
-                        <ImageUploader 
-                            label="Upload Photo"
-                            id="bg-extract-image"
-                            onImageUpload={setBgImage}
-                            sourceFile={bgImage}
-                        />
+                        <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                                <ImageUploader 
+                                    label="Upload Photo"
+                                    id="bg-extract-image"
+                                    onImageUpload={setBgImage}
+                                    sourceFile={bgImage}
+                                />
+                            </div>
+                            <button
+                                onClick={onOpenLibraryForBg}
+                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                title="Select from Library"
+                            >
+                                <LibraryIcon className="w-6 h-6"/>
+                            </button>
+                        </div>
                         <div>
                             <label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>
                             {renderPromptTypeButtons(bgModelType, setBgModelType)}
@@ -511,12 +539,23 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                     {/* Left Column */}
                     <div className="space-y-4">
-                        <ImageUploader 
-                            label="Upload Photo"
-                            id="subject-extract-image"
-                            onImageUpload={setSubjectImage}
-                            sourceFile={subjectImage}
-                        />
+                        <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                                <ImageUploader 
+                                    label="Upload Photo"
+                                    id="subject-extract-image"
+                                    onImageUpload={setSubjectImage}
+                                    sourceFile={subjectImage}
+                                />
+                            </div>
+                            <button
+                                onClick={onOpenLibraryForSubject}
+                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                title="Select from Library"
+                            >
+                                <LibraryIcon className="w-6 h-6"/>
+                            </button>
+                        </div>
                         <div>
                             <label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>
                             {renderPromptTypeButtons(subjectModelType, setSubjectModelType)}

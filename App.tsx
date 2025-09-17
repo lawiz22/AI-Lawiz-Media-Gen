@@ -164,6 +164,9 @@ const App: React.FC = () => {
     const [isLogoRefPickerOpen, setIsLogoRefPickerOpen] = useState(false);
     const [isLogoPalettePickerOpen, setIsLogoPalettePickerOpen] = useState(false);
     const [isOAuthHelperOpen, setIsOAuthHelperOpen] = useState(false);
+    const [isPromptGenImagePickerOpen, setIsPromptGenImagePickerOpen] = useState(false);
+    const [isPromptGenBgImagePickerOpen, setIsPromptGenBgImagePickerOpen] = useState(false);
+    const [isPromptGenSubjectImagePickerOpen, setIsPromptGenSubjectImagePickerOpen] = useState(false);
     
     // --- Google Drive State ---
     const [driveFolder, setDriveFolder] = useState<DriveFolder | null>(null);
@@ -731,6 +734,9 @@ const App: React.FC = () => {
                             subjectPrompt={promptGenState.subjectPrompt} setSubjectPrompt={p => setPromptGenState(prev => ({...prev, subjectPrompt: p}))}
                             soupPrompt={promptGenState.soupPrompt} setSoupPrompt={p => setPromptGenState(prev => ({...prev, soupPrompt: p}))}
                             soupHistory={promptGenState.soupHistory} onAddSoupToHistory={onAddSoupToHistory}
+                            onOpenLibraryForImage={() => setIsPromptGenImagePickerOpen(true)}
+                            onOpenLibraryForBg={() => setIsPromptGenBgImagePickerOpen(true)}
+                            onOpenLibraryForSubject={() => setIsPromptGenSubjectImagePickerOpen(true)}
                         />
                     </div>
                 )}
@@ -848,6 +854,45 @@ const App: React.FC = () => {
                         setLogoThemeState(prev => ({ ...prev, selectedPalette: item }));
                     }}
                     filter="color-palette"
+                />
+            )}
+            {isPromptGenImagePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isPromptGenImagePickerOpen}
+                    onClose={() => setIsPromptGenImagePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], item.name || "library_image.jpeg", { type: blob.type });
+                        setPromptGenState(prev => ({...prev, image: file}));
+                    }}
+                    filter={['image', 'clothes', 'extracted-frame', 'object']}
+                />
+            )}
+            {isPromptGenBgImagePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isPromptGenBgImagePickerOpen}
+                    onClose={() => setIsPromptGenBgImagePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], item.name || "library_image.jpeg", { type: blob.type });
+                        setPromptGenState(prev => ({...prev, bgImage: file}));
+                    }}
+                    filter={['image', 'clothes', 'extracted-frame', 'object']}
+                />
+            )}
+            {isPromptGenSubjectImagePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isPromptGenSubjectImagePickerOpen}
+                    onClose={() => setIsPromptGenSubjectImagePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], item.name || "library_image.jpeg", { type: blob.type });
+                        setPromptGenState(prev => ({...prev, subjectImage: file}));
+                    }}
+                    filter={['image', 'clothes', 'extracted-frame', 'object']}
                 />
             )}
             {globalError && (
