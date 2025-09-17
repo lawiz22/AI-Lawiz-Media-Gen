@@ -1,6 +1,3 @@
-
-
-
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
 import { fileToGenerativePart, fileToBase64, dataUrlToFile } from '../utils/imageUtils';
 // Fix: Import 'getRandomPose' to resolve reference error.
@@ -188,18 +185,21 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
             model: 'gemini-2.5-flash-image-preview',
             contents,
             config: {
-                responseMimeType: 'image/png', // Request PNG for transparency
+                responseModalities: [Modality.IMAGE, Modality.TEXT],
             }
         });
 
-        const part = response.candidates?.[0]?.content?.parts[0];
-        if (part?.inlineData?.data) {
-            allLogos.push(`data:image/png;base64,${part.inlineData.data}`);
+        // The model can return multiple parts (e.g., text commentary and an image).
+        // Find the first part that contains image data.
+        const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+        
+        if (imagePart?.inlineData?.data) {
+            allLogos.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
         }
     }
 
     if (allLogos.length === 0) {
-        throw new Error("The AI failed to generate any logos. Please try adjusting your prompt.");
+        throw new Error("The AI failed to generate any logos. It's possible the prompt was too restrictive or resulted in a safety block. Please try adjusting your prompt.");
     }
 
     return allLogos;
