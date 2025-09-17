@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { User, GenerationOptions, HistoryItem, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject } from './types';
 import { authenticateUser } from './services/cloudUserService';
@@ -47,6 +46,21 @@ const initialExtractorState: ExtractorState = {
     isGeneratingObjects: false,
     generatedObjects: [],
     objectError: null,
+};
+
+const initialVideoUtilsState: VideoUtilsState = {
+    videoFile: null,
+    extractedFrame: null,
+    colorPicker: {
+        imageFile: null,
+        palette: [],
+        paletteName: '',
+        colorCount: 8,
+        isExtracting: false,
+        error: null,
+        dominantColorPool: [],
+        pickingColorIndex: null,
+    },
 };
 
 const App: React.FC = () => {
@@ -114,10 +128,7 @@ const App: React.FC = () => {
     const [generationOptionsForSave, setGenerationOptionsForSave] = useState<GenerationOptions | null>(null);
 
     // --- Video Utilities State ---
-    const [videoUtilsState, setVideoUtilsState] = useState<VideoUtilsState>({
-        videoFile: null,
-        extractedFrame: null,
-    });
+    const [videoUtilsState, setVideoUtilsState] = useState<VideoUtilsState>(initialVideoUtilsState);
     
     // --- Extractor Tools State ---
     const [extractorState, setExtractorState] = useState<ExtractorState>(initialExtractorState);
@@ -128,6 +139,7 @@ const App: React.FC = () => {
     const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
     const [isClothingPickerOpen, setIsClothingPickerOpen] = useState(false);
     const [isBackgroundPickerOpen, setIsBackgroundPickerOpen] = useState(false);
+    const [isColorImagePickerOpen, setIsColorImagePickerOpen] = useState(false);
     const [isStartFramePickerOpen, setIsStartFramePickerOpen] = useState(false);
     const [isEndFramePickerOpen, setIsEndFramePickerOpen] = useState(false);
     const [isOAuthHelperOpen, setIsOAuthHelperOpen] = useState(false);
@@ -699,12 +711,10 @@ const App: React.FC = () => {
                  <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
                     <VideoUtilsPanel
                         setStartFrame={setVideoStartFrame}
-                        // Fix: The prop 'setEndFrame' was incorrectly passed its own undefined value instead of the state setter `setVideoEndFrame`.
                         setEndFrame={setVideoEndFrame}
-                        videoFile={videoUtilsState.videoFile}
-                        setVideoFile={(file) => setVideoUtilsState(prev => ({...prev, videoFile: file}))}
-                        extractedFrame={videoUtilsState.extractedFrame}
-                        setExtractedFrame={(frame) => setVideoUtilsState(prev => ({...prev, extractedFrame: frame}))}
+                        videoUtilsState={videoUtilsState}
+                        setVideoUtilsState={setVideoUtilsState}
+                        onOpenLibrary={() => setIsColorImagePickerOpen(true)}
                     />
                 </div>
 
@@ -744,8 +754,8 @@ const App: React.FC = () => {
                 <LibraryPickerModal
                     isOpen={isClothingPickerOpen}
                     onClose={() => setIsClothingPickerOpen(false)}
-                    onSelectItem={async (dataUrl) => {
-                        const res = await fetch(dataUrl);
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
                         const blob = await res.blob();
                         setClothingImage(new File([blob], "library_clothing.jpeg", { type: blob.type }));
                     }}
@@ -756,12 +766,35 @@ const App: React.FC = () => {
                  <LibraryPickerModal
                     isOpen={isBackgroundPickerOpen}
                     onClose={() => setIsBackgroundPickerOpen(false)}
-                    onSelectItem={async (dataUrl) => {
-                        const res = await fetch(dataUrl);
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
                         const blob = await res.blob();
                         setBackgroundImage(new File([blob], "library_background.jpeg", { type: blob.type }));
                     }}
                     filter="image"
+                />
+            )}
+            {isColorImagePickerOpen && (
+                 <LibraryPickerModal
+                    isOpen={isColorImagePickerOpen}
+                    onClose={() => setIsColorImagePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], item.name || "library_color_source.jpeg", { type: blob.type });
+                        const paletteName = `Palette from "${item.name || 'Library Item'}"`;
+                        setVideoUtilsState(prev => ({
+                            ...prev,
+                            colorPicker: { 
+                                ...prev.colorPicker, 
+                                imageFile: file,
+                                paletteName: paletteName,
+                                palette: [],
+                                error: null,
+                            }
+                        }));
+                    }}
+                    filter={['image', 'clothes', 'extracted-frame', 'object']}
                 />
             )}
             {globalError && (

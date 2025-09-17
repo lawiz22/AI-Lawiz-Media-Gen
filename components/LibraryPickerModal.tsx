@@ -6,8 +6,8 @@ import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtI
 interface LibraryPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectItem: (mediaDataUrl: string) => void;
-  filter: 'image' | 'clothes' | null;
+  onSelectItem: (item: LibraryItem) => void;
+  filter: LibraryItemType | LibraryItemType[] | null;
 }
 
 // Fix: Widened the type of `mediaType` to `LibraryItemType` to include all possible values from `LibraryItem` and added a case for 'object' to resolve the TypeScript error.
@@ -54,31 +54,22 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
 
   const filteredItems = useMemo(() => {
     if (!filter) return [];
-    return items.filter(item => item.mediaType === filter);
+    const activeFilters = Array.isArray(filter) ? filter : [filter];
+    if (activeFilters.length === 0) return [];
+    return items.filter(item => activeFilters.includes(item.mediaType));
   }, [items, filter]);
 
   const handleSelect = (item: LibraryItem) => {
-    // For clothes, the old format stores a JSON string, while the new format stores a data URL.
-    // This logic ensures a valid image data URL is always returned.
-    if (item.mediaType === 'clothes') {
-        try {
-            // Attempt to parse JSON for old format. If it works, it's an object with images.
-            const parsed = JSON.parse(item.media);
-            if (parsed.laidOutImage) {
-                onSelectItem(parsed.laidOutImage); // Prefer the 'laid out' view for reference
-            } else {
-                 console.error("Could not find image in old clothes library item format");
-            }
-        } catch (e) {
-            // If parsing fails, it's the new format (a single data URL string).
-            onSelectItem(item.media);
-        }
-    } else {
-        // For images and videos, 'media' is always a data URL.
-        onSelectItem(item.media);
-    }
+    onSelectItem(item);
     onClose();
   };
+  
+  const filterText = useMemo(() => {
+    if (!filter) return 'items';
+    const filters = Array.isArray(filter) ? filter : [filter];
+    if (filters.length > 1) return 'matching items';
+    return `${filters[0].replace('-', ' ')} items`;
+  }, [filter]);
 
   if (!isOpen) return null;
 
@@ -115,7 +106,7 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
             <div className="flex flex-col items-center justify-center h-full text-center text-text-secondary p-8">
                 <LibraryIcon className="w-16 h-16 text-border-primary mb-4" />
                 <h3 className="text-lg font-bold text-text-primary">No Matching Items Found</h3>
-                <p className="capitalize">Your library doesn't contain any '{filter}' items yet.</p>
+                <p>Your library doesn't contain any {filterText} yet.</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">

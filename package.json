@@ -13,7 +13,8 @@
     "@google/genai": "^1.17.0",
     "react": "^19.1.1",
     "jszip": "^3.10.1",
-    "idb": "^8.0.3"
+    "idb": "^8.0.3",
+    "url": "^0.11.4"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

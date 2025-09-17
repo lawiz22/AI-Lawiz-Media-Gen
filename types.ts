@@ -1,4 +1,4 @@
-
+import { fileURLToPath } from "url";
 
 export interface User {
   username: string;
@@ -215,14 +215,14 @@ export interface ExtractorState {
     objectError: string | null;
 }
 
-export type LibraryItemType = 'image' | 'video' | 'clothes' | 'prompt' | 'extracted-frame' | 'object';
+export type LibraryItemType = 'image' | 'video' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup';
 
 export interface LibraryItem {
     id: number; // Unique ID, typically a timestamp
     name?: string;
     mediaType: LibraryItemType;
-    media: string; // data URL for image/video/clothes, or the prompt text for prompts
+    media: string; // data URL for image/video/clothes, prompt text, or JSON string for palette
     thumbnail: string; // data URL for a small thumbnail
     options?: GenerationOptions;
     sourceImage?: string; // data URL for image/video generations
@@ -245,9 +245,26 @@ export interface DriveFolder {
     name: string;
 }
 
+export interface PaletteColor {
+    hex: string;
+    name: string;
+}
+
+export interface ColorPickerState {
+    imageFile: File | null;
+    palette: PaletteColor[];
+    paletteName: string;
+    colorCount: number;
+    isExtracting: boolean;
+    error: string | null;
+    dominantColorPool: string[]; // Store a large pool of hex codes for reshuffling
+    pickingColorIndex: number | null; // The index of the color swatch being replaced by the eyedropper
+}
+
 export interface VideoUtilsState {
     videoFile: File | null;
     extractedFrame: string | null;
+    colorPicker: ColorPickerState;
 }
 
 export interface PromptGenState {

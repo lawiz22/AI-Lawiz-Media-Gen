@@ -1,3 +1,5 @@
+import type { PaletteColor } from '../types';
+
 // Fix: The function was returning just the blob data, not a full Generative AI Part. Wrapped the result in `inlineData` and updated the return type to match the expected structure for the Gemini API.
 export const fileToGenerativePart = async (file: File): Promise<{inlineData: {mimeType: string; data: string}}> => {
   return new Promise((resolve, reject) => {
@@ -190,4 +192,23 @@ export const getImageDimensionsFromFile = (file: File): Promise<{ width: number;
         };
         img.src = url;
     });
+};
+
+export const createPaletteThumbnail = (palette: PaletteColor[]): string => {
+    const width = 256;
+    const height = 256;
+    if (palette.length === 0) return '';
+    const barWidth = width / palette.length;
+
+    const rects = palette.map((color, index) => 
+        `<rect x="${index * barWidth}" y="0" width="${barWidth}" height="${height}" fill="${color.hex}" />`
+    ).join('');
+
+    const finalSvg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+        <rect width="${width}" height="${height}" fill="#1f2937"/>
+        ${rects}
+    </svg>
+    `;
+    return `data:image/svg+xml;base64,${btoa(finalSvg)}`;
 };

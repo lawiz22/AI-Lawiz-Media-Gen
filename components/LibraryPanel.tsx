@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getLibraryItems, deleteLibraryItem, clearLibrary, saveLibraryItemToDisk, syncLibraryToDrive, exportLibraryAsJson, updateLibraryItem } from '../services/libraryService';
 import { generateThumbnailForPrompt } from '../services/geminiService';
-import type { LibraryItem, GenerationOptions, LibraryItemType } from '../types';
-import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon, FileExportIcon, DocumentTextIcon, Squares2X2Icon, ListBulletIcon, ArrowUpIcon, ArrowDownIcon, FilmIcon, CubeIcon } from './icons';
+import type { LibraryItem, GenerationOptions, LibraryItemType, PaletteColor } from '../types';
+import { SpinnerIcon, TrashIcon, LoadIcon, LibraryIcon, CloseIcon, VideoIcon, PhotographIcon, TshirtIcon, CopyIcon, DownloadIcon, GoogleDriveIcon, UploadIcon, FileExportIcon, DocumentTextIcon, Squares2X2Icon, ListBulletIcon, ArrowUpIcon, ArrowDownIcon, FilmIcon, CubeIcon, PaletteIcon } from './icons';
 
-type FilterType = 'all' | 'image' | 'video' | 'clothes' | 'prompt' | 'extracted-frame' | 'object';
+type FilterType = 'all' | 'image' | 'video' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -222,6 +222,18 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
     loading: boolean;
     position: { top: number; left: number };
   } | null>(null);
+  
+  const selectedPalette = useMemo<PaletteColor[] | null>(() => {
+    if (selectedItem?.mediaType === 'color-palette') {
+        try {
+            return JSON.parse(selectedItem.media);
+        } catch (e) {
+            console.error("Failed to parse palette data:", e);
+            return null;
+        }
+    }
+    return null;
+  }, [selectedItem]);
 
   useEffect(() => {
     if (selectedItem) {
@@ -398,6 +410,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
           case 'prompt': return <DocumentTextIcon className="w-4 h-4 text-white" />;
           case 'extracted-frame': return <FilmIcon className="w-4 h-4 text-white" />;
           case 'object': return <CubeIcon className="w-4 h-4 text-white" />;
+          case 'color-palette': return <PaletteIcon className="w-4 h-4 text-white" />;
           default: return null;
       }
   };
@@ -486,10 +499,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
             <>
                 {/* --- Toolbar --- */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 p-2 bg-bg-tertiary rounded-lg">
-                    <div className="flex items-center gap-1 bg-bg-primary p-1 rounded-md">
-                        {(['all', 'image', 'video', 'clothes', 'object', 'prompt', 'extracted-frame'] as FilterType[]).map(filter => (
+                    <div className="flex items-center gap-1 bg-bg-primary p-1 rounded-md flex-wrap justify-center">
+                        {(['all', 'image', 'video', 'clothes', 'object', 'prompt', 'extracted-frame', 'color-palette'] as FilterType[]).map(filter => (
                             <button key={filter} onClick={() => setActiveFilter(filter)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${activeFilter === filter ? 'bg-accent text-accent-text shadow' : 'hover:bg-bg-secondary'}`}>
-                                {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                                {filter.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                             </button>
                         ))}
                     </div>
@@ -513,7 +526,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                     <div className="flex flex-col items-center justify-center h-full text-center text-text-secondary p-16">
                         <LibraryIcon className="w-20 h-20 text-border-primary mb-4" />
                         <h3 className="text-lg font-bold text-text-primary">No Items in this Category</h3>
-                        <p className="capitalize">Your saved {activeFilter} will appear here.</p>
+                        <p className="capitalize">Your saved {activeFilter.replace('-', ' ')} will appear here.</p>
                     </div>
                 ) : viewMode === 'grid' ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -602,16 +615,14 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                          {selectedItem.mediaType === 'clothes' && (() => {
                             let mediaContent;
                             try {
-                                // Try to parse as JSON for old items (which stored both images)
-                                const media = JSON.parse(selectedItem.media);
+                                const parsed = JSON.parse(selectedItem.media);
                                 mediaContent = (
                                     <div className="flex flex-col gap-4 h-full w-full items-center justify-center">
-                                        <div className="flex-1 w-full flex items-center justify-center"><img src={media.laidOutImage} alt="Laid out view" className="max-w-full max-h-full object-contain"/></div>
-                                        <div className="flex-1 w-full flex items-center justify-center"><img src={media.foldedImage} alt="Folded view" className="max-w-full max-h-full object-contain"/></div>
+                                        <div className="flex-1 w-full flex items-center justify-center"><img src={parsed.laidOutImage} alt="Laid out view" className="max-w-full max-h-full object-contain"/></div>
+                                        {parsed.foldedImage && <div className="flex-1 w-full flex items-center justify-center"><img src={parsed.foldedImage} alt="Folded view" className="max-w-full max-h-full object-contain"/></div>}
                                     </div>
                                 );
                             } catch(e) {
-                                // If parsing fails, it's a new format (a single data URL string).
                                 mediaContent = (
                                     <img src={selectedItem.media} alt={selectedItem.name || 'Clothing item'} className="max-w-full max-h-full object-contain rounded-md" />
                                 );
@@ -621,6 +632,31 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                          {selectedItem.mediaType === 'prompt' && (
                             <div className="w-full h-full p-2 flex items-center justify-center">
                                 <img src={selectedItem.thumbnail} alt="Prompt thumbnail" className="max-w-full max-h-full object-contain rounded-md" />
+                            </div>
+                         )}
+                         {selectedItem.mediaType === 'color-palette' && selectedPalette && (
+                            <div className="w-full h-full p-4 flex flex-col items-center justify-center gap-4">
+                                {selectedItem.sourceImage && (
+                                    <div className="mb-2 text-center">
+                                        <p className="text-sm font-semibold text-text-secondary mb-2">Source Image</p>
+                                        <img
+                                            src={selectedItem.sourceImage}
+                                            alt="Color palette source"
+                                            className="max-w-full h-auto max-h-48 rounded-md shadow-lg"
+                                        />
+                                    </div>
+                                )}
+                                <div className="w-full grid grid-cols-4 gap-2 content-center">
+                                    {selectedPalette.map(color => (
+                                        <div key={color.hex} className="flex flex-col items-center">
+                                            <div className="w-full h-16 rounded-t-md" style={{ backgroundColor: color.hex }} />
+                                            <div className="w-full p-1 bg-bg-tertiary rounded-b-md text-center">
+                                                <p className="text-xs font-semibold text-text-primary truncate">{color.name}</p>
+                                                <p className="text-xs font-mono text-text-muted">{color.hex}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                          )}
                     </div>
@@ -678,7 +714,11 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                                 <button onClick={() => handleDelete(selectedItem.id)} className="flex items-center justify-center gap-2 bg-danger-bg text-danger font-semibold py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
                                     <TrashIcon className="w-4 h-4"/> Delete
                                 </button>
-                                <button onClick={() => onLoadItem(selectedItem)} className="flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors">
+                                <button 
+                                    onClick={() => onLoadItem(selectedItem)} 
+                                    className="flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
+                                    disabled={selectedItem.mediaType === 'prompt' || selectedItem.mediaType === 'color-palette'}
+                                >
                                     <LoadIcon className="w-4 h-4"/> Load
                                 </button>
                              </div>
