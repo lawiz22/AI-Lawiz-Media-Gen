@@ -554,7 +554,8 @@ export const COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE = {
         1
       ]
     },
-    "class_type": "CLIPTextEncode"
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Positive Prompt" }
   },
   "26": {
     "inputs": {

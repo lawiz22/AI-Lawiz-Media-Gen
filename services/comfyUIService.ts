@@ -1,5 +1,3 @@
-
-
 // Fix: Implemented the full comfyUIService.ts module to resolve all module-not-found errors.
 import { GoogleGenAI } from "@google/genai";
 import { fileToGenerativePart } from "../utils/imageUtils";
@@ -26,6 +24,38 @@ const getComfyUIUrl = (): string => {
 };
 
 const getClientId = (): string => `lawiz-app-${Math.random().toString(36).substring(2, 15)}`;
+
+// --- Module state for cancellation ---
+let currentExecution: { clientId: string; ws: WebSocket } | null = null;
+
+export const cancelComfyUIExecution = async (): Promise<void> => {
+    if (!currentExecution) {
+        console.warn("No ComfyUI execution to cancel.");
+        return;
+    }
+    const url = getComfyUIUrl();
+    if (!url) return;
+
+    try {
+        await fetch(`${url}/interrupt`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client_id: currentExecution.clientId }),
+        });
+        console.log("ComfyUI execution interrupt requested for client ID:", currentExecution.clientId);
+        
+        // The websocket will receive an 'execution_interrupted' message which will handle cleanup.
+        // We can also close it here as a fallback.
+        if (currentExecution.ws.readyState === WebSocket.OPEN) {
+             currentExecution.ws.close();
+        }
+    } catch (e) {
+        console.error("Failed to send interrupt request to ComfyUI:", e);
+    } finally {
+        currentExecution = null;
+    }
+};
+
 
 // --- Gemini-based Prompt Generation ---
 
@@ -223,6 +253,16 @@ const executeWorkflow = async (
     return new Promise((resolve, reject) => {
         onProgress("Connecting to ComfyUI...", 0.1);
         const ws = new WebSocket(wsUrl);
+        currentExecution = { clientId, ws };
+
+        const cleanup = () => {
+            if (currentExecution && currentExecution.clientId === clientId) {
+                currentExecution = null;
+            }
+            if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                ws.close();
+            }
+        };
 
         ws.onopen = async () => {
             try {
@@ -230,7 +270,7 @@ const executeWorkflow = async (
                 await queuePrompt(workflow, clientId);
             } catch (err) {
                 reject(err);
-                ws.close();
+                cleanup();
             }
         };
 
@@ -250,50 +290,50 @@ const executeWorkflow = async (
                 case 'executed':
                     onProgress("Fetching results...", 0.95);
                     const promptId = data.data.prompt_id;
+
+                    const fetchHistoryWithRetries = async (retries = 15, delay = 3000): Promise<any> => {
+                        for (let i = 0; i < retries; i++) {
+                            try {
+                                const historyRes = await fetch(`${url}/history/${promptId}`);
+                                if (!historyRes.ok) throw new Error(`Failed to fetch history (attempt ${i + 1}): ${historyRes.statusText}`);
+                                const historyData = await historyRes.json();
+                                const history = historyData[promptId];
+                                if (history && history.outputs) return history;
+                                onProgress(`Waiting for outputs from server... (${i + 1}/${retries})`, 0.96);
+                            } catch (e) {
+                                console.warn(`History fetch attempt ${i + 1} failed`, e);
+                            }
+                            if (i < retries - 1) await new Promise(res => setTimeout(res, delay));
+                        }
+                        throw new Error(`No outputs found in history for prompt ${promptId} after ${retries} attempts.`);
+                    };
+
                     try {
-                        const historyRes = await fetch(`${url}/history/${promptId}`);
-                         if (!historyRes.ok) {
-                           throw new Error(`Failed to fetch history for prompt ${promptId}: ${historyRes.statusText}`);
-                        }
-                        const historyData = await historyRes.json();
-                        const history = historyData[promptId];
-                        
-                        if (!history || !history.outputs) {
-                            throw new Error(`No outputs found in history for prompt ${promptId}.`);
-                        }
-                        
+                        const history = await fetchHistoryWithRetries();
                         const outputs = history.outputs;
                         const imageOutputs = [];
                         let videoUrl = null;
 
-                        // Robustly search for the video URL first, as custom nodes can have varied output formats.
                         for (const nodeId in outputs) {
                             const nodeOutput = outputs[nodeId];
                             let videoList = [];
-
-                            // Check common custom node output formats for video
                             if (nodeOutput.ui && Array.isArray(nodeOutput.ui.videos)) videoList = nodeOutput.ui.videos;
                             else if (Array.isArray(nodeOutput.videos)) videoList = nodeOutput.videos;
-                            else if (Array.isArray(nodeOutput.gifs)) videoList = nodeOutput.gifs; // Some nodes output MP4s here
+                            else if (Array.isArray(nodeOutput.gifs)) videoList = nodeOutput.gifs;
                             else if (Array.isArray(nodeOutput.files)) videoList = nodeOutput.files;
-
                             if (videoList.length > 0) {
                                 const videoFile = videoList[0];
-                                // Ensure all necessary properties exist before constructing the URL
                                 if (videoFile.filename && videoFile.type) {
                                     videoUrl = `${url}/view?filename=${encodeURIComponent(videoFile.filename)}&subfolder=${encodeURIComponent(videoFile.subfolder || '')}&type=${videoFile.type}`;
-                                    break; // Found the video, no need to search further
+                                    break;
                                 }
                             }
                         }
 
-                        // Then, process all image outputs (standard format)
                         for (const nodeId in outputs) {
                             if (outputs[nodeId].images) {
                                 for (const image of outputs[nodeId].images) {
-                                    // Check if this image is actually the video we might have missed, but don't re-assign if already found.
                                     const isVideoFile = image.format?.startsWith('video/') || image.filename?.endsWith('.mp4');
-                                    
                                     if (isVideoFile && !videoUrl) {
                                          videoUrl = `${url}/view?filename=${encodeURIComponent(image.filename)}&subfolder=${encodeURIComponent(image.subfolder || '')}&type=${image.type}`;
                                     } else if (!isVideoFile) {
@@ -315,12 +355,16 @@ const executeWorkflow = async (
                     } catch (err) {
                         reject(err);
                     } finally {
-                        ws.close();
+                        cleanup();
                     }
+                    break;
+                case 'execution_interrupted':
+                    reject(new Error('Operation was cancelled by the user.'));
+                    cleanup();
                     break;
                  case 'execution_error':
                     reject(new Error(`ComfyUI execution error: ${JSON.stringify(data.data)}`));
-                    ws.close();
+                    cleanup();
                     break;
             }
         };
@@ -328,7 +372,11 @@ const executeWorkflow = async (
         ws.onerror = (err) => {
             console.error("WebSocket Error:", err);
             reject(new Error("WebSocket connection failed. Ensure the ComfyUI server is running and accessible."));
-            ws.close();
+            cleanup();
+        };
+
+        ws.onclose = () => {
+            cleanup();
         };
     });
 };

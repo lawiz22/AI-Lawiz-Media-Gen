@@ -5,7 +5,7 @@ import { fileToDataUrl, fileToResizedDataUrl } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
 import { generatePortraits, generateGeminiVideo } from './services/geminiService';
 // Fix: Import 'checkConnection' to resolve missing name error.
-import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection } from './services/comfyUIService';
+import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution } from './services/comfyUIService';
 import { saveGenerationToHistory } from './services/historyService';
 import { Login } from './components/Login';
 import { AdminPanel } from './components/AdminPanel';
@@ -353,7 +353,11 @@ const App: React.FC = () => {
 
         } catch (err: any) {
             console.error("Generation failed:", err);
-            setGlobalError({ title: "Generation Error", message: err.message || 'An unknown error occurred during generation.' });
+            if (err.message?.includes('cancelled by the user')) {
+                console.log("Generation promise rejected due to cancellation.");
+            } else {
+                setGlobalError({ title: "Generation Error", message: err.message || 'An unknown error occurred during generation.' });
+            }
         } finally {
             setIsLoading(false);
             setProgressValue(0);
@@ -389,7 +393,11 @@ const App: React.FC = () => {
             }
         } catch (err: any) {
             console.error("Video generation failed:", err);
-            setGlobalError({ title: "Video Generation Error", message: err.message || 'An unknown error occurred during video generation.' });
+            if (err.message?.includes('cancelled by the user')) {
+                console.log("Video generation promise rejected due to cancellation.");
+            } else {
+                setGlobalError({ title: "Video Generation Error", message: err.message || 'An unknown error occurred during video generation.' });
+            }
         } finally {
             setIsLoading(false);
             setProgressValue(0);
@@ -545,6 +553,24 @@ const App: React.FC = () => {
         } catch (error: any) {
             setGlobalError({ title: "Workflow Export Error", message: error.message || 'Failed to export workflow.' });
         }
+    };
+
+    const handleCancelGeneration = async () => {
+        console.log("User requested to cancel generation.");
+        if (options.provider === 'comfyui' || options.videoProvider === 'comfyui') {
+            try {
+                await cancelComfyUIExecution();
+                setGlobalError({ title: "Operation Cancelled", message: "The generation was successfully cancelled." });
+            } catch (e: any) {
+                setGlobalError({ title: "Cancellation Error", message: e.message || "Could not cancel the operation." });
+            }
+        } else {
+            console.warn("Cancellation is not supported for the current provider.");
+        }
+
+        setIsLoading(false);
+        setProgressValue(0);
+        setProgressMessage('');
     };
 
     if (!currentUser) {
@@ -765,7 +791,11 @@ const App: React.FC = () => {
             {/* --- Global Loader --- */}
             {isLoading && (activeTab === 'image-generator' || activeTab === 'video-generator') && (
                 <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-                    <Loader message={progressMessage} progress={progressValue} />
+                    <Loader 
+                        message={progressMessage} 
+                        progress={progressValue} 
+                        onCancel={handleCancelGeneration}
+                    />
                 </div>
             )}
 
