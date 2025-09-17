@@ -1,9 +1,9 @@
 import React from 'react';
 import type { LogoThemeState, LibraryItem, LogoStyle, LogoBackground, PaletteColor } from '../types';
-import { GenerateIcon, ResetIcon, SpinnerIcon, LibraryIcon, CloseIcon, SaveIcon, CheckIcon, DownloadIcon } from './icons';
+import { GenerateIcon, ResetIcon, SpinnerIcon, LibraryIcon, CloseIcon, SaveIcon, CheckIcon, DownloadIcon, UploadIconSimple } from './icons';
 import { generateLogos } from '../services/geminiService';
 import { saveToLibrary } from '../services/libraryService';
-import { dataUrlToThumbnail } from '../utils/imageUtils';
+import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 
 interface LogoThemeGeneratorPanelProps {
     state: LogoThemeState;
@@ -63,6 +63,32 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
 
     const handleClearPalette = () => {
         setState(prev => ({ ...prev, selectedPalette: null }));
+    };
+
+    const handleReferenceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) return;
+    
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+    
+        const newItems: LibraryItem[] = await Promise.all(files.map(async (file, index) => {
+            const media = await fileToDataUrl(file);
+            const thumbnail = await dataUrlToThumbnail(media, 128);
+            return {
+                id: Date.now() + index,
+                name: file.name,
+                mediaType: 'image' as const,
+                media,
+                thumbnail,
+            };
+        }));
+    
+        setState(prev => ({
+            ...prev,
+            referenceItems: [...(prev.referenceItems || []), ...newItems]
+        }));
+        
+        e.target.value = '';
     };
     
     const handleReset = () => {
@@ -169,41 +195,50 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                             </div>
                         </div>
 
-                        <div className="space-y-4">
-                            <h3 className="text-md font-semibold text-text-secondary">Inspiration & Colors</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                <button onClick={onOpenLibraryForReferences} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors">
-                                    <LibraryIcon className="w-5 h-5"/> Add References
-                                </button>
-                                <button onClick={onOpenLibraryForPalette} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors">
-                                    <LibraryIcon className="w-5 h-5"/> Select Palette
-                                </button>
-                            </div>
-                             {(state.referenceItems && state.referenceItems.length > 0) && (
-                                <div className="p-2 bg-bg-tertiary rounded-md">
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {state.referenceItems.map(item => (
-                                            <div key={item.id} className="relative group">
-                                                <img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/>
-                                                <button onClick={() => handleRemoveReference(item.id)} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <CloseIcon className="w-3 h-3"/>
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
+                        <div className="space-y-6">
+                            <div>
+                                <h3 className="text-md font-semibold text-text-secondary mb-2">Inspiration Images</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button onClick={onOpenLibraryForReferences} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                        <LibraryIcon className="w-5 h-5"/> From Library
+                                    </button>
+                                    <label htmlFor="logo-ref-upload" className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors cursor-pointer">
+                                        <UploadIconSimple className="w-5 h-5"/> Upload File(s)
+                                        <input id="logo-ref-upload" type="file" multiple accept="image/*" className="hidden" onChange={handleReferenceUpload} />
+                                    </label>
                                 </div>
-                            )}
-                             {state.selectedPalette && (
-                                <div className="p-3 bg-bg-tertiary rounded-md flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex -space-x-2">
-                                            {selectedPaletteColors.slice(0, 5).map(c => <div key={c.hex} className="w-6 h-6 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}
+                                {(state.referenceItems && state.referenceItems.length > 0) && (
+                                    <div className="mt-4 p-2 bg-bg-primary/50 rounded-md">
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {state.referenceItems.map(item => (
+                                                <div key={item.id} className="relative group">
+                                                    <img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/>
+                                                    <button onClick={() => handleRemoveReference(item.id)} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <CloseIcon className="w-3 h-3"/>
+                                                    </button>
+                                                </div>
+                                            ))}
                                         </div>
-                                        <p className="text-sm font-semibold truncate">{state.selectedPalette.name}</p>
                                     </div>
-                                    <button onClick={handleClearPalette} className="p-1 text-text-secondary hover:text-white"><CloseIcon className="w-4 h-4"/></button>
-                                </div>
-                            )}
+                                )}
+                            </div>
+                            <div>
+                                <h3 className="text-md font-semibold text-text-secondary mb-2">Color Palette</h3>
+                                <button onClick={onOpenLibraryForPalette} className="w-full flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                    <LibraryIcon className="w-5 h-5"/> From Library
+                                </button>
+                                {state.selectedPalette && (
+                                    <div className="mt-4 p-3 bg-bg-primary/50 rounded-md flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex -space-x-2">
+                                                {selectedPaletteColors.slice(0, 5).map(c => <div key={c.hex} className="w-6 h-6 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}
+                                            </div>
+                                            <p className="text-sm font-semibold truncate">{state.selectedPalette.name}</p>
+                                        </div>
+                                        <button onClick={handleClearPalette} className="p-1 text-text-secondary hover:text-white"><CloseIcon className="w-4 h-4"/></button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div>

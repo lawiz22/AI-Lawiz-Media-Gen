@@ -836,7 +836,7 @@ const App: React.FC = () => {
                     onSelectMultiple={(items) => {
                         setLogoThemeState(prev => ({ ...prev, referenceItems: [...(prev.referenceItems || []), ...items] }));
                     }}
-                    filter={['image', 'clothes', 'object']}
+                    filter={['image', 'clothes', 'object', 'extracted-frame']}
                     multiSelect
                 />
             )}
