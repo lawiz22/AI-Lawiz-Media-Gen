@@ -229,3 +229,29 @@ export const createVideoPlaceholderThumbnail = (): string => {
     `;
     return `data:image/svg+xml;base64,${btoa(finalSvg)}`;
 };
+
+export const createBlankImageFile = (width: number, height: number, color: string, filename: string): Promise<File> => {
+    return new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return reject(new Error('Could not get canvas context'));
+        }
+
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, width, height);
+
+        canvas.toBlob(
+            (blob) => {
+                if (!blob) {
+                    return reject(new Error('Canvas to Blob conversion failed'));
+                }
+                const file = new File([blob], filename, { type: 'image/png' });
+                resolve(file);
+            },
+            'image/png'
+        );
+    });
+};

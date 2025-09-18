@@ -1,3 +1,6 @@
+// Fix: Import Banner type definitions to resolve type errors.
+import type { BannerAspectRatio, BannerStyle, BannerLogoPlacement } from '../types';
+
 // Fix: Removed circular dependency by defining MAX_IMAGES constant directly.
 export const MAX_IMAGES = 12;
 
@@ -52,6 +55,37 @@ export const ASPECT_RATIO_OPTIONS = [
     { value: '4:3', label: '4:3 (Landscape)' },
     { value: '9:16', label: '9:16 (Tall)' },
     { value: '16:9', label: '16:9 (Widescreen)' },
+];
+
+export const BANNER_ASPECT_RATIO_OPTIONS: { value: BannerAspectRatio; label: string }[] = [
+    { value: '16:9', label: '16:9 (HD Video)' },
+    { value: '1.91:1', label: '1.91:1 (Social Feed)' },
+    { value: '4:1', label: '4:1 (Wide Banner)' },
+    { value: '2:1', label: '2:1 (Email Header)' },
+];
+
+export const BANNER_STYLE_OPTIONS: { id: BannerStyle; label: string; description: string }[] = [
+    { id: 'corporate-clean', label: 'Corporate Clean', description: 'Professional, sharp lines, simple typography.' },
+    { id: 'gaming-energetic', label: 'Gaming / Energetic', description: 'Dynamic, bold colors, action-oriented.' },
+    { id: 'artistic-brush', label: 'Artistic / Brush', description: 'Painterly, abstract, expressive feel.' },
+    { id: 'minimalist-type', label: 'Minimalist', description: 'Lots of negative space, focus on typography.' },
+    { id: 'vintage-retro', label: 'Vintage / Retro', description: 'Old-school textures, fonts, and color schemes.' },
+    { id: 'tech-glow', label: 'Tech / Glow', description: 'Dark background, neon lights, futuristic.' },
+    { id: 'cinematic-photo', label: 'Cinematic', description: 'Photorealistic with dramatic lighting.' },
+    { id: 'promotional-sale', label: 'Promotional / Sale', description: 'Bright, attention-grabbing, clear call-to-action.' },
+];
+
+export const BANNER_LOGO_PLACEMENT_OPTIONS: { id: BannerLogoPlacement; label: string }[] = [
+    { id: 'top-left', label: 'Top Left' },
+    { id: 'top-center', label: 'Top Center' },
+    { id: 'top-right', label: 'Top Right' },
+    { id: 'middle-left', label: 'Middle Left' },
+    { id: 'middle-center', label: 'Middle Center' },
+    { id: 'middle-right', label: 'Middle Right' },
+    { id: 'bottom-left', label: 'Bottom Left' },
+    { id: 'bottom-center', label: 'Bottom Center' },
+    { id: 'bottom-right', label: 'Bottom Right' },
+    { id: 'no-logo', label: 'No Logo' },
 ];
 
 export const PHOTO_STYLE_OPTIONS = [

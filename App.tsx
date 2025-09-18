@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType } from './types';
@@ -76,6 +77,20 @@ const initialLogoThemeState: LogoThemeState = {
     isGeneratingLogos: false,
     generatedLogos: [],
     logoError: null,
+    
+    // Banner Generator State
+    bannerPrompt: '',
+    bannerTitle: '',
+    bannerAspectRatio: '16:9',
+    bannerStyle: 'corporate-clean',
+    bannerReferenceItems: [],
+    bannerSelectedPalette: null,
+    bannerSelectedLogo: null,
+    bannerLogoPlacement: 'top-left',
+    numBanners: 4,
+    isGeneratingBanners: false,
+    generatedBanners: [],
+    bannerError: null,
 };
 
 
@@ -176,6 +191,10 @@ const App: React.FC = () => {
     const [isGeminiVideoSourcePickerOpen, setIsGeminiVideoSourcePickerOpen] = useState(false);
     const [isClothesSourcePickerOpen, setIsClothesSourcePickerOpen] = useState(false);
     const [isObjectSourcePickerOpen, setIsObjectSourcePickerOpen] = useState(false);
+    const [isBannerRefPickerOpen, setIsBannerRefPickerOpen] = useState(false);
+    const [isBannerPalettePickerOpen, setIsBannerPalettePickerOpen] = useState(false);
+    const [isBannerLogoPickerOpen, setIsBannerLogoPickerOpen] = useState(false);
+
     
     // --- Google Drive State ---
     const [driveFolder, setDriveFolder] = useState<DriveFolder | null>(null);
@@ -879,6 +898,9 @@ const App: React.FC = () => {
                         setState={setLogoThemeState}
                         onOpenLibraryForReferences={() => setIsLogoRefPickerOpen(true)}
                         onOpenLibraryForPalette={() => setIsLogoPalettePickerOpen(true)}
+                        onOpenLibraryForBannerReferences={() => setIsBannerRefPickerOpen(true)}
+                        onOpenLibraryForBannerPalette={() => setIsBannerPalettePickerOpen(true)}
+                        onOpenLibraryForBannerLogo={() => setIsBannerLogoPickerOpen(true)}
                     />
                 </div>
 
@@ -1138,6 +1160,39 @@ const App: React.FC = () => {
                         setLogoThemeState(prev => ({ ...prev, selectedPalette: item }));
                     }}
                     filter="color-palette"
+                />
+            )}
+            {isBannerRefPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isBannerRefPickerOpen}
+                    onClose={() => setIsBannerRefPickerOpen(false)}
+                    // Fix: Add the required 'onSelectItem' prop. It's a no-op because this modal is in multi-select mode.
+                    onSelectItem={() => {}}
+                    onSelectMultiple={(items) => {
+                        setLogoThemeState(prev => ({ ...prev, bannerReferenceItems: [...(prev.bannerReferenceItems || []), ...items] }));
+                    }}
+                    filter={imageLikeFilter}
+                    multiSelect
+                />
+            )}
+            {isBannerPalettePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isBannerPalettePickerOpen}
+                    onClose={() => setIsBannerPalettePickerOpen(false)}
+                    onSelectItem={(item) => {
+                        setLogoThemeState(prev => ({ ...prev, bannerSelectedPalette: item }));
+                    }}
+                    filter="color-palette"
+                />
+            )}
+            {isBannerLogoPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isBannerLogoPickerOpen}
+                    onClose={() => setIsBannerLogoPickerOpen(false)}
+                    onSelectItem={(item) => {
+                        setLogoThemeState(prev => ({ ...prev, bannerSelectedLogo: item }));
+                    }}
+                    filter="logo"
                 />
             )}
             {isPromptGenImagePickerOpen && (

@@ -207,7 +207,7 @@ export interface ExtractorState {
     objectError: string | null;
 }
 
-export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette';
+export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup';
 
 export interface LibraryItem {
@@ -272,6 +272,9 @@ export interface PromptGenState {
 
 export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';
 export type LogoBackground = 'transparent' | 'white' | 'black';
+export type BannerStyle = 'corporate-clean' | 'gaming-energetic' | 'artistic-brush' | 'minimalist-type' | 'vintage-retro' | 'tech-glow' | 'cinematic-photo' | 'promotional-sale';
+export type BannerLogoPlacement = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'no-logo';
+export type BannerAspectRatio = '16:9' | '1.91:1' | '4:1' | '2:1';
 
 export interface LogoThemeState {
     // Logo Generator State
@@ -286,4 +289,18 @@ export interface LogoThemeState {
     isGeneratingLogos?: boolean;
     generatedLogos?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
     logoError?: string | null;
+    
+    // Banner Generator State
+    bannerPrompt?: string;
+    bannerTitle?: string;
+    bannerAspectRatio?: BannerAspectRatio;
+    bannerStyle?: BannerStyle;
+    bannerReferenceItems?: LibraryItem[];
+    bannerSelectedPalette?: LibraryItem | null;
+    bannerSelectedLogo?: LibraryItem | null;
+    bannerLogoPlacement?: BannerLogoPlacement;
+    numBanners?: number;
+    isGeneratingBanners?: boolean;
+    generatedBanners?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
+    bannerError?: string | null;
 }

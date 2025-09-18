@@ -1,5 +1,5 @@
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
-import { fileToGenerativePart, fileToBase64, dataUrlToFile } from '../utils/imageUtils';
+import { fileToGenerativePart, fileToBase64, dataUrlToFile, createBlankImageFile } from '../utils/imageUtils';
 // Fix: Import 'getRandomPose' to resolve reference error.
 import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
@@ -217,6 +217,93 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
     }
 
     return allLogos;
+};
+
+export const generateBanners = async (state: LogoThemeState): Promise<string[]> => {
+    const { bannerPrompt, bannerTitle, bannerAspectRatio, bannerStyle, bannerReferenceItems, bannerSelectedPalette, bannerSelectedLogo, bannerLogoPlacement, numBanners } = state;
+
+    if (!bannerPrompt?.trim() && !bannerTitle?.trim() && (!bannerReferenceItems || bannerReferenceItems.length === 0)) {
+        throw new Error("Please provide a prompt, a title, or at least one reference image for the banner.");
+    }
+    
+    const [wRatio, hRatio] = bannerAspectRatio!.split(':').map(Number);
+    const baseWidth = 1024;
+    const canvasWidth = baseWidth;
+    const canvasHeight = Math.round(baseWidth / (wRatio / hRatio));
+
+    // 1. Create a blank image with the correct aspect ratio to guide the model
+    const blankImageFile = await createBlankImageFile(canvasWidth, canvasHeight, '#808080', 'aspect_ratio_guide.png');
+    const aspectRatioPart = await fileToGenerativePart(blankImageFile);
+
+    // 2. Build the text prompt
+    const promptSegments = ["Your task is to generate a professional, high-quality banner image."];
+    promptSegments.push(`The banner's style must be: ${bannerStyle}.`);
+    if (bannerTitle) {
+        promptSegments.push(`The banner must prominently feature the title text: "${bannerTitle}". The text should be clear, legible, and stylistically appropriate.`);
+    }
+    if (bannerPrompt) {
+        promptSegments.push(`The core visual concept of the banner is: "${bannerPrompt}".`);
+    }
+
+    // 3. Add Color Palette instructions
+    if (bannerSelectedPalette) {
+        try {
+            const palette: PaletteColor[] = JSON.parse(bannerSelectedPalette.media);
+            const hexCodes = palette.map(p => p.hex).join(', ');
+            promptSegments.push(`Strictly use this color palette as the primary color scheme: ${hexCodes}. You can use shades and tints but avoid introducing new primary colors.`);
+        } catch (e) { console.warn("Could not parse banner color palette for prompt."); }
+    }
+    
+    // 4. Add Logo instructions
+    if (bannerSelectedLogo && bannerLogoPlacement !== 'no-logo') {
+        promptSegments.push(`A logo is provided as a separate image. You MUST incorporate this exact logo into the banner design. Place the logo in the ${bannerLogoPlacement!.replace('-', ' ')} area of the banner. The logo should be integrated naturally but remain clear and readable.`);
+    }
+
+    promptSegments.push("The final design should be clean, visually appealing, and suitable for its style. Pay attention to composition and typography.");
+
+    const finalPrompt = promptSegments.join('\n');
+    const contents: any = { parts: [
+        {text: "Use the dimensions and aspect ratio of this first gray guide image for the final output. Do not include the gray color in the final image."},
+        aspectRatioPart,
+        {text: finalPrompt}
+    ] };
+    
+    // 5. Add image parts (logo and references)
+    if (bannerSelectedLogo && bannerLogoPlacement !== 'no-logo') {
+        const logoFile = await dataUrlToFile(bannerSelectedLogo.media, bannerSelectedLogo.name || 'logo');
+        const logoPart = await fileToGenerativePart(logoFile);
+        contents.parts.splice(2, 0, {text: "This is the logo to include:"}, logoPart);
+    }
+    if (bannerReferenceItems && bannerReferenceItems.length > 0) {
+        contents.parts.splice(2, 0, {text: "Use these images as visual inspiration for the banner's style and content:"});
+        for (const item of bannerReferenceItems) {
+            const file = await dataUrlToFile(item.media, item.name || 'reference');
+            const imagePart = await fileToGenerativePart(file);
+            contents.parts.splice(3, 0, imagePart);
+        }
+    }
+    
+    // 6. Generate banners
+    const allBanners: string[] = [];
+    for (let i = 0; i < (numBanners || 1); i++) {
+        // Here I can add a seed or small variation if needed
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents,
+            config: { responseModalities: [Modality.IMAGE, Modality.TEXT] }
+        });
+
+        const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+        if (imagePart?.inlineData?.data) {
+            allBanners.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+        }
+    }
+
+    if (allBanners.length === 0) {
+        throw new Error("The AI failed to generate any banners. It's possible the prompt was too restrictive or resulted in a safety block. Please try adjusting your prompt.");
+    }
+    
+    return allBanners;
 };
 
 

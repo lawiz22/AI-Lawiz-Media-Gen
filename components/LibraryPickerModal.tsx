@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getLibraryItems } from '../services/libraryService';
 import type { LibraryItem, LibraryItemType } from '../types';
-import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon, DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon } from './icons';
+import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon, DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon, BannerIcon } from './icons';
 
 interface LibraryPickerModalProps {
   isOpen: boolean;
@@ -16,11 +16,15 @@ interface LibraryPickerModalProps {
 const getCategoryIcon = (mediaType: LibraryItemType) => {
     switch(mediaType) {
         case 'image': return <PhotographIcon className="w-4 h-4 text-white" />;
+        case 'character': return <CharacterIcon className="w-4 h-4 text-white" />;
         case 'video': return <VideoIcon className="w-4 h-4 text-white" />;
+        case 'logo': return <LogoIconSimple className="w-4 h-4 text-white" />;
+        case 'banner': return <BannerIcon className="w-4 h-4 text-white" />;
         case 'clothes': return <TshirtIcon className="w-4 h-4 text-white" />;
         case 'prompt': return <DocumentTextIcon className="w-4 h-4 text-white" />;
         case 'extracted-frame': return <FilmIcon className="w-4 h-4 text-white" />;
         case 'object': return <CubeIcon className="w-4 h-4 text-white" />;
+        case 'color-palette': return <PaletteIcon className="w-4 h-4 text-white" />;
         default: return null;
     }
 };
