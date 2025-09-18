@@ -1,4 +1,4 @@
-# Lawiz's AI Media Generator v1.44
+# Lawiz's AI Media Generator v1.45
 
 Welcome to Lawiz's AI Media Generator, a powerful and versatile web application designed for creating stunning images and videos using state-of-the-art AI models. This tool provides a unified interface to interact with both Google's Gemini API and a self-hosted ComfyUI backend, offering a wide range of creative possibilities for both novice and advanced users.
 
@@ -68,7 +68,6 @@ This versatile tab combines two powerful AI utilities for isolating and recreati
 ### 10. Robust User Experience
 - **User Authentication:** Secure login system with roles for regular users and administrators.
 - **Admin Panel:** Administrators can manage the user base by adding or deleting users.
-- **Generation History:** Automatically saves your generations (source image, settings, and results) to local storage, allowing you to review and reload previous sessions.
 - **Responsive & Thematic UI:** A sleek, modern interface that works across devices, with multiple themes (Cyberpunk, Synthwave, etc.) to customize your workspace.
 - **Real-Time Feedback:** Live progress bars and status messages keep you informed during the generation process.
 

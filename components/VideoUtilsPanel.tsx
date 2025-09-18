@@ -1,5 +1,5 @@
 import React, { useState, useRef, ChangeEvent, useMemo, useEffect, useCallback } from 'react';
-import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
+import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon } from './icons';
 import { dataUrlToFile, dataUrlToThumbnail, createPaletteThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 import { saveToLibrary } from '../services/libraryService';
 import type { LibraryItem, VideoUtilsState, PaletteColor, ColorPickerState } from '../types';
@@ -295,6 +295,13 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
         videoRef.current.currentTime = Math.max(0, Math.min(duration, newTime));
     };
 
+    const handleSecondStep = (direction: 'forward' | 'backward') => {
+        if (!videoRef.current) return;
+        const step = direction === 'forward' ? 1 : -1; // 1 second
+        const newTime = videoRef.current.currentTime + step;
+        videoRef.current.currentTime = Math.max(0, Math.min(duration, newTime));
+    };
+
     const handleDownloadFrame = () => {
         if (!extractedFrame) return;
         const link = document.createElement('a');
@@ -491,11 +498,10 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                                 />
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => handleFrameStep('backward')}
-                                            className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors"
-                                            title="Previous Frame"
-                                        >
+                                        <button onClick={() => handleSecondStep('backward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Seek 1 Second Backward">
+                                            <ChevronDoubleLeftIcon className="w-5 h-5" />
+                                        </button>
+                                        <button onClick={() => handleFrameStep('backward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Previous Frame">
                                             <ChevronLeftIcon className="w-5 h-5" />
                                         </button>
                                         <input
@@ -511,12 +517,11 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                                             }}
                                             className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
                                         />
-                                        <button
-                                            onClick={() => handleFrameStep('forward')}
-                                            className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors"
-                                            title="Next Frame"
-                                        >
+                                        <button onClick={() => handleFrameStep('forward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Next Frame">
                                             <ChevronRightIcon className="w-5 h-5" />
+                                        </button>
+                                        <button onClick={() => handleSecondStep('forward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Seek 1 Second Forward">
+                                            <ChevronDoubleRightIcon className="w-5 h-5" />
                                         </button>
                                     </div>
                                     <div className="flex items-center justify-between">

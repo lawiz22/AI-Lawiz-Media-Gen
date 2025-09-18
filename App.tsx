@@ -89,6 +89,7 @@ const App: React.FC = () => {
     // --- Image Generation State ---
     const [sourceImage, setSourceImage] = useState<File | null>(null);
     const [characterName, setCharacterName] = useState<string>('');
+    const [shouldGenerateCharacterName, setShouldGenerateCharacterName] = useState<boolean>(false);
     const [clothingImage, setClothingImage] = useState<File | null>(null);
     const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
     const [previewedBackgroundImage, setPreviewedBackgroundImage] = useState<string | null>(null);
@@ -299,6 +300,7 @@ const App: React.FC = () => {
         setGeneratedImages([]);
         setLastUsedPrompt(null);
         setCharacterName('');
+        setShouldGenerateCharacterName(false);
         setOptions(prev => ({
             ...prev,
             geminiPrompt: '',
@@ -329,7 +331,9 @@ const App: React.FC = () => {
         setGeneratedImages([]);
         setLastUsedPrompt(null);
         setGlobalError(null);
-        setCharacterName('');
+        if (!shouldGenerateCharacterName) {
+             setCharacterName('');
+        }
         
         try {
             let result: { images: string[]; finalPrompt: string | null } = { images: [], finalPrompt: null };
@@ -355,7 +359,7 @@ const App: React.FC = () => {
             setLastUsedPrompt(result.finalPrompt);
             
             if(result.images.length > 0) {
-                if (activeTab === 'character-generator') {
+                if (activeTab === 'character-generator' && shouldGenerateCharacterName) {
                     updateProgress("Generating character name...", 0.96);
                     try {
                         const name = await generateCharacterNameForImage(result.images[0]);
@@ -750,10 +754,22 @@ const App: React.FC = () => {
                                         id="character-name"
                                         value={characterName}
                                         onChange={(e) => setCharacterName(e.target.value)}
-                                        placeholder="AI will suggest a name after generation..."
+                                        placeholder={shouldGenerateCharacterName ? "AI will suggest a name after generation..." : "Enter a name for your character"}
                                         className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
                                         disabled={isLoading}
                                     />
+                                    <div className="mt-2">
+                                        <label className="flex items-center gap-2 text-xs font-medium text-text-secondary cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={shouldGenerateCharacterName}
+                                                onChange={(e) => setShouldGenerateCharacterName(e.target.checked)}
+                                                disabled={isLoading}
+                                                className="rounded text-accent focus:ring-accent"
+                                            />
+                                            Use AI to generate a name
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                             
