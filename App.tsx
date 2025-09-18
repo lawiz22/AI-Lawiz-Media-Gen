@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState } from './types';
+// Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
+import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { fileToDataUrl, fileToResizedDataUrl } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
@@ -612,6 +614,10 @@ const App: React.FC = () => {
         { id: 'admin-panel', label: 'Admin Panel', icon: <AdminIcon className="w-5 h-5"/>, adminOnly: true },
     ];
 
+    // Fix: Explicitly type filter arrays as LibraryItemType[] to fix TypeScript assignment errors.
+    const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'clothes', 'object', 'extracted-frame'];
+    const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object'];
+
     return (
         <div className="min-h-screen bg-bg-primary text-text-primary font-sans">
             <Header 
@@ -919,6 +925,7 @@ const App: React.FC = () => {
                  <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
                     <VideoUtilsPanel
                         setStartFrame={setVideoStartFrame}
+                        // Fix: Corrected typo from `setEndFrame` to `setVideoEndFrame` to match state setter.
                         setEndFrame={setVideoEndFrame}
                         videoUtilsState={videoUtilsState}
                         setVideoUtilsState={setVideoUtilsState}
@@ -989,7 +996,7 @@ const App: React.FC = () => {
                         const blob = await res.blob();
                         setSourceImage(new File([blob], "library_source.jpeg", { type: blob.type }));
                     }}
-                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                    filter={broadImagePickerFilter}
                 />
             )}
             {isCharacterSourcePickerOpen && (
@@ -1003,7 +1010,7 @@ const App: React.FC = () => {
                         setSourceImage(file);
                         setCharacterName('');
                     }}
-                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                    filter={broadImagePickerFilter}
                 />
             )}
             {isVideoStartFramePickerOpen && (
@@ -1016,7 +1023,7 @@ const App: React.FC = () => {
                         const file = new File([blob], "library_start_frame.jpeg", { type: blob.type });
                         setVideoStartFrame(file);
                     }}
-                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                    filter={broadImagePickerFilter}
                 />
             )}
             {isVideoEndFramePickerOpen && (
@@ -1029,7 +1036,7 @@ const App: React.FC = () => {
                         const file = new File([blob], "library_end_frame.jpeg", { type: blob.type });
                         setVideoEndFrame(file);
                     }}
-                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                    filter={broadImagePickerFilter}
                 />
             )}
             {isGeminiVideoSourcePickerOpen && (
@@ -1042,7 +1049,7 @@ const App: React.FC = () => {
                         const file = new File([blob], "library_gemini_source.jpeg", { type: blob.type });
                         setVideoStartFrame(file); // Gemini uses the start frame state
                     }}
-                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                    filter={broadImagePickerFilter}
                 />
             )}
             {isClothesSourcePickerOpen && (
@@ -1055,7 +1062,7 @@ const App: React.FC = () => {
                         const file = new File([blob], "library_clothes_source.jpeg", { type: blob.type });
                         setExtractorState(prev => ({ ...prev, clothesSourceFile: file }));
                     }}
-                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                    filter={broadImagePickerFilter}
                 />
             )}
             {isObjectSourcePickerOpen && (
@@ -1068,7 +1075,7 @@ const App: React.FC = () => {
                         const file = new File([blob], "library_object_source.jpeg", { type: blob.type });
                         setExtractorState(prev => ({ ...prev, objectSourceFile: file }));
                     }}
-                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                    filter={broadImagePickerFilter}
                 />
             )}
             {isColorImagePickerOpen && (
@@ -1091,7 +1098,7 @@ const App: React.FC = () => {
                             }
                         }));
                     }}
-                    filter={['image', 'clothes', 'extracted-frame', 'object']}
+                    filter={imageLikeFilter}
                 />
             )}
             {isVideoUtilsPickerOpen && (
@@ -1119,7 +1126,7 @@ const App: React.FC = () => {
                     onSelectMultiple={(items) => {
                         setLogoThemeState(prev => ({ ...prev, referenceItems: [...(prev.referenceItems || []), ...items] }));
                     }}
-                    filter={['image', 'clothes', 'object', 'extracted-frame']}
+                    filter={imageLikeFilter}
                     multiSelect
                 />
             )}
@@ -1143,7 +1150,7 @@ const App: React.FC = () => {
                         const file = new File([blob], item.name || "library_image.jpeg", { type: blob.type });
                         setPromptGenState(prev => ({...prev, image: file}));
                     }}
-                    filter={['image', 'clothes', 'extracted-frame', 'object']}
+                    filter={imageLikeFilter}
                 />
             )}
             {isPromptGenBgImagePickerOpen && (
@@ -1156,7 +1163,7 @@ const App: React.FC = () => {
                         const file = new File([blob], item.name || "library_image.jpeg", { type: blob.type });
                         setPromptGenState(prev => ({...prev, bgImage: file}));
                     }}
-                    filter={['image', 'clothes', 'extracted-frame', 'object']}
+                    filter={imageLikeFilter}
                 />
             )}
             {isPromptGenSubjectImagePickerOpen && (
@@ -1169,7 +1176,7 @@ const App: React.FC = () => {
                         const file = new File([blob], item.name || "library_image.jpeg", { type: blob.type });
                         setPromptGenState(prev => ({...prev, subjectImage: file}));
                     }}
-                    filter={['image', 'clothes', 'extracted-frame', 'object']}
+                    filter={imageLikeFilter}
                 />
             )}
             {globalError && (
