@@ -2,9 +2,9 @@ import React from 'react';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
 import { ExtractorResultsGrid } from './ExtractorResultsGrid';
-import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage } from '../services/geminiService';
-import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState } from '../types';
-import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, SaveIcon, CheckIcon, ResetIcon, LibraryIcon } from './icons';
+import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage, identifyPoses, generatePoseMannequin } from '../services/geminiService';
+import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose } from '../types';
+import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon } from './icons';
 import { saveToLibrary } from '../services/libraryService';
 import { dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 
@@ -56,13 +56,15 @@ interface ExtractorToolsPanelProps {
     onReset: () => void;
     onOpenLibraryForClothes: () => void;
     onOpenLibraryForObjects: () => void;
+    onOpenLibraryForPoses: () => void;
     activeSubTab: string;
     setActiveSubTab: (tabId: string) => void;
 }
 
 // --- Main Panel ---
-export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState, onReset, onOpenLibraryForClothes, onOpenLibraryForObjects, activeSubTab, setActiveSubTab }) => {
+export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState, onReset, onOpenLibraryForClothes, onOpenLibraryForObjects, onOpenLibraryForPoses, activeSubTab, setActiveSubTab }) => {
     
+    // --- Clothes Logic ---
     const handleIdentify = async () => {
         if (!state.clothesSourceFile) return;
         setState(prev => ({
@@ -126,7 +128,38 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
         }
         setState(prev => ({ ...prev, isGenerating: false }));
     };
+    
+    const handleClothesSaveToLibrary = async (item: GeneratedClothing, index: number) => {
+        setState(prev => {
+            const updatedItems = [...prev.generatedClothes];
+            updatedItems[index] = { ...item, saved: 'saving' };
+            return { ...prev, generatedClothes: updatedItems };
+        });
 
+        try {
+            await saveToLibrary({
+                mediaType: 'clothes',
+                name: item.itemName,
+                media: item.laidOutImage,
+                thumbnail: await dataUrlToThumbnail(item.laidOutImage, 256),
+                sourceImage: state.clothesSourceFile ? await fileToResizedDataUrl(state.clothesSourceFile, 512) : undefined,
+            });
+            setState(prev => {
+                const updatedItems = [...prev.generatedClothes];
+                updatedItems[index] = { ...item, saved: 'saved' };
+                return { ...prev, generatedClothes: updatedItems };
+            });
+        } catch (e) {
+            console.error("Failed to save clothing to library", e);
+            setState(prev => {
+                const updatedItems = [...prev.generatedClothes];
+                updatedItems[index] = { ...item, saved: 'idle' };
+                return { ...prev, generatedClothes: updatedItems };
+            });
+        }
+    };
+
+    // --- Object Logic ---
     const handleIdentifyObjects = async () => {
         if (!state.objectSourceFile) return;
         setState(prev => ({
@@ -185,37 +218,6 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
         }
         setState(prev => ({ ...prev, isGeneratingObjects: false }));
     };
-    
-    const handleClothesSaveToLibrary = async (item: GeneratedClothing, index: number) => {
-        setState(prev => {
-            const updatedItems = [...prev.generatedClothes];
-            updatedItems[index] = { ...item, saved: 'saving' };
-            return { ...prev, generatedClothes: updatedItems };
-        });
-
-        try {
-            await saveToLibrary({
-                mediaType: 'clothes',
-                name: item.itemName,
-                media: item.laidOutImage,
-                thumbnail: await dataUrlToThumbnail(item.laidOutImage, 256),
-                sourceImage: state.clothesSourceFile ? await fileToResizedDataUrl(state.clothesSourceFile, 512) : undefined,
-            });
-            setState(prev => {
-                const updatedItems = [...prev.generatedClothes];
-                updatedItems[index] = { ...item, saved: 'saved' };
-                return { ...prev, generatedClothes: updatedItems };
-            });
-        } catch (e) {
-            console.error("Failed to save clothing to library", e);
-            setState(prev => {
-                const updatedItems = [...prev.generatedClothes];
-                updatedItems[index] = { ...item, saved: 'idle' };
-                return { ...prev, generatedClothes: updatedItems };
-            });
-        }
-    };
-
 
     const handleObjectSaveToLibrary = async (item: GeneratedObject, index: number) => {
         setState(prev => {
@@ -247,9 +249,102 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
         }
     };
 
+    // --- Pose Logic ---
+    const handleIdentifyPoses = async () => {
+        if (!state.poseSourceFile) return;
+        setState(prev => ({
+            ...prev,
+            isIdentifyingPoses: true,
+            poseError: null,
+            identifiedPoses: [],
+            generatedPoses: []
+        }));
+
+        try {
+            const poses = await identifyPoses(state.poseSourceFile);
+            setState(prev => ({ ...prev, identifiedPoses: poses.map(pose => ({ ...pose, selected: true })) }));
+        } catch (err: any) {
+            setState(prev => ({ ...prev, poseError: err.message || 'Failed to identify poses.' }));
+        } finally {
+            setState(prev => ({ ...prev, isIdentifyingPoses: false }));
+        }
+    };
+
+    const handleTogglePoseSelection = (index: number) => {
+        setState(prev => ({
+            ...prev,
+            identifiedPoses: prev.identifiedPoses.map((item, i) => (i === index ? { ...item, selected: !item.selected } : item))
+        }));
+    };
+
+    const handleSelectAllPoses = () => {
+        setState(prev => ({
+            ...prev,
+            identifiedPoses: prev.identifiedPoses.map(item => ({ ...item, selected: true }))
+        }));
+    };
+
+    const handleUnselectAllPoses = () => {
+        setState(prev => ({
+            ...prev,
+            identifiedPoses: prev.identifiedPoses.map(item => ({ ...item, selected: false }))
+        }));
+    };
+
+    const handleGeneratePoses = async () => {
+        if (!state.poseSourceFile || state.identifiedPoses.every(p => !p.selected)) return;
+        
+        setState(prev => ({ ...prev, isGeneratingPoses: true, poseError: null, generatedPoses: [] }));
+        const selectedPoses = state.identifiedPoses.filter(pose => pose.selected);
+
+        for (const pose of selectedPoses) {
+            try {
+                const image = await generatePoseMannequin(pose.description);
+                setState(prev => ({ ...prev, generatedPoses: [...prev.generatedPoses, { description: pose.description, image, saved: 'idle' }] }));
+            } catch (err: any) {
+                console.error(`Failed to generate mannequin for pose:`, err);
+                setState(prev => ({ ...prev, poseError: `Error generating a mannequin. Skipping.` }));
+            }
+        }
+        setState(prev => ({ ...prev, isGeneratingPoses: false }));
+    };
+
+    const handlePoseSaveToLibrary = async (item: GeneratedPose, index: number) => {
+        setState(prev => {
+            const updatedPoses = [...prev.generatedPoses];
+            updatedPoses[index] = { ...item, saved: 'saving' };
+            return { ...prev, generatedPoses: updatedPoses };
+        });
+
+        try {
+            await saveToLibrary({
+                mediaType: 'pose',
+                name: `Pose from ${state.poseSourceFile?.name || 'source'}`,
+                media: item.image,
+                thumbnail: await dataUrlToThumbnail(item.image, 256),
+                sourceImage: state.poseSourceFile ? await fileToResizedDataUrl(state.poseSourceFile, 512) : undefined,
+                poseDescription: item.description,
+            });
+             setState(prev => {
+                const updatedPoses = [...prev.generatedPoses];
+                updatedPoses[index] = { ...item, saved: 'saved' };
+                return { ...prev, generatedPoses: updatedPoses };
+            });
+        } catch (e) {
+            console.error("Failed to save pose to library", e);
+            setState(prev => {
+                const updatedPoses = [...prev.generatedPoses];
+                updatedPoses[index] = { ...item, saved: 'idle' };
+                return { ...prev, generatedPoses: updatedPoses };
+            });
+        }
+    };
+
+
     const subTabs = [
         { id: 'clothes', label: 'Clothes Extractor' },
         { id: 'objects', label: 'Object Extractor' },
+        { id: 'poses', label: 'Pose Extractor' },
     ];
     
     return (
@@ -469,6 +564,89 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                             {state.isGeneratingObjects && <LoadingState message={`Generating images for selected objects... (${state.generatedObjects.length}/${state.identifiedObjects.filter(o => o.selected).length} done)`} />}
                             
                             <ExtractorResultsGrid items={state.generatedObjects} onSave={handleObjectSaveToLibrary} title="Generated Object Shots" />
+
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            {/* --- Pose Extractor Tool --- */}
+            <div className={activeSubTab === 'poses' ? 'block' : 'hidden'}>
+                 <section aria-labelledby="pose-extractor-title">
+                    <ToolHeader 
+                        icon={<PoseIcon className="w-8 h-8"/>}
+                        title="Pose Extractor"
+                        description="Identify human poses in an image and generate wooden mannequins to save and reuse the compositions."
+                    />
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-1 space-y-6">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-grow">
+                                    <ImageUploader 
+                                        label="Upload Photo" 
+                                        id="pose-extractor-image" 
+                                        onImageUpload={(file) => setState(prev => ({...prev, poseSourceFile: file}))}
+                                        sourceFile={state.poseSourceFile}
+                                    />
+                                </div>
+                                <button
+                                    onClick={onOpenLibraryForPoses}
+                                    className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                    title="Select from Library"
+                                >
+                                    <LibraryIcon className="w-6 h-6"/>
+                                </button>
+                            </div>
+                           
+                            <button
+                                onClick={handleIdentifyPoses}
+                                disabled={!state.poseSourceFile || state.isIdentifyingPoses || state.isGeneratingPoses}
+                                style={state.poseSourceFile && !state.isIdentifyingPoses && !state.isGeneratingPoses ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                                className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
+                            >
+                                {state.isIdentifyingPoses ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                {state.isIdentifyingPoses ? 'Identifying...' : '1. Identify Poses'}
+                            </button>
+                        </div>
+
+                        <div className="lg:col-span-2 space-y-6">
+                            {state.poseError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.poseError}</p>}
+                            {state.isIdentifyingPoses && <LoadingState message="Scanning your image for human poses..." />}
+                            
+                            {state.identifiedPoses.length > 0 && (
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h3 className="text-xl font-bold text-accent">Select Poses to Extract</h3>
+                                        <div className="flex gap-2">
+                                            <button onClick={handleSelectAllPoses} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Select All</button>
+                                            <button onClick={handleUnselectAllPoses} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Unselect All</button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
+                                        {state.identifiedPoses.map((pose, index) => (
+                                            <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">
+                                                <input type="checkbox" checked={pose.selected} onChange={() => handleTogglePoseSelection(index)} className="mt-1 rounded text-accent focus:ring-accent" />
+                                                <div>
+                                                    <span className="font-semibold text-text-primary">Pose #{index + 1}</span>
+                                                    <p className="text-sm text-text-secondary">{pose.description}</p>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <button
+                                        onClick={handleGeneratePoses}
+                                        disabled={state.identifiedPoses.every(p => !p.selected) || state.isGeneratingPoses}
+                                        className="w-full mt-4 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 bg-accent text-accent-text disabled:opacity-50"
+                                    >
+                                        {state.isGeneratingPoses ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                        2. Generate Mannequins
+                                    </button>
+                                </div>
+                            )}
+
+                            {state.isGeneratingPoses && <LoadingState message={`Generating mannequins for selected poses... (${state.generatedPoses.length}/${state.identifiedPoses.filter(p => p.selected).length} done)`} />}
+                            
+                            <ExtractorResultsGrid items={state.generatedPoses} onSave={handlePoseSaveToLibrary} title="Generated Mannequins" />
 
                         </div>
                     </div>

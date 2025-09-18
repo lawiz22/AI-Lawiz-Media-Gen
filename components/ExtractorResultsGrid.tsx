@@ -1,13 +1,16 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
-import type { GeneratedClothing, GeneratedObject } from '../types';
+import type { GeneratedClothing, GeneratedObject, GeneratedPose } from '../types';
 import { DownloadIcon, SaveIcon, SpinnerIcon, CheckIcon, CloseIcon } from './icons';
 
 interface ExtractorResultsGridProps {
-  items: (GeneratedClothing | GeneratedObject)[];
-  onSave: (item: GeneratedClothing | GeneratedObject, index: number) => void;
+  items: (GeneratedClothing | GeneratedObject | GeneratedPose)[];
+  onSave: (item: GeneratedClothing | GeneratedObject | GeneratedPose, index: number) => void;
   title: string;
 }
+
+const isClothing = (item: any): item is GeneratedClothing => 'itemName' in item;
+const isPose = (item: any): item is GeneratedPose => 'description' in item && 'image' in item && !isClothing(item);
+
 
 export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ items, onSave, title }) => {
     const [zoomedItemIndex, setZoomedItemIndex] = useState<number | null>(null);
@@ -36,10 +39,10 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
     const currentZoomedItem = zoomedItemIndex !== null ? items[zoomedItemIndex] : null;
     let currentZoomedImageSrc = null;
     if (currentZoomedItem) {
-        if ('itemName' in currentZoomedItem && currentZoomedItem.foldedImage) {
+        if (isClothing(currentZoomedItem) && currentZoomedItem.foldedImage) {
             currentZoomedImageSrc = isShowingFolded ? currentZoomedItem.foldedImage : currentZoomedItem.laidOutImage;
         } else {
-            currentZoomedImageSrc = 'itemName' in currentZoomedItem ? currentZoomedItem.laidOutImage : currentZoomedItem.image;
+            currentZoomedImageSrc = isClothing(currentZoomedItem) ? currentZoomedItem.laidOutImage : currentZoomedItem.image;
         }
     }
 
@@ -62,9 +65,20 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                 <h3 className="text-xl font-bold text-accent">{title}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {items.map((item, index) => {
-                        const isClothing = 'itemName' in item;
-                        const name = isClothing ? item.itemName : item.name;
-                        const image = isClothing ? item.laidOutImage : item.image;
+                        let name: string;
+                        let image: string;
+
+                        if (isClothing(item)) {
+                            name = item.itemName;
+                            image = item.laidOutImage;
+                        } else if (isPose(item)) {
+                            name = `Pose #${index + 1}`;
+                            image = item.image;
+                        } else {
+                            name = (item as GeneratedObject).name;
+                            image = item.image;
+                        }
+
                         const savingStatus = item.saved || 'idle';
 
                         return (
@@ -75,7 +89,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 mt-2">
                                     <button
-                                        onClick={() => handleDownload(image, `${name.replace(/\s+/g, '_')}_laid_out.png`)}
+                                        onClick={() => handleDownload(image, `${name.replace(/\s+/g, '_')}.png`)}
                                         className="w-full flex items-center justify-center gap-2 text-xs bg-bg-primary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
                                     >
                                         <DownloadIcon className="w-4 h-4" />
@@ -130,7 +144,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                         role="toolbar"
                         aria-label="Image actions"
                     >
-                        {'itemName' in currentZoomedItem && currentZoomedItem.foldedImage && (
+                        {isClothing(currentZoomedItem) && currentZoomedItem.foldedImage && (
                             <div className="flex items-center gap-1 bg-bg-tertiary p-1 rounded-full">
                                 <button
                                     onClick={() => setIsShowingFolded(false)}
@@ -147,7 +161,14 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                             </div>
                         )}
                         <button
-                            onClick={() => handleDownload(currentZoomedImageSrc!, ('itemName' in currentZoomedItem ? currentZoomedItem.itemName : currentZoomedItem.name))}
+                            onClick={() => {
+                                const zoomedItem = items[zoomedItemIndex!];
+                                let name = 'download';
+                                if (isClothing(zoomedItem)) name = zoomedItem.itemName;
+                                else if (isPose(zoomedItem)) name = `pose_${zoomedItemIndex! + 1}`;
+                                else name = (zoomedItem as GeneratedObject).name;
+                                handleDownload(currentZoomedImageSrc!, name.replace(/\s+/g, '_') + '.png');
+                            }}
                             title="Download Image"
                             aria-label="Download this image"
                             className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors"

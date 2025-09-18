@@ -322,3 +322,10 @@ export const AlbumCoverIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) =
     <path strokeLinecap="round" strokeLinejoin="round" d="M3 8.25V19.5a1.5 1.5 0 001.5 1.5h15a1.5 1.5 0 001.5-1.5V8.25" />
   </svg>
 );
+
+export const PoseIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <circle cx="12" cy="4" r="2" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v6m0 0l-3 5m3-5l3 5M6 11h12" />
+    </svg>
+);

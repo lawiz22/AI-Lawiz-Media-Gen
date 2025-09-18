@@ -185,6 +185,17 @@ export interface GeneratedObject {
     saved?: 'idle' | 'saving' | 'saved'; // UI state
 }
 
+export interface IdentifiedPose {
+    description: string;
+}
+
+export interface GeneratedPose {
+    description: string;
+    image: string; // data URL
+    saved?: 'idle' | 'saving' | 'saved'; // UI state
+}
+
+
 export interface ExtractorState {
     // Clothes
     clothesSourceFile: File | null;
@@ -205,9 +216,16 @@ export interface ExtractorState {
     isGeneratingObjects: boolean;
     generatedObjects: GeneratedObject[];
     objectError: string | null;
+    // Poses
+    poseSourceFile: File | null;
+    isIdentifyingPoses: boolean;
+    identifiedPoses: (IdentifiedPose & { selected: boolean })[];
+    isGeneratingPoses: boolean;
+    generatedPoses: GeneratedPose[];
+    poseError: string | null;
 }
 
-export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette';
+export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup';
 
 export interface LibraryItem {
@@ -224,6 +242,7 @@ export interface LibraryItem {
     promptModelType?: 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2';
     driveFileId?: string; // Google Drive file ID for the media
     previewThumbnail?: string; // AI-generated visual thumbnail for prompts
+    poseDescription?: string; // For pose items, the detailed text description
 }
 
 export interface VersionInfo {

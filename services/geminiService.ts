@@ -3,7 +3,7 @@ import { fileToGenerativePart, fileToBase64, dataUrlToFile, createBlankImageFile
 // Fix: Import 'getRandomPose' to resolve reference error.
 import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
-import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, LogoThemeState, PaletteColor } from '../types';
+import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, LogoThemeState, PaletteColor, IdentifiedPose } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
@@ -655,6 +655,67 @@ Generate a new, photorealistic image of *only* this object, placed on a plain, s
     }
     throw new Error(`Failed to generate an image for ${objectName}.`);
 };
+
+export const identifyPoses = async (sourceImage: File): Promise<IdentifiedPose[]> => {
+    const imagePart = await fileToGenerativePart(sourceImage);
+    const prompt = `Analyze the image and identify every distinct person. For each person, provide one highly detailed, comprehensive paragraph describing their pose. Describe the position and orientation of their head, torso, shoulders, arms, hands, legs, and feet. Capture the angle, rotation, and any nuanced gestures. Be precise and thorough.`;
+
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    poses: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                description: { 
+                                    type: Type.STRING, 
+                                    description: 'A detailed paragraph describing the full body pose of one person in the image.' 
+                                },
+                            },
+                            required: ["description"],
+                        },
+                    },
+                },
+                required: ["poses"],
+            },
+        },
+    });
+
+    try {
+        const json = JSON.parse(response.text);
+        return json.poses || [];
+    } catch (e) {
+        console.error("Failed to parse pose identification from AI:", response.text, e);
+        throw new Error("The AI returned an invalid response. Please try again.");
+    }
+};
+
+export const generatePoseMannequin = async (poseDescription: string): Promise<string> => {
+    const prompt = `Generate a photorealistic image of a single wooden art mannequin on a completely plain, solid white background. The mannequin must be positioned in this exact pose: "${poseDescription}". The image should be a clean, well-lit studio shot, focusing only on the mannequin and its pose. Do not include any other objects or backgrounds.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: { parts: [{ text: prompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
+        },
+    });
+
+    const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+
+    if (imagePart?.inlineData?.data) {
+        return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+    }
+
+    throw new Error(`Failed to generate a mannequin image for the pose.`);
+};
+
 
 export const generateBackgroundImagePreview = async (prompt: string, aspectRatio: string): Promise<string> => {
     const response = await ai.models.generateImages({

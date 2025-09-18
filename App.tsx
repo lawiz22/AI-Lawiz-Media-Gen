@@ -46,6 +46,12 @@ const initialExtractorState: ExtractorState = {
     isGeneratingObjects: false,
     generatedObjects: [],
     objectError: null,
+    poseSourceFile: null,
+    isIdentifyingPoses: false,
+    identifiedPoses: [],
+    isGeneratingPoses: false,
+    generatedPoses: [],
+    poseError: null,
 };
 
 const initialVideoUtilsState: VideoUtilsState = {
@@ -213,6 +219,7 @@ const App: React.FC = () => {
     const [isGeminiVideoSourcePickerOpen, setIsGeminiVideoSourcePickerOpen] = useState(false);
     const [isClothesSourcePickerOpen, setIsClothesSourcePickerOpen] = useState(false);
     const [isObjectSourcePickerOpen, setIsObjectSourcePickerOpen] = useState(false);
+    const [isPoseSourcePickerOpen, setIsPoseSourcePickerOpen] = useState(false);
     const [isBannerRefPickerOpen, setIsBannerRefPickerOpen] = useState(false);
     const [isBannerPalettePickerOpen, setIsBannerPalettePickerOpen] = useState(false);
     const [isBannerLogoPickerOpen, setIsBannerLogoPickerOpen] = useState(false);
@@ -658,8 +665,8 @@ const App: React.FC = () => {
     ];
 
     // Fix: Explicitly type filter arrays as LibraryItemType[] to fix TypeScript assignment errors.
-    const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'object', 'extracted-frame'];
-    const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'extracted-frame', 'object'];
+    const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'object', 'extracted-frame', 'pose'];
+    const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'extracted-frame', 'object', 'pose'];
 
     return (
         <div className="min-h-screen bg-bg-primary text-text-primary font-sans">
@@ -973,6 +980,7 @@ const App: React.FC = () => {
                         onReset={handleExtractorReset} 
                         onOpenLibraryForClothes={() => setIsClothesSourcePickerOpen(true)}
                         onOpenLibraryForObjects={() => setIsObjectSourcePickerOpen(true)}
+                        onOpenLibraryForPoses={() => setIsPoseSourcePickerOpen(true)}
                         activeSubTab={activeExtractorSubTab}
                         setActiveSubTab={setActiveExtractorSubTab}
                     />
@@ -1157,6 +1165,19 @@ const App: React.FC = () => {
                         const blob = await res.blob();
                         const file = new File([blob], "library_object_source.jpeg", { type: blob.type });
                         setExtractorState(prev => ({ ...prev, objectSourceFile: file }));
+                    }}
+                    filter={broadImagePickerFilter}
+                />
+            )}
+            {isPoseSourcePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isPoseSourcePickerOpen}
+                    onClose={() => setIsPoseSourcePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], "library_pose_source.jpeg", { type: blob.type });
+                        setExtractorState(prev => ({ ...prev, poseSourceFile: file }));
                     }}
                     filter={broadImagePickerFilter}
                 />
