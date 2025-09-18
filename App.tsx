@@ -167,6 +167,12 @@ const App: React.FC = () => {
     const [isPromptGenBgImagePickerOpen, setIsPromptGenBgImagePickerOpen] = useState(false);
     const [isPromptGenSubjectImagePickerOpen, setIsPromptGenSubjectImagePickerOpen] = useState(false);
     const [isNunchakuSourcePickerOpen, setIsNunchakuSourcePickerOpen] = useState(false);
+    const [isCharacterSourcePickerOpen, setIsCharacterSourcePickerOpen] = useState(false);
+    const [isVideoStartFramePickerOpen, setIsVideoStartFramePickerOpen] = useState(false);
+    const [isVideoEndFramePickerOpen, setIsVideoEndFramePickerOpen] = useState(false);
+    const [isGeminiVideoSourcePickerOpen, setIsGeminiVideoSourcePickerOpen] = useState(false);
+    const [isClothesSourcePickerOpen, setIsClothesSourcePickerOpen] = useState(false);
+    const [isObjectSourcePickerOpen, setIsObjectSourcePickerOpen] = useState(false);
     
     // --- Google Drive State ---
     const [driveFolder, setDriveFolder] = useState<DriveFolder | null>(null);
@@ -720,12 +726,23 @@ const App: React.FC = () => {
                         <div className="lg:col-span-1 space-y-8 sticky top-24">
                             <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                 <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Source Image</h2>
-                                <ImageUploader 
-                                    label="Source Face / Pose" 
-                                    id="source-image" 
-                                    onImageUpload={setSourceImage} 
-                                    sourceFile={sourceImage}
-                                />
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-grow">
+                                        <ImageUploader 
+                                            label="Source Face / Pose" 
+                                            id="source-image" 
+                                            onImageUpload={setSourceImage} 
+                                            sourceFile={sourceImage}
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={() => setIsCharacterSourcePickerOpen(true)} 
+                                        className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                        title="Select from Library"
+                                    >
+                                        <LibraryIcon className="w-6 h-6"/>
+                                    </button>
+                                </div>
                                  <div className="mt-4">
                                     <label htmlFor="character-name" className="block text-sm font-medium text-text-secondary">Character Name</label>
                                     <input
@@ -828,6 +845,9 @@ const App: React.FC = () => {
                         progressValue={progressValue}
                         onReset={handleVideoReset}
                         generationOptionsForSave={generationOptionsForSave}
+                        onOpenLibraryForStartFrame={() => setIsVideoStartFramePickerOpen(true)}
+                        onOpenLibraryForEndFrame={() => setIsVideoEndFramePickerOpen(true)}
+                        onOpenLibraryForGeminiSource={() => setIsGeminiVideoSourcePickerOpen(true)}
                     />
                 </div>
 
@@ -871,7 +891,13 @@ const App: React.FC = () => {
                 )}
                 
                 <div className={activeTab === 'extractor-tools' ? 'block' : 'hidden'}>
-                    <ExtractorToolsPanel state={extractorState} setState={setExtractorState} onReset={handleExtractorReset} />
+                    <ExtractorToolsPanel 
+                        state={extractorState} 
+                        setState={setExtractorState} 
+                        onReset={handleExtractorReset} 
+                        onOpenLibraryForClothes={() => setIsClothesSourcePickerOpen(true)}
+                        onOpenLibraryForObjects={() => setIsObjectSourcePickerOpen(true)}
+                    />
                 </div>
                 
                  <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
@@ -946,6 +972,85 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         setSourceImage(new File([blob], "library_source.jpeg", { type: blob.type }));
+                    }}
+                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                />
+            )}
+            {isCharacterSourcePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isCharacterSourcePickerOpen}
+                    onClose={() => setIsCharacterSourcePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], "library_source.jpeg", { type: blob.type });
+                        setSourceImage(file);
+                        setCharacterName('');
+                    }}
+                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                />
+            )}
+            {isVideoStartFramePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isVideoStartFramePickerOpen}
+                    onClose={() => setIsVideoStartFramePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], "library_start_frame.jpeg", { type: blob.type });
+                        setVideoStartFrame(file);
+                    }}
+                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                />
+            )}
+            {isVideoEndFramePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isVideoEndFramePickerOpen}
+                    onClose={() => setIsVideoEndFramePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], "library_end_frame.jpeg", { type: blob.type });
+                        setVideoEndFrame(file);
+                    }}
+                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                />
+            )}
+            {isGeminiVideoSourcePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isGeminiVideoSourcePickerOpen}
+                    onClose={() => setIsGeminiVideoSourcePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], "library_gemini_source.jpeg", { type: blob.type });
+                        setVideoStartFrame(file); // Gemini uses the start frame state
+                    }}
+                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                />
+            )}
+            {isClothesSourcePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isClothesSourcePickerOpen}
+                    onClose={() => setIsClothesSourcePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], "library_clothes_source.jpeg", { type: blob.type });
+                        setExtractorState(prev => ({ ...prev, clothesSourceFile: file }));
+                    }}
+                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
+                />
+            )}
+            {isObjectSourcePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isObjectSourcePickerOpen}
+                    onClose={() => setIsObjectSourcePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], "library_object_source.jpeg", { type: blob.type });
+                        setExtractorState(prev => ({ ...prev, objectSourceFile: file }));
                     }}
                     filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
                 />

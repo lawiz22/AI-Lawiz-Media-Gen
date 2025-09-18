@@ -1,11 +1,10 @@
-
 import React from 'react';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
 import { ExtractorResultsGrid } from './ExtractorResultsGrid';
 import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage } from '../services/geminiService';
 import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState } from '../types';
-import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, SaveIcon, CheckIcon, ResetIcon } from './icons';
+import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, SaveIcon, CheckIcon, ResetIcon, LibraryIcon } from './icons';
 import { saveToLibrary } from '../services/libraryService';
 import { dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 
@@ -26,10 +25,12 @@ interface ExtractorToolsPanelProps {
     state: ExtractorState;
     setState: React.Dispatch<React.SetStateAction<ExtractorState>>;
     onReset: () => void;
+    onOpenLibraryForClothes: () => void;
+    onOpenLibraryForObjects: () => void;
 }
 
 // --- Main Panel ---
-export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState, onReset }) => {
+export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState, onReset, onOpenLibraryForClothes, onOpenLibraryForObjects }) => {
     
     const handleIdentify = async () => {
         if (!state.clothesSourceFile) return;
@@ -235,12 +236,23 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                 />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-1 space-y-6">
-                        <ImageUploader 
-                            label="Upload Photo" 
-                            id="clothes-extractor-image" 
-                            onImageUpload={(file) => setState(prev => ({ ...prev, clothesSourceFile: file }))}
-                            sourceFile={state.clothesSourceFile} 
-                        />
+                        <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                                <ImageUploader 
+                                    label="Upload Photo" 
+                                    id="clothes-extractor-image" 
+                                    onImageUpload={(file) => setState(prev => ({ ...prev, clothesSourceFile: file }))}
+                                    sourceFile={state.clothesSourceFile} 
+                                />
+                            </div>
+                            <button
+                                onClick={onOpenLibraryForClothes}
+                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                title="Select from Library"
+                            >
+                                <LibraryIcon className="w-6 h-6"/>
+                            </button>
+                        </div>
                         <div>
                             <label htmlFor="clothes-details" className="block text-sm font-medium text-text-secondary mb-1">
                                 Add Details (Optional)
@@ -327,12 +339,23 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                 />
                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-1 space-y-6">
-                        <ImageUploader 
-                            label="Upload Photo" 
-                            id="object-extractor-image" 
-                            onImageUpload={(file) => setState(prev => ({...prev, objectSourceFile: file}))}
-                            sourceFile={state.objectSourceFile}
-                        />
+                        <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                                <ImageUploader 
+                                    label="Upload Photo" 
+                                    id="object-extractor-image" 
+                                    onImageUpload={(file) => setState(prev => ({...prev, objectSourceFile: file}))}
+                                    sourceFile={state.objectSourceFile}
+                                />
+                            </div>
+                             <button
+                                onClick={onOpenLibraryForObjects}
+                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                title="Select from Library"
+                            >
+                                <LibraryIcon className="w-6 h-6"/>
+                            </button>
+                        </div>
                         <div>
                             <label htmlFor="object-details" className="block text-sm font-medium text-text-secondary mb-1">
                                 Specific objects to look for (Optional)

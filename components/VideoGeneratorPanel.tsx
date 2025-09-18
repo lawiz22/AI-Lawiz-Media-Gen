@@ -1,5 +1,5 @@
 import React, { useState, useMemo, ChangeEvent, useEffect, useRef } from 'react';
-import { GenerateIcon, ResetIcon, VideoIcon, SpinnerIcon, CopyIcon, SaveIcon, FilmIcon, DownloadIcon, StartFrameIcon, EndFrameIcon, CheckIcon } from './icons';
+import { GenerateIcon, ResetIcon, VideoIcon, SpinnerIcon, CopyIcon, SaveIcon, FilmIcon, DownloadIcon, StartFrameIcon, EndFrameIcon, CheckIcon, LibraryIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { Loader } from './Loader';
 import type { GenerationOptions, LibraryItem } from '../types';
@@ -26,6 +26,9 @@ interface VideoGeneratorPanelProps {
   progressValue: number;
   onReset: () => void;
   generationOptionsForSave?: GenerationOptions | null;
+  onOpenLibraryForStartFrame: () => void;
+  onOpenLibraryForEndFrame: () => void;
+  onOpenLibraryForGeminiSource: () => void;
 }
 
 // --- Helper Functions ---
@@ -94,7 +97,8 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     options, setOptions, comfyUIObjectInfo,
     startFrame, setStartFrame, endFrame, setEndFrame,
     onGenerate, isReady, isLoading, error, generatedVideo, lastUsedPrompt,
-    progressMessage, progressValue, onReset, generationOptionsForSave
+    progressMessage, progressValue, onReset, generationOptionsForSave,
+    onOpenLibraryForStartFrame, onOpenLibraryForEndFrame, onOpenLibraryForGeminiSource
 }) => {
     const [copyButtonText, setCopyButtonText] = useState('Copy');
     const [originalStartFrame, setOriginalStartFrame] = useState<File | null>(null);
@@ -459,12 +463,23 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                 </div>
                                 <div className="space-y-4 mt-8">
                                     <h2 className="text-xl font-bold mb-4 text-accent">2. Upload Media (Optional)</h2>
-                                    <ImageUploader
-                                        label="Input Image (Optional)"
-                                        id="gemini-vid-input"
-                                        onImageUpload={setStartFrame}
-                                        sourceFile={startFrame}
-                                    />
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-grow">
+                                            <ImageUploader
+                                                label="Input Image (Optional)"
+                                                id="gemini-vid-input"
+                                                onImageUpload={setStartFrame}
+                                                sourceFile={startFrame}
+                                            />
+                                        </div>
+                                        <button 
+                                            onClick={onOpenLibraryForGeminiSource} 
+                                            className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                            title="Select from Library"
+                                        >
+                                            <LibraryIcon className="w-6 h-6"/>
+                                        </button>
+                                    </div>
                                     <div className="pt-2 space-y-2" title="The Gemini VEO API currently only supports a single input image. This feature is disabled.">
                                         <label className="flex items-center gap-2 text-sm font-medium text-text-muted cursor-not-allowed">
                                             <input 
@@ -482,14 +497,36 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                         ) : (
                             <div className="space-y-4">
                                 <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Frames</h2>
-                                <ImageUploader label="Start Frame" id="start-frame" onImageUpload={handleStartFrameUpload} sourceFile={startFrame} />
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-grow">
+                                        <ImageUploader label="Start Frame" id="start-frame" onImageUpload={handleStartFrameUpload} sourceFile={startFrame} />
+                                    </div>
+                                    <button 
+                                        onClick={onOpenLibraryForStartFrame} 
+                                        className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                        title="Select from Library"
+                                    >
+                                        <LibraryIcon className="w-6 h-6"/>
+                                    </button>
+                                </div>
                                 <div className="pt-2 space-y-2">
                                     <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
                                         <input type="checkbox" checked={options.comfyVidWanI2VUseEndFrame} onChange={handleUseEndFrameChange} disabled={isLoading} className="rounded text-accent focus:ring-accent" />
                                         Use End Frame
                                     </label>
                                     {options.comfyVidWanI2VUseEndFrame && (
-                                        <ImageUploader label="End Frame" id="end-frame" onImageUpload={handleEndFrameUpload} sourceFile={endFrame} />
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex-grow">
+                                                <ImageUploader label="End Frame" id="end-frame" onImageUpload={handleEndFrameUpload} sourceFile={endFrame} />
+                                            </div>
+                                            <button 
+                                                onClick={onOpenLibraryForEndFrame} 
+                                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                                title="Select from Library"
+                                            >
+                                                <LibraryIcon className="w-6 h-6"/>
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                                 <div className="pt-2">
