@@ -7,6 +7,8 @@ import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, Lib
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 
 interface PromptGeneratorPanelProps {
+    activeSubTab: string;
+    setActiveSubTab: (tabId: string) => void;
     onUsePrompt: (prompt: string) => void;
     image: File | null;
     setImage: (file: File | null) => void;
@@ -78,7 +80,39 @@ const createPromptThumbnail = (text: string, type: PromptCategory, modelType: Pr
 };
 
 
+interface SubTab {
+  id: string;
+  label: string;
+}
+
+interface SubTabsProps {
+  tabs: SubTab[];
+  activeTab: string;
+  onTabClick: (id: string) => void;
+}
+
+const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
+    <div className="flex items-center border-b-2 border-border-primary mb-8 -mt-2">
+        {tabs.map(tab => (
+            <button
+                key={tab.id}
+                onClick={() => onTabClick(tab.id)}
+                className={`px-4 py-2 text-sm font-semibold transition-colors duration-200 border-b-2 ${
+                    activeTab === tab.id
+                    ? 'border-accent text-accent'
+                    : 'border-transparent text-text-secondary hover:text-text-primary'
+                }`}
+            >
+                {tab.label}
+            </button>
+        ))}
+    </div>
+);
+
+
 export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
+    activeSubTab,
+    setActiveSubTab,
     onUsePrompt,
     image, setImage, prompt, setPrompt,
     bgImage, setBgImage, bgPrompt, setBgPrompt,
@@ -345,417 +379,228 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         );
     };
 
+    const subTabs = [
+        { id: 'from-image', label: 'Prompt from Image' },
+        { id: 'extract-background', label: 'Extract Background' },
+        { id: 'extract-subject', label: 'Extract Subject' },
+        { id: 'prompt-soup', label: 'Magical Prompt Soup' },
+    ];
+
     return (
-        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto space-y-8">
-            {/* --- Generate Prompt from Image Section --- */}
-            <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">
-                <h2 className="text-xl font-bold text-accent mb-4">Generate Prompt from Image</h2>
-                <p className="text-sm text-text-secondary mb-6">
-                    Upload a photo to generate a descriptive prompt using AI. Choose a prompt type optimized for your target model.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                    {/* Left Column: Uploader & Generate Button */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2">
-                            <div className="flex-grow">
-                                <ImageUploader 
-                                    label="Upload Photo"
-                                    id="prompt-gen-image"
-                                    onImageUpload={setImage}
-                                    sourceFile={image}
-                                />
+        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto">
+            <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
+
+            {activeSubTab === 'from-image' && (
+                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
+                    <h2 className="text-xl font-bold text-accent">Generate Prompt from Image</h2>
+                    <p className="text-sm text-text-secondary -mt-6">
+                        Upload a photo to generate a descriptive prompt using AI. Choose a prompt type optimized for your target model.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-grow">
+                                    <ImageUploader 
+                                        label="Upload Photo"
+                                        id="prompt-gen-image"
+                                        onImageUpload={setImage}
+                                        sourceFile={image}
+                                    />
+                                </div>
+                                <button
+                                    onClick={onOpenLibraryForImage}
+                                    className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                    title="Select from Library"
+                                >
+                                    <LibraryIcon className="w-6 h-6"/>
+                                </button>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>
+                                {renderPromptTypeButtons(modelType, setModelType)}
                             </div>
                             <button
-                                onClick={onOpenLibraryForImage}
-                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                title="Select from Library"
+                                onClick={handleGenerate}
+                                disabled={!image || isLoading}
+                                style={image && !isLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                                className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary"
                             >
-                                <LibraryIcon className="w-6 h-6"/>
+                                {isLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                {isLoading ? 'Generating...' : 'Generate Prompt'}
                             </button>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>
-                            {renderPromptTypeButtons(modelType, setModelType)}
-                        </div>
-                        <button
-                            onClick={handleGenerate}
-                            disabled={!image || isLoading}
-                            style={image && !isLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary"
-                        >
-                            {isLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                            {isLoading ? 'Generating...' : 'Generate Prompt'}
-                        </button>
-                    </div>
-                    {/* Right Column: Results & Actions */}
-                    <div className="space-y-4">
-                        <div>
-                            <label htmlFor="generated-prompt" className="block text-sm font-medium text-text-secondary mb-1">
-                                Generated Prompt
-                            </label>
-                            <textarea
-                                id="generated-prompt"
-                                value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
-                                readOnly={isLoading}
-                                placeholder="Your generated prompt will appear here..."
-                                className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-accent font-medium"
-                                rows={10}
-                            />
-                        </div>
-                        {error && (
-                            <div className="bg-danger-bg text-danger text-sm p-3 rounded-md">
-                                <p className="font-bold">Error</p>
-                                <p>{error}</p>
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="generated-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Prompt</label>
+                                <textarea
+                                    id="generated-prompt"
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
+                                    readOnly={isLoading}
+                                    placeholder="Your generated prompt will appear here..."
+                                    className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-accent font-medium"
+                                    rows={10}
+                                />
                             </div>
-                        )}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <button 
-                                onClick={() => handleSavePrompt(prompt, 'image', modelType, setSavingState, image)}
-                                disabled={!prompt || isLoading || savingState !== 'idle'}
-                                className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
-                                    savingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
-                                }`}
-                            >
-                                {savingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : savingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                {savingState === 'saved' ? 'Saved!' : 'Save'}
-                            </button>
-                            <button 
-                                onClick={handleCopy}
-                                disabled={!prompt || isLoading}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
-                            >
-                                <CopyIcon className="w-5 h-5" />
-                                {copyButtonText}
-                            </button>
-                            <button 
-                                onClick={handleUsePrompt}
-                                disabled={!prompt || isLoading}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
-                            >
-                                <SendIcon className="w-5 h-5" />
-                                Use
-                            </button>
+                            {error && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{error}</p></div>}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <button onClick={() => handleSavePrompt(prompt, 'image', modelType, setSavingState, image)} disabled={!prompt || isLoading || savingState !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${savingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                                    {savingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : savingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                    {savingState === 'saved' ? 'Saved!' : 'Save'}
+                                </button>
+                                <button onClick={handleCopy} disabled={!prompt || isLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                    <CopyIcon className="w-5 h-5" />{copyButtonText}
+                                </button>
+                                <button onClick={handleUsePrompt} disabled={!prompt || isLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                    <SendIcon className="w-5 h-5" />Use
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
 
-            {/* --- Extract Background from Image Section --- */}
-            <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-green">
-                <h2 className="text-xl font-bold text-highlight-green mb-4">Extract Background from Image</h2>
-                <p className="text-sm text-text-secondary mb-6">
-                    Upload a photo to generate a prompt describing only the background. This is useful for creating consistent environments.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                    {/* Left Column */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2">
-                            <div className="flex-grow">
-                                <ImageUploader 
-                                    label="Upload Photo"
-                                    id="bg-extract-image"
-                                    onImageUpload={setBgImage}
-                                    sourceFile={bgImage}
-                                />
+            {activeSubTab === 'extract-background' && (
+                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-green space-y-8">
+                    <h2 className="text-xl font-bold text-highlight-green">Extract Background from Image</h2>
+                    <p className="text-sm text-text-secondary -mt-6">
+                        Upload a photo to generate a prompt describing only the background. This is useful for creating consistent environments.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-grow">
+                                    <ImageUploader label="Upload Photo" id="bg-extract-image" onImageUpload={setBgImage} sourceFile={bgImage} />
+                                </div>
+                                <button onClick={onOpenLibraryForBg} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library"><LibraryIcon className="w-6 h-6"/></button>
                             </div>
-                            <button
-                                onClick={onOpenLibraryForBg}
-                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                title="Select from Library"
-                            >
-                                <LibraryIcon className="w-6 h-6"/>
+                            <div><label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>{renderPromptTypeButtons(bgModelType, setBgModelType)}</div>
+                            <button onClick={handleBgGenerate} disabled={!bgImage || isBgLoading} style={bgImage && !isBgLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary">
+                                {isBgLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}{isBgLoading ? 'Generating...' : 'Generate Background Prompt'}
                             </button>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>
-                            {renderPromptTypeButtons(bgModelType, setBgModelType)}
-                        </div>
-                         <button
-                            onClick={handleBgGenerate}
-                            disabled={!bgImage || isBgLoading}
-                            style={bgImage && !isBgLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary"
-                        >
-                            {isBgLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                            {isBgLoading ? 'Generating...' : 'Generate Background Prompt'}
-                        </button>
-                    </div>
-                    {/* Right Column */}
-                    <div className="space-y-4">
-                        <div>
-                            <label htmlFor="generated-bg-prompt" className="block text-sm font-medium text-text-secondary mb-1">
-                                Generated Background Prompt
-                            </label>
-                            <textarea
-                                id="generated-bg-prompt"
-                                value={bgPrompt}
-                                onChange={(e) => setBgPrompt(e.target.value)}
-                                readOnly={isBgLoading}
-                                placeholder="Your generated background prompt will appear here..."
-                                className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-green font-medium"
-                                rows={10}
-                            />
-                        </div>
-                         {bgError && (
-                            <div className="bg-danger-bg text-danger text-sm p-3 rounded-md">
-                                <p className="font-bold">Error</p>
-                                <p>{bgError}</p>
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="generated-bg-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Background Prompt</label>
+                                <textarea id="generated-bg-prompt" value={bgPrompt} onChange={(e) => setBgPrompt(e.target.value)} readOnly={isBgLoading} placeholder="Your generated background prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-green font-medium" rows={10}/>
                             </div>
-                        )}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <button 
-                                onClick={() => handleSavePrompt(bgPrompt, 'background', bgModelType, setBgSavingState, bgImage)}
-                                disabled={!bgPrompt || isBgLoading || bgSavingState !== 'idle'}
-                                className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
-                                    bgSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
-                                }`}
-                            >
-                                {bgSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : bgSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                {bgSavingState === 'saved' ? 'Saved!' : 'Save'}
-                            </button>
-                            <button 
-                                onClick={handleBgCopy}
-                                disabled={!bgPrompt || isBgLoading}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
-                            >
-                                <CopyIcon className="w-5 h-5" />
-                                {bgCopyButtonText}
-                            </button>
-                             <button 
-                                onClick={handleUseBgPrompt}
-                                disabled={!bgPrompt || isBgLoading}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
-                            >
-                                <SendIcon className="w-5 h-5" />
-                                Use
-                            </button>
+                            {bgError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{bgError}</p></div>}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <button onClick={() => handleSavePrompt(bgPrompt, 'background', bgModelType, setBgSavingState, bgImage)} disabled={!bgPrompt || isBgLoading || bgSavingState !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${bgSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                                    {bgSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : bgSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                    {bgSavingState === 'saved' ? 'Saved!' : 'Save'}
+                                </button>
+                                <button onClick={handleBgCopy} disabled={!bgPrompt || isBgLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                    <CopyIcon className="w-5 h-5" />{bgCopyButtonText}
+                                </button>
+                                <button onClick={handleUseBgPrompt} disabled={!bgPrompt || isBgLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                    <SendIcon className="w-5 h-5" />Use
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
 
-            {/* --- Extract Subject from Image Section --- */}
-            <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-yellow">
-                <h2 className="text-xl font-bold text-highlight-yellow mb-4">Extract Subject from Image</h2>
-                <p className="text-sm text-text-secondary mb-6">
-                    Upload a photo to generate a prompt describing only the main subject(s). This is useful for isolating characters or objects from their environment.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                    {/* Left Column */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2">
-                            <div className="flex-grow">
-                                <ImageUploader 
-                                    label="Upload Photo"
-                                    id="subject-extract-image"
-                                    onImageUpload={setSubjectImage}
-                                    sourceFile={subjectImage}
-                                />
+            {activeSubTab === 'extract-subject' && (
+                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-yellow space-y-8">
+                     <h2 className="text-xl font-bold text-highlight-yellow">Extract Subject from Image</h2>
+                     <p className="text-sm text-text-secondary -mt-6">
+                        Upload a photo to generate a prompt describing only the main subject(s). This is useful for isolating characters or objects from their environment.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-grow">
+                                    <ImageUploader label="Upload Photo" id="subject-extract-image" onImageUpload={setSubjectImage} sourceFile={subjectImage} />
+                                </div>
+                                <button onClick={onOpenLibraryForSubject} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library"><LibraryIcon className="w-6 h-6"/></button>
                             </div>
-                            <button
-                                onClick={onOpenLibraryForSubject}
-                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                title="Select from Library"
-                            >
-                                <LibraryIcon className="w-6 h-6"/>
+                            <div><label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>{renderPromptTypeButtons(subjectModelType, setSubjectModelType)}</div>
+                            <button onClick={handleSubjectGenerate} disabled={!subjectImage || isSubjectLoading} style={subjectImage && !isSubjectLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary">
+                                {isSubjectLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}{isSubjectLoading ? 'Generating...' : 'Generate Subject Prompt'}
                             </button>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>
-                            {renderPromptTypeButtons(subjectModelType, setSubjectModelType)}
-                        </div>
-                         <button
-                            onClick={handleSubjectGenerate}
-                            disabled={!subjectImage || isSubjectLoading}
-                            style={subjectImage && !isSubjectLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary"
-                        >
-                            {isSubjectLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                            {isSubjectLoading ? 'Generating...' : 'Generate Subject Prompt'}
-                        </button>
-                    </div>
-                    {/* Right Column */}
-                    <div className="space-y-4">
-                        <div>
-                            <label htmlFor="generated-subject-prompt" className="block text-sm font-medium text-text-secondary mb-1">
-                                Generated Subject Prompt
-                            </label>
-                            <textarea
-                                id="generated-subject-prompt"
-                                value={subjectPrompt}
-                                onChange={(e) => setSubjectPrompt(e.target.value)}
-                                readOnly={isSubjectLoading}
-                                placeholder="Your generated subject prompt will appear here..."
-                                className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-yellow font-medium"
-                                rows={10}
-                            />
-                        </div>
-                         {subjectError && (
-                            <div className="bg-danger-bg text-danger text-sm p-3 rounded-md">
-                                <p className="font-bold">Error</p>
-                                <p>{subjectError}</p>
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="generated-subject-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Subject Prompt</label>
+                                <textarea id="generated-subject-prompt" value={subjectPrompt} onChange={(e) => setSubjectPrompt(e.target.value)} readOnly={isSubjectLoading} placeholder="Your generated subject prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-yellow font-medium" rows={10}/>
                             </div>
-                        )}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <button 
-                                onClick={() => handleSavePrompt(subjectPrompt, 'subject', subjectModelType, setSubjectSavingState, subjectImage)}
-                                disabled={!subjectPrompt || isSubjectLoading || subjectSavingState !== 'idle'}
-                                className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
-                                    subjectSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
-                                }`}
-                            >
-                                {subjectSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : subjectSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                {subjectSavingState === 'saved' ? 'Saved!' : 'Save'}
-                            </button>
-                            <button 
-                                onClick={handleSubjectCopy}
-                                disabled={!subjectPrompt || isSubjectLoading}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
-                            >
-                                <CopyIcon className="w-5 h-5" />
-                                {subjectCopyButtonText}
-                            </button>
-                             <button 
-                                onClick={handleUseSubjectPrompt}
-                                disabled={!subjectPrompt || isSubjectLoading}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
-                            >
-                                <SendIcon className="w-5 h-5" />
-                                Use
-                            </button>
+                            {subjectError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{subjectError}</p></div>}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <button onClick={() => handleSavePrompt(subjectPrompt, 'subject', subjectModelType, setSubjectSavingState, subjectImage)} disabled={!subjectPrompt || isSubjectLoading || subjectSavingState !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${subjectSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                                    {subjectSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : subjectSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                    {subjectSavingState === 'saved' ? 'Saved!' : 'Save'}
+                                </button>
+                                <button onClick={handleSubjectCopy} disabled={!subjectPrompt || isSubjectLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                    <CopyIcon className="w-5 h-5" />{subjectCopyButtonText}
+                                </button>
+                                <button onClick={handleUseSubjectPrompt} disabled={!subjectPrompt || isSubjectLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                    <SendIcon className="w-5 h-5" />Use
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            {/* --- Magical Prompt Soup Section --- */}
-            <div>
-                <hr className="border-t-2 border-border-primary/50 mb-8" />
-                <h2 className="text-xl font-bold text-accent mb-4">Magical Prompt Soup</h2>
-                <p className="text-sm text-text-secondary mb-6">
-                    Mash up the prompts generated above into a new, unique, and often surprising creation. Adjust the creativity to control how wild the result is!
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                    {/* Left Column: Controls */}
-                    <div className="space-y-6 bg-bg-tertiary p-6 rounded-lg border border-border-primary/50">
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-2">Output Prompt Type</label>
-                            {renderPromptTypeButtons(soupModelType, setSoupModelType)}
-                        </div>
+            )}
 
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary">Creativity: {soupCreativity}</label>
-                            <input
-                                type="range"
-                                min="0"
-                                max="1"
-                                step="0.1"
-                                value={soupCreativity}
-                                onChange={(e) => setSoupCreativity(parseFloat(e.target.value))}
-                                disabled={isSoupLoading}
-                                className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer"
-                            />
-                             <p className="text-xs text-text-muted mt-1">Higher values lead to more unexpected combinations.</p>
-                        </div>
-                        
-                        <button
-                            onClick={handleGenerateSoup}
-                            disabled={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading}
-                            style={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading ? {} : { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
-                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
-                        >
-                            {isSoupLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                            {isSoupLoading ? 'Stirring...' : 'Create Soup'}
-                        </button>
-                    </div>
-
-                    {/* Right Column: Results & Actions */}
-                    <div className="space-y-4">
-                        <div>
-                            <label htmlFor="generated-soup-prompt" className="block text-sm font-medium text-text-secondary mb-1">
-                                Generated Soup Prompt
-                            </label>
-                            <div
-                                id="generated-soup-prompt"
-                                className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent min-h-[184px] whitespace-pre-wrap"
-                            >
-                                {soupPromptParts.length > 0 ? (
-                                    soupPromptParts.map((part, index) => (
-                                        <span key={index} className={getSourceColor(part.source)}>
-                                            {part.text + ' '}
-                                        </span>
-                                    ))
-                                ) : soupPrompt ? (
-                                    <span className="text-text-primary">{soupPrompt}</span>
-                                ) : (
-                                    <span className="text-text-muted">Your magical prompt soup will appear here...</span>
-                                )}
+            {activeSubTab === 'prompt-soup' && (
+                <div className="space-y-8">
+                    <h2 className="text-xl font-bold text-accent">Magical Prompt Soup</h2>
+                    <p className="text-sm text-text-secondary -mt-6">
+                        Mash up the prompts generated in other tabs into a new, unique, and often surprising creation. Adjust the creativity to control how wild the result is!
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                        <div className="space-y-6 bg-bg-tertiary p-6 rounded-lg border border-border-primary/50">
+                            <div><label className="block text-sm font-medium text-text-secondary mb-2">Output Prompt Type</label>{renderPromptTypeButtons(soupModelType, setSoupModelType)}</div>
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary">Creativity: {soupCreativity}</label>
+                                <input type="range" min="0" max="1" step="0.1" value={soupCreativity} onChange={(e) => setSoupCreativity(parseFloat(e.target.value))} disabled={isSoupLoading} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" />
+                                <p className="text-xs text-text-muted mt-1">Higher values lead to more unexpected combinations.</p>
                             </div>
-                        </div>
-                        {soupError && (
-                            <div className="bg-danger-bg text-danger text-sm p-3 rounded-md">
-                                <p className="font-bold">Error</p>
-                                <p>{soupError}</p>
-                            </div>
-                        )}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                             <button 
-                                onClick={() => handleSavePrompt(soupPrompt, 'soup', soupModelType, setSoupSavingState, null)}
-                                disabled={!soupPrompt || isSoupLoading || soupSavingState !== 'idle'}
-                                className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
-                                    soupSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
-                                }`}
-                            >
-                                {soupSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : soupSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                {soupSavingState === 'saved' ? 'Saved!' : 'Save'}
-                            </button>
-                            <button 
-                                onClick={handleSoupCopy}
-                                disabled={!soupPrompt || isSoupLoading}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
-                            >
-                                <CopyIcon className="w-5 h-5" />
-                                {soupCopyButtonText}
-                            </button>
-                             <button 
-                                onClick={handleUseSoupPrompt}
-                                disabled={!soupPrompt || isSoupLoading}
-                                className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"
-                            >
-                                <SendIcon className="w-5 h-5" />
-                                Use
+                            <button onClick={handleGenerateSoup} disabled={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading} style={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading ? {} : { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
+                                {isSoupLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}{isSoupLoading ? 'Stirring...' : 'Create Soup'}
                             </button>
                         </div>
-                        {soupHistory.length > 0 && (
-                            <div className="mt-4">
-                                <h4 className="text-md font-semibold text-text-secondary mb-2">Recent Soups</h4>
-                                <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md border border-border-primary/50">
-                                    {soupHistory.map((soup, index) => (
-                                        <div key={index} className="group bg-bg-tertiary p-2 rounded-md flex items-center justify-between gap-2">
-                                            <p 
-                                                className="text-xs text-text-secondary truncate cursor-pointer hover:text-text-primary transition-colors" 
-                                                title={soup} 
-                                                onClick={() => { setSoupPrompt(soup); setSoupPromptParts([]); }}
-                                            >
-                                                {soup}
-                                            </p>
-                                            <button 
-                                                onClick={() => handleHistoryItemCopy(soup, index)}
-                                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full bg-bg-secondary text-text-secondary hover:bg-accent hover:text-accent-text"
-                                                title={historyCopyStates[index] || "Copy"}
-                                            >
-                                                <CopyIcon className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    ))}
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="generated-soup-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Soup Prompt</label>
+                                <div id="generated-soup-prompt" className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent min-h-[184px] whitespace-pre-wrap">
+                                    {soupPromptParts.length > 0 ? soupPromptParts.map((part, index) => <span key={index} className={getSourceColor(part.source)}>{part.text + ' '}</span>) : soupPrompt ? <span className="text-text-primary">{soupPrompt}</span> : <span className="text-text-muted">Your magical prompt soup will appear here...</span>}
                                 </div>
                             </div>
-                        )}
+                            {soupError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{soupError}</p></div>}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <button onClick={() => handleSavePrompt(soupPrompt, 'soup', soupModelType, setSoupSavingState, null)} disabled={!soupPrompt || isSoupLoading || soupSavingState !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${soupSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                                    {soupSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : soupSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                    {soupSavingState === 'saved' ? 'Saved!' : 'Save'}
+                                </button>
+                                <button onClick={handleSoupCopy} disabled={!soupPrompt || isSoupLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                    <CopyIcon className="w-5 h-5" />{soupCopyButtonText}
+                                </button>
+                                <button onClick={handleUseSoupPrompt} disabled={!soupPrompt || isSoupLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                    <SendIcon className="w-5 h-5" />Use
+                                </button>
+                            </div>
+                            {soupHistory.length > 0 && (
+                                <div className="mt-4">
+                                    <h4 className="text-md font-semibold text-text-secondary mb-2">Recent Soups</h4>
+                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md border border-border-primary/50">
+                                        {soupHistory.map((soup, index) => (
+                                            <div key={index} className="group bg-bg-tertiary p-2 rounded-md flex items-center justify-between gap-2">
+                                                <p className="text-xs text-text-secondary truncate cursor-pointer hover:text-text-primary transition-colors" title={soup} onClick={() => { setSoupPrompt(soup); setSoupPromptParts([]); }}>{soup}</p>
+                                                <button onClick={() => handleHistoryItemCopy(soup, index)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full bg-bg-secondary text-text-secondary hover:bg-accent hover:text-accent-text" title={historyCopyStates[index] || "Copy"}>
+                                                    <CopyIcon className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
-
+            )}
         </div>
     );
 };

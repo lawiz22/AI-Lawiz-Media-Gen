@@ -1,5 +1,5 @@
 {
-  "version": "1.45",
-  "date": "2024-08-12T10:00:00Z",
-  "changes": "Removed the temporary session History panel. The persistent Library is now the primary method for saving and reloading generations."
+  "version": "1.46",
+  "date": "2024-08-13T10:00:00Z",
+  "changes": "Organized the Extractor Tools and Video Utilities panels into a consistent sub-tabbed interface, improving UI clarity and scalability across all major tools."
 }

@@ -151,6 +151,8 @@ const App: React.FC = () => {
         soupPrompt: '',
         soupHistory: [],
     });
+    const [activePromptToolsSubTab, setActivePromptToolsSubTab] = useState<string>('from-image');
+
 
     // --- Video Generation State ---
     const [videoStartFrame, setVideoStartFrame] = useState<File | null>(null);
@@ -160,9 +162,11 @@ const App: React.FC = () => {
 
     // --- Video Utilities State ---
     const [videoUtilsState, setVideoUtilsState] = useState<VideoUtilsState>(initialVideoUtilsState);
+    const [activeVideoUtilsSubTab, setActiveVideoUtilsSubTab] = useState<string>('frames');
     
     // --- Extractor Tools State ---
     const [extractorState, setExtractorState] = useState<ExtractorState>(initialExtractorState);
+    const [activeExtractorSubTab, setActiveExtractorSubTab] = useState<string>('clothes');
     
     // --- Logo & Theme State ---
     const [logoThemeState, setLogoThemeState] = useState<LogoThemeState>(initialLogoThemeState);
@@ -920,6 +924,8 @@ const App: React.FC = () => {
                 {currentUser.role === 'admin' && (
                     <div className={activeTab === 'prompt-generator' ? 'block' : 'hidden'}>
                         <PromptGeneratorPanel 
+                            activeSubTab={activePromptToolsSubTab}
+                            setActiveSubTab={setActivePromptToolsSubTab}
                             onUsePrompt={handleUsePrompt}
                             image={promptGenState.image} setImage={file => setPromptGenState(prev => ({...prev, image: file}))}
                             prompt={promptGenState.prompt} setPrompt={p => setPromptGenState(prev => ({...prev, prompt: p}))}
@@ -943,6 +949,8 @@ const App: React.FC = () => {
                         onReset={handleExtractorReset} 
                         onOpenLibraryForClothes={() => setIsClothesSourcePickerOpen(true)}
                         onOpenLibraryForObjects={() => setIsObjectSourcePickerOpen(true)}
+                        activeSubTab={activeExtractorSubTab}
+                        setActiveSubTab={setActiveExtractorSubTab}
                     />
                 </div>
                 
@@ -955,6 +963,8 @@ const App: React.FC = () => {
                         setVideoUtilsState={setVideoUtilsState}
                         onOpenLibrary={() => setIsColorImagePickerOpen(true)}
                         onOpenVideoLibrary={() => setIsVideoUtilsPickerOpen(true)}
+                        activeSubTab={activeVideoUtilsSubTab}
+                        setActiveSubTab={setActiveVideoUtilsSubTab}
                     />
                 </div>
             </main>

@@ -179,6 +179,35 @@ const VideoUploader: React.FC<{ onVideoUpload: (file: File | null) => void; sour
     );
 };
 
+interface SubTab {
+  id: string;
+  label: string;
+}
+
+interface SubTabsProps {
+  tabs: SubTab[];
+  activeTab: string;
+  onTabClick: (id: string) => void;
+}
+
+const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
+    <div className="flex items-center border-b-2 border-border-primary mb-8 -mt-2">
+        {tabs.map(tab => (
+            <button
+                key={tab.id}
+                onClick={() => onTabClick(tab.id)}
+                className={`px-4 py-2 text-sm font-semibold transition-colors duration-200 border-b-2 ${
+                    activeTab === tab.id
+                    ? 'border-accent text-accent'
+                    : 'border-transparent text-text-secondary hover:text-text-primary'
+                }`}
+            >
+                {tab.label}
+            </button>
+        ))}
+    </div>
+);
+
 
 interface VideoUtilsPanelProps {
     setStartFrame: (file: File | null) => void;
@@ -187,6 +216,8 @@ interface VideoUtilsPanelProps {
     setVideoUtilsState: React.Dispatch<React.SetStateAction<VideoUtilsState>>;
     onOpenLibrary: () => void;
     onOpenVideoLibrary: () => void;
+    activeSubTab: string;
+    setActiveSubTab: (tabId: string) => void;
 }
 
 export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({ 
@@ -196,6 +227,8 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     setVideoUtilsState,
     onOpenLibrary,
     onOpenVideoLibrary,
+    activeSubTab,
+    setActiveSubTab
 }) => {
     const { videoFile, extractedFrame, colorPicker } = videoUtilsState;
 
@@ -460,259 +493,269 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
         }
     };
 
-    return (
-        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto space-y-12">
-            {/* --- Frame Extractor --- */}
-             <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">
-                <div className="flex items-center gap-3 mb-4">
-                    <FilmIcon className="w-8 h-8 text-accent"/>
-                    <h2 className="text-2xl font-bold text-accent">Frame Extractor</h2>
-                </div>
-                <p className="text-sm text-text-secondary mb-6">
-                    Upload a video to preview it and extract specific frames as high-quality images.
-                </p>
+    const subTabs = [
+        { id: 'frames', label: 'Frame Extractor' },
+        { id: 'colors', label: 'Color Palette Extractor' },
+    ];
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2">
-                            <div className="flex-grow">
-                                <VideoUploader onVideoUpload={setVideoFile} sourceFile={videoFile} />
-                            </div>
-                             <button
-                                onClick={onOpenVideoLibrary}
-                                className="self-center mt-8 bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                title="Select video from Library"
-                            >
-                                <LibraryIcon className="w-6 h-6"/>
-                            </button>
-                        </div>
-                        {videoSrc && (
-                             <div className="space-y-4 pt-4">
-                                <video 
-                                    ref={videoRef} 
-                                    src={videoSrc} 
-                                    controls 
-                                    className="w-full rounded-lg bg-black"
-                                    onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                                    onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                                />
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={() => handleSecondStep('backward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Seek 1 Second Backward">
-                                            <ChevronDoubleLeftIcon className="w-5 h-5" />
-                                        </button>
-                                        <button onClick={() => handleFrameStep('backward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Previous Frame">
-                                            <ChevronLeftIcon className="w-5 h-5" />
-                                        </button>
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max={duration || 0}
-                                            step="0.01"
-                                            value={currentTime}
-                                            onChange={(e) => {
-                                                if (videoRef.current) {
-                                                    videoRef.current.currentTime = parseFloat(e.target.value);
-                                                }
-                                            }}
-                                            className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
-                                        />
-                                        <button onClick={() => handleFrameStep('forward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Next Frame">
-                                            <ChevronRightIcon className="w-5 h-5" />
-                                        </button>
-                                        <button onClick={() => handleSecondStep('forward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Seek 1 Second Forward">
-                                            <ChevronDoubleRightIcon className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="text-sm font-mono text-text-secondary">
-                                            {formatTime(currentTime)} / {formatTime(duration)}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <label htmlFor="frame-rate-input" className="text-xs text-text-muted">FPS:</label>
-                                            <input
-                                                id="frame-rate-input"
-                                                type="number"
-                                                value={frameRate}
-                                                onChange={(e) => setFrameRate(Number(e.target.value) || 24)}
-                                                min="1"
-                                                className="w-16 bg-bg-primary p-1 text-sm rounded-md border border-border-primary text-center"
-                                                title="Set the video's frames per second for accurate stepping"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <button onClick={() => handleExtractFrame(currentTime)} className="bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors">
-                                        Save Current Frame
-                                    </button>
-                                    <button onClick={() => handleExtractFrame(duration)} className="bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors">
-                                        Save Last Frame
-                                    </button>
-                                </div>
-                            </div>
-                        )}
+    return (
+        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto">
+             <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
+            {/* --- Frame Extractor --- */}
+            <div className={activeSubTab === 'frames' ? 'block' : 'hidden'}>
+                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">
+                    <div className="flex items-center gap-3 mb-4">
+                        <FilmIcon className="w-8 h-8 text-accent"/>
+                        <h2 className="text-2xl font-bold text-accent">Frame Extractor</h2>
                     </div>
-                     <div className="space-y-4">
-                        {extractedFrame ? (
-                           <div className="text-center p-4 bg-bg-primary/50 rounded-lg space-y-4">
-                                <h3 className="text-lg font-semibold text-text-primary">Frame Preview</h3>
-                                <img src={extractedFrame} alt="Extracted Frame" className="max-w-full mx-auto rounded-md shadow-lg" />
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                                    <button onClick={handleDownloadFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
-                                        <DownloadIcon className="w-5 h-5"/> Download
-                                    </button>
-                                    <button onClick={handleSetAsStartFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
-                                        <StartFrameIcon className="w-5 h-5"/> Set as Start
-                                    </button>
-                                    <button onClick={handleSetAsEndFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
-                                        <EndFrameIcon className="w-5 h-5"/> Set as End
-                                    </button>
-                                    <button
-                                        onClick={handleSaveFrameToLibrary}
-                                        disabled={frameSavingState !== 'idle'}
-                                        className={`flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors ${
-                                            frameSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 
-                                            frameSavingState === 'saving' ? 'bg-bg-tertiary cursor-wait' :
-                                            'bg-bg-tertiary hover:bg-accent hover:text-accent-text'
-                                        }`}
-                                    >
-                                        {frameSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : frameSavingState === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
-                                        {frameSavingState === 'saved' ? 'Saved!' : 'Save to Library'}
-                                    </button>
+                    <p className="text-sm text-text-secondary mb-6">
+                        Upload a video to preview it and extract specific frames as high-quality images.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-grow">
+                                    <VideoUploader onVideoUpload={setVideoFile} sourceFile={videoFile} />
                                 </div>
+                                <button
+                                    onClick={onOpenVideoLibrary}
+                                    className="self-center mt-8 bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                    title="Select video from Library"
+                                >
+                                    <LibraryIcon className="w-6 h-6"/>
+                                </button>
                             </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl shadow-inner h-full min-h-[400px]">
-                                <FilmIcon className="w-16 h-16 text-border-primary mb-4" />
-                                <h3 className="text-lg font-bold text-text-primary">Your extracted frame will appear here</h3>
-                                <p className="text-text-secondary max-w-xs">Upload a video and click "Save Frame" to see a preview.</p>
-                            </div>
-                        )}
+                            {videoSrc && (
+                                <div className="space-y-4 pt-4">
+                                    <video 
+                                        ref={videoRef} 
+                                        src={videoSrc} 
+                                        controls 
+                                        className="w-full rounded-lg bg-black"
+                                        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                                        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                                    />
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => handleSecondStep('backward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Seek 1 Second Backward">
+                                                <ChevronDoubleLeftIcon className="w-5 h-5" />
+                                            </button>
+                                            <button onClick={() => handleFrameStep('backward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Previous Frame">
+                                                <ChevronLeftIcon className="w-5 h-5" />
+                                            </button>
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max={duration || 0}
+                                                step="0.01"
+                                                value={currentTime}
+                                                onChange={(e) => {
+                                                    if (videoRef.current) {
+                                                        videoRef.current.currentTime = parseFloat(e.target.value);
+                                                    }
+                                                }}
+                                                className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
+                                            />
+                                            <button onClick={() => handleFrameStep('forward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Next Frame">
+                                                <ChevronRightIcon className="w-5 h-5" />
+                                            </button>
+                                            <button onClick={() => handleSecondStep('forward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Seek 1 Second Forward">
+                                                <ChevronDoubleRightIcon className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div className="text-sm font-mono text-text-secondary">
+                                                {formatTime(currentTime)} / {formatTime(duration)}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <label htmlFor="frame-rate-input" className="text-xs text-text-muted">FPS:</label>
+                                                <input
+                                                    id="frame-rate-input"
+                                                    type="number"
+                                                    value={frameRate}
+                                                    onChange={(e) => setFrameRate(Number(e.target.value) || 24)}
+                                                    min="1"
+                                                    className="w-16 bg-bg-primary p-1 text-sm rounded-md border border-border-primary text-center"
+                                                    title="Set the video's frames per second for accurate stepping"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <button onClick={() => handleExtractFrame(currentTime)} className="bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                            Save Current Frame
+                                        </button>
+                                        <button onClick={() => handleExtractFrame(duration)} className="bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                            Save Last Frame
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="space-y-4">
+                            {extractedFrame ? (
+                            <div className="text-center p-4 bg-bg-primary/50 rounded-lg space-y-4">
+                                    <h3 className="text-lg font-semibold text-text-primary">Frame Preview</h3>
+                                    <img src={extractedFrame} alt="Extracted Frame" className="max-w-full mx-auto rounded-md shadow-lg" />
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                        <button onClick={handleDownloadFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
+                                            <DownloadIcon className="w-5 h-5"/> Download
+                                        </button>
+                                        <button onClick={handleSetAsStartFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
+                                            <StartFrameIcon className="w-5 h-5"/> Set as Start
+                                        </button>
+                                        <button onClick={handleSetAsEndFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
+                                            <EndFrameIcon className="w-5 h-5"/> Set as End
+                                        </button>
+                                        <button
+                                            onClick={handleSaveFrameToLibrary}
+                                            disabled={frameSavingState !== 'idle'}
+                                            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors ${
+                                                frameSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 
+                                                frameSavingState === 'saving' ? 'bg-bg-tertiary cursor-wait' :
+                                                'bg-bg-tertiary hover:bg-accent hover:text-accent-text'
+                                            }`}
+                                        >
+                                            {frameSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : frameSavingState === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
+                                            {frameSavingState === 'saved' ? 'Saved!' : 'Save to Library'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl shadow-inner h-full min-h-[400px]">
+                                    <FilmIcon className="w-16 h-16 text-border-primary mb-4" />
+                                    <h3 className="text-lg font-bold text-text-primary">Your extracted frame will appear here</h3>
+                                    <p className="text-text-secondary max-w-xs">Upload a video and click "Save Frame" to see a preview.</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* --- Color Palette Extractor --- */}
-            <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-green">
-                <div className="flex items-center gap-3 mb-4">
-                    <PaletteIcon className="w-8 h-8 text-highlight-green" />
-                    <h2 className="text-2xl font-bold text-highlight-green">Color Palette Extractor</h2>
-                </div>
-                <p className="text-sm text-text-secondary mb-6">
-                    Upload an image to extract a color palette. Re-shuffle the results or click a color to pick a new one from the image.
-                </p>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                    {/* --- Left Column: Controls & Image --- */}
-                    <div className="lg:col-span-1 space-y-6">
-                        <div className="flex items-center gap-2">
-                            <ImageUploader label="Upload Image" id="color-picker-image" onImageUpload={handleColorImageUpload} sourceFile={colorPicker.imageFile} />
-                            <button onClick={onOpenLibrary} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
-                                <LibraryIcon className="w-6 h-6"/>
-                            </button>
-                        </div>
-                        {colorPicker.imageFile && (
-                            <div className="relative bg-bg-primary p-2 rounded-lg">
-                                <canvas
-                                    ref={imageCanvasRef}
-                                    className={`max-w-full rounded-lg shadow-lg ${colorPicker.pickingColorIndex !== null ? 'cursor-crosshair' : 'cursor-default'}`}
-                                    onClick={handleCanvasClick}
-                                    style={{ imageRendering: 'pixelated' }}
-                                />
-                                {colorPicker.pickingColorIndex !== null && (
-                                    <div className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center text-white font-bold p-4 text-center pointer-events-none animate-fade-in">
-                                        Click on the image to pick a new color.
-                                    </div>
-                                )}
-                            </div>
-                        )}
+             <div className={activeSubTab === 'colors' ? 'block' : 'hidden'}>
+                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-green">
+                    <div className="flex items-center gap-3 mb-4">
+                        <PaletteIcon className="w-8 h-8 text-highlight-green" />
+                        <h2 className="text-2xl font-bold text-highlight-green">Color Palette Extractor</h2>
                     </div>
-                    {/* --- Right Column: Results --- */}
-                    <div className="lg:col-span-1 space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary">Number of Colors: {colorPicker.colorCount}</label>
-                            <input
-                                type="range" min="2" max="16" step="1"
-                                value={colorPicker.colorCount}
-                                onChange={e => setColorPickerState(prev => ({...prev, colorCount: Number(e.target.value)}))}
-                                className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
-                                disabled={colorPicker.isExtracting}
-                            />
-                        </div>
-                        <button
-                            onClick={handleExtractPalette}
-                            disabled={!colorPicker.imageFile || colorPicker.isExtracting}
-                            style={colorPicker.imageFile && !colorPicker.isExtracting ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
-                        >
-                            {colorPicker.isExtracting ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                            {colorPicker.isExtracting ? 'Extracting Palette...' : 'Extract Palette'}
-                        </button>
-                        {colorPicker.error && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{colorPicker.error}</p>}
-                        
-                        {colorPicker.palette.length > 0 && (
-                            <div className="space-y-4 pt-4 border-t border-border-primary">
-                                <h3 className="text-lg font-semibold text-text-primary">Generated Palette</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                    {colorPicker.palette.map((color, index) => (
-                                        <div key={index} 
-                                            className="flex flex-col items-center cursor-pointer group"
-                                            onClick={() => handleColorSwatchClick(index)}
-                                            title="Click to change this color"
-                                        >
-                                            <div 
-                                                className={`w-full h-24 rounded-t-lg border-2 transition-all duration-200 ${colorPicker.pickingColorIndex === index ? 'border-accent ring-2 ring-accent shadow-lg scale-105' : 'border-border-primary group-hover:border-accent-light'}`}
-                                                style={{ backgroundColor: color.hex }} 
-                                            />
-                                            <div className="w-full p-2 bg-bg-tertiary rounded-b-lg text-center">
-                                                <p className="text-sm font-semibold text-text-primary truncate" title={color.name}>
-                                                    {color.name}
-                                                </p>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleCopyHex(color.hex); }}
-                                                    className="text-xs font-mono text-text-muted hover:text-accent flex items-center gap-1 mx-auto"
-                                                    title="Click to copy HEX"
-                                                >
-                                                    {copiedHex === color.hex ? 'Copied!' : color.hex}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                 <div className="pt-4 space-y-4">
-                                    <div>
-                                        <label htmlFor="palette-name" className="block text-sm font-medium text-text-secondary">Palette Name</label>
-                                        <input
-                                            id="palette-name"
-                                            type="text"
-                                            value={colorPicker.paletteName}
-                                            onChange={(e) => setPaletteName(e.target.value)}
-                                            className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                                            placeholder="Enter a name for your palette"
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            onClick={handleShuffle}
-                                            disabled={paletteSavingState !== 'idle' || colorPicker.isExtracting}
-                                            className="w-full flex items-center justify-center gap-2 font-semibold py-2 px-3 rounded-lg transition-colors duration-200 disabled:opacity-50 bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover"
-                                        >
-                                            <RefreshIcon className="w-5 h-5"/> Re-shuffle
-                                        </button>
-                                        <button
-                                            onClick={handleSavePalette}
-                                            disabled={paletteSavingState !== 'idle' || colorPicker.isExtracting}
-                                            className={`w-full flex items-center justify-center gap-2 font-semibold py-2 px-3 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
-                                                paletteSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'
-                                            }`}
-                                        >
-                                            {paletteSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : paletteSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                            {paletteSavingState === 'saved' ? 'Saved' : 'Save'}
-                                        </button>
-                                    </div>
-                                </div>
+                    <p className="text-sm text-text-secondary mb-6">
+                        Upload an image to extract a color palette. Re-shuffle the results or click a color to pick a new one from the image.
+                    </p>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                        {/* --- Left Column: Controls & Image --- */}
+                        <div className="lg:col-span-1 space-y-6">
+                            <div className="flex items-center gap-2">
+                                <ImageUploader label="Upload Image" id="color-picker-image" onImageUpload={handleColorImageUpload} sourceFile={colorPicker.imageFile} />
+                                <button onClick={onOpenLibrary} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
+                                    <LibraryIcon className="w-6 h-6"/>
+                                </button>
                             </div>
-                        )}
+                            {colorPicker.imageFile && (
+                                <div className="relative bg-bg-primary p-2 rounded-lg">
+                                    <canvas
+                                        ref={imageCanvasRef}
+                                        className={`max-w-full rounded-lg shadow-lg ${colorPicker.pickingColorIndex !== null ? 'cursor-crosshair' : 'cursor-default'}`}
+                                        onClick={handleCanvasClick}
+                                        style={{ imageRendering: 'pixelated' }}
+                                    />
+                                    {colorPicker.pickingColorIndex !== null && (
+                                        <div className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center text-white font-bold p-4 text-center pointer-events-none animate-fade-in">
+                                            Click on the image to pick a new color.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        {/* --- Right Column: Results --- */}
+                        <div className="lg:col-span-1 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary">Number of Colors: {colorPicker.colorCount}</label>
+                                <input
+                                    type="range" min="2" max="16" step="1"
+                                    value={colorPicker.colorCount}
+                                    onChange={e => setColorPickerState(prev => ({...prev, colorCount: Number(e.target.value)}))}
+                                    className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
+                                    disabled={colorPicker.isExtracting}
+                                />
+                            </div>
+                            <button
+                                onClick={handleExtractPalette}
+                                disabled={!colorPicker.imageFile || colorPicker.isExtracting}
+                                style={colorPicker.imageFile && !colorPicker.isExtracting ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                                className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
+                            >
+                                {colorPicker.isExtracting ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                {colorPicker.isExtracting ? 'Extracting Palette...' : 'Extract Palette'}
+                            </button>
+                            {colorPicker.error && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{colorPicker.error}</p>}
+                            
+                            {colorPicker.palette.length > 0 && (
+                                <div className="space-y-4 pt-4 border-t border-border-primary">
+                                    <h3 className="text-lg font-semibold text-text-primary">Generated Palette</h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                        {colorPicker.palette.map((color, index) => (
+                                            <div key={index} 
+                                                className="flex flex-col items-center cursor-pointer group"
+                                                onClick={() => handleColorSwatchClick(index)}
+                                                title="Click to change this color"
+                                            >
+                                                <div 
+                                                    className={`w-full h-24 rounded-t-lg border-2 transition-all duration-200 ${colorPicker.pickingColorIndex === index ? 'border-accent ring-2 ring-accent shadow-lg scale-105' : 'border-border-primary group-hover:border-accent-light'}`}
+                                                    style={{ backgroundColor: color.hex }} 
+                                                />
+                                                <div className="w-full p-2 bg-bg-tertiary rounded-b-lg text-center">
+                                                    <p className="text-sm font-semibold text-text-primary truncate" title={color.name}>
+                                                        {color.name}
+                                                    </p>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleCopyHex(color.hex); }}
+                                                        className="text-xs font-mono text-text-muted hover:text-accent flex items-center gap-1 mx-auto"
+                                                        title="Click to copy HEX"
+                                                    >
+                                                        {copiedHex === color.hex ? 'Copied!' : color.hex}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="pt-4 space-y-4">
+                                        <div>
+                                            <label htmlFor="palette-name" className="block text-sm font-medium text-text-secondary">Palette Name</label>
+                                            <input
+                                                id="palette-name"
+                                                type="text"
+                                                value={colorPicker.paletteName}
+                                                onChange={(e) => setPaletteName(e.target.value)}
+                                                className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                                placeholder="Enter a name for your palette"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={handleShuffle}
+                                                disabled={paletteSavingState !== 'idle' || colorPicker.isExtracting}
+                                                className="w-full flex items-center justify-center gap-2 font-semibold py-2 px-3 rounded-lg transition-colors duration-200 disabled:opacity-50 bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover"
+                                            >
+                                                <RefreshIcon className="w-5 h-5"/> Re-shuffle
+                                            </button>
+                                            <button
+                                                onClick={handleSavePalette}
+                                                disabled={paletteSavingState !== 'idle' || colorPicker.isExtracting}
+                                                className={`w-full flex items-center justify-center gap-2 font-semibold py-2 px-3 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
+                                                    paletteSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'
+                                                }`}
+                                            >
+                                                {paletteSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : paletteSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                                {paletteSavingState === 'saved' ? 'Saved' : 'Save'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

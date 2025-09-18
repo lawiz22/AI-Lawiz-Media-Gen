@@ -20,6 +20,35 @@ const ToolHeader: React.FC<{ icon: React.ReactNode, title: string, description: 
     </div>
 );
 
+interface SubTab {
+  id: string;
+  label: string;
+}
+
+interface SubTabsProps {
+  tabs: SubTab[];
+  activeTab: string;
+  onTabClick: (id: string) => void;
+}
+
+const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
+    <div className="flex items-center border-b-2 border-border-primary mb-8 -mt-2">
+        {tabs.map(tab => (
+            <button
+                key={tab.id}
+                onClick={() => onTabClick(tab.id)}
+                className={`px-4 py-2 text-sm font-semibold transition-colors duration-200 border-b-2 ${
+                    activeTab === tab.id
+                    ? 'border-accent text-accent'
+                    : 'border-transparent text-text-secondary hover:text-text-primary'
+                }`}
+            >
+                {tab.label}
+            </button>
+        ))}
+    </div>
+);
+
 
 interface ExtractorToolsPanelProps {
     state: ExtractorState;
@@ -27,10 +56,12 @@ interface ExtractorToolsPanelProps {
     onReset: () => void;
     onOpenLibraryForClothes: () => void;
     onOpenLibraryForObjects: () => void;
+    activeSubTab: string;
+    setActiveSubTab: (tabId: string) => void;
 }
 
 // --- Main Panel ---
-export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState, onReset, onOpenLibraryForClothes, onOpenLibraryForObjects }) => {
+export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState, onReset, onOpenLibraryForClothes, onOpenLibraryForObjects, activeSubTab, setActiveSubTab }) => {
     
     const handleIdentify = async () => {
         if (!state.clothesSourceFile) return;
@@ -215,10 +246,16 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
             });
         }
     };
+
+    const subTabs = [
+        { id: 'clothes', label: 'Clothes Extractor' },
+        { id: 'objects', label: 'Object Extractor' },
+    ];
     
     return (
-        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto space-y-8">
-            <div className="flex justify-end">
+        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-accent">Extractor Tools</h2>
                 <button
                     onClick={onReset}
                     className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200"
@@ -227,210 +264,216 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                 </button>
             </div>
             
+            <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
+
             {/* --- Clothes Extractor Tool --- */}
-            <section aria-labelledby="clothes-extractor-title">
-                <ToolHeader 
-                    icon={<TshirtIcon className="w-8 h-8"/>}
-                    title="Clothes Extractor"
-                    description="Automatically identify clothing in an image and generate professional, e-commerce style product shots."
-                />
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-1 space-y-6">
-                        <div className="flex items-center gap-2">
-                            <div className="flex-grow">
-                                <ImageUploader 
-                                    label="Upload Photo" 
-                                    id="clothes-extractor-image" 
-                                    onImageUpload={(file) => setState(prev => ({ ...prev, clothesSourceFile: file }))}
-                                    sourceFile={state.clothesSourceFile} 
+            <div className={activeSubTab === 'clothes' ? 'block' : 'hidden'}>
+                <section aria-labelledby="clothes-extractor-title">
+                    <ToolHeader 
+                        icon={<TshirtIcon className="w-8 h-8"/>}
+                        title="Clothes Extractor"
+                        description="Automatically identify clothing in an image and generate professional, e-commerce style product shots."
+                    />
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-1 space-y-6">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-grow">
+                                    <ImageUploader 
+                                        label="Upload Photo" 
+                                        id="clothes-extractor-image" 
+                                        onImageUpload={(file) => setState(prev => ({ ...prev, clothesSourceFile: file }))}
+                                        sourceFile={state.clothesSourceFile} 
+                                    />
+                                </div>
+                                <button
+                                    onClick={onOpenLibraryForClothes}
+                                    className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                    title="Select from Library"
+                                >
+                                    <LibraryIcon className="w-6 h-6"/>
+                                </button>
+                            </div>
+                            <div>
+                                <label htmlFor="clothes-details" className="block text-sm font-medium text-text-secondary mb-1">
+                                    Add Details (Optional)
+                                </label>
+                                <textarea
+                                    id="clothes-details"
+                                    value={state.clothesDetails}
+                                    onChange={(e) => setState(prev => ({ ...prev, clothesDetails: e.target.value }))}
+                                    placeholder="e.g., 'the red floral dress' or 'the jacket on the person on the left'"
+                                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                    rows={3}
+                                />
+                            </div>
+                            <div className="space-y-3 pt-2">
+                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                                    <input type="checkbox" checked={state.generateFolded} onChange={(e) => setState(prev => ({ ...prev, generateFolded: e.target.checked }))} className="rounded text-accent focus:ring-accent" />
+                                    Generate folded version
+                                </label>
+                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                                    <input type="checkbox" checked={state.excludeAccessories} onChange={(e) => setState(prev => ({ ...prev, excludeAccessories: e.target.checked }))} className="rounded text-accent focus:ring-accent" />
+                                    Extract clothing only (no accessories)
+                                </label>
+                            </div>
+                            <button
+                                onClick={handleIdentify}
+                                disabled={!state.clothesSourceFile || state.isIdentifying || state.isGenerating}
+                                style={state.clothesSourceFile && !state.isIdentifying && !state.isGenerating ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                                className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
+                            >
+                                {state.isIdentifying ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                {state.isIdentifying ? 'Identifying...' : '1. Identify Clothing'}
+                            </button>
+                        </div>
+
+                        <div className="lg:col-span-2 space-y-6">
+                            {state.clothesError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.clothesError}</p>}
+                            {state.isIdentifying && <LoadingState message="Analyzing your image to find clothing items..." />}
+
+                            {state.identifiedItems.length > 0 && (
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h3 className="text-xl font-bold text-accent">Select Items to Extract</h3>
+                                        <div className="flex gap-2">
+                                            <button onClick={handleSelectAllClothes} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Select All</button>
+                                            <button onClick={handleUnselectAllClothes} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Unselect All</button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
+                                        {state.identifiedItems.map((item, index) => (
+                                            <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">
+                                                <input type="checkbox" checked={item.selected} onChange={() => handleToggleClothingSelection(index)} className="mt-1 rounded text-accent focus:ring-accent" />
+                                                <div>
+                                                    <span className="font-semibold text-text-primary">{item.itemName}</span>
+                                                    <p className="text-sm text-text-secondary">{item.description}</p>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <button
+                                        onClick={handleGenerateSelectedClothes}
+                                        disabled={state.identifiedItems.every(o => !o.selected) || state.isGenerating}
+                                        className="w-full mt-4 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 bg-accent text-accent-text disabled:opacity-50"
+                                    >
+                                        {state.isGenerating ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                        2. Generate Product Shots
+                                    </button>
+                                </div>
+                            )}
+
+                            {state.isGenerating && <LoadingState message={`Generating images for selected items... (${state.generatedClothes.length}/${state.identifiedItems.filter(i => i.selected).length} done)`} />}
+                            
+                            <ExtractorResultsGrid items={state.generatedClothes} onSave={handleClothesSaveToLibrary} title="Generated Product Shots" />
+
+                        </div>
+                    </div>
+                </section>
+            </div>
+            
+            {/* --- Object Extractor Tool --- */}
+            <div className={activeSubTab === 'objects' ? 'block' : 'hidden'}>
+                <section aria-labelledby="object-extractor-title">
+                    <ToolHeader 
+                        icon={<CubeIcon className="w-8 h-8"/>}
+                        title="Object Extractor"
+                        description="Find multiple objects in a complex image (like a garage sale) and extract them into individual product shots."
+                    />
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-1 space-y-6">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-grow">
+                                    <ImageUploader 
+                                        label="Upload Photo" 
+                                        id="object-extractor-image" 
+                                        onImageUpload={(file) => setState(prev => ({...prev, objectSourceFile: file}))}
+                                        sourceFile={state.objectSourceFile}
+                                    />
+                                </div>
+                                <button
+                                    onClick={onOpenLibraryForObjects}
+                                    className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                    title="Select from Library"
+                                >
+                                    <LibraryIcon className="w-6 h-6"/>
+                                </button>
+                            </div>
+                            <div>
+                                <label htmlFor="object-details" className="block text-sm font-medium text-text-secondary mb-1">
+                                    Specific objects to look for (Optional)
+                                </label>
+                                <textarea
+                                    id="object-details"
+                                    value={state.objectHints}
+                                    onChange={(e) => setState(prev => ({ ...prev, objectHints: e.target.value }))}
+                                    placeholder="e.g., 'any vintage cameras' or 'the blue vase'"
+                                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                    rows={3}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary">Max objects to identify: {state.maxObjects}</label>
+                                <input
+                                    type="range" min="1" max="20" step="1"
+                                    value={state.maxObjects}
+                                    onChange={e => setState(prev => ({ ...prev, maxObjects: Number(e.target.value) }))}
+                                    className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
                                 />
                             </div>
                             <button
-                                onClick={onOpenLibraryForClothes}
-                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                title="Select from Library"
+                                onClick={handleIdentifyObjects}
+                                disabled={!state.objectSourceFile || state.isIdentifyingObjects || state.isGeneratingObjects}
+                                style={state.objectSourceFile && !state.isIdentifyingObjects && !state.isGeneratingObjects ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                                className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
                             >
-                                <LibraryIcon className="w-6 h-6"/>
+                                {state.isIdentifyingObjects ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                {state.isIdentifyingObjects ? 'Identifying...' : '1. Identify Objects'}
                             </button>
                         </div>
-                        <div>
-                            <label htmlFor="clothes-details" className="block text-sm font-medium text-text-secondary mb-1">
-                                Add Details (Optional)
-                            </label>
-                            <textarea
-                                id="clothes-details"
-                                value={state.clothesDetails}
-                                onChange={(e) => setState(prev => ({ ...prev, clothesDetails: e.target.value }))}
-                                placeholder="e.g., 'the red floral dress' or 'the jacket on the person on the left'"
-                                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                                rows={3}
-                            />
-                        </div>
-                         <div className="space-y-3 pt-2">
-                            <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                <input type="checkbox" checked={state.generateFolded} onChange={(e) => setState(prev => ({ ...prev, generateFolded: e.target.checked }))} className="rounded text-accent focus:ring-accent" />
-                                Generate folded version
-                            </label>
-                            <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                <input type="checkbox" checked={state.excludeAccessories} onChange={(e) => setState(prev => ({ ...prev, excludeAccessories: e.target.checked }))} className="rounded text-accent focus:ring-accent" />
-                                Extract clothing only (no accessories)
-                            </label>
-                        </div>
-                        <button
-                            onClick={handleIdentify}
-                            disabled={!state.clothesSourceFile || state.isIdentifying || state.isGenerating}
-                            style={state.clothesSourceFile && !state.isIdentifying && !state.isGenerating ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
-                        >
-                            {state.isIdentifying ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                            {state.isIdentifying ? 'Identifying...' : '1. Identify Clothing'}
-                        </button>
-                    </div>
 
-                    <div className="lg:col-span-2 space-y-6">
-                        {state.clothesError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.clothesError}</p>}
-                        {state.isIdentifying && <LoadingState message="Analyzing your image to find clothing items..." />}
-
-                        {state.identifiedItems.length > 0 && (
-                             <div>
-                                <div className="flex justify-between items-center mb-2">
-                                    <h3 className="text-xl font-bold text-accent">Select Items to Extract</h3>
-                                    <div className="flex gap-2">
-                                        <button onClick={handleSelectAllClothes} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Select All</button>
-                                        <button onClick={handleUnselectAllClothes} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Unselect All</button>
+                        <div className="lg:col-span-2 space-y-6">
+                            {state.objectError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.objectError}</p>}
+                            {state.isIdentifyingObjects && <LoadingState message="Scanning your image for objects..." />}
+                            
+                            {state.identifiedObjects.length > 0 && (
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h3 className="text-xl font-bold text-accent">Select Objects to Extract</h3>
+                                        <div className="flex gap-2">
+                                            <button onClick={handleSelectAllObjects} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Select All</button>
+                                            <button onClick={handleUnselectAllObjects} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Unselect All</button>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
-                                    {state.identifiedItems.map((item, index) => (
-                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">
-                                            <input type="checkbox" checked={item.selected} onChange={() => handleToggleClothingSelection(index)} className="mt-1 rounded text-accent focus:ring-accent" />
-                                            <div>
-                                                <span className="font-semibold text-text-primary">{item.itemName}</span>
-                                                <p className="text-sm text-text-secondary">{item.description}</p>
-                                            </div>
-                                        </label>
-                                    ))}
-                                </div>
-                                <button
-                                    onClick={handleGenerateSelectedClothes}
-                                    disabled={state.identifiedItems.every(o => !o.selected) || state.isGenerating}
-                                    className="w-full mt-4 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 bg-accent text-accent-text disabled:opacity-50"
-                                >
-                                    {state.isGenerating ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                                    2. Generate Product Shots
-                                </button>
-                            </div>
-                        )}
-
-                        {state.isGenerating && <LoadingState message={`Generating images for selected items... (${state.generatedClothes.length}/${state.identifiedItems.filter(i => i.selected).length} done)`} />}
-                        
-                        <ExtractorResultsGrid items={state.generatedClothes} onSave={handleClothesSaveToLibrary} title="Generated Product Shots" />
-
-                    </div>
-                </div>
-            </section>
-            
-            {/* --- Object Extractor Tool --- */}
-            <section aria-labelledby="object-extractor-title">
-                 <ToolHeader 
-                    icon={<CubeIcon className="w-8 h-8"/>}
-                    title="Object Extractor"
-                    description="Find multiple objects in a complex image (like a garage sale) and extract them into individual product shots."
-                />
-                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-1 space-y-6">
-                        <div className="flex items-center gap-2">
-                            <div className="flex-grow">
-                                <ImageUploader 
-                                    label="Upload Photo" 
-                                    id="object-extractor-image" 
-                                    onImageUpload={(file) => setState(prev => ({...prev, objectSourceFile: file}))}
-                                    sourceFile={state.objectSourceFile}
-                                />
-                            </div>
-                             <button
-                                onClick={onOpenLibraryForObjects}
-                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                title="Select from Library"
-                            >
-                                <LibraryIcon className="w-6 h-6"/>
-                            </button>
-                        </div>
-                        <div>
-                            <label htmlFor="object-details" className="block text-sm font-medium text-text-secondary mb-1">
-                                Specific objects to look for (Optional)
-                            </label>
-                            <textarea
-                                id="object-details"
-                                value={state.objectHints}
-                                onChange={(e) => setState(prev => ({ ...prev, objectHints: e.target.value }))}
-                                placeholder="e.g., 'any vintage cameras' or 'the blue vase'"
-                                className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                                rows={3}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary">Max objects to identify: {state.maxObjects}</label>
-                            <input
-                                type="range" min="1" max="20" step="1"
-                                value={state.maxObjects}
-                                onChange={e => setState(prev => ({ ...prev, maxObjects: Number(e.target.value) }))}
-                                className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
-                            />
-                        </div>
-                         <button
-                            onClick={handleIdentifyObjects}
-                            disabled={!state.objectSourceFile || state.isIdentifyingObjects || state.isGeneratingObjects}
-                            style={state.objectSourceFile && !state.isIdentifyingObjects && !state.isGeneratingObjects ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                            className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
-                        >
-                            {state.isIdentifyingObjects ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                            {state.isIdentifyingObjects ? 'Identifying...' : '1. Identify Objects'}
-                        </button>
-                    </div>
-
-                    <div className="lg:col-span-2 space-y-6">
-                        {state.objectError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.objectError}</p>}
-                        {state.isIdentifyingObjects && <LoadingState message="Scanning your image for objects..." />}
-                        
-                        {state.identifiedObjects.length > 0 && (
-                            <div>
-                                <div className="flex justify-between items-center mb-2">
-                                    <h3 className="text-xl font-bold text-accent">Select Objects to Extract</h3>
-                                    <div className="flex gap-2">
-                                        <button onClick={handleSelectAllObjects} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Select All</button>
-                                        <button onClick={handleUnselectAllObjects} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Unselect All</button>
+                                    <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
+                                        {state.identifiedObjects.map((obj, index) => (
+                                            <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">
+                                                <input type="checkbox" checked={obj.selected} onChange={() => handleToggleObjectSelection(index)} className="mt-1 rounded text-accent focus:ring-accent" />
+                                                <div>
+                                                    <span className="font-semibold text-text-primary">{obj.name}</span>
+                                                    <p className="text-sm text-text-secondary">{obj.description}</p>
+                                                </div>
+                                            </label>
+                                        ))}
                                     </div>
+                                    <button
+                                        onClick={handleGenerateObjects}
+                                        disabled={state.identifiedObjects.every(o => !o.selected) || state.isGeneratingObjects}
+                                        className="w-full mt-4 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 bg-accent text-accent-text disabled:opacity-50"
+                                    >
+                                        {state.isGeneratingObjects ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                        2. Generate Product Shots
+                                    </button>
                                 </div>
-                                <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
-                                    {state.identifiedObjects.map((obj, index) => (
-                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">
-                                            <input type="checkbox" checked={obj.selected} onChange={() => handleToggleObjectSelection(index)} className="mt-1 rounded text-accent focus:ring-accent" />
-                                            <div>
-                                                <span className="font-semibold text-text-primary">{obj.name}</span>
-                                                <p className="text-sm text-text-secondary">{obj.description}</p>
-                                            </div>
-                                        </label>
-                                    ))}
-                                </div>
-                                <button
-                                    onClick={handleGenerateObjects}
-                                    disabled={state.identifiedObjects.every(o => !o.selected) || state.isGeneratingObjects}
-                                    className="w-full mt-4 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 bg-accent text-accent-text disabled:opacity-50"
-                                >
-                                    {state.isGeneratingObjects ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                                    2. Generate Product Shots
-                                </button>
-                            </div>
-                        )}
+                            )}
 
-                        {state.isGeneratingObjects && <LoadingState message={`Generating images for selected objects... (${state.generatedObjects.length}/${state.identifiedObjects.filter(o => o.selected).length} done)`} />}
-                        
-                        <ExtractorResultsGrid items={state.generatedObjects} onSave={handleObjectSaveToLibrary} title="Generated Object Shots" />
+                            {state.isGeneratingObjects && <LoadingState message={`Generating images for selected objects... (${state.generatedObjects.length}/${state.identifiedObjects.filter(o => o.selected).length} done)`} />}
+                            
+                            <ExtractorResultsGrid items={state.generatedObjects} onSave={handleObjectSaveToLibrary} title="Generated Object Shots" />
 
+                        </div>
                     </div>
-                 </div>
-            </section>
+                </section>
+            </div>
         </div>
     );
 };
