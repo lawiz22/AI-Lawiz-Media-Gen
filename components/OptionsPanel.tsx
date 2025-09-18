@@ -37,6 +37,7 @@ interface OptionsPanelProps {
   sourceImage: File | null;
   hideProviderSwitch?: boolean;
   hideGeminiModeSwitch?: boolean;
+  title?: string;
 }
 
 // Helper function to safely extract model lists from ComfyUI's object_info
@@ -143,7 +144,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   onGenerate, onReset, onGeneratePrompt, onExportWorkflow,
   isDisabled, isReady, isGeneratingPrompt,
   comfyUIObjectInfo, comfyUIUrl, sourceImage,
-  hideProviderSwitch = false, hideGeminiModeSwitch = false
+  hideProviderSwitch = false, hideGeminiModeSwitch = false,
+  title = "Configure Options"
 }) => {
     const [isPreviewingBg, setIsPreviewingBg] = useState(false);
     const [bgPreviewError, setBgPreviewError] = useState<string | null>(null);
@@ -358,6 +360,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyNunchakuVae: comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors',
                     comfyNunchakuClipL: comfyClips.find(c => c.includes('ViT-L')) || comfyClips[0] || 'ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors',
                     comfyNunchakuT5XXL: t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp8_e4m3fn_scaled.safetensors',
+                    comfyNunchakuCacheThreshold: 0.12,
                     comfyNunchakuCpuOffload: 'enable',
                     // Fix: Cast the string value to the NunchakuAttention type to resolve TypeScript error.
                     comfyNunchakuAttention: (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention,
@@ -367,7 +370,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyNunchakuUseNudifyLora: true,
                     comfyNunchakuNudifyLoraName: comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors',
                     comfyNunchakuNudifyLoraStrength: 1.0,
-                    comfyNunchakuUseDetailLora: true,
+                    comfyNunchakuUseDetailLora: false,
                     comfyNunchakuDetailLoraName: comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors',
                     comfyNunchakuDetailLoraStrength: 1.0,
                 }));
@@ -386,6 +389,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyNunchakuVae: comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors',
                     comfyNunchakuClipL: comfyClips.find(c => c.includes('clip_l')) || comfyClips[0] || 'clip_l.safetensors',
                     comfyNunchakuT5XXL: t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp16.safetensors',
+                    comfyNunchakuCacheThreshold: 0,
                     comfyNunchakuCpuOffload: 'enable',
                     // Fix: Cast the string value to the NunchakuAttention type to resolve TypeScript error.
                     comfyNunchakuAttention: (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention,
@@ -395,7 +399,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyNunchakuUseNudifyLora: true,
                     comfyNunchakuNudifyLoraName: comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors',
                     comfyNunchakuNudifyLoraStrength: 1.12,
-                    comfyNunchakuUseDetailLora: true,
+                    comfyNunchakuUseDetailLora: false,
                     comfyNunchakuDetailLoraName: comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors',
                     comfyNunchakuDetailLoraStrength: 1.0,
                 }));
@@ -894,7 +898,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             {options.comfyNunchakuUseDetailLora && <SelectInput label="Detail LoRA Name" value={options.comfyNunchakuDetailLoraName || ''} onChange={handleOptionChange('comfyNunchakuDetailLoraName')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isDisabled}/>}
 
                             <hr className="border-border-primary my-4" />
-                            <NumberSlider label="Cache Threshold" value={options.comfyNunchakuCacheThreshold || 0.12} onChange={handleSliderChange('comfyNunchakuCacheThreshold')} min={0} max={1} step={0.01} disabled={isDisabled}/>
+                            <NumberSlider label="Cache Threshold" value={options.comfyNunchakuCacheThreshold ?? (options.comfyModelType === 'nunchaku-flux-image' ? 0 : 0.12)} onChange={handleSliderChange('comfyNunchakuCacheThreshold')} min={0} max={1} step={0.01} disabled={isDisabled}/>
                             <SelectInput label="CPU Offload" value={options.comfyNunchakuCpuOffload || 'enable'} onChange={handleOptionChange('comfyNunchakuCpuOffload')} options={[{value:'auto',label:'Auto'},{value:'enable',label:'Enable'},{value:'disable',label:'Disable'}]} disabled={isDisabled}/>
                             <SelectInput label="Attention" value={options.comfyNunchakuAttention || 'nunchaku-fp16'} onChange={handleOptionChange('comfyNunchakuAttention')} options={nunchakuAttentions.map(a => ({value: a, label: a}))} disabled={isDisabled}/>
                         </OptionSection>
@@ -980,7 +984,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   return (
     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-8">
       <div>
-        <h2 className="text-xl font-bold mb-4 text-accent">2. Configure Options</h2>
+        <h2 className="text-xl font-bold mb-4 text-accent">{title}</h2>
         {!hideProviderSwitch && (
             <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
                 <button 

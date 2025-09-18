@@ -610,7 +610,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         ksampler.inputs.scheduler = options.comfyScheduler;
         // Params
         workflow["12"].inputs.guidance = options.comfyFluxGuidanceKontext;
-        workflow["22"].inputs.cache_threshold = options.comfyNunchakuCacheThreshold;
+        workflow["22"].inputs.cache_threshold = options.comfyNunchakuCacheThreshold ?? 0.12;
         workflow["22"].inputs.cpu_offload = options.comfyNunchakuCpuOffload;
         workflow["22"].inputs.attention = options.comfyNunchakuAttention;
         // LoRAs
@@ -653,6 +653,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         workflow["30"].inputs.max_shift = options.comfyNunchakuMaxShift;
         workflow["45"].inputs.cpu_offload = options.comfyNunchakuCpuOffload;
         workflow["45"].inputs.attention = options.comfyNunchakuAttention;
+        workflow["45"].inputs.cache_threshold = options.comfyNunchakuCacheThreshold ?? 0;
         
         // LoRAs
         let lastLoraNode = "45";

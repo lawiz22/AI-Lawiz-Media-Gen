@@ -183,7 +183,11 @@ const App: React.FC = () => {
             if (options.geminiMode === 't2i') return !!options.geminiPrompt?.trim();
             return !!sourceImage;
         } else if (options.provider === 'comfyui') {
-            return !!isComfyUIConnected && !!options.comfyPrompt?.trim();
+            const baseReady = !!isComfyUIConnected && !!options.comfyPrompt?.trim();
+            if (options.comfyModelType === 'nunchaku-kontext-flux') {
+                return baseReady && !!sourceImage;
+            }
+            return baseReady;
         }
         return false;
     }, [sourceImage, options, isLoading, isComfyUIConnected]);
@@ -674,7 +678,23 @@ const App: React.FC = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                         {/* --- Controls Column (Left) --- */}
                         <div className="lg:col-span-1 space-y-8 sticky top-24">
+                            {options.provider === 'comfyui' && options.comfyModelType === 'nunchaku-kontext-flux' && (
+                                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                                    <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Source Image</h2>
+                                    <ImageUploader 
+                                        label="Source Image" 
+                                        id="nunchaku-source-image" 
+                                        onImageUpload={setSourceImage} 
+                                        sourceFile={sourceImage}
+                                    />
+                                </div>
+                            )}
                             <OptionsPanel 
+                                title={
+                                    options.provider === 'comfyui' && options.comfyModelType === 'nunchaku-kontext-flux'
+                                    ? "2. Configure Options"
+                                    : "1. Configure Options"
+                                }
                                 options={options} 
                                 setOptions={setOptions}
                                 onGenerate={handleGenerate}
@@ -768,6 +788,7 @@ const App: React.FC = () => {
                             )}
 
                             <OptionsPanel 
+                                title="2. Configure Options"
                                 options={options} 
                                 setOptions={setOptions}
                                 onGenerate={handleGenerate}
