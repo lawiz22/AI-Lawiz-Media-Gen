@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType } from './types';
@@ -168,6 +166,7 @@ const App: React.FC = () => {
     
     // --- Logo & Theme State ---
     const [logoThemeState, setLogoThemeState] = useState<LogoThemeState>(initialLogoThemeState);
+    const [activeLogoThemeSubTab, setActiveLogoThemeSubTab] = useState<string>('logo');
 
 
     // --- UI Modals & Panels State ---
@@ -897,6 +896,8 @@ const App: React.FC = () => {
                     <LogoThemeGeneratorPanel
                         state={logoThemeState}
                         setState={setLogoThemeState}
+                        activeSubTab={activeLogoThemeSubTab}
+                        setActiveSubTab={setActiveLogoThemeSubTab}
                         onOpenLibraryForReferences={() => setIsLogoRefPickerOpen(true)}
                         onOpenLibraryForPalette={() => setIsLogoPalettePickerOpen(true)}
                         onOpenLibraryForBannerReferences={() => setIsBannerRefPickerOpen(true)}
