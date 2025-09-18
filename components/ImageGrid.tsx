@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
 import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon, CheckIcon } from './icons';
@@ -58,7 +59,13 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
   const [copyButtonText, setCopyButtonText] = useState('Copy');
   const [savingState, setSavingState] = useState<Record<number, 'idle' | 'saving' | 'saved'>>({});
 
+  // This useEffect hook is crucial. It resets all the local state related to a specific
+  // set of images whenever a *new* set of images is passed in from a new generation.
+  // This prevents old enhanced images, errors, or save states from persisting incorrectly.
   useEffect(() => {
+    setEnhancedImages({});
+    setEnhancingIndex(null);
+    setErrorIndex({});
     setSavingState({});
   }, [images]);
 
@@ -77,6 +84,9 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
     try {
         const enhancedSrc = await enhanceImageResolution(imageSrc);
         setEnhancedImages(prev => ({...prev, [index]: enhancedSrc}));
+        // Fix: Reset the save state for this image slot because the enhanced
+        // image is a new, unsaved entity, allowing it to be saved.
+        setSavingState(prev => ({ ...prev, [index]: 'idle' }));
     } catch (err: any) {
         console.error("Enhancement failed:", err);
         setErrorIndex(prev => ({ ...prev, [index]: err.message || 'Failed to enhance image.' }));
