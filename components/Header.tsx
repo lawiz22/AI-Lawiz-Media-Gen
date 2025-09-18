@@ -1,8 +1,9 @@
 
+
 import React from 'react';
 import { Banner } from './Banner';
 import { ThemeSwitcher } from './ThemeSwitcher';
-import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon } from './icons';
+import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, AdminIcon } from './icons';
 import { Logo } from './Logo';
 import type { User, VersionInfo, DriveFolder } from '../types';
 
@@ -12,6 +13,7 @@ interface HeaderProps {
     onLogout: () => void;
     currentUser: User;
     onOpenSettingsModal: () => void;
+    onOpenAdminPanel: () => void;
     isComfyUIConnected: boolean | null;
     versionInfo: VersionInfo | null;
     driveFolder: DriveFolder | null;
@@ -23,6 +25,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ 
     theme, setTheme, onLogout, currentUser, 
     onOpenSettingsModal,
+    onOpenAdminPanel,
     isComfyUIConnected, versionInfo,
     driveFolder, onDriveConnect, onDriveDisconnect,
     isDriveConfigured
@@ -94,6 +97,15 @@ export const Header: React.FC<HeaderProps> = ({
                     className={`p-2 rounded-full transition-colors ${!!driveFolder ? 'bg-accent text-accent-text hover:bg-accent-hover' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary'}`}
                 >
                     <GoogleDriveIcon className="w-5 h-5" />
+                </button>
+            )}
+            {currentUser.role === 'admin' && (
+                <button 
+                    onClick={onOpenAdminPanel}
+                    title="Admin Panel"
+                    className="p-2 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
+                >
+                    <AdminIcon className="w-5 h-5" />
                 </button>
             )}
             <button 

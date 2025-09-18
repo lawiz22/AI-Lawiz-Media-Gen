@@ -26,7 +26,7 @@ import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
-import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon } from './components/icons';
+import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon } from './components/icons';
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
 
@@ -172,6 +172,7 @@ const App: React.FC = () => {
 
     // --- UI Modals & Panels State ---
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+    const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
     const [isClothingPickerOpen, setIsClothingPickerOpen] = useState(false);
     const [isBackgroundPickerOpen, setIsBackgroundPickerOpen] = useState(false);
     const [isColorImagePickerOpen, setIsColorImagePickerOpen] = useState(false);
@@ -630,7 +631,6 @@ const App: React.FC = () => {
         { id: 'prompt-generator', label: 'Prompt Tools', icon: <PromptIcon className="w-5 h-5"/>, adminOnly: true },
         { id: 'extractor-tools', label: 'Extractor Tools', icon: <ExtractorIcon className="w-5 h-5"/> },
         { id: 'video-utils', label: 'Video Utilities', icon: <VideoUtilsIcon className="w-5 h-5"/> },
-        { id: 'admin-panel', label: 'Admin Panel', icon: <AdminIcon className="w-5 h-5"/>, adminOnly: true },
     ];
 
     // Fix: Explicitly type filter arrays as LibraryItemType[] to fix TypeScript assignment errors.
@@ -645,6 +645,7 @@ const App: React.FC = () => {
                 onLogout={handleLogout} 
                 currentUser={currentUser}
                 onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+                onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
                 isComfyUIConnected={isComfyUIConnected}
                 versionInfo={versionInfo}
                 driveFolder={driveFolder}
@@ -955,12 +956,6 @@ const App: React.FC = () => {
                         onOpenVideoLibrary={() => setIsVideoUtilsPickerOpen(true)}
                     />
                 </div>
-
-                {currentUser.role === 'admin' && (
-                    <div className={activeTab === 'admin-panel' ? 'block' : 'hidden'}>
-                        <AdminPanel />
-                    </div>
-                )}
             </main>
 
             {/* --- Global Loader --- */}
@@ -984,6 +979,37 @@ const App: React.FC = () => {
                     initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
                     onSave={handleSaveSettings}
                 />
+            )}
+            {isAdminPanelOpen && (
+                 <div
+                    className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="admin-panel-title"
+                    onClick={() => setIsAdminPanelOpen(false)}
+                >
+                    <div
+                        className="bg-bg-secondary w-full max-w-4xl p-6 rounded-2xl shadow-lg border border-border-primary flex flex-col max-h-[90vh]"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                            <h2 id="admin-panel-title" className="text-xl font-bold text-accent flex items-center gap-2">
+                                <AdminIcon className="w-6 h-6" />
+                                Admin Panel
+                            </h2>
+                            <button
+                                onClick={() => setIsAdminPanelOpen(false)}
+                                className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
+                                aria-label="Close"
+                            >
+                                <CloseIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="flex-grow overflow-y-auto pr-2 -mr-2">
+                            <AdminPanel />
+                        </div>
+                    </div>
+                </div>
             )}
             {isClothingPickerOpen && (
                 <LibraryPickerModal
