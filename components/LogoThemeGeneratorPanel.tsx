@@ -382,7 +382,41 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                             {/* --- Right Column: Results --- */}
                             <div className="space-y-4">
                                 {state.logoError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.logoError}</p>}
-                                {state.isGeneratingLogos ? <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl shadow-inner h-full min-h-[400px]"><SpinnerIcon className="w-16 h-16 text-accent animate-spin mb-4" /><h3 className="text-lg font-bold text-text-primary">Generating your logos...</h3></div> : (state.generatedLogos && state.generatedLogos.length > 0) ? <div className="grid grid-cols-2 gap-4">{state.generatedLogos.map((logo, index) => <div key={index} className="group relative aspect-square bg-bg-primary p-2 rounded-lg flex items-center justify-center cursor-pointer" onClick={() => setZoomedLogoIndex(index)}><img src={logo.src} alt={`Generated Logo ${index + 1}`} className="max-w-full max-h-full object-contain" /><div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity" /></div>)}</div> : <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl shadow-inner h-full min-h-[400px]"><GenerateIcon className="w-16 h-16 text-border-primary mb-4" /><h3 className="text-lg font-bold text-text-primary">Your generated logos will appear here</h3><p className="text-text-secondary max-w-xs">Configure your options and click "Generate Logos".</p></div>}
+                                {state.isGeneratingLogos ? <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl shadow-inner h-full min-h-[400px]"><SpinnerIcon className="w-16 h-16 text-accent animate-spin mb-4" /><h3 className="text-lg font-bold text-text-primary">Generating your logos...</h3></div> : (state.generatedLogos && state.generatedLogos.length > 0) ? <div className="grid grid-cols-2 gap-4">{state.generatedLogos.map((logo, index) => (
+                                    <div key={index} className="group relative aspect-square bg-bg-primary p-2 rounded-lg flex items-center justify-center">
+                                        <img src={logo.src} alt={`Generated Logo ${index + 1}`} className="max-w-full max-h-full object-contain" />
+                                        <div 
+                                            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                            onClick={() => setZoomedLogoIndex(index)}
+                                            title="Zoom In"
+                                        >
+                                            <div 
+                                                className="flex items-center gap-2"
+                                                onClick={(e) => e.stopPropagation()} 
+                                            >
+                                                <button
+                                                    onClick={() => handleDownloadLogo(logo.src, index)}
+                                                    title="Save to Disk"
+                                                    className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                                                >
+                                                    <DownloadIcon className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleSaveLogo(logo.src, index)}
+                                                    title={logo.saved === 'saved' ? 'Saved!' : 'Save to Library'}
+                                                    disabled={logo.saved !== 'idle'}
+                                                    className={`p-3 rounded-full transition-all duration-200 ${
+                                                        logo.saved === 'saved' ? 'bg-green-500 text-white cursor-default' : 
+                                                        logo.saved === 'saving' ? 'bg-bg-secondary text-text-secondary cursor-wait' :
+                                                        'bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text'
+                                                    }`}
+                                                >
+                                                    {logo.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : logo.saved === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}</div> : <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl shadow-inner h-full min-h-[400px]"><GenerateIcon className="w-16 h-16 text-border-primary mb-4" /><h3 className="text-lg font-bold text-text-primary">Your generated logos will appear here</h3><p className="text-text-secondary max-w-xs">Configure your options and click "Generate Logos".</p></div>}
                             </div>
                         </div>
                     </Section>
@@ -439,7 +473,41 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                             </div>
                             <div className="space-y-4">
                                 {state.bannerError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.bannerError}</p>}
-                                {state.isGeneratingBanners ? <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl h-full min-h-[400px]"><SpinnerIcon className="w-16 h-16 text-accent animate-spin mb-4" /><h3 className="text-lg font-bold text-text-primary">Generating banners...</h3></div> : (state.generatedBanners && state.generatedBanners.length > 0) ? <div className="grid grid-cols-2 gap-4">{state.generatedBanners.map((banner, index) => <div key={index} className="group relative aspect-video bg-bg-primary p-2 rounded-lg flex items-center justify-center cursor-pointer" onClick={() => setZoomedBannerIndex(index)}><img src={banner.src} alt={`Generated Banner ${index + 1}`} className="max-w-full max-h-full object-contain" /><div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity" /></div>)}</div> : <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl h-full min-h-[400px]"><GenerateIcon className="w-16 h-16 text-border-primary mb-4" /><h3 className="text-lg font-bold text-text-primary">Your banners will appear here</h3></div>}
+                                {state.isGeneratingBanners ? <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl h-full min-h-[400px]"><SpinnerIcon className="w-16 h-16 text-accent animate-spin mb-4" /><h3 className="text-lg font-bold text-text-primary">Generating banners...</h3></div> : (state.generatedBanners && state.generatedBanners.length > 0) ? <div className="grid grid-cols-2 gap-4">{state.generatedBanners.map((banner, index) => (
+                                    <div key={index} className="group relative aspect-video bg-bg-primary p-2 rounded-lg flex items-center justify-center">
+                                        <img src={banner.src} alt={`Generated Banner ${index + 1}`} className="max-w-full max-h-full object-contain" />
+                                        <div 
+                                            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                            onClick={() => setZoomedBannerIndex(index)}
+                                            title="Zoom In"
+                                        >
+                                            <div 
+                                                className="flex items-center gap-2"
+                                                onClick={(e) => e.stopPropagation()} 
+                                            >
+                                                <button
+                                                    onClick={() => handleDownloadBanner(banner.src, index)}
+                                                    title="Save to Disk"
+                                                    className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                                                >
+                                                    <DownloadIcon className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleSaveBanner(banner.src, index)}
+                                                    title={banner.saved === 'saved' ? 'Saved!' : 'Save to Library'}
+                                                    disabled={banner.saved !== 'idle'}
+                                                    className={`p-3 rounded-full transition-all duration-200 ${
+                                                        banner.saved === 'saved' ? 'bg-green-500 text-white cursor-default' : 
+                                                        banner.saved === 'saving' ? 'bg-bg-secondary text-text-secondary cursor-wait' :
+                                                        'bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text'
+                                                    }`}
+                                                >
+                                                    {banner.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : banner.saved === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}</div> : <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl h-full min-h-[400px]"><GenerateIcon className="w-16 h-16 text-border-primary mb-4" /><h3 className="text-lg font-bold text-text-primary">Your banners will appear here</h3></div>}
                             </div>
                         </div>
                     </Section>
