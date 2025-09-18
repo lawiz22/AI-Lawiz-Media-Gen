@@ -162,14 +162,6 @@ export interface GenerationOptions {
     comfyVidWanI2VEndFrameStrength?: number;
 }
 
-export interface HistoryItem {
-    id: number; // Using timestamp
-    timestamp: number;
-    sourceImage?: string; // data URL
-    generatedImages: string[]; // array of data URLs
-    options: GenerationOptions;
-}
-
 export interface IdentifiedClothing {
   itemName: string;
   description: string;

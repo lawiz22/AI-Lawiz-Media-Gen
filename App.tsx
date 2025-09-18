@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { User, GenerationOptions, HistoryItem, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState } from './types';
+import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { fileToDataUrl, fileToResizedDataUrl } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
 import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage } from './services/geminiService';
 // Fix: Import 'checkConnection' to resolve missing name error.
 import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution } from './services/comfyUIService';
-import { saveGenerationToHistory } from './services/historyService';
 import { Login } from './components/Login';
 import { AdminPanel } from './components/AdminPanel';
 import { Header } from './components/Header';
@@ -15,7 +14,6 @@ import { OptionsPanel } from './components/OptionsPanel';
 import { ImageGrid } from './components/ImageGrid';
 import { Loader } from './components/Loader';
 import { ConnectionSettingsModal } from './components/ComfyUIConnection';
-import { HistoryPanel } from './components/HistoryPanel';
 import { LibraryPanel } from './components/LibraryPanel';
 import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
@@ -156,7 +154,6 @@ const App: React.FC = () => {
 
     // --- UI Modals & Panels State ---
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-    const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
     const [isClothingPickerOpen, setIsClothingPickerOpen] = useState(false);
     const [isBackgroundPickerOpen, setIsBackgroundPickerOpen] = useState(false);
     const [isColorImagePickerOpen, setIsColorImagePickerOpen] = useState(false);
@@ -169,6 +166,7 @@ const App: React.FC = () => {
     const [isPromptGenImagePickerOpen, setIsPromptGenImagePickerOpen] = useState(false);
     const [isPromptGenBgImagePickerOpen, setIsPromptGenBgImagePickerOpen] = useState(false);
     const [isPromptGenSubjectImagePickerOpen, setIsPromptGenSubjectImagePickerOpen] = useState(false);
+    const [isNunchakuSourcePickerOpen, setIsNunchakuSourcePickerOpen] = useState(false);
     
     // --- Google Drive State ---
     const [driveFolder, setDriveFolder] = useState<DriveFolder | null>(null);
@@ -361,12 +359,6 @@ const App: React.FC = () => {
                         setCharacterName(''); // Clear on error
                     }
                 }
-                saveGenerationToHistory({
-                    timestamp: Date.now(),
-                    sourceImage: sourceImage ? await fileToResizedDataUrl(sourceImage, 256) : undefined,
-                    generatedImages: result.images,
-                    options: options,
-                });
             }
 
         } catch (err: any) {
@@ -448,31 +440,6 @@ const App: React.FC = () => {
             console.error("Error setting new source image:", error);
             setGlobalError({ title: "File Error", message: "Could not use the selected image as a new source." });
         }
-    };
-    
-    const handleLoadHistoryItem = async (item: HistoryItem) => {
-        setOptions(item.options);
-        setGeneratedImages(item.generatedImages);
-        setCharacterName('');
-        // This is a simplification; a more robust solution would re-fetch the File object if needed
-        if (item.sourceImage) {
-           try {
-                const response = await fetch(item.sourceImage);
-                const blob = await response.blob();
-                const file = new File([blob], "history-source.jpeg", { type: "image/jpeg" });
-                setSourceImage(file);
-           } catch (e) {
-                console.error("Could not load history source image:", e);
-                setSourceImage(null);
-           }
-        } else {
-            setSourceImage(null);
-        }
-        setIsHistoryPanelOpen(false);
-
-        // Determine which tab to switch to
-        const isI2I = !!item.sourceImage || item.options.geminiMode === 'i2i';
-        setActiveTab(isI2I ? 'character-generator' : 'image-generator');
     };
     
     const handleLoadLibraryItem = async (item: LibraryItem) => {
@@ -643,7 +610,6 @@ const App: React.FC = () => {
                 onLogout={handleLogout} 
                 currentUser={currentUser}
                 onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
-                onOpenHistoryPanel={() => setIsHistoryPanelOpen(true)}
                 isComfyUIConnected={isComfyUIConnected}
                 versionInfo={versionInfo}
                 driveFolder={driveFolder}
@@ -681,12 +647,23 @@ const App: React.FC = () => {
                             {options.provider === 'comfyui' && options.comfyModelType === 'nunchaku-kontext-flux' && (
                                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                     <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Source Image</h2>
-                                    <ImageUploader 
-                                        label="Source Image" 
-                                        id="nunchaku-source-image" 
-                                        onImageUpload={setSourceImage} 
-                                        sourceFile={sourceImage}
-                                    />
+                                     <div className="flex items-center gap-2">
+                                        <div className="flex-grow">
+                                            <ImageUploader 
+                                                label="Source Image" 
+                                                id="nunchaku-source-image" 
+                                                onImageUpload={setSourceImage} 
+                                                sourceFile={sourceImage}
+                                            />
+                                        </div>
+                                        <button 
+                                            onClick={() => setIsNunchakuSourcePickerOpen(true)} 
+                                            className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                            title="Select from Library"
+                                        >
+                                            <LibraryIcon className="w-6 h-6"/>
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                             <OptionsPanel 
@@ -937,13 +914,6 @@ const App: React.FC = () => {
                     onSave={handleSaveSettings}
                 />
             )}
-            {isHistoryPanelOpen && (
-                <HistoryPanel 
-                    isOpen={isHistoryPanelOpen}
-                    onClose={() => setIsHistoryPanelOpen(false)}
-                    onLoadHistoryItem={handleLoadHistoryItem}
-                />
-            )}
             {isClothingPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isClothingPickerOpen}
@@ -966,6 +936,18 @@ const App: React.FC = () => {
                         setBackgroundImage(new File([blob], "library_background.jpeg", { type: blob.type }));
                     }}
                     filter="image"
+                />
+            )}
+             {isNunchakuSourcePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isNunchakuSourcePickerOpen}
+                    onClose={() => setIsNunchakuSourcePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        setSourceImage(new File([blob], "library_source.jpeg", { type: blob.type }));
+                    }}
+                    filter={['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object']}
                 />
             )}
             {isColorImagePickerOpen && (
