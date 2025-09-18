@@ -1,4 +1,4 @@
-# Lawiz's AI Media Generator v1.45
+# Lawiz's AI Media Generator v1.47
 
 Welcome to Lawiz's AI Media Generator, a powerful and versatile web application designed for creating stunning images and videos using state-of-the-art AI models. This tool provides a unified interface to interact with both Google's Gemini API and a self-hosted ComfyUI backend, offering a wide range of creative possibilities for both novice and advanced users.
 
@@ -27,9 +27,11 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 - **Clothing & Background Customization (Gemini):** Keep the original, replace from a reference image, or describe new clothing and backgrounds with text prompts. You can even preview AI-generated clothing and backgrounds before committing to a full generation.
 
 ### 5. Logo & Theme Generator
-- **AI Logo Creation:** Generate unique, professional logos from text descriptions, brand names, and slogans.
-- **Advanced Customization:** Fine-tune your logo by selecting from various styles (e.g., Symbolic, Wordmark, 3D Clay, Vaporwave), providing visual inspiration images, and applying color palettes saved in your library.
-- **Future-Ready:** Includes placeholders for upcoming tools like a Banner Generator, Album Cover Generator, and a comprehensive Theme Generator to create full brand kits.
+A full creative suite for brand identity design.
+
+- **AI Logo Creation:** Generate unique, professional logos from text descriptions, brand names, and slogans. Fine-tune your logo by selecting from various styles (e.g., Symbolic, Wordmark, 3D Clay, Vaporwave), providing visual inspiration images, and applying color palettes saved in your library.
+- **Banner Generator:** Design eye-catching banners for social media, websites, or advertisements. Combine text, logos, and imagery for impactful visuals with various aspect ratios and styles.
+- **Album Cover Generator:** Design the perfect 1:1 album cover for your music. Specify genre, era (50s, 80s, modern, etc.), and media type (Vinyl, CD, Digital) for a pitch-perfect result. A special "vinyl wear" effect can be added to create an authentic, aged look.
 
 ### 6. AI-Powered Extractor Tools
 This versatile tab combines two powerful AI utilities for isolating and recreating elements from within a source image.
@@ -50,7 +52,7 @@ This versatile tab combines two powerful AI utilities for isolating and recreati
 
 ### 8. Hybrid Local & Cloud Library
 - **Auto-Naming:** Generated items are now intelligently named by AI before being saved. Prompts are summarized, and images/videos are given descriptive titles, keeping your library effortlessly organized.
-- **Expanded Item Support:** The library now supports new types, including `logo`, `object`, `extracted-frame`, and `color-palette`, in addition to images, videos, characters, and clothes.
+- **Expanded Item Support:** The library now supports new types, including `logo`, `banner`, `album-cover`, `object`, `extracted-frame`, and `color-palette`, in addition to images, videos, characters, and clothes.
 - **Local Storage First:** Save any generated item to a persistent local library in your browser for fast access.
 - **Google Drive Sync:** Securely connect your Google Drive account to sync your entire library for persistent, cloud-based storage.
 - **Robust Architecture:** The Drive integration uses a central `library.json` file as an index for all media items, ensuring robust and efficient synchronization.
