@@ -1,6 +1,3 @@
-// Fix: Implemented the full OptionsPanel component, which was missing.
-// This resolves the module resolution error and provides the necessary UI
-// for configuring image generation for both Gemini and ComfyUI providers.
 import React, { useState, useEffect, useMemo, ChangeEvent } from 'react';
 // Fix: Import `NunchakuAttention` type to be used for casting.
 import type { GenerationOptions, NunchakuAttention } from '../types';
@@ -1015,7 +1012,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             step={1}
             disabled={isDisabled}
         />
-        {(options.provider === 'gemini' || (options.provider === 'comfyui' && ['sd1.5', 'sdxl', 'flux'].includes(options.comfyModelType || ''))) && (
+        {(options.provider === 'gemini' || (options.provider === 'comfyui' && ['sd1.5', 'sdxl', 'flux', 'wan2.2', 'nunchaku-kontext-flux', 'nunchaku-flux-image', 'flux-krea'].includes(options.comfyModelType || ''))) && (
             <SelectInput
                 label="Aspect Ratio"
                 value={options.aspectRatio}

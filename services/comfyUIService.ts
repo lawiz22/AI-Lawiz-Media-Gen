@@ -537,11 +537,22 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         }
         workflow["8"].inputs.vae_name = options.comfyWanVaeModel;
 
-        // Latent
-        const [w, h] = options.aspectRatio.split(':').map(Number);
+        // Latent (Dynamic Aspect Ratio)
+        const [w_ratio_wan, h_ratio_wan] = options.aspectRatio.split(':').map(Number);
+        const aspect_wan = w_ratio_wan / h_ratio_wan;
+        const baseSize_wan = 1024;
+        let width_wan, height_wan;
+        if (aspect_wan >= 1) {
+            width_wan = baseSize_wan;
+            height_wan = Math.round(baseSize_wan / aspect_wan / 8) * 8;
+        } else {
+            height_wan = baseSize_wan;
+            width_wan = Math.round(baseSize_wan * aspect_wan / 8) * 8;
+        }
         const latentNode = workflow["5"];
-        latentNode.inputs.width = w > h ? 1280 : 720;
-        latentNode.inputs.height = w > h ? 720 : 1280;
+        latentNode.inputs.width = width_wan;
+        latentNode.inputs.height = height_wan;
+
 
         // Samplers
         const sampler1 = workflow["35"];
@@ -654,6 +665,29 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         workflow["45"].inputs.cpu_offload = options.comfyNunchakuCpuOffload;
         workflow["45"].inputs.attention = options.comfyNunchakuAttention;
         workflow["45"].inputs.cache_threshold = options.comfyNunchakuCacheThreshold ?? 0;
+
+        // Dynamic Aspect Ratio
+        const latentKey_nfi = findNodeKey(workflow, "EmptySD3LatentImage", 'class_type');
+        if (latentKey_nfi) {
+            const [w_ratio, h_ratio] = options.aspectRatio.split(':').map(Number);
+            const aspect = w_ratio / h_ratio;
+            const baseSize = 768; 
+            let width, height;
+            if (aspect >= 1) { 
+                width = baseSize;
+                height = Math.round(baseSize / aspect / 8) * 8;
+            } else { 
+                height = baseSize;
+                width = Math.round(baseSize * aspect / 8) * 8;
+            }
+            workflow[latentKey_nfi].inputs.width = width;
+            workflow[latentKey_nfi].inputs.height = height;
+            const modelSamplingKey = findNodeKey(workflow, "ModelSamplingFlux", "class_type");
+            if (modelSamplingKey) {
+                workflow[modelSamplingKey].inputs.width = width;
+                workflow[modelSamplingKey].inputs.height = height;
+            }
+        }
         
         // LoRAs
         let lastLoraNode = "45";
@@ -690,6 +724,24 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         workflow["163"].inputs.steps = options.comfySteps;
         workflow["163"].inputs.sampler_name = options.comfySampler;
         workflow["163"].inputs.scheduler = options.comfyScheduler;
+
+        // Dynamic Aspect Ratio
+        const latentKey_fk = findNodeKey(workflow, "EmptySD3LatentImage", 'class_type');
+        if (latentKey_fk) {
+            const [w_ratio, h_ratio] = options.aspectRatio.split(':').map(Number);
+            const aspect = w_ratio / h_ratio;
+            const baseSize = 1024;
+            let width, height;
+            if (aspect >= 1) { 
+                width = baseSize;
+                height = Math.round(baseSize / aspect / 8) * 8;
+            } else { 
+                height = baseSize;
+                width = Math.round(baseSize * aspect / 8) * 8;
+            }
+            workflow[latentKey_fk].inputs.width = width;
+            workflow[latentKey_fk].inputs.height = height;
+        }
 
         // LoRAs
         const loraLoader = workflow["191"];
@@ -732,6 +784,8 @@ export const generateComfyUIPortraits = async (
     const allImages: string[] = [];
     const baseWorkflow = await buildWorkflow(options, sourceImage);
 
+    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux'].includes(options.comfyModelType!);
+
     for (let i = 0; i < options.numImages; i++) {
         const currentWorkflow = JSON.parse(JSON.stringify(baseWorkflow));
         
@@ -747,7 +801,7 @@ export const generateComfyUIPortraits = async (
         };
         
         try {
-            const result = await executeWorkflow(currentWorkflow, progressWrapper);
+            const result = await executeWorkflow(currentWorkflow, progressWrapper, isLongJob);
             allImages.push(...result.images);
         } catch (error) {
             console.error(`Error generating image ${i + 1}:`, error);
