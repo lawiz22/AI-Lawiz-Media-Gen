@@ -282,6 +282,7 @@ export interface LogoThemeState {
     brandName?: string;
     slogan?: string;
     logoStyle?: LogoStyle;
+    fontStyleAdjectives?: string[];
     referenceItems?: LibraryItem[];
     selectedPalette?: LibraryItem | null;
     numLogos?: number;
@@ -295,6 +296,7 @@ export interface LogoThemeState {
     bannerTitle?: string;
     bannerAspectRatio?: BannerAspectRatio;
     bannerStyle?: BannerStyle;
+    bannerFontStyleAdjectives?: string[];
     bannerReferenceItems?: LibraryItem[];
     bannerSelectedPalette?: LibraryItem | null;
     bannerSelectedLogo?: LibraryItem | null;

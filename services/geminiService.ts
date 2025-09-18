@@ -141,7 +141,7 @@ export const generatePortraits = async (
 };
 
 export const generateLogos = async (state: LogoThemeState): Promise<string[]> => {
-    const { logoPrompt, brandName, slogan, logoStyle, referenceItems, selectedPalette, numLogos, backgroundColor } = state;
+    const { logoPrompt, brandName, slogan, logoStyle, fontStyleAdjectives, referenceItems, selectedPalette, numLogos, backgroundColor } = state;
 
     if (!logoPrompt?.trim() && !brandName?.trim() && (!referenceItems || referenceItems.length === 0)) {
         throw new Error("Please provide a prompt, brand name, or at least one reference image.");
@@ -163,6 +163,11 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
     }
     if (slogan) {
         promptSegments.push(`If appropriate for the style, include the slogan: "${slogan}".`);
+    }
+    
+    // Font Adjectives
+    if (fontStyleAdjectives && fontStyleAdjectives.length > 0) {
+        promptSegments.push(`For any text, the font style must be: ${fontStyleAdjectives.join(', ')}.`);
     }
 
     // Color Palette
@@ -220,7 +225,7 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
 };
 
 export const generateBanners = async (state: LogoThemeState): Promise<string[]> => {
-    const { bannerPrompt, bannerTitle, bannerAspectRatio, bannerStyle, bannerReferenceItems, bannerSelectedPalette, bannerSelectedLogo, bannerLogoPlacement, numBanners } = state;
+    const { bannerPrompt, bannerTitle, bannerAspectRatio, bannerStyle, bannerFontStyleAdjectives, bannerReferenceItems, bannerSelectedPalette, bannerSelectedLogo, bannerLogoPlacement, numBanners } = state;
 
     if (!bannerPrompt?.trim() && !bannerTitle?.trim() && (!bannerReferenceItems || bannerReferenceItems.length === 0)) {
         throw new Error("Please provide a prompt, a title, or at least one reference image for the banner.");
@@ -243,6 +248,11 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
     }
     if (bannerPrompt) {
         promptSegments.push(`The core visual concept of the banner is: "${bannerPrompt}".`);
+    }
+    
+    // Font Adjectives
+    if (bannerFontStyleAdjectives && bannerFontStyleAdjectives.length > 0) {
+        promptSegments.push(`For any text, the font style must be: ${bannerFontStyleAdjectives.join(', ')}.`);
     }
 
     // 3. Add Color Palette instructions

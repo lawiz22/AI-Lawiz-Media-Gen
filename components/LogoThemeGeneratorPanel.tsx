@@ -79,6 +79,13 @@ const BACKGROUND_OPTIONS: { id: LogoBackground; label: string }[] = [
     { id: 'black', label: 'Black' },
 ];
 
+const FONT_STYLE_ADJECTIVES = [
+    'Bold', 'Italic', 'Script', 'Sans-serif', 'Serif', 'Modern', 'Minimalist',
+    'Groovy', 'Psychedelic', 'Futuristic', 'Retro', 'Grunge', 'Elegant',
+    'Playful', 'Hand-drawn', 'Geometric', 'Blocky', 'Stencil', 'Bubbly'
+];
+
+
 export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = ({ state, setState, activeSubTab, setActiveSubTab, onOpenLibraryForReferences, onOpenLibraryForPalette, onOpenLibraryForBannerReferences, onOpenLibraryForBannerPalette, onOpenLibraryForBannerLogo }) => {
     const [zoomedLogoIndex, setZoomedLogoIndex] = useState<number | null>(null);
     const [zoomedBannerIndex, setZoomedBannerIndex] = useState<number | null>(null);
@@ -138,11 +145,32 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         }
         e.target.value = '';
     };
+
+    const handleFontAdjectiveToggle = (adjective: string, type: 'logo' | 'banner') => {
+        if (type === 'logo') {
+            setState(prev => {
+                const currentAdjectives = prev.fontStyleAdjectives || [];
+                const newAdjectives = currentAdjectives.includes(adjective)
+                    ? currentAdjectives.filter(adj => adj !== adjective)
+                    : [...currentAdjectives, adjective];
+                return { ...prev, fontStyleAdjectives: newAdjectives };
+            });
+        } else { // banner
+             setState(prev => {
+                const currentAdjectives = prev.bannerFontStyleAdjectives || [];
+                const newAdjectives = currentAdjectives.includes(adjective)
+                    ? currentAdjectives.filter(adj => adj !== adjective)
+                    : [...currentAdjectives, adjective];
+                return { ...prev, bannerFontStyleAdjectives: newAdjectives };
+            });
+        }
+    };
     
     const handleLogoReset = () => {
         setState(prev => ({
             ...prev,
             logoPrompt: '', brandName: '', slogan: '', logoStyle: 'symbolic',
+            fontStyleAdjectives: [],
             referenceItems: [], selectedPalette: null, generatedLogos: [], logoError: null
         }));
     };
@@ -203,6 +231,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         setState(prev => ({
             ...prev,
             bannerPrompt: '', bannerTitle: '', bannerAspectRatio: '16:9', bannerStyle: 'corporate-clean',
+            bannerFontStyleAdjectives: [],
             bannerReferenceItems: [], bannerSelectedPalette: null, bannerSelectedLogo: null, bannerLogoPlacement: 'top-left',
             generatedBanners: [], bannerError: null
         }));
@@ -312,6 +341,17 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                         {LOGO_STYLES.map(style => <button key={style.id} onClick={() => handleStyleChange(style.id)} title={style.description} className={`p-3 text-center rounded-lg text-sm transition-colors ${state.logoStyle === style.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>{style.label}</button>)}
                                     </div>
                                 </div>
+                                <div>
+                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Typography</h3>
+                                    <div className="p-3 bg-bg-tertiary rounded-lg">
+                                        <label className="block text-sm font-medium text-text-primary mb-2">Font Style Adjectives</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {FONT_STYLE_ADJECTIVES.map(adj => (
+                                                <button key={adj} onClick={() => handleFontAdjectiveToggle(adj, 'logo')} className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${state.fontStyleAdjectives?.includes(adj) ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{adj}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
                                 <div className="space-y-6">
                                     <div>
                                         <h3 className="text-md font-semibold text-text-secondary mb-2">Inspiration Images</h3>
@@ -360,6 +400,17 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Banner Style</h3>
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{BANNER_STYLE_OPTIONS.map(style => <button key={style.id} onClick={() => setState(p => ({...p, bannerStyle: style.id}))} title={style.description} className={`p-3 text-center rounded-lg text-sm transition-colors ${state.bannerStyle === style.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>{style.label}</button>)}</div>
+                                </div>
+                                <div>
+                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Typography</h3>
+                                    <div className="p-3 bg-bg-tertiary rounded-lg">
+                                        <label className="block text-sm font-medium text-text-primary mb-2">Font Style Adjectives</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {FONT_STYLE_ADJECTIVES.map(adj => (
+                                                <button key={adj} onClick={() => handleFontAdjectiveToggle(adj, 'banner')} className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${state.bannerFontStyleAdjectives?.includes(adj) ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{adj}</button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="space-y-6">
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
