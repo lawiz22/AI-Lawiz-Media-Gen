@@ -314,3 +314,11 @@ export const BannerIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12V6a2.25 2.25 0 012.25-2.25h10.5A2.25 2.25 0 0119.5 6v6a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 12z" />
   </svg>
 );
+
+export const AlbumCoverIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8.25V19.5a1.5 1.5 0 001.5 1.5h15a1.5 1.5 0 001.5-1.5V8.25" />
+  </svg>
+);

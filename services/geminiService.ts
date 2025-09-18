@@ -316,6 +316,108 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
     return allBanners;
 };
 
+export const generateAlbumCovers = async (state: LogoThemeState): Promise<string[]> => {
+    const { 
+        albumPrompt, albumTitle, artistName, musicStyle, customMusicStyle, albumEra, albumMediaType, addVinylWear, 
+        albumFontStyleAdjectives, albumReferenceItems, albumSelectedPalette, albumSelectedLogo, numAlbumCovers 
+    } = state;
+
+    if (!albumPrompt?.trim() && !albumTitle?.trim() && !artistName?.trim() && (!albumReferenceItems || albumReferenceItems.length === 0)) {
+        throw new Error("Please provide a prompt, title, artist, or a reference image.");
+    }
+
+    const promptSegments = ["Your task is to generate a professional, high-quality, 1:1 square album cover."];
+
+    // Style & Era
+    const finalMusicStyle = musicStyle === 'other' ? customMusicStyle : musicStyle;
+    promptSegments.push(`The music style is ${finalMusicStyle}, with an aesthetic from the ${albumEra} era.`);
+
+    // Media Type and Wear
+    if (albumMediaType === 'vinyl') {
+        promptSegments.push("The cover should have the aesthetic of a cardboard vinyl record sleeve.");
+        if (addVinylWear) {
+            promptSegments.push("The cover must look aged and well-used, with visible ring wear, scratches, scuffs on the corners, and faded colors, as if it's a well-loved record from that era.");
+        }
+    } else if (albumMediaType === 'cd') {
+        promptSegments.push("The cover should look like it belongs in a plastic CD jewel case booklet, fitting the aesthetic of CD covers from its era.");
+    } else {
+        promptSegments.push("The cover is for a modern digital release. It should be clean and sharp.");
+    }
+
+    // Core Visual Concept
+    if (albumPrompt) {
+        promptSegments.push(`The core visual concept is: "${albumPrompt}".`);
+    }
+
+    // Text Elements
+    if (artistName) {
+        promptSegments.push(`The artist/band name "${artistName}" must be clearly visible on the cover.`);
+    }
+    if (albumTitle) {
+        promptSegments.push(`The album title "${albumTitle}" must be clearly visible on the cover.`);
+    }
+    
+    // Font Adjectives
+    if (albumFontStyleAdjectives && albumFontStyleAdjectives.length > 0) {
+        promptSegments.push(`The typography style for all text must be: ${albumFontStyleAdjectives.join(', ')}.`);
+    }
+
+    // Color Palette
+    if (albumSelectedPalette) {
+        try {
+            const palette: PaletteColor[] = JSON.parse(albumSelectedPalette.media);
+            const hexCodes = palette.map(p => p.hex).join(', ');
+            promptSegments.push(`Strictly use this color palette: ${hexCodes}. You may use shades and tints but no new hues.`);
+        } catch (e) { console.warn("Could not parse album cover color palette for prompt."); }
+    }
+
+    // Final instructions
+    promptSegments.push("The final design should be compelling, memorable, and appropriate for the music style and era.");
+    
+    const finalPrompt = promptSegments.join('\n');
+    const contents: any = { parts: [{ text: finalPrompt }] };
+
+    // Logo
+    if (albumSelectedLogo) {
+        const logoFile = await dataUrlToFile(albumSelectedLogo.media, albumSelectedLogo.name || 'logo');
+        const logoPart = await fileToGenerativePart(logoFile);
+        contents.parts.unshift(logoPart);
+        contents.parts.unshift({ text: "Incorporate this exact logo into the design naturally, but ensure it is clear and legible:" });
+    }
+    
+    // Reference Images
+    if (albumReferenceItems && albumReferenceItems.length > 0) {
+        contents.parts.unshift({ text: "Use these images as strong visual inspiration for the album's style, composition, or subject matter:" });
+        for (const item of albumReferenceItems) {
+            const file = await dataUrlToFile(item.media, item.name || 'reference');
+            const imagePart = await fileToGenerativePart(file);
+            contents.parts.unshift(imagePart);
+        }
+    }
+
+    const allCovers: string[] = [];
+    for (let i = 0; i < (numAlbumCovers || 1); i++) {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents,
+            config: {
+                responseModalities: [Modality.IMAGE, Modality.TEXT],
+            }
+        });
+
+        const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+        if (imagePart?.inlineData?.data) {
+            allCovers.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+        }
+    }
+
+    if (allCovers.length === 0) {
+        throw new Error("The AI failed to generate any album covers. Please try adjusting your prompt.");
+    }
+
+    return allCovers;
+};
+
 
 export const generateGeminiVideo = async (
     options: GenerationOptions,

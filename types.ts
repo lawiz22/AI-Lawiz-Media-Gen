@@ -1,4 +1,4 @@
-import { fileURLToPath } from "url";
+import type { fileURLToPath } from "url";
 
 export interface User {
   username: string;
@@ -207,7 +207,7 @@ export interface ExtractorState {
     objectError: string | null;
 }
 
-export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette';
+export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup';
 
 export interface LibraryItem {
@@ -276,6 +276,10 @@ export type BannerStyle = 'corporate-clean' | 'gaming-energetic' | 'artistic-bru
 export type BannerLogoPlacement = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'no-logo';
 export type BannerAspectRatio = '16:9' | '1.91:1' | '4:1' | '2:1';
 
+export type MusicStyle = 'rock' | 'pop' | 'electronic' | 'jazz' | 'hip-hop' | 'country' | 'folk' | 'metal' | 'classical' | 'other';
+export type AlbumEra = '50s' | '60s' | '70s' | '80s' | '90s' | '2000s' | 'modern';
+export type AlbumMediaType = 'vinyl' | 'cd' | 'digital';
+
 export interface LogoThemeState {
     // Logo Generator State
     logoPrompt?: string;
@@ -305,4 +309,22 @@ export interface LogoThemeState {
     isGeneratingBanners?: boolean;
     generatedBanners?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
     bannerError?: string | null;
+
+    // Album Cover Generator State
+    albumPrompt?: string;
+    albumTitle?: string;
+    artistName?: string;
+    musicStyle?: MusicStyle;
+    customMusicStyle?: string;
+    albumEra?: AlbumEra;
+    albumMediaType?: AlbumMediaType;
+    addVinylWear?: boolean;
+    albumFontStyleAdjectives?: string[];
+    albumReferenceItems?: LibraryItem[];
+    albumSelectedPalette?: LibraryItem | null;
+    albumSelectedLogo?: LibraryItem | null;
+    numAlbumCovers?: number;
+    isGeneratingAlbumCovers?: boolean;
+    generatedAlbumCovers?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
+    albumCoverError?: string | null;
 }

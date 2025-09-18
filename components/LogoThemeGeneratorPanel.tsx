@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { LogoThemeState, LibraryItem, LogoStyle, LogoBackground, PaletteColor, BannerStyle, BannerLogoPlacement, BannerAspectRatio } from '../types';
-import { GenerateIcon, ResetIcon, SpinnerIcon, LibraryIcon, CloseIcon, SaveIcon, CheckIcon, DownloadIcon, UploadIconSimple, ChevronLeftIcon, ChevronRightIcon } from './icons';
-import { generateLogos, generateBanners } from '../services/geminiService';
+import type { LogoThemeState, LibraryItem, LogoStyle, LogoBackground, PaletteColor, BannerStyle, BannerLogoPlacement, BannerAspectRatio, MusicStyle, AlbumEra, AlbumMediaType } from '../types';
+import { GenerateIcon, ResetIcon, SpinnerIcon, LibraryIcon, CloseIcon, SaveIcon, CheckIcon, DownloadIcon, UploadIconSimple, ChevronLeftIcon, ChevronRightIcon, ZoomIcon } from './icons';
+import { generateLogos, generateBanners, generateAlbumCovers } from '../services/geminiService';
 import { saveToLibrary } from '../services/libraryService';
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { BANNER_ASPECT_RATIO_OPTIONS, BANNER_STYLE_OPTIONS, BANNER_LOGO_PLACEMENT_OPTIONS } from '../constants';
@@ -16,6 +16,9 @@ interface LogoThemeGeneratorPanelProps {
     onOpenLibraryForBannerReferences: () => void;
     onOpenLibraryForBannerPalette: () => void;
     onOpenLibraryForBannerLogo: () => void;
+    onOpenLibraryForAlbumCoverReferences: () => void;
+    onOpenLibraryForAlbumCoverPalette: () => void;
+    onOpenLibraryForAlbumCoverLogo: () => void;
 }
 
 const Section: React.FC<{ title: string; description: string; borderColor: string; children: React.ReactNode }> = ({ title, description, borderColor, children }) => (
@@ -85,14 +88,50 @@ const FONT_STYLE_ADJECTIVES = [
     'Playful', 'Hand-drawn', 'Geometric', 'Blocky', 'Stencil', 'Bubbly'
 ];
 
+const MUSIC_STYLES: { id: MusicStyle, label: string }[] = [
+    { id: 'rock', label: 'Rock' },
+    { id: 'pop', label: 'Pop' },
+    { id: 'electronic', label: 'Electronic' },
+    { id: 'jazz', label: 'Jazz' },
+    { id: 'hip-hop', label: 'Hip-Hop' },
+    { id: 'country', label: 'Country' },
+    { id: 'folk', label: 'Folk' },
+    { id: 'metal', label: 'Metal' },
+    { id: 'classical', label: 'Classical' },
+    { id: 'other', label: 'Other' },
+];
 
-export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = ({ state, setState, activeSubTab, setActiveSubTab, onOpenLibraryForReferences, onOpenLibraryForPalette, onOpenLibraryForBannerReferences, onOpenLibraryForBannerPalette, onOpenLibraryForBannerLogo }) => {
+const ALBUM_ERAS: { id: AlbumEra, label: string }[] = [
+    { id: 'modern', label: 'Modern' },
+    { id: '2000s', label: '2000s' },
+    { id: '90s', label: '90s' },
+    { id: '80s', label: '80s' },
+    { id: '70s', label: '70s' },
+    { id: '60s', label: '60s' },
+    { id: '50s', label: '50s' },
+];
+
+const ALBUM_MEDIA_TYPES: { id: AlbumMediaType, label: string }[] = [
+    { id: 'digital', label: 'Digital' },
+    { id: 'vinyl', label: 'Vinyl Sleeve' },
+    { id: 'cd', label: 'CD Booklet' },
+];
+
+
+export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = ({ 
+    state, setState, activeSubTab, setActiveSubTab, 
+    onOpenLibraryForReferences, onOpenLibraryForPalette, 
+    onOpenLibraryForBannerReferences, onOpenLibraryForBannerPalette, onOpenLibraryForBannerLogo,
+    onOpenLibraryForAlbumCoverReferences, onOpenLibraryForAlbumCoverPalette, onOpenLibraryForAlbumCoverLogo
+}) => {
     const [zoomedLogoIndex, setZoomedLogoIndex] = useState<number | null>(null);
     const [zoomedBannerIndex, setZoomedBannerIndex] = useState<number | null>(null);
+    const [zoomedAlbumCoverIndex, setZoomedAlbumCoverIndex] = useState<number | null>(null);
     
     const subTabs = [
         { id: 'logo', label: 'Logo Generator' },
         { id: 'banner', label: 'Banner Generator' },
+        { id: 'album-cover', label: 'Album Cover Generator' },
     ];
 
     const handleInputChange = (field: keyof LogoThemeState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -111,23 +150,27 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         setState(prev => ({ ...prev, [field]: parseInt(e.target.value, 10) }));
     };
 
-    const handleRemoveReference = (id: number, type: 'logo' | 'banner') => {
+    const handleRemoveReference = (id: number, type: 'logo' | 'banner' | 'album-cover') => {
         if (type === 'logo') {
             setState(prev => ({ ...prev, referenceItems: prev.referenceItems?.filter(item => item.id !== id) }));
-        } else {
+        } else if (type === 'banner') {
             setState(prev => ({ ...prev, bannerReferenceItems: prev.bannerReferenceItems?.filter(item => item.id !== id) }));
+        } else {
+            setState(prev => ({ ...prev, albumReferenceItems: prev.albumReferenceItems?.filter(item => item.id !== id) }));
         }
     };
 
-    const handleClearPalette = (type: 'logo' | 'banner') => {
+    const handleClearPalette = (type: 'logo' | 'banner' | 'album-cover') => {
         if (type === 'logo') {
             setState(prev => ({ ...prev, selectedPalette: null }));
-        } else {
+        } else if (type === 'banner') {
             setState(prev => ({ ...prev, bannerSelectedPalette: null }));
+        } else {
+            setState(prev => ({ ...prev, albumSelectedPalette: null }));
         }
     };
 
-    const handleReferenceUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'banner') => {
+    const handleReferenceUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'banner' | 'album-cover') => {
         if (!e.target.files) return;
         const files = Array.from(e.target.files);
         if (files.length === 0) return;
@@ -140,30 +183,23 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     
         if (type === 'logo') {
             setState(prev => ({ ...prev, referenceItems: [...(prev.referenceItems || []), ...newItems] }));
-        } else {
+        } else if (type === 'banner') {
             setState(prev => ({ ...prev, bannerReferenceItems: [...(prev.bannerReferenceItems || []), ...newItems] }));
+        } else {
+            setState(prev => ({ ...prev, albumReferenceItems: [...(prev.albumReferenceItems || []), ...newItems] }));
         }
         e.target.value = '';
     };
 
-    const handleFontAdjectiveToggle = (adjective: string, type: 'logo' | 'banner') => {
-        if (type === 'logo') {
-            setState(prev => {
-                const currentAdjectives = prev.fontStyleAdjectives || [];
-                const newAdjectives = currentAdjectives.includes(adjective)
-                    ? currentAdjectives.filter(adj => adj !== adjective)
-                    : [...currentAdjectives, adjective];
-                return { ...prev, fontStyleAdjectives: newAdjectives };
-            });
-        } else { // banner
-             setState(prev => {
-                const currentAdjectives = prev.bannerFontStyleAdjectives || [];
-                const newAdjectives = currentAdjectives.includes(adjective)
-                    ? currentAdjectives.filter(adj => adj !== adjective)
-                    : [...currentAdjectives, adjective];
-                return { ...prev, bannerFontStyleAdjectives: newAdjectives };
-            });
-        }
+    const handleFontAdjectiveToggle = (adjective: string, type: 'logo' | 'banner' | 'album-cover') => {
+        const key = `${type}FontStyleAdjectives` as 'fontStyleAdjectives' | 'bannerFontStyleAdjectives' | 'albumFontStyleAdjectives';
+        setState(prev => {
+            const currentAdjectives = (prev as any)[key] || [];
+            const newAdjectives = currentAdjectives.includes(adjective)
+                ? currentAdjectives.filter((adj: string) => adj !== adjective)
+                : [...currentAdjectives, adjective];
+            return { ...prev, [key]: newAdjectives };
+        });
     };
     
     const handleLogoReset = () => {
@@ -282,10 +318,67 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         document.body.removeChild(link);
     };
 
+    const handleAlbumCoverReset = () => {
+        setState(prev => ({
+            ...prev,
+            albumPrompt: '', albumTitle: '', artistName: '', musicStyle: 'rock', customMusicStyle: '', albumEra: 'modern', albumMediaType: 'digital',
+            addVinylWear: false, albumFontStyleAdjectives: [], albumReferenceItems: [], albumSelectedPalette: null, albumSelectedLogo: null,
+            generatedAlbumCovers: [], albumCoverError: null
+        }));
+    };
+
+    const handleGenerateAlbumCovers = async () => {
+        setState(prev => ({ ...prev, isGeneratingAlbumCovers: true, albumCoverError: null, generatedAlbumCovers: [] }));
+        try {
+            const covers = await generateAlbumCovers(state);
+            setState(prev => ({ ...prev, generatedAlbumCovers: covers.map(src => ({ src, saved: 'idle' })) }));
+        } catch (err: any) {
+            setState(prev => ({ ...prev, albumCoverError: err.message || "An unknown error occurred." }));
+        } finally {
+            setState(prev => ({ ...prev, isGeneratingAlbumCovers: false }));
+        }
+    };
+
+    const handleSaveAlbumCover = async (coverSrc: string, index: number) => {
+        setState(prev => {
+            const updated = [...(prev.generatedAlbumCovers || [])];
+            updated[index] = { ...updated[index], saved: 'saving' };
+            return { ...prev, generatedAlbumCovers: updated };
+        });
+        try {
+            const name = `${state.artistName || 'Artist'} - ${state.albumTitle || 'Album'}`;
+            await saveToLibrary({ mediaType: 'album-cover', name: name, media: coverSrc, thumbnail: await dataUrlToThumbnail(coverSrc, 256), options: {} as any });
+            setState(prev => {
+                const updated = [...(prev.generatedAlbumCovers || [])];
+                updated[index] = { ...updated[index], saved: 'saved' };
+                return { ...prev, generatedAlbumCovers: updated };
+            });
+        } catch(e) {
+            console.error("Failed to save album cover", e);
+             setState(prev => {
+                const updated = [...(prev.generatedAlbumCovers || [])];
+                updated[index] = { ...updated[index], saved: 'idle' };
+                return { ...prev, generatedAlbumCovers: updated };
+            });
+        }
+    };
+
+    const handleDownloadAlbumCover = (coverSrc: string, index: number) => {
+        const link = document.createElement('a');
+        link.href = coverSrc;
+        link.download = `album_${(state.artistName || 'art')}_${(state.albumTitle || 'cover')}_${index + 1}`.replace(/\s+/g, '_') + '.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const selectedPaletteColors = state.selectedPalette ? JSON.parse(state.selectedPalette.media) as PaletteColor[] : [];
     const bannerSelectedPaletteColors = state.bannerSelectedPalette ? JSON.parse(state.bannerSelectedPalette.media) as PaletteColor[] : [];
+    const albumSelectedPaletteColors = state.albumSelectedPalette ? JSON.parse(state.albumSelectedPalette.media) as PaletteColor[] : [];
+    
     const currentZoomedLogo = zoomedLogoIndex !== null ? state.generatedLogos?.[zoomedLogoIndex] : null;
     const currentZoomedBanner = zoomedBannerIndex !== null ? state.generatedBanners?.[zoomedBannerIndex] : null;
+    const currentZoomedAlbumCover = zoomedAlbumCoverIndex !== null ? state.generatedAlbumCovers?.[zoomedAlbumCoverIndex] : null;
 
     // --- Modal Logic ---
     const useZoomModal = (itemCount: number, getZoomedIndex: () => number | null, setZoomedIndex: (index: number | null) => void) => {
@@ -315,6 +408,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
 
     const { handleClose: handleCloseLogoZoom, handleNext: handleNextLogo, handlePrev: handlePrevLogo } = useZoomModal(state.generatedLogos?.length || 0, () => zoomedLogoIndex, setZoomedLogoIndex);
     const { handleClose: handleCloseBannerZoom, handleNext: handleNextBanner, handlePrev: handlePrevBanner } = useZoomModal(state.generatedBanners?.length || 0, () => zoomedBannerIndex, setZoomedBannerIndex);
+    const { handleClose: handleCloseAlbumCoverZoom, handleNext: handleNextAlbumCover, handlePrev: handlePrevAlbumCover } = useZoomModal(state.generatedAlbumCovers?.length || 0, () => zoomedAlbumCoverIndex, setZoomedAlbumCoverIndex);
 
     return (
         <>
@@ -512,9 +606,96 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                         </div>
                     </Section>
                 </div>
+                 <div className={activeSubTab === 'album-cover' ? 'block' : 'hidden'}>
+                    <Section 
+                        title="Album Cover Generator"
+                        description="Design the perfect 1:1 album cover for your music. Specify genre, era, and media type for a pitch-perfect result."
+                        borderColor="var(--color-danger)"
+                    >
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                            {/* --- Left Column: Controls --- */}
+                            <div className="space-y-6">
+                                <textarea value={state.albumPrompt} onChange={handleInputChange('albumPrompt')} placeholder="Describe the album cover's visual concept..." className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" rows={3} />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <input type="text" value={state.albumTitle} onChange={handleInputChange('albumTitle')} placeholder="Album Title" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" />
+                                    <input type="text" value={state.artistName} onChange={handleInputChange('artistName')} placeholder="Artist / Band Name" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" />
+                                </div>
+                                <div>
+                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Style</h3>
+                                    <div className="p-4 bg-bg-tertiary rounded-lg space-y-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Music Style</label><select value={state.musicStyle} onChange={(e) => setState(p => ({...p, musicStyle: e.target.value as MusicStyle}))} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{MUSIC_STYLES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Era</label><select value={state.albumEra} onChange={(e) => setState(p => ({...p, albumEra: e.target.value as AlbumEra}))} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{ALBUM_ERAS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</select></div>
+                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Media Format</label><select value={state.albumMediaType} onChange={(e) => setState(p => ({...p, albumMediaType: e.target.value as AlbumMediaType}))} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{ALBUM_MEDIA_TYPES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
+                                        </div>
+                                        {state.musicStyle === 'other' && <input type="text" value={state.customMusicStyle} onChange={handleInputChange('customMusicStyle')} placeholder="Enter custom music style" className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm" />}
+                                        {state.albumMediaType === 'vinyl' && <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer pt-2"><input type="checkbox" checked={state.addVinylWear} onChange={(e) => setState(p => ({...p, addVinylWear: e.target.checked}))} className="rounded text-accent focus:ring-accent" />Add wear & tear (scratches, ring wear)</label>}
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Typography</h3>
+                                    <div className="p-3 bg-bg-tertiary rounded-lg">
+                                        <label className="block text-sm font-medium text-text-primary mb-2">Font Style Adjectives</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {FONT_STYLE_ADJECTIVES.map(adj => (
+                                                <button key={adj} onClick={() => handleFontAdjectiveToggle(adj, 'album-cover')} className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${state.albumFontStyleAdjectives?.includes(adj) ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{adj}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <button onClick={onOpenLibraryForAlbumCoverReferences} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover"><LibraryIcon className="w-5 h-5"/> Images</button>
+                                        <button onClick={onOpenLibraryForAlbumCoverPalette} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover"><LibraryIcon className="w-5 h-5"/> Palette</button>
+                                        <button onClick={onOpenLibraryForAlbumCoverLogo} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover"><LibraryIcon className="w-5 h-5"/> Logo</button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-4">
+                                        {state.albumSelectedLogo && <div className="relative group"><img src={state.albumSelectedLogo.thumbnail} className="w-16 h-16 object-contain rounded bg-bg-primary/50 p-1"/><button onClick={() => setState(p => ({...p, albumSelectedLogo: null}))} className="absolute -top-1 -right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>}
+                                        {state.albumSelectedPalette && <div className="relative group flex items-center gap-2 p-2 rounded-md bg-bg-primary/50"><div className="flex -space-x-2">{albumSelectedPaletteColors.slice(0, 4).map(c => <div key={c.hex} className="w-8 h-8 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}</div><button onClick={() => handleClearPalette('album-cover')} className="p-1 text-text-secondary hover:text-white opacity-0 group-hover:opacity-100"><CloseIcon className="w-4 h-4"/></button></div>}
+                                    </div>
+                                    {(state.albumReferenceItems && state.albumReferenceItems.length > 0) && <div className="p-2 bg-bg-primary/50 rounded-md"><div className="grid grid-cols-4 gap-2">{state.albumReferenceItems.map(item => <div key={item.id} className="relative group"><img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/><button onClick={() => handleRemoveReference(item.id, 'album-cover')} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>)}</div></div>}
+                                </div>
+                                <div>
+                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Settings</h3>
+                                    <div className="p-4 bg-bg-tertiary rounded-lg space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-text-secondary">Number of Covers: {state.numAlbumCovers}</label>
+                                            <input type="range" min="1" max="4" step="1" value={state.numAlbumCovers} onChange={handleSliderChange('numAlbumCovers')} className="w-full h-2 mt-1 bg-bg-primary rounded-lg" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 pt-4">
+                                    <button onClick={handleAlbumCoverReset} disabled={state.isGeneratingAlbumCovers} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover"><ResetIcon className="w-5 h-5"/> Reset</button>
+                                    <button onClick={handleGenerateAlbumCovers} disabled={state.isGeneratingAlbumCovers} className="flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg bg-danger text-white disabled:opacity-50">{state.isGeneratingAlbumCovers ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <GenerateIcon className="w-5 h-5"/>}{state.isGeneratingAlbumCovers ? 'Generating...' : 'Generate Covers'}</button>
+                                </div>
+                            </div>
+                            <div className="space-y-4">
+                                {state.albumCoverError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.albumCoverError}</p>}
+                                {state.isGeneratingAlbumCovers ? <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl h-full min-h-[400px]"><SpinnerIcon className="w-16 h-16 text-danger animate-spin mb-4" /><h3 className="text-lg font-bold text-text-primary">Generating album covers...</h3></div> : (state.generatedAlbumCovers && state.generatedAlbumCovers.length > 0) ? <div className="grid grid-cols-2 gap-4">{state.generatedAlbumCovers.map((cover, index) => (
+                                    <div key={index} className="group relative aspect-square bg-bg-primary p-2 rounded-lg flex items-center justify-center">
+                                        <img src={cover.src} alt={`Generated Album Cover ${index + 1}`} className="max-w-full max-h-full object-contain" />
+                                        <div 
+                                            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                            onClick={() => setZoomedAlbumCoverIndex(index)}
+                                            title="Zoom In"
+                                        >
+                                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                <button onClick={() => handleDownloadAlbumCover(cover.src, index)} title="Save to Disk" className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text"><DownloadIcon className="w-5 h-5" /></button>
+                                                <button onClick={() => handleSaveAlbumCover(cover.src, index)} title={cover.saved === 'saved' ? 'Saved!' : 'Save to Library'} disabled={cover.saved !== 'idle'} className={`p-3 rounded-full transition-all ${cover.saved === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text'}`}>
+                                                    {cover.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : cover.saved === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}</div> : <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl h-full min-h-[400px]"><GenerateIcon className="w-16 h-16 text-border-primary mb-4" /><h3 className="text-lg font-bold text-text-primary">Your album covers will appear here</h3></div>}
+                            </div>
+                        </div>
+                    </Section>
+                </div>
             </div>
-            {currentZoomedLogo && <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={handleCloseLogoZoom}><div className="relative" onClick={e => e.stopPropagation()}><img src={currentZoomedLogo.src} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }}/><button onClick={handleCloseLogoZoom} className="absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75 z-10"><CloseIcon className="w-5 h-5" /></button></div>{state.generatedLogos && state.generatedLogos.length > 1 && <><button onClick={(e) => { e.stopPropagation(); handlePrevLogo(); }} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text"><ChevronLeftIcon className="w-8 h-8" /></button><button onClick={(e) => { e.stopPropagation(); handleNextLogo(); }} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text"><ChevronRightIcon className="w-8 h-8" /></button></>}<div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-bg-secondary/80 p-3 rounded-full" onClick={e => e.stopPropagation()}><button onClick={() => handleDownloadLogo(currentZoomedLogo.src, zoomedLogoIndex!)} className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text"><DownloadIcon className="w-6 h-6" /></button><button onClick={() => handleSaveLogo(currentZoomedLogo.src, zoomedLogoIndex!)} disabled={currentZoomedLogo.saved !== 'idle'} className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text disabled:opacity-50">{currentZoomedLogo.saved === 'saving' ? <SpinnerIcon className="w-6 h-6 animate-spin" /> : currentZoomedLogo.saved === 'saved' ? <CheckIcon className="w-6 h-6" /> : <SaveIcon className="w-6 h-6" />}</button></div></div>}
-            {currentZoomedBanner && <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={handleCloseBannerZoom}><div className="relative" onClick={e => e.stopPropagation()}><img src={currentZoomedBanner.src} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }}/><button onClick={handleCloseBannerZoom} className="absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75 z-10"><CloseIcon className="w-5 h-5" /></button></div>{state.generatedBanners && state.generatedBanners.length > 1 && <><button onClick={(e) => { e.stopPropagation(); handlePrevBanner(); }} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text"><ChevronLeftIcon className="w-8 h-8" /></button><button onClick={(e) => { e.stopPropagation(); handleNextBanner(); }} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text"><ChevronRightIcon className="w-8 h-8" /></button></>}<div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-bg-secondary/80 p-3 rounded-full" onClick={e => e.stopPropagation()}><button onClick={() => handleDownloadBanner(currentZoomedBanner.src, zoomedBannerIndex!)} className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text"><DownloadIcon className="w-6 h-6" /></button><button onClick={() => handleSaveBanner(currentZoomedBanner.src, zoomedBannerIndex!)} disabled={currentZoomedBanner.saved !== 'idle'} className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text disabled:opacity-50">{currentZoomedBanner.saved === 'saving' ? <SpinnerIcon className="w-6 h-6 animate-spin" /> : currentZoomedBanner.saved === 'saved' ? <CheckIcon className="w-6 h-6" /> : <SaveIcon className="w-6 h-6" />}</button></div></div>}
+            {currentZoomedLogo && <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={handleCloseLogoZoom}><div className="relative" onClick={e => e.stopPropagation()}><img src={currentZoomedLogo.src} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }}/><button onClick={handleCloseLogoZoom} className="absolute -top-2 -right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75"><CloseIcon className="w-5 h-5"/></button>{state.generatedLogos && state.generatedLogos.length > 1 && <><button onClick={handlePrevLogo} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronLeftIcon className="w-8 h-8"/></button><button onClick={handleNextLogo} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronRightIcon className="w-8 h-8"/></button></>}</div></div>}
+            {currentZoomedBanner && <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={handleCloseBannerZoom}><div className="relative" onClick={e => e.stopPropagation()}><img src={currentZoomedBanner.src} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }}/><button onClick={handleCloseBannerZoom} className="absolute -top-2 -right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75"><CloseIcon className="w-5 h-5"/></button>{state.generatedBanners && state.generatedBanners.length > 1 && <><button onClick={handlePrevBanner} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronLeftIcon className="w-8 h-8"/></button><button onClick={handleNextBanner} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronRightIcon className="w-8 h-8"/></button></>}</div></div>}
+            {currentZoomedAlbumCover && <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={handleCloseAlbumCoverZoom}><div className="relative" onClick={e => e.stopPropagation()}><img src={currentZoomedAlbumCover.src} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }}/><button onClick={handleCloseAlbumCoverZoom} className="absolute -top-2 -right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75"><CloseIcon className="w-5 h-5"/></button>{state.generatedAlbumCovers && state.generatedAlbumCovers.length > 1 && <><button onClick={handlePrevAlbumCover} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronLeftIcon className="w-8 h-8"/></button><button onClick={handleNextAlbumCover} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronRightIcon className="w-8 h-8"/></button></>}</div></div>}
         </>
     );
 };

@@ -89,6 +89,24 @@ const initialLogoThemeState: LogoThemeState = {
     isGeneratingBanners: false,
     generatedBanners: [],
     bannerError: null,
+    
+    // Album Cover Generator State
+    albumPrompt: '',
+    albumTitle: '',
+    artistName: '',
+    musicStyle: 'rock',
+    customMusicStyle: '',
+    albumEra: 'modern',
+    albumMediaType: 'digital',
+    addVinylWear: false,
+    albumFontStyleAdjectives: [],
+    albumReferenceItems: [],
+    albumSelectedPalette: null,
+    albumSelectedLogo: null,
+    numAlbumCovers: 1,
+    isGeneratingAlbumCovers: false,
+    generatedAlbumCovers: [],
+    albumCoverError: null,
 };
 
 
@@ -198,6 +216,9 @@ const App: React.FC = () => {
     const [isBannerRefPickerOpen, setIsBannerRefPickerOpen] = useState(false);
     const [isBannerPalettePickerOpen, setIsBannerPalettePickerOpen] = useState(false);
     const [isBannerLogoPickerOpen, setIsBannerLogoPickerOpen] = useState(false);
+    const [isAlbumCoverRefPickerOpen, setIsAlbumCoverRefPickerOpen] = useState(false);
+    const [isAlbumCoverPalettePickerOpen, setIsAlbumCoverPalettePickerOpen] = useState(false);
+    const [isAlbumCoverLogoPickerOpen, setIsAlbumCoverLogoPickerOpen] = useState(false);
 
     
     // --- Google Drive State ---
@@ -637,8 +658,8 @@ const App: React.FC = () => {
     ];
 
     // Fix: Explicitly type filter arrays as LibraryItemType[] to fix TypeScript assignment errors.
-    const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'clothes', 'object', 'extracted-frame'];
-    const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'clothes', 'extracted-frame', 'object'];
+    const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'object', 'extracted-frame'];
+    const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'extracted-frame', 'object'];
 
     return (
         <div className="min-h-screen bg-bg-primary text-text-primary font-sans">
@@ -907,6 +928,9 @@ const App: React.FC = () => {
                         onOpenLibraryForBannerReferences={() => setIsBannerRefPickerOpen(true)}
                         onOpenLibraryForBannerPalette={() => setIsBannerPalettePickerOpen(true)}
                         onOpenLibraryForBannerLogo={() => setIsBannerLogoPickerOpen(true)}
+                        onOpenLibraryForAlbumCoverReferences={() => setIsAlbumCoverRefPickerOpen(true)}
+                        onOpenLibraryForAlbumCoverPalette={() => setIsAlbumCoverPalettePickerOpen(true)}
+                        onOpenLibraryForAlbumCoverLogo={() => setIsAlbumCoverLogoPickerOpen(true)}
                     />
                 </div>
 
@@ -1228,6 +1252,38 @@ const App: React.FC = () => {
                     onClose={() => setIsBannerLogoPickerOpen(false)}
                     onSelectItem={(item) => {
                         setLogoThemeState(prev => ({ ...prev, bannerSelectedLogo: item }));
+                    }}
+                    filter="logo"
+                />
+            )}
+            {isAlbumCoverRefPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isAlbumCoverRefPickerOpen}
+                    onClose={() => setIsAlbumCoverRefPickerOpen(false)}
+                    onSelectItem={() => {}}
+                    onSelectMultiple={(items) => {
+                        setLogoThemeState(prev => ({ ...prev, albumReferenceItems: [...(prev.albumReferenceItems || []), ...items] }));
+                    }}
+                    filter={imageLikeFilter}
+                    multiSelect
+                />
+            )}
+            {isAlbumCoverPalettePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isAlbumCoverPalettePickerOpen}
+                    onClose={() => setIsAlbumCoverPalettePickerOpen(false)}
+                    onSelectItem={(item) => {
+                        setLogoThemeState(prev => ({ ...prev, albumSelectedPalette: item }));
+                    }}
+                    filter="color-palette"
+                />
+            )}
+            {isAlbumCoverLogoPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isAlbumCoverLogoPickerOpen}
+                    onClose={() => setIsAlbumCoverLogoPickerOpen(false)}
+                    onSelectItem={(item) => {
+                        setLogoThemeState(prev => ({ ...prev, albumSelectedLogo: item }));
                     }}
                     filter="logo"
                 />
