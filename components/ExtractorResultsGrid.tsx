@@ -43,8 +43,10 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
     if (currentZoomedItem) {
         if (isClothing(currentZoomedItem) && currentZoomedItem.foldedImage) {
             currentZoomedImageSrc = isShowingFolded ? currentZoomedItem.foldedImage : currentZoomedItem.laidOutImage;
+        } else if (isPose(currentZoomedItem)) {
+            currentZoomedImageSrc = isShowingFolded ? currentZoomedItem.skeletonImage : currentZoomedItem.image;
         } else {
-            currentZoomedImageSrc = isClothing(currentZoomedItem) ? currentZoomedItem.laidOutImage : (currentZoomedItem as GeneratedObject | GeneratedPose).image;
+            currentZoomedImageSrc = (currentZoomedItem as GeneratedObject).image;
         }
     }
 
@@ -84,7 +86,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                             image = item.laidOutImage;
                         } else if (isPoseItem) {
                             name = `Pose #${index + 1}`;
-                            image = item.image;
+                            image = item.image; // This is the mannequin
                         } else {
                             name = (item as GeneratedObject).name;
                             image = item.image;
@@ -95,9 +97,20 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                         return (
                             <div key={index} className="text-center p-2 bg-bg-tertiary rounded-md flex flex-col">
                                 <h4 className="text-sm font-medium text-text-primary mb-2 truncate" title={name}>{name}</h4>
-                                <div className="aspect-square bg-white rounded-md flex items-center justify-center p-2 flex-grow cursor-pointer" onClick={() => setZoomedItemIndex(index)}>
-                                    <img src={image} alt={name} className="max-w-full max-h-full object-contain" />
-                                </div>
+                                {isPoseItem ? (
+                                    <div className="grid grid-cols-2 gap-2 flex-grow">
+                                        <div className="aspect-square bg-white rounded-md flex items-center justify-center p-1 cursor-pointer" onClick={() => { setZoomedItemIndex(index); setIsShowingFolded(false); }}>
+                                            <img src={item.image} alt={`${name} - Mannequin`} className="max-w-full max-h-full object-contain" />
+                                        </div>
+                                        <div className="aspect-square bg-black rounded-md flex items-center justify-center p-1 cursor-pointer" onClick={() => { setZoomedItemIndex(index); setIsShowingFolded(true); }}>
+                                            <img src={item.skeletonImage} alt={`${name} - Skeleton`} className="max-w-full max-h-full object-contain" />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="aspect-square bg-white rounded-md flex items-center justify-center p-2 flex-grow cursor-pointer" onClick={() => setZoomedItemIndex(index)}>
+                                        <img src={image} alt={name} className="max-w-full max-h-full object-contain" />
+                                    </div>
+                                )}
                                 <div className={`grid ${isPoseItem ? 'grid-cols-3' : 'grid-cols-2'} gap-2 mt-2`}>
                                     <button
                                         onClick={() => handleDownload(image, `${name.replace(/\s+/g, '_')}.png`)}
@@ -149,6 +162,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                             src={currentZoomedImageSrc}
                             alt={`Zoomed content`}
                             className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                            style={isPose(currentZoomedItem) && isShowingFolded ? { backgroundColor: 'black' } : {}}
                         />
                         <button
                             onClick={handleCloseZoom}
@@ -165,22 +179,22 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                         role="toolbar"
                         aria-label="Image actions"
                     >
-                        {isClothing(currentZoomedItem) && currentZoomedItem.foldedImage && (
+                        {(isClothing(currentZoomedItem) && currentZoomedItem.foldedImage) || isPose(currentZoomedItem) ? (
                             <div className="flex items-center gap-1 bg-bg-tertiary p-1 rounded-full">
                                 <button
                                     onClick={() => setIsShowingFolded(false)}
                                     className={`px-3 py-1 text-xs rounded-full ${!isShowingFolded ? 'bg-accent text-accent-text' : 'text-text-secondary'}`}
                                 >
-                                    Laid Out
+                                    {isClothing(currentZoomedItem) ? 'Laid Out' : 'Mannequin'}
                                 </button>
                                 <button
                                     onClick={() => setIsShowingFolded(true)}
                                     className={`px-3 py-1 text-xs rounded-full ${isShowingFolded ? 'bg-accent text-accent-text' : 'text-text-secondary'}`}
                                 >
-                                    Folded
+                                     {isClothing(currentZoomedItem) ? 'Folded' : 'Skeleton'}
                                 </button>
                             </div>
-                        )}
+                        ) : null}
                         <button
                             onClick={() => {
                                 const zoomedItem = items[zoomedItemIndex!];

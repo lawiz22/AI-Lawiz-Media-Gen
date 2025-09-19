@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
@@ -9,6 +7,7 @@ import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, Generated
 import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon } from './icons';
 import { saveToLibrary } from '../services/libraryService';
 import { dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
+import { renderPoseSkeleton } from '../utils/poseRenderer';
 
 // --- Helper Components ---
 
@@ -327,11 +326,13 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                         people: [personJsonData] 
                     };
 
+                    const skeletonImage = renderPoseSkeleton(finalJson);
+
                     setState(prev => ({ 
                         ...prev, 
                         generatedPoses: [
                             ...prev.generatedPoses, 
-                            { description, image, poseJson: finalJson, saved: 'idle' }
+                            { description, image, poseJson: finalJson, skeletonImage, saved: 'idle' }
                         ] 
                     }));
                 } catch (err: any) {
@@ -688,14 +689,14 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                                         className="w-full mt-4 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 bg-accent text-accent-text disabled:opacity-50"
                                     >
                                         {state.isGeneratingPoses ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                                        2. Generate Mannequins
+                                        2. Generate Mannequins & Skeletons
                                     </button>
                                 </div>
                             )}
 
-                            {state.isGeneratingPoses && <LoadingState message={`Generating mannequins for selected poses... (${state.generatedPoses.length}/${state.identifiedPoses.filter(p => p.selected).length} done)`} />}
+                            {state.isGeneratingPoses && <LoadingState message={`Generating assets for selected poses... (${state.generatedPoses.length}/${state.identifiedPoses.filter(p => p.selected).length} done)`} />}
                             
-                            <ExtractorResultsGrid items={state.generatedPoses} onSave={handlePoseSaveToLibrary} title="Generated Mannequins" />
+                            <ExtractorResultsGrid items={state.generatedPoses} onSave={handlePoseSaveToLibrary} title="Generated Poses" />
 
                         </div>
                     </div>

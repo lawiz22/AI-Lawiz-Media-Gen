@@ -192,6 +192,7 @@ export interface IdentifiedPose {
 export interface GeneratedPose {
     description: string;
     image: string; // data URL for mannequin
+    skeletonImage: string; // data URL for skeleton render
     poseJson: object; // The ControlNet JSON object
     saved?: 'idle' | 'saving' | 'saved'; // UI state
 }
