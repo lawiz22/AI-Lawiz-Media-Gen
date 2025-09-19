@@ -1,6 +1,7 @@
 
+
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
-import { fileToGenerativePart, fileToBase64, dataUrlToFile, createBlankImageFile } from '../utils/imageUtils';
+import { fileToGenerativePart, fileToBase64, dataUrlToFile, createBlankImageFile, getImageDimensionsFromFile } from '../utils/imageUtils';
 // Fix: Import 'getRandomPose' to resolve reference error.
 import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
@@ -696,6 +697,60 @@ Focus exclusively on the skeletal posture: the position and orientation of their
     } catch (e) {
         console.error("Failed to parse pose identification from AI:", response.text, e);
         throw new Error("The AI returned an invalid response. Please try again.");
+    }
+};
+
+export const extractPoseKeypoints = async (sourceImage: File): Promise<object> => {
+    const imagePart = await fileToGenerativePart(sourceImage);
+    const { width, height } = await getImageDimensionsFromFile(sourceImage);
+
+    const POSE_KEYPOINTS = [ "Nose", "Neck", "RShoulder", "RElbow", "RWrist", "LShoulder", "LElbow", "LWrist", "RHip", "RKnee", "RAnkle", "LHip", "LKnee", "LAnkle", "REye", "LEye", "REar", "LEar" ];
+    const prompt = `Analyze the person in the image and extract the 2D pose keypoints for a ControlNet OpenPose model. Identify the coordinates (x, y) for each of the 18 standard COCO keypoints. If a keypoint is not visible, set its coordinates and confidence to 0.
+    The keypoints are: ${POSE_KEYPOINTS.join(', ')}.
+    The final JSON must include the original image width and height.`;
+
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    width: { type: Type.INTEGER, description: "The width of the source image in pixels." },
+                    height: { type: Type.INTEGER, description: "The height of the source image in pixels." },
+                    people: {
+                        type: Type.ARRAY,
+                        description: "An array containing detected people. For each person, provide their pose keypoints.",
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                pose_keypoints_2d: {
+                                    type: Type.ARRAY,
+                                    description: "A flat array of [x, y, confidence] triplets for each of the 18 COCO keypoints. This should contain exactly 54 numbers.",
+                                    items: { type: Type.NUMBER }
+                                }
+                            }
+                        }
+                    }
+                },
+                required: ["width", "height", "people"]
+            },
+        },
+    });
+
+    try {
+        const json = JSON.parse(response.text);
+        // Inject width/height if model omits it, which can happen.
+        if (!json.width) json.width = width;
+        if (!json.height) json.height = height;
+        // Ensure people is an array
+        if (!Array.isArray(json.people)) json.people = [];
+
+        return json;
+    } catch (e) {
+        console.error("Failed to parse pose keypoints from AI:", response.text, e);
+        throw new Error("The AI returned invalid JSON for pose keypoints.");
     }
 };
 

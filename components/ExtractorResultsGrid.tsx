@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { GeneratedClothing, GeneratedObject, GeneratedPose } from '../types';
-import { DownloadIcon, SaveIcon, SpinnerIcon, CheckIcon, CloseIcon } from './icons';
+import { DownloadIcon, SaveIcon, SpinnerIcon, CheckIcon, CloseIcon, CodeBracketIcon, CopyIcon } from './icons';
 
 interface ExtractorResultsGridProps {
   items: (GeneratedClothing | GeneratedObject | GeneratedPose)[];
@@ -9,12 +9,13 @@ interface ExtractorResultsGridProps {
 }
 
 const isClothing = (item: any): item is GeneratedClothing => 'itemName' in item;
-const isPose = (item: any): item is GeneratedPose => 'description' in item && 'image' in item && !isClothing(item);
-
+const isPose = (item: any): item is GeneratedPose => 'poseJson' in item;
 
 export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ items, onSave, title }) => {
     const [zoomedItemIndex, setZoomedItemIndex] = useState<number | null>(null);
     const [isShowingFolded, setIsShowingFolded] = useState(false);
+    const [jsonViewer, setJsonViewer] = useState<{ title: string; content: string } | null>(null);
+    const [jsonCopyText, setJsonCopyText] = useState('Copy');
 
     const handleCloseZoom = useCallback(() => {
         setZoomedItemIndex(null);
@@ -24,17 +25,18 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         if (e.key === 'Escape') {
             handleCloseZoom();
+            setJsonViewer(null);
         }
     }, [handleCloseZoom]);
 
     useEffect(() => {
-        if (zoomedItemIndex !== null) {
+        if (zoomedItemIndex !== null || jsonViewer !== null) {
             window.addEventListener('keydown', handleKeyDown);
         }
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [zoomedItemIndex, handleKeyDown]);
+    }, [zoomedItemIndex, jsonViewer, handleKeyDown]);
     
     const currentZoomedItem = zoomedItemIndex !== null ? items[zoomedItemIndex] : null;
     let currentZoomedImageSrc = null;
@@ -42,7 +44,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
         if (isClothing(currentZoomedItem) && currentZoomedItem.foldedImage) {
             currentZoomedImageSrc = isShowingFolded ? currentZoomedItem.foldedImage : currentZoomedItem.laidOutImage;
         } else {
-            currentZoomedImageSrc = isClothing(currentZoomedItem) ? currentZoomedItem.laidOutImage : currentZoomedItem.image;
+            currentZoomedImageSrc = isClothing(currentZoomedItem) ? currentZoomedItem.laidOutImage : (currentZoomedItem as GeneratedObject | GeneratedPose).image;
         }
     }
 
@@ -53,6 +55,14 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const handleCopyJson = () => {
+        if (!jsonViewer) return;
+        navigator.clipboard.writeText(jsonViewer.content).then(() => {
+            setJsonCopyText('Copied!');
+            setTimeout(() => setJsonCopyText('Copy'), 2000);
+        });
     };
 
     if (items.length === 0) {
@@ -67,11 +77,12 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                     {items.map((item, index) => {
                         let name: string;
                         let image: string;
+                        const isPoseItem = isPose(item);
 
                         if (isClothing(item)) {
                             name = item.itemName;
                             image = item.laidOutImage;
-                        } else if (isPose(item)) {
+                        } else if (isPoseItem) {
                             name = `Pose #${index + 1}`;
                             image = item.image;
                         } else {
@@ -87,13 +98,23 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                                 <div className="aspect-square bg-white rounded-md flex items-center justify-center p-2 flex-grow cursor-pointer" onClick={() => setZoomedItemIndex(index)}>
                                     <img src={image} alt={name} className="max-w-full max-h-full object-contain" />
                                 </div>
-                                <div className="grid grid-cols-2 gap-2 mt-2">
+                                <div className={`grid ${isPoseItem ? 'grid-cols-3' : 'grid-cols-2'} gap-2 mt-2`}>
                                     <button
                                         onClick={() => handleDownload(image, `${name.replace(/\s+/g, '_')}.png`)}
                                         className="w-full flex items-center justify-center gap-2 text-xs bg-bg-primary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
+                                        title="Download Image"
                                     >
                                         <DownloadIcon className="w-4 h-4" />
                                     </button>
+                                    {isPoseItem && (
+                                        <button
+                                            onClick={() => setJsonViewer({ title: name, content: JSON.stringify(item.poseJson, null, 2)})}
+                                            className="w-full flex items-center justify-center gap-2 text-xs bg-bg-primary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
+                                            title="View Pose JSON"
+                                        >
+                                            <CodeBracketIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => onSave(item, index)}
                                         disabled={savingStatus !== 'idle'}
@@ -183,6 +204,42 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                         >
                              {currentZoomedItem.saved === 'saving' ? <SpinnerIcon className="w-6 h-6 animate-spin" /> : currentZoomedItem.saved === 'saved' ? <CheckIcon className="w-6 h-6" /> : <SaveIcon className="w-6 h-6" />}
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {jsonViewer && (
+                <div
+                    className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in"
+                    onClick={() => setJsonViewer(null)}
+                >
+                    <div
+                        className="bg-bg-secondary w-full max-w-2xl p-6 rounded-2xl shadow-lg border border-border-primary flex flex-col max-h-[90vh]"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                            <h3 className="text-xl font-bold text-accent">{jsonViewer.title} - Pose JSON</h3>
+                             <button
+                                onClick={() => setJsonViewer(null)}
+                                className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
+                                aria-label="Close"
+                            >
+                                <CloseIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="relative flex-grow bg-bg-primary rounded-md overflow-hidden">
+                            <pre className="h-full overflow-auto p-4 text-xs text-text-secondary whitespace-pre-wrap font-mono">
+                                {jsonViewer.content}
+                            </pre>
+                             <button
+                                onClick={handleCopyJson}
+                                className="absolute top-2 right-2 flex items-center gap-1.5 bg-bg-secondary/80 text-text-secondary text-xs font-semibold py-1 px-2 rounded-full hover:bg-accent hover:text-accent-text transition-colors"
+                                title="Copy JSON"
+                            >
+                                <CopyIcon className="w-3 h-3"/>
+                                {jsonCopyText}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

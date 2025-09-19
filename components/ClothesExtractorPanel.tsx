@@ -1,9 +1,10 @@
 
+
 import React from 'react';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
 import { ExtractorResultsGrid } from './ExtractorResultsGrid';
-import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage, identifyPoses, generatePoseMannequin } from '../services/geminiService';
+import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage, identifyPoses, generatePoseMannequin, extractPoseKeypoints } from '../services/geminiService';
 import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose } from '../types';
 import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon } from './icons';
 import { saveToLibrary } from '../services/libraryService';
@@ -294,19 +295,55 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
 
     const handleGeneratePoses = async () => {
         if (!state.poseSourceFile || state.identifiedPoses.every(p => !p.selected)) return;
-        
-        setState(prev => ({ ...prev, isGeneratingPoses: true, poseError: null, generatedPoses: [] }));
-        const selectedPoses = state.identifiedPoses.filter(pose => pose.selected);
 
-        for (const pose of selectedPoses) {
-            try {
-                const image = await generatePoseMannequin(pose.description, state.poseSourceFile, state.posesKeepClothes);
-                setState(prev => ({ ...prev, generatedPoses: [...prev.generatedPoses, { description: pose.description, image, saved: 'idle' }] }));
-            } catch (err: any) {
-                console.error(`Failed to generate mannequin for pose:`, err);
-                setState(prev => ({ ...prev, poseError: `Error generating a mannequin. Skipping.` }));
+        setState(prev => ({ ...prev, isGeneratingPoses: true, poseError: null, generatedPoses: [] }));
+
+        try {
+            // Extract keypoints for ALL people in the image once.
+            const poseJsonData = await extractPoseKeypoints(state.poseSourceFile);
+            
+            const selectedPoseInfos = state.identifiedPoses
+                .map((pose, index) => ({...pose, originalIndex: index}))
+                .filter(pose => pose.selected);
+
+            for (const poseInfo of selectedPoseInfos) {
+                const { description, originalIndex } = poseInfo;
+                try {
+                    // Generate the mannequin image using the text description
+                    const image = await generatePoseMannequin(description, state.poseSourceFile, state.posesKeepClothes);
+                    
+                    // Get the corresponding JSON data for this person, assuming order is preserved
+                    const allPeople = (poseJsonData as any).people || [];
+                    const personJsonData = allPeople[originalIndex];
+                    
+                    if (!personJsonData) {
+                         throw new Error(`Could not find matching JSON data for pose index ${originalIndex}.`);
+                    }
+
+                    // Create a new JSON object with only this person's data
+                    const finalJson = {
+                        width: (poseJsonData as any).width,
+                        height: (poseJsonData as any).height,
+                        people: [personJsonData] 
+                    };
+
+                    setState(prev => ({ 
+                        ...prev, 
+                        generatedPoses: [
+                            ...prev.generatedPoses, 
+                            { description, image, poseJson: finalJson, saved: 'idle' }
+                        ] 
+                    }));
+                } catch (err: any) {
+                    console.error(`Failed to generate mannequin or JSON for pose index ${originalIndex}:`, err);
+                    setState(prev => ({ ...prev, poseError: `Error generating assets for a pose. Skipping.` }));
+                }
             }
+        } catch (err: any) {
+            console.error(`Failed to extract pose keypoints:`, err);
+            setState(prev => ({ ...prev, poseError: `Critical error extracting pose data: ${err.message}` }));
         }
+
         setState(prev => ({ ...prev, isGeneratingPoses: false }));
     };
 

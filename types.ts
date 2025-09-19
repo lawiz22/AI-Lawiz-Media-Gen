@@ -1,4 +1,3 @@
-
 import type { fileURLToPath } from "url";
 
 export interface User {
@@ -192,7 +191,8 @@ export interface IdentifiedPose {
 
 export interface GeneratedPose {
     description: string;
-    image: string; // data URL
+    image: string; // data URL for mannequin
+    poseJson: object; // The ControlNet JSON object
     saved?: 'idle' | 'saving' | 'saved'; // UI state
 }
 
