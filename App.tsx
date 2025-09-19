@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType } from './types';
@@ -52,6 +53,7 @@ const initialExtractorState: ExtractorState = {
     isGeneratingPoses: false,
     generatedPoses: [],
     poseError: null,
+    posesKeepClothes: false,
 };
 
 const initialVideoUtilsState: VideoUtilsState = {

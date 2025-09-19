@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
@@ -299,7 +300,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
 
         for (const pose of selectedPoses) {
             try {
-                const image = await generatePoseMannequin(pose.description);
+                const image = await generatePoseMannequin(pose.description, state.poseSourceFile, state.posesKeepClothes);
                 setState(prev => ({ ...prev, generatedPoses: [...prev.generatedPoses, { description: pose.description, image, saved: 'idle' }] }));
             } catch (err: any) {
                 console.error(`Failed to generate mannequin for pose:`, err);
@@ -596,6 +597,17 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                                 >
                                     <LibraryIcon className="w-6 h-6"/>
                                 </button>
+                            </div>
+                            <div className="space-y-3 pt-2">
+                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={state.posesKeepClothes} 
+                                        onChange={(e) => setState(prev => ({ ...prev, posesKeepClothes: e.target.checked }))} 
+                                        className="rounded text-accent focus:ring-accent" 
+                                    />
+                                    Keep clothes and accessories on mannequin
+                                </label>
                             </div>
                            
                             <button

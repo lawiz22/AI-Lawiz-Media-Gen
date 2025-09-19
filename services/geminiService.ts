@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
 import { fileToGenerativePart, fileToBase64, dataUrlToFile, createBlankImageFile } from '../utils/imageUtils';
 // Fix: Import 'getRandomPose' to resolve reference error.
@@ -658,7 +659,9 @@ Generate a new, photorealistic image of *only* this object, placed on a plain, s
 
 export const identifyPoses = async (sourceImage: File): Promise<IdentifiedPose[]> => {
     const imagePart = await fileToGenerativePart(sourceImage);
-    const prompt = `Analyze the image and identify every distinct person. For each person, provide one highly detailed, comprehensive paragraph describing their pose. Describe the position and orientation of their head, torso, shoulders, arms, hands, legs, and feet. Capture the angle, rotation, and any nuanced gestures. Be precise and thorough.`;
+    const prompt = `Analyze the image and identify every distinct person. For each person, provide one highly detailed, comprehensive paragraph describing their pose only.
+**Strictly ignore their clothing, accessories, and facial expressions.**
+Focus exclusively on the skeletal posture: the position and orientation of their head, torso,shoulders, arms, hands, legs, and feet. Capture the angle, rotation, and any nuanced gestures. Be precise and thorough.`;
 
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -696,21 +699,36 @@ export const identifyPoses = async (sourceImage: File): Promise<IdentifiedPose[]
     }
 };
 
-export const generatePoseMannequin = async (poseDescription: string): Promise<string> => {
-    const prompt = `Generate a photorealistic image of a single wooden art mannequin on a completely plain, solid white background. The mannequin must be positioned in this exact pose: "${poseDescription}". The image should be a clean, well-lit studio shot, focusing only on the mannequin and its pose. Do not include any other objects or backgrounds.`;
+export const generatePoseMannequin = async (poseDescription: string, sourceImage: File, keepClothes: boolean): Promise<string> => {
+    
+    const imagePart = await fileToGenerativePart(sourceImage);
+    let prompt: string;
+
+    if (keepClothes) {
+        prompt = `From the provided reference image, analyze the pose of the person described as: "${poseDescription}".
+Your task is to generate a photorealistic image of a simple wooden art mannequin on a plain, solid white background.
+The mannequin must **exactly replicate the pose AND be dressed in the exact clothing and accessories** worn by the person in the reference image.
+The output should be a clean, well-lit studio shot.`;
+    } else {
+        prompt = `From the provided reference image, analyze the pose of the person described as: "${poseDescription}".
+Your task is to generate a photorealistic image of a simple, unadorned wooden art mannequin on a plain, solid white background.
+The mannequin must **exactly replicate the pose** from the reference image.
+**Do NOT include any clothing, accessories, or features from the person in the original photo.**
+The output should be a clean, well-lit studio shot focusing only on the mannequin and its precise pose.`;
+    }
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image-preview',
-        contents: { parts: [{ text: prompt }] },
+        contents: { parts: [imagePart, { text: prompt }] },
         config: {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
         },
     });
 
-    const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+    const imagePartResponse = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
 
-    if (imagePart?.inlineData?.data) {
-        return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+    if (imagePartResponse?.inlineData?.data) {
+        return `data:${imagePartResponse.inlineData.mimeType};base64,${imagePartResponse.inlineData.data}`;
     }
 
     throw new Error(`Failed to generate a mannequin image for the pose.`);

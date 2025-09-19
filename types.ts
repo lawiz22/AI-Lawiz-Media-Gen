@@ -1,3 +1,4 @@
+
 import type { fileURLToPath } from "url";
 
 export interface User {
@@ -223,6 +224,7 @@ export interface ExtractorState {
     isGeneratingPoses: boolean;
     generatedPoses: GeneratedPose[];
     poseError: string | null;
+    posesKeepClothes: boolean;
 }
 
 export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose';
