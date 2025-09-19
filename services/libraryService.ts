@@ -82,7 +82,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
     try {
       const { index, fileId: indexFileId } = await driveService.getLibraryIndex();
 
-      if (newItem.mediaType === 'prompt') {
+      if (newItem.mediaType === 'prompt' || newItem.mediaType === 'color-palette') {
           index.items[newItem.id] = newItem;
           await driveService.updateLibraryIndex(index, indexFileId);
           return;
@@ -96,6 +96,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
         case 'clothes': subfolderName = 'clothes'; break;
         case 'extracted-frame': subfolderName = 'extracted-frames'; break;
         case 'object': subfolderName = 'objects'; break;
+        case 'pose': subfolderName = 'poses'; break;
         default: subfolderName = 'misc';
       }
       const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
@@ -147,7 +148,7 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
         const itemMetadata = missingItems[i];
         onProgress(`Processing "${itemMetadata.name || itemMetadata.mediaType}" (${i + 1}/${missingItems.length})...`);
         try {
-            if (itemMetadata.mediaType === 'prompt') {
+            if (itemMetadata.mediaType === 'prompt' || itemMetadata.mediaType === 'color-palette') {
                 await idbService.saveToLibrary(itemMetadata as LibraryItem, true);
             } else if (itemMetadata.driveFileId) {
                 const blob = await driveService.downloadMediaFile(itemMetadata.driveFileId);
@@ -188,8 +189,9 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
     const localItems = await idbService.getLibraryItems();
     const { index, fileId: initialFileId } = await driveService.getLibraryIndex();
 
-    const itemsToUpload = localItems.filter(item => !item.driveFileId && item.mediaType !== 'prompt');
-    const promptsToSync = localItems.filter(item => item.mediaType === 'prompt' && !index.items[item.id]);
+    const textBasedTypes = ['prompt', 'color-palette'];
+    const itemsToUpload = localItems.filter(item => !item.driveFileId && !textBasedTypes.includes(item.mediaType));
+    const promptsToSync = localItems.filter(item => textBasedTypes.includes(item.mediaType) && !index.items[item.id]);
 
     if (itemsToUpload.length === 0 && promptsToSync.length === 0) {
         onProgress("All local items are already synced to Drive.");
@@ -215,6 +217,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
                     case 'clothes': subfolderName = 'clothes'; break;
                     case 'extracted-frame': subfolderName = 'extracted-frames'; break;
                     case 'object': subfolderName = 'objects'; break;
+                    case 'pose': subfolderName = 'poses'; break;
                     default: subfolderName = 'misc';
                 }
                 const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);

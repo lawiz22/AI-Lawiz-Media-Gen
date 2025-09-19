@@ -246,6 +246,8 @@ export interface LibraryItem {
     driveFileId?: string; // Google Drive file ID for the media
     previewThumbnail?: string; // AI-generated visual thumbnail for prompts
     poseDescription?: string; // For pose items, the detailed text description
+    poseJson?: string; // For pose items, the ControlNet JSON as a string
+    skeletonImage?: string; // For pose items, the data URL for the skeleton visualization
 }
 
 export interface VersionInfo {

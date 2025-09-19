@@ -328,7 +328,22 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Media Column */}
                   <div className="space-y-4">
-                    {(selectedItemModal.mediaType !== 'prompt' && selectedItemModal.mediaType !== 'color-palette') && (
+                    {selectedItemModal.mediaType === 'pose' ? (
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <h4 className="text-sm font-semibold text-text-secondary mb-2 text-center">Mannequin</h4>
+                                <div className="aspect-square bg-white rounded-lg flex items-center justify-center p-1">
+                                    <img src={selectedItemModal.media} alt="Mannequin" className="max-w-full max-h-full object-contain" />
+                                </div>
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-semibold text-text-secondary mb-2 text-center">Skeleton</h4>
+                                <div className="aspect-square bg-black rounded-lg flex items-center justify-center p-1">
+                                    {selectedItemModal.skeletonImage ? <img src={selectedItemModal.skeletonImage} alt="Skeleton" className="max-w-full max-h-full object-contain" /> : <p className="text-xs text-text-muted">No skeleton available</p>}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (selectedItemModal.mediaType !== 'prompt' && selectedItemModal.mediaType !== 'color-palette') && (
                         <div className="aspect-square bg-bg-primary rounded-lg flex items-center justify-center overflow-hidden">
                             {selectedItemModal.mediaType === 'video' ? (
                                 <video src={selectedItemModal.media} controls className="w-full h-full object-contain" />
@@ -366,6 +381,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
                     <DetailItem label="Type" value={selectedItemModal.mediaType} />
                     {selectedItemModal.mediaType === 'prompt' && <DetailItem label="Prompt Text" value={selectedItemModal.media} isCode />}
                     {selectedItemModal.poseDescription && <DetailItem label="Pose Description" value={selectedItemModal.poseDescription} isCode />}
+                    {selectedItemModal.poseJson && <DetailItem label="Pose JSON (ControlNet)" value={selectedItemModal.poseJson} isCode />}
                     {renderOptionsDetails(selectedItemModal.options)}
                     <div className="pt-4 flex flex-wrap gap-2">
                          <button

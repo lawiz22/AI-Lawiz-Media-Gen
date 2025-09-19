@@ -363,6 +363,8 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                 thumbnail: await dataUrlToThumbnail(item.image, 256),
                 sourceImage: state.poseSourceFile ? await fileToResizedDataUrl(state.poseSourceFile, 512) : undefined,
                 poseDescription: item.description,
+                skeletonImage: item.skeletonImage,
+                poseJson: JSON.stringify(item.poseJson, null, 2),
             });
              setState(prev => {
                 const updatedPoses = [...prev.generatedPoses];
