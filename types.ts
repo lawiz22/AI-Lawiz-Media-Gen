@@ -6,7 +6,7 @@ export interface User {
   password?: string; // Only used for creation/local storage
 }
 
-export type PoseMode = 'random' | 'select' | 'prompt';
+export type PoseMode = 'random' | 'select' | 'prompt' | 'library';
 export type BackgroundMode = 'black' | 'white' | 'gray' | 'green screen' | 'natural studio' | 'original' | 'random' | 'prompt' | 'image';
 export type ClothingMode = 'original' | 'image' | 'prompt' | 'random';
 export type AspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
@@ -14,6 +14,7 @@ export type PhotoStyle = 'professional photoshoot' | '35mm analog' | 'polaroid' 
 export type ImageStyle = 'photorealistic' | 'cartoon' | 'comic book style' | 'anime' | 'oil painting' | 'watercolor painting' | 'impressionism' | 'charcoal sketch' | 'cubism' | 'surrealism' | 'pixel art';
 export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | 'a 1970s film look' | 'a high-contrast film noir style photograph' | 'a classical Dutch Master painting' | 'a high-fashion Vogue magazine shot';
 export type GeminiMode = 'i2i' | 't2i';
+export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image-preview';
 export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
 export type ComfyVideoModelType = 'wan-i2v' | 'svd';
@@ -38,6 +39,8 @@ export interface GenerationOptions {
     geminiT2IModel?: GeminiT2IModel;
     poseMode: PoseMode;
     poseSelection: string[];
+    poseLibraryItems?: LibraryItem[];
+    geminiPoseSource?: GeminiPoseSource;
     background: BackgroundMode;
     customBackground?: string;
     consistentBackground?: boolean;

@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Part, Type, Modality } from "@google/genai";
 import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState, PaletteColor } from '../types';
 import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart } from "../utils/imageUtils";
@@ -72,27 +73,43 @@ export const generatePortraits = async (
     if (clothingPart) parts.push(clothingPart);
 
     const poses: string[] = [];
-    if (options.poseMode === 'random') {
-        for (let i = 0; i < options.numImages; i++) {
-            poses.push(decodePose(getRandomPose()));
-        }
-    } else if (options.poseMode === 'select' || options.poseMode === 'prompt') {
-        const selectedPoses = options.poseSelection.map(p => POSES.includes(p) ? decodePose(p) : p);
-        for (let i = 0; i < options.numImages; i++) {
-            // Cycle through selected poses if there are fewer poses than requested images
-            poses.push(selectedPoses[i % selectedPoses.length]);
+    if (options.poseMode !== 'library') {
+        if (options.poseMode === 'random') {
+            for (let i = 0; i < options.numImages; i++) {
+                poses.push(decodePose(getRandomPose()));
+            }
+        } else if (options.poseMode === 'select' || options.poseMode === 'prompt') {
+            const selectedPoses = options.poseSelection.map(p => POSES.includes(p) ? decodePose(p) : p);
+            for (let i = 0; i < options.numImages; i++) {
+                // Cycle through selected poses if there are fewer poses than requested images
+                poses.push(selectedPoses[i % selectedPoses.length]);
+            }
         }
     }
 
 
     for (let i = 0; i < options.numImages; i++) {
         updateProgress(`Generating image ${i + 1}/${options.numImages}...`, i / totalSteps);
-        const pose = poses[i];
+        
+        let pose: string | null = null;
+        const currentParts: Part[] = [...parts]; 
+
+        if (options.poseMode === 'library' && options.poseLibraryItems && options.poseLibraryItems.length > 0) {
+            const poseItem = options.poseLibraryItems[i % options.poseLibraryItems.length];
+            if (options.geminiPoseSource === 'json' && poseItem.poseJson) {
+                currentParts.push({ text: `Use this exact OpenPose JSON data for the target pose:\n${poseItem.poseJson}` });
+            } else { // Default to mannequin image
+                currentParts.push(dataUrlToGenerativePart(poseItem.media));
+            }
+        } else {
+            pose = poses[i];
+        }
+
         const promptSegments = buildPromptSegments(options, pose, !!previewedClothingImage);
         const textPrompt = promptSegments.join('\n\n');
         if (!finalPrompt) finalPrompt = textPrompt;
 
-        const currentParts: Part[] = [...parts, { text: textPrompt }];
+        currentParts.push({ text: textPrompt });
         
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',

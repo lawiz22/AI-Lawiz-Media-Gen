@@ -38,7 +38,8 @@ const getCategoryIcon = (mediaType: LibraryItemType, className: string = "w-4 h-
     }
 };
 
-const FILTER_BUTTONS: { id: LibraryItemType; label: string; icon: JSX.Element }[] = [
+// Fix: Changed JSX.Element to React.ReactElement to resolve namespace issue.
+const FILTER_BUTTONS: { id: LibraryItemType; label: string; icon: React.ReactElement }[] = [
     { id: 'image', label: 'Images', icon: <PhotographIcon className="w-5 h-5"/> },
     { id: 'character', label: 'Characters', icon: <CharacterIcon className="w-5 h-5"/> },
     { id: 'video', label: 'Videos', icon: <VideoIcon className="w-5 h-5"/> },

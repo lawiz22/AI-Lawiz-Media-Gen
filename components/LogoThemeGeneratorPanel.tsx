@@ -206,7 +206,8 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         const files = Array.from(e.target.files);
         if (files.length === 0) return;
     
-        const newItems: LibraryItem[] = await Promise.all(files.map(async (file, index) => {
+        // Fix: Explicitly type the `file` parameter as `File` to resolve TS inference errors.
+        const newItems: LibraryItem[] = await Promise.all(files.map(async (file: File, index) => {
             const media = await fileToDataUrl(file);
             const thumbnail = await dataUrlToThumbnail(media, 128);
             return { id: Date.now() + index, name: file.name, mediaType: 'image' as const, media, thumbnail };

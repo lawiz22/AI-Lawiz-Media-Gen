@@ -151,6 +151,8 @@ const App: React.FC = () => {
         numImages: 4,
         poseMode: 'random',
         poseSelection: [],
+        poseLibraryItems: [],
+        geminiPoseSource: 'mannequin',
         background: 'original',
         clothing: 'original',
         aspectRatio: '3:4',
@@ -216,6 +218,7 @@ const App: React.FC = () => {
     const [isFeatureAnalysisModalOpen, setIsFeatureAnalysisModalOpen] = useState(false);
     const [isClothingPickerOpen, setIsClothingPickerOpen] = useState(false);
     const [isBackgroundPickerOpen, setIsBackgroundPickerOpen] = useState(false);
+    const [isPosePickerOpen, setIsPosePickerOpen] = useState(false);
     const [isColorImagePickerOpen, setIsColorImagePickerOpen] = useState(false);
     const [isVideoUtilsPickerOpen, setIsVideoUtilsPickerOpen] = useState(false);
     const [isStartFramePickerOpen, setIsStartFramePickerOpen] = useState(false);
@@ -258,6 +261,9 @@ const App: React.FC = () => {
         if (isLoading) return false;
         if (options.provider === 'gemini') {
             if (options.geminiMode === 't2i') return !!options.geminiPrompt?.trim();
+            if (options.poseMode === 'library') {
+                 return !!sourceImage && !!options.poseLibraryItems && options.poseLibraryItems.length > 0;
+            }
             return !!sourceImage;
         } else if (options.provider === 'comfyui') {
             const baseReady = !!isComfyUIConnected && !!options.comfyPrompt?.trim();
@@ -379,6 +385,7 @@ const App: React.FC = () => {
             comfyPrompt: '',
             customBackground: '',
             customClothingPrompt: '',
+            poseLibraryItems: [],
         }));
         setPromptGenState({
             image: null, prompt: '', bgImage: null, bgPrompt: '',
@@ -893,6 +900,7 @@ const App: React.FC = () => {
                                 onGenerate={handleGenerate}
                                 onReset={handleReset}
                                 onGeneratePrompt={() => {}}
+                                onOpenPosePicker={() => setIsPosePickerOpen(true)}
                                 onExportWorkflow={handleExport}
                                 isDisabled={isLoading}
                                 isReady={isReadyToGenerate}
@@ -1146,6 +1154,18 @@ const App: React.FC = () => {
                         setCharacterName('');
                     }}
                     filter={broadImagePickerFilter}
+                />
+            )}
+            {isPosePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isPosePickerOpen}
+                    onClose={() => setIsPosePickerOpen(false)}
+                    onSelectItem={() => {}}
+                    onSelectMultiple={(items) => {
+                        setOptions(prev => ({ ...prev, poseLibraryItems: items.slice(0, prev.numImages) }));
+                    }}
+                    filter="pose"
+                    multiSelect
                 />
             )}
             {isVideoStartFramePickerOpen && (

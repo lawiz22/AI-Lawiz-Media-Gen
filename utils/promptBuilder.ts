@@ -99,10 +99,12 @@ export const generateRandomPosePrompts = (count: number): string[] => {
 export const getRandomTextObjectPrompt = (): string => getRandom(TEXT_OBJECT_PROMPTS);
 
 
-export const buildPromptSegments = (options: GenerationOptions, pose: string, hasPreviewedClothing: boolean): string[] => {
+export const buildPromptSegments = (options: GenerationOptions, pose: string | null, hasPreviewedClothing: boolean): string[] => {
     const promptSegments: string[] = [`Generate a high-quality, professional, and tasteful image. The subject is a person with the same face and features as in the reference image.`];
     
-    promptSegments.push(`Pose: ${pose}`);
+    if (options.poseMode !== 'library' && pose) {
+        promptSegments.push(`Pose: ${pose}`);
+    }
 
     // Clothing
     if (hasPreviewedClothing) {

@@ -12,7 +12,7 @@ import {
 } from '../constants';
 import { generateBackgroundImagePreview, generateClothingPreview } from '../services/geminiService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
-import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon } from './icons';
+import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon, LibraryIcon } from './icons';
 
 // --- Prop Types ---
 interface OptionsPanelProps {
@@ -26,6 +26,7 @@ interface OptionsPanelProps {
   onReset: () => void;
   onGeneratePrompt: () => void;
   onExportWorkflow: () => void;
+  onOpenPosePicker?: () => void;
   isDisabled: boolean;
   isReady: boolean;
   isGeneratingPrompt: boolean;
@@ -138,7 +139,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   options, setOptions,
   previewedBackgroundImage, setPreviewedBackgroundImage,
   previewedClothingImage, setPreviewedClothingImage,
-  onGenerate, onReset, onGeneratePrompt, onExportWorkflow,
+  onGenerate, onReset, onGeneratePrompt, onExportWorkflow, onOpenPosePicker,
   isDisabled, isReady, isGeneratingPrompt,
   comfyUIObjectInfo, comfyUIUrl, sourceImage,
   hideProviderSwitch = false, hideGeminiModeSwitch = false,
@@ -583,6 +584,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             { value: 'random', label: 'Random Preset Poses' },
                             { value: 'select', label: 'Select Preset Poses' },
                             { value: 'prompt', label: 'Custom Pose Prompts' },
+                            { value: 'library', label: 'From Library' },
                         ]}
                         disabled={isDisabled}
                     />
@@ -620,6 +622,37 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             >
                                 <RefreshIcon className="w-4 h-4" /> Randomize
                             </button>
+                        </div>
+                    )}
+                    {options.poseMode === 'library' && onOpenPosePicker && (
+                        <div className="space-y-4 p-3 bg-bg-primary/50 rounded-lg border border-border-primary">
+                            <button
+                                onClick={onOpenPosePicker}
+                                disabled={isDisabled}
+                                className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
+                            >
+                                <LibraryIcon className="w-5 h-5" />
+                                Select Poses ({options.poseLibraryItems?.length || 0}/{options.numImages} selected)
+                            </button>
+                            {options.poseLibraryItems && options.poseLibraryItems.length > 0 && (
+                                <div className="grid grid-cols-4 gap-2">
+                                    {options.poseLibraryItems.map(item => (
+                                        <div key={item.id} className="relative aspect-square">
+                                            <img src={item.thumbnail} alt={item.name} title={item.name} className="w-full h-full object-cover rounded-md" />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <SelectInput
+                                label="Use Pose As"
+                                value={options.geminiPoseSource || 'mannequin'}
+                                onChange={handleOptionChange('geminiPoseSource')}
+                                options={[
+                                    { value: 'mannequin', label: 'Mannequin Image' },
+                                    { value: 'json', label: 'JSON Data' },
+                                ]}
+                                disabled={isDisabled}
+                            />
                         </div>
                     )}
                 </OptionSection>
