@@ -189,7 +189,7 @@ export interface IdentifiedPose {
     description: string;
 }
 
-export type MannequinStyle = 'wooden-artist' | 'neutral-gray' | 'wireframe' | 'comic-outline';
+export type MannequinStyle = 'wooden-artist' | 'neutral-gray' | 'wireframe' | 'comic-outline' | 'custom-reference';
 
 export interface GeneratedPose {
     description: string;
@@ -229,6 +229,7 @@ export interface ExtractorState {
     generatedPoses: GeneratedPose[];
     poseError: string | null;
     mannequinStyle: MannequinStyle;
+    mannequinReferenceFile: File | null;
 }
 
 export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose';

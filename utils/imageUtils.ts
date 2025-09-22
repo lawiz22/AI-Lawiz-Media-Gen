@@ -26,6 +26,24 @@ export const fileToGenerativePart = async (file: File): Promise<{inlineData: {mi
   });
 };
 
+export const dataUrlToGenerativePart = (dataUrl: string): {inlineData: {mimeType: string; data: string}} => {
+    const [header, base64Data] = dataUrl.split(',');
+    if (!header || !base64Data) {
+        throw new Error("Invalid data URL format");
+    }
+    const mimeTypeMatch = header.match(/:(.*?);/);
+    if (!mimeTypeMatch || !mimeTypeMatch[1]) {
+        throw new Error("Could not extract MIME type from data URL");
+    }
+    const mimeType = mimeTypeMatch[1];
+    return {
+        inlineData: {
+            mimeType: mimeType,
+            data: base64Data
+        }
+    };
+};
+
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

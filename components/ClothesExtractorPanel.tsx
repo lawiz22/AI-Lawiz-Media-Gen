@@ -59,6 +59,7 @@ interface ExtractorToolsPanelProps {
     onOpenLibraryForClothes: () => void;
     onOpenLibraryForObjects: () => void;
     onOpenLibraryForPoses: () => void;
+    onOpenLibraryForMannequinRef: () => void;
     activeSubTab: string;
     setActiveSubTab: (tabId: string) => void;
 }
@@ -68,10 +69,11 @@ const MANNEQUIN_STYLES: { id: MannequinStyle, label: string }[] = [
     { id: 'neutral-gray', label: 'Neutral Gray 3D Model' },
     { id: 'wireframe', label: 'Technical Wireframe' },
     { id: 'comic-outline', label: 'Comic Book Outline' },
+    { id: 'custom-reference', label: 'Upload Custom Reference' },
 ];
 
 // --- Main Panel ---
-export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState, onReset, onOpenLibraryForClothes, onOpenLibraryForObjects, onOpenLibraryForPoses, activeSubTab, setActiveSubTab }) => {
+export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState, onReset, onOpenLibraryForClothes, onOpenLibraryForObjects, onOpenLibraryForPoses, onOpenLibraryForMannequinRef, activeSubTab, setActiveSubTab }) => {
     
     // --- Clothes Logic ---
     const handleIdentify = async () => {
@@ -283,7 +285,11 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                     const skeletonImage = renderPoseSkeleton(poseJson);
 
                     // Fix: Destructure the image and prompt from the updated service function.
-                    const { image: mannequinImage, prompt: generationPrompt } = await generatePoseMannequin(state.poseSourceFile, state.mannequinStyle);
+                    const { image: mannequinImage, prompt: generationPrompt } = await generatePoseMannequin(
+                        state.poseSourceFile, 
+                        state.mannequinStyle,
+                        state.mannequinReferenceFile
+                    );
 
                     setState(prev => ({ 
                         ...prev, 
@@ -352,6 +358,8 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
         { id: 'objects', label: 'Object Extractor' },
         { id: 'poses', label: 'Pose Extractor' },
     ];
+    
+    const isGeneratePoseDisabled = !state.poseSourceFile || state.isGeneratingPoses || (state.mannequinStyle === 'custom-reference' && !state.mannequinReferenceFile);
     
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto">
@@ -618,11 +626,30 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                                     ))}
                                 </select>
                             </div>
+                            {state.mannequinStyle === 'custom-reference' && (
+                                <div className="flex items-center gap-2 mt-2">
+                                    <div className="flex-grow">
+                                        <ImageUploader
+                                            label="Custom Mannequin (1:1)"
+                                            id="mannequin-ref-image"
+                                            onImageUpload={(file) => setState(prev => ({...prev, mannequinReferenceFile: file}))}
+                                            sourceFile={state.mannequinReferenceFile}
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={onOpenLibraryForMannequinRef}
+                                        className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                        title="Select from Library"
+                                    >
+                                        <LibraryIcon className="w-6 h-6"/>
+                                    </button>
+                                </div>
+                            )}
                            
                             <button
                                 onClick={handleGeneratePoses}
-                                disabled={!state.poseSourceFile || state.isGeneratingPoses}
-                                style={state.poseSourceFile && !state.isGeneratingPoses ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                                disabled={isGeneratePoseDisabled}
+                                style={!isGeneratePoseDisabled ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
                                 className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
                             >
                                 {state.isGeneratingPoses ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}

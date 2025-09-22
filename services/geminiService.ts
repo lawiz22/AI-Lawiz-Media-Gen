@@ -1,843 +1,640 @@
-
-import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
-import { fileToGenerativePart, fileToBase64, dataUrlToFile, createBlankImageFile, dataUrlToBlob } from '../utils/imageUtils';
-// Fix: Import 'getRandomPose' to resolve reference error.
-import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
+import { GoogleGenAI, Part, Type, Modality } from "@google/genai";
+import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState } from '../types';
+import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
-import { MANNEQUIN_STYLE_REFERENCES } from "../assets/styleReferences";
-import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, LogoThemeState, PaletteColor, MannequinStyle } from '../types';
+import { buildPromptSegments, decodePose, getRandomPose } from "../utils/promptBuilder";
+import { MANNEQUIN_STYLE_REFERENCES } from '../assets/styleReferences';
+import { POSES } from "../constants";
+
+// Fix: Add full implementation for the geminiService module.
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
-// Helper to convert an SVG data URL to a PNG GenerativePart for the Gemini API.
-const svgDataUrlToPngGenerativePart = async (svgDataUrl: string, size: number = 512): Promise<{inlineData: {mimeType: string; data: string}}> => {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = size;
-            canvas.height = size;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-                return reject(new Error('Could not get canvas context'));
-            }
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            const pngDataUrl = canvas.toDataURL('image/png');
-            const base64Data = pngDataUrl.split(',')[1];
-            if (!base64Data) {
-                return reject(new Error('Failed to extract base64 string from PNG data URL.'));
-            }
-            resolve({
-                inlineData: {
-                    mimeType: 'image/png',
-                    data: base64Data
-                }
-            });
-        };
-        img.onerror = (err) => {
-            reject(new Error(`Failed to load SVG data URL as an image.`));
-        };
-        img.src = svgDataUrl;
-    });
-};
-
-
 export const generatePortraits = async (
-    sourceImage: File | null, 
-    options: GenerationOptions, 
+    sourceImage: File | null,
+    options: GenerationOptions,
     updateProgress: (message: string, value: number) => void,
     clothingImage: File | null,
     backgroundImage: File | null,
     previewedBackgroundImage: string | null,
     previewedClothingImage: string | null
-): Promise<{ images: string[], finalPrompt: string | null }> => {
-
-    // --- TEXT-TO-IMAGE MODE ---
+): Promise<{ images: string[]; finalPrompt: string | null }> => {
     if (options.geminiMode === 't2i') {
-        updateProgress("Generating text-to-image...", 0.1);
-        const t2iModel = options.geminiT2IModel || 'imagen-4.0-generate-001';
-        
-        if (t2iModel === 'imagen-4.0-generate-001') {
-            const response = await ai.models.generateImages({
-                model: t2iModel,
-                prompt: options.geminiPrompt!,
-                config: {
-                    numberOfImages: options.numImages,
-                    outputMimeType: 'image/jpeg',
-                    aspectRatio: options.aspectRatio,
-                },
-            });
-            updateProgress("Finalizing images...", 0.9);
-            const imageUrls = response.generatedImages.map(img => `data:image/jpeg;base64,${img.image.imageBytes}`);
-            return { images: imageUrls, finalPrompt: options.geminiPrompt || null };
-        } else { // gemini-2.5-flash-image-preview
-             const allImages = [];
-             const finalPromptForModel = `Generate a single, high-quality image based on this description: ${options.geminiPrompt!}`;
-             for (let i = 0; i < options.numImages; i++) {
-                updateProgress(`Generating image ${i + 1}/${options.numImages}...`, (i + 1) / options.numImages);
-                const response: GenerateContentResponse = await ai.models.generateContent({
-                    model: t2iModel,
-                    contents: { parts: [{ text: finalPromptForModel }] },
-                    config: {
-                        responseModalities: [Modality.IMAGE, Modality.TEXT]
-                    }
-                });
-                const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-                if (imagePart?.inlineData?.data) {
-                    allImages.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
-                }
-             }
-             updateProgress("Finalizing images...", 0.9);
-             return { images: allImages, finalPrompt: options.geminiPrompt || null };
+        if (!options.geminiPrompt) {
+            throw new Error("A prompt is required for Text-to-Image generation.");
         }
+        const model = options.geminiT2IModel || 'imagen-4.0-generate-001';
+        updateProgress(`Generating with ${model}...`, 0.1);
+
+        const response = await ai.models.generateImages({
+            model,
+            prompt: options.geminiPrompt,
+            config: {
+                numberOfImages: options.numImages,
+                aspectRatio: options.aspectRatio,
+                outputMimeType: 'image/jpeg'
+            }
+        });
+
+        const images = response.generatedImages.map(img => `data:image/jpeg;base64,${img.image.imageBytes}`);
+        return { images, finalPrompt: options.geminiPrompt };
     }
 
-    // --- IMAGE-TO-IMAGE MODE ---
-    if (!sourceImage) {
-        throw new Error("Source image is required for image-to-image generation.");
+    // I2I Mode
+    if (!sourceImage) throw new Error("A source image is required for Image-to-Image mode.");
+
+    const allImages: string[] = [];
+    let finalPrompt: string | null = null;
+    const totalSteps = options.numImages;
+
+    const sourcePart = await fileToGenerativePart(sourceImage);
+    const parts: Part[] = [sourcePart];
+
+    let bgPart: Part | null = null;
+    if (options.background === 'image' && backgroundImage) {
+        bgPart = await fileToGenerativePart(backgroundImage);
+    } else if (options.background === 'prompt' && options.consistentBackground && previewedBackgroundImage) {
+        const response = await fetch(previewedBackgroundImage);
+        const blob = await response.blob();
+        const file = new File([blob], "bg.jpeg", { type: "image/jpeg" });
+        bgPart = await fileToGenerativePart(file);
     }
-    
-    updateProgress("Preparing source images...", 0.05);
-    
-    // The gemini-2.5-flash-image-preview model inherits the aspect ratio from the source image.
-    // To enforce the user's selection, we must pre-crop all input images before sending them.
-    const croppedSourceImage = await cropImageToAspectRatio(sourceImage, options.aspectRatio);
-    const sourceImagePart = await fileToGenerativePart(croppedSourceImage);
+    if (bgPart) parts.push(bgPart);
 
-    // Crop uploaded reference images
-    const croppedClothingImage = clothingImage ? await cropImageToAspectRatio(clothingImage, options.aspectRatio) : null;
-    const clothingImagePart = croppedClothingImage ? await fileToGenerativePart(croppedClothingImage) : null;
-    const croppedBackgroundImage = backgroundImage ? await cropImageToAspectRatio(backgroundImage, options.aspectRatio) : null;
-    let backgroundImagePart = croppedBackgroundImage ? await fileToGenerativePart(croppedBackgroundImage) : null;
-    
-    // Handle AI-generated preview images
-    if (previewedBackgroundImage && options.consistentBackground) {
-        const bgFile = await dataUrlToFile(previewedBackgroundImage, 'background.jpeg');
-        // Background preview is already generated with the correct aspect ratio, so no cropping needed.
-        backgroundImagePart = await fileToGenerativePart(bgFile);
+    let clothingPart: Part | null = null;
+    if (options.clothing === 'image' && clothingImage) {
+        clothingPart = await fileToGenerativePart(clothingImage);
+    } else if ((options.clothing === 'prompt' || options.clothing === 'random') && previewedClothingImage) {
+        const response = await fetch(previewedClothingImage);
+        const blob = await response.blob();
+        const file = new File([blob], "clothing.jpeg", { type: "image/jpeg" });
+        clothingPart = await fileToGenerativePart(file);
     }
+    if (clothingPart) parts.push(clothingPart);
 
-    const previewedClothingFile = previewedClothingImage ? await dataUrlToFile(previewedClothingImage, 'clothing.jpeg') : null;
-    // Clothing preview is generated at 1:1, so it MUST be cropped to the target ratio.
-    const croppedPreviewedClothingFile = previewedClothingFile ? await cropImageToAspectRatio(previewedClothingFile, options.aspectRatio) : null;
-    const previewedClothingImagePart = croppedPreviewedClothingFile ? await fileToGenerativePart(croppedPreviewedClothingFile) : null;
-
-
-    let posePrompts = options.poseSelection.map(decodePose);
+    const poses: string[] = [];
     if (options.poseMode === 'random') {
-        const randomPoses = new Set<string>();
-        while(randomPoses.size < options.numImages) {
-            randomPoses.add(decodePose(getRandomPose()));
+        for (let i = 0; i < options.numImages; i++) {
+            poses.push(decodePose(getRandomPose()));
         }
-        posePrompts = Array.from(randomPoses);
+    } else if (options.poseMode === 'select' || options.poseMode === 'prompt') {
+        const selectedPoses = options.poseSelection.map(p => POSES.includes(p) ? decodePose(p) : p);
+        for (let i = 0; i < options.numImages; i++) {
+            // Cycle through selected poses if there are fewer poses than requested images
+            poses.push(selectedPoses[i % selectedPoses.length]);
+        }
     }
-    
-    const allImages = [];
-    const promptsUsed: string[] = [];
 
-    for (let i = 0; i < Math.min(options.numImages, posePrompts.length); i++) {
-        const pose = posePrompts[i];
-        updateProgress(`Generating image ${i + 1}/${options.numImages} with pose: "${pose.substring(0, 30)}..."`, (i + 1) / options.numImages);
+
+    for (let i = 0; i < options.numImages; i++) {
+        updateProgress(`Generating image ${i + 1}/${options.numImages}...`, i / totalSteps);
+        const pose = poses[i];
+        const promptSegments = buildPromptSegments(options, pose, !!previewedClothingImage);
+        const textPrompt = promptSegments.join('\n\n');
+        if (!finalPrompt) finalPrompt = textPrompt;
+
+        const currentParts: Part[] = [...parts, { text: textPrompt }];
         
-        const promptSegments = buildPromptSegments(options, pose, !!previewedClothingImagePart);
-        const finalPrompt = promptSegments.join('\n\n');
-        promptsUsed.push(finalPrompt);
-
-        const contents: any = { parts: [sourceImagePart] };
-
-        if (previewedClothingImagePart) {
-            contents.parts.push({text: 'Use this image as the exclusive reference for the subject\'s clothing:'}, previewedClothingImagePart);
-        } else if (clothingImagePart && options.clothing === 'image') {
-            contents.parts.push({text: 'Use this image as the exclusive reference for the subject\'s clothing:'}, clothingImagePart);
-        }
-
-        if (backgroundImagePart && (options.background === 'image' || options.consistentBackground)) {
-             contents.parts.push({text: 'Use this image as the exclusive reference for the background:'}, backgroundImagePart);
-        }
-        
-        contents.parts.push({text: finalPrompt});
-
-        const response: GenerateContentResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image-preview',
-            contents,
-            config: {
-                responseModalities: [Modality.IMAGE, Modality.TEXT]
-            }
-        });
-
-        const part = response.candidates?.[0]?.content?.parts[0];
-        if (part?.inlineData?.data) {
-            allImages.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
-        }
-    }
-    
-    updateProgress("Finalizing images...", 0.95);
-    return { images: allImages, finalPrompt: promptsUsed[0] || null };
-};
-
-export const generateLogos = async (state: LogoThemeState): Promise<string[]> => {
-    const { logoPrompt, brandName, slogan, logoStyle, fontStyleAdjectives, referenceItems, selectedPalette, numLogos, backgroundColor } = state;
-
-    if (!logoPrompt?.trim() && !brandName?.trim() && (!referenceItems || referenceItems.length === 0)) {
-        throw new Error("Please provide a prompt, brand name, or at least one reference image.");
-    }
-
-    const promptSegments = ["Your task is to generate a professional, clean, and modern logo."];
-    
-    // Style
-    promptSegments.push(`The logo style must be: ${logoStyle}.`);
-
-    // Core Concept
-    if (logoPrompt) {
-        promptSegments.push(`The core concept of the logo is: "${logoPrompt}".`);
-    }
-
-    // Text
-    if (brandName) {
-        promptSegments.push(`The logo must incorporate the brand name "${brandName}". The text should be clear, legible, and well-integrated into the design.`);
-    }
-    if (slogan) {
-        promptSegments.push(`If appropriate for the style, include the slogan: "${slogan}".`);
-    }
-    
-    // Font Adjectives
-    if (fontStyleAdjectives && fontStyleAdjectives.length > 0) {
-        promptSegments.push(`For any text, the font style must be: ${fontStyleAdjectives.join(', ')}.`);
-    }
-
-    // Color Palette
-    if (selectedPalette) {
-        try {
-            const palette: PaletteColor[] = JSON.parse(selectedPalette.media);
-            const hexCodes = palette.map(p => p.hex).join(', ');
-            promptSegments.push(`Strictly use the following color palette: ${hexCodes}. You may use shades and tints, but do not introduce new hues.`);
-        } catch (e) { console.error("Could not parse color palette for prompt."); }
-    }
-
-    // Background
-    promptSegments.push(`The logo must be generated on a ${backgroundColor} background. If transparent, ensure the output is a clean PNG with an alpha channel.`);
-    
-    // Final instructions
-    promptSegments.push("The final design should be simple, memorable, and scalable (vector-like). Avoid overly complex details or photorealism.");
-
-    const finalPrompt = promptSegments.join('\n');
-    const contents: any = { parts: [{ text: finalPrompt }] };
-
-    // Reference Images
-    if (referenceItems && referenceItems.length > 0) {
-        contents.parts.unshift({ text: "Use the following images as visual inspiration for the logo's style, shapes, or concepts. Combine elements from them into a new, unique design:" });
-        for (const item of referenceItems) {
-            const file = await dataUrlToFile(item.media, item.name || 'reference');
-            const imagePart = await fileToGenerativePart(file);
-            contents.parts.push(imagePart);
-        }
-    }
-
-    const allLogos: string[] = [];
-    for (let i = 0; i < (numLogos || 1); i++) {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
-            contents,
+            contents: { parts: currentParts },
             config: {
                 responseModalities: [Modality.IMAGE, Modality.TEXT],
-            }
+            },
         });
 
-        // The model can return multiple parts (e.g., text commentary and an image).
-        // Find the first part that contains image data.
-        const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-        
-        if (imagePart?.inlineData?.data) {
-            allLogos.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+        const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+        if (imagePart?.inlineData) {
+            allImages.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+        } else {
+            console.warn(`Image ${i+1} generation did not return an image. Text response:`, response.text);
         }
     }
-
-    if (allLogos.length === 0) {
-        throw new Error("The AI failed to generate any logos. It's possible the prompt was too restrictive or resulted in a safety block. Please try adjusting your prompt.");
-    }
-
-    return allLogos;
+    return { images: allImages, finalPrompt };
 };
-
-export const generateBanners = async (state: LogoThemeState): Promise<string[]> => {
-    const { bannerPrompt, bannerTitle, bannerAspectRatio, bannerStyle, bannerFontStyleAdjectives, bannerReferenceItems, bannerSelectedPalette, bannerSelectedLogo, bannerLogoPlacement, numBanners } = state;
-
-    if (!bannerPrompt?.trim() && !bannerTitle?.trim() && (!bannerReferenceItems || bannerReferenceItems.length === 0)) {
-        throw new Error("Please provide a prompt, a title, or at least one reference image for the banner.");
-    }
-    
-    const [wRatio, hRatio] = bannerAspectRatio!.split(':').map(Number);
-    const baseWidth = 1024;
-    const canvasWidth = baseWidth;
-    const canvasHeight = Math.round(baseWidth / (wRatio / hRatio));
-
-    // 1. Create a blank image with the correct aspect ratio to guide the model
-    const blankImageFile = await createBlankImageFile(canvasWidth, canvasHeight, '#808080', 'aspect_ratio_guide.png');
-    const aspectRatioPart = await fileToGenerativePart(blankImageFile);
-
-    // 2. Build the text prompt
-    const promptSegments = ["Your task is to generate a professional, high-quality banner image."];
-    promptSegments.push(`The banner's style must be: ${bannerStyle}.`);
-    if (bannerTitle) {
-        promptSegments.push(`The banner must prominently feature the title text: "${bannerTitle}". The text should be clear, legible, and stylistically appropriate.`);
-    }
-    if (bannerPrompt) {
-        promptSegments.push(`The core visual concept of the banner is: "${bannerPrompt}".`);
-    }
-    
-    // Font Adjectives
-    if (bannerFontStyleAdjectives && bannerFontStyleAdjectives.length > 0) {
-        promptSegments.push(`For any text, the font style must be: ${bannerFontStyleAdjectives.join(', ')}.`);
-    }
-
-    // 3. Add Color Palette instructions
-    if (bannerSelectedPalette) {
-        try {
-            const palette: PaletteColor[] = JSON.parse(bannerSelectedPalette.media);
-            const hexCodes = palette.map(p => p.hex).join(', ');
-            promptSegments.push(`Strictly use this color palette as the primary color scheme: ${hexCodes}. You can use shades and tints but avoid introducing new primary colors.`);
-        } catch (e) { console.warn("Could not parse banner color palette for prompt."); }
-    }
-    
-    // 4. Add Logo instructions
-    if (bannerSelectedLogo && bannerLogoPlacement !== 'no-logo') {
-        promptSegments.push(`A logo is provided as a separate image. You MUST incorporate this exact logo into the banner design. Place the logo in the ${bannerLogoPlacement!.replace('-', ' ')} area of the banner. The logo should be integrated naturally but remain clear and readable.`);
-    }
-
-    promptSegments.push("The final design should be clean, visually appealing, and suitable for its style. Pay attention to composition and typography.");
-
-    const finalPrompt = promptSegments.join('\n');
-    const contents: any = { parts: [
-        {text: "Use the dimensions and aspect ratio of this first gray guide image for the final output. Do not include the gray color in the final image."},
-        aspectRatioPart,
-        {text: finalPrompt}
-    ] };
-    
-    // 5. Add image parts (logo and references)
-    if (bannerSelectedLogo && bannerLogoPlacement !== 'no-logo') {
-        const logoFile = await dataUrlToFile(bannerSelectedLogo.media, bannerSelectedLogo.name || 'logo');
-        const logoPart = await fileToGenerativePart(logoFile);
-        contents.parts.splice(2, 0, {text: "This is the logo to include:"}, logoPart);
-    }
-    if (bannerReferenceItems && bannerReferenceItems.length > 0) {
-        contents.parts.splice(2, 0, {text: "Use these images as visual inspiration for the banner's style and content:"});
-        for (const item of bannerReferenceItems) {
-            const file = await dataUrlToFile(item.media, item.name || 'reference');
-            const imagePart = await fileToGenerativePart(file);
-            contents.parts.splice(3, 0, imagePart);
-        }
-    }
-    
-    // 6. Generate banners
-    const allBanners: string[] = [];
-    for (let i = 0; i < (numBanners || 1); i++) {
-        // Here I can add a seed or small variation if needed
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image-preview',
-            contents,
-            config: { responseModalities: [Modality.IMAGE, Modality.TEXT] }
-        });
-
-        const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-        if (imagePart?.inlineData?.data) {
-            allBanners.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
-        }
-    }
-
-    if (allBanners.length === 0) {
-        throw new Error("The AI failed to generate any banners. It's possible the prompt was too restrictive or resulted in a safety block. Please try adjusting your prompt.");
-    }
-    
-    return allBanners;
-};
-
-export const generateAlbumCovers = async (state: LogoThemeState): Promise<string[]> => {
-    const { 
-        albumPrompt, albumTitle, artistName, musicStyle, customMusicStyle, albumEra, albumMediaType, addVinylWear, 
-        albumFontStyleAdjectives, albumReferenceItems, albumSelectedPalette, albumSelectedLogo, numAlbumCovers 
-    } = state;
-
-    if (!albumPrompt?.trim() && !albumTitle?.trim() && !artistName?.trim() && (!albumReferenceItems || albumReferenceItems.length === 0)) {
-        throw new Error("Please provide a prompt, title, artist, or a reference image.");
-    }
-
-    const promptSegments = ["Your task is to generate a professional, high-quality, 1:1 square album cover."];
-
-    // Style & Era
-    const finalMusicStyle = musicStyle === 'other' ? customMusicStyle : musicStyle;
-    promptSegments.push(`The music style is ${finalMusicStyle}, with an aesthetic from the ${albumEra} era.`);
-
-    // Media Type and Wear
-    if (albumMediaType === 'vinyl') {
-        promptSegments.push("The cover should have the aesthetic of a cardboard vinyl record sleeve.");
-        if (addVinylWear) {
-            promptSegments.push("The cover must look aged and well-used, with visible ring wear, scratches, scuffs on the corners, and faded colors, as if it's a well-loved record from that era.");
-        }
-    } else if (albumMediaType === 'cd') {
-        promptSegments.push("The cover should look like it belongs in a plastic CD jewel case booklet, fitting the aesthetic of CD covers from its era.");
-    } else {
-        promptSegments.push("The cover is for a modern digital release. It should be clean and sharp.");
-    }
-
-    // Core Visual Concept
-    if (albumPrompt) {
-        promptSegments.push(`The core visual concept is: "${albumPrompt}".`);
-    }
-
-    // Text Elements
-    if (artistName) {
-        promptSegments.push(`The artist/band name "${artistName}" must be clearly visible on the cover.`);
-    }
-    if (albumTitle) {
-        promptSegments.push(`The album title "${albumTitle}" must be clearly visible on the cover.`);
-    }
-    
-    // Font Adjectives
-    if (albumFontStyleAdjectives && albumFontStyleAdjectives.length > 0) {
-        promptSegments.push(`The typography style for all text must be: ${albumFontStyleAdjectives.join(', ')}.`);
-    }
-
-    // Color Palette
-    if (albumSelectedPalette) {
-        try {
-            const palette: PaletteColor[] = JSON.parse(albumSelectedPalette.media);
-            const hexCodes = palette.map(p => p.hex).join(', ');
-            promptSegments.push(`Strictly use this color palette: ${hexCodes}. You may use shades and tints but no new hues.`);
-        } catch (e) { console.warn("Could not parse album cover color palette for prompt."); }
-    }
-
-    // Final instructions
-    promptSegments.push("The final design should be compelling, memorable, and appropriate for the music style and era.");
-    
-    const finalPrompt = promptSegments.join('\n');
-    const contents: any = { parts: [{ text: finalPrompt }] };
-
-    // Logo
-    if (albumSelectedLogo) {
-        const logoFile = await dataUrlToFile(albumSelectedLogo.media, albumSelectedLogo.name || 'logo');
-        const logoPart = await fileToGenerativePart(logoFile);
-        contents.parts.unshift(logoPart);
-        contents.parts.unshift({ text: "Incorporate this exact logo into the design naturally, but ensure it is clear and legible:" });
-    }
-    
-    // Reference Images
-    if (albumReferenceItems && albumReferenceItems.length > 0) {
-        contents.parts.unshift({ text: "Use these images as strong visual inspiration for the album's style, composition, or subject matter:" });
-        for (const item of albumReferenceItems) {
-            const file = await dataUrlToFile(item.media, item.name || 'reference');
-            const imagePart = await fileToGenerativePart(file);
-            contents.parts.unshift(imagePart);
-        }
-    }
-
-    const allCovers: string[] = [];
-    for (let i = 0; i < (numAlbumCovers || 1); i++) {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image-preview',
-            contents,
-            config: {
-                responseModalities: [Modality.IMAGE, Modality.TEXT],
-            }
-        });
-
-        const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-        if (imagePart?.inlineData?.data) {
-            allCovers.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
-        }
-    }
-
-    if (allCovers.length === 0) {
-        throw new Error("The AI failed to generate any album covers. Please try adjusting your prompt.");
-    }
-
-    return allCovers;
-};
-
 
 export const generateGeminiVideo = async (
     options: GenerationOptions,
     startFrame: File | null,
     updateProgress: (message: string, value: number) => void
 ): Promise<{ videoUrl: string, finalPrompt: string }> => {
-    if (!options.geminiVidPrompt?.trim()) {
-        throw new Error("A prompt is required for Gemini video generation.");
+    if (!options.geminiVidPrompt) {
+        throw new Error("Prompt is required for Gemini video generation.");
     }
+    updateProgress("Starting video generation...", 0.05);
 
-    const model = options.geminiVidModel || 'veo-2.0-generate-001';
-    
-    const requestPayload: any = {
-        model,
-        prompt: options.geminiVidPrompt,
-        config: {
-            numberOfVideos: 1
-        }
-    };
-
+    let operation;
     if (startFrame) {
-        updateProgress("Preparing input image...", 0.05);
-        requestPayload.image = {
-            imageBytes: await fileToBase64(startFrame),
-            mimeType: startFrame.type,
-        };
+        const imageBase64 = await fileToBase64(startFrame);
+        operation = await ai.models.generateVideos({
+            model: 'veo-2.0-generate-001',
+            prompt: options.geminiVidPrompt,
+            image: {
+                imageBytes: imageBase64,
+                mimeType: startFrame.type,
+            },
+            config: {
+                numberOfVideos: 1
+            }
+        });
+    } else {
+        operation = await ai.models.generateVideos({
+            model: 'veo-2.0-generate-001',
+            prompt: options.geminiVidPrompt,
+            config: {
+                numberOfVideos: 1
+            }
+        });
     }
 
-    updateProgress("Sending request to Gemini...", 0.1);
-    let operation = await ai.models.generateVideos(requestPayload);
-
-    updateProgress("Video generation started. This may take several minutes...", 0.2);
+    let progress = 0.1;
+    while (!operation.done) {
+        updateProgress("Video is processing on Google's servers...", progress);
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        progress = Math.min(0.9, progress + 0.05);
+        operation = await ai.operations.getVideosOperation({ operation: operation });
+    }
     
-    const pollingInterval = 10000; // 10 seconds
-    const maxAttempts = 60; // 10 minutes timeout
-    let attempt = 0;
-
-    while (!operation.done && attempt < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, pollingInterval));
-        attempt++;
-        const progress = 0.2 + (attempt / maxAttempts) * 0.7; // Progress from 20% to 90%
-        updateProgress(`Processing video... (Attempt ${attempt}/${maxAttempts})`, progress);
-        try {
-            operation = await ai.operations.getVideosOperation({ operation });
-        } catch (e: any) {
-            console.warn(`Polling attempt ${attempt} failed, retrying... Error:`, e.message);
-        }
-    }
-
-    if (!operation.done) {
-        throw new Error("Video generation timed out after 10 minutes.");
-    }
-
+    updateProgress("Fetching video link...", 0.95);
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (!downloadLink) {
-        const opError = (operation as any).error;
-        if (opError) {
-             throw new Error(`Video generation failed with an error: ${opError.message} (Code: ${opError.code})`);
-        }
         throw new Error("Video generation completed, but no download link was returned.");
     }
-
-    updateProgress("Downloading generated video...", 0.95);
-    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-    if (!response.ok) {
-        throw new Error(`Failed to download video file. Status: ${response.statusText}`);
-    }
-
-    const videoBlob = await response.blob();
-    const videoDataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(videoBlob);
-    });
-
-    return { videoUrl: videoDataUrl, finalPrompt: options.geminiVidPrompt };
-};
-
-export const enhanceImageResolution = async (imageDataUrl: string): Promise<string> => {
-    const base64Data = imageDataUrl.split(',')[1];
-    const mimeType = imageDataUrl.match(/data:(.*);/)?.[1] || 'image/jpeg';
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
-        contents: {
-            parts: [
-                {
-                    inlineData: { data: base64Data, mimeType: mimeType },
-                },
-                {
-                    text: 'Enhance the resolution and quality of this image, making it sharper and more detailed without changing the content.',
-                },
-            ],
-        },
-        config: {
-            responseModalities: [Modality.IMAGE, Modality.TEXT],
-        },
-    });
-
-    for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-            const base64ImageBytes: string = part.inlineData.data;
-            return `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
-        }
-    }
-    throw new Error('Image enhancement failed to return an image.');
-};
-
-export const identifyClothing = async (sourceImage: File, details: string, excludeAccessories: boolean): Promise<IdentifiedClothing[]> => {
-    const imagePart = await fileToGenerativePart(sourceImage);
-    let prompt = `Analyze the image and identify all distinct articles of clothing worn by the person.`;
-    if (excludeAccessories) {
-        prompt += ' Exclude accessories like jewelry, hats, glasses, and bags.';
-    }
-    if (details) {
-        prompt += ` Pay special attention to: "${details}".`;
-    }
-    prompt += ' For each item, provide a short, descriptive name and a brief description.';
-
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: { parts: [imagePart, { text: prompt }] },
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    items: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                itemName: { type: Type.STRING, description: 'A short, descriptive name for the clothing item (e.g., "Blue Denim Jacket").' },
-                                description: { type: Type.STRING, description: 'A brief description of the clothing item.' },
-                            },
-                        },
-                    },
-                },
-            },
-        },
-    });
-
-    try {
-        const json = JSON.parse(response.text);
-        return json.items || [];
-    } catch (e) {
-        console.error("Failed to parse clothing identification from AI:", response.text, e);
-        throw new Error("The AI returned an invalid response. Please try again.");
-    }
-};
-
-export const generateClothingImage = async (sourceImage: File, itemName: string, style: 'laid out' | 'folded'): Promise<string> => {
-    const imagePart = await fileToGenerativePart(sourceImage);
-    const prompt = `From the reference image, isolate the "${itemName}". Generate a new, photorealistic image of just this item on a plain, solid white background, as if for an e-commerce product listing. The item should be ${style} neatly.`;
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
-        contents: { parts: [imagePart, { text: prompt }] },
-        config: {
-            responseModalities: [Modality.IMAGE, Modality.TEXT],
-        },
-    });
-
-    for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-        }
-    }
-    throw new Error(`Failed to generate a '${style}' image for ${itemName}.`);
-};
-
-export const identifyObjects = async (sourceImage: File, maxObjects: number, hints: string): Promise<IdentifiedObject[]> => {
-    const imagePart = await fileToGenerativePart(sourceImage);
-    let prompt = `Analyze the image and identify up to ${maxObjects} distinct, prominent objects.`;
-    if (hints) {
-        prompt += ` Prioritize or pay special attention to objects related to: "${hints}".`;
-    }
-    prompt += ' For each object, provide its name and a brief description.';
-
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: { parts: [imagePart, { text: prompt }] },
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    objects: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                name: { type: Type.STRING, description: 'The name of the identified object.' },
-                                description: { type: Type.STRING, description: 'A brief description of the object.' },
-                            },
-                        },
-                    },
-                },
-            },
-        },
-    });
-
-    try {
-        const json = JSON.parse(response.text);
-        return json.objects || [];
-    } catch (e) {
-        console.error("Failed to parse object identification from AI:", response.text, e);
-        throw new Error("The AI returned an invalid response. Please try again.");
-    }
-};
-
-export const generateObjectImage = async (sourceImage: File, objectName: string): Promise<string> => {
-    const imagePart = await fileToGenerativePart(sourceImage);
-    const prompt = `From the reference image, your task is to precisely isolate the object named "${objectName}".
-Generate a new, photorealistic image of *only* this object, placed on a plain, solid white background.
-
-**Crucial requirements:**
--   **Faithful Reproduction:** The generated object MUST be a faithful, photorealistic cutout of the original. Strictly preserve its exact shape, colors, textures, lighting, and any defining details like logos or text.
--   **No Alterations:** Do NOT alter, enhance, or 'improve' the object itself. The goal is an accurate extraction.
--   **Clean Background:** The background must be a completely uniform, neutral white, suitable for an e-commerce listing. Do not add any new shadows.`;
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
-        contents: { parts: [imagePart, { text: prompt }] },
-        config: {
-            responseModalities: [Modality.IMAGE, Modality.TEXT],
-        },
-    });
-
-    for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-        }
-    }
-    throw new Error(`Failed to generate an image for ${objectName}.`);
-};
-
-export const generatePoseMannequin = async (
-    sourceImage: File,
-    style: MannequinStyle
-): Promise<{ image: string; prompt: string }> => {
     
-    const sourceImagePart = await fileToGenerativePart(sourceImage);
+    // Per guidelines, API key must be appended to the download URI to fetch the video bytes.
+    const finalUrl = `${downloadLink}&key=${process.env.API_KEY}`;
     
-    // Get the pre-defined style reference image
-    const referenceDataUrl = MANNEQUIN_STYLE_REFERENCES[style];
-    if (!referenceDataUrl) {
-        throw new Error(`No style reference found for: ${style}`);
-    }
-    
-    // Convert the SVG reference to a PNG part that the API supports, as Gemini doesn't accept SVG.
-    const referenceImagePart = await svgDataUrlToPngGenerativePart(referenceDataUrl);
-    
-    const finalPrompt = `You have two input images. 
-    IMAGE 1 contains a person in a specific pose.
-    IMAGE 2 is a style reference of a mannequin.
-    
-    Your task is to generate a new, photorealistic 1:1 square image.
-    
-    CRITICAL INSTRUCTIONS:
-    1.  The mannequin in your generated image must be in the **EXACT SAME POSE** as the person in IMAGE 1. Replicate all limb angles, body posture, and orientation precisely.
-    2.  The mannequin's appearance, material, and lighting **MUST** match the style of IMAGE 2.
-    3.  The final image must be on a **SOLID, SEAMLESS WHITE** studio background.
-    4.  Do **NOT** include any background elements or other people from IMAGE 1.`;
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
-        contents: { parts: [
-            sourceImagePart,
-            referenceImagePart,
-            {text: finalPrompt}
-        ]},
-        config: {
-            responseModalities: [Modality.IMAGE, Modality.TEXT],
-        },
-    });
-
-    const imagePartResponse = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-
-    if (imagePartResponse?.inlineData?.data) {
-        const image = `data:${imagePartResponse.inlineData.mimeType};base64,${imagePartResponse.inlineData.data}`;
-        return { image, prompt: finalPrompt };
-    }
-
-    throw new Error(`Failed to generate a mannequin image for the pose. The model may have refused to generate content based on the inputs.`);
-};
-
-export const generatePoseDescription = async (sourceImage: File, poseJson: object): Promise<string> => {
-    const imagePart = await fileToGenerativePart(sourceImage);
-    const jsonPart = { text: `Pose Data: \n\`\`\`json\n${JSON.stringify(poseJson, null, 2)}\n\`\`\`` };
-    const prompt = `Analyze the person in the provided image and their corresponding pose keypoint data. Generate a concise, single-sentence, natural language description of their pose. Focus on the main action and body position. Start the sentence with "A person...". Example: "A person standing with their left hand on their hip, looking confidently towards the camera."`;
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, jsonPart, { text: prompt }] },
-    });
-    
-    return response.text.trim();
-};
-
-
-export const generateBackgroundImagePreview = async (prompt: string, aspectRatio: string): Promise<string> => {
-    const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: `A high-quality, photorealistic background image of: ${prompt}`,
-        config: {
-            numberOfImages: 1,
-            outputMimeType: 'image/jpeg',
-            aspectRatio: aspectRatio,
-        },
-    });
-    const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-    return `data:image/jpeg;base64,${base64ImageBytes}`;
-};
-
-export const generateClothingPreview = async (prompt: string, aspectRatio: string): Promise<string> => {
-    const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: `A high-quality, photorealistic image of a piece of clothing on a plain white background, laid out flat. The clothing is: ${prompt}`,
-        config: {
-            numberOfImages: 1,
-            outputMimeType: 'image/jpeg',
-            aspectRatio: '1:1',
-        },
-    });
-    const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-    return `data:image/jpeg;base64,${base64ImageBytes}`;
-};
-
-export const generateTitleForImage = async (imageDataUrl: string): Promise<string> => {
-    const base64Data = imageDataUrl.split(',')[1];
-    const mimeType = imageDataUrl.match(/data:(.*);/)?.[1] || 'image/jpeg';
-    const imagePart = { inlineData: { data: base64Data, mimeType: mimeType } };
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, { text: 'Generate a short, descriptive, and appealing title for this image, no more than 6-8 words long. The title should be suitable for a gallery. Do not use quotes.' }] },
-        config: { temperature: 0.4 },
-    });
-
-    return response.text.trim().replace(/["']/g, ""); // Remove quotes
-};
-
-export const summarizePrompt = async (prompt: string): Promise<string> => {
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Summarize the following creative prompt into a short, descriptive title of no more than 6-8 words. The title should capture the essence of the prompt. Do not use quotes. Prompt: "${prompt}"`,
-        config: { temperature: 0.3 },
-    });
-    return response.text.trim().replace(/["']/g, "");
+    return { videoUrl: finalUrl, finalPrompt: options.geminiVidPrompt };
 };
 
 export const generateCharacterNameForImage = async (imageDataUrl: string): Promise<string> => {
-    const base64Data = imageDataUrl.split(',')[1];
-    const mimeType = imageDataUrl.match(/data:(.*);/)?.[1] || 'image/jpeg';
-    const imagePart = { inlineData: { data: base64Data, mimeType: mimeType } };
+    const response = await fetch(imageDataUrl);
+    const blob = await response.blob();
+    const file = new File([blob], "character.jpeg", { type: "image/jpeg" });
+    const imagePart = await fileToGenerativePart(file);
 
-    const prompt = `Analyze the person in this image and generate a single, plausible, and unique first name for them. The name can be common or slightly uncommon, but should fit the person's appearance.
-
-    **CRITICAL INSTRUCTIONS:**
-    - Respond with ONLY the name.
-    - Do NOT include any extra text, explanation, quotation marks, or labels.
-    - Example of a good response: "Eleanor"
-    - Example of a bad response: "A fitting name would be: 'Eleanor'"`;
-
-    const response = await ai.models.generateContent({
+    const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, { text: prompt }] },
-        config: { temperature: 0.8 },
+        contents: {
+            parts: [
+                imagePart,
+                { text: 'Analyze the person in this image. Suggest a cool, fitting, and unique fantasy or sci-fi name for them as a character. Respond with only the name and nothing else.' }
+            ]
+        },
+        config: {
+            temperature: 0.8,
+        }
     });
 
-    return response.text.trim().replace(/["']/g, ""); // Remove quotes just in case
+    const name = result.text?.trim();
+    if (!name) {
+        throw new Error("AI failed to generate a character name.");
+    }
+    return name.replace(/["'*]/g, ''); // Clean up quotes
 };
 
-export const generateThumbnailForPrompt = async (prompt: string): Promise<string> => {
+export const generateBackgroundImagePreview = async (prompt: string, aspectRatio: GenerationOptions['aspectRatio']): Promise<string> => {
     const response = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
-        prompt: `An abstract, visually appealing conceptual image representing the following creative idea: ${prompt}`,
+        prompt: `A beautiful, high-quality background image with no people or subjects. The scene is: ${prompt}`,
         config: {
             numberOfImages: 1,
-            outputMimeType: 'image/jpeg',
-            aspectRatio: '1:1',
+            aspectRatio,
+            outputMimeType: 'image/jpeg'
+        }
+    });
+    const imageBytes = response.generatedImages[0]?.image?.imageBytes;
+    if (!imageBytes) {
+        throw new Error("Failed to generate background preview.");
+    }
+    return `data:image/jpeg;base64,${imageBytes}`;
+};
+
+export const generateClothingPreview = async (prompt: string, aspectRatio: GenerationOptions['aspectRatio']): Promise<string> => {
+    const response = await ai.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt: `A professional, e-commerce style product shot of a single clothing item on a plain white background. The item is: ${prompt}`,
+        config: {
+            numberOfImages: 1,
+            aspectRatio,
+            outputMimeType: 'image/jpeg'
+        }
+    });
+    const imageBytes = response.generatedImages[0]?.image?.imageBytes;
+    if (!imageBytes) {
+        throw new Error("Failed to generate clothing preview.");
+    }
+    return `data:image/jpeg;base64,${imageBytes}`;
+};
+
+export const enhanceImageResolution = async (imageDataUrl: string): Promise<string> => {
+    const response = await fetch(imageDataUrl);
+    const blob = await response.blob();
+    const file = new File([blob], "enhance.jpeg", { type: "image/jpeg" });
+    const imagePart = await fileToGenerativePart(file);
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: {
+            parts: [
+                imagePart,
+                { text: "Enhance this image. Increase the resolution, sharpness, and detail. Correct any small imperfections. Do not change the content or composition of the image. The output must be a higher quality version of the input." }
+            ]
+        },
+        config: {
+            responseModalities: [Modality.IMAGE],
         },
     });
-    const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-    return `data:image/jpeg;base64,${base64ImageBytes}`;
+
+    const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (outputPart?.inlineData) {
+        return `data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`;
+    } else {
+        throw new Error("Image enhancement failed to return an image.");
+    }
+};
+
+export const identifyClothing = async (sourceFile: File, details: string, excludeAccessories: boolean): Promise<IdentifiedClothing[]> => {
+    const imagePart = await fileToGenerativePart(sourceFile);
+    let prompt = `Analyze the image and identify all distinct clothing items worn by the person. ${details ? `Focus on: ${details}.` : ''} ${excludeAccessories ? 'Exclude accessories like hats, glasses, jewelry, and bags.' : ''} Describe each item briefly. Respond with a JSON array of objects, where each object has "itemName" (e.g., "Blue Denim Jacket") and "description" keys.`;
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        itemName: { type: Type.STRING },
+                        description: { type: Type.STRING }
+                    },
+                    required: ["itemName", "description"]
+                }
+            }
+        }
+    });
+
+    try {
+        const jsonText = result.text.trim();
+        const items = JSON.parse(jsonText);
+        if (!Array.isArray(items)) throw new Error("AI did not return an array.");
+        return items;
+    } catch (e) {
+        console.error("Failed to parse clothing identification from AI:", result.text, e);
+        throw new Error("AI returned an invalid response for clothing identification.");
+    }
+};
+
+export const generateClothingImage = async (sourceFile: File, itemName: string, style: 'laid out' | 'folded'): Promise<string> => {
+    const imagePart = await fileToGenerativePart(sourceFile);
+    const prompt = `From the source image, extract the "${itemName}". Generate a new, photorealistic image of ONLY this item. The item should be ${style} flat on a clean, plain white background, as if for an e-commerce product listing. Remove the person and any other background elements.`;
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (outputPart?.inlineData) {
+        return `data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`;
+    } else {
+        throw new Error(`Failed to generate '${style}' image for ${itemName}.`);
+    }
+};
+
+export const identifyObjects = async (sourceFile: File, maxObjects: number, hints: string): Promise<IdentifiedObject[]> => {
+    const imagePart = await fileToGenerativePart(sourceFile);
+    let prompt = `Analyze the image and identify up to ${maxObjects} distinct, individual objects. ${hints ? `Give priority to objects related to: ${hints}.` : ''} For each object, provide a short name and a one-sentence description. Respond with a JSON array of objects, where each object has "name" and "description" keys.`;
+    
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        name: { type: Type.STRING },
+                        description: { type: Type.STRING }
+                    },
+                    required: ["name", "description"]
+                }
+            }
+        }
+    });
+
+    try {
+        const items = JSON.parse(result.text.trim());
+        if (!Array.isArray(items)) throw new Error("AI did not return an array.");
+        return items;
+    } catch (e) {
+        console.error("Failed to parse object identification from AI:", result.text, e);
+        throw new Error("AI returned an invalid response for object identification.");
+    }
+};
+
+export const generateObjectImage = async (sourceFile: File, objectName: string): Promise<string> => {
+    const imagePart = await fileToGenerativePart(sourceFile);
+    const prompt = `From the source image, find the object described as "${objectName}". Generate a new, photorealistic image of ONLY this object on a clean, plain white background, suitable for a product listing. Remove all other objects, people, and background elements.`;
+    
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (outputPart?.inlineData) {
+        return `data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`;
+    } else {
+        throw new Error(`Failed to generate image for ${objectName}.`);
+    }
+};
+
+export const generatePoseDescription = async (sourceFile: File, poseJson: object): Promise<string> => {
+    const imagePart = await fileToGenerativePart(sourceFile);
+    const textPart = `Analyze the pose of the person in the image. Briefly describe it in a dynamic and descriptive way, like "A confident power pose, looking directly at the camera." The pose data is: ${JSON.stringify(poseJson)}. Respond with only the description text.`;
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, { text: textPart }] },
+    });
+    
+    const description = result.text?.trim().replace(/["']/g, '');
+    if (!description) throw new Error("Failed to generate pose description.");
+    return description;
+};
+
+export const generatePoseMannequin = async (
+    sourceFile: File, // This is the POSE file
+    style: MannequinStyle,
+    referenceFile: File | null // This is the custom STYLE file
+): Promise<{ image: string; prompt: string }> => {
+    const posePart = await fileToGenerativePart(sourceFile);
+    let stylePart: Part;
+    
+    const prompt = `You are a "Pose Transfer AI". Your task is to apply the exact pose from the second image (the POSE SOURCE) to the mannequin model from the first image (the STYLE REFERENCE).
+
+CRITICAL INSTRUCTIONS:
+- The final image must contain ONLY the mannequin from the first image, but redrawn in the new pose.
+- The new pose must EXACTLY match the pose of the person in the second image.
+- IGNORE the person, clothing, hair, and background from the second image. Only copy the pose.
+- The background of the final image must be solid white.
+- Output only the final image.`;
+
+    if (style === 'custom-reference' && referenceFile) {
+        // Crop the user-provided reference to 1:1 to ensure consistency for the AI
+        const croppedRefFile = await cropImageToAspectRatio(referenceFile, '1:1');
+        stylePart = await fileToGenerativePart(croppedRefFile);
+    } else {
+        const styleRefKey = style as Exclude<MannequinStyle, 'custom-reference'>;
+        const styleReferenceDataUrl = MANNEQUIN_STYLE_REFERENCES[styleRefKey];
+        // Convert the static data URL reference to the format the API needs
+        stylePart = dataUrlToGenerativePart(styleReferenceDataUrl);
+    }
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: { 
+            parts: [
+                stylePart,    // STYLE REFERENCE is FIRST
+                posePart,     // POSE SOURCE is SECOND
+                { text: prompt }
+            ] 
+        },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (outputPart?.inlineData) {
+        return {
+            image: `data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`,
+            prompt: prompt
+        };
+    } else {
+        console.error("Pose generation failed. AI Response:", result.text);
+        throw new Error(`Failed to generate mannequin in style '${style}'. The AI did not return an image.`);
+    }
+};
+
+
+export const generateTitleForImage = async (imageDataUrl: string): Promise<string> => {
+    const response = await fetch(imageDataUrl);
+    const blob = await response.blob();
+    const file = new File([blob], "image.jpeg", { type: "image/jpeg" });
+    const imagePart = await fileToGenerativePart(file);
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: {
+            parts: [
+                imagePart,
+                { text: 'Analyze this image. Create a short, descriptive title for it, like for a piece of art in a gallery. Respond with only the title.' }
+            ]
+        },
+    });
+
+    const title = result.text?.trim().replace(/["']/g, '');
+    if (!title) return `Untitled Image ${Date.now()}`;
+    return title;
+};
+
+export const summarizePrompt = async (prompt: string): Promise<string> => {
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Summarize this image generation prompt into a short, descriptive title of 5-7 words. Here is the prompt: "${prompt}"`,
+    });
+    
+    const summary = result.text?.trim().replace(/["']/g, '');
+    if (!summary) return prompt.substring(0, 40) + '...';
+    return summary;
+};
+
+export const generateLogos = async (state: LogoThemeState): Promise<string[]> => {
+    let prompt = `Generate a logo based on the following specifications. The output must be a high-resolution image with a clean background.\n`;
+    if (state.brandName) prompt += `- Brand Name: ${state.brandName}\n`;
+    if (state.slogan) prompt += `- Slogan: ${state.slogan}\n`;
+    if (state.logoPrompt) prompt += `- Core Concept: ${state.logoPrompt}\n`;
+    if (state.logoStyle) prompt += `- Style: ${state.logoStyle}\n`;
+    if (state.fontStyleAdjectives && state.fontStyleAdjectives.length > 0) prompt += `- Font Adjectives: ${state.fontStyleAdjectives.join(', ')}\n`;
+    if (state.backgroundColor) prompt += `- Background: ${state.backgroundColor === 'transparent' ? 'transparent PNG' : `solid ${state.backgroundColor}`}\n`;
+
+    if (state.selectedPalette) {
+        const palette = JSON.parse(state.selectedPalette.media);
+        const hexCodes = palette.map((c: any) => c.hex).join(', ');
+        prompt += `- Color Palette: Strictly use these colors: ${hexCodes}\n`;
+    }
+
+    if (state.referenceItems && state.referenceItems.length > 0) {
+        const parts: Part[] = [{ text: prompt }];
+        for (const item of state.referenceItems) {
+            const refResponse = await fetch(item.media);
+            const refBlob = await refResponse.blob();
+            const refFile = new File([refBlob], "ref.jpeg", { type: "image/jpeg" });
+            parts.push(await fileToGenerativePart(refFile));
+        }
+        
+        const allImages: string[] = [];
+        for (let i = 0; i < (state.numLogos || 1); i++) {
+            const result = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image-preview',
+                contents: { parts },
+                config: { responseModalities: [Modality.IMAGE] }
+            });
+            const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+            if (outputPart?.inlineData) {
+                allImages.push(`data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`);
+            }
+        }
+        return allImages;
+    } else {
+        const result = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: state.numLogos || 1,
+                aspectRatio: '1:1',
+                outputMimeType: 'image/png'
+            }
+        });
+        return result.generatedImages.map(img => `data:image/png;base64,${img.image.imageBytes}`);
+    }
+};
+
+export const generateBanners = async (state: LogoThemeState): Promise<string[]> => {
+    let prompt = `Generate a banner image. The output must be a high-resolution image.\n`;
+    if (state.bannerTitle) prompt += `- Text on Banner: "${state.bannerTitle}"\n`;
+    if (state.bannerPrompt) prompt += `- Core Concept: ${state.bannerPrompt}\n`;
+    if (state.bannerStyle) prompt += `- Style: ${state.bannerStyle}\n`;
+    if (state.bannerFontStyleAdjectives && state.bannerFontStyleAdjectives.length > 0) prompt += `- Font Style: ${state.bannerFontStyleAdjectives.join(', ')}\n`;
+    if (state.bannerLogoPlacement && state.bannerLogoPlacement !== 'no-logo') prompt += `- Logo Placement: ${state.bannerLogoPlacement}\n`;
+    
+    if (state.bannerSelectedPalette) {
+        const palette = JSON.parse(state.bannerSelectedPalette.media);
+        const hexCodes = palette.map((c: any) => c.hex).join(', ');
+        prompt += `- Color Palette: Strictly use these colors: ${hexCodes}\n`;
+    }
+    
+    const hasReferences = (state.bannerReferenceItems && state.bannerReferenceItems.length > 0) || state.bannerSelectedLogo;
+
+    if (hasReferences) {
+        const parts: Part[] = [{ text: prompt }];
+        if (state.bannerSelectedLogo) {
+            const logoResponse = await fetch(state.bannerSelectedLogo.media);
+            const logoBlob = await logoResponse.blob();
+            const logoFile = new File([logoBlob], "logo.png", { type: "image/png" });
+            parts.push({ text: "Use this logo in the banner:" });
+            parts.push(await fileToGenerativePart(logoFile));
+        }
+        if (state.bannerReferenceItems) {
+            for (const item of state.bannerReferenceItems) {
+                const refResponse = await fetch(item.media);
+                const refBlob = await refResponse.blob();
+                const refFile = new File([refBlob], "ref.jpeg", { type: "image/jpeg" });
+                parts.push(await fileToGenerativePart(refFile));
+            }
+        }
+        
+        const allImages: string[] = [];
+        for (let i = 0; i < (state.numBanners || 1); i++) {
+            const result = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image-preview',
+                contents: { parts },
+                config: { responseModalities: [Modality.IMAGE] }
+            });
+            const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+            if (outputPart?.inlineData) {
+                allImages.push(`data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`);
+            }
+        }
+        return allImages;
+    } else {
+        const result = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: state.numBanners || 1,
+                aspectRatio: state.bannerAspectRatio,
+                outputMimeType: 'image/png'
+            }
+        });
+        return result.generatedImages.map(img => `data:image/png;base64,${img.image.imageBytes}`);
+    }
+};
+
+export const generateAlbumCovers = async (state: LogoThemeState): Promise<string[]> => {
+    let prompt = `Generate a 1:1 square album cover. The output must be a high-resolution image.\n`;
+    if (state.artistName) prompt += `- Artist Name: "${state.artistName}"\n`;
+    if (state.albumTitle) prompt += `- Album Title: "${state.albumTitle}"\n`;
+    if (state.albumPrompt) prompt += `- Core Concept: ${state.albumPrompt}\n`;
+    const musicStyle = state.musicStyle === 'other' ? state.customMusicStyle : state.musicStyle;
+    if (musicStyle) prompt += `- Music Style: ${musicStyle}\n`;
+    if (state.albumEra) prompt += `- Era: ${state.albumEra}\n`;
+    if (state.albumMediaType) prompt += `- Media Type Style: Emulate a ${state.albumMediaType} cover.\n`;
+    if (state.addVinylWear) prompt += `- Effects: Add realistic vinyl record sleeve wear and tear (scratches, ring wear).\n`;
+    if (state.albumFontStyleAdjectives && state.albumFontStyleAdjectives.length > 0) prompt += `- Font Style: ${state.albumFontStyleAdjectives.join(', ')}\n`;
+
+    if (state.albumSelectedPalette) {
+        const palette = JSON.parse(state.albumSelectedPalette.media);
+        const hexCodes = palette.map((c: any) => c.hex).join(', ');
+        prompt += `- Color Palette: Strictly use these colors: ${hexCodes}\n`;
+    }
+
+    const hasReferences = (state.albumReferenceItems && state.albumReferenceItems.length > 0) || state.albumSelectedLogo;
+
+    if (hasReferences) {
+        const parts: Part[] = [{ text: prompt }];
+        if (state.albumSelectedLogo) {
+            const logoResponse = await fetch(state.albumSelectedLogo.media);
+            const logoBlob = await logoResponse.blob();
+            const logoFile = new File([logoBlob], "logo.png", { type: "image/png" });
+            parts.push({ text: "Use this logo in the album cover:" });
+            parts.push(await fileToGenerativePart(logoFile));
+        }
+        if (state.albumReferenceItems) {
+            for (const item of state.albumReferenceItems) {
+                const refResponse = await fetch(item.media);
+                const refBlob = await refResponse.blob();
+                const refFile = new File([refBlob], "ref.jpeg", { type: "image/jpeg" });
+                parts.push(await fileToGenerativePart(refFile));
+            }
+        }
+        
+        const allImages: string[] = [];
+        for (let i = 0; i < (state.numAlbumCovers || 1); i++) {
+            const result = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image-preview',
+                contents: { parts },
+                config: { responseModalities: [Modality.IMAGE] }
+            });
+            const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+            if (outputPart?.inlineData) {
+                allImages.push(`data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`);
+            }
+        }
+        return allImages;
+    } else {
+        const result = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: state.numAlbumCovers || 1,
+                aspectRatio: '1:1',
+                outputMimeType: 'image/png'
+            }
+        });
+        return result.generatedImages.map(img => `data:image/png;base64,${img.image.imageBytes}`);
+    }
 };

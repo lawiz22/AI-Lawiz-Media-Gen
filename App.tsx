@@ -54,6 +54,7 @@ const initialExtractorState: ExtractorState = {
     poseError: null,
     // Fix: Removed 'posesKeepClothes' as it does not exist in the ExtractorState type.
     mannequinStyle: 'wooden-artist',
+    mannequinReferenceFile: null,
 };
 
 const initialVideoUtilsState: VideoUtilsState = {
@@ -228,6 +229,7 @@ const App: React.FC = () => {
     const [isAlbumCoverRefPickerOpen, setIsAlbumCoverRefPickerOpen] = useState(false);
     const [isAlbumCoverPalettePickerOpen, setIsAlbumCoverPalettePickerOpen] = useState(false);
     const [isAlbumCoverLogoPickerOpen, setIsAlbumCoverLogoPickerOpen] = useState(false);
+    const [isMannequinRefPickerOpen, setIsMannequinRefPickerOpen] = useState(false);
 
     
     // --- Google Drive State ---
@@ -983,6 +985,7 @@ const App: React.FC = () => {
                         onOpenLibraryForClothes={() => setIsClothesSourcePickerOpen(true)}
                         onOpenLibraryForObjects={() => setIsObjectSourcePickerOpen(true)}
                         onOpenLibraryForPoses={() => setIsPoseSourcePickerOpen(true)}
+                        onOpenLibraryForMannequinRef={() => setIsMannequinRefPickerOpen(true)}
                         activeSubTab={activeExtractorSubTab}
                         setActiveSubTab={setActiveExtractorSubTab}
                     />
@@ -1180,6 +1183,19 @@ const App: React.FC = () => {
                         const blob = await res.blob();
                         const file = new File([blob], "library_pose_source.jpeg", { type: blob.type });
                         setExtractorState(prev => ({ ...prev, poseSourceFile: file }));
+                    }}
+                    filter={broadImagePickerFilter}
+                />
+            )}
+             {isMannequinRefPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isMannequinRefPickerOpen}
+                    onClose={() => setIsMannequinRefPickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], "library_mannequin_ref.jpeg", { type: blob.type });
+                        setExtractorState(prev => ({ ...prev, mannequinReferenceFile: file }));
                     }}
                     filter={broadImagePickerFilter}
                 />
