@@ -230,9 +230,14 @@ export interface ExtractorState {
     poseError: string | null;
     mannequinStyle: MannequinStyle;
     mannequinReferenceFile: File | null;
+    // Font
+    fontSourceFile: File | null;
+    isGeneratingFont: boolean;
+    generatedFontChart: { src: string; saved: 'idle' | 'saving' | 'saved' } | null;
+    fontError: string | null;
 }
 
-export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose';
+export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup';
 
 export interface LibraryItem {

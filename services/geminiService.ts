@@ -429,6 +429,32 @@ CRITICAL INSTRUCTIONS:
     }
 };
 
+export const generateFontChart = async (sourceFile: File): Promise<string> => {
+    const imagePart = await fileToGenerativePart(sourceFile);
+    const prompt = `Analyze the font style from the provided image. Generate a new image that is a comprehensive alphabet chart of that exact font style.
+The chart must include:
+- Uppercase letters (A-Z)
+- Lowercase letters (a-z)
+- Numbers (0-9)
+
+The background must be a clean, solid white. The output must be a single, high-quality PNG image showing only the alphabet chart. Do not include any other text, explanations, or elements.`;
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+    
+    const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (outputPart?.inlineData) {
+        return `data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`;
+    } else {
+        console.error("Font chart generation failed. AI Response:", result.text);
+        throw new Error(`Failed to generate font chart. The AI did not return an image.`);
+    }
+};
 
 export const generateTitleForImage = async (imageDataUrl: string): Promise<string> => {
     const response = await fetch(imageDataUrl);

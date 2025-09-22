@@ -5,7 +5,7 @@ import {
   CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon,
   DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon,
   BannerIcon, AlbumCoverIcon, TrashIcon, LoadIcon, FileExportIcon, UploadIconSimple, GoogleDriveIcon,
-  PoseIcon
+  PoseIcon, FontIcon
 } from './icons';
 import { dataUrlToBlob } from '../utils/imageUtils';
 
@@ -33,6 +33,7 @@ const getCategoryIcon = (mediaType: LibraryItemType, className: string = "w-4 h-
         case 'object': return <CubeIcon {...props} />;
         case 'color-palette': return <PaletteIcon {...props} />;
         case 'pose': return <PoseIcon {...props} />;
+        case 'font': return <FontIcon {...props} />;
         default: return null;
     }
 };
@@ -47,6 +48,7 @@ const FILTER_BUTTONS: { id: LibraryItemType; label: string; icon: JSX.Element }[
     { id: 'clothes', label: 'Clothes', icon: <TshirtIcon className="w-5 h-5"/> },
     { id: 'object', label: 'Objects', icon: <CubeIcon className="w-5 h-5"/> },
     { id: 'pose', label: 'Poses', icon: <PoseIcon className="w-5 h-5"/> },
+    { id: 'font', label: 'Fonts', icon: <FontIcon className="w-5 h-5"/> },
     { id: 'prompt', label: 'Prompts', icon: <DocumentTextIcon className="w-5 h-5"/> },
     { id: 'color-palette', label: 'Palettes', icon: <PaletteIcon className="w-5 h-5"/> },
     { id: 'extracted-frame', label: 'Frames', icon: <FilmIcon className="w-5 h-5"/> },

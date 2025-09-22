@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getLibraryItems } from '../services/libraryService';
 import type { LibraryItem, LibraryItemType } from '../types';
-import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon, DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon, BannerIcon, AlbumCoverIcon } from './icons';
+import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon, DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon, BannerIcon, AlbumCoverIcon, PoseIcon, FontIcon } from './icons';
 
 interface LibraryPickerModalProps {
   isOpen: boolean;
@@ -26,6 +26,8 @@ const getCategoryIcon = (mediaType: LibraryItemType) => {
         case 'extracted-frame': return <FilmIcon className="w-4 h-4 text-white" />;
         case 'object': return <CubeIcon className="w-4 h-4 text-white" />;
         case 'color-palette': return <PaletteIcon className="w-4 h-4 text-white" />;
+        case 'pose': return <PoseIcon className="w-4 h-4 text-white" />;
+        case 'font': return <FontIcon className="w-4 h-4 text-white" />;
         default: return null;
     }
 };

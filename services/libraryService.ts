@@ -97,6 +97,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
         case 'extracted-frame': subfolderName = 'extracted-frames'; break;
         case 'object': subfolderName = 'objects'; break;
         case 'pose': subfolderName = 'poses'; break;
+        case 'font': subfolderName = 'fonts'; break;
         default: subfolderName = 'misc';
       }
       const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
@@ -218,6 +219,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
                     case 'extracted-frame': subfolderName = 'extracted-frames'; break;
                     case 'object': subfolderName = 'objects'; break;
                     case 'pose': subfolderName = 'poses'; break;
+                    case 'font': subfolderName = 'fonts'; break;
                     default: subfolderName = 'misc';
                 }
                 const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);

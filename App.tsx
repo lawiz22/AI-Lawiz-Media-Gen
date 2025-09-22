@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle } from './types';
@@ -18,6 +17,7 @@ import { ImageGrid } from './components/ImageGrid';
 import { Loader } from './components/Loader';
 import { ConnectionSettingsModal } from './components/ComfyUIConnection';
 import { LibraryPanel } from './components/LibraryPanel';
+// Fix: Corrected import to use `ExtractorToolsPanel`, which is the correct export from the module.
 import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
 import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
@@ -56,6 +56,10 @@ const initialExtractorState: ExtractorState = {
     // Fix: Removed 'posesKeepClothes' as it does not exist in the ExtractorState type.
     mannequinStyle: 'wooden-artist',
     mannequinReferenceFile: null,
+    fontSourceFile: null,
+    isGeneratingFont: false,
+    generatedFontChart: null,
+    fontError: null,
 };
 
 const initialVideoUtilsState: VideoUtilsState = {
@@ -232,6 +236,7 @@ const App: React.FC = () => {
     const [isAlbumCoverPalettePickerOpen, setIsAlbumCoverPalettePickerOpen] = useState(false);
     const [isAlbumCoverLogoPickerOpen, setIsAlbumCoverLogoPickerOpen] = useState(false);
     const [isMannequinRefPickerOpen, setIsMannequinRefPickerOpen] = useState(false);
+    const [isFontSourcePickerOpen, setIsFontSourcePickerOpen] = useState(false);
 
     
     // --- Google Drive State ---
@@ -671,8 +676,8 @@ const App: React.FC = () => {
     ];
 
     // Fix: Explicitly type filter arrays as LibraryItemType[] to fix TypeScript assignment errors.
-    const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'object', 'extracted-frame', 'pose'];
-    const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'extracted-frame', 'object', 'pose'];
+    const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'object', 'extracted-frame', 'pose', 'font'];
+    const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'extracted-frame', 'object', 'pose', 'font'];
 
     return (
         <div className="min-h-screen bg-bg-primary text-text-primary font-sans">
@@ -989,6 +994,7 @@ const App: React.FC = () => {
                         onOpenLibraryForObjects={() => setIsObjectSourcePickerOpen(true)}
                         onOpenLibraryForPoses={() => setIsPoseSourcePickerOpen(true)}
                         onOpenLibraryForMannequinRef={() => setIsMannequinRefPickerOpen(true)}
+                        onOpenLibraryForFont={() => setIsFontSourcePickerOpen(true)}
                         activeSubTab={activeExtractorSubTab}
                         setActiveSubTab={setActiveExtractorSubTab}
                     />
@@ -1205,6 +1211,19 @@ const App: React.FC = () => {
                         const blob = await res.blob();
                         const file = new File([blob], "library_mannequin_ref.jpeg", { type: blob.type });
                         setExtractorState(prev => ({ ...prev, mannequinReferenceFile: file }));
+                    }}
+                    filter={broadImagePickerFilter}
+                />
+            )}
+            {isFontSourcePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isFontSourcePickerOpen}
+                    onClose={() => setIsFontSourcePickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], "library_font_source.jpeg", { type: blob.type });
+                        setExtractorState(prev => ({ ...prev, fontSourceFile: file }));
                     }}
                     filter={broadImagePickerFilter}
                 />

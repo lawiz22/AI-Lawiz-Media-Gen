@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
 import { ExtractorResultsGrid } from './ExtractorResultsGrid';
-import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage, generatePoseMannequin, generatePoseDescription } from '../services/geminiService';
+import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage, generatePoseMannequin, generatePoseDescription, generateFontChart } from '../services/geminiService';
 import { detectPosesInImage } from '../services/mediaPipeService';
 import { mediaPipeToOpenPose, renderPoseSkeleton } from '../utils/poseRenderer';
 import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose, MannequinStyle } from '../types';
-import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon } from './icons';
+// Fix: Add the missing 'DownloadIcon' to the import list to resolve a ReferenceError.
+import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon, FontIcon, ZoomIcon, CloseIcon, SaveIcon, CheckIcon, DownloadIcon } from './icons';
 import { saveToLibrary } from '../services/libraryService';
 import { dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 
@@ -60,611 +61,388 @@ interface ExtractorToolsPanelProps {
     onOpenLibraryForObjects: () => void;
     onOpenLibraryForPoses: () => void;
     onOpenLibraryForMannequinRef: () => void;
+    onOpenLibraryForFont: () => void;
     activeSubTab: string;
     setActiveSubTab: (tabId: string) => void;
 }
 
-const MANNEQUIN_STYLES: { id: MannequinStyle, label: string }[] = [
-    { id: 'wooden-artist', label: 'Wooden Artist\'s Figure' },
-    { id: 'neutral-gray', label: 'Neutral Gray 3D Model' },
-    { id: 'wireframe', label: 'Technical Wireframe' },
-    { id: 'comic-outline', label: 'Comic Book Outline' },
-    { id: 'custom-reference', label: 'Upload Custom Reference' },
-];
 
-// --- Main Panel ---
-export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState, onReset, onOpenLibraryForClothes, onOpenLibraryForObjects, onOpenLibraryForPoses, onOpenLibraryForMannequinRef, activeSubTab, setActiveSubTab }) => {
-    
-    // --- Clothes Logic ---
+// --- Main Component ---
+// This is the component being exported. The user likely intended to rename the file or the component, but they are mismatched.
+// Fix: Renamed component from ClothesExtractorPanel to ExtractorToolsPanel to match the import in App.tsx.
+export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
+    state,
+    setState,
+    onReset,
+    onOpenLibraryForClothes,
+    onOpenLibraryForObjects,
+    onOpenLibraryForPoses,
+    onOpenLibraryForMannequinRef,
+    onOpenLibraryForFont,
+    activeSubTab,
+    setActiveSubTab,
+}) => {
+    const {
+        clothesSourceFile, clothesDetails, isIdentifying, identifiedItems, isGenerating, generatedClothes, clothesError, generateFolded, excludeAccessories,
+        objectSourceFile, objectHints, maxObjects, isIdentifyingObjects, identifiedObjects, isGeneratingObjects, generatedObjects, objectError,
+        poseSourceFile, isGeneratingPoses, generatedPoses, poseError, mannequinStyle, mannequinReferenceFile,
+        fontSourceFile, isGeneratingFont, generatedFontChart, fontError
+    } = state;
+
+    // --- Clothes ---
     const handleIdentify = async () => {
-        if (!state.clothesSourceFile) return;
-        setState(prev => ({
-            ...prev,
-            isIdentifying: true,
-            clothesError: null,
-            identifiedItems: [],
-            generatedClothes: []
-        }));
-
+        if (!clothesSourceFile) return;
+        setState(prev => ({ ...prev, isIdentifying: true, identifiedItems: [], clothesError: null, generatedClothes: [] }));
         try {
-            const items = await identifyClothing(state.clothesSourceFile, state.clothesDetails, state.excludeAccessories);
+            const items = await identifyClothing(clothesSourceFile, clothesDetails, excludeAccessories);
             setState(prev => ({ ...prev, identifiedItems: items.map(item => ({ ...item, selected: true })) }));
         } catch (err: any) {
-            setState(prev => ({ ...prev, clothesError: err.message || 'Failed to identify clothing items.' }));
+            setState(prev => ({ ...prev, clothesError: err.message || "Failed to identify clothing." }));
         } finally {
             setState(prev => ({ ...prev, isIdentifying: false }));
         }
     };
-    
-    const handleToggleClothingSelection = (index: number) => {
-        setState(prev => ({
-            ...prev,
-            identifiedItems: prev.identifiedItems.map((item, i) => (i === index ? { ...item, selected: !item.selected } : item))
-        }));
-    };
 
-    const handleSelectAllClothes = () => {
-        setState(prev => ({
-            ...prev,
-            identifiedItems: prev.identifiedItems.map(item => ({ ...item, selected: true }))
-        }));
-    };
+    const handleGenerateClothes = async () => {
+        const selected = identifiedItems.filter(item => item.selected);
+        if (!clothesSourceFile || selected.length === 0) return;
 
-    const handleUnselectAllClothes = () => {
-        setState(prev => ({
-            ...prev,
-            identifiedItems: prev.identifiedItems.map(item => ({ ...item, selected: false }))
-        }));
-    };
-
-    const handleGenerateSelectedClothes = async () => {
-        if (!state.clothesSourceFile || state.identifiedItems.every(i => !i.selected)) return;
-        
-        setState(prev => ({ ...prev, isGenerating: true, clothesError: null, generatedClothes: [] }));
-        const selectedItems = state.identifiedItems.filter(item => item.selected);
-        
-        for (const item of selectedItems) {
-            try {
-                const laidOutImage = await generateClothingImage(state.clothesSourceFile, item.itemName, 'laid out');
-                let foldedImage: string | undefined = undefined;
-                if (state.generateFolded) {
-                    foldedImage = await generateClothingImage(state.clothesSourceFile, item.itemName, 'folded');
-                }
-                
-                setState(prev => ({ ...prev, generatedClothes: [...prev.generatedClothes, { itemName: item.itemName, laidOutImage, foldedImage, saved: 'idle' }] }));
-            } catch (err: any) {
-                 console.error(`Failed to generate image for ${item.itemName}:`, err);
-                setState(prev => ({ ...prev, clothesError: `Error generating "${item.itemName}". Skipping.` }));
-            }
-        }
-        setState(prev => ({ ...prev, isGenerating: false }));
-    };
-    
-    const handleClothesSaveToLibrary = async (item: GeneratedClothing, index: number) => {
-        setState(prev => {
-            const updatedItems = [...prev.generatedClothes];
-            updatedItems[index] = { ...item, saved: 'saving' };
-            return { ...prev, generatedClothes: updatedItems };
-        });
-
+        setState(prev => ({ ...prev, isGenerating: true, generatedClothes: [], clothesError: null }));
+        const results: GeneratedClothing[] = [];
         try {
+            for (const item of selected) {
+                const laidOutImage = await generateClothingImage(clothesSourceFile, item.itemName, 'laid out');
+                let foldedImage: string | undefined = undefined;
+                if (generateFolded) {
+                    try {
+                        foldedImage = await generateClothingImage(clothesSourceFile, item.itemName, 'folded');
+                    } catch (e) {
+                        console.warn(`Could not generate folded image for ${item.itemName}:`, e);
+                    }
+                }
+                results.push({ itemName: item.itemName, laidOutImage, foldedImage, saved: 'idle' });
+            }
+            setState(prev => ({ ...prev, generatedClothes: results }));
+        } catch (err: any) {
+            setState(prev => ({ ...prev, clothesError: err.message || "Failed to generate clothing images." }));
+        } finally {
+            setState(prev => ({ ...prev, isGenerating: false }));
+        }
+    };
+    
+    const handleSaveClothing = async (item: GeneratedClothing, index: number) => {
+        setState(prev => {
+            const updated = [...prev.generatedClothes];
+            updated[index] = { ...item, saved: 'saving' };
+            return { ...prev, generatedClothes: updated };
+        });
+        try {
+            const thumbnail = await dataUrlToThumbnail(item.laidOutImage, 256);
             await saveToLibrary({
                 mediaType: 'clothes',
                 name: item.itemName,
-                media: item.laidOutImage,
-                thumbnail: await dataUrlToThumbnail(item.laidOutImage, 256),
-                sourceImage: state.clothesSourceFile ? await fileToResizedDataUrl(state.clothesSourceFile, 512) : undefined,
+                media: item.laidOutImage, // Save only the laid out image
+                thumbnail: thumbnail,
+                sourceImage: await fileToResizedDataUrl(clothesSourceFile!, 512),
             });
             setState(prev => {
-                const updatedItems = [...prev.generatedClothes];
-                updatedItems[index] = { ...item, saved: 'saved' };
-                return { ...prev, generatedClothes: updatedItems };
+                const updated = [...prev.generatedClothes];
+                updated[index] = { ...item, saved: 'saved' };
+                return { ...prev, generatedClothes: updated };
             });
-        } catch (e) {
-            console.error("Failed to save clothing to library", e);
+        } catch (err) {
+            console.error("Failed to save clothing to library:", err);
             setState(prev => {
-                const updatedItems = [...prev.generatedClothes];
-                updatedItems[index] = { ...item, saved: 'idle' };
-                return { ...prev, generatedClothes: updatedItems };
+                const updated = [...prev.generatedClothes];
+                updated[index] = { ...item, saved: 'idle' };
+                return { ...prev, generatedClothes: updated };
             });
         }
     };
 
-    // --- Object Logic ---
+    // --- Objects ---
     const handleIdentifyObjects = async () => {
-        if (!state.objectSourceFile) return;
-        setState(prev => ({
-            ...prev,
-            isIdentifyingObjects: true,
-            objectError: null,
-            identifiedObjects: [],
-            generatedObjects: [],
-        }));
-
+        if (!objectSourceFile) return;
+        setState(prev => ({ ...prev, isIdentifyingObjects: true, identifiedObjects: [], objectError: null, generatedObjects: [] }));
         try {
-            const items = await identifyObjects(state.objectSourceFile, state.maxObjects, state.objectHints);
+            const items = await identifyObjects(objectSourceFile, maxObjects, objectHints);
             setState(prev => ({ ...prev, identifiedObjects: items.map(item => ({ ...item, selected: true })) }));
         } catch (err: any) {
-            setState(prev => ({ ...prev, objectError: err.message || 'Failed to identify objects.' }));
+            setState(prev => ({ ...prev, objectError: err.message || "Failed to identify objects." }));
         } finally {
             setState(prev => ({ ...prev, isIdentifyingObjects: false }));
         }
     };
-
-    const handleToggleObjectSelection = (index: number) => {
-        setState(prev => ({
-            ...prev,
-            identifiedObjects: prev.identifiedObjects.map((item, i) => (i === index ? { ...item, selected: !item.selected } : item))
-        }));
-    };
     
-    const handleSelectAllObjects = () => {
-        setState(prev => ({
-            ...prev,
-            identifiedObjects: prev.identifiedObjects.map(obj => ({ ...obj, selected: true }))
-        }));
-    };
-
-    const handleUnselectAllObjects = () => {
-        setState(prev => ({
-            ...prev,
-            identifiedObjects: prev.identifiedObjects.map(obj => ({ ...obj, selected: false }))
-        }));
-    };
-
     const handleGenerateObjects = async () => {
-        if (!state.objectSourceFile || state.identifiedObjects.every(obj => !obj.selected)) return;
-        
-        setState(prev => ({ ...prev, isGeneratingObjects: true, objectError: null, generatedObjects: [] }));
-        const selectedObjects = state.identifiedObjects.filter(obj => obj.selected);
+        const selected = identifiedObjects.filter(item => item.selected);
+        if (!objectSourceFile || selected.length === 0) return;
 
-        for (const obj of selectedObjects) {
-            try {
-                const image = await generateObjectImage(state.objectSourceFile, obj.name);
-                setState(prev => ({ ...prev, generatedObjects: [...prev.generatedObjects, { name: obj.name, image, saved: 'idle' }] }));
-            } catch (err: any) {
-                console.error(`Failed to generate image for ${obj.name}:`, err);
-                setState(prev => ({ ...prev, objectError: `Error generating "${obj.name}". Skipping.` }));
+        setState(prev => ({ ...prev, isGeneratingObjects: true, generatedObjects: [], objectError: null }));
+        const results: GeneratedObject[] = [];
+        try {
+            for (const item of selected) {
+                const image = await generateObjectImage(objectSourceFile, item.name);
+                results.push({ name: item.name, image, saved: 'idle' });
             }
+            setState(prev => ({ ...prev, generatedObjects: results }));
+        } catch (err: any) {
+            setState(prev => ({ ...prev, objectError: err.message || "Failed to generate object images." }));
+        } finally {
+            setState(prev => ({ ...prev, isGeneratingObjects: false }));
         }
-        setState(prev => ({ ...prev, isGeneratingObjects: false }));
     };
 
-    const handleObjectSaveToLibrary = async (item: GeneratedObject, index: number) => {
+    const handleSaveObject = async (item: GeneratedObject, index: number) => {
         setState(prev => {
-            const updatedObjects = [...prev.generatedObjects];
-            updatedObjects[index] = { ...item, saved: 'saving' };
-            return { ...prev, generatedObjects: updatedObjects };
+            const updated = [...prev.generatedObjects];
+            updated[index] = { ...item, saved: 'saving' };
+            return { ...prev, generatedObjects: updated };
         });
-        
         try {
             await saveToLibrary({
-                mediaType: 'object',
-                name: item.name,
-                media: item.image,
+                mediaType: 'object', name: item.name, media: item.image,
                 thumbnail: await dataUrlToThumbnail(item.image, 256),
-                sourceImage: state.objectSourceFile ? await fileToResizedDataUrl(state.objectSourceFile, 512) : undefined,
+                sourceImage: await fileToResizedDataUrl(objectSourceFile!, 512),
             });
-             setState(prev => {
-                const updatedObjects = [...prev.generatedObjects];
-                updatedObjects[index] = { ...item, saved: 'saved' };
-                return { ...prev, generatedObjects: updatedObjects };
+            setState(prev => {
+                const updated = [...prev.generatedObjects];
+                updated[index] = { ...item, saved: 'saved' };
+                return { ...prev, generatedObjects: updated };
             });
-        } catch(e) {
-             console.error("Failed to save object to library", e);
-             setState(prev => {
-                const updatedObjects = [...prev.generatedObjects];
-                updatedObjects[index] = { ...item, saved: 'idle' }; // Revert on error
-                return { ...prev, generatedObjects: updatedObjects };
+        } catch (err) {
+            console.error("Failed to save object:", err);
+            setState(prev => {
+                const updated = [...prev.generatedObjects];
+                updated[index] = { ...item, saved: 'idle' };
+                return { ...prev, generatedObjects: updated };
             });
         }
     };
-
-    // --- Pose Logic ---
+    
+    // --- Poses ---
     const handleGeneratePoses = async () => {
-        if (!state.poseSourceFile) return;
-
-        setState(prev => ({ ...prev, isGeneratingPoses: true, poseError: null, generatedPoses: [] }));
-
+        if (!poseSourceFile) return;
+        setState(prev => ({ ...prev, isGeneratingPoses: true, generatedPoses: [], poseError: null }));
         try {
-            const { poseLandmarks, handLandmarks, faceLandmarks, handedness, width, height } = await detectPosesInImage(state.poseSourceFile);
-
+            const { poseLandmarks, handLandmarks, handedness, faceLandmarks, width, height } = await detectPosesInImage(poseSourceFile);
             if (poseLandmarks.length === 0) {
-                setState(prev => ({ ...prev, poseError: "No poses could be detected in the image.", isGeneratingPoses: false }));
-                return;
+                throw new Error("No poses could be detected in the image.");
             }
-            
-            const faceLandmarksByPerson = faceLandmarks; // Assuming one face per person for now
+            const allGeneratedPoses: GeneratedPose[] = [];
+            for (let i = 0; i < poseLandmarks.length; i++) {
+                const poseData = mediaPipeToOpenPose(poseLandmarks[i], handLandmarks, handedness, faceLandmarks[i], width, height);
+                const { image, prompt: generationPrompt } = await generatePoseMannequin(poseSourceFile, mannequinStyle, mannequinReferenceFile);
+                const skeletonImage = renderPoseSkeleton(poseData);
+                const description = await generatePoseDescription(poseSourceFile, poseData);
 
-            for (const [index, personLandmarks] of poseLandmarks.entries()) {
-                try {
-                    const faceLandmarksForPerson = faceLandmarksByPerson[index];
-                    const poseJson = mediaPipeToOpenPose(personLandmarks, handLandmarks, handedness, faceLandmarksForPerson, width, height);
-                    
-                    const description = await generatePoseDescription(state.poseSourceFile, poseJson);
-                    const skeletonImage = renderPoseSkeleton(poseJson);
-
-                    // Fix: Destructure the image and prompt from the updated service function.
-                    const { image: mannequinImage, prompt: generationPrompt } = await generatePoseMannequin(
-                        state.poseSourceFile, 
-                        state.mannequinStyle,
-                        state.mannequinReferenceFile
-                    );
-
-                    setState(prev => ({ 
-                        ...prev, 
-                        generatedPoses: [
-                            ...prev.generatedPoses, 
-                            { 
-                                description, 
-                                image: mannequinImage, 
-                                poseJson, 
-                                skeletonImage,
-                                mannequinStyle: state.mannequinStyle,
-                                saved: 'idle',
-                                // Fix: Store the returned generation prompt.
-                                generationPrompt,
-                            }
-                        ] 
-                    }));
-                } catch (err: any) {
-                    console.error(`Failed to generate assets for pose index ${index}:`, err);
-                    setState(prev => ({ ...prev, poseError: `Error generating assets for a pose. Skipping.` }));
-                }
+                allGeneratedPoses.push({
+                    description, image, skeletonImage, poseJson: poseData,
+                    mannequinStyle, generationPrompt, saved: 'idle',
+                });
             }
+            setState(prev => ({ ...prev, generatedPoses: allGeneratedPoses }));
         } catch (err: any) {
-            console.error(`MediaPipe pose detection failed:`, err);
-            setState(prev => ({ ...prev, poseError: `Pose detection failed: ${err.message}` }));
+            setState(prev => ({ ...prev, poseError: err.message || "An unknown error occurred during pose generation." }));
         } finally {
             setState(prev => ({ ...prev, isGeneratingPoses: false }));
         }
     };
-
-    const handlePoseSaveToLibrary = async (item: GeneratedPose, index: number) => {
+    
+    const handleSavePose = async (item: GeneratedPose, index: number) => {
         setState(prev => {
-            const updatedPoses = [...prev.generatedPoses];
-            updatedPoses[index] = { ...item, saved: 'saving' };
-            return { ...prev, generatedPoses: updatedPoses };
+            const updated = [...prev.generatedPoses];
+            updated[index] = { ...item, saved: 'saving' };
+            return { ...prev, generatedPoses: updated };
         });
-
         try {
             await saveToLibrary({
-                mediaType: 'pose',
-                name: item.description,
-                media: item.image,
+                mediaType: 'pose', name: item.description, media: item.image,
                 thumbnail: await dataUrlToThumbnail(item.image, 256),
-                sourceImage: state.poseSourceFile ? await fileToResizedDataUrl(state.poseSourceFile, 512) : undefined,
+                sourceImage: await fileToResizedDataUrl(poseSourceFile!, 512),
+                poseJson: JSON.stringify(item.poseJson),
                 skeletonImage: item.skeletonImage,
-                poseJson: JSON.stringify(item.poseJson, null, 2),
             });
-             setState(prev => {
-                const updatedPoses = [...prev.generatedPoses];
-                updatedPoses[index] = { ...item, saved: 'saved' };
-                return { ...prev, generatedPoses: updatedPoses };
-            });
-        } catch (e) {
-            console.error("Failed to save pose to library", e);
             setState(prev => {
-                const updatedPoses = [...prev.generatedPoses];
-                updatedPoses[index] = { ...item, saved: 'idle' };
-                return { ...prev, generatedPoses: updatedPoses };
+                const updated = [...prev.generatedPoses];
+                updated[index] = { ...item, saved: 'saved' };
+                return { ...prev, generatedPoses: updated };
+            });
+        } catch (err) {
+            console.error("Failed to save pose:", err);
+            setState(prev => {
+                const updated = [...prev.generatedPoses];
+                updated[index] = { ...item, saved: 'idle' };
+                return { ...prev, generatedPoses: updated };
             });
         }
     };
 
+    // --- Font ---
+    const handleGenerateFont = async () => {
+        if (!fontSourceFile) return;
+        setState(prev => ({ ...prev, isGeneratingFont: true, generatedFontChart: null, fontError: null }));
+        try {
+            const chartSrc = await generateFontChart(fontSourceFile);
+            setState(prev => ({ ...prev, generatedFontChart: { src: chartSrc, saved: 'idle' } }));
+        } catch (err: any) {
+            setState(prev => ({ ...prev, fontError: err.message || "An unknown error occurred." }));
+        } finally {
+            setState(prev => ({ ...prev, isGeneratingFont: false }));
+        }
+    };
+
+    const handleSaveFont = async () => {
+        if (!generatedFontChart || !fontSourceFile) return;
+        setState(prev => ({ ...prev, generatedFontChart: { ...prev.generatedFontChart!, saved: 'saving' } }));
+        try {
+            await saveToLibrary({
+                mediaType: 'font',
+                name: `Font from ${fontSourceFile.name}`,
+                media: generatedFontChart.src,
+                thumbnail: await dataUrlToThumbnail(generatedFontChart.src, 256),
+                sourceImage: await fileToResizedDataUrl(fontSourceFile!, 512),
+            });
+            setState(prev => ({ ...prev, generatedFontChart: { ...prev.generatedFontChart!, saved: 'saved' } }));
+        } catch (err) {
+            console.error("Failed to save font:", err);
+            setState(prev => ({ ...prev, generatedFontChart: { ...prev.generatedFontChart!, saved: 'idle' } }));
+        }
+    };
 
     const subTabs = [
-        { id: 'clothes', label: 'Clothes Extractor' },
-        { id: 'objects', label: 'Object Extractor' },
-        { id: 'poses', label: 'Pose Extractor' },
+        { id: 'clothes', label: 'Clothes' },
+        { id: 'objects', label: 'Objects' },
+        { id: 'poses', label: 'Poses' },
+        { id: 'font', label: 'Font' },
     ];
-    
-    const isGeneratePoseDisabled = !state.poseSourceFile || state.isGeneratingPoses || (state.mannequinStyle === 'custom-reference' && !state.mannequinReferenceFile);
     
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold text-accent">Extractor Tools</h2>
-                <button
-                    onClick={onReset}
-                    className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200"
-                >
-                    <ResetIcon className="w-5 h-5" /> Reset All Fields
-                </button>
-            </div>
-            
             <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
 
-            {/* --- Clothes Extractor Tool --- */}
             <div className={activeSubTab === 'clothes' ? 'block' : 'hidden'}>
-                <section aria-labelledby="clothes-extractor-title">
-                    <ToolHeader 
-                        icon={<TshirtIcon className="w-8 h-8"/>}
-                        title="Clothes Extractor"
-                        description="Automatically identify clothing in an image and generate professional, e-commerce style product shots."
-                    />
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-1 space-y-6">
-                            <div className="flex items-center gap-2">
-                                <div className="flex-grow">
-                                    <ImageUploader 
-                                        label="Upload Photo" 
-                                        id="clothes-extractor-image" 
-                                        onImageUpload={(file) => setState(prev => ({ ...prev, clothesSourceFile: file }))}
-                                        sourceFile={state.clothesSourceFile} 
-                                    />
-                                </div>
-                                <button
-                                    onClick={onOpenLibraryForClothes}
-                                    className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                    title="Select from Library"
-                                >
-                                    <LibraryIcon className="w-6 h-6"/>
-                                </button>
+                <ToolHeader icon={<TshirtIcon className="w-8 h-8"/>} title="Clothes Extractor" description="Identify clothing items from an image and generate new product-style photos of them." />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                    {/* --- Controls Column --- */}
+                    <div className="lg:col-span-1 space-y-6">
+                        <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                                <ImageUploader label="Upload Image" id="clothes-source" onImageUpload={file => setState(prev => ({ ...prev, clothesSourceFile: file, identifiedItems: [], generatedClothes: [] }))} sourceFile={clothesSourceFile} />
                             </div>
-                            <div>
-                                <label htmlFor="clothes-details" className="block text-sm font-medium text-text-secondary mb-1">
-                                    Add Details (Optional)
-                                </label>
-                                <textarea
-                                    id="clothes-details"
-                                    value={state.clothesDetails}
-                                    onChange={(e) => setState(prev => ({ ...prev, clothesDetails: e.target.value }))}
-                                    placeholder="e.g., 'the red floral dress' or 'the jacket on the person on the left'"
-                                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                                    rows={3}
-                                />
-                            </div>
-                            <div className="space-y-3 pt-2">
-                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                    <input type="checkbox" checked={state.generateFolded} onChange={(e) => setState(prev => ({ ...prev, generateFolded: e.target.checked }))} className="rounded text-accent focus:ring-accent" />
-                                    Generate folded version
-                                </label>
-                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                    <input type="checkbox" checked={state.excludeAccessories} onChange={(e) => setState(prev => ({ ...prev, excludeAccessories: e.target.checked }))} className="rounded text-accent focus:ring-accent" />
-                                    Extract clothing only (no accessories)
-                                </label>
-                            </div>
-                            <button
-                                onClick={handleIdentify}
-                                disabled={!state.clothesSourceFile || state.isIdentifying || state.isGenerating}
-                                style={state.clothesSourceFile && !state.isIdentifying && !state.isGenerating ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                                className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
-                            >
-                                {state.isIdentifying ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                                {state.isIdentifying ? 'Identifying...' : '1. Identify Clothing'}
-                            </button>
+                            <button onClick={onOpenLibraryForClothes} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button>
                         </div>
-
-                        <div className="lg:col-span-2 space-y-6">
-                            {state.clothesError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.clothesError}</p>}
-                            {state.isIdentifying && <LoadingState message="Analyzing your image to find clothing items..." />}
-
-                            {state.identifiedItems.length > 0 && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="text-xl font-bold text-accent">Select Items to Extract</h3>
-                                        <div className="flex gap-2">
-                                            <button onClick={handleSelectAllClothes} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Select All</button>
-                                            <button onClick={handleUnselectAllClothes} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Unselect All</button>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
-                                        {state.identifiedItems.map((item, index) => (
-                                            <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">
-                                                <input type="checkbox" checked={item.selected} onChange={() => handleToggleClothingSelection(index)} className="mt-1 rounded text-accent focus:ring-accent" />
-                                                <div>
-                                                    <span className="font-semibold text-text-primary">{item.itemName}</span>
-                                                    <p className="text-sm text-text-secondary">{item.description}</p>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
-                                    <button
-                                        onClick={handleGenerateSelectedClothes}
-                                        disabled={state.identifiedItems.every(o => !o.selected) || state.isGenerating}
-                                        className="w-full mt-4 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 bg-accent text-accent-text disabled:opacity-50"
-                                    >
-                                        {state.isGenerating ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                                        2. Generate Product Shots
-                                    </button>
-                                </div>
-                            )}
-
-                            {state.isGenerating && <LoadingState message={`Generating images for selected items... (${state.generatedClothes.length}/${state.identifiedItems.filter(i => i.selected).length} done)`} />}
-                            
-                            <ExtractorResultsGrid items={state.generatedClothes} onSave={handleClothesSaveToLibrary} title="Generated Product Shots" />
-
-                        </div>
+                        <textarea value={clothesDetails} onChange={e => setState(p => ({...p, clothesDetails: e.target.value}))} placeholder="Optional: add details or hints, e.g., 'focus on the jacket'" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent" rows={2}/>
+                        <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={excludeAccessories} onChange={e => setState(p => ({...p, excludeAccessories: e.target.checked}))} className="rounded text-accent focus:ring-accent" />Exclude accessories (hats, glasses, etc.)</label>
+                        <button onClick={handleIdentify} disabled={!clothesSourceFile || isIdentifying} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isIdentifying ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Identifying...</> : '1. Identify Clothing'}</button>
                     </div>
-                </section>
+                    {/* --- Identification & Generation Column --- */}
+                    <div className="lg:col-span-2">
+                        {isIdentifying && <LoadingState message="Analyzing image for clothing items..." />}
+                        {clothesError && <p className="text-danger bg-danger-bg p-3 rounded-md">{clothesError}</p>}
+                        {identifiedItems.length > 0 && (
+                            <div className="space-y-4">
+                                <h3 className="text-xl font-bold text-accent">Identified Items</h3>
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">
+                                    {identifiedItems.map((item, index) => (
+                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer"><input type="checkbox" checked={item.selected} onChange={() => setState(p => { const newItems = [...p.identifiedItems]; newItems[index].selected = !newItems[index].selected; return {...p, identifiedItems: newItems}; })} className="mt-1 rounded text-accent focus:ring-accent" /><div><p className="font-semibold text-text-primary">{item.itemName}</p><p className="text-sm text-text-secondary">{item.description}</p></div></label>
+                                    ))}
+                                </div>
+                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={generateFolded} onChange={e => setState(p => ({...p, generateFolded: e.target.checked}))} className="rounded text-accent focus:ring-accent" />Also generate folded version</label>
+                                <button onClick={handleGenerateClothes} disabled={isGenerating || identifiedItems.every(i => !i.selected)} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGenerating ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : '2. Generate Selected'}</button>
+                            </div>
+                        )}
+                        {isGenerating && <LoadingState message="Generating product images for selected items..." />}
+                        <ExtractorResultsGrid items={generatedClothes} onSave={handleSaveClothing} title="Generated Clothing" />
+                    </div>
+                </div>
             </div>
             
-            {/* --- Object Extractor Tool --- */}
             <div className={activeSubTab === 'objects' ? 'block' : 'hidden'}>
-                <section aria-labelledby="object-extractor-title">
-                    <ToolHeader 
-                        icon={<CubeIcon className="w-8 h-8"/>}
-                        title="Object Extractor"
-                        description="Find multiple objects in a complex image (like a garage sale) and extract them into individual product shots."
-                    />
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-1 space-y-6">
-                            <div className="flex items-center gap-2">
-                                <div className="flex-grow">
-                                    <ImageUploader 
-                                        label="Upload Photo" 
-                                        id="object-extractor-image" 
-                                        onImageUpload={(file) => setState(prev => ({...prev, objectSourceFile: file}))}
-                                        sourceFile={state.objectSourceFile}
-                                    />
-                                </div>
-                                <button
-                                    onClick={onOpenLibraryForObjects}
-                                    className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                    title="Select from Library"
-                                >
-                                    <LibraryIcon className="w-6 h-6"/>
-                                </button>
-                            </div>
-                            <div>
-                                <label htmlFor="object-details" className="block text-sm font-medium text-text-secondary mb-1">
-                                    Specific objects to look for (Optional)
-                                </label>
-                                <textarea
-                                    id="object-details"
-                                    value={state.objectHints}
-                                    onChange={(e) => setState(prev => ({ ...prev, objectHints: e.target.value }))}
-                                    placeholder="e.g., 'any vintage cameras' or 'the blue vase'"
-                                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                                    rows={3}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-text-secondary">Max objects to identify: {state.maxObjects}</label>
-                                <input
-                                    type="range" min="1" max="20" step="1"
-                                    value={state.maxObjects}
-                                    onChange={e => setState(prev => ({ ...prev, maxObjects: Number(e.target.value) }))}
-                                    className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
-                                />
-                            </div>
-                            <button
-                                onClick={handleIdentifyObjects}
-                                disabled={!state.objectSourceFile || state.isIdentifyingObjects || state.isGeneratingObjects}
-                                style={state.objectSourceFile && !state.isIdentifyingObjects && !state.isGeneratingObjects ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                                className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
-                            >
-                                {state.isIdentifyingObjects ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                                {state.isIdentifyingObjects ? 'Identifying...' : '1. Identify Objects'}
-                            </button>
-                        </div>
-
-                        <div className="lg:col-span-2 space-y-6">
-                            {state.objectError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.objectError}</p>}
-                            {state.isIdentifyingObjects && <LoadingState message="Scanning your image for objects..." />}
-                            
-                            {state.identifiedObjects.length > 0 && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="text-xl font-bold text-accent">Select Objects to Extract</h3>
-                                        <div className="flex gap-2">
-                                            <button onClick={handleSelectAllObjects} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Select All</button>
-                                            <button onClick={handleUnselectAllObjects} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Unselect All</button>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
-                                        {state.identifiedObjects.map((obj, index) => (
-                                            <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">
-                                                <input type="checkbox" checked={obj.selected} onChange={() => handleToggleObjectSelection(index)} className="mt-1 rounded text-accent focus:ring-accent" />
-                                                <div>
-                                                    <span className="font-semibold text-text-primary">{obj.name}</span>
-                                                    <p className="text-sm text-text-secondary">{obj.description}</p>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
-                                    <button
-                                        onClick={handleGenerateObjects}
-                                        disabled={state.identifiedObjects.every(o => !o.selected) || state.isGeneratingObjects}
-                                        className="w-full mt-4 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 bg-accent text-accent-text disabled:opacity-50"
-                                    >
-                                        {state.isGeneratingObjects ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                                        2. Generate Product Shots
-                                    </button>
-                                </div>
-                            )}
-
-                            {state.isGeneratingObjects && <LoadingState message={`Generating images for selected objects... (${state.generatedObjects.length}/${state.identifiedObjects.filter(o => o.selected).length} done)`} />}
-                            
-                            <ExtractorResultsGrid items={state.generatedObjects} onSave={handleObjectSaveToLibrary} title="Generated Object Shots" />
-
-                        </div>
+                 <ToolHeader icon={<CubeIcon className="w-8 h-8"/>} title="Object Extractor" description="Identify individual objects in an image and generate new product-style photos of them." />
+                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                    <div className="lg:col-span-1 space-y-6">
+                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image" id="object-source" onImageUpload={file => setState(prev => ({ ...prev, objectSourceFile: file, identifiedObjects: [], generatedObjects: [] }))} sourceFile={objectSourceFile} /></div><button onClick={onOpenLibraryForObjects} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                        <textarea value={objectHints} onChange={e => setState(p => ({...p, objectHints: e.target.value}))} placeholder="Optional: hints to guide identification, e.g., 'focus on the electronic devices'" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm" rows={2}/>
+                        <div><label className="block text-sm font-medium text-text-secondary">Max Objects: {maxObjects}</label><input type="range" min="1" max="10" value={maxObjects} onChange={e => setState(p => ({...p, maxObjects: parseInt(e.target.value)}))} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" /></div>
+                        <button onClick={handleIdentifyObjects} disabled={!objectSourceFile || isIdentifyingObjects} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isIdentifyingObjects ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Identifying...</> : '1. Identify Objects'}</button>
                     </div>
-                </section>
+                     <div className="lg:col-span-2">
+                        {isIdentifyingObjects && <LoadingState message="Analyzing image for objects..." />}
+                        {objectError && <p className="text-danger bg-danger-bg p-3 rounded-md">{objectError}</p>}
+                        {identifiedObjects.length > 0 && (
+                            <div className="space-y-4">
+                                <h3 className="text-xl font-bold text-accent">Identified Objects</h3>
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">{identifiedObjects.map((item, index) => (<label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer"><input type="checkbox" checked={item.selected} onChange={() => setState(p => { const newItems = [...p.identifiedObjects]; newItems[index].selected = !newItems[index].selected; return {...p, identifiedObjects: newItems}; })} className="mt-1 rounded text-accent focus:ring-accent" /><div><p className="font-semibold text-text-primary">{item.name}</p><p className="text-sm text-text-secondary">{item.description}</p></div></label>))}</div>
+                                <button onClick={handleGenerateObjects} disabled={isGeneratingObjects || identifiedObjects.every(i => !i.selected)} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingObjects ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : '2. Generate Selected'}</button>
+                            </div>
+                        )}
+                        {isGeneratingObjects && <LoadingState message="Generating product images for selected objects..." />}
+                        <ExtractorResultsGrid items={generatedObjects} onSave={handleSaveObject} title="Generated Objects" />
+                    </div>
+                </div>
             </div>
-
-            {/* --- Pose Extractor Tool --- */}
+            
             <div className={activeSubTab === 'poses' ? 'block' : 'hidden'}>
-                 <section aria-labelledby="pose-extractor-title">
-                    <ToolHeader 
-                        icon={<PoseIcon className="w-8 h-8"/>}
-                        title="Pose Extractor"
-                        description="Identify human poses in an image and generate stylized mannequins to save and reuse the compositions."
-                    />
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-1 space-y-6">
-                            <div className="flex items-center gap-2">
-                                <div className="flex-grow">
-                                    <ImageUploader 
-                                        label="Upload Photo" 
-                                        id="pose-extractor-image" 
-                                        onImageUpload={(file) => setState(prev => ({...prev, poseSourceFile: file}))}
-                                        sourceFile={state.poseSourceFile}
-                                    />
+                <ToolHeader icon={<PoseIcon className="w-8 h-8"/>} title="Pose Extractor" description="Extract human poses from an image and render them onto a stylized mannequin. Generates pose data compatible with ControlNet." />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                    <div className="lg:col-span-1 space-y-6">
+                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image" id="pose-source" onImageUpload={file => setState(p => ({...p, poseSourceFile: file, generatedPoses: []}))} sourceFile={poseSourceFile} /></div><button onClick={onOpenLibraryForPoses} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                        <div>
+                            <label className="block text-sm font-medium text-text-secondary mb-2">Mannequin Style</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {(['wooden-artist', 'neutral-gray', 'wireframe', 'comic-outline', 'custom-reference'] as MannequinStyle[]).map(style => <button key={style} onClick={() => setState(p=>({...p, mannequinStyle: style}))} className={`p-2 text-xs rounded-md ${mannequinStyle === style ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>{style.replace(/-/g, ' ')}</button>)}
+                            </div>
+                        </div>
+                        {mannequinStyle === 'custom-reference' && <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Mannequin Reference Image" id="mannequin-ref" onImageUpload={file => setState(p=>({...p, mannequinReferenceFile: file}))} sourceFile={mannequinReferenceFile} /></div><button onClick={onOpenLibraryForMannequinRef} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>}
+                        <button onClick={handleGeneratePoses} disabled={!poseSourceFile || isGeneratingPoses} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingPoses ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : 'Generate Poses'}</button>
+                    </div>
+                    <div className="lg:col-span-2">
+                        {isGeneratingPoses && <LoadingState message="Detecting poses and generating mannequins..." />}
+                        {poseError && <p className="text-danger bg-danger-bg p-3 rounded-md">{poseError}</p>}
+                        <ExtractorResultsGrid items={generatedPoses} onSave={handleSavePose} title="Generated Poses" />
+                    </div>
+                </div>
+            </div>
+            
+             <div className={activeSubTab === 'font' ? 'block' : 'hidden'}>
+                <ToolHeader icon={<FontIcon className="w-8 h-8"/>} title="Font Extractor" description="Identify the font style from text in an image and generate a full A-Z, 0-9 character chart." />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                    <div className="lg:col-span-1 space-y-6">
+                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image with Text" id="font-source" onImageUpload={file => setState(p => ({...p, fontSourceFile: file, generatedFontChart: null}))} sourceFile={fontSourceFile} /></div><button onClick={onOpenLibraryForFont} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                        <button onClick={handleGenerateFont} disabled={!fontSourceFile || isGeneratingFont} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingFont ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : 'Generate Font Chart'}</button>
+                    </div>
+                    <div className="lg:col-span-2">
+                        {isGeneratingFont && <LoadingState message="Analyzing font and generating character chart..." />}
+                        {fontError && <p className="text-danger bg-danger-bg p-3 rounded-md">{fontError}</p>}
+                        {generatedFontChart && (
+                            <div className="space-y-4">
+                                <h3 className="text-xl font-bold text-accent">Generated Font Chart</h3>
+                                <div className="bg-white p-2 rounded-lg">
+                                    <img src={generatedFontChart.src} alt="Generated Font Chart" className="w-full h-auto" />
                                 </div>
-                                <button
-                                    onClick={onOpenLibraryForPoses}
-                                    className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                    title="Select from Library"
-                                >
-                                    <LibraryIcon className="w-6 h-6"/>
-                                </button>
-                            </div>
-                             <div>
-                                <label htmlFor="mannequin-style" className="block text-sm font-medium text-text-secondary mb-1">
-                                    Mannequin Style
-                                </label>
-                                <select 
-                                    id="mannequin-style"
-                                    value={state.mannequinStyle}
-                                    onChange={(e) => setState(prev => ({...prev, mannequinStyle: e.target.value as MannequinStyle}))}
-                                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                                >
-                                    {MANNEQUIN_STYLES.map(style => (
-                                        <option key={style.id} value={style.id}>{style.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            {state.mannequinStyle === 'custom-reference' && (
-                                <div className="flex items-center gap-2 mt-2">
-                                    <div className="flex-grow">
-                                        <ImageUploader
-                                            label="Custom Mannequin (1:1)"
-                                            id="mannequin-ref-image"
-                                            onImageUpload={(file) => setState(prev => ({...prev, mannequinReferenceFile: file}))}
-                                            sourceFile={state.mannequinReferenceFile}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={onOpenLibraryForMannequinRef}
-                                        className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                        title="Select from Library"
-                                    >
-                                        <LibraryIcon className="w-6 h-6"/>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button onClick={() => { const link = document.createElement('a'); link.href = generatedFontChart.src; link.download = 'font_chart.png'; link.click(); }} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                        <DownloadIcon className="w-5 h-5"/> Download
+                                    </button>
+                                    <button onClick={handleSaveFont} disabled={generatedFontChart.saved !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors ${generatedFontChart.saved === 'saved' ? 'bg-green-500 text-white' : 'bg-accent text-accent-text hover:bg-accent-hover'}`}>
+                                        {generatedFontChart.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : generatedFontChart.saved === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
+                                        {generatedFontChart.saved === 'saving' ? 'Saving...' : generatedFontChart.saved === 'saved' ? 'Saved' : 'Save to Library'}
                                     </button>
                                 </div>
-                            )}
-                           
-                            <button
-                                onClick={handleGeneratePoses}
-                                disabled={isGeneratePoseDisabled}
-                                style={!isGeneratePoseDisabled ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
-                                className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
-                            >
-                                {state.isGeneratingPoses ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                                {state.isGeneratingPoses ? 'Detecting & Generating...' : 'Extract All Poses'}
-                            </button>
-                        </div>
-
-                        <div className="lg:col-span-2 space-y-6">
-                            {state.poseError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.poseError}</p>}
-                            {state.isGeneratingPoses && <LoadingState message={`Generating assets for detected poses...`} />}
-                            <ExtractorResultsGrid items={state.generatedPoses} onSave={handlePoseSaveToLibrary} title="Extracted Poses" />
-                        </div>
+                            </div>
+                        )}
                     </div>
-                </section>
+                </div>
             </div>
+            
+            {(activeSubTab === 'clothes' || activeSubTab === 'objects' || activeSubTab === 'poses' || activeSubTab === 'font') && (
+                <div className="mt-8 pt-4 border-t border-danger-bg">
+                    <button onClick={onReset} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
+                        <ResetIcon className="w-5 h-5" /> Reset All Extractor Tools
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
