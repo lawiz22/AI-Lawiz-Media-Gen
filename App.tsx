@@ -26,6 +26,7 @@ import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
+import { FeatureAnalysisModal } from './components/FeatureAnalysisModal';
 import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon } from './components/icons';
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
@@ -203,6 +204,7 @@ const App: React.FC = () => {
     // --- UI Modals & Panels State ---
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+    const [isFeatureAnalysisModalOpen, setIsFeatureAnalysisModalOpen] = useState(false);
     const [isClothingPickerOpen, setIsClothingPickerOpen] = useState(false);
     const [isBackgroundPickerOpen, setIsBackgroundPickerOpen] = useState(false);
     const [isColorImagePickerOpen, setIsColorImagePickerOpen] = useState(false);
@@ -681,6 +683,7 @@ const App: React.FC = () => {
                 currentUser={currentUser}
                 onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
                 onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+                onOpenFeatureAnalysisModal={() => setIsFeatureAnalysisModalOpen(true)}
                 isComfyUIConnected={isComfyUIConnected}
                 versionInfo={versionInfo}
                 driveFolder={driveFolder}
@@ -1058,6 +1061,12 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+            {isFeatureAnalysisModalOpen && (
+                <FeatureAnalysisModal
+                    isOpen={isFeatureAnalysisModalOpen}
+                    onClose={() => setIsFeatureAnalysisModalOpen(false)}
+                />
             )}
             {isClothingPickerOpen && (
                 <LibraryPickerModal

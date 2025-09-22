@@ -1,0 +1,149 @@
+{
+  "featureAnalysis": {
+    "geminiFeatures": [
+      {
+        "featureName": "Character & Pose Generation (Image-to-Image)",
+        "description": "Takes a source image of a person and generates variations based on detailed text prompts for pose, clothing, and background. Can also combine with reference images for clothing/background.",
+        "implementationDetails": {
+          "serviceFunctions": ["generatePortraits (i2i mode)"],
+          "modelsUsed": ["gemini-2.5-flash-image-preview"],
+          "apiMethods": ["ai.models.generateContent"],
+          "keyTechniques": "Complex multi-modal generation. It combines multiple input images (source person, optional clothing, optional background) with a detailed, structured text prompt to guide the AI's edits. The response modality is set to IMAGE."
+        },
+        "comfyui_equivalent_notes": "A partial equivalent exists via the 'Nunchaku Kontext FLUX' image-to-image workflow, but it's less flexible. Replicating this would require a sophisticated ControlNet workflow combining OpenPose (for pose), IPAdapters or reference-only models (for face), and potentially segmentation models with inpainting (for clothing/background replacement)."
+      },
+      {
+        "featureName": "Image Enhancement & Upscaling",
+        "description": "Takes a generated image and increases its resolution, sharpness, and detail using an AI enhancement process.",
+        "implementationDetails": {
+          "serviceFunctions": ["enhanceImageResolution"],
+          "modelsUsed": ["gemini-2.5-flash-image-preview"],
+          "apiMethods": ["ai.models.generateContent"],
+          "keyTechniques": "Image-to-image prompting where the instruction is to enhance the input without changing the content. The response modality is set to IMAGE."
+        },
+        "comfyui_equivalent_notes": "This is a standard feature in ComfyUI, typically achieved by chaining the output of a KSampler into an 'Upscale Image (using Model)' node with models like ESRGAN, RealESRGAN, or UltraSharp."
+      },
+      {
+        "featureName": "Object/Clothing Identification (JSON Output)",
+        "description": "Analyzes an image to identify distinct items (clothes, objects) and returns a structured JSON list of their names and descriptions.",
+        "implementationDetails": {
+          "serviceFunctions": ["identifyClothing", "identifyObjects"],
+          "modelsUsed": ["gemini-2.5-flash"],
+          "apiMethods": ["ai.models.generateContent"],
+          "keyTechniques": "Utilizes the powerful `responseMimeType: 'application/json'` and a `responseSchema` to force the model to return structured data about the image content, rather than freeform text."
+        },
+        "comfyui_equivalent_notes": "No direct equivalent. This is a Vision-Language Model (VLM) task. To replicate, you would need a custom node that integrates a VLM like LLaVA, CogVLM, or a dedicated object detection model (YOLO, GroundingDINO) and then formats the output as JSON."
+      },
+      {
+        "featureName": "Inpainting/Outpainting for Product Shots",
+        "description": "Extracts a specific clothing item or object identified in a source photo and redraws it on a clean, white background.",
+        "implementationDetails": {
+          "serviceFunctions": ["generateClothingImage", "generateObjectImage"],
+          "modelsUsed": ["gemini-2.5-flash-image-preview"],
+          "apiMethods": ["ai.models.generateContent"],
+          "keyTechniques": "Multi-modal inpainting. The prompt instructs the model to isolate a specific item from the source image and place it on a new background, effectively removing everything else."
+        },
+        "comfyui_equivalent_notes": "Achievable but complex. Would require a workflow that first uses a segmentation model (like SAM) to create a mask of the desired object, followed by an inpainting model to fill the object onto a new latent background, potentially with a 'clean background' LoRA."
+      },
+      {
+        "featureName": "Pose Transfer to Mannequin",
+        "description": "Takes a source image with a person's pose and a reference image of a mannequin style, and generates an image of the mannequin in the source pose.",
+        "implementationDetails": {
+          "serviceFunctions": ["generatePoseMannequin"],
+          "modelsUsed": ["gemini-2.5-flash-image-preview"],
+          "apiMethods": ["ai.models.generateContent"],
+          "keyTechniques": "Advanced multi-modal prompting with two source images. A highly specific 'persona' prompt instructs the AI to use one image for 'style' and the other for 'pose', ensuring it doesn't get confused by clothes or other features."
+        },
+        "comfyui_equivalent_notes": "This is a classic ControlNet task. The workflow would involve using MediaPipe/OpenPose to extract a skeleton from the source pose image and feeding that skeleton into a ControlNet node along with a text prompt describing the desired mannequin style (e.g., 'a wooden artist mannequin, solid white background')."
+      },
+      {
+        "featureName": "Thematic Content Generation (Logos, Banners, Album Covers)",
+        "description": "Generates specialized content like logos or banners. Uses simple text-to-image if no references are provided, but switches to a more powerful multi-modal approach when inspiration images are included.",
+        "implementationDetails": {
+          "serviceFunctions": ["generateLogos", "generateBanners", "generateAlbumCovers"],
+          "modelsUsed": ["imagen-4.0-generate-001", "gemini-2.5-flash-image-preview"],
+          "apiMethods": ["ai.models.generateImages", "ai.models.generateContent"],
+          "keyTechniques": "Conditionally switches between two generation methods. For simple T2I, it uses `generateImages`. For complex, reference-based generation, it uses `generateContent` with multiple image and text parts."
+        },
+        "comfyui_equivalent_notes": "Achievable. The simple T2I is a basic KSampler workflow. The reference-based generation would use IPAdapter or Revision nodes to incorporate the style and concepts from the reference images into the prompt conditioning."
+      },
+      {
+        "featureName": "Text-to-Video and Image-to-Video Generation",
+        "description": "Generates a video from a text prompt, with an optional starting image to guide the generation.",
+        "implementationDetails": {
+          "serviceFunctions": ["generateGeminiVideo"],
+          "modelsUsed": ["veo-2.0-generate-001"],
+          "apiMethods": ["ai.models.generateVideos", "ai.operations.getVideosOperation"],
+          "keyTechniques": "Uses the asynchronous video generation API, polling the operation status until the video is ready for download."
+        },
+        "comfyui_equivalent_notes": "An equivalent exists with the WAN 2.2 Image-to-Video workflow, which is already implemented. A Text-to-Video equivalent in ComfyUI is less common but could be built with models like AnimateDiff."
+      },
+      {
+        "featureName": "AI Text Analysis of Images (Naming, Descriptions)",
+        "description": "Analyzes an image and generates descriptive text about it, such as a character name, a pose description, or a title for the artwork.",
+        "implementationDetails": {
+          "serviceFunctions": ["generateCharacterNameForImage", "generatePoseDescription", "generateTitleForImage"],
+          "modelsUsed": ["gemini-2.5-flash"],
+          "apiMethods": ["ai.models.generateContent"],
+          "keyTechniques": "Simple multi-modal prompting where an image is provided along with a text instruction asking for a specific type of textual analysis. No special configuration needed."
+        },
+        "comfyui_equivalent_notes": "No direct equivalent. This is another VLM task. Would require a custom node integrating a model like LLaVA."
+      },
+      {
+        "featureName": "Text Summarization",
+        "description": "Takes a long, complex image generation prompt and summarizes it into a short, descriptive title.",
+        "implementationDetails": {
+          "serviceFunctions": ["summarizePrompt"],
+          "modelsUsed": ["gemini-2.5-flash"],
+          "apiMethods": ["ai.models.generateContent"],
+          "keyTechniques": "A pure text-generation task (text-in, text-out) using the language model."
+        },
+        "comfyui_equivalent_notes": "No direct equivalent. This would require an external API call to a language model or a custom node that runs a local LLM."
+      }
+    ],
+    "comfyuiFeatures": [
+      {
+        "featureName": "Workflow-based Image Generation",
+        "description": "Generates images by constructing and executing a JSON-based workflow on the ComfyUI server. Supports multiple model architectures (SD1.5, SDXL, FLUX, WAN 2.2, Nunchaku).",
+        "implementationDetails": {
+          "serviceFunctions": ["generateComfyUIPortraits"],
+          "modelsUsed": ["User's choice of installed checkpoints and LoRAs."],
+          "apiMethods": ["WebSocket connection for progress", "HTTP POST to /prompt"],
+          "keyTechniques": "Dynamically builds a workflow JSON based on user options, uploads source images if needed, queues the prompt, and listens for progress and output messages over a WebSocket."
+        }
+      },
+      {
+        "featureName": "Workflow-based Video Generation (Image-to-Video)",
+        "description": "Generates video from a start and optional end frame using a predefined WAN 2.2 I2V workflow.",
+        "implementationDetails": {
+          "serviceFunctions": ["generateComfyUIVideo"],
+          "modelsUsed": ["WAN 2.2 specific models (Unet, VAE, CLIP, etc.)"],
+          "apiMethods": ["WebSocket connection for progress", "HTTP POST to /prompt"],
+          "keyTechniques": "Similar to image generation, but uses a much larger, specialized workflow template for video."
+        }
+      }
+    ],
+    "geminiHelperFeaturesForComfyUI": [
+      {
+        "featureName": "Prompt Generation from Image",
+        "description": "Uses Gemini's VLM capabilities to analyze a source image and generate a text prompt that can then be used in a ComfyUI workflow.",
+        "implementationDetails": {
+          "serviceFunctions": ["generateComfyUIPromptFromSource", "extractBackgroundPromptFromImage", "extractSubjectPromptFromImage"],
+          "modelsUsed": ["gemini-2.5-flash"],
+          "apiMethods": ["ai.models.generateContent"],
+          "keyTechniques": "Multi-modal prompting to generate text *about* an image, which is then fed into a separate ComfyUI text-to-image workflow."
+        }
+      },
+      {
+        "featureName": "Magical Prompt Soup",
+        "description": "Uses Gemini's language model to creatively combine multiple text prompts into a new, cohesive 'soup' prompt, which can then be used in ComfyUI.",
+        "implementationDetails": {
+          "serviceFunctions": ["generateMagicalPromptSoup"],
+          "modelsUsed": ["gemini-2.5-flash"],
+          "apiMethods": ["ai.models.generateContent"],
+          "keyTechniques": "A pure text-generation task that takes multiple text inputs and uses the LLM's creativity to merge them into a single output, with a JSON response format."
+        }
+      }
+    ]
+  }
+}

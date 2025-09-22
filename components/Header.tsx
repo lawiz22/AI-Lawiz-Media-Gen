@@ -3,7 +3,7 @@
 import React from 'react';
 import { Banner } from './Banner';
 import { ThemeSwitcher } from './ThemeSwitcher';
-import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, AdminIcon } from './icons';
+import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, AdminIcon, CodeBracketIcon } from './icons';
 import { Logo } from './Logo';
 import type { User, VersionInfo, DriveFolder } from '../types';
 
@@ -14,6 +14,7 @@ interface HeaderProps {
     currentUser: User;
     onOpenSettingsModal: () => void;
     onOpenAdminPanel: () => void;
+    onOpenFeatureAnalysisModal: () => void;
     isComfyUIConnected: boolean | null;
     versionInfo: VersionInfo | null;
     driveFolder: DriveFolder | null;
@@ -26,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
     theme, setTheme, onLogout, currentUser, 
     onOpenSettingsModal,
     onOpenAdminPanel,
+    onOpenFeatureAnalysisModal,
     isComfyUIConnected, versionInfo,
     driveFolder, onDriveConnect, onDriveDisconnect,
     isDriveConfigured
@@ -100,13 +102,22 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
             )}
             {currentUser.role === 'admin' && (
-                <button 
-                    onClick={onOpenAdminPanel}
-                    title="Admin Panel"
-                    className="p-2 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
-                >
-                    <AdminIcon className="w-5 h-5" />
-                </button>
+                <>
+                    <button 
+                        onClick={onOpenAdminPanel}
+                        title="Admin Panel"
+                        className="p-2 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
+                    >
+                        <AdminIcon className="w-5 h-5" />
+                    </button>
+                     <button
+                        onClick={onOpenFeatureAnalysisModal}
+                        title="Feature Analysis"
+                        className="p-2 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
+                    >
+                        <CodeBracketIcon className="w-5 h-5" />
+                    </button>
+                </>
             )}
             <button 
                 onClick={onLogout}
