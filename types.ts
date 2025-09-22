@@ -318,7 +318,8 @@ export interface LogoThemeState {
     brandName?: string;
     slogan?: string;
     logoStyle?: LogoStyle;
-    fontStyleAdjectives?: string[];
+    fontReferenceImage?: File | null;
+    selectedFont?: LibraryItem | null;
     referenceItems?: LibraryItem[];
     selectedPalette?: LibraryItem | null;
     numLogos?: number;
@@ -332,7 +333,8 @@ export interface LogoThemeState {
     bannerTitle?: string;
     bannerAspectRatio?: BannerAspectRatio;
     bannerStyle?: BannerStyle;
-    bannerFontStyleAdjectives?: string[];
+    bannerFontReferenceImage?: File | null;
+    bannerSelectedFont?: LibraryItem | null;
     bannerReferenceItems?: LibraryItem[];
     bannerSelectedPalette?: LibraryItem | null;
     bannerSelectedLogo?: LibraryItem | null;
@@ -352,7 +354,8 @@ export interface LogoThemeState {
     albumEra?: AlbumEra;
     albumMediaType?: AlbumMediaType;
     addVinylWear?: boolean;
-    albumFontStyleAdjectives?: string[];
+    albumFontReferenceImage?: File | null;
+    albumSelectedFont?: LibraryItem | null;
     albumReferenceItems?: LibraryItem[];
     albumSelectedPalette?: LibraryItem | null;
     albumSelectedLogo?: LibraryItem | null;

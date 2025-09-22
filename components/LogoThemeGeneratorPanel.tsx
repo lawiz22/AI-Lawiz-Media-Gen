@@ -13,12 +13,15 @@ interface LogoThemeGeneratorPanelProps {
     setActiveSubTab: (tabId: string) => void;
     onOpenLibraryForReferences: () => void;
     onOpenLibraryForPalette: () => void;
+    onOpenLibraryForFont: () => void;
     onOpenLibraryForBannerReferences: () => void;
     onOpenLibraryForBannerPalette: () => void;
     onOpenLibraryForBannerLogo: () => void;
+    onOpenLibraryForBannerFont: () => void;
     onOpenLibraryForAlbumCoverReferences: () => void;
     onOpenLibraryForAlbumCoverPalette: () => void;
     onOpenLibraryForAlbumCoverLogo: () => void;
+    onOpenLibraryForAlbumCoverFont: () => void;
 }
 
 const Section: React.FC<{ title: string; description: string; borderColor: string; children: React.ReactNode }> = ({ title, description, borderColor, children }) => (
@@ -82,12 +85,6 @@ const BACKGROUND_OPTIONS: { id: LogoBackground; label: string }[] = [
     { id: 'black', label: 'Black' },
 ];
 
-const FONT_STYLE_ADJECTIVES = [
-    'Bold', 'Italic', 'Script', 'Sans-serif', 'Serif', 'Modern', 'Minimalist',
-    'Groovy', 'Psychedelic', 'Futuristic', 'Retro', 'Grunge', 'Elegant',
-    'Playful', 'Hand-drawn', 'Geometric', 'Blocky', 'Stencil', 'Bubbly'
-];
-
 const MUSIC_STYLES: { id: MusicStyle, label: string }[] = [
     { id: 'rock', label: 'Rock' },
     { id: 'pop', label: 'Pop' },
@@ -120,14 +117,48 @@ const ALBUM_MEDIA_TYPES: { id: AlbumMediaType, label: string }[] = [
 
 export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = ({ 
     state, setState, activeSubTab, setActiveSubTab, 
-    onOpenLibraryForReferences, onOpenLibraryForPalette, 
-    onOpenLibraryForBannerReferences, onOpenLibraryForBannerPalette, onOpenLibraryForBannerLogo,
-    onOpenLibraryForAlbumCoverReferences, onOpenLibraryForAlbumCoverPalette, onOpenLibraryForAlbumCoverLogo
+    onOpenLibraryForReferences, onOpenLibraryForPalette, onOpenLibraryForFont,
+    onOpenLibraryForBannerReferences, onOpenLibraryForBannerPalette, onOpenLibraryForBannerLogo, onOpenLibraryForBannerFont,
+    onOpenLibraryForAlbumCoverReferences, onOpenLibraryForAlbumCoverPalette, onOpenLibraryForAlbumCoverLogo, onOpenLibraryForAlbumCoverFont
 }) => {
     const [zoomedLogoIndex, setZoomedLogoIndex] = useState<number | null>(null);
     const [zoomedBannerIndex, setZoomedBannerIndex] = useState<number | null>(null);
     const [zoomedAlbumCoverIndex, setZoomedAlbumCoverIndex] = useState<number | null>(null);
     
+    const [fontPreview, setFontPreview] = useState<string | null>(null);
+    const [bannerFontPreview, setBannerFontPreview] = useState<string | null>(null);
+    const [albumFontPreview, setAlbumFontPreview] = useState<string | null>(null);
+    
+    useEffect(() => {
+        if (state.fontReferenceImage) {
+            const url = URL.createObjectURL(state.fontReferenceImage);
+            setFontPreview(url);
+            return () => URL.revokeObjectURL(url);
+        } else {
+            setFontPreview(null);
+        }
+    }, [state.fontReferenceImage]);
+    
+    useEffect(() => {
+        if (state.bannerFontReferenceImage) {
+            const url = URL.createObjectURL(state.bannerFontReferenceImage);
+            setBannerFontPreview(url);
+            return () => URL.revokeObjectURL(url);
+        } else {
+            setBannerFontPreview(null);
+        }
+    }, [state.bannerFontReferenceImage]);
+
+    useEffect(() => {
+        if (state.albumFontReferenceImage) {
+            const url = URL.createObjectURL(state.albumFontReferenceImage);
+            setAlbumFontPreview(url);
+            return () => URL.revokeObjectURL(url);
+        } else {
+            setAlbumFontPreview(null);
+        }
+    }, [state.albumFontReferenceImage]);
+
     const subTabs = [
         { id: 'logo', label: 'Logo Generator' },
         { id: 'banner', label: 'Banner Generator' },
@@ -191,22 +222,11 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         e.target.value = '';
     };
 
-    const handleFontAdjectiveToggle = (adjective: string, type: 'logo' | 'banner' | 'album-cover') => {
-        const key = `${type}FontStyleAdjectives` as 'fontStyleAdjectives' | 'bannerFontStyleAdjectives' | 'albumFontStyleAdjectives';
-        setState(prev => {
-            const currentAdjectives = (prev as any)[key] || [];
-            const newAdjectives = currentAdjectives.includes(adjective)
-                ? currentAdjectives.filter((adj: string) => adj !== adjective)
-                : [...currentAdjectives, adjective];
-            return { ...prev, [key]: newAdjectives };
-        });
-    };
-    
     const handleLogoReset = () => {
         setState(prev => ({
             ...prev,
             logoPrompt: '', brandName: '', slogan: '', logoStyle: 'symbolic',
-            fontStyleAdjectives: [],
+            fontReferenceImage: null, selectedFont: null,
             referenceItems: [], selectedPalette: null, generatedLogos: [], logoError: null
         }));
     };
@@ -267,7 +287,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         setState(prev => ({
             ...prev,
             bannerPrompt: '', bannerTitle: '', bannerAspectRatio: '16:9', bannerStyle: 'corporate-clean',
-            bannerFontStyleAdjectives: [],
+            bannerFontReferenceImage: null, bannerSelectedFont: null,
             bannerReferenceItems: [], bannerSelectedPalette: null, bannerSelectedLogo: null, bannerLogoPlacement: 'top-left',
             generatedBanners: [], bannerError: null
         }));
@@ -322,7 +342,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         setState(prev => ({
             ...prev,
             albumPrompt: '', albumTitle: '', artistName: '', musicStyle: 'rock', customMusicStyle: '', albumEra: 'modern', albumMediaType: 'digital',
-            addVinylWear: false, albumFontStyleAdjectives: [], albumReferenceItems: [], albumSelectedPalette: null, albumSelectedLogo: null,
+            addVinylWear: false, albumFontReferenceImage: null, albumSelectedFont: null, albumReferenceItems: [], albumSelectedPalette: null, albumSelectedLogo: null,
             generatedAlbumCovers: [], albumCoverError: null
         }));
     };
@@ -370,6 +390,63 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+    
+    const handleFontImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        setState(prev => ({
+            ...prev,
+            fontReferenceImage: file,
+            selectedFont: null, // Clear library selection
+        }));
+        e.target.value = ''; // Allow re-upload
+    };
+    
+    const handleBannerFontImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        setState(prev => ({
+            ...prev,
+            bannerFontReferenceImage: file,
+            bannerSelectedFont: null,
+        }));
+        e.target.value = '';
+    };
+
+    const handleAlbumFontImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        setState(prev => ({
+            ...prev,
+            albumFontReferenceImage: file,
+            albumSelectedFont: null,
+        }));
+        e.target.value = '';
+    };
+
+    const handleClearFont = () => {
+        setState(prev => ({
+            ...prev,
+            fontReferenceImage: null,
+            selectedFont: null,
+        }));
+    };
+    
+    const handleClearBannerFont = () => {
+        setState(prev => ({
+            ...prev,
+            bannerFontReferenceImage: null,
+            bannerSelectedFont: null,
+        }));
+    };
+
+    const handleClearAlbumFont = () => {
+        setState(prev => ({
+            ...prev,
+            albumFontReferenceImage: null,
+            albumSelectedFont: null,
+        }));
     };
 
     const selectedPaletteColors = state.selectedPalette ? JSON.parse(state.selectedPalette.media) as PaletteColor[] : [];
@@ -436,15 +513,34 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                     </div>
                                 </div>
                                 <div>
-                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Typography</h3>
-                                    <div className="p-3 bg-bg-tertiary rounded-lg">
-                                        <label className="block text-sm font-medium text-text-primary mb-2">Font Style Adjectives</label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {FONT_STYLE_ADJECTIVES.map(adj => (
-                                                <button key={adj} onClick={() => handleFontAdjectiveToggle(adj, 'logo')} className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${state.fontStyleAdjectives?.includes(adj) ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{adj}</button>
-                                            ))}
+                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Font (Optional)</h3>
+                                    {state.fontReferenceImage || state.selectedFont ? (
+                                        <div className="mt-2 p-2 bg-bg-primary/50 rounded-md flex items-center justify-between">
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <img 
+                                                    src={state.selectedFont ? state.selectedFont.thumbnail : fontPreview!}
+                                                    alt="Font preview" 
+                                                    className="w-12 h-12 object-cover rounded flex-shrink-0"
+                                                />
+                                                <p className="text-sm font-semibold truncate">
+                                                    {state.selectedFont ? state.selectedFont.name : state.fontReferenceImage?.name}
+                                                </p>
+                                            </div>
+                                            <button onClick={handleClearFont} className="p-1 text-text-secondary hover:text-white flex-shrink-0 ml-2">
+                                                <CloseIcon className="w-4 h-4"/>
+                                            </button>
                                         </div>
-                                    </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button onClick={onOpenLibraryForFont} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                                <LibraryIcon className="w-5 h-5"/> From Library
+                                            </button>
+                                            <label htmlFor="logo-font-upload" className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors cursor-pointer">
+                                                <UploadIconSimple className="w-5 h-5"/> Upload Image
+                                                <input id="logo-font-upload" type="file" accept="image/*" className="hidden" onChange={handleFontImageUpload} />
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-6">
                                     <div>
@@ -530,15 +626,34 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{BANNER_STYLE_OPTIONS.map(style => <button key={style.id} onClick={() => setState(p => ({...p, bannerStyle: style.id}))} title={style.description} className={`p-3 text-center rounded-lg text-sm transition-colors ${state.bannerStyle === style.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>{style.label}</button>)}</div>
                                 </div>
                                 <div>
-                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Typography</h3>
-                                    <div className="p-3 bg-bg-tertiary rounded-lg">
-                                        <label className="block text-sm font-medium text-text-primary mb-2">Font Style Adjectives</label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {FONT_STYLE_ADJECTIVES.map(adj => (
-                                                <button key={adj} onClick={() => handleFontAdjectiveToggle(adj, 'banner')} className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${state.bannerFontStyleAdjectives?.includes(adj) ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{adj}</button>
-                                            ))}
+                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Font (Optional)</h3>
+                                    {state.bannerFontReferenceImage || state.bannerSelectedFont ? (
+                                        <div className="mt-2 p-2 bg-bg-primary/50 rounded-md flex items-center justify-between">
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <img 
+                                                    src={state.bannerSelectedFont ? state.bannerSelectedFont.thumbnail : bannerFontPreview!}
+                                                    alt="Font preview" 
+                                                    className="w-12 h-12 object-cover rounded flex-shrink-0"
+                                                />
+                                                <p className="text-sm font-semibold truncate">
+                                                    {state.bannerSelectedFont ? state.bannerSelectedFont.name : state.bannerFontReferenceImage?.name}
+                                                </p>
+                                            </div>
+                                            <button onClick={handleClearBannerFont} className="p-1 text-text-secondary hover:text-white flex-shrink-0 ml-2">
+                                                <CloseIcon className="w-4 h-4"/>
+                                            </button>
                                         </div>
-                                    </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button onClick={onOpenLibraryForBannerFont} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                                <LibraryIcon className="w-5 h-5"/> From Library
+                                            </button>
+                                            <label htmlFor="banner-font-upload" className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors cursor-pointer">
+                                                <UploadIconSimple className="w-5 h-5"/> Upload Image
+                                                <input id="banner-font-upload" type="file" accept="image/*" className="hidden" onChange={handleBannerFontImageUpload} />
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-6">
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -633,15 +748,34 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                     </div>
                                 </div>
                                 <div>
-                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Typography</h3>
-                                    <div className="p-3 bg-bg-tertiary rounded-lg">
-                                        <label className="block text-sm font-medium text-text-primary mb-2">Font Style Adjectives</label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {FONT_STYLE_ADJECTIVES.map(adj => (
-                                                <button key={adj} onClick={() => handleFontAdjectiveToggle(adj, 'album-cover')} className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${state.albumFontStyleAdjectives?.includes(adj) ? 'bg-accent text-accent-text' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{adj}</button>
-                                            ))}
+                                    <h3 className="text-md font-semibold text-text-secondary mb-2">Font (Optional)</h3>
+                                    {state.albumFontReferenceImage || state.albumSelectedFont ? (
+                                        <div className="mt-2 p-2 bg-bg-primary/50 rounded-md flex items-center justify-between">
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <img 
+                                                    src={state.albumSelectedFont ? state.albumSelectedFont.thumbnail : albumFontPreview!}
+                                                    alt="Font preview" 
+                                                    className="w-12 h-12 object-cover rounded flex-shrink-0"
+                                                />
+                                                <p className="text-sm font-semibold truncate">
+                                                    {state.albumSelectedFont ? state.albumSelectedFont.name : state.albumFontReferenceImage?.name}
+                                                </p>
+                                            </div>
+                                            <button onClick={handleClearAlbumFont} className="p-1 text-text-secondary hover:text-white flex-shrink-0 ml-2">
+                                                <CloseIcon className="w-4 h-4"/>
+                                            </button>
                                         </div>
-                                    </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button onClick={onOpenLibraryForAlbumCoverFont} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                                <LibraryIcon className="w-5 h-5"/> From Library
+                                            </button>
+                                            <label htmlFor="album-font-upload" className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors cursor-pointer">
+                                                <UploadIconSimple className="w-5 h-5"/> Upload Image
+                                                <input id="album-font-upload" type="file" accept="image/*" className="hidden" onChange={handleAlbumFontImageUpload} />
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-6">
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

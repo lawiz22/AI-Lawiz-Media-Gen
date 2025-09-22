@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle } from './types';
@@ -82,6 +81,8 @@ const initialLogoThemeState: LogoThemeState = {
     brandName: '',
     slogan: '',
     logoStyle: 'symbolic',
+    fontReferenceImage: null,
+    selectedFont: null,
     referenceItems: [],
     selectedPalette: null,
     numLogos: 4,
@@ -95,6 +96,8 @@ const initialLogoThemeState: LogoThemeState = {
     bannerTitle: '',
     bannerAspectRatio: '16:9',
     bannerStyle: 'corporate-clean',
+    bannerFontReferenceImage: null,
+    bannerSelectedFont: null,
     bannerReferenceItems: [],
     bannerSelectedPalette: null,
     bannerSelectedLogo: null,
@@ -113,7 +116,8 @@ const initialLogoThemeState: LogoThemeState = {
     albumEra: 'modern',
     albumMediaType: 'digital',
     addVinylWear: false,
-    albumFontStyleAdjectives: [],
+    albumFontReferenceImage: null,
+    albumSelectedFont: null,
     albumReferenceItems: [],
     albumSelectedPalette: null,
     albumSelectedLogo: null,
@@ -217,6 +221,7 @@ const App: React.FC = () => {
     const [isEndFramePickerOpen, setIsEndFramePickerOpen] = useState(false);
     const [isLogoRefPickerOpen, setIsLogoRefPickerOpen] = useState(false);
     const [isLogoPalettePickerOpen, setIsLogoPalettePickerOpen] = useState(false);
+    const [isLogoFontPickerOpen, setIsLogoFontPickerOpen] = useState(false);
     const [isOAuthHelperOpen, setIsOAuthHelperOpen] = useState(false);
     const [isPromptGenImagePickerOpen, setIsPromptGenImagePickerOpen] = useState(false);
     const [isPromptGenBgImagePickerOpen, setIsPromptGenBgImagePickerOpen] = useState(false);
@@ -232,9 +237,11 @@ const App: React.FC = () => {
     const [isBannerRefPickerOpen, setIsBannerRefPickerOpen] = useState(false);
     const [isBannerPalettePickerOpen, setIsBannerPalettePickerOpen] = useState(false);
     const [isBannerLogoPickerOpen, setIsBannerLogoPickerOpen] = useState(false);
+    const [isBannerFontPickerOpen, setIsBannerFontPickerOpen] = useState(false);
     const [isAlbumCoverRefPickerOpen, setIsAlbumCoverRefPickerOpen] = useState(false);
     const [isAlbumCoverPalettePickerOpen, setIsAlbumCoverPalettePickerOpen] = useState(false);
     const [isAlbumCoverLogoPickerOpen, setIsAlbumCoverLogoPickerOpen] = useState(false);
+    const [isAlbumCoverFontPickerOpen, setIsAlbumCoverFontPickerOpen] = useState(false);
     const [isMannequinRefPickerOpen, setIsMannequinRefPickerOpen] = useState(false);
     const [isFontSourcePickerOpen, setIsFontSourcePickerOpen] = useState(false);
 
@@ -944,12 +951,15 @@ const App: React.FC = () => {
                         setActiveSubTab={setActiveLogoThemeSubTab}
                         onOpenLibraryForReferences={() => setIsLogoRefPickerOpen(true)}
                         onOpenLibraryForPalette={() => setIsLogoPalettePickerOpen(true)}
+                        onOpenLibraryForFont={() => setIsLogoFontPickerOpen(true)}
                         onOpenLibraryForBannerReferences={() => setIsBannerRefPickerOpen(true)}
                         onOpenLibraryForBannerPalette={() => setIsBannerPalettePickerOpen(true)}
                         onOpenLibraryForBannerLogo={() => setIsBannerLogoPickerOpen(true)}
+                        onOpenLibraryForBannerFont={() => setIsBannerFontPickerOpen(true)}
                         onOpenLibraryForAlbumCoverReferences={() => setIsAlbumCoverRefPickerOpen(true)}
                         onOpenLibraryForAlbumCoverPalette={() => setIsAlbumCoverPalettePickerOpen(true)}
                         onOpenLibraryForAlbumCoverLogo={() => setIsAlbumCoverLogoPickerOpen(true)}
+                        onOpenLibraryForAlbumCoverFont={() => setIsAlbumCoverFontPickerOpen(true)}
                     />
                 </div>
 
@@ -1290,6 +1300,16 @@ const App: React.FC = () => {
                     filter="color-palette"
                 />
             )}
+             {isLogoFontPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isLogoFontPickerOpen}
+                    onClose={() => setIsLogoFontPickerOpen(false)}
+                    onSelectItem={(item) => {
+                        setLogoThemeState(prev => ({ ...prev, selectedFont: item, fontReferenceImage: null }));
+                    }}
+                    filter="font"
+                />
+            )}
             {isBannerRefPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isBannerRefPickerOpen}
@@ -1323,6 +1343,16 @@ const App: React.FC = () => {
                     filter="logo"
                 />
             )}
+            {isBannerFontPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isBannerFontPickerOpen}
+                    onClose={() => setIsBannerFontPickerOpen(false)}
+                    onSelectItem={(item) => {
+                        setLogoThemeState(prev => ({ ...prev, bannerSelectedFont: item, bannerFontReferenceImage: null }));
+                    }}
+                    filter="font"
+                />
+            )}
             {isAlbumCoverRefPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isAlbumCoverRefPickerOpen}
@@ -1353,6 +1383,16 @@ const App: React.FC = () => {
                         setLogoThemeState(prev => ({ ...prev, albumSelectedLogo: item }));
                     }}
                     filter="logo"
+                />
+            )}
+             {isAlbumCoverFontPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isAlbumCoverFontPickerOpen}
+                    onClose={() => setIsAlbumCoverFontPickerOpen(false)}
+                    onSelectItem={(item) => {
+                        setLogoThemeState(prev => ({ ...prev, albumSelectedFont: item, albumFontReferenceImage: null }));
+                    }}
+                    filter="font"
                 />
             )}
             {isPromptGenImagePickerOpen && (

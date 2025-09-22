@@ -494,8 +494,11 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
     if (state.slogan) prompt += `- Slogan: ${state.slogan}\n`;
     if (state.logoPrompt) prompt += `- Core Concept: ${state.logoPrompt}\n`;
     if (state.logoStyle) prompt += `- Style: ${state.logoStyle}\n`;
-    if (state.fontStyleAdjectives && state.fontStyleAdjectives.length > 0) prompt += `- Font Adjectives: ${state.fontStyleAdjectives.join(', ')}\n`;
     if (state.backgroundColor) prompt += `- Background: ${state.backgroundColor === 'transparent' ? 'transparent PNG' : `solid ${state.backgroundColor}`}\n`;
+
+    if (state.fontReferenceImage || state.selectedFont) {
+        prompt += `- Font Style: Use the exact font style shown in the provided font reference image for all text.\n`;
+    }
 
     if (state.selectedPalette) {
         const palette = JSON.parse(state.selectedPalette.media);
@@ -503,13 +506,27 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
         prompt += `- Color Palette: Strictly use these colors: ${hexCodes}\n`;
     }
 
-    if (state.referenceItems && state.referenceItems.length > 0) {
+    const usesMultiModal = (state.referenceItems && state.referenceItems.length > 0) || state.fontReferenceImage || state.selectedFont;
+
+    if (usesMultiModal) {
         const parts: Part[] = [{ text: prompt }];
-        for (const item of state.referenceItems) {
-            const refResponse = await fetch(item.media);
-            const refBlob = await refResponse.blob();
-            const refFile = new File([refBlob], "ref.jpeg", { type: "image/jpeg" });
-            parts.push(await fileToGenerativePart(refFile));
+
+        if (state.fontReferenceImage) {
+            parts.push(await fileToGenerativePart(state.fontReferenceImage));
+        } else if (state.selectedFont) {
+            const fontResponse = await fetch(state.selectedFont.media);
+            const fontBlob = await fontResponse.blob();
+            const fontFile = new File([fontBlob], "font_ref.png", { type: fontBlob.type });
+            parts.push(await fileToGenerativePart(fontFile));
+        }
+        
+        if (state.referenceItems) {
+            for (const item of state.referenceItems) {
+                const refResponse = await fetch(item.media);
+                const refBlob = await refResponse.blob();
+                const refFile = new File([refBlob], "ref.jpeg", { type: "image/jpeg" });
+                parts.push(await fileToGenerativePart(refFile));
+            }
         }
         
         const allImages: string[] = [];
@@ -544,7 +561,9 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
     if (state.bannerTitle) prompt += `- Text on Banner: "${state.bannerTitle}"\n`;
     if (state.bannerPrompt) prompt += `- Core Concept: ${state.bannerPrompt}\n`;
     if (state.bannerStyle) prompt += `- Style: ${state.bannerStyle}\n`;
-    if (state.bannerFontStyleAdjectives && state.bannerFontStyleAdjectives.length > 0) prompt += `- Font Style: ${state.bannerFontStyleAdjectives.join(', ')}\n`;
+    if (state.bannerFontReferenceImage || state.bannerSelectedFont) {
+        prompt += `- Font Style: Use the exact font style shown in the provided font reference image for all text.\n`;
+    }
     if (state.bannerLogoPlacement && state.bannerLogoPlacement !== 'no-logo') prompt += `- Logo Placement: ${state.bannerLogoPlacement}\n`;
     
     if (state.bannerSelectedPalette) {
@@ -553,7 +572,7 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
         prompt += `- Color Palette: Strictly use these colors: ${hexCodes}\n`;
     }
     
-    const hasReferences = (state.bannerReferenceItems && state.bannerReferenceItems.length > 0) || state.bannerSelectedLogo;
+    const hasReferences = (state.bannerReferenceItems && state.bannerReferenceItems.length > 0) || state.bannerSelectedLogo || state.bannerFontReferenceImage || state.bannerSelectedFont;
 
     if (hasReferences) {
         const parts: Part[] = [{ text: prompt }];
@@ -563,6 +582,14 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
             const logoFile = new File([logoBlob], "logo.png", { type: "image/png" });
             parts.push({ text: "Use this logo in the banner:" });
             parts.push(await fileToGenerativePart(logoFile));
+        }
+        if (state.bannerFontReferenceImage) {
+            parts.push(await fileToGenerativePart(state.bannerFontReferenceImage));
+        } else if (state.bannerSelectedFont) {
+            const fontResponse = await fetch(state.bannerSelectedFont.media);
+            const fontBlob = await fontResponse.blob();
+            const fontFile = new File([fontBlob], "font_ref.png", { type: fontBlob.type });
+            parts.push(await fileToGenerativePart(fontFile));
         }
         if (state.bannerReferenceItems) {
             for (const item of state.bannerReferenceItems) {
@@ -610,7 +637,9 @@ export const generateAlbumCovers = async (state: LogoThemeState): Promise<string
     if (state.albumEra) prompt += `- Era: ${state.albumEra}\n`;
     if (state.albumMediaType) prompt += `- Media Type Style: Emulate a ${state.albumMediaType} cover.\n`;
     if (state.addVinylWear) prompt += `- Effects: Add realistic vinyl record sleeve wear and tear (scratches, ring wear).\n`;
-    if (state.albumFontStyleAdjectives && state.albumFontStyleAdjectives.length > 0) prompt += `- Font Style: ${state.albumFontStyleAdjectives.join(', ')}\n`;
+    if (state.albumFontReferenceImage || state.albumSelectedFont) {
+        prompt += `- Font Style: Use the exact font style shown in the provided font reference image for all text.\n`;
+    }
 
     if (state.albumSelectedPalette) {
         const palette = JSON.parse(state.albumSelectedPalette.media);
@@ -618,7 +647,7 @@ export const generateAlbumCovers = async (state: LogoThemeState): Promise<string
         prompt += `- Color Palette: Strictly use these colors: ${hexCodes}\n`;
     }
 
-    const hasReferences = (state.albumReferenceItems && state.albumReferenceItems.length > 0) || state.albumSelectedLogo;
+    const hasReferences = (state.albumReferenceItems && state.albumReferenceItems.length > 0) || state.albumSelectedLogo || state.albumFontReferenceImage || state.albumSelectedFont;
 
     if (hasReferences) {
         const parts: Part[] = [{ text: prompt }];
@@ -628,6 +657,14 @@ export const generateAlbumCovers = async (state: LogoThemeState): Promise<string
             const logoFile = new File([logoBlob], "logo.png", { type: "image/png" });
             parts.push({ text: "Use this logo in the album cover:" });
             parts.push(await fileToGenerativePart(logoFile));
+        }
+        if (state.albumFontReferenceImage) {
+            parts.push(await fileToGenerativePart(state.albumFontReferenceImage));
+        } else if (state.albumSelectedFont) {
+            const fontResponse = await fetch(state.albumSelectedFont.media);
+            const fontBlob = await fontResponse.blob();
+            const fontFile = new File([fontBlob], "font_ref.png", { type: fontBlob.type });
+            parts.push(await fileToGenerativePart(fontFile));
         }
         if (state.albumReferenceItems) {
             for (const item of state.albumReferenceItems) {
