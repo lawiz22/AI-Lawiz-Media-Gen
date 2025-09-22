@@ -251,7 +251,8 @@ export interface LibraryItem {
     startFrame?: string; // data URL for video generations
     endFrame?: string; // data URL for video generations
     promptType?: PromptCategory;
-    promptModelType?: 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2';
+    // Fix: Widened the type to include all possible prompt model types to match the implementation in the PromptGeneratorPanel.
+    promptModelType?: ComfyModelType | 'gemini';
     driveFileId?: string; // Google Drive file ID for the media
     previewThumbnail?: string; // AI-generated visual thumbnail for prompts
     poseJson?: string; // For pose items, the ControlNet JSON as a string

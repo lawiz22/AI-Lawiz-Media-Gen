@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { ImageUploader } from './ImageUploader';
 import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup } from '../services/comfyUIService';
 import { saveToLibrary } from '../services/libraryService';
 import type { LibraryItem } from '../types';
-import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon } from './icons';
+import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon } from './icons';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 
 interface PromptGeneratorPanelProps {
@@ -29,6 +30,7 @@ interface PromptGeneratorPanelProps {
     onOpenLibraryForImage: () => void;
     onOpenLibraryForBg: () => void;
     onOpenLibraryForSubject: () => void;
+    onReset: () => void;
 }
 
 interface PromptPart {
@@ -36,8 +38,7 @@ interface PromptPart {
   source: number; // 0 for new, 1 for full, 2 for bg, 3 for subject
 }
 
-// Fix: Corrected the 'wan 2.2' type to 'wan2.2' to match the service layer function signatures and fix the type error.
-type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2';
+type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
 type PromptCategory = 'image' | 'background' | 'subject' | 'soup';
 
 const createPromptThumbnail = (text: string, type: PromptCategory, modelType: PromptModelType): string => {
@@ -120,7 +121,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     soupPrompt, setSoupPrompt, soupHistory, onAddSoupToHistory,
     onOpenLibraryForImage,
     onOpenLibraryForBg,
-    onOpenLibraryForSubject
+    onOpenLibraryForSubject,
+    onReset
 }) => {
     // --- Ephemeral state (not persisted) ---
     const [modelType, setModelType] = useState<PromptModelType>('sdxl');
@@ -601,6 +603,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                     </div>
                 </div>
             )}
+            <div className="mt-8 pt-4 border-t border-danger-bg">
+                <button onClick={onReset} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
+                    <ResetIcon className="w-5 h-5" /> Reset All Prompt Tools
+                </button>
+            </div>
         </div>
     );
 };

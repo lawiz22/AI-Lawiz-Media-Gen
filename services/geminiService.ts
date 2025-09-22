@@ -1,12 +1,11 @@
+
 import { GoogleGenAI, Part, Type, Modality } from "@google/genai";
-import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState } from '../types';
+import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState, PaletteColor } from '../types';
 import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
 import { buildPromptSegments, decodePose, getRandomPose } from "../utils/promptBuilder";
 import { MANNEQUIN_STYLE_REFERENCES } from '../assets/styleReferences';
 import { POSES } from "../constants";
-
-// Fix: Add full implementation for the geminiService module.
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
@@ -501,7 +500,7 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
     }
 
     if (state.selectedPalette) {
-        const palette = JSON.parse(state.selectedPalette.media);
+        const palette = JSON.parse(state.selectedPalette.media) as PaletteColor[];
         const hexCodes = palette.map((c: any) => c.hex).join(', ');
         prompt += `- Color Palette: Strictly use these colors: ${hexCodes}\n`;
     }
@@ -567,7 +566,7 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
     if (state.bannerLogoPlacement && state.bannerLogoPlacement !== 'no-logo') prompt += `- Logo Placement: ${state.bannerLogoPlacement}\n`;
     
     if (state.bannerSelectedPalette) {
-        const palette = JSON.parse(state.bannerSelectedPalette.media);
+        const palette = JSON.parse(state.bannerSelectedPalette.media) as PaletteColor[];
         const hexCodes = palette.map((c: any) => c.hex).join(', ');
         prompt += `- Color Palette: Strictly use these colors: ${hexCodes}\n`;
     }
@@ -642,7 +641,7 @@ export const generateAlbumCovers = async (state: LogoThemeState): Promise<string
     }
 
     if (state.albumSelectedPalette) {
-        const palette = JSON.parse(state.albumSelectedPalette.media);
+        const palette = JSON.parse(state.albumSelectedPalette.media) as PaletteColor[];
         const hexCodes = palette.map((c: any) => c.hex).join(', ');
         prompt += `- Color Palette: Strictly use these colors: ${hexCodes}\n`;
     }

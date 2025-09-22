@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle } from './types';
@@ -396,6 +397,18 @@ const App: React.FC = () => {
     const handleExtractorReset = () => {
         setExtractorState(initialExtractorState);
     };
+    
+    const handlePromptGenReset = useCallback(() => {
+        setPromptGenState({
+            image: null, prompt: '', bgImage: null, bgPrompt: '',
+            subjectImage: null, subjectPrompt: '', soupPrompt: '',
+            soupHistory: [],
+        });
+    }, []);
+
+    const handleVideoUtilsReset = useCallback(() => {
+        setVideoUtilsState(initialVideoUtilsState);
+    }, []);
 
     const handleGenerate = async () => {
         setIsLoading(true);
@@ -991,6 +1004,7 @@ const App: React.FC = () => {
                             onOpenLibraryForImage={() => setIsPromptGenImagePickerOpen(true)}
                             onOpenLibraryForBg={() => setIsPromptGenBgImagePickerOpen(true)}
                             onOpenLibraryForSubject={() => setIsPromptGenSubjectImagePickerOpen(true)}
+                            onReset={handlePromptGenReset}
                         />
                     </div>
                 )}
@@ -1013,7 +1027,6 @@ const App: React.FC = () => {
                  <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
                     <VideoUtilsPanel
                         setStartFrame={setVideoStartFrame}
-                        // Fix: Corrected prop from `setStartFrame` to `setVideoStartFrame` to match the state setter name.
                         setEndFrame={setVideoEndFrame}
                         videoUtilsState={videoUtilsState}
                         setVideoUtilsState={setVideoUtilsState}
@@ -1021,6 +1034,7 @@ const App: React.FC = () => {
                         onOpenVideoLibrary={() => setIsVideoUtilsPickerOpen(true)}
                         activeSubTab={activeVideoUtilsSubTab}
                         setActiveSubTab={setActiveVideoUtilsSubTab}
+                        onReset={handleVideoUtilsReset}
                     />
                 </div>
             </main>

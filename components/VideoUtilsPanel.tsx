@@ -1,5 +1,6 @@
+
 import React, { useState, useRef, ChangeEvent, useMemo, useEffect, useCallback } from 'react';
-import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon } from './icons';
+import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, ResetIcon } from './icons';
 import { dataUrlToFile, dataUrlToThumbnail, createPaletteThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 import { saveToLibrary } from '../services/libraryService';
 import type { LibraryItem, VideoUtilsState, PaletteColor, ColorPickerState } from '../types';
@@ -218,6 +219,7 @@ interface VideoUtilsPanelProps {
     onOpenVideoLibrary: () => void;
     activeSubTab: string;
     setActiveSubTab: (tabId: string) => void;
+    onReset: () => void;
 }
 
 export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({ 
@@ -228,7 +230,8 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     onOpenLibrary,
     onOpenVideoLibrary,
     activeSubTab,
-    setActiveSubTab
+    setActiveSubTab,
+    onReset
 }) => {
     const { videoFile, extractedFrame, colorPicker } = videoUtilsState;
 
@@ -761,6 +764,11 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
             </div>
 
             <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+             <div className="mt-8 pt-4 border-t border-danger-bg">
+                <button onClick={onReset} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
+                    <ResetIcon className="w-5 h-5" /> Reset All Video Utilities
+                </button>
+            </div>
         </div>
     );
 };
