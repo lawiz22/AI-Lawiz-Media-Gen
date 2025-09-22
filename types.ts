@@ -189,12 +189,17 @@ export interface IdentifiedPose {
     description: string;
 }
 
+export type MannequinStyle = 'wooden-artist' | 'neutral-gray' | 'wireframe' | 'comic-outline';
+
 export interface GeneratedPose {
     description: string;
     image: string; // data URL for mannequin
     skeletonImage: string; // data URL for skeleton render
     poseJson: object; // The ControlNet JSON object
+    mannequinStyle: MannequinStyle; // The style used for generation
     saved?: 'idle' | 'saving' | 'saved'; // UI state
+    // Fix: Add optional 'generationPrompt' to store the prompt used for mannequin creation.
+    generationPrompt?: string;
 }
 
 
@@ -220,12 +225,10 @@ export interface ExtractorState {
     objectError: string | null;
     // Poses
     poseSourceFile: File | null;
-    isIdentifyingPoses: boolean;
-    identifiedPoses: (IdentifiedPose & { selected: boolean })[];
     isGeneratingPoses: boolean;
     generatedPoses: GeneratedPose[];
     poseError: string | null;
-    posesKeepClothes: boolean;
+    mannequinStyle: MannequinStyle;
 }
 
 export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose';
@@ -245,7 +248,6 @@ export interface LibraryItem {
     promptModelType?: 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2';
     driveFileId?: string; // Google Drive file ID for the media
     previewThumbnail?: string; // AI-generated visual thumbnail for prompts
-    poseDescription?: string; // For pose items, the detailed text description
     poseJson?: string; // For pose items, the ControlNet JSON as a string
     skeletonImage?: string; // For pose items, the data URL for the skeleton visualization
 }
@@ -328,6 +330,7 @@ export interface LogoThemeState {
     bannerReferenceItems?: LibraryItem[];
     bannerSelectedPalette?: LibraryItem | null;
     bannerSelectedLogo?: LibraryItem | null;
+    // Fix: Corrected typo from BannerPlacement to BannerLogoPlacement.
     bannerLogoPlacement?: BannerLogoPlacement;
     numBanners?: number;
     isGeneratingBanners?: boolean;

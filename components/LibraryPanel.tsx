@@ -380,7 +380,6 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
                     <DetailItem label="Item ID" value={selectedItemModal.id} />
                     <DetailItem label="Type" value={selectedItemModal.mediaType} />
                     {selectedItemModal.mediaType === 'prompt' && <DetailItem label="Prompt Text" value={selectedItemModal.media} isCode />}
-                    {selectedItemModal.poseDescription && <DetailItem label="Pose Description" value={selectedItemModal.poseDescription} isCode />}
                     {selectedItemModal.poseJson && <DetailItem label="Pose JSON (ControlNet)" value={selectedItemModal.poseJson} isCode />}
                     {renderOptionsDetails(selectedItemModal.options)}
                     <div className="pt-4 flex flex-wrap gap-2">

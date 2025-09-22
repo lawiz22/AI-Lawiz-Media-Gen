@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { GeneratedClothing, GeneratedObject, GeneratedPose } from '../types';
-import { DownloadIcon, SaveIcon, SpinnerIcon, CheckIcon, CloseIcon, CodeBracketIcon, CopyIcon } from './icons';
+import { DownloadIcon, SaveIcon, SpinnerIcon, CheckIcon, CloseIcon, CodeBracketIcon, CopyIcon, DocumentTextIcon, ZoomIcon } from './icons';
 
 interface ExtractorResultsGridProps {
   items: (GeneratedClothing | GeneratedObject | GeneratedPose)[];
@@ -12,44 +12,34 @@ const isClothing = (item: any): item is GeneratedClothing => 'itemName' in item;
 const isPose = (item: any): item is GeneratedPose => 'poseJson' in item;
 
 export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ items, onSave, title }) => {
-    const [zoomedItemIndex, setZoomedItemIndex] = useState<number | null>(null);
-    const [isShowingFolded, setIsShowingFolded] = useState(false);
-    const [jsonViewer, setJsonViewer] = useState<{ title: string; content: string } | null>(null);
-    const [jsonCopyText, setJsonCopyText] = useState('Copy');
+    const [selectedItemModal, setSelectedItemModal] = useState<(GeneratedClothing | GeneratedObject | GeneratedPose) & { index: number } | null>(null);
+    const [textViewer, setTextViewer] = useState<{ title: string; content: string } | null>(null);
+    const [textCopyButton, setTextCopyButton] = useState('Copy');
+    const [zoomedImage, setZoomedImage] = useState<{ src: string, alt: string } | null>(null);
 
-    const handleCloseZoom = useCallback(() => {
-        setZoomedItemIndex(null);
-        setIsShowingFolded(false);
+    const handleCloseModals = useCallback(() => {
+        setSelectedItemModal(null);
+        setTextViewer(null);
+        setZoomedImage(null);
     }, []);
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         if (e.key === 'Escape') {
-            handleCloseZoom();
-            setJsonViewer(null);
+            if (zoomedImage) setZoomedImage(null);
+            else if (textViewer) setTextViewer(null);
+            else handleCloseModals();
         }
-    }, [handleCloseZoom]);
+    }, [zoomedImage, textViewer, handleCloseModals]);
 
     useEffect(() => {
-        if (zoomedItemIndex !== null || jsonViewer !== null) {
+        if (selectedItemModal !== null || textViewer !== null || zoomedImage !== null) {
             window.addEventListener('keydown', handleKeyDown);
         }
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [zoomedItemIndex, jsonViewer, handleKeyDown]);
+    }, [selectedItemModal, textViewer, zoomedImage, handleKeyDown]);
     
-    const currentZoomedItem = zoomedItemIndex !== null ? items[zoomedItemIndex] : null;
-    let currentZoomedImageSrc = null;
-    if (currentZoomedItem) {
-        if (isClothing(currentZoomedItem) && currentZoomedItem.foldedImage) {
-            currentZoomedImageSrc = isShowingFolded ? currentZoomedItem.foldedImage : currentZoomedItem.laidOutImage;
-        } else if (isPose(currentZoomedItem)) {
-            currentZoomedImageSrc = isShowingFolded ? currentZoomedItem.skeletonImage : currentZoomedItem.image;
-        } else {
-            currentZoomedImageSrc = (currentZoomedItem as GeneratedObject).image;
-        }
-    }
-
     const handleDownload = (dataUrl: string, name: string) => {
         const link = document.createElement('a');
         link.href = dataUrl;
@@ -58,12 +48,19 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
         link.click();
         document.body.removeChild(link);
     };
+    
+    const handleDownloadText = (content: string, filename: string) => {
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        handleDownload(url, filename);
+        URL.revokeObjectURL(url);
+    };
 
-    const handleCopyJson = () => {
-        if (!jsonViewer) return;
-        navigator.clipboard.writeText(jsonViewer.content).then(() => {
-            setJsonCopyText('Copied!');
-            setTimeout(() => setJsonCopyText('Copy'), 2000);
+    const handleCopyText = () => {
+        if (!textViewer) return;
+        navigator.clipboard.writeText(textViewer.content).then(() => {
+            setTextCopyButton('Copied!');
+            setTimeout(() => setTextCopyButton('Copy'), 2000);
         });
     };
 
@@ -75,186 +72,128 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
         <>
             <div className="space-y-4">
                 <h3 className="text-xl font-bold text-accent">{title}</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {items.map((item, index) => {
-                        let name: string;
-                        let image: string;
-                        const isPoseItem = isPose(item);
-
-                        if (isClothing(item)) {
-                            name = item.itemName;
-                            image = item.laidOutImage;
-                        } else if (isPoseItem) {
-                            name = `Pose #${index + 1}`;
-                            image = item.image; // This is the mannequin
-                        } else {
-                            name = (item as GeneratedObject).name;
-                            image = item.image;
-                        }
-
-                        const savingStatus = item.saved || 'idle';
+                        let name: string, image: string;
+                        if (isClothing(item)) { name = item.itemName; image = item.laidOutImage; } 
+                        else if (isPose(item)) { name = item.description; image = item.image; } 
+                        else { name = (item as GeneratedObject).name; image = item.image; }
 
                         return (
-                            <div key={index} className="text-center p-2 bg-bg-tertiary rounded-md flex flex-col">
-                                <h4 className="text-sm font-medium text-text-primary mb-2 truncate" title={name}>{name}</h4>
-                                {isPoseItem ? (
-                                    <div className="grid grid-cols-2 gap-2 flex-grow">
-                                        <div className="aspect-square bg-white rounded-md flex items-center justify-center p-1 cursor-pointer" onClick={() => { setZoomedItemIndex(index); setIsShowingFolded(false); }}>
-                                            <img src={item.image} alt={`${name} - Mannequin`} className="max-w-full max-h-full object-contain" />
-                                        </div>
-                                        <div className="aspect-square bg-black rounded-md flex items-center justify-center p-1 cursor-pointer" onClick={() => { setZoomedItemIndex(index); setIsShowingFolded(true); }}>
-                                            <img src={item.skeletonImage} alt={`${name} - Skeleton`} className="max-w-full max-h-full object-contain" />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="aspect-square bg-white rounded-md flex items-center justify-center p-2 flex-grow cursor-pointer" onClick={() => setZoomedItemIndex(index)}>
-                                        <img src={image} alt={name} className="max-w-full max-h-full object-contain" />
-                                    </div>
-                                )}
-                                <div className={`grid ${isPoseItem ? 'grid-cols-3' : 'grid-cols-2'} gap-2 mt-2`}>
+                             <div key={index} className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
+                                <img src={image} alt={name} className="object-contain w-full h-full p-2" style={isPose(item) ? {backgroundColor: 'white'} : {}}/>
+                                <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                     <button
-                                        onClick={() => handleDownload(image, `${name.replace(/\s+/g, '_')}.png`)}
-                                        className="w-full flex items-center justify-center gap-2 text-xs bg-bg-primary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
-                                        title="Download Image"
+                                        onClick={() => setSelectedItemModal({ ...item, index })}
+                                        title="View Details"
+                                        className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
                                     >
-                                        <DownloadIcon className="w-4 h-4" />
+                                        <ZoomIcon className="w-5 h-5" />
                                     </button>
-                                    {isPoseItem && (
-                                        <button
-                                            onClick={() => setJsonViewer({ title: name, content: JSON.stringify(item.poseJson, null, 2)})}
-                                            className="w-full flex items-center justify-center gap-2 text-xs bg-bg-primary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
-                                            title="View Pose JSON"
-                                        >
-                                            <CodeBracketIcon className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={() => onSave(item, index)}
-                                        disabled={savingStatus !== 'idle'}
-                                        className={`w-full flex items-center justify-center gap-2 text-xs font-semibold py-2 px-3 rounded-lg transition-colors ${
-                                            savingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' :
-                                            savingStatus === 'saving' ? 'bg-bg-primary text-text-secondary cursor-wait' :
-                                            'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'
-                                        }`}
+                                     <button
+                                        onClick={() => handleDownload(image, `${name.replace(/\s+/g, '_')}.png`)}
+                                        title="Download Image"
+                                        className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
                                     >
-                                        {savingStatus === 'saving' ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : savingStatus === 'saved' ? <CheckIcon className="w-4 h-4" /> : <SaveIcon className="w-4 h-4" />}
+                                        <DownloadIcon className="w-5 h-5" />
                                     </button>
                                 </div>
+                                <p className="absolute bottom-0 left-0 p-2 text-white text-xs font-bold truncate max-w-full">{name}</p>
                             </div>
                         );
                     })}
                 </div>
             </div>
 
-            {currentZoomedItem && currentZoomedImageSrc && (
+            {selectedItemModal && (
                 <div 
-                    className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-fade-in"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label="Zoomed image view"
-                    onClick={handleCloseZoom}
+                    className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in"
+                    onClick={handleCloseModals}
                 >
                     <div 
-                        className="relative max-w-4xl max-h-[90vh]"
+                        className="bg-bg-secondary w-full max-w-4xl p-6 rounded-2xl shadow-lg border border-border-primary flex flex-col max-h-[90vh]"
                         onClick={e => e.stopPropagation()}
                     >
-                        <img 
-                            src={currentZoomedImageSrc}
-                            alt={`Zoomed content`}
-                            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
-                            style={isPose(currentZoomedItem) && isShowingFolded ? { backgroundColor: 'black' } : {}}
-                        />
-                        <button
-                            onClick={handleCloseZoom}
-                            className="absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75 transition-colors z-10"
-                            aria-label="Close zoomed image"
-                        >
-                            <CloseIcon className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                            <h2 className="text-xl font-bold text-accent truncate">
+                                {isClothing(selectedItemModal) ? selectedItemModal.itemName : isPose(selectedItemModal) ? selectedItemModal.description : (selectedItemModal as GeneratedObject).name}
+                            </h2>
+                            <button onClick={handleCloseModals} className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover"><CloseIcon className="w-5 h-5" /></button>
+                        </div>
+                        
+                        <div className="flex-grow overflow-y-auto pr-2 -mr-2">
+                            {isPose(selectedItemModal) ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <h4 className="text-sm font-semibold text-text-secondary">Mannequin</h4>
+                                            <button onClick={() => handleDownload(selectedItemModal.image, `${selectedItemModal.description.replace(/\s+/g, '_')}_mannequin.png`)} title="Download Mannequin" className="p-1 rounded-full text-text-muted hover:text-text-primary"><DownloadIcon className="w-4 h-4"/></button>
+                                        </div>
+                                        <div onClick={() => setZoomedImage({ src: selectedItemModal.image, alt: 'Mannequin' })} className="relative group aspect-square bg-white rounded-lg p-1 cursor-zoom-in"><img src={selectedItemModal.image} className="w-full h-full object-contain" /><div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><ZoomIcon className="w-10 h-10 text-white"/></div></div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <h4 className="text-sm font-semibold text-text-secondary">Skeleton</h4>
+                                            <button onClick={() => handleDownload(selectedItemModal.skeletonImage, `${selectedItemModal.description.replace(/\s+/g, '_')}_skeleton.png`)} title="Download Skeleton" className="p-1 rounded-full text-text-muted hover:text-text-primary"><DownloadIcon className="w-4 h-4"/></button>
+                                        </div>
+                                        <div onClick={() => setZoomedImage({ src: selectedItemModal.skeletonImage, alt: 'Skeleton' })} className="relative group aspect-square bg-black rounded-lg p-1 cursor-zoom-in"><img src={selectedItemModal.skeletonImage} className="w-full h-full object-contain" /><div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><ZoomIcon className="w-10 h-10 text-white"/></div></div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="aspect-square bg-white rounded-lg p-2 flex items-center justify-center">
+                                    <img src={isClothing(selectedItemModal) ? selectedItemModal.laidOutImage : (selectedItemModal as GeneratedObject).image} className="max-w-full max-h-full object-contain" />
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="pt-4 mt-4 border-t border-border-primary flex-shrink-0 flex flex-wrap gap-2 justify-end">
+                             {isPose(selectedItemModal) && selectedItemModal.generationPrompt && (
+                                <button onClick={() => setTextViewer({ title: 'Mannequin Generation Prompt', content: selectedItemModal.generationPrompt! })} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover">
+                                    <DocumentTextIcon className="w-5 h-5"/> View Prompt
+                                </button>
+                            )}
+                            {isPose(selectedItemModal) && (
+                                <button onClick={() => setTextViewer({ title: 'Pose JSON (ControlNet)', content: JSON.stringify(selectedItemModal.poseJson, null, 2) })} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover">
+                                    <CodeBracketIcon className="w-5 h-5"/> View JSON
+                                </button>
+                            )}
+                            <button onClick={() => onSave(selectedItemModal, selectedItemModal.index)} disabled={selectedItemModal.saved !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors ${selectedItemModal.saved === 'saved' ? 'bg-green-500 text-white' : 'bg-accent text-accent-text hover:bg-accent-hover'}`}>
+                                {selectedItemModal.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : selectedItemModal.saved === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
+                                {selectedItemModal.saved === 'saving' ? 'Saving...' : selectedItemModal.saved === 'saved' ? 'Saved' : 'Save to Library'}
+                            </button>
+                        </div>
                     </div>
-
-                    <div
-                        className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-bg-secondary/80 backdrop-blur-sm p-3 rounded-full shadow-lg"
-                        onClick={e => e.stopPropagation()}
-                        role="toolbar"
-                        aria-label="Image actions"
-                    >
-                        {(isClothing(currentZoomedItem) && currentZoomedItem.foldedImage) || isPose(currentZoomedItem) ? (
-                            <div className="flex items-center gap-1 bg-bg-tertiary p-1 rounded-full">
-                                <button
-                                    onClick={() => setIsShowingFolded(false)}
-                                    className={`px-3 py-1 text-xs rounded-full ${!isShowingFolded ? 'bg-accent text-accent-text' : 'text-text-secondary'}`}
-                                >
-                                    {isClothing(currentZoomedItem) ? 'Laid Out' : 'Mannequin'}
-                                </button>
-                                <button
-                                    onClick={() => setIsShowingFolded(true)}
-                                    className={`px-3 py-1 text-xs rounded-full ${isShowingFolded ? 'bg-accent text-accent-text' : 'text-text-secondary'}`}
-                                >
-                                     {isClothing(currentZoomedItem) ? 'Folded' : 'Skeleton'}
-                                </button>
-                            </div>
-                        ) : null}
-                        <button
-                            onClick={() => {
-                                const zoomedItem = items[zoomedItemIndex!];
-                                let name = 'download';
-                                if (isClothing(zoomedItem)) name = zoomedItem.itemName;
-                                else if (isPose(zoomedItem)) name = `pose_${zoomedItemIndex! + 1}`;
-                                else name = (zoomedItem as GeneratedObject).name;
-                                handleDownload(currentZoomedImageSrc!, name.replace(/\s+/g, '_') + '.png');
-                            }}
-                            title="Download Image"
-                            aria-label="Download this image"
-                            className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
-                        >
-                            <DownloadIcon className="w-6 h-6" />
-                        </button>
-                        <button
-                            onClick={() => onSave(currentZoomedItem, zoomedItemIndex!)}
-                            disabled={currentZoomedItem.saved !== 'idle'}
-                            title="Save to Library"
-                            className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50"
-                        >
-                             {currentZoomedItem.saved === 'saving' ? <SpinnerIcon className="w-6 h-6 animate-spin" /> : currentZoomedItem.saved === 'saved' ? <CheckIcon className="w-6 h-6" /> : <SaveIcon className="w-6 h-6" />}
-                        </button>
+                </div>
+            )}
+            
+            {textViewer && (
+                <div className="fixed inset-0 bg-black/80 z-[51] flex items-center justify-center p-4" onClick={() => setTextViewer(null)}>
+                    <div className="bg-bg-secondary w-full max-w-2xl p-6 rounded-2xl shadow-lg border border-border-primary flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                            <h3 className="text-xl font-bold text-accent">{textViewer.title}</h3>
+                            <button onClick={() => setTextViewer(null)} className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover"><CloseIcon className="w-5 h-5"/></button>
+                        </div>
+                        <div className="relative flex-grow bg-bg-primary rounded-md overflow-hidden">
+                            <pre className="h-full overflow-auto p-4 text-xs text-text-secondary whitespace-pre-wrap font-mono">{textViewer.content}</pre>
+                        </div>
+                         <div className="pt-4 mt-4 border-t border-border-primary flex-shrink-0 flex flex-wrap gap-2 justify-end">
+                            <button onClick={() => handleDownloadText(textViewer.content, `${textViewer.title.replace(/\s/g, '_')}${textViewer.title.includes('JSON') ? '.json' : '.txt'}`)} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover">
+                                <DownloadIcon className="w-5 h-5"/> Download
+                            </button>
+                            <button onClick={handleCopyText} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover">
+                                <CopyIcon className="w-5 h-5"/>{textCopyButton}
+                            </button>
+                         </div>
                     </div>
                 </div>
             )}
 
-            {jsonViewer && (
-                <div
-                    className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in"
-                    onClick={() => setJsonViewer(null)}
-                >
-                    <div
-                        className="bg-bg-secondary w-full max-w-2xl p-6 rounded-2xl shadow-lg border border-border-primary flex flex-col max-h-[90vh]"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                            <h3 className="text-xl font-bold text-accent">{jsonViewer.title} - Pose JSON</h3>
-                             <button
-                                onClick={() => setJsonViewer(null)}
-                                className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
-                                aria-label="Close"
-                            >
-                                <CloseIcon className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="relative flex-grow bg-bg-primary rounded-md overflow-hidden">
-                            <pre className="h-full overflow-auto p-4 text-xs text-text-secondary whitespace-pre-wrap font-mono">
-                                {jsonViewer.content}
-                            </pre>
-                             <button
-                                onClick={handleCopyJson}
-                                className="absolute top-2 right-2 flex items-center gap-1.5 bg-bg-secondary/80 text-text-secondary text-xs font-semibold py-1 px-2 rounded-full hover:bg-accent hover:text-accent-text transition-colors"
-                                title="Copy JSON"
-                            >
-                                <CopyIcon className="w-3 h-3"/>
-                                {jsonCopyText}
-                            </button>
-                        </div>
-                    </div>
+            {zoomedImage && (
+                <div className="fixed inset-0 bg-black/90 z-[52] flex items-center justify-center p-4" onClick={() => setZoomedImage(null)}>
+                     <div className="relative max-w-full max-h-full" onClick={e => e.stopPropagation()}>
+                        <img src={zoomedImage.src} alt={zoomedImage.alt} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" style={{ maxHeight: '90vh', maxWidth: '90vw' }} />
+                        <button onClick={() => setZoomedImage(null)} className="absolute -top-3 -right-3 p-2 rounded-full bg-black/50 text-white hover:bg-black/75 transition-colors"><CloseIcon className="w-6 h-6"/></button>
+                     </div>
                 </div>
             )}
         </>

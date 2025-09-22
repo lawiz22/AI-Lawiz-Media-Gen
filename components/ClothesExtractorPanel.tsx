@@ -2,12 +2,13 @@ import React from 'react';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
 import { ExtractorResultsGrid } from './ExtractorResultsGrid';
-import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage, identifyPoses, generatePoseMannequin, extractPoseKeypoints } from '../services/geminiService';
-import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose } from '../types';
+import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage, generatePoseMannequin, generatePoseDescription } from '../services/geminiService';
+import { detectPosesInImage } from '../services/mediaPipeService';
+import { mediaPipeToOpenPose, renderPoseSkeleton } from '../utils/poseRenderer';
+import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose, MannequinStyle } from '../types';
 import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon } from './icons';
 import { saveToLibrary } from '../services/libraryService';
 import { dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
-import { renderPoseSkeleton } from '../utils/poseRenderer';
 
 // --- Helper Components ---
 
@@ -61,6 +62,13 @@ interface ExtractorToolsPanelProps {
     activeSubTab: string;
     setActiveSubTab: (tabId: string) => void;
 }
+
+const MANNEQUIN_STYLES: { id: MannequinStyle, label: string }[] = [
+    { id: 'wooden-artist', label: 'Wooden Artist\'s Figure' },
+    { id: 'neutral-gray', label: 'Neutral Gray 3D Model' },
+    { id: 'wireframe', label: 'Technical Wireframe' },
+    { id: 'comic-outline', label: 'Comic Book Outline' },
+];
 
 // --- Main Panel ---
 export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state, setState, onReset, onOpenLibraryForClothes, onOpenLibraryForObjects, onOpenLibraryForPoses, activeSubTab, setActiveSubTab }) => {
@@ -251,101 +259,59 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
     };
 
     // --- Pose Logic ---
-    const handleIdentifyPoses = async () => {
-        if (!state.poseSourceFile) return;
-        setState(prev => ({
-            ...prev,
-            isIdentifyingPoses: true,
-            poseError: null,
-            identifiedPoses: [],
-            generatedPoses: []
-        }));
-
-        try {
-            const poses = await identifyPoses(state.poseSourceFile);
-            setState(prev => ({ ...prev, identifiedPoses: poses.map(pose => ({ ...pose, selected: true })) }));
-        } catch (err: any) {
-            setState(prev => ({ ...prev, poseError: err.message || 'Failed to identify poses.' }));
-        } finally {
-            setState(prev => ({ ...prev, isIdentifyingPoses: false }));
-        }
-    };
-
-    const handleTogglePoseSelection = (index: number) => {
-        setState(prev => ({
-            ...prev,
-            identifiedPoses: prev.identifiedPoses.map((item, i) => (i === index ? { ...item, selected: !item.selected } : item))
-        }));
-    };
-
-    const handleSelectAllPoses = () => {
-        setState(prev => ({
-            ...prev,
-            identifiedPoses: prev.identifiedPoses.map(item => ({ ...item, selected: true }))
-        }));
-    };
-
-    const handleUnselectAllPoses = () => {
-        setState(prev => ({
-            ...prev,
-            identifiedPoses: prev.identifiedPoses.map(item => ({ ...item, selected: false }))
-        }));
-    };
-
     const handleGeneratePoses = async () => {
-        if (!state.poseSourceFile || state.identifiedPoses.every(p => !p.selected)) return;
+        if (!state.poseSourceFile) return;
 
         setState(prev => ({ ...prev, isGeneratingPoses: true, poseError: null, generatedPoses: [] }));
 
         try {
-            // Extract keypoints for ALL people in the image once.
-            const poseJsonData = await extractPoseKeypoints(state.poseSourceFile);
+            const { poseLandmarks, handLandmarks, faceLandmarks, handedness, width, height } = await detectPosesInImage(state.poseSourceFile);
+
+            if (poseLandmarks.length === 0) {
+                setState(prev => ({ ...prev, poseError: "No poses could be detected in the image.", isGeneratingPoses: false }));
+                return;
+            }
             
-            const selectedPoseInfos = state.identifiedPoses
-                .map((pose, index) => ({...pose, originalIndex: index}))
-                .filter(pose => pose.selected);
+            const faceLandmarksByPerson = faceLandmarks; // Assuming one face per person for now
 
-            for (const poseInfo of selectedPoseInfos) {
-                const { description, originalIndex } = poseInfo;
+            for (const [index, personLandmarks] of poseLandmarks.entries()) {
                 try {
-                    // Generate the mannequin image using the text description
-                    const image = await generatePoseMannequin(description, state.poseSourceFile, state.posesKeepClothes);
+                    const faceLandmarksForPerson = faceLandmarksByPerson[index];
+                    const poseJson = mediaPipeToOpenPose(personLandmarks, handLandmarks, handedness, faceLandmarksForPerson, width, height);
                     
-                    // Get the corresponding JSON data for this person, assuming order is preserved
-                    const allPeople = (poseJsonData as any).people || [];
-                    const personJsonData = allPeople[originalIndex];
-                    
-                    if (!personJsonData) {
-                         throw new Error(`Could not find matching JSON data for pose index ${originalIndex}.`);
-                    }
+                    const description = await generatePoseDescription(state.poseSourceFile, poseJson);
+                    const skeletonImage = renderPoseSkeleton(poseJson);
 
-                    // Create a new JSON object with only this person's data
-                    const finalJson = {
-                        width: (poseJsonData as any).width,
-                        height: (poseJsonData as any).height,
-                        people: [personJsonData] 
-                    };
-
-                    const skeletonImage = renderPoseSkeleton(finalJson);
+                    // Fix: Destructure the image and prompt from the updated service function.
+                    const { image: mannequinImage, prompt: generationPrompt } = await generatePoseMannequin(state.poseSourceFile, state.mannequinStyle);
 
                     setState(prev => ({ 
                         ...prev, 
                         generatedPoses: [
                             ...prev.generatedPoses, 
-                            { description, image, poseJson: finalJson, skeletonImage, saved: 'idle' }
+                            { 
+                                description, 
+                                image: mannequinImage, 
+                                poseJson, 
+                                skeletonImage,
+                                mannequinStyle: state.mannequinStyle,
+                                saved: 'idle',
+                                // Fix: Store the returned generation prompt.
+                                generationPrompt,
+                            }
                         ] 
                     }));
                 } catch (err: any) {
-                    console.error(`Failed to generate mannequin or JSON for pose index ${originalIndex}:`, err);
+                    console.error(`Failed to generate assets for pose index ${index}:`, err);
                     setState(prev => ({ ...prev, poseError: `Error generating assets for a pose. Skipping.` }));
                 }
             }
         } catch (err: any) {
-            console.error(`Failed to extract pose keypoints:`, err);
-            setState(prev => ({ ...prev, poseError: `Critical error extracting pose data: ${err.message}` }));
+            console.error(`MediaPipe pose detection failed:`, err);
+            setState(prev => ({ ...prev, poseError: `Pose detection failed: ${err.message}` }));
+        } finally {
+            setState(prev => ({ ...prev, isGeneratingPoses: false }));
         }
-
-        setState(prev => ({ ...prev, isGeneratingPoses: false }));
     };
 
     const handlePoseSaveToLibrary = async (item: GeneratedPose, index: number) => {
@@ -358,11 +324,10 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
         try {
             await saveToLibrary({
                 mediaType: 'pose',
-                name: `Pose from ${state.poseSourceFile?.name || 'source'}`,
+                name: item.description,
                 media: item.image,
                 thumbnail: await dataUrlToThumbnail(item.image, 256),
                 sourceImage: state.poseSourceFile ? await fileToResizedDataUrl(state.poseSourceFile, 512) : undefined,
-                poseDescription: item.description,
                 skeletonImage: item.skeletonImage,
                 poseJson: JSON.stringify(item.poseJson, null, 2),
             });
@@ -617,7 +582,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                     <ToolHeader 
                         icon={<PoseIcon className="w-8 h-8"/>}
                         title="Pose Extractor"
-                        description="Identify human poses in an image and generate wooden mannequins to save and reuse the compositions."
+                        description="Identify human poses in an image and generate stylized mannequins to save and reuse the compositions."
                     />
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-1 space-y-6">
@@ -638,68 +603,37 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({ state,
                                     <LibraryIcon className="w-6 h-6"/>
                                 </button>
                             </div>
-                            <div className="space-y-3 pt-2">
-                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={state.posesKeepClothes} 
-                                        onChange={(e) => setState(prev => ({ ...prev, posesKeepClothes: e.target.checked }))} 
-                                        className="rounded text-accent focus:ring-accent" 
-                                    />
-                                    Keep clothes and accessories on mannequin
+                             <div>
+                                <label htmlFor="mannequin-style" className="block text-sm font-medium text-text-secondary mb-1">
+                                    Mannequin Style
                                 </label>
+                                <select 
+                                    id="mannequin-style"
+                                    value={state.mannequinStyle}
+                                    onChange={(e) => setState(prev => ({...prev, mannequinStyle: e.target.value as MannequinStyle}))}
+                                    className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                >
+                                    {MANNEQUIN_STYLES.map(style => (
+                                        <option key={style.id} value={style.id}>{style.label}</option>
+                                    ))}
+                                </select>
                             </div>
                            
                             <button
-                                onClick={handleIdentifyPoses}
-                                disabled={!state.poseSourceFile || state.isIdentifyingPoses || state.isGeneratingPoses}
-                                style={state.poseSourceFile && !state.isIdentifyingPoses && !state.isGeneratingPoses ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                                onClick={handleGeneratePoses}
+                                disabled={!state.poseSourceFile || state.isGeneratingPoses}
+                                style={state.poseSourceFile && !state.isGeneratingPoses ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
                                 className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
                             >
-                                {state.isIdentifyingPoses ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                                {state.isIdentifyingPoses ? 'Identifying...' : '1. Identify Poses'}
+                                {state.isGeneratingPoses ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                {state.isGeneratingPoses ? 'Detecting & Generating...' : 'Extract All Poses'}
                             </button>
                         </div>
 
                         <div className="lg:col-span-2 space-y-6">
                             {state.poseError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.poseError}</p>}
-                            {state.isIdentifyingPoses && <LoadingState message="Scanning your image for human poses..." />}
-                            
-                            {state.identifiedPoses.length > 0 && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="text-xl font-bold text-accent">Select Poses to Extract</h3>
-                                        <div className="flex gap-2">
-                                            <button onClick={handleSelectAllPoses} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Select All</button>
-                                            <button onClick={handleUnselectAllPoses} className="text-xs font-semibold bg-bg-tertiary text-text-secondary py-1 px-3 rounded-md hover:bg-bg-tertiary-hover">Unselect All</button>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-border-primary rounded-md bg-bg-primary/50">
-                                        {state.identifiedPoses.map((pose, index) => (
-                                            <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-lg cursor-pointer hover:bg-bg-tertiary-hover">
-                                                <input type="checkbox" checked={pose.selected} onChange={() => handleTogglePoseSelection(index)} className="mt-1 rounded text-accent focus:ring-accent" />
-                                                <div>
-                                                    <span className="font-semibold text-text-primary">Pose #{index + 1}</span>
-                                                    <p className="text-sm text-text-secondary">{pose.description}</p>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
-                                    <button
-                                        onClick={handleGeneratePoses}
-                                        disabled={state.identifiedPoses.every(p => !p.selected) || state.isGeneratingPoses}
-                                        className="w-full mt-4 flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 bg-accent text-accent-text disabled:opacity-50"
-                                    >
-                                        {state.isGeneratingPoses ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                                        2. Generate Mannequins & Skeletons
-                                    </button>
-                                </div>
-                            )}
-
-                            {state.isGeneratingPoses && <LoadingState message={`Generating assets for selected poses... (${state.generatedPoses.length}/${state.identifiedPoses.filter(p => p.selected).length} done)`} />}
-                            
-                            <ExtractorResultsGrid items={state.generatedPoses} onSave={handlePoseSaveToLibrary} title="Generated Poses" />
-
+                            {state.isGeneratingPoses && <LoadingState message={`Generating assets for detected poses...`} />}
+                            <ExtractorResultsGrid items={state.generatedPoses} onSave={handlePoseSaveToLibrary} title="Extracted Poses" />
                         </div>
                     </div>
                 </section>

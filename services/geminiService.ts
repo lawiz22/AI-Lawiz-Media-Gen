@@ -1,13 +1,46 @@
 
-
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
-import { fileToGenerativePart, fileToBase64, dataUrlToFile, createBlankImageFile, getImageDimensionsFromFile } from '../utils/imageUtils';
+import { fileToGenerativePart, fileToBase64, dataUrlToFile, createBlankImageFile, dataUrlToBlob } from '../utils/imageUtils';
 // Fix: Import 'getRandomPose' to resolve reference error.
 import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
-import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, LogoThemeState, PaletteColor, IdentifiedPose } from '../types';
+import { MANNEQUIN_STYLE_REFERENCES } from "../assets/styleReferences";
+import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, LogoThemeState, PaletteColor, MannequinStyle } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+
+// Helper to convert an SVG data URL to a PNG GenerativePart for the Gemini API.
+const svgDataUrlToPngGenerativePart = async (svgDataUrl: string, size: number = 512): Promise<{inlineData: {mimeType: string; data: string}}> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                return reject(new Error('Could not get canvas context'));
+            }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const pngDataUrl = canvas.toDataURL('image/png');
+            const base64Data = pngDataUrl.split(',')[1];
+            if (!base64Data) {
+                return reject(new Error('Failed to extract base64 string from PNG data URL.'));
+            }
+            resolve({
+                inlineData: {
+                    mimeType: 'image/png',
+                    data: base64Data
+                }
+            });
+        };
+        img.onerror = (err) => {
+            reject(new Error(`Failed to load SVG data URL as an image.`));
+        };
+        img.src = svgDataUrl;
+    });
+};
+
 
 export const generatePortraits = async (
     sourceImage: File | null, 
@@ -658,123 +691,41 @@ Generate a new, photorealistic image of *only* this object, placed on a plain, s
     throw new Error(`Failed to generate an image for ${objectName}.`);
 };
 
-export const identifyPoses = async (sourceImage: File): Promise<IdentifiedPose[]> => {
-    const imagePart = await fileToGenerativePart(sourceImage);
-    const prompt = `Analyze the image and identify every distinct person. For each person, provide one highly detailed, comprehensive paragraph describing their pose only.
-**Strictly ignore their clothing, accessories, and facial expressions.**
-Focus exclusively on the skeletal posture: the position and orientation of their head, torso,shoulders, arms, hands, legs, and feet. Capture the angle, rotation, and any nuanced gestures. Be precise and thorough.`;
-
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: { parts: [imagePart, { text: prompt }] },
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    poses: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                description: { 
-                                    type: Type.STRING, 
-                                    description: 'A detailed paragraph describing the full body pose of one person in the image.' 
-                                },
-                            },
-                            required: ["description"],
-                        },
-                    },
-                },
-                required: ["poses"],
-            },
-        },
-    });
-
-    try {
-        const json = JSON.parse(response.text);
-        return json.poses || [];
-    } catch (e) {
-        console.error("Failed to parse pose identification from AI:", response.text, e);
-        throw new Error("The AI returned an invalid response. Please try again.");
-    }
-};
-
-export const extractPoseKeypoints = async (sourceImage: File): Promise<object> => {
-    const imagePart = await fileToGenerativePart(sourceImage);
-    const { width, height } = await getImageDimensionsFromFile(sourceImage);
-
-    const POSE_KEYPOINTS = [ "Nose", "Neck", "RShoulder", "RElbow", "RWrist", "LShoulder", "LElbow", "LWrist", "RHip", "RKnee", "RAnkle", "LHip", "LKnee", "LAnkle", "REye", "LEye", "REar", "LEar" ];
-    const prompt = `Analyze the person in the image and extract the 2D pose keypoints for a ControlNet OpenPose model. Identify the coordinates (x, y) for each of the 18 standard COCO keypoints. If a keypoint is not visible, set its coordinates and confidence to 0.
-    The keypoints are: ${POSE_KEYPOINTS.join(', ')}.
-    The final JSON must include the original image width and height.`;
-
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: { parts: [imagePart, { text: prompt }] },
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    width: { type: Type.INTEGER, description: "The width of the source image in pixels." },
-                    height: { type: Type.INTEGER, description: "The height of the source image in pixels." },
-                    people: {
-                        type: Type.ARRAY,
-                        description: "An array containing detected people. For each person, provide their pose keypoints.",
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                pose_keypoints_2d: {
-                                    type: Type.ARRAY,
-                                    description: "A flat array of [x, y, confidence] triplets for each of the 18 COCO keypoints. This should contain exactly 54 numbers.",
-                                    items: { type: Type.NUMBER }
-                                }
-                            }
-                        }
-                    }
-                },
-                required: ["width", "height", "people"]
-            },
-        },
-    });
-
-    try {
-        const json = JSON.parse(response.text);
-        // Inject width/height if model omits it, which can happen.
-        if (!json.width) json.width = width;
-        if (!json.height) json.height = height;
-        // Ensure people is an array
-        if (!Array.isArray(json.people)) json.people = [];
-
-        return json;
-    } catch (e) {
-        console.error("Failed to parse pose keypoints from AI:", response.text, e);
-        throw new Error("The AI returned invalid JSON for pose keypoints.");
-    }
-};
-
-export const generatePoseMannequin = async (poseDescription: string, sourceImage: File, keepClothes: boolean): Promise<string> => {
+export const generatePoseMannequin = async (
+    sourceImage: File,
+    style: MannequinStyle
+): Promise<{ image: string; prompt: string }> => {
     
-    const imagePart = await fileToGenerativePart(sourceImage);
-    let prompt: string;
-
-    if (keepClothes) {
-        prompt = `From the provided reference image, analyze the pose of the person described as: "${poseDescription}".
-Your task is to generate a photorealistic image of a simple wooden art mannequin on a plain, solid white background.
-The mannequin must **exactly replicate the pose AND be dressed in the exact clothing and accessories** worn by the person in the reference image.
-The output should be a clean, well-lit studio shot.`;
-    } else {
-        prompt = `From the provided reference image, analyze the pose of the person described as: "${poseDescription}".
-Your task is to generate a photorealistic image of a simple, unadorned wooden art mannequin on a plain, solid white background.
-The mannequin must **exactly replicate the pose** from the reference image.
-**Do NOT include any clothing, accessories, or features from the person in the original photo.**
-The output should be a clean, well-lit studio shot focusing only on the mannequin and its precise pose.`;
+    const sourceImagePart = await fileToGenerativePart(sourceImage);
+    
+    // Get the pre-defined style reference image
+    const referenceDataUrl = MANNEQUIN_STYLE_REFERENCES[style];
+    if (!referenceDataUrl) {
+        throw new Error(`No style reference found for: ${style}`);
     }
+    
+    // Convert the SVG reference to a PNG part that the API supports, as Gemini doesn't accept SVG.
+    const referenceImagePart = await svgDataUrlToPngGenerativePart(referenceDataUrl);
+    
+    const finalPrompt = `You have two input images. 
+    IMAGE 1 contains a person in a specific pose.
+    IMAGE 2 is a style reference of a mannequin.
+    
+    Your task is to generate a new, photorealistic 1:1 square image.
+    
+    CRITICAL INSTRUCTIONS:
+    1.  The mannequin in your generated image must be in the **EXACT SAME POSE** as the person in IMAGE 1. Replicate all limb angles, body posture, and orientation precisely.
+    2.  The mannequin's appearance, material, and lighting **MUST** match the style of IMAGE 2.
+    3.  The final image must be on a **SOLID, SEAMLESS WHITE** studio background.
+    4.  Do **NOT** include any background elements or other people from IMAGE 1.`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image-preview',
-        contents: { parts: [imagePart, { text: prompt }] },
+        contents: { parts: [
+            sourceImagePart,
+            referenceImagePart,
+            {text: finalPrompt}
+        ]},
         config: {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
         },
@@ -783,10 +734,24 @@ The output should be a clean, well-lit studio shot focusing only on the mannequi
     const imagePartResponse = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
 
     if (imagePartResponse?.inlineData?.data) {
-        return `data:${imagePartResponse.inlineData.mimeType};base64,${imagePartResponse.inlineData.data}`;
+        const image = `data:${imagePartResponse.inlineData.mimeType};base64,${imagePartResponse.inlineData.data}`;
+        return { image, prompt: finalPrompt };
     }
 
-    throw new Error(`Failed to generate a mannequin image for the pose.`);
+    throw new Error(`Failed to generate a mannequin image for the pose. The model may have refused to generate content based on the inputs.`);
+};
+
+export const generatePoseDescription = async (sourceImage: File, poseJson: object): Promise<string> => {
+    const imagePart = await fileToGenerativePart(sourceImage);
+    const jsonPart = { text: `Pose Data: \n\`\`\`json\n${JSON.stringify(poseJson, null, 2)}\n\`\`\`` };
+    const prompt = `Analyze the person in the provided image and their corresponding pose keypoint data. Generate a concise, single-sentence, natural language description of their pose. Focus on the main action and body position. Start the sentence with "A person...". Example: "A person standing with their left hand on their hip, looking confidently towards the camera."`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, jsonPart, { text: prompt }] },
+    });
+    
+    return response.text.trim();
 };
 
 

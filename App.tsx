@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
-import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType } from './types';
+import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { fileToDataUrl, fileToResizedDataUrl } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
@@ -48,12 +49,11 @@ const initialExtractorState: ExtractorState = {
     generatedObjects: [],
     objectError: null,
     poseSourceFile: null,
-    isIdentifyingPoses: false,
-    identifiedPoses: [],
     isGeneratingPoses: false,
     generatedPoses: [],
     poseError: null,
-    posesKeepClothes: false,
+    // Fix: Removed 'posesKeepClothes' as it does not exist in the ExtractorState type.
+    mannequinStyle: 'wooden-artist',
 };
 
 const initialVideoUtilsState: VideoUtilsState = {
@@ -991,7 +991,7 @@ const App: React.FC = () => {
                  <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
                     <VideoUtilsPanel
                         setStartFrame={setVideoStartFrame}
-                        // Fix: Corrected typo from `setEndFrame` to `setVideoEndFrame` to match state setter.
+                        // Fix: Corrected prop from `setStartFrame` to `setVideoStartFrame` to match the state setter name.
                         setEndFrame={setVideoEndFrame}
                         videoUtilsState={videoUtilsState}
                         setVideoUtilsState={setVideoUtilsState}
