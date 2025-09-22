@@ -1,5 +1,5 @@
 {
-  "version": "1.47",
-  "date": "2024-08-14T10:00:00Z",
-  "changes": "Added a full-featured Album Cover Generator. Users can now create 1:1 album art with controls for music style, era, media type (Vinyl/CD), and an optional 'vinyl wear' effect. Also includes a slider to generate up to 4 covers at once."
+  "version": "1.48",
+  "date": "2024-08-15T11:00:00Z",
+  "changes": "Overhauled the Pose Extractor for significantly improved reliability. It now uses a new 'Pose Transfer' AI technique with visual style references instead of text prompts, resolving common issues where the AI would incorrectly copy clothing instead of the pose. Users can now also upload their own custom mannequin image as a style reference."
 }

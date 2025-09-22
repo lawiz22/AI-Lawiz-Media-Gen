@@ -1,4 +1,4 @@
-# Lawiz's AI Media Generator v1.47
+# Lawiz's AI Media Generator v1.48
 
 Welcome to Lawiz's AI Media Generator, a powerful and versatile web application designed for creating stunning images and videos using state-of-the-art AI models. This tool provides a unified interface to interact with both Google's Gemini API and a self-hosted ComfyUI backend, offering a wide range of creative possibilities for both novice and advanced users.
 
@@ -34,7 +34,7 @@ A full creative suite for brand identity design.
 - **Album Cover Generator:** Design the perfect 1:1 album cover for your music. Specify genre, era (50s, 80s, modern, etc.), and media type (Vinyl, CD, Digital) for a pitch-perfect result. A special "vinyl wear" effect can be added to create an authentic, aged look.
 
 ### 6. AI-Powered Extractor Tools
-This versatile tab combines two powerful AI utilities for isolating and recreating elements from within a source image.
+This versatile tab combines powerful AI utilities for isolating and recreating elements from within a source image.
 
 - **Clothes Extractor:**
   - **AI Clothing Identification:** Upload a photo and let the AI automatically detect all clothing items.
@@ -46,13 +46,19 @@ This versatile tab combines two powerful AI utilities for isolating and recreati
   - **Photorealistic Cutouts:** Generate clean, photorealistic images of each selected object on a plain white background.
   - **Controlled Extraction:** Specify the maximum number of objects to find and provide hints to guide the AI's focus.
 
+- **Pose Extractor:**
+  - **Accurate Pose Detection:** Utilizes MediaPipe to detect one or more human poses in an image, generating a ControlNet-compatible JSON skeleton.
+  - **Reliable Pose Transfer:** Employs a new 'Pose Transfer' AI technique that accurately applies the detected pose to a mannequin figure, resolving previous issues where the AI would get confused by clothing or background elements.
+  - **Stylized Mannequins:** Choose from several built-in mannequin styles (e.g., Wooden Artist, Wireframe, Neutral 3D) or upload your own custom reference image for a unique look.
+  - **Multiple Outputs:** Save the generated mannequin, the skeleton visualization, and the raw pose data directly to your library for later use in other projects.
+
 ### 7. Video & Color Utilities
 - **Frame Extractor:** Upload any video and use a precise slider to select and save any frame as a high-quality JPEG image. Includes a quick button to instantly save the very last frame, perfect for creating video continuations.
 - **Color Palette Extractor:** Upload an image to automatically extract a beautiful color palette. You can customize the number of colors, re-shuffle the palette from a pool of dominant colors, or use an eyedropper to manually pick new colors from the source image. Palettes can be named and saved directly to the library.
 
 ### 8. Hybrid Local & Cloud Library
 - **Auto-Naming:** Generated items are now intelligently named by AI before being saved. Prompts are summarized, and images/videos are given descriptive titles, keeping your library effortlessly organized.
-- **Expanded Item Support:** The library now supports new types, including `logo`, `banner`, `album-cover`, `object`, `extracted-frame`, and `color-palette`, in addition to images, videos, characters, and clothes.
+- **Expanded Item Support:** The library now supports new types, including `logo`, `banner`, `album-cover`, `object`, `extracted-frame`, `color-palette`, and `pose`, in addition to images, videos, characters, and clothes.
 - **Local Storage First:** Save any generated item to a persistent local library in your browser for fast access.
 - **Google Drive Sync:** Securely connect your Google Drive account to sync your entire library for persistent, cloud-based storage.
 - **Robust Architecture:** The Drive integration uses a central `library.json` file as an index for all media items, ensuring robust and efficient synchronization.
@@ -79,7 +85,7 @@ This versatile tab combines two powerful AI utilities for isolating and recreati
 2.  **Select a Tool:** Choose between the various generator tabs, the Library, Extractor Tools, or Video Utilities.
 3.  **Configure & Provide Inputs:**
     -   **Generators:** Upload source media, configure the AI backend (Gemini/ComfyUI), write prompts, and adjust detailed settings in the left-hand panel.
-    -   **Extractor Tools:** Upload a single photo for either the Clothes or Object Extractor, and optionally add descriptive text to improve accuracy.
+    -   **Extractor Tools:** Upload a single photo for the Clothes, Object, or Pose Extractor, and optionally add descriptive text to improve accuracy.
     -   **Video Utilities:** Upload a video to use the frame extractor or an image for the color palette extractor.
 4.  **Generate:** Click the "Generate" or other relevant action button to begin processing.
 5.  **View & Save Results:** Your generated media will appear on the right. You can download them, enhance them (for images), save them to your library, or use an image as a new source.
