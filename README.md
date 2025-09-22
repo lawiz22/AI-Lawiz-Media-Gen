@@ -1,4 +1,4 @@
-# Lawiz's AI Media Generator v1.48
+# Lawiz's AI Media Generator v1.49
 
 Welcome to Lawiz's AI Media Generator, a powerful and versatile web application designed for creating stunning images and videos using state-of-the-art AI models. This tool provides a unified interface to interact with both Google's Gemini API and a self-hosted ComfyUI backend, offering a wide range of creative possibilities for both novice and advanced users.
 
@@ -32,9 +32,10 @@ A full creative suite for brand identity design.
 - **AI Logo Creation:** Generate unique, professional logos from text descriptions, brand names, and slogans. Fine-tune your logo by selecting from various styles (e.g., Symbolic, Wordmark, 3D Clay, Vaporwave), providing visual inspiration images, and applying color palettes saved in your library.
 - **Banner Generator:** Design eye-catching banners for social media, websites, or advertisements. Combine text, logos, and imagery for impactful visuals with various aspect ratios and styles.
 - **Album Cover Generator:** Design the perfect 1:1 album cover for your music. Specify genre, era (50s, 80s, modern, etc.), and media type (Vinyl, CD, Digital) for a pitch-perfect result. A special "vinyl wear" effect can be added to create an authentic, aged look.
+- **Precise Font Control:** Instead of vague adjectives, you can now provide a direct visual reference for the typography in your designs. Either upload an image containing the font style you want or select a pre-extracted font chart from your library for the AI to replicate.
 
 ### 6. AI-Powered Extractor Tools
-This versatile tab combines powerful AI utilities for isolating and recreating elements from within a source image.
+This versatile tab combines powerful utilities for isolating and recreating elements from within a source image.
 
 - **Clothes Extractor:**
   - **AI Clothing Identification:** Upload a photo and let the AI automatically detect all clothing items.

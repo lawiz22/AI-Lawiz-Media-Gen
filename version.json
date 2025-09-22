@@ -1,5 +1,5 @@
 {
-  "version": "1.48",
-  "date": "2024-08-15T11:00:00Z",
-  "changes": "Overhauled the Pose Extractor for significantly improved reliability. It now uses a new 'Pose Transfer' AI technique with visual style references instead of text prompts, resolving common issues where the AI would incorrectly copy clothing instead of the pose. Users can now also upload their own custom mannequin image as a style reference."
+  "version": "1.49",
+  "date": "2024-08-16T12:00:00Z",
+  "changes": "Replaced the ineffective adjective-based typography controls in the Logo, Banner, and Album Cover generators with a powerful new font selection system. Users can now upload a font image or select a pre-extracted font chart from the library to guide the AI's typography, offering much more direct and precise control."
 }
