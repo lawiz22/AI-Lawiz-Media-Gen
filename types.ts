@@ -308,7 +308,7 @@ export interface PromptGenState {
 
 export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';
 export type LogoBackground = 'transparent' | 'white' | 'black';
-export type BannerStyle = 'corporate-clean' | 'gaming-energetic' | 'artistic-brush' | 'minimalist-type' | 'vintage-retro' | 'tech-glow' | 'cinematic-photo' | 'promotional-sale';
+export type BannerStyle = 'none' | 'corporate-clean' | 'gaming-energetic' | 'artistic-brush' | 'minimalist-type' | 'vintage-retro' | 'tech-glow' | 'cinematic-photo' | 'promotional-sale' | 'watercolor-wash' | 'collage';
 export type BannerLogoPlacement = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'no-logo';
 export type BannerAspectRatio = '16:9' | '1.91:1' | '4:1' | '2:1' | '1:1' | '9:16' | '1:2' | '1:4';
 

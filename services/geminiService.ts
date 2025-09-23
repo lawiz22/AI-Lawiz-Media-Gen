@@ -606,7 +606,7 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
     let prompt = `Generate a banner image. The output must be a high-resolution image.\n`;
     if (state.bannerTitle) prompt += `- Text on Banner: "${state.bannerTitle}"\n`;
     if (state.bannerPrompt) prompt += `- Core Concept: ${state.bannerPrompt}\n`;
-    if (state.bannerStyle) prompt += `- Style: ${state.bannerStyle}\n`;
+    if (state.bannerStyle && state.bannerStyle !== 'none') prompt += `- Style: ${state.bannerStyle}\n`;
     if (state.bannerFontReferenceImage || state.bannerSelectedFont) {
         prompt += `- Font Style: Use the exact font style shown in the provided font reference image for all text.\n`;
     }

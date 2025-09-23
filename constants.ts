@@ -69,6 +69,7 @@ export const BANNER_ASPECT_RATIO_OPTIONS: { value: BannerAspectRatio; label: str
 ];
 
 export const BANNER_STYLE_OPTIONS: { id: BannerStyle; label: string; description: string }[] = [
+    { id: 'none', label: 'None (Prompt Only)', description: 'Relies purely on your prompt for styling.' },
     { id: 'corporate-clean', label: 'Corporate Clean', description: 'Professional, sharp lines, simple typography.' },
     { id: 'gaming-energetic', label: 'Gaming / Energetic', description: 'Dynamic, bold colors, action-oriented.' },
     { id: 'artistic-brush', label: 'Artistic / Brush', description: 'Painterly, abstract, expressive feel.' },
@@ -77,6 +78,8 @@ export const BANNER_STYLE_OPTIONS: { id: BannerStyle; label: string; description
     { id: 'tech-glow', label: 'Tech / Glow', description: 'Dark background, neon lights, futuristic.' },
     { id: 'cinematic-photo', label: 'Cinematic', description: 'Photorealistic with dramatic lighting.' },
     { id: 'promotional-sale', label: 'Promotional / Sale', description: 'Bright, attention-grabbing, clear call-to-action.' },
+    { id: 'watercolor-wash', label: 'Watercolor Wash', description: 'Soft, blended colors with a gentle, artistic feel.' },
+    { id: 'collage', label: 'Photo Collage', description: 'A mix of different images, textures, and typography.' },
 ];
 
 export const BANNER_LOGO_PLACEMENT_OPTIONS: { id: BannerLogoPlacement; label: string }[] = [
