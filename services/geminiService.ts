@@ -1,8 +1,9 @@
 
 
+
 import { GoogleGenAI, Part, Type, Modality } from "@google/genai";
 import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState, PaletteColor } from '../types';
-import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart } from "../utils/imageUtils";
+import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart, createBlankImageFile } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
 import { buildPromptSegments, decodePose, getRandomPose } from "../utils/promptBuilder";
 import { MANNEQUIN_STYLE_REFERENCES } from '../assets/styleReferences';
@@ -600,6 +601,7 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
 };
 
 export const generateBanners = async (state: LogoThemeState): Promise<string[]> => {
+    // 1. Build the base prompt.
     let prompt = `Generate a banner image. The output must be a high-resolution image.\n`;
     if (state.bannerTitle) prompt += `- Text on Banner: "${state.bannerTitle}"\n`;
     if (state.bannerPrompt) prompt += `- Core Concept: ${state.bannerPrompt}\n`;
@@ -614,60 +616,67 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
         const hexCodes = palette.map((c: any) => c.hex).join(', ');
         prompt += `- Color Palette: Strictly use these colors: ${hexCodes}\n`;
     }
-    
-    const hasReferences = (state.bannerReferenceItems && state.bannerReferenceItems.length > 0) || state.bannerSelectedLogo || state.bannerFontReferenceImage || state.bannerSelectedFont;
 
-    if (hasReferences) {
-        const parts: Part[] = [{ text: prompt }];
-        if (state.bannerSelectedLogo) {
-            const logoResponse = await fetch(state.bannerSelectedLogo.media);
-            const logoBlob = await logoResponse.blob();
-            const logoFile = new File([logoBlob], "logo.png", { type: "image/png" });
-            parts.push({ text: "Use this logo in the banner:" });
-            parts.push(await fileToGenerativePart(logoFile));
-        }
-        if (state.bannerFontReferenceImage) {
-            parts.push(await fileToGenerativePart(state.bannerFontReferenceImage));
-        } else if (state.bannerSelectedFont) {
-            const fontResponse = await fetch(state.bannerSelectedFont.media);
-            const fontBlob = await fontResponse.blob();
-            const fontFile = new File([fontBlob], "font_ref.png", { type: fontBlob.type });
-            parts.push(await fileToGenerativePart(fontFile));
-        }
-        if (state.bannerReferenceItems) {
-            for (const item of state.bannerReferenceItems) {
-                const refResponse = await fetch(item.media);
-                const refBlob = await refResponse.blob();
-                const refFile = new File([refBlob], "ref.jpeg", { type: "image/jpeg" });
-                parts.push(await fileToGenerativePart(refFile));
-            }
-        }
-        
-        const allImages: string[] = [];
-        for (let i = 0; i < (state.numBanners || 1); i++) {
-            const result = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image-preview',
-                contents: { parts },
-                config: { responseModalities: [Modality.IMAGE] }
-            });
-            const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-            if (outputPart?.inlineData) {
-                allImages.push(`data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`);
-            }
-        }
-        return allImages;
-    } else {
-        const result = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
-            prompt: prompt,
-            config: {
-                numberOfImages: state.numBanners || 1,
-                aspectRatio: state.bannerAspectRatio,
-                outputMimeType: 'image/png'
-            }
-        });
-        return result.generatedImages.map(img => `data:image/png;base64,${img.image.imageBytes}`);
+    // 2. Add the new canvas instruction to the prompt.
+    prompt += `\nCRITICAL INSTRUCTION: A blank canvas with the target aspect ratio is provided as the first image. You MUST generate your banner content to fill this canvas exactly, respecting its dimensions and aspect ratio. Do not alter the aspect ratio.`;
+
+    // 3. Create the blank canvas generative part.
+    const [w, h] = state.bannerAspectRatio!.split(':').map(Number);
+    const baseWidth = 1024; // A reasonable base width for quality.
+    const canvasWidth = baseWidth;
+    const canvasHeight = Math.round(baseWidth / (w / h));
+    const blankCanvasFile = await createBlankImageFile(canvasWidth, canvasHeight, '#111827', 'canvas.png'); // using a dark color to avoid pure white
+    const canvasPart = await fileToGenerativePart(blankCanvasFile);
+
+    // 4. Always use the multi-modal flow, starting with the canvas.
+    const parts: Part[] = [canvasPart, { text: prompt }];
+    
+    // 5. Add other references as before.
+    if (state.bannerSelectedLogo) {
+        const logoResponse = await fetch(state.bannerSelectedLogo.media);
+        const logoBlob = await logoResponse.blob();
+        const logoFile = new File([logoBlob], "logo.png", { type: "image/png" });
+        parts.push({ text: "Use this logo in the banner:" });
+        parts.push(await fileToGenerativePart(logoFile));
     }
+    if (state.bannerFontReferenceImage) {
+        parts.push(await fileToGenerativePart(state.bannerFontReferenceImage));
+    } else if (state.bannerSelectedFont) {
+        const fontResponse = await fetch(state.bannerSelectedFont.media);
+        const fontBlob = await fontResponse.blob();
+        const fontFile = new File([fontBlob], "font_ref.png", { type: fontBlob.type });
+        parts.push(await fileToGenerativePart(fontFile));
+    }
+    if (state.bannerReferenceItems) {
+        for (const item of state.bannerReferenceItems) {
+            const refResponse = await fetch(item.media);
+            const refBlob = await refResponse.blob();
+            const refFile = new File([refBlob], "ref.jpeg", { type: "image/jpeg" });
+            parts.push(await fileToGenerativePart(refFile));
+        }
+    }
+    
+    // 6. Loop and generate images
+    const allImages: string[] = [];
+    for (let i = 0; i < (state.numBanners || 1); i++) {
+        const result = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents: { parts },
+            config: { responseModalities: [Modality.IMAGE] }
+        });
+        const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+        if (outputPart?.inlineData) {
+            allImages.push(`data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`);
+        } else {
+             console.warn(`Banner generation ${i+1} did not return an image. Text response:`, result.text);
+        }
+    }
+    
+    if (allImages.length === 0 && (state.numBanners || 1) > 0) {
+        throw new Error("The AI failed to generate any banner images. It might be having trouble with the prompt or references provided.");
+    }
+    
+    return allImages;
 };
 
 export const generateAlbumCovers = async (state: LogoThemeState): Promise<string[]> => {

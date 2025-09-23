@@ -58,10 +58,14 @@ export const ASPECT_RATIO_OPTIONS = [
 ];
 
 export const BANNER_ASPECT_RATIO_OPTIONS: { value: BannerAspectRatio; label: string }[] = [
-    { value: '16:9', label: '16:9 (HD Video)' },
+    { value: '4:1', label: '4:1 (Ultra-Wide Horizontal)' },
+    { value: '2:1', label: '2:1 (Wide Horizontal)' },
+    { value: '16:9', label: '16:9 (Standard Widescreen)' },
     { value: '1.91:1', label: '1.91:1 (Social Feed)' },
-    { value: '4:1', label: '4:1 (Wide Banner)' },
-    { value: '2:1', label: '2:1 (Email Header)' },
+    { value: '1:1', label: '1:1 (Square)' },
+    { value: '9:16', label: '9:16 (Tall Vertical)' },
+    { value: '1:2', label: '1:2 (Narrow Vertical)' },
+    { value: '1:4', label: '1:4 (Skyscraper Vertical)' },
 ];
 
 export const BANNER_STYLE_OPTIONS: { id: BannerStyle; label: string; description: string }[] = [

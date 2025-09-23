@@ -310,7 +310,7 @@ export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combi
 export type LogoBackground = 'transparent' | 'white' | 'black';
 export type BannerStyle = 'corporate-clean' | 'gaming-energetic' | 'artistic-brush' | 'minimalist-type' | 'vintage-retro' | 'tech-glow' | 'cinematic-photo' | 'promotional-sale';
 export type BannerLogoPlacement = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'no-logo';
-export type BannerAspectRatio = '16:9' | '1.91:1' | '4:1' | '2:1';
+export type BannerAspectRatio = '16:9' | '1.91:1' | '4:1' | '2:1' | '1:1' | '9:16' | '1:2' | '1:4';
 
 export type MusicStyle = 'rock' | 'pop' | 'electronic' | 'jazz' | 'hip-hop' | 'country' | 'folk' | 'metal' | 'classical' | 'other';
 export type AlbumEra = '50s' | '60s' | '70s' | '80s' | '90s' | '2000s' | 'modern';
