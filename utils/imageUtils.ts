@@ -273,3 +273,63 @@ export const createBlankImageFile = (width: number, height: number, color: strin
         );
     });
 };
+
+export const letterboxImage = (file: File, targetAspectRatio: string, fillColor: string = '#111827'): Promise<File> => {
+    return new Promise((resolve, reject) => {
+        const [targetW, targetH] = targetAspectRatio.split(':').map(Number);
+        const targetRatio = targetW / targetH;
+
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            
+            const sourceWidth = img.naturalWidth;
+            const sourceHeight = img.naturalHeight;
+            const sourceRatio = sourceWidth / sourceHeight;
+
+            let canvasWidth = sourceWidth;
+            let canvasHeight = sourceHeight;
+
+            if (Math.abs(sourceRatio - targetRatio) < 0.01) {
+                // Ratios are close enough, no letterboxing needed
+                resolve(file);
+                return;
+            }
+
+            // Determine new canvas dimensions
+            if (sourceRatio > targetRatio) {
+                // Source is wider than target, so canvas height needs to increase
+                canvasHeight = sourceWidth / targetRatio;
+            } else {
+                // Source is taller than target, so canvas width needs to increase
+                canvasWidth = sourceHeight * targetRatio;
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(canvasWidth);
+            canvas.height = Math.round(canvasHeight);
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return reject(new Error("Could not get canvas context"));
+
+            // Fill background
+            ctx.fillStyle = fillColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw original image centered
+            const drawX = (canvas.width - sourceWidth) / 2;
+            const drawY = (canvas.height - sourceHeight) / 2;
+            ctx.drawImage(img, drawX, drawY);
+
+            canvas.toBlob((blob) => {
+                if (!blob) return reject(new Error("Canvas to Blob failed"));
+                const newFile = new File([blob], file.name, { type: 'image/png' });
+                resolve(newFile);
+            }, 'image/png');
+        };
+
+        img.onerror = reject;
+        img.src = url;
+    });
+};

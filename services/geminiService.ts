@@ -1,9 +1,10 @@
 
 
 
+
 import { GoogleGenAI, Part, Type, Modality } from "@google/genai";
 import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState, PaletteColor } from '../types';
-import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart, createBlankImageFile } from "../utils/imageUtils";
+import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart, createBlankImageFile, letterboxImage } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
 import { buildPromptSegments, decodePose, getRandomPose } from "../utils/promptBuilder";
 import { MANNEQUIN_STYLE_REFERENCES } from '../assets/styleReferences';
@@ -618,7 +619,10 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
     }
 
     // 2. Add the new canvas instruction to the prompt.
-    prompt += `\nCRITICAL INSTRUCTION: A blank canvas with the target aspect ratio is provided as the first image. You MUST generate your banner content to fill this canvas exactly, respecting its dimensions and aspect ratio. Do not alter the aspect ratio.`;
+    prompt += `\nCRITICAL INSTRUCTIONS:
+1. A blank canvas with the target aspect ratio (${state.bannerAspectRatio}) is provided as the first image. You MUST generate your banner content to fill this canvas exactly, respecting its dimensions and aspect ratio.
+2. Other images are provided for STYLE, CONTENT, and COLOR inspiration ONLY. They have been placed on a canvas to match the target aspect ratio. You MUST IGNORE any empty space, bars, or borders around these reference images.
+3. Your final output's shape and dimensions MUST EXACTLY MATCH the blank canvas. DO NOT copy the aspect ratio of the original reference images.`;
 
     // 3. Create the blank canvas generative part.
     const [w, h] = state.bannerAspectRatio!.split(':').map(Number);
@@ -631,28 +635,34 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
     // 4. Always use the multi-modal flow, starting with the canvas.
     const parts: Part[] = [canvasPart, { text: prompt }];
     
-    // 5. Add other references as before.
+    // Helper function to process and add reference items
+    const processAndAddReference = async (itemFile: File, itemType: string) => {
+        const letterboxedFile = await letterboxImage(itemFile, state.bannerAspectRatio!);
+        parts.push({ text: `This is a ${itemType} reference for style, content, and color. It has been placed on a canvas to match the target aspect ratio. IGNORE the empty space/bars around it and fill the entire banner.` });
+        parts.push(await fileToGenerativePart(letterboxedFile));
+    };
+
+    // 5. Add other references as before, but now with letterboxing.
     if (state.bannerSelectedLogo) {
         const logoResponse = await fetch(state.bannerSelectedLogo.media);
         const logoBlob = await logoResponse.blob();
         const logoFile = new File([logoBlob], "logo.png", { type: "image/png" });
-        parts.push({ text: "Use this logo in the banner:" });
-        parts.push(await fileToGenerativePart(logoFile));
+        await processAndAddReference(logoFile, 'logo');
     }
     if (state.bannerFontReferenceImage) {
-        parts.push(await fileToGenerativePart(state.bannerFontReferenceImage));
+        await processAndAddReference(state.bannerFontReferenceImage, 'font style');
     } else if (state.bannerSelectedFont) {
         const fontResponse = await fetch(state.bannerSelectedFont.media);
         const fontBlob = await fontResponse.blob();
         const fontFile = new File([fontBlob], "font_ref.png", { type: fontBlob.type });
-        parts.push(await fileToGenerativePart(fontFile));
+        await processAndAddReference(fontFile, 'font style');
     }
     if (state.bannerReferenceItems) {
         for (const item of state.bannerReferenceItems) {
             const refResponse = await fetch(item.media);
             const refBlob = await refResponse.blob();
             const refFile = new File([refBlob], "ref.jpeg", { type: "image/jpeg" });
-            parts.push(await fileToGenerativePart(refFile));
+            await processAndAddReference(refFile, 'general inspiration');
         }
     }
     
