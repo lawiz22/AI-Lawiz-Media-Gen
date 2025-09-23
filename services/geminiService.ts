@@ -26,18 +26,45 @@ export const generatePortraits = async (
         const model = options.geminiT2IModel || 'imagen-4.0-generate-001';
         updateProgress(`Generating with ${model}...`, 0.1);
 
-        const response = await ai.models.generateImages({
-            model,
-            prompt: options.geminiPrompt,
-            config: {
-                numberOfImages: options.numImages,
-                aspectRatio: options.aspectRatio,
-                outputMimeType: 'image/jpeg'
-            }
-        });
+        if (model === 'imagen-4.0-generate-001') {
+            const response = await ai.models.generateImages({
+                model,
+                prompt: options.geminiPrompt,
+                config: {
+                    numberOfImages: options.numImages,
+                    aspectRatio: options.aspectRatio,
+                    outputMimeType: 'image/jpeg'
+                }
+            });
+    
+            const images = response.generatedImages.map(img => `data:image/jpeg;base64,${img.image.imageBytes}`);
+            return { images, finalPrompt: options.geminiPrompt };
+        } else if (model === 'gemini-2.5-flash-image-preview') {
+            const allImages: string[] = [];
+            const totalSteps = options.numImages;
 
-        const images = response.generatedImages.map(img => `data:image/jpeg;base64,${img.image.imageBytes}`);
-        return { images, finalPrompt: options.geminiPrompt };
+            for (let i = 0; i < options.numImages; i++) {
+                updateProgress(`Generating image ${i + 1}/${totalSteps}...`, i / totalSteps);
+                
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash-image-preview',
+                    contents: { parts: [{ text: options.geminiPrompt }] },
+                    config: {
+                        responseModalities: [Modality.IMAGE, Modality.TEXT],
+                    },
+                });
+
+                const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                if (imagePart?.inlineData) {
+                    allImages.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+                } else {
+                    console.warn(`T2I Image ${i+1} generation did not return an image. Text response:`, response.text);
+                }
+            }
+            return { images: allImages, finalPrompt: options.geminiPrompt };
+        } else {
+            throw new Error(`Unsupported T2I model: ${model}`);
+        }
     }
 
     // I2I Mode
