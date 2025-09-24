@@ -6,6 +6,17 @@ import { saveToLibrary } from '../services/libraryService';
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { BANNER_ASPECT_RATIO_OPTIONS, BANNER_STYLE_OPTIONS, BANNER_LOGO_PLACEMENT_OPTIONS } from '../constants';
 
+const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
+    if (!text) return '';
+    return text
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]/g, '')
+        .replace(/__+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .substring(0, maxLength);
+};
+
 interface LogoThemeGeneratorPanelProps {
     state: LogoThemeState;
     setState: React.Dispatch<React.SetStateAction<LogoThemeState>>;
@@ -278,7 +289,9 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     const handleDownloadLogo = (logoSrc: string, index: number) => {
         const link = document.createElement('a');
         link.href = logoSrc;
-        link.download = `${(state.brandName || 'logo').replace(/\s+/g, '_')}_${index + 1}.png`;
+        const baseName = sanitizeForFilename(state.brandName || state.logoPrompt || 'logo');
+        const randomPart = Math.random().toString(36).substring(2, 7);
+        link.download = `${baseName}_${index + 1}_${randomPart}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -333,7 +346,9 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     const handleDownloadBanner = (bannerSrc: string, index: number) => {
         const link = document.createElement('a');
         link.href = bannerSrc;
-        link.download = `banner_${(state.bannerTitle || 'design').replace(/\s+/g, '_')}_${index + 1}.png`;
+        const baseName = sanitizeForFilename(state.bannerTitle || state.bannerPrompt || 'banner');
+        const randomPart = Math.random().toString(36).substring(2, 7);
+        link.download = `${baseName}_${index + 1}_${randomPart}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -387,7 +402,10 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     const handleDownloadAlbumCover = (coverSrc: string, index: number) => {
         const link = document.createElement('a');
         link.href = coverSrc;
-        link.download = `album_${(state.artistName || 'art')}_${(state.albumTitle || 'cover')}_${index + 1}`.replace(/\s+/g, '_') + '.png';
+        const artist = sanitizeForFilename(state.artistName || 'artist');
+        const album = sanitizeForFilename(state.albumTitle || 'album');
+        const randomPart = Math.random().toString(36).substring(2, 7);
+        link.download = `${artist}_${album}_${index + 1}_${randomPart}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

@@ -1,11 +1,11 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
 import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon, CheckIcon } from './icons';
 import { enhanceImageResolution } from '../services/geminiService';
 import { saveToLibrary } from '../services/libraryService';
 import type { GenerationOptions, LibraryItem } from '../types';
-import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromDataUrl } from '../utils/imageUtils';
+// Fix: Import the missing `dataUrlToFile` utility function.
+import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromDataUrl, dataUrlToFile } from '../utils/imageUtils';
 
 /**
  * Creates a simple, readable description of the character generation settings.
@@ -17,7 +17,6 @@ const generateCharacterDescription = (options: GenerationOptions): string => {
     // Pose
     parts.push(`${options.poseMode} pose`);
     
-    // Clothing
     // Fix: Explicitly type `clothing` as `string` to allow assigning a descriptive string. This resolves a TypeScript error where the variable was inferred as the strict literal type `ClothingMode`.
     let clothing: string = options.clothing;
     if ((clothing === 'prompt' || clothing === 'random') && options.customClothingPrompt) {
@@ -37,6 +36,17 @@ const generateCharacterDescription = (options: GenerationOptions): string => {
     parts.push(options.imageStyle);
     
     return parts.join('; ');
+};
+
+const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
+    if (!text) return '';
+    return text
+        .toLowerCase()
+        .replace(/\s+/g, '_') // replace spaces with underscores
+        .replace(/[^a-z0-9_]/g, '') // remove all other invalid characters
+        .replace(/__+/g, '_') // collapse multiple underscores
+        .replace(/^_+|_+$/g, '') // trim underscores from start/end
+        .substring(0, maxLength);
 };
 
 
@@ -72,7 +82,22 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
   const handleDownload = (imageSrc: string, index: number) => {
     const link = document.createElement('a');
     link.href = imageSrc;
-    link.download = `generated-${index + 1}${enhancedImages[index] ? '-enhanced' : ''}.jpeg`;
+    
+    let baseName = '';
+    if (activeTab === 'character-generator' && characterName) {
+        baseName = sanitizeForFilename(characterName);
+    } else if (lastUsedPrompt) {
+        const promptSnippet = lastUsedPrompt.split(/\s+/).slice(0, 5).join(' ');
+        baseName = sanitizeForFilename(promptSnippet);
+    }
+    if (!baseName) { baseName = 'generated_image'; }
+
+    const isEnhanced = !!enhancedImages[index];
+    const enhancedTag = isEnhanced ? '_enhanced' : '';
+    const randomPart = Math.random().toString(36).substring(2, 7);
+    
+    link.download = `${baseName}_${index + 1}${enhancedTag}_${randomPart}.jpeg`;
+    
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -98,26 +123,48 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
   const handleSaveToLibrary = async (imageSrc: string, index: number) => {
     setSavingState(prev => ({ ...prev, [index]: 'saving' }));
     try {
+      const isEnhanced = !!enhancedImages[index];
       const { width, height } = await getImageDimensionsFromDataUrl(imageSrc);
-      const optionsToSave = { ...options, width, height };
       const isCharacter = activeTab === 'character-generator';
+
+      let optionsToSave: Partial<GenerationOptions>;
+      let itemName: string | undefined;
+      let sourceImageToSave = sourceImage;
+
+      if (isEnhanced) {
+        optionsToSave = {
+            provider: 'gemini',
+            width,
+            height,
+            comfyPrompt: 'This image was enhanced using the gemini-2.5-flash-image-preview model.',
+        };
+        const baseName = characterName || (isCharacter ? `Character #${index + 1}` : `Image #${index + 1}`);
+        itemName = `${baseName} (Enhanced)`;
+        // If the original image before enhancement was from a text-to-image generation, there's no source image.
+        // In that case, we should use the *generated* (pre-enhancement) image as the source for the enhanced version.
+        if (!sourceImageToSave) {
+            sourceImageToSave = await dataUrlToFile(images[index], 't2i_source.jpeg');
+        }
+      } else {
+        optionsToSave = { ...options, width, height };
+        if (isCharacter) {
+          const description = generateCharacterDescription(optionsToSave as GenerationOptions);
+          itemName = `${characterName || 'Character'}: ${description}`;
+        }
+      }
 
       const item: Omit<LibraryItem, 'id'> = {
         mediaType: isCharacter ? 'character' : 'image',
         media: imageSrc,
         thumbnail: await dataUrlToThumbnail(imageSrc, 256),
-        options: optionsToSave,
-        sourceImage: sourceImage ? await fileToResizedDataUrl(sourceImage, 512) : undefined,
+        options: optionsToSave as GenerationOptions,
+        sourceImage: sourceImageToSave ? await fileToResizedDataUrl(sourceImageToSave, 512) : undefined,
+        name: itemName,
       };
-
-      if (isCharacter) {
-        const description = generateCharacterDescription(optionsToSave);
-        item.name = `${characterName || 'Character'}: ${description}`;
-      }
 
       await saveToLibrary(item);
       setSavingState(prev => ({ ...prev, [index]: 'saved' }));
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to save to library:", err);
       setSavingState(prev => ({ ...prev, [index]: 'idle' })); // Allow retry on error
     }
@@ -134,18 +181,35 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
     setIsZipping(true);
     try {
       const zip = new JSZip();
+      
+      let baseName = '';
+      if (activeTab === 'character-generator' && characterName) {
+          baseName = sanitizeForFilename(characterName);
+      } else if (lastUsedPrompt) {
+          const promptSnippet = lastUsedPrompt.split(/\s+/).slice(0, 5).join(' ');
+          baseName = sanitizeForFilename(promptSnippet);
+      }
+      if (!baseName) { baseName = 'generated_images'; }
+      const zipBaseName = baseName;
+
       images.forEach((src, index) => {
         const finalSrc = enhancedImages[index] || src;
         const base64Data = finalSrc.split(',')[1];
         if (base64Data) {
-          const fileName = `generated-${index + 1}${enhancedImages[index] ? '-enhanced' : ''}.jpeg`;
+          const isEnhanced = !!enhancedImages[index];
+          const enhancedTag = isEnhanced ? '_enhanced' : '';
+          const fileName = `${zipBaseName}_${index + 1}${enhancedTag}.jpeg`;
           zip.file(fileName, base64Data, { base64: true });
         }
       });
+      
+      const randomPart = Math.random().toString(36).substring(2, 7);
+      const zipFilename = `lawiz_${zipBaseName}_${randomPart}.zip`;
+
       const content = await zip.generateAsync({ type: 'blob' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(content);
-      link.download = 'LAWIZ-generated.zip';
+      link.download = zipFilename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -345,6 +409,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
               src={currentZoomedSrc} 
               alt={`Zoomed content ${zoomedImageIndex + 1}`} 
               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              style={{ maxWidth: '90vw', maxHeight: '90vh' }}
             />
             <button
               onClick={(e) => { e.stopPropagation(); handleCloseZoom(); }}

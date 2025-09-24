@@ -11,6 +11,17 @@ interface ExtractorResultsGridProps {
 const isClothing = (item: any): item is GeneratedClothing => 'itemName' in item;
 const isPose = (item: any): item is GeneratedPose => 'poseJson' in item;
 
+const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
+    if (!text) return '';
+    return text
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]/g, '')
+        .replace(/__+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .substring(0, maxLength);
+};
+
 export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ items, onSave, title }) => {
     const [selectedItemModal, setSelectedItemModal] = useState<(GeneratedClothing | GeneratedObject | GeneratedPose) & { index: number } | null>(null);
     const [textViewer, setTextViewer] = useState<{ title: string; content: string } | null>(null);
@@ -43,7 +54,9 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
     const handleDownload = (dataUrl: string, name: string) => {
         const link = document.createElement('a');
         link.href = dataUrl;
-        link.download = name;
+        const baseName = sanitizeForFilename(name);
+        const randomPart = Math.random().toString(36).substring(2, 7);
+        link.download = `${baseName}_${randomPart}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -52,7 +65,12 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
     const handleDownloadText = (content: string, filename: string) => {
         const blob = new Blob([content], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
-        handleDownload(url, filename);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
         URL.revokeObjectURL(url);
     };
 
@@ -144,7 +162,10 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                                     )}
                                     <div className="grid grid-cols-2 gap-4">
                                          <button
-                                            onClick={() => handleDownload(isClothing(selectedItemModal) ? selectedItemModal.laidOutImage : isPose(selectedItemModal) ? selectedItemModal.image : (selectedItemModal as GeneratedObject).image, `${isClothing(selectedItemModal) ? selectedItemModal.itemName : isPose(selectedItemModal) ? selectedItemModal.description : (selectedItemModal as GeneratedObject).name}.png`)}
+                                            onClick={() => handleDownload(
+                                                isClothing(selectedItemModal) ? selectedItemModal.laidOutImage : isPose(selectedItemModal) ? selectedItemModal.image : (selectedItemModal as GeneratedObject).image,
+                                                isClothing(selectedItemModal) ? selectedItemModal.itemName : isPose(selectedItemModal) ? selectedItemModal.description : (selectedItemModal as GeneratedObject).name
+                                            )}
                                             className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover"
                                         >
                                             <DownloadIcon className="w-5 h-5"/> Download

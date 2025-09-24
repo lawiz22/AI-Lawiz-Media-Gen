@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, ChangeEvent, useMemo, useEffect, useCallback } from 'react';
 import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, ResetIcon } from './icons';
 import { dataUrlToFile, dataUrlToThumbnail, createPaletteThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
@@ -81,6 +80,17 @@ const formatTime = (seconds: number): string => {
     const s = Math.floor(seconds % 60);
     const ms = Math.round((seconds - Math.floor(seconds)) * 1000);
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+};
+
+const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
+    if (!text) return '';
+    return text
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]/g, '')
+        .replace(/__+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .substring(0, maxLength);
 };
 
 const quantizeImage = (file: File, colorCount: number): Promise<string[]> => {
@@ -342,7 +352,9 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
         if (!extractedFrame) return;
         const link = document.createElement('a');
         link.href = extractedFrame;
-        link.download = `frame_${formatTime(currentTime).replace(/:|\./g, '_')}.jpeg`;
+        const videoName = sanitizeForFilename(videoFile?.name.replace(/\.[^/.]+$/, "") || 'video_frame');
+        const time = formatTime(currentTime).replace(/:|\./g, '_');
+        link.download = `${videoName}_${time}.jpeg`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
