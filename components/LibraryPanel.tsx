@@ -5,7 +5,7 @@ import {
   CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon,
   DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon,
   BannerIcon, AlbumCoverIcon, TrashIcon, LoadIcon, FileExportIcon, UploadIconSimple, GoogleDriveIcon,
-  PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon
+  PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon
 } from './icons';
 import { dataUrlToBlob, createPaletteThumbnail } from '../utils/imageUtils';
 
@@ -301,6 +301,8 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
   const [selectedItemModal, setSelectedItemModal] = useState<LibraryItem | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [hoveredSource, setHoveredSource] = useState<{ src: string; x: number; y: number } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   const fetchItems = useCallback(() => {
     setIsLoading(true);
@@ -374,6 +376,17 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
     }
     return filtered;
   }, [items, filter, searchTerm]);
+  
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filteredItems.length, itemsPerPage]);
+
+  const paginatedItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredItems.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredItems, currentPage, itemsPerPage]);
+
+  const totalPages = useMemo(() => Math.ceil(filteredItems.length / itemsPerPage), [filteredItems, itemsPerPage]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -414,24 +427,24 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
 
     if (viewMode === 'list') {
         return (
-            <div className="flex flex-col gap-2">
-                {filteredItems.map(item => (
+            <div className="flex flex-col gap-1.5">
+                {paginatedItems.map(item => (
                     <div
                         key={item.id}
-                        className="group flex items-center gap-4 p-2 rounded-lg hover:bg-bg-tertiary transition-colors w-full cursor-pointer"
+                        className="group flex items-center gap-3 p-1.5 rounded-lg hover:bg-bg-tertiary transition-colors w-full cursor-pointer"
                         onClick={() => setSelectedItemModal(item)}
                         onMouseEnter={(e) => (item.mediaType === 'prompt' || item.mediaType === 'color-palette') && handleMouseEnterSource(e, item.sourceImage)}
                         onMouseLeave={handleMouseLeaveSource}
                     >
-                        <img src={item.thumbnail} alt={item.name} className="w-12 h-12 object-cover rounded-md flex-shrink-0" />
-                        <div className="flex-shrink-0 text-text-secondary">{getCategoryIcon(item.mediaType, "w-6 h-6")}</div>
+                        <img src={item.thumbnail} alt={item.name} className="w-10 h-10 object-cover rounded-md flex-shrink-0" />
+                        <div className="flex-shrink-0 text-text-secondary">{getCategoryIcon(item.mediaType, "w-5 h-5")}</div>
                         <div className="flex-grow truncate">
-                            <p className="font-semibold text-text-primary truncate">{item.name}</p>
+                            <p className="font-medium text-text-primary truncate text-sm">{item.name}</p>
                             <p className="text-xs text-text-muted">Created: {new Date(item.id).toLocaleDateString()}</p>
                         </div>
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={(e) => { e.stopPropagation(); onLoadItem(item); }} title="Load in Generator" className="p-2 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent"><LoadIcon className="w-5 h-5"/></button>
-                            <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name || `Item #${item.id}`); }} disabled={deletingId === item.id} title="Delete Item" className="p-2 rounded-full hover:bg-bg-primary text-text-secondary hover:text-danger">{deletingId === item.id ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <TrashIcon className="w-5 h-5"/>}</button>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={(e) => { e.stopPropagation(); onLoadItem(item); }} title="Load in Generator" className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent"><LoadIcon className="w-4 h-4"/></button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name || `Item #${item.id}`); }} disabled={deletingId === item.id} title="Delete Item" className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-danger">{deletingId === item.id ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <TrashIcon className="w-4 h-4"/>}</button>
                         </div>
                     </div>
                 ))}
@@ -445,7 +458,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
 
     return (
         <div className={`grid ${gridClasses} gap-4`}>
-            {filteredItems.map(item => (
+            {paginatedItems.map(item => (
               <div
                 key={item.id}
                 className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer"
@@ -466,6 +479,45 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
         </div>
     );
   };
+  
+  const PaginationControls = () => {
+    if (totalPages <= 1) return null;
+    return (
+        <div className="flex flex-wrap items-center justify-between gap-4 mt-6 pt-4 border-t border-border-primary">
+            <div className="flex items-center gap-2">
+                <label htmlFor="items-per-page" className="text-sm text-text-secondary">Items per page:</label>
+                <select
+                    id="items-per-page"
+                    value={itemsPerPage}
+                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                    className="bg-bg-tertiary border border-border-primary rounded-md p-1.5 text-sm focus:ring-accent focus:border-accent"
+                >
+                    <option value={12}>12</option>
+                    <option value={20}>20</option>
+                    <option value={48}>48</option>
+                    <option value={96}>96</option>
+                </select>
+            </div>
+            <div className="flex items-center gap-1">
+                <span className="text-sm text-text-secondary mr-2">
+                    Page {currentPage} of {totalPages}
+                </span>
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-2 rounded-full hover:bg-bg-primary disabled:opacity-50" title="First Page">
+                    <ChevronDoubleLeftIcon className="w-5 h-5"/>
+                </button>
+                <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className="p-2 rounded-full hover:bg-bg-primary disabled:opacity-50" title="Previous Page">
+                    <ChevronLeftIcon className="w-5 h-5"/>
+                </button>
+                <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages} className="p-2 rounded-full hover:bg-bg-primary disabled:opacity-50" title="Next Page">
+                    <ChevronRightIcon className="w-5 h-5"/>
+                </button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-2 rounded-full hover:bg-bg-primary disabled:opacity-50" title="Last Page">
+                    <ChevronDoubleRightIcon className="w-5 h-5"/>
+                </button>
+            </div>
+        </div>
+    );
+};
 
   return (
     <>
@@ -526,6 +578,8 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
         </div>
 
         {renderItemViews()}
+        
+        <PaginationControls />
 
          <div className="mt-8 pt-4 border-t border-danger-bg">
             <button
