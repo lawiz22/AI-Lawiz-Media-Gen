@@ -5,7 +5,7 @@ import {
   CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon,
   DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon,
   BannerIcon, AlbumCoverIcon, TrashIcon, LoadIcon, FileExportIcon, UploadIconSimple, GoogleDriveIcon,
-  PoseIcon, FontIcon
+  PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon
 } from './icons';
 import { dataUrlToBlob, createPaletteThumbnail } from '../utils/imageUtils';
 
@@ -38,7 +38,6 @@ const getCategoryIcon = (mediaType: LibraryItemType, className: string = "w-4 h-
     }
 };
 
-// Fix: Changed JSX.Element to React.ReactElement to resolve namespace issue.
 const FILTER_BUTTONS: { id: LibraryItemType; label: string; icon: React.ReactElement }[] = [
     { id: 'image', label: 'Images', icon: <PhotographIcon className="w-5 h-5"/> },
     { id: 'character', label: 'Characters', icon: <CharacterIcon className="w-5 h-5"/> },
@@ -291,6 +290,7 @@ const renderThemeOptionsDetails = (themeOptions: ThemeGenerationInfo) => {
     );
 };
 
+type ViewMode = 'grid' | 'smallGrid' | 'list';
 
 export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveConnected, onSyncWithDrive, isSyncing, syncMessage, isDriveConfigured }) => {
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -299,6 +299,8 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [selectedItemModal, setSelectedItemModal] = useState<LibraryItem | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [hoveredSource, setHoveredSource] = useState<{ src: string; x: number; y: number } | null>(null);
 
   const fetchItems = useCallback(() => {
     setIsLoading(true);
@@ -387,13 +389,97 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [selectedItemModal, handleKeyDown]);
+  
+  const handleMouseEnterSource = (e: React.MouseEvent, sourceImage?: string) => {
+    if (!sourceImage) return;
+    setHoveredSource({ src: sourceImage, x: e.clientX, y: e.clientY });
+  };
+  const handleMouseLeaveSource = () => {
+    setHoveredSource(null);
+  };
+  
+  const renderItemViews = () => {
+    if (isLoading) {
+        return <div className="flex justify-center items-center py-16"><SpinnerIcon className="w-12 h-12 text-accent animate-spin" /></div>;
+    }
+    if (filteredItems.length === 0) {
+        return (
+            <div className="text-center py-16 text-text-secondary">
+                <LibraryIcon className="w-16 h-16 mx-auto text-border-primary mb-4" />
+                <h3 className="font-bold text-lg text-text-primary">No Items Found</h3>
+                <p>Your library is empty or no items match your current filters.</p>
+            </div>
+        );
+    }
+
+    if (viewMode === 'list') {
+        return (
+            <div className="flex flex-col gap-2">
+                {filteredItems.map(item => (
+                    <div
+                        key={item.id}
+                        className="group flex items-center gap-4 p-2 rounded-lg hover:bg-bg-tertiary transition-colors w-full cursor-pointer"
+                        onClick={() => setSelectedItemModal(item)}
+                        onMouseEnter={(e) => (item.mediaType === 'prompt' || item.mediaType === 'color-palette') && handleMouseEnterSource(e, item.sourceImage)}
+                        onMouseLeave={handleMouseLeaveSource}
+                    >
+                        <img src={item.thumbnail} alt={item.name} className="w-12 h-12 object-cover rounded-md flex-shrink-0" />
+                        <div className="flex-shrink-0 text-text-secondary">{getCategoryIcon(item.mediaType, "w-6 h-6")}</div>
+                        <div className="flex-grow truncate">
+                            <p className="font-semibold text-text-primary truncate">{item.name}</p>
+                            <p className="text-xs text-text-muted">Created: {new Date(item.id).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={(e) => { e.stopPropagation(); onLoadItem(item); }} title="Load in Generator" className="p-2 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent"><LoadIcon className="w-5 h-5"/></button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name || `Item #${item.id}`); }} disabled={deletingId === item.id} title="Delete Item" className="p-2 rounded-full hover:bg-bg-primary text-text-secondary hover:text-danger">{deletingId === item.id ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <TrashIcon className="w-5 h-5"/>}</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+    
+    const gridClasses = viewMode === 'grid' 
+      ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+      : "grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12";
+
+    return (
+        <div className={`grid ${gridClasses} gap-4`}>
+            {filteredItems.map(item => (
+              <div
+                key={item.id}
+                className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer"
+                onClick={() => setSelectedItemModal(item)}
+                onMouseEnter={(e) => (item.mediaType === 'prompt' || item.mediaType === 'color-palette') && handleMouseEnterSource(e, item.sourceImage)}
+                onMouseLeave={handleMouseLeaveSource}
+              >
+                <img src={item.thumbnail} alt={item.name || `Library item ${item.id}`} className="object-cover w-full h-full" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="absolute bottom-0 left-0 p-2 text-white transform translate-y-4 group-hover:translate-y-0 transition-transform">
+                  <p className="text-xs font-bold truncate max-w-full">{item.name}</p>
+                </div>
+                <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full" title={item.mediaType}>
+                    {getCategoryIcon(item.mediaType, "w-4 h-4 text-white")}
+                </div>
+              </div>
+            ))}
+        </div>
+    );
+  };
 
   return (
     <>
       <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <h2 className="text-2xl font-bold text-accent">Library</h2>
+            <div className="flex items-center gap-4">
+                <h2 className="text-2xl font-bold text-accent">Library</h2>
+                <div className="flex items-center gap-1 p-1 bg-bg-primary rounded-full">
+                    <button onClick={() => setViewMode('grid')} className={`p-2 rounded-full transition-colors ${viewMode === 'grid' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary'}`} title="Large Grid View"><Squares2X2Icon className="w-5 h-5"/></button>
+                    <button onClick={() => setViewMode('smallGrid')} className={`p-2 rounded-full transition-colors ${viewMode === 'smallGrid' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary'}`} title="Small Grid View"><Squares2X2Icon className="w-4 h-4"/></button>
+                    <button onClick={() => setViewMode('list')} className={`p-2 rounded-full transition-colors ${viewMode === 'list' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary'}`} title="List View"><ListBulletIcon className="w-5 h-5"/></button>
+                </div>
+            </div>
           <div className="flex items-center gap-2">
             {isDriveConfigured && (
               <button onClick={onSyncWithDrive} disabled={!isDriveConnected || isSyncing} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
@@ -439,35 +525,8 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
             </div>
         </div>
 
-        {/* Grid */}
-        {isLoading ? (
-          <div className="flex justify-center items-center py-16"><SpinnerIcon className="w-12 h-12 text-accent animate-spin" /></div>
-        ) : filteredItems.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {filteredItems.map(item => (
-              <div
-                key={item.id}
-                className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer"
-                onClick={() => setSelectedItemModal(item)}
-              >
-                <img src={item.thumbnail} alt={item.name || `Library item ${item.id}`} className="object-cover w-full h-full" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="absolute bottom-0 left-0 p-2 text-white transform translate-y-4 group-hover:translate-y-0 transition-transform">
-                  <p className="text-xs font-bold truncate max-w-full">{item.name}</p>
-                </div>
-                <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full" title={item.mediaType}>
-                    {getCategoryIcon(item.mediaType, "w-4 h-4 text-white")}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-16 text-text-secondary">
-             <LibraryIcon className="w-16 h-16 mx-auto text-border-primary mb-4" />
-            <h3 className="font-bold text-lg text-text-primary">No Items Found</h3>
-            <p>Your library is empty or no items match your current filters.</p>
-          </div>
-        )}
+        {renderItemViews()}
+
          <div className="mt-8 pt-4 border-t border-danger-bg">
             <button
                 onClick={handleClearLibrary}
@@ -477,6 +536,19 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
             </button>
          </div>
       </div>
+
+      {hoveredSource && (
+        <div 
+          style={{ position: 'fixed', top: hoveredSource.y + 20, left: hoveredSource.x + 20, zIndex: 100 }}
+          className="pointer-events-none animate-fade-in"
+        >
+          <img 
+            src={hoveredSource.src} 
+            className="w-48 h-48 object-cover rounded-lg shadow-2xl border-2 border-accent" 
+            alt="Source Preview" 
+          />
+        </div>
+      )}
       
       {selectedItemModal && (
         <div 
