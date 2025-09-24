@@ -24,7 +24,6 @@ const generateCharacterDescription = (options: GenerationOptions): string => {
     }
     parts.push(`clothing ${clothing}`);
     
-    // Background
     // Fix: Explicitly type `bg` as `string` to allow assigning a descriptive string. This resolves a TypeScript error where the variable was inferred as the strict literal type `BackgroundMode`.
     let bg: string = options.background;
     if ((bg === 'prompt' || bg === 'random') && options.customBackground) {
@@ -129,7 +128,11 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
 
       let optionsToSave: Partial<GenerationOptions>;
       let itemName: string | undefined;
-      let sourceImageToSave = sourceImage;
+      let sourceImageToSave: File | null = sourceImage;
+      
+      // Determine if the generation was Text-to-Image to prevent saving a lingering source image from a previous run.
+      const isGeminiT2I = options.provider === 'gemini' && options.geminiMode === 't2i';
+      const isComfyT2I = options.provider === 'comfyui' && options.comfyModelType !== 'nunchaku-kontext-flux';
 
       if (isEnhanced) {
         optionsToSave = {
@@ -140,16 +143,25 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
         };
         const baseName = characterName || (isCharacter ? `Character #${index + 1}` : `Image #${index + 1}`);
         itemName = `${baseName} (Enhanced)`;
-        // If the original image before enhancement was from a text-to-image generation, there's no source image.
-        // In that case, we should use the *generated* (pre-enhancement) image as the source for the enhanced version.
-        if (!sourceImageToSave) {
+
+        // For an enhanced T2I image, its "source" is the image *before* enhancement.
+        // For an enhanced I2I image, its "source" is the original I2I input image.
+        if (!sourceImage) { // If original had no source, it was T2I.
             sourceImageToSave = await dataUrlToFile(images[index], 't2i_source.jpeg');
+        } else {
+            sourceImageToSave = sourceImage; // Keep the original I2I source.
         }
       } else {
+        // This is a normal, non-enhanced generation.
         optionsToSave = { ...options, width, height };
         if (isCharacter) {
           const description = generateCharacterDescription(optionsToSave as GenerationOptions);
           itemName = `${characterName || 'Character'}: ${description}`;
+        }
+        
+        // If it's T2I, ensure no source image is saved.
+        if (isGeminiT2I || isComfyT2I) {
+            sourceImageToSave = null;
         }
       }
 
