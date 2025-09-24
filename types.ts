@@ -243,6 +243,42 @@ export interface ExtractorState {
 export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup';
 
+export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';
+export type LogoBackground = 'transparent' | 'white' | 'black';
+export type BannerStyle = 'none' | 'corporate-clean' | 'gaming-energetic' | 'artistic-brush' | 'minimalist-type' | 'vintage-retro' | 'tech-glow' | 'cinematic-photo' | 'promotional-sale' | 'watercolor-wash' | 'collage';
+export type BannerLogoPlacement = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'no-logo';
+export type BannerAspectRatio = '16:9' | '1.91:1' | '4:1' | '2:1' | '1:1' | '9:16' | '1:2' | '1:4';
+
+export type MusicStyle = 'rock' | 'pop' | 'electronic' | 'jazz' | 'hip-hop' | 'country' | 'folk' | 'metal' | 'classical' | 'other';
+export type AlbumEra = '50s' | '60s' | '70s' | '80s' | '90s' | '2000s' | 'modern';
+export type AlbumMediaType = 'vinyl' | 'cd' | 'digital';
+
+export interface ThemeGenerationInfo {
+    prompt?: string;
+    // Common
+    style?: string; // LogoStyle, BannerStyle, MusicStyle, etc.
+    referenceItems?: { name: string; thumbnail: string }[];
+    selectedPalette?: { name: string; media: string }; // name and palette JSON
+    selectedFont?: { name: string; thumbnail: string };
+    fontReferenceImage?: string; // thumbnail dataURL
+    // Logo specific
+    brandName?: string;
+    slogan?: string;
+    backgroundColor?: LogoBackground;
+    // Banner specific
+    bannerTitle?: string;
+    bannerAspectRatio?: BannerAspectRatio;
+    bannerLogoPlacement?: BannerLogoPlacement;
+    bannerSelectedLogo?: { name: string; thumbnail: string };
+    // Album specific
+    albumTitle?: string;
+    artistName?: string;
+    albumEra?: AlbumEra;
+    albumMediaType?: AlbumMediaType;
+    addVinylWear?: boolean;
+    albumSelectedLogo?: { name: string; thumbnail: string };
+}
+
 export interface LibraryItem {
     id: number; // Unique ID, typically a timestamp
     name?: string;
@@ -250,6 +286,7 @@ export interface LibraryItem {
     media: string; // data URL for image/video/clothes, prompt text, or JSON string for palette
     thumbnail: string; // data URL for a small thumbnail
     options?: GenerationOptions;
+    themeOptions?: ThemeGenerationInfo;
     sourceImage?: string; // data URL for image/video generations
     startFrame?: string; // data URL for video generations
     endFrame?: string; // data URL for video generations
@@ -305,16 +342,6 @@ export interface PromptGenState {
     soupPrompt: string;
     soupHistory: string[];
 }
-
-export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';
-export type LogoBackground = 'transparent' | 'white' | 'black';
-export type BannerStyle = 'none' | 'corporate-clean' | 'gaming-energetic' | 'artistic-brush' | 'minimalist-type' | 'vintage-retro' | 'tech-glow' | 'cinematic-photo' | 'promotional-sale' | 'watercolor-wash' | 'collage';
-export type BannerLogoPlacement = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'no-logo';
-export type BannerAspectRatio = '16:9' | '1.91:1' | '4:1' | '2:1' | '1:1' | '9:16' | '1:2' | '1:4';
-
-export type MusicStyle = 'rock' | 'pop' | 'electronic' | 'jazz' | 'hip-hop' | 'country' | 'folk' | 'metal' | 'classical' | 'other';
-export type AlbumEra = '50s' | '60s' | '70s' | '80s' | '90s' | '2000s' | 'modern';
-export type AlbumMediaType = 'vinyl' | 'cd' | 'digital';
 
 export interface LogoThemeState {
     // Logo Generator State

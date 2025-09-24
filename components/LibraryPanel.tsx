@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getLibraryItems, deleteLibraryItem, exportLibraryAsJson, clearLibrary } from '../services/libraryService';
-import type { LibraryItem, LibraryItemType, GenerationOptions } from '../types';
+import type { LibraryItem, LibraryItemType, GenerationOptions, ThemeGenerationInfo, PaletteColor } from '../types';
 import {
   CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon,
   DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon,
   BannerIcon, AlbumCoverIcon, TrashIcon, LoadIcon, FileExportIcon, UploadIconSimple, GoogleDriveIcon,
   PoseIcon, FontIcon
 } from './icons';
-import { dataUrlToBlob } from '../utils/imageUtils';
+import { dataUrlToBlob, createPaletteThumbnail } from '../utils/imageUtils';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -55,17 +55,18 @@ const FILTER_BUTTONS: { id: LibraryItemType; label: string; icon: React.ReactEle
     { id: 'extracted-frame', label: 'Frames', icon: <FilmIcon className="w-5 h-5"/> },
 ];
 
-const DetailItem: React.FC<{ label: string; value?: string | number | null; isCode?: boolean }> = ({ label, value, isCode }) => {
+const DetailItem: React.FC<{ label: string; value?: string | number | boolean | null; isCode?: boolean }> = ({ label, value, isCode }) => {
     if (value === null || value === undefined || value === '') return null;
+    const displayValue = typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value);
     return (
         <div className="mb-2">
             <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">{label}</h4>
             {isCode ? (
                 <pre className="text-xs bg-bg-primary p-2 rounded-md mt-1 max-h-48 overflow-auto text-text-secondary whitespace-pre-wrap font-mono">
-                    <code>{value}</code>
+                    <code>{displayValue}</code>
                 </pre>
             ) : (
-                <p className="text-sm text-text-primary mt-1">{String(value)}</p>
+                <p className="text-sm text-text-primary mt-1">{String(displayValue)}</p>
             )}
         </div>
     );
@@ -216,6 +217,77 @@ const renderOptionsDetails = (options?: GenerationOptions, mediaType?: LibraryIt
           {isImageType && <DetailItem label="Aspect Ratio" value={options.aspectRatio} />}
         </div>
       </div>
+    );
+};
+
+const renderThemeOptionsDetails = (themeOptions: ThemeGenerationInfo) => {
+    if (!themeOptions) return null;
+
+    const palette = themeOptions.selectedPalette ? JSON.parse(themeOptions.selectedPalette.media) as PaletteColor[] : [];
+    
+    return (
+        <div>
+            <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Theme Options</h4>
+            <div className="space-y-3 bg-bg-primary p-3 rounded-md max-h-96 overflow-y-auto">
+                <DetailItem label="Prompt" value={themeOptions.prompt} isCode />
+                {/* Logo */}
+                <DetailItem label="Brand Name" value={themeOptions.brandName} />
+                <DetailItem label="Slogan" value={themeOptions.slogan} />
+                <DetailItem label="Style" value={themeOptions.style} />
+                <DetailItem label="Background" value={themeOptions.backgroundColor} />
+
+                {/* Banner */}
+                <DetailItem label="Banner Title" value={themeOptions.bannerTitle} />
+                <DetailItem label="Aspect Ratio" value={themeOptions.bannerAspectRatio} />
+                <DetailItem label="Logo Placement" value={themeOptions.bannerLogoPlacement} />
+
+                {/* Album Cover */}
+                <DetailItem label="Artist Name" value={themeOptions.artistName} />
+                <DetailItem label="Album Title" value={themeOptions.albumTitle} />
+                <DetailItem label="Album Era" value={themeOptions.albumEra} />
+                <DetailItem label="Media Format" value={themeOptions.albumMediaType} />
+                <DetailItem label="Vinyl Wear" value={themeOptions.addVinylWear} />
+
+                {/* Common References */}
+                {themeOptions.referenceItems && themeOptions.referenceItems.length > 0 && (
+                    <div>
+                        <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Reference Images</h4>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                            {themeOptions.referenceItems.map((ref, index) => (
+                                <img key={index} src={ref.thumbnail} alt={ref.name} title={ref.name} className="w-12 h-12 object-cover rounded" />
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {palette.length > 0 && themeOptions.selectedPalette && (
+                     <div>
+                        <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Color Palette</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                            <img src={createPaletteThumbnail(palette)} alt="Color Palette" className="w-12 h-12 rounded" />
+                            <p className="text-sm text-text-primary truncate">{themeOptions.selectedPalette.name}</p>
+                        </div>
+                    </div>
+                )}
+                {(themeOptions.selectedFont || themeOptions.fontReferenceImage) && (
+                     <div>
+                        <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Font Reference</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                            <img src={themeOptions.selectedFont?.thumbnail || themeOptions.fontReferenceImage} alt="Font reference" className="w-12 h-12 object-cover rounded" />
+                            <p className="text-sm text-text-primary truncate">{themeOptions.selectedFont?.name || 'Uploaded Image'}</p>
+                        </div>
+                    </div>
+                )}
+                {(themeOptions.bannerSelectedLogo || themeOptions.albumSelectedLogo) && (
+                     <div>
+                        <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Logo Used</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                            <img src={themeOptions.bannerSelectedLogo?.thumbnail || themeOptions.albumSelectedLogo?.thumbnail} alt="Logo reference" className="w-12 h-12 object-contain rounded" />
+                            <p className="text-sm text-text-primary truncate">{themeOptions.bannerSelectedLogo?.name || themeOptions.albumSelectedLogo?.name}</p>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
     );
 };
 
@@ -489,7 +561,12 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
                     <DetailItem label="Type" value={selectedItemModal.mediaType} />
                     {selectedItemModal.mediaType === 'prompt' && <DetailItem label="Prompt Text" value={selectedItemModal.media} isCode />}
                     {selectedItemModal.poseJson && <DetailItem label="Pose JSON (ControlNet)" value={selectedItemModal.poseJson} isCode />}
-                    {renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType)}
+                    
+                    {selectedItemModal.themeOptions 
+                        ? renderThemeOptionsDetails(selectedItemModal.themeOptions)
+                        : renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType)
+                    }
+
                     <div className="pt-4 flex flex-wrap gap-2">
                          <button
                             onClick={() => {

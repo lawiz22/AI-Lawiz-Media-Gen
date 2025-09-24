@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { LogoThemeState, LibraryItem, LogoStyle, LogoBackground, PaletteColor, BannerStyle, BannerLogoPlacement, BannerAspectRatio, MusicStyle, AlbumEra, AlbumMediaType } from '../types';
+import type { LogoThemeState, LibraryItem, LogoStyle, LogoBackground, PaletteColor, BannerStyle, BannerLogoPlacement, BannerAspectRatio, MusicStyle, AlbumEra, AlbumMediaType, ThemeGenerationInfo } from '../types';
 import { GenerateIcon, ResetIcon, SpinnerIcon, LibraryIcon, CloseIcon, SaveIcon, CheckIcon, DownloadIcon, UploadIconSimple, ChevronLeftIcon, ChevronRightIcon, ZoomIcon } from './icons';
 import { generateLogos, generateBanners, generateAlbumCovers } from '../services/geminiService';
 import { saveToLibrary } from '../services/libraryService';
@@ -266,10 +266,25 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
             let logoName = 'Logo';
             const styleLabel = LOGO_STYLES.find(s => s.id === state.logoStyle)?.label || state.logoStyle;
             logoName = state.brandName ? `${state.brandName} - ${styleLabel} Logo` : state.logoPrompt ? `Logo for "${state.logoPrompt.substring(0, 25)}..." - ${styleLabel}` : `${styleLabel} Logo Concept`;
+            
+            const themeOptions: ThemeGenerationInfo = {
+                prompt: state.logoPrompt,
+                style: state.logoStyle,
+                brandName: state.brandName,
+                slogan: state.slogan,
+                backgroundColor: state.backgroundColor,
+                referenceItems: state.referenceItems?.map(item => ({ name: item.name!, thumbnail: item.thumbnail })),
+                selectedPalette: state.selectedPalette ? { name: state.selectedPalette.name!, media: state.selectedPalette.media } : undefined,
+                selectedFont: state.selectedFont ? { name: state.selectedFont.name!, thumbnail: state.selectedFont.thumbnail } : undefined,
+                fontReferenceImage: state.fontReferenceImage ? await dataUrlToThumbnail(await fileToDataUrl(state.fontReferenceImage), 64) : undefined,
+            };
 
             await saveToLibrary({
-                mediaType: 'logo', name: logoName, media: logoSrc, thumbnail: await dataUrlToThumbnail(logoSrc, 256),
-                options: {} as any,
+                mediaType: 'logo', 
+                name: logoName, 
+                media: logoSrc, 
+                thumbnail: await dataUrlToThumbnail(logoSrc, 256),
+                themeOptions: themeOptions,
             });
              setState(prev => {
                 const updatedLogos = [...(prev.generatedLogos || [])];
@@ -327,7 +342,21 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         });
         try {
             const name = state.bannerTitle || state.bannerPrompt?.substring(0, 30) || 'Banner';
-            await saveToLibrary({ mediaType: 'banner', name: `Banner: ${name}`, media: bannerSrc, thumbnail: await dataUrlToThumbnail(bannerSrc, 256), options: {} as any });
+            
+            const themeOptions: ThemeGenerationInfo = {
+                prompt: state.bannerPrompt,
+                bannerTitle: state.bannerTitle,
+                style: state.bannerStyle,
+                bannerAspectRatio: state.bannerAspectRatio,
+                bannerLogoPlacement: state.bannerLogoPlacement,
+                referenceItems: state.bannerReferenceItems?.map(item => ({ name: item.name!, thumbnail: item.thumbnail })),
+                selectedPalette: state.bannerSelectedPalette ? { name: state.bannerSelectedPalette.name!, media: state.bannerSelectedPalette.media } : undefined,
+                bannerSelectedLogo: state.bannerSelectedLogo ? { name: state.bannerSelectedLogo.name!, thumbnail: state.bannerSelectedLogo.thumbnail } : undefined,
+                selectedFont: state.bannerSelectedFont ? { name: state.bannerSelectedFont.name!, thumbnail: state.bannerSelectedFont.thumbnail } : undefined,
+                fontReferenceImage: state.bannerFontReferenceImage ? await dataUrlToThumbnail(await fileToDataUrl(state.bannerFontReferenceImage), 64) : undefined,
+            };
+
+            await saveToLibrary({ mediaType: 'banner', name: `Banner: ${name}`, media: bannerSrc, thumbnail: await dataUrlToThumbnail(bannerSrc, 256), themeOptions });
             setState(prev => {
                 const updatedBanners = [...(prev.generatedBanners || [])];
                 updatedBanners[index] = { ...updatedBanners[index], saved: 'saved' };
@@ -383,7 +412,23 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         });
         try {
             const name = `${state.artistName || 'Artist'} - ${state.albumTitle || 'Album'}`;
-            await saveToLibrary({ mediaType: 'album-cover', name: name, media: coverSrc, thumbnail: await dataUrlToThumbnail(coverSrc, 256), options: {} as any });
+
+            const themeOptions: ThemeGenerationInfo = {
+                prompt: state.albumPrompt,
+                albumTitle: state.albumTitle,
+                artistName: state.artistName,
+                style: state.musicStyle === 'other' ? state.customMusicStyle : state.musicStyle,
+                albumEra: state.albumEra,
+                albumMediaType: state.albumMediaType,
+                addVinylWear: state.addVinylWear,
+                referenceItems: state.albumReferenceItems?.map(item => ({ name: item.name!, thumbnail: item.thumbnail })),
+                selectedPalette: state.albumSelectedPalette ? { name: state.albumSelectedPalette.name!, media: state.albumSelectedPalette.media } : undefined,
+                albumSelectedLogo: state.albumSelectedLogo ? { name: state.albumSelectedLogo.name!, thumbnail: state.albumSelectedLogo.thumbnail } : undefined,
+                selectedFont: state.albumSelectedFont ? { name: state.albumSelectedFont.name!, thumbnail: state.albumSelectedFont.thumbnail } : undefined,
+                fontReferenceImage: state.albumFontReferenceImage ? await dataUrlToThumbnail(await fileToDataUrl(state.albumFontReferenceImage), 64) : undefined,
+            };
+
+            await saveToLibrary({ mediaType: 'album-cover', name: name, media: coverSrc, thumbnail: await dataUrlToThumbnail(coverSrc, 256), themeOptions });
             setState(prev => {
                 const updated = [...(prev.generatedAlbumCovers || [])];
                 updated[index] = { ...updated[index], saved: 'saved' };
