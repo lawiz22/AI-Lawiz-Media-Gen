@@ -55,6 +55,171 @@ const FILTER_BUTTONS: { id: LibraryItemType; label: string; icon: React.ReactEle
     { id: 'extracted-frame', label: 'Frames', icon: <FilmIcon className="w-5 h-5"/> },
 ];
 
+const DetailItem: React.FC<{ label: string; value?: string | number | null; isCode?: boolean }> = ({ label, value, isCode }) => {
+    if (value === null || value === undefined || value === '') return null;
+    return (
+        <div className="mb-2">
+            <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">{label}</h4>
+            {isCode ? (
+                <pre className="text-xs bg-bg-primary p-2 rounded-md mt-1 max-h-48 overflow-auto text-text-secondary whitespace-pre-wrap font-mono">
+                    <code>{value}</code>
+                </pre>
+            ) : (
+                <p className="text-sm text-text-primary mt-1">{String(value)}</p>
+            )}
+        </div>
+    );
+};
+
+const LoraDetail: React.FC<{ label: string; name?: string; strength?: number; enabled?: boolean }> = ({ label, name, strength, enabled = true }) => {
+    if (!enabled || !name) return null;
+    return (
+        <div className="pl-4 border-l-2 border-border-primary/50 ml-2 py-1">
+            <p className="text-xs text-text-secondary">{label}:</p>
+            <p className="text-xs font-mono text-text-primary ml-2">{name} (Strength: {strength})</p>
+        </div>
+    );
+};
+
+const renderOptionsDetails = (options?: GenerationOptions, mediaType?: LibraryItemType) => {
+    if (!options) return <DetailItem label="Options" value="Not available" />;
+    
+    const isImageType = mediaType === 'image' || mediaType === 'character' || mediaType === 'logo' || mediaType === 'banner' || mediaType === 'album-cover' || mediaType === 'clothes' || mediaType === 'object' || mediaType === 'extracted-frame' || mediaType === 'pose' || mediaType === 'font';
+
+    return (
+      <div>
+        <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Generation Options</h4>
+        <div className="space-y-3 bg-bg-primary p-3 rounded-md max-h-96 overflow-y-auto">
+          <DetailItem label="Provider" value={options.provider} />
+
+          {/* --- GEMINI IMAGE DETAILS --- */}
+          {options.provider === 'gemini' && isImageType && (
+            <>
+              <DetailItem label="Mode" value={options.geminiMode} />
+              {options.geminiMode === 't2i' && <DetailItem label="Prompt" value={options.geminiPrompt} isCode />}
+              <DetailItem label="Pose" value={options.poseMode} />
+              <DetailItem label="Background" value={options.background} />
+              {options.background === 'prompt' && <DetailItem label="BG Prompt" value={options.customBackground} isCode />}
+              <DetailItem label="Clothing" value={options.clothing} />
+              {options.clothing === 'prompt' && <DetailItem label="Clothing Prompt" value={options.customClothingPrompt} isCode />}
+              <DetailItem label="Image Style" value={options.imageStyle} />
+            </>
+          )}
+          
+          {/* --- COMFYUI IMAGE DETAILS --- */}
+          {options.provider === 'comfyui' && isImageType && (
+            <>
+                <DetailItem label="Workflow" value={options.comfyModelType} />
+                <DetailItem label="Prompt" value={options.comfyPrompt} isCode/>
+                {options.comfyNegativePrompt && <DetailItem label="Negative Prompt" value={options.comfyNegativePrompt} isCode/>}
+                
+                { (options.comfyModelType === 'sdxl' || options.comfyModelType === 'sd1.5' || options.comfyModelType === 'flux') && (
+                    <div className="space-y-2 p-2 mt-2 border-t border-border-primary/50">
+                        <DetailItem label="Model" value={options.comfyModel} />
+                        <DetailItem label="Steps" value={options.comfySteps} />
+                        <DetailItem label="CFG" value={options.comfyCfg} />
+                        <DetailItem label="Sampler" value={options.comfySampler} />
+                        <DetailItem label="Scheduler" value={options.comfyScheduler} />
+                        {options.comfyModelType === 'flux' && <DetailItem label="FLUX Guidance" value={options.comfyFluxGuidance} />}
+                        {options.comfyModelType === 'sdxl' && options.comfySdxlUseLora && (
+                            <div>
+                                <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">LoRA</h5>
+                                <LoraDetail label="SDXL LoRA" name={options.comfySdxlLoraName} strength={options.comfySdxlLoraStrength} enabled={options.comfySdxlUseLora} />
+                            </div>
+                        )}
+                    </div>
+                )}
+                
+                { options.comfyModelType === 'wan2.2' && (
+                    <div className="space-y-2 p-2 mt-2 border-t border-border-primary/50">
+                        <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider">Sampler</h5>
+                        <DetailItem label="Steps" value={options.comfySteps} />
+                        <DetailItem label="CFG" value={options.comfyCfg} />
+                        <DetailItem label="Sampler" value={options.comfySampler} />
+                        <DetailItem label="Scheduler" value={options.comfyScheduler} />
+                        <DetailItem label="Refiner Start Step" value={options.comfyWanRefinerStartStep} />
+                        <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">Models</h5>
+                        <DetailItem label="High-Noise Unet" value={options.comfyWanHighNoiseModel} />
+                        <DetailItem label="Low-Noise Unet" value={options.comfyWanLowNoiseModel} />
+                        <DetailItem label="CLIP Model" value={options.comfyWanClipModel} />
+                        <DetailItem label="VAE Model" value={options.comfyWanVaeModel} />
+                        <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">LoRAs</h5>
+                        <LoraDetail label="FusionX" name={options.comfyWanFusionXLoraName} strength={options.comfyWanFusionXLoraStrength} enabled={options.comfyWanUseFusionXLora} />
+                        <LoraDetail label="Lightning (High)" name={options.comfyWanLightningLoraNameHigh} strength={options.comfyWanLightningLoraStrength} enabled={options.comfyWanUseLightningLora} />
+                        <LoraDetail label="Lightning (Low)" name={options.comfyWanLightningLoraNameLow} strength={options.comfyWanLightningLoraStrength} enabled={options.comfyWanUseLightningLora} />
+                        <LoraDetail label="Stock Photo (High)" name={options.comfyWanStockPhotoLoraNameHigh} strength={options.comfyWanStockPhotoLoraStrength} enabled={options.comfyWanUseStockPhotoLora} />
+                        <LoraDetail label="Stock Photo (Low)" name={options.comfyWanStockPhotoLoraNameLow} strength={options.comfyWanStockPhotoLoraStrength} enabled={options.comfyWanUseStockPhotoLora} />
+                    </div>
+                )}
+
+                { (options.comfyModelType === 'nunchaku-kontext-flux' || options.comfyModelType === 'nunchaku-flux-image') && (
+                    <div className="space-y-2 p-2 mt-2 border-t border-border-primary/50">
+                        <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider">Sampler</h5>
+                        <DetailItem label="Steps" value={options.comfySteps} />
+                        {options.comfyModelType === 'nunchaku-kontext-flux' && <DetailItem label="CFG" value={options.comfyCfg} />}
+                        <DetailItem label="Sampler" value={options.comfySampler} />
+                        <DetailItem label="Scheduler" value={options.comfyScheduler} />
+                        <DetailItem label="FLUX Guidance" value={options.comfyFluxGuidanceKontext} />
+                        {options.comfyModelType === 'nunchaku-flux-image' && <>
+                            <DetailItem label="Base Shift" value={options.comfyNunchakuBaseShift} />
+                            <DetailItem label="Max Shift" value={options.comfyNunchakuMaxShift} />
+                        </>}
+                        <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">Models</h5>
+                        <DetailItem label="DiT Model" value={options.comfyNunchakuModel} />
+                        <DetailItem label="VAE Model" value={options.comfyNunchakuVae} />
+                        <DetailItem label="CLIP L Model" value={options.comfyNunchakuClipL} />
+                        <DetailItem label="T5 XXL Model" value={options.comfyNunchakuT5XXL} />
+                        <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">LoRAs</h5>
+                        <LoraDetail label="Turbo" name={options.comfyNunchakuTurboLoraName} strength={options.comfyNunchakuTurboLoraStrength} enabled={options.comfyNunchakuUseTurboLora} />
+                        <LoraDetail label="Nudify" name={options.comfyNunchakuNudifyLoraName} strength={options.comfyNunchakuNudifyLoraStrength} enabled={options.comfyNunchakuUseNudifyLora} />
+                        <LoraDetail label="Detail" name={options.comfyNunchakuDetailLoraName} strength={options.comfyNunchakuDetailLoraStrength} enabled={options.comfyNunchakuUseDetailLora} />
+                    </div>
+                )}
+
+                { options.comfyModelType === 'flux-krea' && (
+                    <div className="space-y-2 p-2 mt-2 border-t border-border-primary/50">
+                         <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider">Sampler</h5>
+                        <DetailItem label="Steps" value={options.comfySteps} />
+                        <DetailItem label="Sampler" value={options.comfySampler} />
+                        <DetailItem label="Scheduler" value={options.comfyScheduler} />
+                        <DetailItem label="FLUX Guidance" value={options.comfyFluxGuidance} />
+                        <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">Models</h5>
+                        <DetailItem label="Unet GGUF" value={options.comfyFluxKreaModel} />
+                        <DetailItem label="CLIP T5 GGUF" value={options.comfyFluxKreaClipT5} />
+                        <DetailItem label="CLIP L" value={options.comfyFluxKreaClipL} />
+                        <DetailItem label="VAE" value={options.comfyFluxKreaVae} />
+                        <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">LoRAs</h5>
+                        <LoraDetail label="Woman" name={options.p1x4r0maWomanLoraName} strength={options.p1x4r0maWomanLoraStrength} enabled={options.useP1x4r0maWomanLora} />
+                        <LoraDetail label="Nipple" name={options.nippleDiffusionLoraName} strength={options.nippleDiffusionLoraStrength} enabled={options.useNippleDiffusionLora} />
+                        <LoraDetail label="Pussy" name={options.pussyDiffusionLoraName} strength={options.pussyDiffusionLoraStrength} enabled={options.usePussyDiffusionLora} />
+                        {options.comfyFluxKreaUseUpscaler && <>
+                            <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">Upscaler</h5>
+                            <DetailItem label="Upscale Model" value={options.comfyFluxKreaUpscaleModel} />
+                            <DetailItem label="Upscaler Steps" value={options.comfyFluxKreaUpscalerSteps} />
+                            <DetailItem label="Denoise" value={options.comfyFluxKreaDenoise} />
+                        </>}
+                    </div>
+                )}
+            </>
+          )}
+
+          {/* --- VIDEO DETAILS --- */}
+          {mediaType === 'video' && options.videoProvider && (
+            <>
+                <DetailItem label="Video Provider" value={options.videoProvider} />
+                {options.videoProvider === 'gemini' && <DetailItem label="Video Prompt" value={options.geminiVidPrompt} isCode />}
+                {options.videoProvider === 'comfyui' && <DetailItem label="Video Prompt" value={options.comfyVidWanI2VPositivePrompt} isCode />}
+            </>
+          )}
+          
+          {/* --- IMAGE-ONLY DETAILS --- */}
+          {isImageType && <DetailItem label="Aspect Ratio" value={options.aspectRatio} />}
+        </div>
+      </div>
+    );
+};
+
+
 export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveConnected, onSyncWithDrive, isSyncing, syncMessage, isDriveConfigured }) => {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -150,66 +315,6 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [selectedItemModal, handleKeyDown]);
-
-  const DetailItem: React.FC<{ label: string; value?: string | number | null; isCode?: boolean }> = ({ label, value, isCode }) => {
-    if (!value) return null;
-    return (
-        <div className="mb-2">
-            <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">{label}</h4>
-            {isCode ? (
-                <pre className="text-xs bg-bg-primary p-2 rounded-md mt-1 max-h-48 overflow-auto text-text-secondary whitespace-pre-wrap font-mono">
-                    <code>{value}</code>
-                </pre>
-            ) : (
-                <p className="text-sm text-text-primary mt-1">{value}</p>
-            )}
-        </div>
-    );
-  };
-  
-  const renderOptionsDetails = (options?: GenerationOptions) => {
-    if (!options) return <DetailItem label="Options" value="Not available" />;
-    const { provider } = options;
-    return (
-      <div>
-        <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Generation Options</h4>
-        <div className="space-y-3 bg-bg-primary p-3 rounded-md max-h-96 overflow-y-auto">
-          <DetailItem label="Provider" value={provider} />
-          {provider === 'gemini' && (
-            <>
-              <DetailItem label="Mode" value={options.geminiMode} />
-              {options.geminiMode === 't2i' && <DetailItem label="Prompt" value={options.geminiPrompt} isCode />}
-              <DetailItem label="Pose" value={options.poseMode} />
-              <DetailItem label="Background" value={options.background} />
-              {options.background === 'prompt' && <DetailItem label="BG Prompt" value={options.customBackground} isCode />}
-              <DetailItem label="Clothing" value={options.clothing} />
-              {options.clothing === 'prompt' && <DetailItem label="Clothing Prompt" value={options.customClothingPrompt} isCode />}
-              <DetailItem label="Image Style" value={options.imageStyle} />
-            </>
-          )}
-          {provider === 'comfyui' && (
-             <>
-                <DetailItem label="Workflow" value={options.comfyModelType} />
-                <DetailItem label="Model" value={options.comfyModel} />
-                <DetailItem label="Prompt" value={options.comfyPrompt} isCode/>
-                <DetailItem label="Negative Prompt" value={options.comfyNegativePrompt} isCode/>
-                <DetailItem label="Steps" value={options.comfySteps} />
-                <DetailItem label="CFG" value={options.comfyCfg} />
-             </>
-          )}
-          {options.videoProvider && (
-            <>
-                <DetailItem label="Video Provider" value={options.videoProvider} />
-                {options.videoProvider === 'gemini' && <DetailItem label="Video Prompt" value={options.geminiVidPrompt} isCode />}
-                {options.videoProvider === 'comfyui' && <DetailItem label="Video Prompt" value={options.comfyVidWanI2VPositivePrompt} isCode />}
-            </>
-          )}
-          <DetailItem label="Aspect Ratio" value={options.aspectRatio} />
-        </div>
-      </div>
-    );
-  };
-
 
   return (
     <>
@@ -384,7 +489,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
                     <DetailItem label="Type" value={selectedItemModal.mediaType} />
                     {selectedItemModal.mediaType === 'prompt' && <DetailItem label="Prompt Text" value={selectedItemModal.media} isCode />}
                     {selectedItemModal.poseJson && <DetailItem label="Pose JSON (ControlNet)" value={selectedItemModal.poseJson} isCode />}
-                    {renderOptionsDetails(selectedItemModal.options)}
+                    {renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType)}
                     <div className="pt-4 flex flex-wrap gap-2">
                          <button
                             onClick={() => {
