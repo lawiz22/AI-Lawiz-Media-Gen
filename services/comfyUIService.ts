@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { fileToGenerativePart } from "../utils/imageUtils";
 import type { GenerationOptions } from "../types";
@@ -623,12 +622,34 @@ export const generateComfyUIPortraits = async (
 
     const isLongJob = ['flux-krea', 'nunchaku-kontext-flux'].includes(options.comfyModelType!);
 
+    let currentSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+
     for (let i = 0; i < options.numImages; i++) {
         const currentWorkflow = JSON.parse(JSON.stringify(baseWorkflow));
         
         const samplerKey = Object.keys(currentWorkflow).find(k => currentWorkflow[k].class_type.toLowerCase().startsWith('ksampler'));
         if (samplerKey) {
-            currentWorkflow[samplerKey].inputs.seed = Math.floor(Math.random() * 1e15);
+            currentWorkflow[samplerKey].inputs.seed = currentSeed;
+            
+            // Prepare seed for the *next* image generation
+            const seedControl = options.comfyModelType === 'sd1.5' ? (options.comfySeedControl || 'randomize') : 'randomize';
+            const seedIncrement = options.comfySeedIncrement || 1;
+
+            switch (seedControl) {
+                case 'increment':
+                    currentSeed += seedIncrement;
+                    break;
+                case 'decrement':
+                    currentSeed -= seedIncrement;
+                    break;
+                case 'randomize':
+                    currentSeed = Math.floor(Math.random() * 1e15);
+                    break;
+                case 'fixed':
+                default:
+                    // Seed remains unchanged
+                    break;
+            }
         }
 
         const progressWrapper = (message: string, value: number) => {

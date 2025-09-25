@@ -303,6 +303,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyCfg: 7,
                     comfySampler: 'euler',
                     comfyScheduler: 'normal',
+                    comfySeed: undefined,
+                    comfySeedControl: 'randomize',
+                    comfySeedIncrement: 1,
                 }));
             } else if (newModelType === 'flux') {
                 const specificFluxModel = comfyModels.find((m: string) => m === 'flux1-dev-fp8.safetensors');
@@ -994,6 +997,49 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             <NumberSlider label="CFG" value={options.comfyCfg || 0} onChange={handleSliderChange('comfyCfg')} min={1} max={20} step={0.5} disabled={isDisabled}/>
                          </div>
                          {modelType === 'flux' && <NumberSlider label="FLUX Guidance" value={options.comfyFluxGuidance || 3.5} onChange={handleSliderChange('comfyFluxGuidance')} min={0} max={10} step={0.1} disabled={isDisabled}/>}
+                    </OptionSection>
+                )}
+                
+                {modelType === 'sd1.5' && (
+                    <OptionSection title="Seed Control">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary">Seed</label>
+                                <input
+                                    type="number"
+                                    value={options.comfySeed ?? ''}
+                                    onChange={(e) => setOptions(prev => ({ ...prev, comfySeed: e.target.value ? parseInt(e.target.value, 10) : undefined }))}
+                                    placeholder="Random"
+                                    className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                    disabled={isDisabled}
+                                />
+                            </div>
+                            <SelectInput
+                                label="After Generate"
+                                value={options.comfySeedControl || 'randomize'}
+                                onChange={handleOptionChange('comfySeedControl')}
+                                options={[
+                                    { value: 'randomize', label: 'Randomize' },
+                                    { value: 'fixed', label: 'Fixed' },
+                                    { value: 'increment', label: 'Increment' },
+                                    { value: 'decrement', label: 'Decrement' },
+                                ]}
+                                disabled={isDisabled}
+                            />
+                        </div>
+                        {(options.comfySeedControl === 'increment' || options.comfySeedControl === 'decrement') && (
+                             <div>
+                                <label className="block text-sm font-medium text-text-secondary">Step Value</label>
+                                <input
+                                    type="number"
+                                    value={options.comfySeedIncrement ?? 1}
+                                    onChange={(e) => setOptions(prev => ({ ...prev, comfySeedIncrement: parseInt(e.target.value, 10) || 1 }))}
+                                    min="1"
+                                    className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                    disabled={isDisabled}
+                                />
+                            </div>
+                        )}
                     </OptionSection>
                 )}
 

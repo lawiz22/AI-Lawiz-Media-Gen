@@ -60,6 +60,9 @@ export interface GenerationOptions {
     comfyCfg?: number;
     comfySampler?: string;
     comfyScheduler?: string;
+    comfySeed?: number;
+    comfySeedControl?: 'fixed' | 'increment' | 'decrement' | 'randomize';
+    comfySeedIncrement?: number;
     comfySdxlUseLora?: boolean;
     comfySdxlLoraName?: string;
     comfySdxlLoraStrength?: number;
