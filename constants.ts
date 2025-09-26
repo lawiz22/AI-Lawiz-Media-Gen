@@ -874,3 +874,26 @@ export const COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE = {
   "111": { "inputs": { "frame_rate": 24, "loop_count": 0, "filename_prefix": "GeneratedVideo_", "format": "video/nvenc_h264-mp4", "pix_fmt": "yuv420p", "bitrate": 10, "megabit": true, "save_metadata": true, "pingpong": false, "save_output": true, "images": [ "114", 0 ] }, "class_type": "VHS_VideoCombine", "_meta": { "title": "Video Final" } },
   "114": { "inputs": { "grain_intensity": 0.02, "saturation_mix": 0.3, "images": [ "8", 0 ] }, "class_type": "FastFilmGrain", "_meta": { "title": "FastFilmGrain" } }
 };
+
+// --- ComfyUI Face Detailer Workflow (SD 1.5) ---
+export const COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE = {
+  "4": { "inputs": { "ckpt_name": "epicphotogasm_ultimateFidelity.safetensors" }, "class_type": "CheckpointLoaderSimple", "_meta": { "title": "Load Checkpoint" } },
+  "5": { "inputs": { "text": "Positive prompt here", "clip": [ "4", 1 ] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Positive" } },
+  "6": { "inputs": { "text": "Negative prompt here", "clip": [ "4", 1 ] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Negative" } },
+  "16": { "inputs": { "model_name": "sam_vit_b_01ec64.pth", "device_mode": "AUTO" }, "class_type": "SAMLoader", "_meta": { "title": "SAMLoader" } },
+  "17": { "inputs": { "mask": [ "51", 3 ] }, "class_type": "MaskToImage", "_meta": { "title": "MaskToImage" } },
+  "51": { "inputs": {
+      "guide_size": 360, "guide_size_for": "BBOX", "max_size": 512, "seed": 0, "steps": 20, "cfg": 8, "sampler_name": "euler", "scheduler": "normal",
+      "denoise": 0.5, "feather": 5, "noise_mask": true, "force_inpaint": false, "wildcard": "", "cycle": 1,
+      "bbox_threshold": 0.93, "bbox_dilation": 0, "bbox_crop_factor": 3.0, "sam_detection_hint": "center-1", "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0, "sam_mask_hint_threshold": 0.7, "sam_mask_hint_use_negative": "False", "sam_mask_hint_oversize": 10, "sam_dilation": 0, "drop_size": 10,
+      "image": [ "72", 0 ], "model": [ "4", 0 ], "clip": [ "4", 1 ], "vae": [ "4", 2 ], "positive": [ "5", 0 ], "negative": [ "6", 0 ],
+      "bbox_detector": [ "53", 0 ], "sam_model_opt": [ "16", 0 ]
+    }, "class_type": "FaceDetailer", "_meta": { "title": "FaceDetailer" } },
+  "53": { "inputs": { "model_name": "bbox/face_yolov8m.pt" }, "class_type": "UltralyticsDetectorProvider", "_meta": { "title": "UltralyticsDetectorProvider" } },
+  "63": { "inputs": { "filename_prefix": "Mask", "images": [ "17", 0 ] }, "class_type": "SaveImage", "_meta": { "title": "Save Mask" } },
+  "64": { "inputs": { "filename_prefix": "CroppedEnhanced", "images": [ "51", 2 ] }, "class_type": "SaveImage", "_meta": { "title": "Save Cropped Enhanced" } },
+  "65": { "inputs": { "filename_prefix": "CroppedRefined", "images": [ "51", 1 ] }, "class_type": "SaveImage", "_meta": { "title": "Save Cropped Refined" } },
+  "66": { "inputs": { "filename_prefix": "FinalImage", "images": [ "51", 0 ] }, "class_type": "SaveImage", "_meta": { "title": "Save Final Image" } },
+  "72": { "inputs": { "image": "source_image.png", "upload": "image" }, "class_type": "LoadImage", "_meta": { "title": "Load Image" } }
+};

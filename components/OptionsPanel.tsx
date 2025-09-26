@@ -252,6 +252,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         const list = getModelListFromInfo(comfyUIObjectInfo?.NunchakuFluxDiTLoader?.input?.required?.attention);
         return list.length > 0 ? list : ['nunchaku-fp16', 'flash-attention2'];
     }, [comfyUIObjectInfo]);
+    
+    // Face Detailer specific model lists
+    const comfyBboxModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.UltralyticsDetectorProvider?.input?.required?.model_name), [comfyUIObjectInfo]);
+    const comfySamModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.SAMLoader?.input?.required?.model_name), [comfyUIObjectInfo]);
 
     // This effect synchronizes the model types whenever the provider or generation mode changes.
     // It ensures the correct model and its default settings are loaded.
@@ -261,7 +265,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             let optionsChanged = false;
 
             if (newOptions.provider === 'comfyui') {
-                const isI2IModel = newOptions.comfyModelType === 'nunchaku-kontext-flux';
+                const isI2IModel = ['nunchaku-kontext-flux', 'face-detailer-sd1.5'].includes(newOptions.comfyModelType!);
                 if (generationMode === 'i2i' && !isI2IModel) {
                     // Switching TO I2I mode for Comfy
                     optionsChanged = true;
@@ -359,7 +363,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         }
         
         if (field === 'comfyModelType') {
-            const newModelType = value as 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
+            const newModelType = value as 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5';
             if (newModelType === 'sd1.5') {
                  const sd15Model = comfyModels.find((m: string) => m.toLowerCase().includes('1.5') || m.toLowerCase().includes('15') || m.toLowerCase().includes('realisticvision')) || (comfyModels.length > 0 ? comfyModels[0] : '');
                  setOptions(prev => ({
@@ -498,6 +502,26 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyFluxKreaUpscaleModel: comfyUpscaleModels.find(m => m.includes('Siax')) || comfyUpscaleModels[0] || '4x_NMKD-Siax_200k.pth',
                     comfyFluxKreaDenoise: 0.8,
                     comfyFluxKreaUpscalerSteps: 10,
+                }));
+            } else if (newModelType === 'face-detailer-sd1.5') {
+                const sd15Model = comfyModels.find((m: string) => m.toLowerCase().includes('1.5') || m.toLowerCase().includes('15') || m.toLowerCase().includes('epicphotogasm')) || (comfyModels.length > 0 ? comfyModels[0] : '');
+                setOptions(prev => ({
+                    ...prev,
+                    comfyModelType: 'face-detailer-sd1.5',
+                    comfyModel: sd15Model,
+                    comfyPrompt: 'Female, young adult, dark long wavy hair, smiling, sunglasses, light-medium skin tone, green crop top, white trim, 85 on shirt, black wide-leg pants, barefoot, small earrings, bracelet, bare midriff, forearm tattoo.',
+                    comfyNegativePrompt: 'embedding:easynegative, embedding:badhandv4, paintings, sketches, (worst quality:1.4, low quality, normal quality), lowres, normal quality, (monochrome), (grayscale), skin spots, acnes, skin blemishes, age spot, glans,  watermark, signature, text, bad anatomy, (six_fingers), (nail_art), nail polish, blush, fruit,',
+                    comfyDetailerBboxModel: comfyBboxModels.find(m => m.includes('face_yolov8m')) || comfyBboxModels[0],
+                    comfyDetailerSamModel: comfySamModels.find(m => m.includes('sam_vit_b')) || comfySamModels[0],
+                    comfyDetailerSteps: 20,
+                    comfyDetailerCfg: 8,
+                    comfyDetailerSampler: 'euler',
+                    comfyDetailerScheduler: 'normal',
+                    comfyDetailerDenoise: 0.5,
+                    comfyDetailerFeather: 5,
+                    comfyDetailerBboxThreshold: 0.70,
+                    comfyDetailerBboxDilation: 0,
+                    comfyDetailerBboxCropFactor: 3.0,
                 }));
             } else { // Switching back to 'sdxl'
                 const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
@@ -847,6 +871,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         const i2iModelOptions = [
             {value: 'nunchaku-kontext-flux', label: 'Nunchaku Kontext FLUX (i2i)'},
+            {value: 'face-detailer-sd1.5', label: 'Face Detailer SD 1.5 (i2i)'},
         ];
 
         const renderSamplerOptions = () => (
@@ -873,10 +898,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         value={modelType} 
                         onChange={handleOptionChange('comfyModelType')} 
                         options={generationMode === 'i2i' ? i2iModelOptions : t2iModelOptions} 
-                        disabled={isDisabled || generationMode === 'i2i'}
+                        disabled={isDisabled}
                     />
 
-                    {modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux' ? (
+                    {modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux' || modelType === 'face-detailer-sd1.5' ? (
                         <SelectInput label="Checkpoint Model" value={options.comfyModel || ''} onChange={handleOptionChange('comfyModel')} options={comfyModels.map(m => ({value: m, label: m}))} disabled={isDisabled}/>
                     ) : null}
 
@@ -895,6 +920,26 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         <TextInput label="Negative Prompt" value={options.comfyNegativePrompt || ''} onChange={handleOptionChange('comfyNegativePrompt')} disabled={isDisabled} isTextArea/>
                     )}
                 </OptionSection>
+
+                {modelType === 'face-detailer-sd1.5' && (
+                    <>
+                        <OptionSection title="Face Detailer Models">
+                            <SelectInput label="BBOX Model" value={options.comfyDetailerBboxModel || ''} onChange={handleOptionChange('comfyDetailerBboxModel')} options={comfyBboxModels.map(m => ({value: m, label: m}))} disabled={isDisabled}/>
+                            <SelectInput label="SAM Model" value={options.comfyDetailerSamModel || ''} onChange={handleOptionChange('comfyDetailerSamModel')} options={comfySamModels.map(m => ({value: m, label: m}))} disabled={isDisabled}/>
+                        </OptionSection>
+                        <OptionSection title="Face Detailer Settings">
+                            <NumberSlider label="Steps" value={options.comfyDetailerSteps || 20} onChange={handleSliderChange('comfyDetailerSteps')} min={1} max={50} step={1} disabled={isDisabled}/>
+                            <NumberSlider label="CFG" value={options.comfyDetailerCfg || 8} onChange={handleSliderChange('comfyDetailerCfg')} min={1} max={20} step={0.5} disabled={isDisabled}/>
+                            <NumberSlider label="Denoise" value={options.comfyDetailerDenoise || 0.5} onChange={handleSliderChange('comfyDetailerDenoise')} min={0} max={1} step={0.05} disabled={isDisabled}/>
+                            <SelectInput label="Sampler" value={options.comfyDetailerSampler || ''} onChange={handleOptionChange('comfyDetailerSampler')} options={comfySamplers.map(s => ({value: s, label: s}))} disabled={isDisabled}/>
+                            <SelectInput label="Scheduler" value={options.comfyDetailerScheduler || ''} onChange={handleOptionChange('comfyDetailerScheduler')} options={comfySchedulers.map(s => ({value: s, label: s}))} disabled={isDisabled}/>
+                            <NumberSlider label="Mask Feathering" value={options.comfyDetailerFeather || 5} onChange={handleSliderChange('comfyDetailerFeather')} min={0} max={50} step={1} disabled={isDisabled}/>
+                            <NumberSlider label="BBOX Threshold" value={options.comfyDetailerBboxThreshold || 0.70} onChange={handleSliderChange('comfyDetailerBboxThreshold')} min={0} max={1} step={0.01} disabled={isDisabled}/>
+                            <NumberSlider label="BBOX Dilation" value={options.comfyDetailerBboxDilation || 0} onChange={handleSliderChange('comfyDetailerBboxDilation')} min={0} max={50} step={1} disabled={isDisabled}/>
+                            <NumberSlider label="BBOX Crop Factor" value={options.comfyDetailerBboxCropFactor || 3.0} onChange={handleSliderChange('comfyDetailerBboxCropFactor')} min={1.0} max={10.0} step={0.1} disabled={isDisabled}/>
+                        </OptionSection>
+                    </>
+                )}
 
                 {modelType === 'wan2.2' && (
                     <>
@@ -1181,7 +1226,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             step={1}
             disabled={isDisabled}
         />
-        {(options.provider === 'gemini' || (options.provider === 'comfyui' && ['sd1.5', 'sdxl', 'flux', 'wan2.2', 'nunchaku-kontext-flux', 'nunchaku-flux-image', 'flux-krea'].includes(options.comfyModelType || ''))) && (
+        {(options.provider === 'gemini' || (options.provider === 'comfyui' && ['sd1.5', 'sdxl', 'flux', 'wan2.2', 'nunchaku-kontext-flux', 'nunchaku-flux-image', 'flux-krea', 'face-detailer-sd1.5'].includes(options.comfyModelType || ''))) && (
             <SelectInput
                 label="Aspect Ratio"
                 value={options.aspectRatio}

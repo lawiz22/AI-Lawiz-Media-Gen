@@ -9,6 +9,7 @@ import {
   COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE,
   COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE,
   COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE,
+  COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE,
 } from "../constants";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
@@ -69,11 +70,12 @@ export const cancelComfyUIExecution = async (): Promise<void> => {
 };
 
 // --- Gemini-based Prompt Generation ---
-type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
+type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5';
 
 const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
     switch(modelType) {
         case 'sd1.5':
+        case 'face-detailer-sd1.5':
             return 'Your response MUST be a very simple, comma-separated list of keywords. Do not use sentences.';
         case 'flux':
         case 'nunchaku-flux-image':
@@ -411,6 +413,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         case 'nunchaku-kontext-flux': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE)); break;
         case 'nunchaku-flux-image': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE)); break;
         case 'flux-krea': workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE)); break;
+        case 'face-detailer-sd1.5': workflow = JSON.parse(JSON.stringify(COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE)); break;
         case 'flux': {
             workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE));
             const ksamplerKey = findNodeKey(workflow, "KSampler", 'class_type');
@@ -607,6 +610,28 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         if (!options.comfyFluxKreaUseUpscaler) {
              workflow["51"].mode = workflow["100"].mode = workflow["102"].mode = workflow["110"].mode = workflow["111"].mode = workflow["170"].mode = 4;
         }
+    } else if (options.comfyModelType === 'face-detailer-sd1.5') {
+        workflow = JSON.parse(JSON.stringify(COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE));
+        if (sourceFile) {
+            workflow["72"].inputs.image = (await uploadImage(sourceFile)).name;
+        }
+        // Fix: Correctly modify the 'inputs' object for each node, not a non-existent 'widgets_values' array.
+        workflow["4"].inputs.ckpt_name = options.comfyModel;
+        workflow["53"].inputs.model_name = options.comfyDetailerBboxModel;
+        workflow["16"].inputs.model_name = options.comfyDetailerSamModel;
+        workflow["5"].inputs.text = options.comfyPrompt;
+        workflow["6"].inputs.text = options.comfyNegativePrompt;
+        
+        const detailerNodeInputs = workflow["51"].inputs;
+        detailerNodeInputs.steps = options.comfyDetailerSteps;
+        detailerNodeInputs.cfg = options.comfyDetailerCfg;
+        detailerNodeInputs.sampler_name = options.comfyDetailerSampler;
+        detailerNodeInputs.scheduler = options.comfyDetailerScheduler;
+        detailerNodeInputs.denoise = options.comfyDetailerDenoise;
+        detailerNodeInputs.feather = options.comfyDetailerFeather;
+        detailerNodeInputs.bbox_threshold = options.comfyDetailerBboxThreshold;
+        detailerNodeInputs.bbox_dilation = options.comfyDetailerBboxDilation;
+        detailerNodeInputs.bbox_crop_factor = options.comfyDetailerBboxCropFactor;
     }
 
     return workflow;
@@ -620,18 +645,18 @@ export const generateComfyUIPortraits = async (
     const allImages: string[] = [];
     const baseWorkflow = await buildWorkflow(options, sourceImage);
 
-    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux'].includes(options.comfyModelType!);
+    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5'].includes(options.comfyModelType!);
+    const numImages = options.comfyModelType === 'face-detailer-sd1.5' ? 1 : options.numImages;
 
     let currentSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
 
-    for (let i = 0; i < options.numImages; i++) {
+    for (let i = 0; i < numImages; i++) {
         const currentWorkflow = JSON.parse(JSON.stringify(baseWorkflow));
         
         const samplerKey = Object.keys(currentWorkflow).find(k => currentWorkflow[k].class_type.toLowerCase().startsWith('ksampler'));
         if (samplerKey) {
             currentWorkflow[samplerKey].inputs.seed = currentSeed;
             
-            // Prepare seed for the *next* image generation
             const seedControl = options.comfyModelType === 'sd1.5' ? (options.comfySeedControl || 'randomize') : 'randomize';
             const seedIncrement = options.comfySeedIncrement || 1;
 
@@ -653,8 +678,8 @@ export const generateComfyUIPortraits = async (
         }
 
         const progressWrapper = (message: string, value: number) => {
-            const overallProgress = (i + value) / options.numImages;
-            updateProgress(`Image ${i + 1}/${options.numImages}: ${message}`, overallProgress);
+            const overallProgress = (i + value) / numImages;
+            updateProgress(`Image ${i + 1}/${numImages}: ${message}`, overallProgress);
         };
         
         try {

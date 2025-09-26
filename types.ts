@@ -16,7 +16,7 @@ export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | '
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image-preview';
-export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
+export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5';
 export type ComfyVideoModelType = 'wan-i2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui';
 export type VideoProvider = 'gemini' | 'comfyui';
@@ -127,6 +127,19 @@ export interface GenerationOptions {
     comfyFluxKreaDenoise?: number;
     comfyFluxKreaUpscalerSteps?: number;
     
+    // Face Detailer specific
+    comfyDetailerBboxModel?: string;
+    comfyDetailerSamModel?: string;
+    comfyDetailerSteps?: number;
+    comfyDetailerCfg?: number;
+    comfyDetailerSampler?: string;
+    comfyDetailerScheduler?: string;
+    comfyDetailerDenoise?: number;
+    comfyDetailerFeather?: number;
+    comfyDetailerBboxThreshold?: number;
+    comfyDetailerBboxDilation?: number;
+    comfyDetailerBboxCropFactor?: number;
+
     // Video Generation
     videoProvider?: VideoProvider;
     width?: number;
