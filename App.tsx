@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle } from './types';
@@ -535,17 +534,32 @@ const App: React.FC = () => {
         }
     };
 
-    const handleSetNewSource = async (imageDataUrl: string) => {
+    const handleSendToI2I = async (imageDataUrl: string) => {
         try {
             const response = await fetch(imageDataUrl);
             const blob = await response.blob();
-            const file = new File([blob], "new_source_image.jpeg", { type: "image/jpeg" });
+            const file = new File([blob], "i2i_source_image.jpeg", { type: "image/jpeg" });
+            setSourceImage(file);
+            setGenerationMode('i2i');
+            setActiveTab('image-generator');
+            setCharacterName('');
+        } catch (error) {
+            console.error("Error setting image for I2I:", error);
+            setGlobalError({ title: "File Error", message: "Could not use the selected image as a new source for I2I." });
+        }
+    };
+
+    const handleSendToCharacter = async (imageDataUrl: string) => {
+        try {
+            const response = await fetch(imageDataUrl);
+            const blob = await response.blob();
+            const file = new File([blob], "character_source_image.jpeg", { type: "image/jpeg" });
             setSourceImage(file);
             setCharacterName('');
             setActiveTab('character-generator');
         } catch (error) {
-            console.error("Error setting new source image:", error);
-            setGlobalError({ title: "File Error", message: "Could not use the selected image as a new source." });
+            console.error("Error setting new source image for character:", error);
+            setGlobalError({ title: "File Error", message: "Could not use the selected image as a new character source." });
         }
     };
     
@@ -808,7 +822,8 @@ const App: React.FC = () => {
                         <div className="lg:col-span-2">
                            <ImageGrid 
                                 images={generatedImages} 
-                                onSetNewSource={handleSetNewSource}
+                                onSendToI2I={handleSendToI2I}
+                                onSendToCharacter={handleSendToCharacter}
                                 lastUsedPrompt={lastUsedPrompt}
                                 options={options}
                                 sourceImage={sourceImage}
@@ -930,7 +945,8 @@ const App: React.FC = () => {
                         <div className="lg:col-span-2">
                            <ImageGrid 
                                 images={generatedImages} 
-                                onSetNewSource={handleSetNewSource}
+                                onSendToI2I={handleSendToI2I}
+                                onSendToCharacter={handleSendToCharacter}
                                 lastUsedPrompt={lastUsedPrompt}
                                 options={options}
                                 sourceImage={sourceImage}
@@ -1037,6 +1053,7 @@ const App: React.FC = () => {
                         onOpenLibraryForMannequinRef={() => setIsMannequinRefPickerOpen(true)}
                         onOpenLibraryForFont={() => setIsFontSourcePickerOpen(true)}
                         activeSubTab={activeExtractorSubTab}
+                        // Fix: The 'setActiveSubTab' prop was being passed an undefined variable. Changed to use the correct state setter 'setActiveExtractorSubTab'.
                         setActiveSubTab={setActiveExtractorSubTab}
                     />
                 </div>
@@ -1051,6 +1068,7 @@ const App: React.FC = () => {
                         onOpenLibrary={() => setIsColorImagePickerOpen(true)}
                         onOpenVideoLibrary={() => setIsVideoUtilsPickerOpen(true)}
                         activeSubTab={activeVideoUtilsSubTab}
+                        // Fix: The 'setActiveSubTab' prop was being passed an undefined variable. Changed to use the correct state setter 'setActiveVideoUtilsSubTab'.
                         setActiveSubTab={setActiveVideoUtilsSubTab}
                         onReset={handleVideoUtilsReset}
                     />

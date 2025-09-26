@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
-import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon, CheckIcon } from './icons';
+import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon, CheckIcon, CharacterIcon } from './icons';
 import { enhanceImageResolution } from '../services/geminiService';
 import { saveToLibrary } from '../services/libraryService';
 import type { GenerationOptions, LibraryItem } from '../types';
@@ -52,7 +52,8 @@ const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
 
 interface ImageGridProps {
   images: string[];
-  onSetNewSource: (imageData: string) => void;
+  onSendToI2I: (imageData: string) => void;
+  onSendToCharacter: (imageData: string) => void;
   lastUsedPrompt?: string | null;
   options: GenerationOptions;
   sourceImage: File | null;
@@ -60,7 +61,7 @@ interface ImageGridProps {
   activeTab: string;
 }
 
-export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, lastUsedPrompt, options, sourceImage, characterName, activeTab }) => {
+export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSendToCharacter, lastUsedPrompt, options, sourceImage, characterName, activeTab }) => {
   const [enhancedImages, setEnhancedImages] = useState<Record<number, string>>({});
   const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
   const [errorIndex, setErrorIndex] = useState<Record<number, string>>({});
@@ -186,9 +187,16 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
     }
   };
 
-  const handleSetAsSource = () => {
+  const handleSendToI2I = () => {
       if (zoomedImageIndex !== null && currentZoomedSrc) {
-        onSetNewSource(currentZoomedSrc);
+        onSendToI2I(currentZoomedSrc);
+        handleCloseZoom();
+      }
+    };
+
+    const handleSendToCharacter = () => {
+      if (zoomedImageIndex !== null && currentZoomedSrc) {
+        onSendToCharacter(currentZoomedSrc);
         handleCloseZoom();
       }
     };
@@ -456,31 +464,58 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
           )}
 
           <div
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-bg-secondary/80 backdrop-blur-sm p-3 rounded-full shadow-lg"
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-bg-secondary/80 backdrop-blur-sm p-2 rounded-full shadow-lg"
             onClick={e => e.stopPropagation()}
             role="toolbar"
             aria-label="Image actions"
           >
-            <button
-                onClick={handleSetAsSource}
-                title="Use as New Source"
-                aria-label="Use this image as the new source for generation"
-                className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
-            >
-                <AddAsSourceIcon className="w-6 h-6" />
-            </button>
+            {activeTab === 'image-generator' ? (
+                <>
+                    <button
+                        onClick={handleSendToI2I}
+                        title="Use in Image-to-Image"
+                        aria-label="Use this image for a new image-to-image generation"
+                        className="flex items-center gap-2 px-3 py-2 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors text-xs font-semibold"
+                    >
+                        <AddAsSourceIcon className="w-4 h-4" />
+                        <span>Use in I2I</span>
+                    </button>
+                    <button
+                        onClick={handleSendToCharacter}
+                        title="Use for new character"
+                        aria-label="Use this image as the source for a new character"
+                        className="flex items-center gap-2 px-3 py-2 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors text-xs font-semibold"
+                    >
+                        <CharacterIcon className="w-4 h-4" />
+                        <span>Use for Character</span>
+                    </button>
+                </>
+            ) : (
+                <button
+                    onClick={handleSendToCharacter}
+                    title="Set as New Character Source"
+                    aria-label="Use this image as the new source for character variations"
+                    className="flex items-center gap-2 px-3 py-2 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors text-xs font-semibold"
+                >
+                    <AddAsSourceIcon className="w-4 h-4" />
+                    <span>Set as New Character</span>
+                </button>
+            )}
+
+            <div className="w-px h-5 bg-border-primary/50"></div>
+
             <button
                 onClick={() => handleDownload(currentZoomedSrc, zoomedImageIndex)}
                 title="Download Image"
                 aria-label="Download this image"
-                className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                className="p-2 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
             >
-                <DownloadIcon className="w-6 h-6" />
+                <DownloadIcon className="w-5 h-5" />
             </button>
 
             {enhancingIndex === zoomedImageIndex ? (
-                <div className="p-3 rounded-full text-text-primary" aria-label="Enhancing image quality">
-                    <SpinnerIcon className="w-6 h-6 animate-spin" />
+                <div className="p-2 rounded-full text-text-primary" aria-label="Enhancing image quality">
+                    <SpinnerIcon className="w-5 h-5 animate-spin" />
                 </div>
             ) : !enhancedImages[zoomedImageIndex] && (
                 <button
@@ -488,9 +523,9 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
                     disabled={enhancingIndex !== null}
                     title="Enhance Quality"
                     aria-label="Enhance image quality"
-                    className="p-3 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-2 rounded-full text-text-primary hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50"
                 >
-                    <EnhanceIcon className="w-6 h-6" />
+                    <EnhanceIcon className="w-5 h-5" />
                 </button>
             )}
           </div>
