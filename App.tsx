@@ -163,6 +163,7 @@ const App: React.FC = () => {
         eraStyle: 'a modern digital photograph',
         geminiMode: 't2i',
         geminiI2iMode: 'general',
+        geminiGeneralEditPrompt: '',
         geminiInpaintTask: 'remove',
         geminiInpaintCustomPrompt: '',
         geminiInpaintTargetPrompt: '',
@@ -271,18 +272,24 @@ const App: React.FC = () => {
 
         if (options.provider === 'gemini') {
             if (options.geminiMode === 't2i') return !!options.geminiPrompt?.trim();
-            // I2I modes for Gemini on the main image generator tab
-            if (activeTab === 'image-generator' && options.geminiI2iMode === 'inpaint') {
-                return !!sourceImage; // Mask is optional, can do prompt-only inpainting
+            
+            // I2I modes
+            if (activeTab === 'image-generator') {
+                if (options.geminiI2iMode === 'general') {
+                    return !!sourceImage && !!options.geminiGeneralEditPrompt?.trim();
+                }
+                if (options.geminiI2iMode === 'inpaint') {
+                    return !!sourceImage; // Mask is optional
+                }
+                if (options.geminiI2iMode === 'compose') {
+                    return !!sourceImage && elementImages.length > 0 && !!options.geminiComposePrompt?.trim();
+                }
+            } else if (activeTab === 'character-generator') {
+                if (options.poseMode === 'library') {
+                     return !!sourceImage && !!options.poseLibraryItems && options.poseLibraryItems.length > 0;
+                }
+                return !!sourceImage;
             }
-            if (activeTab === 'image-generator' && options.geminiI2iMode === 'compose') {
-                return !!sourceImage && elementImages.length > 0 && !!options.geminiComposePrompt?.trim();
-            }
-            // Default Gemini I2I (Character Gen or General Edit on main tab)
-            if (options.poseMode === 'library') {
-                 return !!sourceImage && !!options.poseLibraryItems && options.poseLibraryItems.length > 0;
-            }
-            return !!sourceImage;
         } else if (options.provider === 'comfyui') {
             const isI2IMode = generationMode === 'i2i';
             const baseReady = !!isComfyUIConnected && !!options.comfyPrompt?.trim();
@@ -292,7 +299,7 @@ const App: React.FC = () => {
             return baseReady;
         }
         return false;
-    }, [sourceImage, maskImage, elementImages, options, isLoading, isComfyUIConnected, activeTab, generationMode]);
+    }, [sourceImage, elementImages, options, isLoading, isComfyUIConnected, activeTab, generationMode]);
     
     const isVideoReady = useMemo(() => {
         if (isLoading) return false;
@@ -408,6 +415,7 @@ const App: React.FC = () => {
             customClothingPrompt: '',
             poseLibraryItems: [],
             geminiI2iMode: 'general',
+            geminiGeneralEditPrompt: '',
             geminiInpaintTask: 'remove',
             geminiInpaintCustomPrompt: '',
             geminiInpaintTargetPrompt: '',

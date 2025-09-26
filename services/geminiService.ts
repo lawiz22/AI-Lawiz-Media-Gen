@@ -141,34 +141,12 @@ export const generatePortraits = async (
         return { images: allImages, finalPrompt };
     }
 
-    // --- Original 'general' mode logic (for Character Generator) ---
+    // --- 'general' mode logic (covers Character Generator and simple General Edit) ---
     const sourcePart = await fileToGenerativePart(sourceImage);
-    const parts: Part[] = [sourcePart];
-
-    let bgPart: Part | null = null;
-    if (options.background === 'image' && backgroundImage) {
-        bgPart = await fileToGenerativePart(backgroundImage);
-    } else if (options.background === 'prompt' && options.consistentBackground && previewedBackgroundImage) {
-        const response = await fetch(previewedBackgroundImage);
-        const blob = await response.blob();
-        const file = new File([blob], "bg.jpeg", { type: "image/jpeg" });
-        bgPart = await fileToGenerativePart(file);
-    }
-    if (bgPart) parts.push(bgPart);
-
-    let clothingPart: Part | null = null;
-    if (options.clothing === 'image' && clothingImage) {
-        clothingPart = await fileToGenerativePart(clothingImage);
-    } else if ((options.clothing === 'prompt' || options.clothing === 'random') && previewedClothingImage) {
-        const response = await fetch(previewedClothingImage);
-        const blob = await response.blob();
-        const file = new File([blob], "clothing.jpeg", { type: "image/jpeg" });
-        clothingPart = await fileToGenerativePart(file);
-    }
-    if (clothingPart) parts.push(clothingPart);
-
+    
+    // Determine poses early if needed for prompt building
     const poses: string[] = [];
-    if (options.poseMode !== 'library') {
+    if (options.poseMode !== 'library' && !options.geminiGeneralEditPrompt) {
         if (options.poseMode === 'random') {
             for (let i = 0; i < options.numImages; i++) {
                 poses.push(decodePose(getRandomPose()));
@@ -176,7 +154,6 @@ export const generatePortraits = async (
         } else if (options.poseMode === 'select' || options.poseMode === 'prompt') {
             const selectedPoses = options.poseSelection.map(p => POSES.includes(p) ? decodePose(p) : p);
             for (let i = 0; i < options.numImages; i++) {
-                // Cycle through selected poses if there are fewer poses than requested images
                 poses.push(selectedPoses[i % selectedPoses.length]);
             }
         }
@@ -186,24 +163,56 @@ export const generatePortraits = async (
     for (let i = 0; i < options.numImages; i++) {
         updateProgress(`Generating image ${i + 1}/${options.numImages}...`, i / totalSteps);
         
-        let pose: string | null = null;
-        const currentParts: Part[] = [...parts]; 
+        const currentParts: Part[] = [sourcePart]; 
 
-        if (options.poseMode === 'library' && options.poseLibraryItems && options.poseLibraryItems.length > 0) {
+        // Add optional reference images (only for character generator flow)
+        if (!options.geminiGeneralEditPrompt) {
+            let bgPart: Part | null = null;
+            if (options.background === 'image' && backgroundImage) {
+                bgPart = await fileToGenerativePart(backgroundImage);
+            } else if (options.background === 'prompt' && options.consistentBackground && previewedBackgroundImage) {
+                const response = await fetch(previewedBackgroundImage);
+                const blob = await response.blob();
+                const file = new File([blob], "bg.jpeg", { type: "image/jpeg" });
+                bgPart = await fileToGenerativePart(file);
+            }
+            if (bgPart) currentParts.push(bgPart);
+
+            let clothingPart: Part | null = null;
+            if (options.clothing === 'image' && clothingImage) {
+                clothingPart = await fileToGenerativePart(clothingImage);
+            } else if ((options.clothing === 'prompt' || options.clothing === 'random') && previewedClothingImage) {
+                const response = await fetch(previewedClothingImage);
+                const blob = await response.blob();
+                const file = new File([blob], "clothing.jpeg", { type: "image/jpeg" });
+                clothingPart = await fileToGenerativePart(file);
+            }
+            if (clothingPart) currentParts.push(clothingPart);
+        }
+
+        // Add pose reference (only for character generator flow)
+        if (options.poseMode === 'library' && options.poseLibraryItems && options.poseLibraryItems.length > 0 && !options.geminiGeneralEditPrompt) {
             const poseItem = options.poseLibraryItems[i % options.poseLibraryItems.length];
             if (options.geminiPoseSource === 'json' && poseItem.poseJson) {
                 currentParts.push({ text: `Use this exact OpenPose JSON data for the target pose:\n${poseItem.poseJson}` });
-            } else { // Default to mannequin image
+            } else {
                 currentParts.push(dataUrlToGenerativePart(poseItem.media));
             }
-        } else {
-            pose = poses[i];
         }
 
-        const promptSegments = buildPromptSegments(options, pose, !!previewedClothingImage);
-        const textPrompt = promptSegments.join('\n\n');
-        if (!finalPrompt) finalPrompt = textPrompt;
+        // Build or get the final text prompt
+        let textPrompt: string;
+        if (options.geminiGeneralEditPrompt) {
+            // Use the simple general edit prompt from the main image generator tab
+            textPrompt = options.geminiGeneralEditPrompt;
+        } else {
+            // Build the detailed prompt for the character generator tab
+            const pose = poses[i] || null;
+            const promptSegments = buildPromptSegments(options, pose, !!previewedClothingImage);
+            textPrompt = promptSegments.join('\n\n');
+        }
 
+        if (!finalPrompt) finalPrompt = textPrompt;
         currentParts.push({ text: textPrompt });
         
         const response = await ai.models.generateContent({

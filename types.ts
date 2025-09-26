@@ -53,6 +53,7 @@ export interface GenerationOptions {
 
     // Gemini I2I Editing
     geminiI2iMode?: 'general' | 'inpaint' | 'compose';
+    geminiGeneralEditPrompt?: string;
     geminiInpaintTask?: 'remove' | 'replace' | 'changeColor' | 'custom';
     geminiInpaintCustomPrompt?: string;
     geminiInpaintTargetPrompt?: string; // For color name or replacement object
