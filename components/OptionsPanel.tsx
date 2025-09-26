@@ -18,6 +18,8 @@ import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseI
 interface OptionsPanelProps {
   options: GenerationOptions;
   setOptions: React.Dispatch<React.SetStateAction<GenerationOptions>>;
+  generationMode: 't2i' | 'i2i';
+  setGenerationMode: React.Dispatch<React.SetStateAction<'t2i' | 'i2i'>>;
   previewedBackgroundImage: string | null;
   setPreviewedBackgroundImage: (url: string | null) => void;
   previewedClothingImage: string | null;
@@ -35,6 +37,7 @@ interface OptionsPanelProps {
   sourceImage: File | null;
   hideProviderSwitch?: boolean;
   hideGeminiModeSwitch?: boolean;
+  hideGenerationModeSwitch?: boolean;
   title?: string;
 }
 
@@ -137,12 +140,13 @@ const NumberSlider: React.FC<{
 // --- Main Component ---
 export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   options, setOptions,
+  generationMode, setGenerationMode,
   previewedBackgroundImage, setPreviewedBackgroundImage,
   previewedClothingImage, setPreviewedClothingImage,
   onGenerate, onReset, onGeneratePrompt, onExportWorkflow, onOpenPosePicker,
   isDisabled, isReady, isGeneratingPrompt,
   comfyUIObjectInfo, comfyUIUrl, sourceImage,
-  hideProviderSwitch = false, hideGeminiModeSwitch = false,
+  hideProviderSwitch = false, hideGeminiModeSwitch = false, hideGenerationModeSwitch = false,
   title = "Configure Options"
 }) => {
     const [isPreviewingBg, setIsPreviewingBg] = useState(false);
@@ -248,6 +252,69 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         const list = getModelListFromInfo(comfyUIObjectInfo?.NunchakuFluxDiTLoader?.input?.required?.attention);
         return list.length > 0 ? list : ['nunchaku-fp16', 'flash-attention2'];
     }, [comfyUIObjectInfo]);
+
+    // This effect synchronizes the model types whenever the provider or generation mode changes.
+    // It ensures the correct model and its default settings are loaded.
+    useEffect(() => {
+        setOptions(prev => {
+            let newOptions = { ...prev };
+            let optionsChanged = false;
+
+            if (newOptions.provider === 'comfyui') {
+                const isI2IModel = newOptions.comfyModelType === 'nunchaku-kontext-flux';
+                if (generationMode === 'i2i' && !isI2IModel) {
+                    // Switching TO I2I mode for Comfy
+                    optionsChanged = true;
+                    newOptions.comfyModelType = 'nunchaku-kontext-flux';
+                    // Reset to nunchaku defaults (copied from handleOptionChange)
+                    newOptions.comfySteps = 10;
+                    newOptions.comfyCfg = 1;
+                    newOptions.comfySampler = 'euler';
+                    newOptions.comfyScheduler = 'simple';
+                    newOptions.comfyNegativePrompt = '';
+                    newOptions.comfyFluxGuidanceKontext = 2.5;
+                    newOptions.comfyNunchakuModel = nunchakuModels.find(m => m.includes('kontext-dev')) || nunchakuModels[0] || 'svdq-int4_r32-flux.1-kontext-dev.safetensors';
+                    newOptions.comfyNunchakuVae = comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors';
+                    newOptions.comfyNunchakuClipL = comfyClips.find(c => c.includes('ViT-L')) || comfyClips[0] || 'ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors';
+                    newOptions.comfyNunchakuT5XXL = t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp8_e4m3fn_scaled.safetensors';
+                    newOptions.comfyNunchakuCacheThreshold = 0.12;
+                    newOptions.comfyNunchakuCpuOffload = 'enable';
+                    newOptions.comfyNunchakuAttention = (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention;
+                    newOptions.comfyNunchakuUseTurboLora = true;
+                    newOptions.comfyNunchakuTurboLoraName = comfyLoras.find(l => l.includes('turbo')) || comfyLoras[0] || 'flux-turbo.safetensors';
+                    newOptions.comfyNunchakuTurboLoraStrength = 1.0;
+                    newOptions.comfyNunchakuUseNudifyLora = true;
+                    newOptions.comfyNunchakuNudifyLoraName = comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors';
+                    newOptions.comfyNunchakuNudifyLoraStrength = 1.0;
+                    newOptions.comfyNunchakuUseDetailLora = false;
+                    newOptions.comfyNunchakuDetailLoraName = comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors';
+                    newOptions.comfyNunchakuDetailLoraStrength = 1.0;
+                } else if (generationMode === 't2i' && isI2IModel) {
+                    // Switching FROM I2I mode for Comfy
+                    optionsChanged = true;
+                    const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
+                    newOptions.comfyModelType = 'sdxl';
+                    newOptions.comfyModel = sdxlModel || (comfyModels.length > 0 ? comfyModels[0] : '');
+                    newOptions.comfySteps = 25;
+                    newOptions.comfyCfg = 5.5;
+                    newOptions.comfySampler = 'euler';
+                    newOptions.comfyScheduler = 'normal';
+                }
+            } else if (newOptions.provider === 'gemini') {
+                if (newOptions.geminiMode !== generationMode) {
+                    optionsChanged = true;
+                    newOptions.geminiMode = generationMode;
+                }
+            }
+            
+            return optionsChanged ? newOptions : prev;
+        });
+    }, [options.provider, generationMode, setOptions, comfyModels, comfyVaes, comfyClips, comfyLoras, nunchakuModels, nunchakuAttentions, t5SafetensorEncoderModels]);
+
+
+    const handleGenerationModeChange = (mode: 't2i' | 'i2i') => {
+        setGenerationMode(mode);
+    };
 
     const handleOptionChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
@@ -769,6 +836,19 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const renderComfyUIOptions = () => {
         const modelType = options.comfyModelType || 'sdxl';
 
+        const t2iModelOptions = [
+            {value: 'sdxl', label: 'SDXL'},
+            {value: 'sd1.5', label: 'SD 1.5'},
+            {value: 'flux', label: 'FLUX'},
+            {value: 'wan2.2', label: 'WAN 2.2'},
+            {value: 'nunchaku-flux-image', label: 'Nunchaku FLUX Image'},
+            {value: 'flux-krea', label: 'FLUX Krea'},
+        ];
+
+        const i2iModelOptions = [
+            {value: 'nunchaku-kontext-flux', label: 'Nunchaku Kontext FLUX (i2i)'},
+        ];
+
         const renderSamplerOptions = () => (
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <SelectInput label="Sampler" value={options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={comfySamplers.map(s => ({value: s, label: s}))} disabled={isDisabled}/>
@@ -792,16 +872,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         label="Workflow Type" 
                         value={modelType} 
                         onChange={handleOptionChange('comfyModelType')} 
-                        options={[
-                            {value: 'sdxl', label: 'SDXL'},
-                            {value: 'sd1.5', label: 'SD 1.5'},
-                            {value: 'flux', label: 'FLUX'},
-                            {value: 'wan2.2', label: 'WAN 2.2'},
-                            {value: 'nunchaku-kontext-flux', label: 'Nunchaku Kontext FLUX (i2i)'},
-                            {value: 'nunchaku-flux-image', label: 'Nunchaku FLUX Image'},
-                            {value: 'flux-krea', label: 'FLUX Krea'},
-                        ]} 
-                        disabled={isDisabled}
+                        options={generationMode === 'i2i' ? i2iModelOptions : t2iModelOptions} 
+                        disabled={isDisabled || generationMode === 'i2i'}
                     />
 
                     {modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux' ? (
@@ -1061,6 +1133,24 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-8">
       <div>
         <h2 className="text-xl font-bold mb-4 text-accent">{title}</h2>
+        {!hideGenerationModeSwitch && (
+             <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1 mb-4">
+                <button 
+                    onClick={() => handleGenerationModeChange('t2i')} 
+                    disabled={isDisabled}
+                    className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${generationMode === 't2i' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
+                >
+                    Text-to-Image
+                </button>
+                <button 
+                    onClick={() => handleGenerationModeChange('i2i')} 
+                    disabled={isDisabled}
+                    className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${generationMode === 'i2i' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
+                >
+                    Image-to-Image
+                </button>
+            </div>
+        )}
         {!hideProviderSwitch && (
             <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
                 <button 

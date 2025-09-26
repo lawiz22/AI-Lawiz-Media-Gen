@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle } from './types';
@@ -140,6 +142,7 @@ const App: React.FC = () => {
 
     // --- Image Generation State ---
     const [sourceImage, setSourceImage] = useState<File | null>(null);
+    const [generationMode, setGenerationMode] = useState<'t2i' | 'i2i'>('t2i');
     const [characterName, setCharacterName] = useState<string>('');
     const [shouldGenerateCharacterName, setShouldGenerateCharacterName] = useState<boolean>(false);
     const [clothingImage, setClothingImage] = useState<File | null>(null);
@@ -147,7 +150,7 @@ const App: React.FC = () => {
     const [previewedBackgroundImage, setPreviewedBackgroundImage] = useState<string | null>(null);
     const [previewedClothingImage, setPreviewedClothingImage] = useState<string | null>(null);
     const [options, setOptions] = useState<GenerationOptions>({
-        provider: 'gemini',
+        provider: 'comfyui',
         numImages: 4,
         poseMode: 'random',
         poseSelection: [],
@@ -159,7 +162,7 @@ const App: React.FC = () => {
         imageStyle: 'photorealistic',
         photoStyle: 'professional photoshoot',
         eraStyle: 'a modern digital photograph',
-        geminiMode: 't2i', // Default to T2I for the first tab
+        geminiMode: 't2i',
         // ComfyUI specific
         comfyModelType: 'sdxl',
         comfyPrompt: '',
@@ -259,6 +262,9 @@ const App: React.FC = () => {
     // --- Computed State ---
     const isReadyToGenerate = useMemo(() => {
         if (isLoading) return false;
+        
+        const isI2IMode = activeTab === 'image-generator' ? generationMode === 'i2i' : true;
+        
         if (options.provider === 'gemini') {
             if (options.geminiMode === 't2i') return !!options.geminiPrompt?.trim();
             if (options.poseMode === 'library') {
@@ -267,13 +273,13 @@ const App: React.FC = () => {
             return !!sourceImage;
         } else if (options.provider === 'comfyui') {
             const baseReady = !!isComfyUIConnected && !!options.comfyPrompt?.trim();
-            if (options.comfyModelType === 'nunchaku-kontext-flux') {
+            if (isI2IMode) {
                 return baseReady && !!sourceImage;
             }
             return baseReady;
         }
         return false;
-    }, [sourceImage, options, isLoading, isComfyUIConnected]);
+    }, [sourceImage, options, isLoading, isComfyUIConnected, activeTab, generationMode]);
     
     const isVideoReady = useMemo(() => {
         if (isLoading) return false;
@@ -574,7 +580,8 @@ const App: React.FC = () => {
                 setGeneratedImages([item.media]);
                 setCharacterName('');
                 const isI2I = !!sourceToSet || item.options?.geminiMode === 'i2i';
-                setActiveTab(isI2I ? 'character-generator' : 'image-generator');
+                setGenerationMode(isI2I ? 'i2i' : 't2i');
+                setActiveTab('image-generator');
                 break;
             case 'video':
                 setVideoStartFrame(sourceToSet);
@@ -679,7 +686,8 @@ const App: React.FC = () => {
             // This tab is Gemini I2I only
             setOptions(prev => ({ ...prev, provider: 'gemini', geminiMode: 'i2i' }));
         } else if (tabId === 'image-generator') {
-            // This tab is T2I only for Gemini
+            // Reset to T2I when coming back to this tab
+            setGenerationMode('t2i');
             if (options.provider === 'gemini') {
                 setOptions(prev => ({ ...prev, geminiMode: 't2i' }));
             }
@@ -750,14 +758,14 @@ const App: React.FC = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                         {/* --- Controls Column (Left) --- */}
                         <div className="lg:col-span-1 space-y-8 sticky top-24">
-                            {options.provider === 'comfyui' && options.comfyModelType === 'nunchaku-kontext-flux' && (
+                            {generationMode === 'i2i' && (
                                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                     <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Source Image</h2>
                                      <div className="flex items-center gap-2">
                                         <div className="flex-grow">
                                             <ImageUploader 
                                                 label="Source Image" 
-                                                id="nunchaku-source-image" 
+                                                id="i2i-source-image" 
                                                 onImageUpload={setSourceImage} 
                                                 sourceFile={sourceImage}
                                             />
@@ -773,13 +781,11 @@ const App: React.FC = () => {
                                 </div>
                             )}
                             <OptionsPanel 
-                                title={
-                                    options.provider === 'comfyui' && options.comfyModelType === 'nunchaku-kontext-flux'
-                                    ? "2. Configure Options"
-                                    : "1. Configure Options"
-                                }
+                                title={generationMode === 'i2i' ? "2. Configure Options" : "1. Configure Options"}
                                 options={options} 
                                 setOptions={setOptions}
+                                generationMode={generationMode}
+                                setGenerationMode={setGenerationMode}
                                 onGenerate={handleGenerate}
                                 onReset={handleReset}
                                 onGeneratePrompt={() => {}}
@@ -897,6 +903,8 @@ const App: React.FC = () => {
                                 title="2. Configure Options"
                                 options={options} 
                                 setOptions={setOptions}
+                                generationMode={generationMode}
+                                setGenerationMode={setGenerationMode}
                                 onGenerate={handleGenerate}
                                 onReset={handleReset}
                                 onGeneratePrompt={() => {}}
@@ -914,6 +922,7 @@ const App: React.FC = () => {
                                 sourceImage={sourceImage}
                                 hideProviderSwitch={true}
                                 hideGeminiModeSwitch={true}
+                                hideGenerationModeSwitch={true}
                             />
                         </div>
 
@@ -1035,6 +1044,7 @@ const App: React.FC = () => {
                  <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
                     <VideoUtilsPanel
                         setStartFrame={setVideoStartFrame}
+                        // Fix: The 'setEndFrame' prop was being passed an undefined variable. Changed to use the correct state setter 'setVideoEndFrame'.
                         setEndFrame={setVideoEndFrame}
                         videoUtilsState={videoUtilsState}
                         setVideoUtilsState={setVideoUtilsState}
