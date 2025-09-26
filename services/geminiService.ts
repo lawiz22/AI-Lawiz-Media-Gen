@@ -19,7 +19,9 @@ export const generatePortraits = async (
     clothingImage: File | null,
     backgroundImage: File | null,
     previewedBackgroundImage: string | null,
-    previewedClothingImage: string | null
+    previewedClothingImage: string | null,
+    maskImage: File | null,
+    elementImages: File[]
 ): Promise<{ images: string[]; finalPrompt: string | null }> => {
     if (options.geminiMode === 't2i') {
         if (!options.geminiPrompt) {
@@ -76,6 +78,71 @@ export const generatePortraits = async (
     let finalPrompt: string | null = null;
     const totalSteps = options.numImages;
 
+    // Handle new I2I modes
+    if (options.geminiI2iMode === 'inpaint') {
+        if (!maskImage) throw new Error("A mask image is required for inpainting mode.");
+        
+        let prompt = '';
+        switch (options.geminiInpaintTask) {
+            case 'remove':
+                prompt = 'Analyze the source image and the mask. The mask indicates an area to be removed. Remove the object or feature within the white area of the mask. Fill the removed area with a plausible, seamless, and high-quality continuation of the surrounding background and textures. The final image should look natural, as if the object was never there.';
+                break;
+            case 'replace':
+                prompt = `Analyze the source image and the mask. Replace the object within the white area of the mask with the following: "${options.geminiInpaintTargetPrompt}". The replacement should be seamless, with realistic lighting, shadows, and perspective that match the original image.`;
+                break;
+            case 'changeColor':
+                prompt = `Analyze the source image and the mask. Change the color of the object within the white area of the mask to "${options.geminiInpaintTargetPrompt}". The texture, lighting, and shadows of the object should be preserved. Only the color should change.`;
+                break;
+            case 'custom':
+            default:
+                prompt = options.geminiInpaintCustomPrompt || 'Perform the edit as described in the prompt on the masked area of the image.';
+        }
+        finalPrompt = prompt;
+
+        const sourcePart = await fileToGenerativePart(sourceImage);
+        const maskPart = await fileToGenerativePart(maskImage);
+        
+        for (let i = 0; i < totalSteps; i++) {
+            updateProgress(`Generating inpaint variation ${i + 1}/${totalSteps}...`, i / totalSteps);
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image-preview',
+                contents: { parts: [sourcePart, {text: "This is the mask, where white is the area to edit and black is the area to keep."}, maskPart, { text: prompt }] },
+                config: { responseModalities: [Modality.IMAGE] },
+            });
+            const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+            if (imagePart?.inlineData) {
+                allImages.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+            }
+        }
+        return { images: allImages, finalPrompt };
+
+    } else if (options.geminiI2iMode === 'compose') {
+        if (elementImages.length === 0) throw new Error("At least one element image is required for composition mode.");
+
+        finalPrompt = options.geminiComposePrompt || 'Combine the provided images as described. The first image is the background scene, and the subsequent images are elements to place within it.';
+        const sourcePart = await fileToGenerativePart(sourceImage);
+        const parts: Part[] = [sourcePart];
+        for (const element of elementImages) {
+            parts.push(await fileToGenerativePart(element));
+        }
+        parts.push({ text: finalPrompt });
+
+        for (let i = 0; i < totalSteps; i++) {
+            updateProgress(`Generating composition ${i + 1}/${totalSteps}...`, i / totalSteps);
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image-preview',
+                contents: { parts },
+                config: { responseModalities: [Modality.IMAGE] },
+            });
+             const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+            if (imagePart?.inlineData) {
+                allImages.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+            }
+        }
+        return { images: allImages, finalPrompt };
+    }
+
+    // --- Original 'general' mode logic (for Character Generator) ---
     const sourcePart = await fileToGenerativePart(sourceImage);
     const parts: Part[] = [sourcePart];
 

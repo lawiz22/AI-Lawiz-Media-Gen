@@ -50,6 +50,13 @@ export interface GenerationOptions {
     addTextToImage?: boolean;
     textOnImagePrompt?: string;
     textObjectPrompt?: string;
+
+    // Gemini I2I Editing
+    geminiI2iMode?: 'general' | 'inpaint' | 'compose';
+    geminiInpaintTask?: 'remove' | 'replace' | 'changeColor' | 'custom';
+    geminiInpaintCustomPrompt?: string;
+    geminiInpaintTargetPrompt?: string; // For color name or replacement object
+    geminiComposePrompt?: string;
     
     // ComfyUI-specific
     comfyPrompt?: string;

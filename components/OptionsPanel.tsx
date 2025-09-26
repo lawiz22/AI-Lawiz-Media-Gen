@@ -13,6 +13,7 @@ import {
 import { generateBackgroundImagePreview, generateClothingPreview } from '../services/geminiService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
 import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon, LibraryIcon } from './icons';
+import { ImageUploader } from './ImageUploader';
 
 // --- Prop Types ---
 interface OptionsPanelProps {
@@ -39,6 +40,11 @@ interface OptionsPanelProps {
   hideGeminiModeSwitch?: boolean;
   hideGenerationModeSwitch?: boolean;
   title?: string;
+  activeTab: string;
+  maskImage: File | null;
+  setMaskImage: (file: File | null) => void;
+  elementImages: File[];
+  setElementImages: (files: File[]) => void;
 }
 
 // Helper function to safely extract model lists from ComfyUI's object_info
@@ -136,6 +142,50 @@ const NumberSlider: React.FC<{
     </div>
 );
 
+const ElementImageManager: React.FC<{
+  elementImages: File[];
+  setElementImages: (files: File[]) => void;
+  disabled: boolean;
+}> = ({ elementImages, setElementImages, disabled }) => {
+  const handleAddImage = (file: File | null) => {
+    if (file) {
+      setElementImages([...elementImages, file]);
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setElementImages(elementImages.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-4">
+      {elementImages.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {elementImages.map((file, index) => (
+            <div key={index} className="relative group">
+                <img src={URL.createObjectURL(file)} alt={`Element ${index + 1}`} className="w-full aspect-square object-cover rounded-lg" />
+                <button
+                onClick={() => handleRemoveImage(index)}
+                className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                disabled={disabled}
+                >
+                <CloseIcon className="w-4 h-4" />
+                </button>
+            </div>
+            ))}
+        </div>
+      )}
+      <ImageUploader
+        id="element-image-uploader"
+        onImageUpload={handleAddImage}
+        disabled={disabled || elementImages.length >= 5}
+        label="Add Element Image"
+        infoText={elementImages.length >= 5 ? "Max 5 elements" : "PNG, JPG, WEBP"}
+      />
+    </div>
+  );
+};
+
 
 // --- Main Component ---
 export const OptionsPanel: React.FC<OptionsPanelProps> = ({
@@ -147,7 +197,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   isDisabled, isReady, isGeneratingPrompt,
   comfyUIObjectInfo, comfyUIUrl, sourceImage,
   hideProviderSwitch = false, hideGeminiModeSwitch = false, hideGenerationModeSwitch = false,
-  title = "Configure Options"
+  title = "Configure Options",
+  activeTab,
+  maskImage, setMaskImage,
+  elementImages, setElementImages
 }) => {
     const [isPreviewingBg, setIsPreviewingBg] = useState(false);
     const [bgPreviewError, setBgPreviewError] = useState<string | null>(null);
@@ -625,28 +678,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
     const renderGeminiOptions = () => (
       <>
-        {!hideGeminiModeSwitch &&
-            <OptionSection title="Generation Mode">
-                <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
-                    <button 
-                        onClick={() => setOptions(prev => ({...prev, geminiMode: 'i2i'}))} 
-                        disabled={isDisabled}
-                        className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.geminiMode === 'i2i' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
-                    >
-                        Image-to-Image
-                    </button>
-                    <button 
-                        onClick={() => setOptions(prev => ({...prev, geminiMode: 't2i'}))} 
-                        disabled={isDisabled}
-                        className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.geminiMode === 't2i' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
-                    >
-                        Text-to-Image
-                    </button>
-                </div>
-            </OptionSection>
-        }
-
-        {options.geminiMode === 't2i' ? (
+        {generationMode === 't2i' ? (
             <OptionSection title="Prompt Options">
                 <SelectInput
                     label="Generation Model"
@@ -669,191 +701,238 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             </OptionSection>
         ) : (
              <>
-                <OptionSection title="Pose & Composition">
-                    <SelectInput
-                        label="Pose Mode"
-                        value={options.poseMode}
-                        onChange={handleOptionChange('poseMode')}
-                        options={[
-                            { value: 'random', label: 'Random Preset Poses' },
-                            { value: 'select', label: 'Select Preset Poses' },
-                            { value: 'prompt', label: 'Custom Pose Prompts' },
-                            { value: 'library', label: 'From Library' },
-                        ]}
-                        disabled={isDisabled}
-                    />
-                    {options.poseMode === 'select' && (
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">
-                            <p className="text-xs text-text-muted">Select up to {options.numImages} poses.</p>
-                            {PRESET_POSES.map(pose => (
-                                <label key={pose.value} className="flex items-center gap-2 p-2 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedPoses.includes(pose.value)}
-                                        onChange={() => handlePoseSelection(pose.value)}
-                                        disabled={isDisabled || (!selectedPoses.includes(pose.value) && selectedPoses.length >= options.numImages)}
-                                        className="rounded text-accent focus:ring-accent"
-                                    />
-                                    <span className="text-sm">{pose.label}</span>
-                                </label>
-                            ))}
-                        </div>
-                    )}
-                    {options.poseMode === 'prompt' && (
-                        <div>
-                             <textarea
-                                value={options.poseSelection.join('\n')}
-                                onChange={handleCustomPoseChange}
-                                placeholder="Enter one pose prompt per line..."
+                {activeTab === 'image-generator' && (
+                    <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-3 gap-1">
+                        {(['general', 'inpaint', 'compose'] as const).map(mode => (
+                             <button 
+                                key={mode}
+                                onClick={() => setOptions(prev => ({...prev, geminiI2iMode: mode}))} 
                                 disabled={isDisabled}
-                                rows={4}
-                                className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                            />
-                             <button
-                                onClick={handleRandomizeCustomPoses}
-                                disabled={isDisabled}
-                                className="mt-2 flex items-center gap-1.5 text-xs bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-1 px-2 rounded-lg transition-colors"
+                                className={`px-2 py-2 text-xs font-bold rounded-full transition-colors capitalize ${options.geminiI2iMode === mode ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
                             >
-                                <RefreshIcon className="w-4 h-4" /> Randomize
+                                {mode}
                             </button>
-                        </div>
-                    )}
-                    {options.poseMode === 'library' && onOpenPosePicker && (
-                        <div className="space-y-4 p-3 bg-bg-primary/50 rounded-lg border border-border-primary">
-                            <button
-                                onClick={onOpenPosePicker}
-                                disabled={isDisabled}
-                                className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
-                            >
-                                <LibraryIcon className="w-5 h-5" />
-                                Select Poses ({options.poseLibraryItems?.length || 0}/{options.numImages} selected)
-                            </button>
-                            {options.poseLibraryItems && options.poseLibraryItems.length > 0 && (
-                                <div className="grid grid-cols-4 gap-2">
-                                    {options.poseLibraryItems.map(item => (
-                                        <div key={item.id} className="relative aspect-square">
-                                            <img src={item.thumbnail} alt={item.name} title={item.name} className="w-full h-full object-cover rounded-md" />
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                        ))}
+                    </div>
+                )}
+
+                {options.geminiI2iMode === 'general' && (
+                    <>
+                        <OptionSection title="Pose & Composition">
                             <SelectInput
-                                label="Use Pose As"
-                                value={options.geminiPoseSource || 'mannequin'}
-                                onChange={handleOptionChange('geminiPoseSource')}
+                                label="Pose Mode"
+                                value={options.poseMode}
+                                onChange={handleOptionChange('poseMode')}
                                 options={[
-                                    { value: 'mannequin', label: 'Mannequin Image' },
-                                    { value: 'json', label: 'JSON Data' },
+                                    { value: 'random', label: 'Random Preset Poses' },
+                                    { value: 'select', label: 'Select Preset Poses' },
+                                    { value: 'prompt', label: 'Custom Pose Prompts' },
+                                    { value: 'library', label: 'From Library' },
                                 ]}
                                 disabled={isDisabled}
                             />
-                        </div>
-                    )}
-                </OptionSection>
-
-                <OptionSection title="Background">
-                     <SelectInput label="Background Source" value={options.background} onChange={handleOptionChange('background')} options={BACKGROUND_OPTIONS} disabled={isDisabled} />
-                     {(options.background === 'prompt' || options.background === 'random') && (
-                        <div className="relative">
-                            <TextInput label="Custom Background Prompt" value={options.customBackground || ''} onChange={handleOptionChange('customBackground')} placeholder="e.g., a futuristic neon-lit city" disabled={isDisabled} />
-                            <button onClick={handleRandomizeBackground} disabled={isDisabled} className="absolute top-0 right-0 p-1 rounded-full text-text-secondary hover:bg-bg-primary" title="Randomize Prompt"><RefreshIcon className="w-4 h-4"/></button>
-                        </div>
-                     )}
-                     {options.background === 'prompt' && (
-                        <div>
-                             <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                <input type="checkbox" checked={options.consistentBackground} onChange={handleOptionChange('consistentBackground')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
-                                Use a Consistent Background
-                            </label>
-                            <p className="text-xs text-text-muted mt-1">Generate one background and apply it to all images. Slower first image, but faster subsequent images.</p>
-                            {options.consistentBackground && (
-                                <div className="mt-2">
-                                     <button onClick={handleGenerateBgPreview} disabled={isPreviewingBg || !options.customBackground} className="flex w-full items-center justify-center gap-2 text-sm bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
-                                        {isPreviewingBg ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : null}
-                                        {isPreviewingBg ? 'Generating...' : (previewedBackgroundImage ? 'Regenerate Preview' : 'Generate Preview')}
+                            {options.poseMode === 'select' && (
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">
+                                    <p className="text-xs text-text-muted">Select up to {options.numImages} poses.</p>
+                                    {PRESET_POSES.map(pose => (
+                                        <label key={pose.value} className="flex items-center gap-2 p-2 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPoses.includes(pose.value)}
+                                                onChange={() => handlePoseSelection(pose.value)}
+                                                disabled={isDisabled || (!selectedPoses.includes(pose.value) && selectedPoses.length >= options.numImages)}
+                                                className="rounded text-accent focus:ring-accent"
+                                            />
+                                            <span className="text-sm">{pose.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                            {options.poseMode === 'prompt' && (
+                                <div>
+                                    <textarea
+                                        value={options.poseSelection.join('\n')}
+                                        onChange={handleCustomPoseChange}
+                                        placeholder="Enter one pose prompt per line..."
+                                        disabled={isDisabled}
+                                        rows={4}
+                                        className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                    />
+                                    <button
+                                        onClick={handleRandomizeCustomPoses}
+                                        disabled={isDisabled}
+                                        className="mt-2 flex items-center gap-1.5 text-xs bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-1 px-2 rounded-lg transition-colors"
+                                    >
+                                        <RefreshIcon className="w-4 h-4" /> Randomize
                                     </button>
-                                     {bgPreviewError && <p className="text-xs text-danger mt-1">{bgPreviewError}</p>}
-                                     {previewedBackgroundImage && (
-                                        <div className="relative mt-2">
-                                            <img src={previewedBackgroundImage} alt="Background Preview" className="w-full h-auto rounded-md"/>
-                                            <button onClick={() => setPreviewedBackgroundImage(null)} className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-black/80" title="Clear Preview"><CloseIcon className="w-4 h-4"/></button>
+                                </div>
+                            )}
+                            {options.poseMode === 'library' && onOpenPosePicker && (
+                                <div className="space-y-4 p-3 bg-bg-primary/50 rounded-lg border border-border-primary">
+                                    <button
+                                        onClick={onOpenPosePicker}
+                                        disabled={isDisabled}
+                                        className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
+                                    >
+                                        <LibraryIcon className="w-5 h-5" />
+                                        Select Poses ({options.poseLibraryItems?.length || 0}/{options.numImages} selected)
+                                    </button>
+                                    {options.poseLibraryItems && options.poseLibraryItems.length > 0 && (
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {options.poseLibraryItems.map(item => (
+                                                <div key={item.id} className="relative aspect-square">
+                                                    <img src={item.thumbnail} alt={item.name} title={item.name} className="w-full h-full object-cover rounded-md" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <SelectInput
+                                        label="Use Pose As"
+                                        value={options.geminiPoseSource || 'mannequin'}
+                                        onChange={handleOptionChange('geminiPoseSource')}
+                                        options={[
+                                            { value: 'mannequin', label: 'Mannequin Image' },
+                                            { value: 'json', label: 'JSON Data' },
+                                        ]}
+                                        disabled={isDisabled}
+                                    />
+                                </div>
+                            )}
+                        </OptionSection>
+
+                        <OptionSection title="Background">
+                            <SelectInput label="Background Source" value={options.background} onChange={handleOptionChange('background')} options={BACKGROUND_OPTIONS} disabled={isDisabled} />
+                            {(options.background === 'prompt' || options.background === 'random') && (
+                                <div className="relative">
+                                    <TextInput label="Custom Background Prompt" value={options.customBackground || ''} onChange={handleOptionChange('customBackground')} placeholder="e.g., a futuristic neon-lit city" disabled={isDisabled} />
+                                    <button onClick={handleRandomizeBackground} disabled={isDisabled} className="absolute top-0 right-0 p-1 rounded-full text-text-secondary hover:bg-bg-primary" title="Randomize Prompt"><RefreshIcon className="w-4 h-4"/></button>
+                                </div>
+                            )}
+                            {options.background === 'prompt' && (
+                                <div>
+                                    <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                                        <input type="checkbox" checked={options.consistentBackground} onChange={handleOptionChange('consistentBackground')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
+                                        Use a Consistent Background
+                                    </label>
+                                    <p className="text-xs text-text-muted mt-1">Generate one background and apply it to all images. Slower first image, but faster subsequent images.</p>
+                                    {options.consistentBackground && (
+                                        <div className="mt-2">
+                                            <button onClick={handleGenerateBgPreview} disabled={isPreviewingBg || !options.customBackground} className="flex w-full items-center justify-center gap-2 text-sm bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                                {isPreviewingBg ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : null}
+                                                {isPreviewingBg ? 'Generating...' : (previewedBackgroundImage ? 'Regenerate Preview' : 'Generate Preview')}
+                                            </button>
+                                            {bgPreviewError && <p className="text-xs text-danger mt-1">{bgPreviewError}</p>}
+                                            {previewedBackgroundImage && (
+                                                <div className="relative mt-2">
+                                                    <img src={previewedBackgroundImage} alt="Background Preview" className="w-full h-auto rounded-md"/>
+                                                    <button onClick={() => setPreviewedBackgroundImage(null)} className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-black/80" title="Clear Preview"><CloseIcon className="w-4 h-4"/></button>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
                             )}
-                        </div>
-                     )}
-                </OptionSection>
+                        </OptionSection>
 
-                <OptionSection title="Clothing">
-                    <SelectInput label="Clothing Source" value={options.clothing} onChange={handleOptionChange('clothing')} options={[
-                        {value: 'original', label: 'Original from Image'},
-                        {value: 'image', label: 'From Reference Image'},
-                        {value: 'prompt', label: 'From Custom Prompt'},
-                        {value: 'random', label: 'Random from Prompt'},
-                    ]} disabled={isDisabled}/>
-                    {(options.clothing === 'prompt' || options.clothing === 'random') && (
-                        <>
-                            <div className="relative">
-                                <TextInput label="Custom Clothing Prompt" value={options.customClothingPrompt || ''} onChange={handleOptionChange('customClothingPrompt')} placeholder="e.g., a stylish leather jacket" disabled={isDisabled}/>
-                                <button onClick={handleRandomizeClothing} disabled={isDisabled} className="absolute top-0 right-0 p-1 rounded-full text-text-secondary hover:bg-bg-primary" title="Randomize Prompt"><RefreshIcon className="w-4 h-4"/></button>
-                            </div>
-                            <SelectInput label="Style Consistency" value={options.clothingStyleConsistency || 'varied'} onChange={handleOptionChange('clothingStyleConsistency')} options={[
-                                {value: 'varied', label: 'Varied Interpretations'},
-                                {value: 'strict', label: 'Strictly Identical'},
+                        <OptionSection title="Clothing">
+                            <SelectInput label="Clothing Source" value={options.clothing} onChange={handleOptionChange('clothing')} options={[
+                                {value: 'original', label: 'Original from Image'},
+                                {value: 'image', label: 'From Reference Image'},
+                                {value: 'prompt', label: 'From Custom Prompt'},
+                                {value: 'random', label: 'Random from Prompt'},
                             ]} disabled={isDisabled}/>
-                            <div className="mt-2">
-                                <button onClick={handleGenerateClothingPreview} disabled={isPreviewingClothing || !options.customClothingPrompt} className="flex w-full items-center justify-center gap-2 text-sm bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
-                                    {isPreviewingClothing ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : null}
-                                    {isPreviewingClothing ? 'Generating...' : (previewedClothingImage ? 'Regenerate Preview' : 'Generate Preview')}
-                                </button>
-                                {clothingPreviewError && <p className="text-xs text-danger mt-1">{clothingPreviewError}</p>}
-                                {previewedClothingImage && (
-                                    <div className="relative mt-2">
-                                        <img src={previewedClothingImage} alt="Clothing Preview" className="w-full h-auto rounded-md"/>
-                                        <button onClick={() => setPreviewedClothingImage(null)} className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-black/80" title="Clear Preview"><CloseIcon className="w-4 h-4"/></button>
+                            {(options.clothing === 'prompt' || options.clothing === 'random') && (
+                                <>
+                                    <div className="relative">
+                                        <TextInput label="Custom Clothing Prompt" value={options.customClothingPrompt || ''} onChange={handleOptionChange('customClothingPrompt')} placeholder="e.g., a stylish leather jacket" disabled={isDisabled}/>
+                                        <button onClick={handleRandomizeClothing} disabled={isDisabled} className="absolute top-0 right-0 p-1 rounded-full text-text-secondary hover:bg-bg-primary" title="Randomize Prompt"><RefreshIcon className="w-4 h-4"/></button>
                                     </div>
-                                )}
-                            </div>
-                        </>
-                    )}
-                </OptionSection>
+                                    <SelectInput label="Style Consistency" value={options.clothingStyleConsistency || 'varied'} onChange={handleOptionChange('clothingStyleConsistency')} options={[
+                                        {value: 'varied', label: 'Varied Interpretations'},
+                                        {value: 'strict', label: 'Strictly Identical'},
+                                    ]} disabled={isDisabled}/>
+                                    <div className="mt-2">
+                                        <button onClick={handleGenerateClothingPreview} disabled={isPreviewingClothing || !options.customClothingPrompt} className="flex w-full items-center justify-center gap-2 text-sm bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                            {isPreviewingClothing ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : null}
+                                            {isPreviewingClothing ? 'Generating...' : (previewedClothingImage ? 'Regenerate Preview' : 'Generate Preview')}
+                                        </button>
+                                        {clothingPreviewError && <p className="text-xs text-danger mt-1">{clothingPreviewError}</p>}
+                                        {previewedClothingImage && (
+                                            <div className="relative mt-2">
+                                                <img src={previewedClothingImage} alt="Clothing Preview" className="w-full h-auto rounded-md"/>
+                                                <button onClick={() => setPreviewedClothingImage(null)} className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-black/80" title="Clear Preview"><CloseIcon className="w-4 h-4"/></button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </OptionSection>
+                    </>
+                )}
+
+                {options.geminiI2iMode === 'inpaint' && (
+                     <OptionSection title="Inpainting / Outpainting">
+                        <ImageUploader
+                            id="mask-image"
+                            label="Mask Image"
+                            onImageUpload={setMaskImage}
+                            sourceFile={maskImage}
+                            disabled={isDisabled}
+                            infoText="White areas are edited, black areas are protected."
+                        />
+                        <SelectInput
+                            label="Task"
+                            value={options.geminiInpaintTask || 'remove'}
+                            onChange={handleOptionChange('geminiInpaintTask')}
+                            options={[
+                                { value: 'remove', label: 'Remove Area' },
+                                { value: 'replace', label: 'Replace with...' },
+                                { value: 'changeColor', label: 'Change Color to...' },
+                                { value: 'custom', label: 'Custom Prompt' },
+                            ]}
+                            disabled={isDisabled}
+                        />
+                        {(options.geminiInpaintTask === 'replace' || options.geminiInpaintTask === 'changeColor') && (
+                            <TextInput
+                                label={options.geminiInpaintTask === 'replace' ? "Replacement Object" : "New Color"}
+                                value={options.geminiInpaintTargetPrompt || ''}
+                                onChange={handleOptionChange('geminiInpaintTargetPrompt')}
+                                placeholder={options.geminiInpaintTask === 'replace' ? "e.g., a blue sports car" : "e.g., bright red"}
+                                disabled={isDisabled}
+                            />
+                        )}
+                        {options.geminiInpaintTask === 'custom' && (
+                            <TextInput
+                                label="Custom Inpainting Prompt"
+                                value={options.geminiInpaintCustomPrompt || ''}
+                                onChange={handleOptionChange('geminiInpaintCustomPrompt')}
+                                placeholder="e.g., add a futuristic city in the background"
+                                disabled={isDisabled}
+                                isTextArea
+                            />
+                        )}
+                     </OptionSection>
+                )}
+
+                {options.geminiI2iMode === 'compose' && (
+                    <OptionSection title="Image Composition">
+                        <ElementImageManager
+                            elementImages={elementImages}
+                            setElementImages={setElementImages}
+                            disabled={isDisabled}
+                        />
+                        <TextInput
+                            label="Composition Instructions"
+                            value={options.geminiComposePrompt || ''}
+                            onChange={handleOptionChange('geminiComposePrompt')}
+                            placeholder="Describe how to combine the images. The source image is the background..."
+                            disabled={isDisabled}
+                            isTextArea
+                        />
+                    </OptionSection>
+                )}
              </>
         )}
-
-        <OptionSection title="Style">
-            <SelectInput label="Image Style" value={options.imageStyle} onChange={handleOptionChange('imageStyle')} options={IMAGE_STYLE_OPTIONS} disabled={isDisabled} />
-            {options.imageStyle === 'photorealistic' ? (
-                <>
-                    <SelectInput label="Photo Style" value={options.photoStyle} onChange={handleOptionChange('photoStyle')} options={PHOTO_STYLE_OPTIONS} disabled={isDisabled} />
-                    <SelectInput label="Era / Medium" value={options.eraStyle} onChange={handleOptionChange('eraStyle')} options={ERA_STYLE_OPTIONS} disabled={isDisabled} />
-                </>
-            ) : (
-                <NumberSlider label="Creativity" value={options.creativity || 0.7} onChange={handleSliderChange('creativity')} min={0} max={1} step={0.1} disabled={isDisabled} />
-            )}
-            <div>
-                 <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                    <input type="checkbox" checked={options.addTextToImage} onChange={handleOptionChange('addTextToImage')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
-                    Add Text to Image
-                </label>
-                {options.addTextToImage && (
-                    <div className="mt-2 space-y-2 pl-6">
-                        <TextInput label="Text to Add" value={options.textOnImagePrompt || ''} onChange={handleOptionChange('textOnImagePrompt')} placeholder="e.g., 'Hello World'" disabled={isDisabled} />
-                        <div className="relative">
-                            <TextInput
-                                label="Object for Text"
-                                value={options.textObjectPrompt || ''}
-                                onChange={handleOptionChange('textObjectPrompt')}
-                                placeholder="e.g., a sign that reads '%s'"
-                                disabled={isDisabled}
-                                tooltip="Use %s as a placeholder for the text above."
-                            />
-                            <button onClick={handleRandomizeTextObject} disabled={isDisabled} className="absolute top-0 right-0 p-1 rounded-full text-text-secondary hover:bg-bg-primary" title="Randomize Object"><RefreshIcon className="w-4 h-4"/></button>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </OptionSection>
       </>
     );
 

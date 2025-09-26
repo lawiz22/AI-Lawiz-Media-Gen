@@ -8,9 +8,10 @@ interface ImageUploaderProps {
   sourceFile?: File | null;
   // Fix: Added optional 'disabled' prop to allow the uploader to be disabled, resolving the TypeScript error in parent components.
   disabled?: boolean;
+  infoText?: string;
 }
 
-export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImageUpload, sourceFile, disabled = false }) => {
+export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImageUpload, sourceFile, disabled = false, infoText }) => {
   const [preview, setPreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [fileName, setFileName] = useState<string>('');
@@ -85,7 +86,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
           <div className="flex flex-col items-center justify-center pt-5 pb-6 text-text-secondary">
             <UploadIcon className="w-8 h-8 mb-3" />
             <p className="mb-2 text-sm"><span className="font-semibold text-accent">Click to upload</span> or drag and drop</p>
-            <p className="text-xs">PNG, JPG, WEBP</p>
+            <p className="text-xs">{infoText || 'PNG, JPG, WEBP'}</p>
           </div>
         )}
         <input id={id} type="file" className="hidden" accept="image/*" onChange={onFileChange} disabled={disabled} />

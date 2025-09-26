@@ -148,6 +148,8 @@ const App: React.FC = () => {
     const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
     const [previewedBackgroundImage, setPreviewedBackgroundImage] = useState<string | null>(null);
     const [previewedClothingImage, setPreviewedClothingImage] = useState<string | null>(null);
+    const [maskImage, setMaskImage] = useState<File | null>(null);
+    const [elementImages, setElementImages] = useState<File[]>([]);
     const [options, setOptions] = useState<GenerationOptions>({
         provider: 'comfyui',
         numImages: 4,
@@ -162,6 +164,11 @@ const App: React.FC = () => {
         photoStyle: 'professional photoshoot',
         eraStyle: 'a modern digital photograph',
         geminiMode: 't2i',
+        geminiI2iMode: 'general',
+        geminiInpaintTask: 'remove',
+        geminiInpaintCustomPrompt: '',
+        geminiInpaintTargetPrompt: '',
+        geminiComposePrompt: '',
         // ComfyUI specific
         comfyModelType: 'sdxl',
         comfyPrompt: '',
@@ -261,16 +268,23 @@ const App: React.FC = () => {
     // --- Computed State ---
     const isReadyToGenerate = useMemo(() => {
         if (isLoading) return false;
-        
-        const isI2IMode = activeTab === 'image-generator' ? generationMode === 'i2i' : true;
-        
+
         if (options.provider === 'gemini') {
             if (options.geminiMode === 't2i') return !!options.geminiPrompt?.trim();
+            // I2I modes for Gemini on the main image generator tab
+            if (activeTab === 'image-generator' && options.geminiI2iMode === 'inpaint') {
+                return !!sourceImage && !!maskImage;
+            }
+            if (activeTab === 'image-generator' && options.geminiI2iMode === 'compose') {
+                return !!sourceImage && elementImages.length > 0 && !!options.geminiComposePrompt?.trim();
+            }
+            // Default Gemini I2I (Character Gen or General Edit on main tab)
             if (options.poseMode === 'library') {
                  return !!sourceImage && !!options.poseLibraryItems && options.poseLibraryItems.length > 0;
             }
             return !!sourceImage;
         } else if (options.provider === 'comfyui') {
+            const isI2IMode = generationMode === 'i2i';
             const baseReady = !!isComfyUIConnected && !!options.comfyPrompt?.trim();
             if (isI2IMode) {
                 return baseReady && !!sourceImage;
@@ -278,7 +292,7 @@ const App: React.FC = () => {
             return baseReady;
         }
         return false;
-    }, [sourceImage, options, isLoading, isComfyUIConnected, activeTab, generationMode]);
+    }, [sourceImage, maskImage, elementImages, options, isLoading, isComfyUIConnected, activeTab, generationMode]);
     
     const isVideoReady = useMemo(() => {
         if (isLoading) return false;
@@ -384,6 +398,8 @@ const App: React.FC = () => {
         setLastUsedPrompt(null);
         setCharacterName('');
         setShouldGenerateCharacterName(false);
+        setMaskImage(null);
+        setElementImages([]);
         setOptions(prev => ({
             ...prev,
             geminiPrompt: '',
@@ -391,6 +407,11 @@ const App: React.FC = () => {
             customBackground: '',
             customClothingPrompt: '',
             poseLibraryItems: [],
+            geminiI2iMode: 'general',
+            geminiInpaintTask: 'remove',
+            geminiInpaintCustomPrompt: '',
+            geminiInpaintTargetPrompt: '',
+            geminiComposePrompt: '',
         }));
         setPromptGenState({
             image: null, prompt: '', bgImage: null, bgPrompt: '',
@@ -438,13 +459,13 @@ const App: React.FC = () => {
                 if (options.geminiMode === 't2i') {
                     result = await generatePortraits(
                         null, options, updateProgress, null, null,
-                        previewedBackgroundImage, previewedClothingImage
+                        previewedBackgroundImage, previewedClothingImage, null, []
                     );
                 } else {
                     if (!sourceImage) throw new Error("Source image is required for Image-to-Image mode.");
                     result = await generatePortraits(
                         sourceImage, options, updateProgress, clothingImage, backgroundImage,
-                        previewedBackgroundImage, previewedClothingImage
+                        previewedBackgroundImage, previewedClothingImage, maskImage, elementImages
                     );
                 }
             } else if (options.provider === 'comfyui') {
@@ -698,7 +719,7 @@ const App: React.FC = () => {
     const handleTabClick = (tabId: string) => {
         if (tabId === 'character-generator') {
             // This tab is Gemini I2I only
-            setOptions(prev => ({ ...prev, provider: 'gemini', geminiMode: 'i2i' }));
+            setOptions(prev => ({ ...prev, provider: 'gemini', geminiMode: 'i2i', geminiI2iMode: 'general' }));
         } else if (tabId === 'image-generator') {
             // Reset to T2I when coming back to this tab
             setGenerationMode('t2i');
@@ -815,6 +836,11 @@ const App: React.FC = () => {
                                 comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                                 sourceImage={sourceImage}
                                 hideGeminiModeSwitch={true}
+                                activeTab={activeTab}
+                                maskImage={maskImage}
+                                setMaskImage={setMaskImage}
+                                elementImages={elementImages}
+                                setElementImages={setElementImages}
                             />
                         </div>
 
@@ -938,6 +964,11 @@ const App: React.FC = () => {
                                 hideProviderSwitch={true}
                                 hideGeminiModeSwitch={true}
                                 hideGenerationModeSwitch={true}
+                                activeTab={activeTab}
+                                maskImage={maskImage}
+                                setMaskImage={setMaskImage}
+                                elementImages={elementImages}
+                                setElementImages={setElementImages}
                             />
                         </div>
 
