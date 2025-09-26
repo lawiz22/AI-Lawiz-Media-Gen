@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, ChangeEvent } from 'react';
 // Fix: Import `NunchakuAttention` type to be used for casting.
 import type { GenerationOptions, NunchakuAttention } from '../types';
@@ -13,9 +12,10 @@ import {
 } from '../constants';
 import { generateBackgroundImagePreview, generateClothingPreview, generateMaskForImage } from '../services/geminiService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
-import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon, LibraryIcon } from './icons';
+import { saveToLibrary } from '../services/libraryService';
+import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon, LibraryIcon, SaveIcon, CheckIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
-import { dataUrlToFile } from '../utils/imageUtils';
+import { dataUrlToFile, fileToDataUrl, dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 
 // --- Prop Types ---
 interface OptionsPanelProps {
@@ -47,6 +47,8 @@ interface OptionsPanelProps {
   setMaskImage: (file: File | null) => void;
   elementImages: File[];
   setElementImages: (files: File[]) => void;
+  onOpenMaskPicker: () => void;
+  onOpenElementPicker: () => void;
 }
 
 // Helper function to safely extract model lists from ComfyUI's object_info
@@ -148,10 +150,11 @@ const ElementImageManager: React.FC<{
   elementImages: File[];
   setElementImages: (files: File[]) => void;
   disabled: boolean;
-}> = ({ elementImages, setElementImages, disabled }) => {
-  const handleAddImage = (file: File | null) => {
-    if (file) {
-      setElementImages([...elementImages, file]);
+  onOpenElementPicker: () => void;
+}> = ({ elementImages, setElementImages, disabled, onOpenElementPicker }) => {
+  const handleAddImages = (files: File[]) => {
+    if (files.length > 0) {
+      setElementImages(prev => [...prev, ...files].slice(0, 5));
     }
   };
 
@@ -177,13 +180,27 @@ const ElementImageManager: React.FC<{
             ))}
         </div>
       )}
-      <ImageUploader
-        id="element-image-uploader"
-        onImageUpload={handleAddImage}
-        disabled={disabled || elementImages.length >= 5}
-        label="Add Element Image"
-        infoText={elementImages.length >= 5 ? "Max 5 elements" : "PNG, JPG, WEBP"}
-      />
+      <div className="flex items-center gap-2">
+        <div className="flex-grow">
+            <ImageUploader
+                id="element-image-uploader"
+                onImageUpload={() => {}}
+                onImagesUpload={handleAddImages}
+                multiple
+                disabled={disabled || elementImages.length >= 5}
+                label="Add Element Image(s)"
+                infoText={elementImages.length >= 5 ? "Max 5 elements" : "PNG, JPG, WEBP"}
+            />
+        </div>
+        <button 
+            onClick={onOpenElementPicker} 
+            disabled={disabled || elementImages.length >= 5}
+            className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+            title="Select from Library"
+        >
+            <LibraryIcon className="w-6 h-6"/>
+        </button>
+      </div>
     </div>
   );
 };
@@ -202,7 +219,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
   title = "Configure Options",
   activeTab,
   maskImage, setMaskImage,
-  elementImages, setElementImages
+  elementImages, setElementImages,
+  onOpenMaskPicker, onOpenElementPicker,
 }) => {
     const [isPreviewingBg, setIsPreviewingBg] = useState(false);
     const [bgPreviewError, setBgPreviewError] = useState<string | null>(null);
@@ -211,10 +229,15 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const [selectedPoses, setSelectedPoses] = useState<string[]>(options.poseSelection);
     const [isGeneratingMask, setIsGeneratingMask] = useState<boolean>(false);
     const [maskGenError, setMaskGenError] = useState<string | null>(null);
+    const [maskSavingState, setMaskSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
     useEffect(() => {
         setOptions(prev => ({ ...prev, poseSelection: selectedPoses }));
     }, [selectedPoses, setOptions]);
+
+    useEffect(() => {
+        setMaskSavingState('idle');
+    }, [maskImage]);
     
     // --- Memoized Model Lists from ComfyUI Object Info ---
     const comfyModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name), [comfyUIObjectInfo]);
@@ -694,6 +717,27 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         }
     };
 
+    const handleSaveMask = async () => {
+        if (!maskImage) return;
+        setMaskSavingState('saving');
+        try {
+            const media = await fileToDataUrl(maskImage);
+            const thumbnail = await dataUrlToThumbnail(media, 256);
+            const name = `Mask from "${sourceImage?.name || 'source image'}"`;
+            await saveToLibrary({
+                mediaType: 'image',
+                name,
+                media,
+                thumbnail,
+                sourceImage: sourceImage ? await fileToResizedDataUrl(sourceImage, 512) : undefined,
+            });
+            setMaskSavingState('saved');
+        } catch (err) {
+            console.error("Failed to save mask to library:", err);
+            setMaskSavingState('idle'); // Allow retry on error
+        }
+    };
+
     // --- Render Methods for different providers ---
 
     const renderGeminiOptions = () => (
@@ -730,7 +774,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                 disabled={isDisabled}
                                 className={`px-2 py-2 text-xs font-bold rounded-full transition-colors capitalize ${options.geminiI2iMode === mode ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
                             >
-                                {mode}
+                                {mode === 'inpaint' ? 'Inpaint/Outpaint' : mode}
                             </button>
                         ))}
                     </div>
@@ -892,14 +936,25 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
                 {options.geminiI2iMode === 'inpaint' && (
                      <OptionSection title="Inpainting / Outpainting">
-                        <ImageUploader
-                            id="mask-image"
-                            label="Mask Image"
-                            onImageUpload={setMaskImage}
-                            sourceFile={maskImage}
-                            disabled={isDisabled}
-                            infoText="White areas are edited, black areas are protected."
-                        />
+                        <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                                <ImageUploader
+                                    id="mask-image"
+                                    label="Upload Mask"
+                                    onImageUpload={setMaskImage}
+                                    sourceFile={maskImage}
+                                    disabled={isDisabled}
+                                    infoText="White: edit, Black: protect."
+                                />
+                            </div>
+                            <button 
+                                onClick={onOpenMaskPicker} 
+                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                title="Select Mask from Library"
+                            >
+                                <LibraryIcon className="w-6 h-6"/>
+                            </button>
+                        </div>
                          <div className="text-center text-sm text-text-secondary my-2">OR</div>
                          <div className="space-y-2">
                             <button onClick={() => handleGenerateMask('person')} disabled={!sourceImage || isDisabled || isGeneratingMask} className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors disabled:opacity-50">
@@ -913,6 +968,35 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             {isGeneratingMask && <p className="text-xs text-accent text-center">AI is generating mask...</p>}
                             {maskGenError && <p className="text-xs text-danger text-center mt-1">{maskGenError}</p>}
                          </div>
+
+                         {maskImage && (
+                            <div className="mt-2 space-y-2 p-3 bg-bg-primary/50 rounded-lg">
+                                <h4 className="text-sm font-semibold text-text-secondary">Active Mask</h4>
+                                <div className="relative">
+                                    <img src={URL.createObjectURL(maskImage)} alt="Active Mask" className="w-full rounded-md" />
+                                    <button
+                                        onClick={() => setMaskImage(null)}
+                                        title="Remove Mask"
+                                        className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full hover:bg-black/80 transition-colors"
+                                    >
+                                        <CloseIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={handleSaveMask}
+                                    disabled={maskSavingState !== 'idle' || isDisabled}
+                                    className={`w-full flex items-center justify-center gap-2 font-semibold py-2 px-3 rounded-lg transition-all duration-200 disabled:opacity-50 ${
+                                        maskSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' :
+                                        maskSavingState === 'saving' ? 'bg-bg-tertiary text-text-secondary cursor-wait' :
+                                        'bg-bg-tertiary text-text-secondary hover:bg-accent hover:text-accent-text'
+                                    }`}
+                                >
+                                    {maskSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : maskSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                    {maskSavingState === 'saving' ? 'Saving...' : maskSavingState === 'saved' ? 'Saved!' : 'Save Mask to Library'}
+                                </button>
+                            </div>
+                        )}
+
                         <SelectInput
                             label="Task"
                             value={options.geminiInpaintTask || 'remove'}
@@ -953,6 +1037,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             elementImages={elementImages}
                             setElementImages={setElementImages}
                             disabled={isDisabled}
+                            onOpenElementPicker={onOpenElementPicker}
                         />
                         <TextInput
                             label="Composition Instructions"

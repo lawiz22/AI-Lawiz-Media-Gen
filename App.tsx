@@ -1,10 +1,8 @@
-
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle } from './types';
 import { authenticateUser } from './services/cloudUserService';
-import { fileToDataUrl, fileToResizedDataUrl } from './utils/imageUtils';
+import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
 import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage } from './services/geminiService';
 // Fix: Import 'checkConnection' to resolve missing name error.
@@ -257,6 +255,8 @@ const App: React.FC = () => {
     const [isAlbumCoverFontPickerOpen, setIsAlbumCoverFontPickerOpen] = useState(false);
     const [isMannequinRefPickerOpen, setIsMannequinRefPickerOpen] = useState(false);
     const [isFontSourcePickerOpen, setIsFontSourcePickerOpen] = useState(false);
+    const [isMaskPickerOpen, setIsMaskPickerOpen] = useState(false);
+    const [isElementPickerOpen, setIsElementPickerOpen] = useState(false);
 
     
     // --- Google Drive State ---
@@ -273,7 +273,7 @@ const App: React.FC = () => {
             if (options.geminiMode === 't2i') return !!options.geminiPrompt?.trim();
             // I2I modes for Gemini on the main image generator tab
             if (activeTab === 'image-generator' && options.geminiI2iMode === 'inpaint') {
-                return !!sourceImage && !!maskImage;
+                return !!sourceImage; // Mask is optional, can do prompt-only inpainting
             }
             if (activeTab === 'image-generator' && options.geminiI2iMode === 'compose') {
                 return !!sourceImage && elementImages.length > 0 && !!options.geminiComposePrompt?.trim();
@@ -841,6 +841,8 @@ const App: React.FC = () => {
                                 setMaskImage={setMaskImage}
                                 elementImages={elementImages}
                                 setElementImages={setElementImages}
+                                onOpenMaskPicker={() => setIsMaskPickerOpen(true)}
+                                onOpenElementPicker={() => setIsElementPickerOpen(true)}
                             />
                         </div>
 
@@ -969,6 +971,8 @@ const App: React.FC = () => {
                                 setMaskImage={setMaskImage}
                                 elementImages={elementImages}
                                 setElementImages={setElementImages}
+                                onOpenMaskPicker={() => {}}
+                                onOpenElementPicker={() => {}}
                             />
                         </div>
 
@@ -1224,6 +1228,33 @@ const App: React.FC = () => {
                         setOptions(prev => ({ ...prev, poseLibraryItems: items.slice(0, prev.numImages) }));
                     }}
                     filter="pose"
+                    multiSelect
+                />
+            )}
+            {isMaskPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isMaskPickerOpen}
+                    onClose={() => setIsMaskPickerOpen(false)}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        setMaskImage(new File([blob], "library_mask.png", { type: blob.type }));
+                    }}
+                    filter="image"
+                />
+            )}
+            {isElementPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isElementPickerOpen}
+                    onClose={() => setIsElementPickerOpen(false)}
+                    onSelectItem={() => {}} // single select no-op
+                    onSelectMultiple={async (items) => {
+                        const files = await Promise.all(
+                            items.map(item => dataUrlToFile(item.media, item.name || `element_${item.id}.jpeg`))
+                        );
+                        setElementImages(prev => [...prev, ...files].slice(0, 5));
+                    }}
+                    filter={broadImagePickerFilter}
                     multiSelect
                 />
             )}

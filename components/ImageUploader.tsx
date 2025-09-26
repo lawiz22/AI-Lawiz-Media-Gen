@@ -5,19 +5,21 @@ interface ImageUploaderProps {
   label?: string;
   id: string;
   onImageUpload: (file: File | null) => void;
+  onImagesUpload?: (files: File[]) => void;
   sourceFile?: File | null;
   // Fix: Added optional 'disabled' prop to allow the uploader to be disabled, resolving the TypeScript error in parent components.
   disabled?: boolean;
   infoText?: string;
+  multiple?: boolean;
 }
 
-export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImageUpload, sourceFile, disabled = false, infoText }) => {
+export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImageUpload, onImagesUpload, sourceFile, disabled = false, infoText, multiple = false }) => {
   const [preview, setPreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [fileName, setFileName] = useState<string>('');
 
   useEffect(() => {
-    if (sourceFile) {
+    if (sourceFile && !multiple) {
       if (!sourceFile.type.startsWith('image/')) {
         onImageUpload(null);
         return;
@@ -32,17 +34,17 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
       setPreview(null);
       setFileName('');
     }
-  }, [sourceFile, onImageUpload]);
-
-  const handleFileChange = useCallback((file: File | null) => {
-    if (disabled) return;
-    onImageUpload(file);
-  }, [onImageUpload, disabled]);
+  }, [sourceFile, onImageUpload, multiple]);
 
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (disabled) return;
-    handleFileChange(e.target.files ? e.target.files[0] : null);
-    // Clear the input value to allow re-uploading the same file
+    // Fix: Explicitly type `files` as `File[]` to resolve type inference issues with `FileList` elements, which caused errors on lines 43 and 45.
+    const files: File[] = e.target.files ? Array.from(e.target.files) : [];
+    if (multiple && onImagesUpload) {
+        onImagesUpload(files.filter(f => f.type.startsWith('image/')));
+    } else {
+        onImageUpload(files.find(f => f.type.startsWith('image/')) || null);
+    }
     e.target.value = '';
   };
   
@@ -62,7 +64,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
     e.preventDefault();
     if (disabled) return;
     setIsDragging(false);
-    handleFileChange(e.dataTransfer.files ? e.dataTransfer.files[0] : null);
+    // Fix: Explicitly type `files` as `File[]` to resolve type inference issues with `FileList` elements, which caused errors on lines 68 and 70.
+    const files: File[] = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+    if (multiple && onImagesUpload) {
+        onImagesUpload(files.filter(f => f.type.startsWith('image/')));
+    } else {
+        const imageFile = files.find(f => f.type.startsWith('image/'));
+        onImageUpload(imageFile || null);
+    }
   };
 
   return (
@@ -89,7 +98,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
             <p className="text-xs">{infoText || 'PNG, JPG, WEBP'}</p>
           </div>
         )}
-        <input id={id} type="file" className="hidden" accept="image/*" onChange={onFileChange} disabled={disabled} />
+        <input id={id} type="file" className="hidden" accept="image/*" onChange={onFileChange} disabled={disabled} multiple={multiple} />
       </label>
       {fileName && <p className="text-xs text-text-muted mt-1 truncate">File: {fileName}</p>}
     </div>
