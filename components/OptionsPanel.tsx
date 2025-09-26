@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, ChangeEvent } from 'react';
 // Fix: Import `NunchakuAttention` type to be used for casting.
 import type { GenerationOptions, NunchakuAttention } from '../types';
@@ -10,10 +11,11 @@ import {
   PRESET_POSES,
   MAX_IMAGES,
 } from '../constants';
-import { generateBackgroundImagePreview, generateClothingPreview } from '../services/geminiService';
+import { generateBackgroundImagePreview, generateClothingPreview, generateMaskForImage } from '../services/geminiService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
 import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon, LibraryIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
+import { dataUrlToFile } from '../utils/imageUtils';
 
 // --- Prop Types ---
 interface OptionsPanelProps {
@@ -207,6 +209,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const [isPreviewingClothing, setIsPreviewingClothing] = useState(false);
     const [clothingPreviewError, setClothingPreviewError] = useState<string | null>(null);
     const [selectedPoses, setSelectedPoses] = useState<string[]>(options.poseSelection);
+    const [isGeneratingMask, setIsGeneratingMask] = useState<boolean>(false);
+    const [maskGenError, setMaskGenError] = useState<string | null>(null);
 
     useEffect(() => {
         setOptions(prev => ({ ...prev, poseSelection: selectedPoses }));
@@ -674,6 +678,22 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         setOptions(prev => ({ ...prev, textObjectPrompt: getRandomTextObjectPrompt() }));
     };
 
+    const handleGenerateMask = async (subject: 'person' | 'clothing') => {
+        if (!sourceImage) return;
+        setIsGeneratingMask(true);
+        setMaskGenError(null);
+        setMaskImage(null); // Clear previous mask
+        try {
+            const maskDataUrl = await generateMaskForImage(sourceImage, subject);
+            const maskFile = await dataUrlToFile(maskDataUrl, `mask_${subject}.png`);
+            setMaskImage(maskFile);
+        } catch (err: any) {
+            setMaskGenError(err.message || `Failed to generate ${subject} mask.`);
+        } finally {
+            setIsGeneratingMask(false);
+        }
+    };
+
     // --- Render Methods for different providers ---
 
     const renderGeminiOptions = () => (
@@ -880,6 +900,19 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             disabled={isDisabled}
                             infoText="White areas are edited, black areas are protected."
                         />
+                         <div className="text-center text-sm text-text-secondary my-2">OR</div>
+                         <div className="space-y-2">
+                            <button onClick={() => handleGenerateMask('person')} disabled={!sourceImage || isDisabled || isGeneratingMask} className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors disabled:opacity-50">
+                                {isGeneratingMask && <SpinnerIcon className="w-5 h-5 animate-spin" />}
+                                Generate Subject Mask
+                            </button>
+                             <button onClick={() => handleGenerateMask('clothing')} disabled={!sourceImage || isDisabled || isGeneratingMask} className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors disabled:opacity-50">
+                                {isGeneratingMask && <SpinnerIcon className="w-5 h-5 animate-spin" />}
+                                Generate Clothing Mask
+                            </button>
+                            {isGeneratingMask && <p className="text-xs text-accent text-center">AI is generating mask...</p>}
+                            {maskGenError && <p className="text-xs text-danger text-center mt-1">{maskGenError}</p>}
+                         </div>
                         <SelectInput
                             label="Task"
                             value={options.geminiInpaintTask || 'remove'}
@@ -894,7 +927,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         />
                         {(options.geminiInpaintTask === 'replace' || options.geminiInpaintTask === 'changeColor') && (
                             <TextInput
-                                label={options.geminiInpaintTask === 'replace' ? "Replacement Object" : "New Color"}
+                                label={options.geminiInpaintTask === 'replace' ? "Replacement Object (Prompt)" : "New Color (Prompt)"}
                                 value={options.geminiInpaintTargetPrompt || ''}
                                 onChange={handleOptionChange('geminiInpaintTargetPrompt')}
                                 placeholder={options.geminiInpaintTask === 'replace' ? "e.g., a blue sports car" : "e.g., bright red"}

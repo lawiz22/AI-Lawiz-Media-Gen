@@ -1,8 +1,7 @@
 
 
-
-
 import { GoogleGenAI, Part, Type, Modality } from "@google/genai";
+// Fix: Corrected typo in type name from 'ManquinnequinStyle' to 'MannequinStyle'.
 import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState, PaletteColor } from '../types';
 import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart, createBlankImageFile, letterboxImage } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
@@ -223,6 +222,32 @@ export const generatePortraits = async (
         }
     }
     return { images: allImages, finalPrompt };
+};
+
+export const generateMaskForImage = async (sourceImage: File, maskSubject: 'person' | 'clothing'): Promise<string> => {
+    const imagePart = await fileToGenerativePart(sourceImage);
+    let promptText = '';
+    
+    if (maskSubject === 'person') {
+        promptText = "You are a precise image segmentation tool. Your only task is to analyze the provided image and create a black and white mask. In the mask, the area corresponding to the main human subject(s), including their hair and clothes, must be solid white (#FFFFFF). Everything else, including the background, must be solid black (#000000). Do not use any shades of gray or feathered edges. Output only the mask image.";
+    } else { // 'clothing'
+        promptText = "You are a precise image segmentation tool. Your only task is to analyze the provided image and create a black and white mask. In the mask, the area corresponding to all pieces of clothing worn by the main human subject(s) must be solid white (#FFFFFF). The person's skin, hair, and the entire background must be solid black (#000000). Do not use any shades of gray or feathered edges. Output only the mask image.";
+    }
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: { parts: [imagePart, { text: promptText }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (outputPart?.inlineData) {
+        return `data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`;
+    } else {
+        throw new Error(`Failed to generate ${maskSubject} mask. The AI did not return an image.`);
+    }
 };
 
 export const generateGeminiVideo = async (
@@ -509,6 +534,7 @@ CRITICAL INSTRUCTIONS:
         const croppedRefFile = await cropImageToAspectRatio(referenceFile, '1:1');
         stylePart = await fileToGenerativePart(croppedRefFile);
     } else {
+        // Fix: Corrected typo in type name from 'ManquinnequinStyle' to 'MannequinStyle'.
         const styleRefKey = style as Exclude<MannequinStyle, 'custom-reference'>;
         const styleReferenceDataUrl = MANNEQUIN_STYLE_REFERENCES[styleRefKey];
         // Convert the static data URL reference to the format the API needs
