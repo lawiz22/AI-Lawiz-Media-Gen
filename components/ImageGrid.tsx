@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
 import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon, CheckIcon } from './icons';
@@ -132,7 +133,10 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSetNewSource, la
       
       // Determine if the generation was Text-to-Image to prevent saving a lingering source image from a previous run.
       const isGeminiT2I = options.provider === 'gemini' && options.geminiMode === 't2i';
-      const isComfyT2I = options.provider === 'comfyui' && options.comfyModelType !== 'nunchaku-kontext-flux';
+      
+      // An i2i workflow requires a source image. If the model type is one of these, it's i2i.
+      const comfyI2IWorkflows: (GenerationOptions['comfyModelType'])[] = ['nunchaku-kontext-flux', 'face-detailer-sd1.5'];
+      const isComfyT2I = options.provider === 'comfyui' && !comfyI2IWorkflows.includes(options.comfyModelType);
 
       if (isEnhanced) {
         optionsToSave = {
