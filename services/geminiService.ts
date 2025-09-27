@@ -215,12 +215,21 @@ export const generatePortraits = async (
         if (!finalPrompt) finalPrompt = textPrompt;
         currentParts.push({ text: textPrompt });
         
+        const config: {
+            responseModalities: Modality[];
+            temperature?: number;
+        } = {
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
+        };
+
+        if (typeof options.creativity === 'number') {
+            config.temperature = options.creativity;
+        }
+
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
             contents: { parts: currentParts },
-            config: {
-                responseModalities: [Modality.IMAGE, Modality.TEXT],
-            },
+            config: config,
         });
 
         const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);

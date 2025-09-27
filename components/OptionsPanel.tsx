@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, ChangeEvent } from 'react';
 // Fix: Import `NunchakuAttention` type to be used for casting.
-import type { GenerationOptions, NunchakuAttention } from '../types';
+import type { GenerationOptions, NunchakuAttention, ImageStyle } from '../types';
 import {
   BACKGROUND_OPTIONS,
   ASPECT_RATIO_OPTIONS,
@@ -403,6 +403,18 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const handleOptionChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
 
+        if (field === 'imageStyle') {
+            if (options.provider === 'gemini') {
+                const newStyle = value as ImageStyle;
+                setOptions(prev => ({
+                    ...prev,
+                    imageStyle: newStyle,
+                    creativity: newStyle === 'photorealistic' ? undefined : (prev.creativity ?? 0.7)
+                }));
+                return; 
+            }
+        }
+        
         if (field === 'geminiT2IModel') {
             const newModel = value as 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image-preview';
             setOptions(prev => ({
@@ -862,11 +874,21 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         </OptionSection>
                          <OptionSection title="Style">
                             <SelectInput label="Image Style" value={options.imageStyle} onChange={handleOptionChange('imageStyle')} options={IMAGE_STYLE_OPTIONS} disabled={isDisabled} />
-                            {options.imageStyle === 'photorealistic' && (
+                            {options.imageStyle === 'photorealistic' ? (
                                 <>
                                     <SelectInput label="Photo Style" value={options.photoStyle} onChange={handleOptionChange('photoStyle')} options={PHOTO_STYLE_OPTIONS} disabled={isDisabled} />
                                     <SelectInput label="Era / Medium" value={options.eraStyle} onChange={handleOptionChange('eraStyle')} options={ERA_STYLE_OPTIONS} disabled={isDisabled} />
                                 </>
+                            ) : (
+                                <NumberSlider
+                                    label="Creativity"
+                                    value={options.creativity ?? 0.7}
+                                    onChange={handleSliderChange('creativity')}
+                                    min={0}
+                                    max={1}
+                                    step={0.1}
+                                    disabled={isDisabled}
+                                />
                             )}
                         </OptionSection>
                     </>

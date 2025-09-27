@@ -1,5 +1,5 @@
 {
-  "version": "1.49",
-  "date": "2024-08-16T12:00:00Z",
-  "changes": "Replaced the ineffective adjective-based typography controls in the Logo, Banner, and Album Cover generators with a powerful new font selection system. Users can now upload a font image or select a pre-extracted font chart from the library to guide the AI's typography, offering much more direct and precise control."
+  "version": "1.50",
+  "date": "2024-08-18T12:00:00Z",
+  "changes": "Integrated a new 'Face Detailer' ComfyUI workflow. This image-to-image pipeline allows users to upload an image and automatically detect, enhance, and fix faces with high precision, using models like YOLO and SAM."
 }

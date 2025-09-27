@@ -1,4 +1,4 @@
-# Lawiz's AI Media Generator v1.49
+# Lawiz's AI Media Generator v1.50
 
 Welcome to Lawiz's AI Media Generator, a powerful and versatile web application designed for creating stunning images and videos using state-of-the-art AI models. This tool provides a unified interface to interact with both Google's Gemini API and a self-hosted ComfyUI backend, offering a wide range of creative possibilities for both novice and advanced users.
 
@@ -11,7 +11,7 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 ### 2. Advanced Image Generation
 - **Multi-Provider Support:** Seamlessly switch between Gemini and ComfyUI for image generation.
 - **Rich Configuration:** Fine-tune every aspect of your creation, including aspect ratio, artistic style, photo era, and number of images.
-- **ComfyUI Workflow Support:** The UI dynamically loads your installed models, samplers, and LoRAs, with out-of-the-box support for popular workflows including SD 1.5, SDXL, FLUX, WAN 2.2, Nunchaku Kontext FLUX (i2i), Nunchaku FLUX Image, and FLUX Krea.
+- **ComfyUI Workflow Support:** The UI dynamically loads your installed models, samplers, and LoRAs, with out-of-the-box support for popular workflows including SD 1.5, SDXL, FLUX, WAN 2.2, Nunchaku Kontext FLUX (i2i), Nunchaku FLUX Image, FLUX Krea, and a powerful Face Detailer workflow for enhancing and fixing faces in existing images.
 - **Post-Processing:** Enhance the resolution and quality of generated images with a single click using the Gemini API.
 
 ### 3. AI-Powered Video Generation
