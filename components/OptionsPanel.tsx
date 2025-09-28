@@ -20,7 +20,7 @@ import { dataUrlToFile, fileToDataUrl, dataUrlToThumbnail, fileToResizedDataUrl 
 // --- Prop Types ---
 interface OptionsPanelProps {
   options: GenerationOptions;
-  setOptions: React.Dispatch<React.SetStateAction<GenerationOptions>>;
+  setOptions: (options: GenerationOptions) => void;
   generationMode: 't2i' | 'i2i';
   setGenerationMode: React.Dispatch<React.SetStateAction<'t2i' | 'i2i'>>;
   previewedBackgroundImage: string | null;
@@ -227,14 +227,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const [bgPreviewError, setBgPreviewError] = useState<string | null>(null);
     const [isPreviewingClothing, setIsPreviewingClothing] = useState(false);
     const [clothingPreviewError, setClothingPreviewError] = useState<string | null>(null);
-    const [selectedPoses, setSelectedPoses] = useState<string[]>(options.poseSelection);
     const [isGeneratingMask, setIsGeneratingMask] = useState<boolean>(false);
     const [maskGenError, setMaskGenError] = useState<string | null>(null);
     const [maskSavingState, setMaskSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
-
-    useEffect(() => {
-        setOptions(prev => ({ ...prev, poseSelection: selectedPoses }));
-    }, [selectedPoses, setOptions]);
 
     useEffect(() => {
         setMaskSavingState('idle');
@@ -341,59 +336,59 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     // This effect synchronizes the model types whenever the provider or generation mode changes.
     // It ensures the correct model and its default settings are loaded.
     useEffect(() => {
-        setOptions(prev => {
-            let newOptions = { ...prev };
-            let optionsChanged = false;
+        let newOptions = { ...options };
+        let optionsChanged = false;
 
-            if (newOptions.provider === 'comfyui') {
-                const isI2IModel = ['nunchaku-kontext-flux', 'face-detailer-sd1.5'].includes(newOptions.comfyModelType!);
-                if (generationMode === 'i2i' && !isI2IModel) {
-                    // Switching TO I2I mode for Comfy
-                    optionsChanged = true;
-                    newOptions.comfyModelType = 'nunchaku-kontext-flux';
-                    // Reset to nunchaku defaults (copied from handleOptionChange)
-                    newOptions.comfySteps = 10;
-                    newOptions.comfyCfg = 1;
-                    newOptions.comfySampler = 'euler';
-                    newOptions.comfyScheduler = 'simple';
-                    newOptions.comfyNegativePrompt = '';
-                    newOptions.comfyFluxGuidanceKontext = 2.5;
-                    newOptions.comfyNunchakuModel = nunchakuModels.find(m => m.includes('kontext-dev')) || nunchakuModels[0] || 'svdq-int4_r32-flux.1-kontext-dev.safetensors';
-                    newOptions.comfyNunchakuVae = comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors';
-                    newOptions.comfyNunchakuClipL = comfyClips.find(c => c.includes('ViT-L')) || comfyClips[0] || 'ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors';
-                    newOptions.comfyNunchakuT5XXL = t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp8_e4m3fn_scaled.safetensors';
-                    newOptions.comfyNunchakuCacheThreshold = 0.12;
-                    newOptions.comfyNunchakuCpuOffload = 'enable';
-                    newOptions.comfyNunchakuAttention = (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention;
-                    newOptions.comfyNunchakuUseTurboLora = true;
-                    newOptions.comfyNunchakuTurboLoraName = comfyLoras.find(l => l.includes('turbo')) || comfyLoras[0] || 'flux-turbo.safetensors';
-                    newOptions.comfyNunchakuTurboLoraStrength = 1.0;
-                    newOptions.comfyNunchakuUseNudifyLora = true;
-                    newOptions.comfyNunchakuNudifyLoraName = comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors';
-                    newOptions.comfyNunchakuNudifyLoraStrength = 1.0;
-                    newOptions.comfyNunchakuUseDetailLora = false;
-                    newOptions.comfyNunchakuDetailLoraName = comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors';
-                    newOptions.comfyNunchakuDetailLoraStrength = 1.0;
-                } else if (generationMode === 't2i' && isI2IModel) {
-                    // Switching FROM I2I mode for Comfy
-                    optionsChanged = true;
-                    const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
-                    newOptions.comfyModelType = 'sdxl';
-                    newOptions.comfyModel = sdxlModel || (comfyModels.length > 0 ? comfyModels[0] : '');
-                    newOptions.comfySteps = 25;
-                    newOptions.comfyCfg = 5.5;
-                    newOptions.comfySampler = 'euler';
-                    newOptions.comfyScheduler = 'normal';
-                }
-            } else if (newOptions.provider === 'gemini') {
-                if (newOptions.geminiMode !== generationMode) {
-                    optionsChanged = true;
-                    newOptions.geminiMode = generationMode;
-                }
+        if (newOptions.provider === 'comfyui') {
+            const isI2IModel = ['nunchaku-kontext-flux', 'face-detailer-sd1.5'].includes(newOptions.comfyModelType!);
+            if (generationMode === 'i2i' && !isI2IModel) {
+                // Switching TO I2I mode for Comfy
+                optionsChanged = true;
+                newOptions.comfyModelType = 'nunchaku-kontext-flux';
+                // Reset to nunchaku defaults (copied from handleOptionChange)
+                newOptions.comfySteps = 10;
+                newOptions.comfyCfg = 1;
+                newOptions.comfySampler = 'euler';
+                newOptions.comfyScheduler = 'simple';
+                newOptions.comfyNegativePrompt = '';
+                newOptions.comfyFluxGuidanceKontext = 2.5;
+                newOptions.comfyNunchakuModel = nunchakuModels.find(m => m.includes('kontext-dev')) || nunchakuModels[0] || 'svdq-int4_r32-flux.1-kontext-dev.safetensors';
+                newOptions.comfyNunchakuVae = comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors';
+                newOptions.comfyNunchakuClipL = comfyClips.find(c => c.includes('ViT-L')) || comfyClips[0] || 'ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors';
+                newOptions.comfyNunchakuT5XXL = t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp8_e4m3fn_scaled.safetensors';
+                newOptions.comfyNunchakuCacheThreshold = 0.12;
+                newOptions.comfyNunchakuCpuOffload = 'enable';
+                newOptions.comfyNunchakuAttention = (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention;
+                newOptions.comfyNunchakuUseTurboLora = true;
+                newOptions.comfyNunchakuTurboLoraName = comfyLoras.find(l => l.includes('turbo')) || comfyLoras[0] || 'flux-turbo.safetensors';
+                newOptions.comfyNunchakuTurboLoraStrength = 1.0;
+                newOptions.comfyNunchakuUseNudifyLora = true;
+                newOptions.comfyNunchakuNudifyLoraName = comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors';
+                newOptions.comfyNunchakuNudifyLoraStrength = 1.0;
+                newOptions.comfyNunchakuUseDetailLora = false;
+                newOptions.comfyNunchakuDetailLoraName = comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors';
+                newOptions.comfyNunchakuDetailLoraStrength = 1.0;
+            } else if (generationMode === 't2i' && isI2IModel) {
+                // Switching FROM I2I mode for Comfy
+                optionsChanged = true;
+                const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
+                newOptions.comfyModelType = 'sdxl';
+                newOptions.comfyModel = sdxlModel || (comfyModels.length > 0 ? comfyModels[0] : '');
+                newOptions.comfySteps = 25;
+                newOptions.comfyCfg = 5.5;
+                newOptions.comfySampler = 'euler';
+                newOptions.comfyScheduler = 'normal';
             }
-            
-            return optionsChanged ? newOptions : prev;
-        });
+        } else if (newOptions.provider === 'gemini') {
+            if (newOptions.geminiMode !== generationMode) {
+                optionsChanged = true;
+                newOptions.geminiMode = generationMode;
+            }
+        }
+        
+        if (optionsChanged) {
+            setOptions(newOptions);
+        }
     }, [options.provider, generationMode, setOptions, comfyModels, comfyVaes, comfyClips, comfyLoras, nunchakuModels, nunchakuAttentions, t5SafetensorEncoderModels]);
 
 
@@ -407,22 +402,22 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         if (field === 'imageStyle') {
             if (options.provider === 'gemini') {
                 const newStyle = value as ImageStyle;
-                setOptions(prev => ({
-                    ...prev,
+                setOptions({
+                    ...options,
                     imageStyle: newStyle,
-                    creativity: newStyle === 'photorealistic' ? undefined : (prev.creativity ?? 0.7)
-                }));
+                    creativity: newStyle === 'photorealistic' ? undefined : (options.creativity ?? 0.7)
+                });
                 return; 
             }
         }
         
         if (field === 'geminiT2IModel') {
             const newModel = value as 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image-preview';
-            setOptions(prev => ({
-                ...prev,
+            setOptions({
+                ...options,
                 geminiT2IModel: newModel,
                 aspectRatio: newModel === 'gemini-2.5-flash-image-preview' ? '1:1' : '3:4', // 3:4 is default
-            }));
+            });
             return;
         }
 
@@ -437,21 +432,19 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         };
 
         if (options.provider === 'comfyui' && ['imageStyle', 'photoStyle', 'eraStyle'].includes(field)) {
-            setOptions(prev => {
-                const oldPrefix = getStylePrefix(prev);
-                const tempOptions = { ...prev, [field]: value as string };
-                const newPrefix = getStylePrefix(tempOptions);
-                
-                let currentPrompt = prev.comfyPrompt || '';
-                
-                if (oldPrefix && currentPrompt.startsWith(oldPrefix)) {
-                    currentPrompt = currentPrompt.substring(oldPrefix.length);
-                }
-                
-                const newPrompt = `${newPrefix}${currentPrompt}`;
-                
-                return { ...prev, [field]: value, comfyPrompt: newPrompt };
-            });
+            const oldPrefix = getStylePrefix(options);
+            const tempOptions = { ...options, [field]: value as string };
+            const newPrefix = getStylePrefix(tempOptions);
+            
+            let currentPrompt = options.comfyPrompt || '';
+            
+            if (oldPrefix && currentPrompt.startsWith(oldPrefix)) {
+                currentPrompt = currentPrompt.substring(oldPrefix.length);
+            }
+            
+            const newPrompt = `${newPrefix}${currentPrompt}`;
+            
+            setOptions({ ...options, [field]: value, comfyPrompt: newPrompt });
             return;
         }
         
@@ -459,8 +452,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             const newModelType = value as 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5';
             if (newModelType === 'sd1.5') {
                  const sd15Model = comfyModels.find((m: string) => m.toLowerCase().includes('1.5') || m.toLowerCase().includes('15') || m.toLowerCase().includes('realisticvision')) || (comfyModels.length > 0 ? comfyModels[0] : '');
-                 setOptions(prev => ({
-                    ...prev,
+                 setOptions({
+                    ...options,
                     comfyModelType: 'sd1.5',
                     comfyModel: sd15Model,
                     comfySteps: 20,
@@ -470,13 +463,13 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfySeed: undefined,
                     comfySeedControl: 'randomize',
                     comfySeedIncrement: 1,
-                }));
+                });
             } else if (newModelType === 'flux') {
                 const specificFluxModel = comfyModels.find((m: string) => m === 'flux1-dev-fp8.safetensors');
                 const genericFluxModel = comfyModels.find((m: string) => m.toLowerCase().includes('flux'));
                 
-                setOptions(prev => ({
-                    ...prev,
+                setOptions({
+                    ...options,
                     comfyModelType: 'flux',
                     comfyModel: specificFluxModel || genericFluxModel || 'flux1-dev-fp8.safetensors',
                     comfySteps: 20,
@@ -484,11 +477,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfySampler: 'euler',
                     comfyScheduler: 'normal',
                     comfyFluxGuidance: 3.5,
-                }));
+                });
             } else if (newModelType === 'wan2.2') {
                  const allT5Models = [...t5GgufEncoderModels, ...t5SafetensorEncoderModels];
-                 setOptions(prev => ({
-                    ...prev,
+                 setOptions({
+                    ...options,
                     comfyModelType: 'wan2.2',
                     comfySteps: 6,
                     comfyCfg: 1,
@@ -510,10 +503,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyWanStockPhotoLoraStrength: 1.5,
                     comfyWanStockPhotoLoraNameHigh: comfyLoras.find(l => l.includes('stock') && l.includes('HIGH')) || comfyLoras[0] || 'stock_photography_wan22_HIGH_v1.safetensors',
                     comfyWanStockPhotoLoraNameLow: comfyLoras.find(l => l.includes('stock') && l.includes('LOW')) || comfyLoras[1] || 'stock_photography_wan22_LOW_v1.safetensors',
-                }));
+                });
             } else if (newModelType === 'nunchaku-kontext-flux') {
-                 setOptions(prev => ({
-                    ...prev,
+                 setOptions({
+                    ...options,
                     comfyModelType: 'nunchaku-kontext-flux',
                     comfySteps: 10,
                     comfyCfg: 1,
@@ -538,10 +531,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyNunchakuUseDetailLora: false,
                     comfyNunchakuDetailLoraName: comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors',
                     comfyNunchakuDetailLoraStrength: 1.0,
-                }));
+                });
             } else if (newModelType === 'nunchaku-flux-image') {
-                 setOptions(prev => ({
-                    ...prev,
+                 setOptions({
+                    ...options,
                     comfyModelType: 'nunchaku-flux-image',
                     comfySteps: 10,
                     comfySampler: 'res_2s',
@@ -567,10 +560,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyNunchakuUseDetailLora: false,
                     comfyNunchakuDetailLoraName: comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors',
                     comfyNunchakuDetailLoraStrength: 1.0,
-                }));
+                });
             } else if (newModelType === 'flux-krea') {
-                setOptions(prev => ({
-                    ...prev,
+                setOptions({
+                    ...options,
                     comfyModelType: 'flux-krea',
                     comfySteps: 20,
                     comfyCfg: 1,
@@ -595,11 +588,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyFluxKreaUpscaleModel: comfyUpscaleModels.find(m => m.includes('Siax')) || comfyUpscaleModels[0] || '4x_NMKD-Siax_200k.pth',
                     comfyFluxKreaDenoise: 0.8,
                     comfyFluxKreaUpscalerSteps: 10,
-                }));
+                });
             } else if (newModelType === 'face-detailer-sd1.5') {
                 const sd15Model = comfyModels.find((m: string) => m.toLowerCase().includes('1.5') || m.toLowerCase().includes('15') || m.toLowerCase().includes('epicphotogasm')) || (comfyModels.length > 0 ? comfyModels[0] : '');
-                setOptions(prev => ({
-                    ...prev,
+                setOptions({
+                    ...options,
                     comfyModelType: 'face-detailer-sd1.5',
                     comfyModel: sd15Model,
                     comfyPrompt: 'Female, young adult, dark long wavy hair, smiling, sunglasses, light-medium skin tone, green crop top, white trim, 85 on shirt, black wide-leg pants, barefoot, small earrings, bracelet, bare midriff, forearm tattoo.',
@@ -615,41 +608,42 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyDetailerBboxThreshold: 0.70,
                     comfyDetailerBboxDilation: 0,
                     comfyDetailerBboxCropFactor: 3.0,
-                }));
+                });
             } else { // Switching back to 'sdxl'
                 const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
-                setOptions(prev => ({
-                    ...prev,
+                setOptions({
+                    ...options,
                     comfyModelType: 'sdxl',
                     comfyModel: sdxlModel || (comfyModels.length > 0 ? comfyModels[0] : ''),
                     comfySteps: 25, // Default for SDXL
                     comfyCfg: 5.5, // Default for SDXL
                     comfySampler: 'euler',
                     comfyScheduler: 'normal',
-                }));
+                });
             }
         } else {
-            setOptions(prev => ({ ...prev, [field]: value }));
+            setOptions({ ...options, [field]: value });
         }
     };
 
     const handleSliderChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement>) => {
-        setOptions(prev => ({ ...prev, [field]: parseFloat(e.target.value) }));
+        setOptions({ ...options, [field]: parseFloat(e.target.value) });
     };
     
     const handleNumberInputChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement>) => {
-        setOptions(prev => ({ ...prev, [field]: parseInt(e.target.value, 10) || 0 }));
+        setOptions({ ...options, [field]: parseInt(e.target.value, 10) || 0 });
     };
 
     const handlePoseSelection = (poseValue: string) => {
-        setSelectedPoses(prev => {
-            const isSelected = prev.includes(poseValue);
-            if (isSelected) {
-                return prev.filter(p => p !== poseValue);
-            } else {
-                return [...prev, poseValue];
-            }
-        });
+        const { poseSelection } = options;
+        const isSelected = poseSelection.includes(poseValue);
+        let newSelectedPoses;
+        if (isSelected) {
+            newSelectedPoses = poseSelection.filter(p => p !== poseValue);
+        } else {
+            newSelectedPoses = [...poseSelection, poseValue];
+        }
+        setOptions({ ...options, poseSelection: newSelectedPoses });
     };
 
     const handleCustomPoseChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -658,12 +652,12 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             .map(p => p.trim())
             .filter(Boolean)
             .slice(0, 13); // Max 13 poses
-        setOptions(prev => ({ ...prev, poseSelection: poses }));
+        setOptions({ ...options, poseSelection: poses });
     };
 
     const handleRandomizeCustomPoses = () => {
         const randomPoses = generateRandomPosePrompts(options.numImages);
-        setOptions(prev => ({ ...prev, poseSelection: randomPoses }));
+        setOptions({ ...options, poseSelection: randomPoses });
     };
     
     const handleGenerateBgPreview = async () => {
@@ -703,15 +697,15 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     };
     
     const handleRandomizeClothing = () => {
-        setOptions(prev => ({ ...prev, customClothingPrompt: generateRandomClothingPrompt() }));
+        setOptions({ ...options, customClothingPrompt: generateRandomClothingPrompt() });
     };
 
     const handleRandomizeBackground = () => {
-        setOptions(prev => ({ ...prev, customBackground: generateRandomBackgroundPrompt() }));
+        setOptions({ ...options, customBackground: generateRandomBackgroundPrompt() });
     };
     
     const handleRandomizeTextObject = () => {
-        setOptions(prev => ({ ...prev, textObjectPrompt: getRandomTextObjectPrompt() }));
+        setOptions({ ...options, textObjectPrompt: getRandomTextObjectPrompt() });
     };
 
     const handleGenerateMask = async (subject: 'person' | 'clothing') => {
@@ -785,7 +779,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             {(['general', 'inpaint', 'compose'] as const).map(mode => (
                                  <button 
                                     key={mode}
-                                    onClick={() => setOptions(prev => ({...prev, geminiI2iMode: mode}))} 
+                                    onClick={() => setOptions({ ...options, geminiI2iMode: mode })} 
                                     disabled={isDisabled}
                                     className={`px-2 py-2 text-xs font-bold rounded-full transition-colors capitalize ${options.geminiI2iMode === mode ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
                                 >
@@ -860,7 +854,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     <>
                         <OptionSection title="Pose & Composition">
                             <SelectInput label="Pose Mode" value={options.poseMode} onChange={handleOptionChange('poseMode')} options={[{ value: 'random', label: 'Random Preset Poses' }, { value: 'select', label: 'Select Preset Poses' }, { value: 'prompt', label: 'Custom Pose Prompts' }, { value: 'library', label: 'From Library' }]} disabled={isDisabled} />
-                            {options.poseMode === 'select' && (<div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md"><p className="text-xs text-text-muted">Select up to {options.numImages} poses.</p>{PRESET_POSES.map(pose => (<label key={pose.value} className="flex items-center gap-2 p-2 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer"><input type="checkbox" checked={selectedPoses.includes(pose.value)} onChange={() => handlePoseSelection(pose.value)} disabled={isDisabled || (!selectedPoses.includes(pose.value) && selectedPoses.length >= options.numImages)} className="rounded text-accent focus:ring-accent" /><span className="text-sm">{pose.label}</span></label>))}</div>)}
+                            {options.poseMode === 'select' && (<div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md"><p className="text-xs text-text-muted">Select up to {options.numImages} poses.</p>{PRESET_POSES.map(pose => (<label key={pose.value} className="flex items-center gap-2 p-2 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer"><input type="checkbox" checked={options.poseSelection.includes(pose.value)} onChange={() => handlePoseSelection(pose.value)} disabled={isDisabled || (!options.poseSelection.includes(pose.value) && options.poseSelection.length >= options.numImages)} className="rounded text-accent focus:ring-accent" /><span className="text-sm">{pose.label}</span></label>))}</div>)}
                             {options.poseMode === 'prompt' && (<div><textarea value={options.poseSelection.join('\n')} onChange={handleCustomPoseChange} placeholder="Enter one pose prompt per line..." disabled={isDisabled} rows={4} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent" /><button onClick={handleRandomizeCustomPoses} disabled={isDisabled} className="mt-2 flex items-center gap-1.5 text-xs bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary font-semibold py-1 px-2 rounded-lg transition-colors"><RefreshIcon className="w-4 h-4" /> Randomize</button></div>)}
                             {options.poseMode === 'library' && onOpenPosePicker && (<div className="space-y-4 p-3 bg-bg-primary/50 rounded-lg border border-border-primary"><button onClick={onOpenPosePicker} disabled={isDisabled} className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"><LibraryIcon className="w-5 h-5" />Select Poses ({options.poseLibraryItems?.length || 0}/{options.numImages} selected)</button>{options.poseLibraryItems && options.poseLibraryItems.length > 0 && (<div className="grid grid-cols-4 gap-2">{options.poseLibraryItems.map(item => (<div key={item.id} className="relative aspect-square"><img src={item.thumbnail} alt={item.name} title={item.name} className="w-full h-full object-cover rounded-md" /></div>))}</div>)}<SelectInput label="Use Pose As" value={options.geminiPoseSource || 'mannequin'} onChange={handleOptionChange('geminiPoseSource')} options={[{ value: 'mannequin', label: 'Mannequin Image' }, { value: 'json', label: 'JSON Data' }]} disabled={isDisabled} /></div>)}
                         </OptionSection>
@@ -1167,7 +1161,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                 <input
                                     type="number"
                                     value={options.comfySeed ?? ''}
-                                    onChange={(e) => setOptions(prev => ({ ...prev, comfySeed: e.target.value ? parseInt(e.target.value, 10) : undefined }))}
+                                    onChange={(e) => setOptions({ ...options, comfySeed: e.target.value ? parseInt(e.target.value, 10) : undefined })}
                                     placeholder="Random"
                                     className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
                                     disabled={isDisabled}
@@ -1192,7 +1186,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                 <input
                                     type="number"
                                     value={options.comfySeedIncrement ?? 1}
-                                    onChange={(e) => setOptions(prev => ({ ...prev, comfySeedIncrement: parseInt(e.target.value, 10) || 1 }))}
+                                    onChange={(e) => setOptions({ ...options, comfySeedIncrement: parseInt(e.target.value, 10) || 1 })}
                                     min="1"
                                     className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
                                     disabled={isDisabled}
@@ -1241,14 +1235,14 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         {!hideProviderSwitch && (
             <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
                 <button 
-                    onClick={() => setOptions(prev => ({...prev, provider: 'gemini'}))} 
+                    onClick={() => setOptions({ ...options, provider: 'gemini'})} 
                     disabled={isDisabled}
                     className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'gemini' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
                 >
                     Gemini
                 </button>
                 <button 
-                    onClick={() => setOptions(prev => ({...prev, provider: 'comfyui'}))} 
+                    onClick={() => setOptions({ ...options, provider: 'comfyui'})} 
                     disabled={isDisabled || !comfyUIUrl}
                     className={`px-4 py-2 text-sm font-bold rounded-full transition-colors disabled:opacity-50 ${options.provider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
                 >

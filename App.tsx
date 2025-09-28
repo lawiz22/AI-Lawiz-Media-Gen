@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
@@ -10,6 +8,13 @@ import {
     openFeatureAnalysisModal, closeFeatureAnalysisModal, openOAuthHelper, closeOAuthHelper,
     setModalOpen
 } from './store/appSlice';
+import {
+    setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
+    setClothingImage, setBackgroundImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
+    setMaskImage, setElementImages, setOptions, updateOptions, setLoadingState,
+    updateProgress, setGeneratedImages, setLastUsedPrompt, resetGenerationState,
+    selectIsReadyToGenerate
+} from './store/generationSlice';
 
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 // Fix: Import 'AppSliceState' to resolve missing type error.
@@ -142,8 +147,10 @@ const initialLogoThemeState: LogoThemeState = {
 
 
 const App: React.FC = () => {
-    // --- Redux State ---
+    // --- Redux Dispatch ---
     const dispatch: AppDispatch = useDispatch();
+    
+    // --- App State (from appSlice) ---
     const {
         currentUser, theme, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
         isSettingsModalOpen, isAdminPanelOpen, isFeatureAnalysisModalOpen, isOAuthHelperOpen,
@@ -158,56 +165,14 @@ const App: React.FC = () => {
         driveFolder, isSyncing, syncMessage, isDriveConfigured
     } = useSelector((state: RootState) => state.app);
 
-    // --- Local Component State ---
-    // --- Image Generation State ---
-    const [sourceImage, setSourceImage] = useState<File | null>(null);
-    const [generationMode, setGenerationMode] = useState<'t2i' | 'i2i'>('t2i');
-    const [characterName, setCharacterName] = useState<string>('');
-    const [shouldGenerateCharacterName, setShouldGenerateCharacterName] = useState<boolean>(false);
-    const [clothingImage, setClothingImage] = useState<File | null>(null);
-    const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
-    const [previewedBackgroundImage, setPreviewedBackgroundImage] = useState<string | null>(null);
-    const [previewedClothingImage, setPreviewedClothingImage] = useState<string | null>(null);
-    const [maskImage, setMaskImage] = useState<File | null>(null);
-    const [elementImages, setElementImages] = useState<File[]>([]);
-    const [options, setOptions] = useState<GenerationOptions>({
-        provider: 'comfyui',
-        numImages: 4,
-        poseMode: 'random',
-        poseSelection: [],
-        poseLibraryItems: [],
-        geminiPoseSource: 'mannequin',
-        background: 'original',
-        clothing: 'original',
-        aspectRatio: '3:4',
-        imageStyle: 'photorealistic',
-        photoStyle: 'professional photoshoot',
-        eraStyle: 'a modern digital photograph',
-        geminiMode: 't2i',
-        geminiI2iMode: 'general',
-        geminiGeneralEditPrompt: '',
-        geminiInpaintTask: 'remove',
-        geminiInpaintCustomPrompt: '',
-        geminiInpaintTargetPrompt: '',
-        geminiComposePrompt: '',
-        // ComfyUI specific
-        comfyModelType: 'sdxl',
-        comfyPrompt: '',
-        comfyNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed, disfigured',
-        comfySteps: 25,
-        comfyCfg: 5.5,
-        comfySampler: 'euler',
-        comfyScheduler: 'normal',
-        // Video Generation defaults
-        videoProvider: 'comfyui',
-        comfyVidModelType: 'wan-i2v',
-    });
-    const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [progressMessage, setProgressMessage] = useState<string>('');
-    const [progressValue, setProgressValue] = useState<number>(0);
-    const [generatedImages, setGeneratedImages] = useState<string[]>([]);
-    const [lastUsedPrompt, setLastUsedPrompt] = useState<string | null>(null);
+    // --- Generation State (from generationSlice) ---
+    const {
+        sourceImage, generationMode, characterName, shouldGenerateCharacterName, clothingImage,
+        backgroundImage, previewedBackgroundImage, previewedClothingImage, maskImage, elementImages,
+        options, isLoading, progressMessage, progressValue, generatedImages, lastUsedPrompt
+    } = useSelector((state: RootState) => state.generation);
     
+    // --- Local Component State ---
     // --- Prompt Generation State ---
     const [promptGenState, setPromptGenState] = useState<PromptGenState>({
         image: null,
@@ -241,39 +206,7 @@ const App: React.FC = () => {
     const [activeLogoThemeSubTab, setActiveLogoThemeSubTab] = useState<string>('logo');
 
     // --- Computed State ---
-    const isReadyToGenerate = useMemo(() => {
-        if (isLoading) return false;
-
-        if (options.provider === 'gemini') {
-            if (options.geminiMode === 't2i') return !!options.geminiPrompt?.trim();
-            
-            // I2I modes
-            if (activeTab === 'image-generator') {
-                if (options.geminiI2iMode === 'general') {
-                    return !!sourceImage && !!options.geminiGeneralEditPrompt?.trim();
-                }
-                if (options.geminiI2iMode === 'inpaint') {
-                    return !!sourceImage; // Mask is optional
-                }
-                if (options.geminiI2iMode === 'compose') {
-                    return !!sourceImage && elementImages.length > 0 && !!options.geminiComposePrompt?.trim();
-                }
-            } else if (activeTab === 'character-generator') {
-                if (options.poseMode === 'library') {
-                     return !!sourceImage && !!options.poseLibraryItems && options.poseLibraryItems.length > 0;
-                }
-                return !!sourceImage;
-            }
-        } else if (options.provider === 'comfyui') {
-            const isI2IMode = generationMode === 'i2i';
-            const baseReady = !!isComfyUIConnected && !!options.comfyPrompt?.trim();
-            if (isI2IMode) {
-                return baseReady && !!sourceImage;
-            }
-            return baseReady;
-        }
-        return false;
-    }, [sourceImage, elementImages, options, isLoading, isComfyUIConnected, activeTab, generationMode]);
+    const isReadyToGenerate = useSelector(selectIsReadyToGenerate);
     
     const isVideoReady = useMemo(() => {
         if (isLoading) return false;
@@ -283,6 +216,11 @@ const App: React.FC = () => {
             return !!videoStartFrame;
         }
     }, [isLoading, options.videoProvider, options.geminiVidPrompt, videoStartFrame]);
+    
+    // --- Memoized Handlers for Redux ---
+    const handleSetOptions = useCallback((newOptions: GenerationOptions) => {
+        dispatch(setOptions(newOptions));
+    }, [dispatch]);
 
     // --- Effects ---
     const checkComfyUIConnection = useCallback(async (url: string) => {
@@ -356,11 +294,6 @@ const App: React.FC = () => {
         dispatch(setTheme(newTheme));
     };
 
-    const updateProgress = (message: string, value: number) => {
-        setProgressMessage(message);
-        setProgressValue(value);
-    };
-    
     const onAddSoupToHistory = (soup: string) => {
         setPromptGenState(prev => ({
             ...prev,
@@ -370,31 +303,7 @@ const App: React.FC = () => {
     };
     
     const handleReset = () => {
-        setSourceImage(null);
-        setClothingImage(null);
-        setBackgroundImage(null);
-        setPreviewedBackgroundImage(null);
-        setPreviewedClothingImage(null);
-        setGeneratedImages([]);
-        setLastUsedPrompt(null);
-        setCharacterName('');
-        setShouldGenerateCharacterName(false);
-        setMaskImage(null);
-        setElementImages([]);
-        setOptions(prev => ({
-            ...prev,
-            geminiPrompt: '',
-            comfyPrompt: '',
-            customBackground: '',
-            customClothingPrompt: '',
-            poseLibraryItems: [],
-            geminiI2iMode: 'general',
-            geminiGeneralEditPrompt: '',
-            geminiInpaintTask: 'remove',
-            geminiInpaintCustomPrompt: '',
-            geminiInpaintTargetPrompt: '',
-            geminiComposePrompt: '',
-        }));
+        dispatch(resetGenerationState());
         setPromptGenState({
             image: null, prompt: '', bgImage: null, bgPrompt: '',
             subjectImage: null, subjectPrompt: '', soupPrompt: '',
@@ -426,13 +335,17 @@ const App: React.FC = () => {
     }, []);
 
     const handleGenerate = async () => {
-        setIsLoading(true);
-        setGeneratedImages([]);
-        setLastUsedPrompt(null);
+        dispatch(setLoadingState({ isLoading: true }));
+        dispatch(setGeneratedImages([]));
+        dispatch(setLastUsedPrompt(null));
         dispatch(setGlobalError(null));
         if (!shouldGenerateCharacterName) {
-             setCharacterName('');
+             dispatch(setCharacterName(''));
         }
+        
+        const localUpdateProgress = (message: string, value: number) => {
+            dispatch(updateProgress({ message, value }));
+        };
         
         try {
             let result: { images: string[]; finalPrompt: string | null } = { images: [], finalPrompt: null };
@@ -440,32 +353,32 @@ const App: React.FC = () => {
             if (options.provider === 'gemini') {
                 if (options.geminiMode === 't2i') {
                     result = await generatePortraits(
-                        null, options, updateProgress, null, null,
+                        null, options, localUpdateProgress, null, null,
                         previewedBackgroundImage, previewedClothingImage, null, []
                     );
                 } else {
                     if (!sourceImage) throw new Error("Source image is required for Image-to-Image mode.");
                     result = await generatePortraits(
-                        sourceImage, options, updateProgress, clothingImage, backgroundImage,
+                        sourceImage, options, localUpdateProgress, clothingImage, backgroundImage,
                         previewedBackgroundImage, previewedClothingImage, maskImage, elementImages
                     );
                 }
             } else if (options.provider === 'comfyui') {
-                result = await generateComfyUIPortraits(sourceImage, options, updateProgress);
+                result = await generateComfyUIPortraits(sourceImage, options, localUpdateProgress);
             }
             
-            setGeneratedImages(result.images);
-            setLastUsedPrompt(result.finalPrompt);
+            dispatch(setGeneratedImages(result.images));
+            dispatch(setLastUsedPrompt(result.finalPrompt));
             
             if(result.images.length > 0) {
                 if (activeTab === 'character-generator' && shouldGenerateCharacterName) {
-                    updateProgress("Generating character name...", 0.96);
+                    localUpdateProgress("Generating character name...", 0.96);
                     try {
                         const name = await generateCharacterNameForImage(result.images[0]);
-                        setCharacterName(name);
+                        dispatch(setCharacterName(name));
                     } catch (nameError) {
                         console.warn("Could not generate character name:", nameError);
-                        setCharacterName(''); // Clear on error
+                        dispatch(setCharacterName('')); // Clear on error
                     }
                 }
             }
@@ -478,35 +391,37 @@ const App: React.FC = () => {
                 dispatch(setGlobalError({ title: "Generation Error", message: err.message || 'An unknown error occurred during generation.' }));
             }
         } finally {
-            setIsLoading(false);
-            setProgressValue(0);
-            setProgressMessage('');
+            dispatch(setLoadingState({ isLoading: false }));
         }
     };
     
     const handleGenerateVideo = async () => {
-        setIsLoading(true);
+        dispatch(setLoadingState({ isLoading: true }));
         setGeneratedVideo(null);
-        setLastUsedPrompt(null);
+        dispatch(setLastUsedPrompt(null));
         dispatch(setGlobalError(null));
         setGenerationOptionsForSave(options);
+
+        const localUpdateProgress = (message: string, value: number) => {
+            dispatch(updateProgress({ message, value }));
+        };
 
         try {
             if (options.videoProvider === 'comfyui') {
                 if (!videoStartFrame) throw new Error("A start frame is required for video generation.");
                 const { videoUrl, finalPrompt } = await generateComfyUIVideo(
-                    videoStartFrame, videoEndFrame, options, updateProgress
+                    videoStartFrame, videoEndFrame, options, localUpdateProgress
                 );
                 setGeneratedVideo(videoUrl);
-                setLastUsedPrompt(finalPrompt);
+                dispatch(setLastUsedPrompt(finalPrompt));
             } else if (options.videoProvider === 'gemini') {
                 const { videoUrl, finalPrompt } = await generateGeminiVideo(
                     options,
                     videoStartFrame, // This is optional for the service
-                    updateProgress
+                    localUpdateProgress
                 );
                 setGeneratedVideo(videoUrl);
-                setLastUsedPrompt(finalPrompt);
+                dispatch(setLastUsedPrompt(finalPrompt));
             } else {
                  throw new Error("Selected video provider is not implemented.");
             }
@@ -518,9 +433,7 @@ const App: React.FC = () => {
                 dispatch(setGlobalError({ title: "Video Generation Error", message: err.message || 'An unknown error occurred during video generation.' }));
             }
         } finally {
-            setIsLoading(false);
-            setProgressValue(0);
-            setProgressMessage('');
+            dispatch(setLoadingState({ isLoading: false }));
         }
     };
 
@@ -542,10 +455,10 @@ const App: React.FC = () => {
             const response = await fetch(imageDataUrl);
             const blob = await response.blob();
             const file = new File([blob], "i2i_source_image.jpeg", { type: "image/jpeg" });
-            setSourceImage(file);
-            setGenerationMode('i2i');
+            dispatch(setSourceImage(file));
+            dispatch(setGenerationMode('i2i'));
             dispatch(setActiveTab('image-generator'));
-            setCharacterName('');
+            dispatch(setCharacterName(''));
         } catch (error) {
             console.error("Error setting image for I2I:", error);
             dispatch(setGlobalError({ title: "File Error", message: "Could not use the selected image as a new source for I2I." }));
@@ -557,8 +470,8 @@ const App: React.FC = () => {
             const response = await fetch(imageDataUrl);
             const blob = await response.blob();
             const file = new File([blob], "character_source_image.jpeg", { type: "image/jpeg" });
-            setSourceImage(file);
-            setCharacterName('');
+            dispatch(setSourceImage(file));
+            dispatch(setCharacterName(''));
             dispatch(setActiveTab('character-generator'));
         } catch (error) {
             console.error("Error setting new source image for character:", error);
@@ -568,7 +481,7 @@ const App: React.FC = () => {
     
     const handleLoadLibraryItem = async (item: LibraryItem) => {
         if (item.options) {
-            setOptions(item.options);
+            dispatch(setOptions(item.options));
         }
         
         let sourceToSet: File | null = null;
@@ -585,19 +498,19 @@ const App: React.FC = () => {
 
         switch (item.mediaType) {
             case 'character':
-                setSourceImage(sourceToSet);
-                setGeneratedImages([item.media]);
+                dispatch(setSourceImage(sourceToSet));
+                dispatch(setGeneratedImages([item.media]));
                 // When loading a character, parse the name to separate it from the description
                 const [namePart] = (item.name || '').split(':');
-                setCharacterName(namePart.trim());
+                dispatch(setCharacterName(namePart.trim()));
                 dispatch(setActiveTab('character-generator'));
                 break;
             case 'image':
-                setSourceImage(sourceToSet);
-                setGeneratedImages([item.media]);
-                setCharacterName('');
+                dispatch(setSourceImage(sourceToSet));
+                dispatch(setGeneratedImages([item.media]));
+                dispatch(setCharacterName(''));
                 const isI2I = !!sourceToSet || item.options?.geminiMode === 'i2i';
-                setGenerationMode(isI2I ? 'i2i' : 't2i');
+                dispatch(setGenerationMode(isI2I ? 'i2i' : 't2i'));
                 dispatch(setActiveTab('image-generator'));
                 break;
             case 'video':
@@ -622,7 +535,7 @@ const App: React.FC = () => {
     };
     
     const handleUsePrompt = (prompt: string) => {
-        setOptions(prev => ({ ...prev, comfyPrompt: prompt, provider: 'comfyui' }));
+        dispatch(updateOptions({ comfyPrompt: prompt, provider: 'comfyui' }));
         dispatch(setActiveTab('image-generator'));
     };
     
@@ -691,20 +604,18 @@ const App: React.FC = () => {
             console.warn("Cancellation is not supported for the current provider.");
         }
 
-        setIsLoading(false);
-        setProgressValue(0);
-        setProgressMessage('');
+        dispatch(setLoadingState({ isLoading: false }));
     };
 
     const handleTabClick = (tabId: string) => {
         if (tabId === 'character-generator') {
             // This tab is Gemini I2I only
-            setOptions(prev => ({ ...prev, provider: 'gemini', geminiMode: 'i2i', geminiI2iMode: 'general' }));
+            dispatch(updateOptions({ provider: 'gemini', geminiMode: 'i2i', geminiI2iMode: 'general' }));
         } else if (tabId === 'image-generator') {
             // Reset to T2I when coming back to this tab
-            setGenerationMode('t2i');
+            dispatch(setGenerationMode('t2i'));
             if (options.provider === 'gemini') {
-                setOptions(prev => ({ ...prev, geminiMode: 't2i' }));
+                dispatch(updateOptions({ geminiMode: 't2i' }));
             }
         }
         dispatch(setActiveTab(tabId));
@@ -785,7 +696,7 @@ const App: React.FC = () => {
                                             <ImageUploader 
                                                 label="Source Image" 
                                                 id="i2i-source-image" 
-                                                onImageUpload={setSourceImage} 
+                                                onImageUpload={(file) => dispatch(setSourceImage(file))} 
                                                 sourceFile={sourceImage}
                                             />
                                         </div>
@@ -802,9 +713,9 @@ const App: React.FC = () => {
                             <OptionsPanel 
                                 title={generationMode === 'i2i' ? "2. Configure Options" : "1. Configure Options"}
                                 options={options} 
-                                setOptions={setOptions}
+                                setOptions={handleSetOptions}
                                 generationMode={generationMode}
-                                setGenerationMode={setGenerationMode}
+                                setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
                                 onGenerate={handleGenerate}
                                 onReset={handleReset}
                                 onGeneratePrompt={() => {}}
@@ -813,18 +724,18 @@ const App: React.FC = () => {
                                 isReady={isReadyToGenerate}
                                 isGeneratingPrompt={false}
                                 previewedBackgroundImage={previewedBackgroundImage}
-                                setPreviewedBackgroundImage={setPreviewedBackgroundImage}
+                                setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
                                 previewedClothingImage={previewedClothingImage}
-                                setPreviewedClothingImage={setPreviewedClothingImage}
+                                setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
                                 comfyUIObjectInfo={comfyUIObjectInfo}
                                 comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                                 sourceImage={sourceImage}
                                 hideGeminiModeSwitch={true}
                                 activeTab={activeTab}
                                 maskImage={maskImage}
-                                setMaskImage={setMaskImage}
+                                setMaskImage={(file) => dispatch(setMaskImage(file))}
                                 elementImages={elementImages}
-                                setElementImages={setElementImages}
+                                setElementImages={(files) => dispatch(setElementImages(files))}
                                 onOpenMaskPicker={() => openModal('isMaskPickerOpen')}
                                 onOpenElementPicker={() => openModal('isElementPickerOpen')}
                             />
@@ -864,7 +775,7 @@ const App: React.FC = () => {
                                         <ImageUploader 
                                             label="Source Face / Pose" 
                                             id="source-image" 
-                                            onImageUpload={setSourceImage} 
+                                            onImageUpload={(file) => dispatch(setSourceImage(file))} 
                                             sourceFile={sourceImage}
                                         />
                                     </div>
@@ -882,7 +793,7 @@ const App: React.FC = () => {
                                         type="text"
                                         id="character-name"
                                         value={characterName}
-                                        onChange={(e) => setCharacterName(e.target.value)}
+                                        onChange={(e) => dispatch(setCharacterName(e.target.value))}
                                         placeholder={shouldGenerateCharacterName ? "AI will suggest a name after generation..." : "Enter a name for your character"}
                                         className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
                                         disabled={isLoading}
@@ -892,7 +803,7 @@ const App: React.FC = () => {
                                             <input
                                                 type="checkbox"
                                                 checked={shouldGenerateCharacterName}
-                                                onChange={(e) => setShouldGenerateCharacterName(e.target.checked)}
+                                                onChange={(e) => dispatch(setShouldGenerateCharacterName(e.target.checked))}
                                                 disabled={isLoading}
                                                 className="rounded text-accent focus:ring-accent"
                                             />
@@ -908,7 +819,7 @@ const App: React.FC = () => {
                                     <div className="space-y-4">
                                         {options.clothing === 'image' && (
                                             <div className="flex items-center gap-2">
-                                                <ImageUploader label="Clothing" id="clothing-image" onImageUpload={setClothingImage} sourceFile={clothingImage} />
+                                                <ImageUploader label="Clothing" id="clothing-image" onImageUpload={(file) => dispatch(setClothingImage(file))} sourceFile={clothingImage} />
                                                 <button onClick={() => openModal('isClothingPickerOpen')} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
                                                     <LibraryIcon className="w-6 h-6"/>
                                                 </button>
@@ -916,7 +827,7 @@ const App: React.FC = () => {
                                         )}
                                         {options.background === 'image' && (
                                             <div className="flex items-center gap-2">
-                                                <ImageUploader label="Background" id="background-image" onImageUpload={setBackgroundImage} sourceFile={backgroundImage}/>
+                                                <ImageUploader label="Background" id="background-image" onImageUpload={(file) => dispatch(setBackgroundImage(file))} sourceFile={backgroundImage}/>
                                                 <button onClick={() => openModal('isBackgroundPickerOpen')} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
                                                     <LibraryIcon className="w-6 h-6"/>
                                                 </button>
@@ -929,9 +840,9 @@ const App: React.FC = () => {
                             <OptionsPanel 
                                 title="2. Configure Options"
                                 options={options} 
-                                setOptions={setOptions}
+                                setOptions={handleSetOptions}
                                 generationMode={generationMode}
-                                setGenerationMode={setGenerationMode}
+                                setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
                                 onGenerate={handleGenerate}
                                 onReset={handleReset}
                                 onGeneratePrompt={() => {}}
@@ -941,9 +852,9 @@ const App: React.FC = () => {
                                 isReady={isReadyToGenerate}
                                 isGeneratingPrompt={false}
                                 previewedBackgroundImage={previewedBackgroundImage}
-                                setPreviewedBackgroundImage={setPreviewedBackgroundImage}
+                                setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
                                 previewedClothingImage={previewedClothingImage}
-                                setPreviewedClothingImage={setPreviewedClothingImage}
+                                setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
                                 comfyUIObjectInfo={comfyUIObjectInfo}
                                 comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                                 sourceImage={sourceImage}
@@ -952,9 +863,9 @@ const App: React.FC = () => {
                                 hideGenerationModeSwitch={true}
                                 activeTab={activeTab}
                                 maskImage={maskImage}
-                                setMaskImage={setMaskImage}
+                                setMaskImage={(file) => dispatch(setMaskImage(file))}
                                 elementImages={elementImages}
-                                setElementImages={setElementImages}
+                                setElementImages={(files) => dispatch(setElementImages(files))}
                                 onOpenMaskPicker={() => {}}
                                 onOpenElementPicker={() => {}}
                             />
@@ -986,7 +897,7 @@ const App: React.FC = () => {
                 <div className={activeTab === 'video-generator' ? 'block' : 'hidden'}>
                      <VideoGeneratorPanel
                         options={options}
-                        setOptions={setOptions}
+                        setOptions={handleSetOptions}
                         comfyUIObjectInfo={comfyUIObjectInfo}
                         startFrame={videoStartFrame}
                         setStartFrame={setVideoStartFrame}
@@ -1160,7 +1071,7 @@ const App: React.FC = () => {
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
-                        setClothingImage(new File([blob], "library_clothing.jpeg", { type: blob.type }));
+                        dispatch(setClothingImage(new File([blob], "library_clothing.jpeg", { type: blob.type })));
                     }}
                     filter="clothes"
                 />
@@ -1172,7 +1083,7 @@ const App: React.FC = () => {
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
-                        setBackgroundImage(new File([blob], "library_background.jpeg", { type: blob.type }));
+                        dispatch(setBackgroundImage(new File([blob], "library_background.jpeg", { type: blob.type })));
                     }}
                     filter="image"
                 />
@@ -1184,7 +1095,7 @@ const App: React.FC = () => {
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
-                        setSourceImage(new File([blob], "library_source.jpeg", { type: blob.type }));
+                        dispatch(setSourceImage(new File([blob], "library_source.jpeg", { type: blob.type })));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1197,8 +1108,8 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_source.jpeg", { type: blob.type });
-                        setSourceImage(file);
-                        setCharacterName('');
+                        dispatch(setSourceImage(file));
+                        dispatch(setCharacterName(''));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1209,7 +1120,7 @@ const App: React.FC = () => {
                     onClose={() => closeModal('isPosePickerOpen')}
                     onSelectItem={() => {}}
                     onSelectMultiple={(items) => {
-                        setOptions(prev => ({ ...prev, poseLibraryItems: items.slice(0, prev.numImages) }));
+                        dispatch(updateOptions({ poseLibraryItems: items.slice(0, options.numImages) }));
                     }}
                     filter="pose"
                     multiSelect
@@ -1222,7 +1133,7 @@ const App: React.FC = () => {
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
-                        setMaskImage(new File([blob], "library_mask.png", { type: blob.type }));
+                        dispatch(setMaskImage(new File([blob], "library_mask.png", { type: blob.type })));
                     }}
                     filter="image"
                 />
@@ -1236,7 +1147,7 @@ const App: React.FC = () => {
                         const files = await Promise.all(
                             items.map(item => dataUrlToFile(item.media, item.name || `element_${item.id}.jpeg`))
                         );
-                        setElementImages(prev => [...prev, ...files].slice(0, 5));
+                        dispatch(setElementImages([...elementImages, ...files].slice(0, 5)));
                     }}
                     filter={broadImagePickerFilter}
                     multiSelect

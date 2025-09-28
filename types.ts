@@ -474,3 +474,22 @@ export interface AppSliceState {
   syncMessage: string;
   isDriveConfigured: boolean;
 }
+
+export interface GenerationSliceState {
+  sourceImage: File | null;
+  generationMode: 't2i' | 'i2i';
+  characterName: string;
+  shouldGenerateCharacterName: boolean;
+  clothingImage: File | null;
+  backgroundImage: File | null;
+  previewedBackgroundImage: string | null;
+  previewedClothingImage: string | null;
+  maskImage: File | null;
+  elementImages: File[];
+  options: GenerationOptions;
+  isLoading: boolean;
+  progressMessage: string;
+  progressValue: number;
+  generatedImages: string[];
+  lastUsedPrompt: string | null;
+}

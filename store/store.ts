@@ -1,15 +1,25 @@
 import { configureStore } from '@reduxjs/toolkit';
 import appReducer from './appSlice';
+import generationReducer from './generationSlice';
 
 export const store = configureStore({
   reducer: {
     app: appReducer,
+    generation: generationReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        // This is needed because comfyUIObjectInfo can contain non-serializable data.
-        ignoredPaths: ['app.comfyUIObjectInfo', 'app.driveFolder'],
+        // This is needed because some state holds non-serializable data like File objects.
+        ignoredPaths: [
+            'app.comfyUIObjectInfo', 
+            'app.driveFolder',
+            'generation.sourceImage',
+            'generation.clothingImage',
+            'generation.backgroundImage',
+            'generation.maskImage',
+            'generation.elementImages',
+        ],
         ignoredActions: ['app/setDriveFolder'], // The folder object may not be serializable
       },
     }),

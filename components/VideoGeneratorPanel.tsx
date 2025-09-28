@@ -10,7 +10,7 @@ import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromFile, d
 // --- Prop Types ---
 interface VideoGeneratorPanelProps {
   options: GenerationOptions;
-  setOptions: React.Dispatch<React.SetStateAction<GenerationOptions>>;
+  setOptions: (options: GenerationOptions) => void;
   comfyUIObjectInfo: any | null;
   startFrame: File | null;
   setStartFrame: (file: File | null) => void;
@@ -161,8 +161,8 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
             // Guard against running if no models are found, which would set incorrect fallbacks.
             if (comfyGgufModels.length === 0) return;
 
-            setOptions(prev => ({
-                ...prev,
+            setOptions({
+                ...options,
                 // --- Models ---
                 comfyVidWanI2VHighNoiseModel: comfyGgufModels.find(m => m.toLowerCase().includes('highnoise')) || comfyGgufModels[0],
                 comfyVidWanI2VLowNoiseModel: comfyGgufModels.find(m => m.toLowerCase().includes('lownoise')) || (comfyGgufModels.length > 1 ? comfyGgufModels[1] : comfyGgufModels[0]),
@@ -171,8 +171,8 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                 comfyVidWanI2VClipVisionModel: comfyClipVision.find(cv => cv.includes('clip_vision_h')) || comfyClipVision[0],
 
                 // --- Prompts (keep user's if they exist) ---
-                comfyVidWanI2VPositivePrompt: prev.comfyVidWanI2VPositivePrompt || 'cinematic shot of a majestic lion walking through the savanna',
-                comfyVidWanI2VNegativePrompt: prev.comfyVidWanI2VNegativePrompt || 'blurry, bad quality, low-res, ugly, deformed, disfigured, text, watermark',
+                comfyVidWanI2VPositivePrompt: options.comfyVidWanI2VPositivePrompt || 'cinematic shot of a majestic lion walking through the savanna',
+                comfyVidWanI2VNegativePrompt: options.comfyVidWanI2VNegativePrompt || 'blurry, bad quality, low-res, ugly, deformed, disfigured, text, watermark',
 
                 // --- Core Settings ---
                 comfyVidWanI2VSteps: 6,
@@ -207,7 +207,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                 // --- End Frame Logic ---
                 comfyVidWanI2VUseEndFrame: !!endFrame,
                 comfyVidWanI2VEndFrameStrength: 1.0,
-            }));
+            });
         }
     }, [
         options.videoProvider, 
@@ -264,7 +264,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                 img.onload = () => {
                     const width = Math.round(img.naturalWidth / 8) * 8;
                     const height = Math.round(img.naturalHeight / 8) * 8;
-                    setOptions(prev => ({ ...prev, comfyVidWanI2VWidth: width, comfyVidWanI2VHeight: height }));
+                    setOptions({ ...options, comfyVidWanI2VWidth: width, comfyVidWanI2VHeight: height });
                     URL.revokeObjectURL(objectUrl);
                 };
                 img.onerror = () => URL.revokeObjectURL(objectUrl);
@@ -273,16 +273,16 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
         };
 
         if (startFrame) detectAndSetDimensions(startFrame);
-        else setOptions(prev => ({ ...prev, comfyVidWanI2VWidth: 848, comfyVidWanI2VHeight: 560 }));
+        else setOptions({ ...options, comfyVidWanI2VWidth: 848, comfyVidWanI2VHeight: 560 });
     }, [startFrame, setOptions]);
 
     const handleOptionChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
-        setOptions(prev => ({ ...prev, [field]: value }));
+        setOptions({ ...options, [field]: value });
     };
 
     const handleSliderChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement>) => {
-        setOptions(prev => ({ ...prev, [field]: parseFloat(e.target.value) }));
+        setOptions({ ...options, [field]: parseFloat(e.target.value) });
     };
 
     const handleCopyPrompt = () => {
@@ -294,7 +294,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
 
     const handleUseEndFrameChange = (e: ChangeEvent<HTMLInputElement>) => {
         const isChecked = e.target.checked;
-        setOptions(prev => ({ ...prev, comfyVidWanI2VUseEndFrame: isChecked }));
+        setOptions({ ...options, comfyVidWanI2VUseEndFrame: isChecked });
         if (!isChecked) {
             setEndFrame(null);
             setOriginalEndFrame(null);
@@ -417,14 +417,14 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const renderProviderSwitch = () => (
         <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1 mb-6">
             <button 
-                onClick={() => setOptions(prev => ({...prev, videoProvider: 'comfyui'}))} 
+                onClick={() => setOptions({ ...options, videoProvider: 'comfyui'})} 
                 disabled={isLoading}
                 className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.videoProvider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
             >
                 ComfyUI
             </button>
             <button 
-                onClick={() => setOptions(prev => ({...prev, videoProvider: 'gemini'}))} 
+                onClick={() => setOptions({ ...options, videoProvider: 'gemini'})} 
                 disabled={isLoading}
                 className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.videoProvider === 'gemini' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
             >
