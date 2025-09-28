@@ -493,3 +493,15 @@ export interface GenerationSliceState {
   generatedImages: string[];
   lastUsedPrompt: string | null;
 }
+
+export interface VideoSliceState {
+  // Video Generation
+  videoStartFrame: File | null;
+  videoEndFrame: File | null;
+  generatedVideoUrl: string | null;
+  generationOptionsForSave: GenerationOptions | null;
+  
+  // Video Utilities
+  videoUtilsState: VideoUtilsState;
+  activeVideoUtilsSubTab: 'frames' | 'colors';
+}

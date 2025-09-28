@@ -1,11 +1,13 @@
 import { configureStore } from '@reduxjs/toolkit';
 import appReducer from './appSlice';
 import generationReducer from './generationSlice';
+import videoReducer from './videoSlice';
 
 export const store = configureStore({
   reducer: {
     app: appReducer,
     generation: generationReducer,
+    video: videoReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -19,6 +21,10 @@ export const store = configureStore({
             'generation.backgroundImage',
             'generation.maskImage',
             'generation.elementImages',
+            'video.videoStartFrame',
+            'video.videoEndFrame',
+            'video.videoUtilsState.videoFile',
+            'video.videoUtilsState.colorPicker.imageFile',
         ],
         ignoredActions: ['app/setDriveFolder'], // The folder object may not be serializable
       },

@@ -224,7 +224,7 @@ interface VideoUtilsPanelProps {
     setStartFrame: (file: File | null) => void;
     setEndFrame: (file: File | null) => void;
     videoUtilsState: VideoUtilsState;
-    setVideoUtilsState: React.Dispatch<React.SetStateAction<VideoUtilsState>>;
+    updateVideoUtilsState: (updater: React.SetStateAction<VideoUtilsState>) => void;
     onOpenLibrary: () => void;
     onOpenVideoLibrary: () => void;
     activeSubTab: string;
@@ -236,7 +236,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     setStartFrame, 
     setEndFrame,
     videoUtilsState,
-    setVideoUtilsState,
+    updateVideoUtilsState,
     onOpenLibrary,
     onOpenVideoLibrary,
     activeSubTab,
@@ -247,13 +247,13 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
 
     // --- State Setters ---
     const setVideoFile = (file: File | null) => {
-        setVideoUtilsState(prev => ({ ...prev, videoFile: file, extractedFrame: null }));
+        updateVideoUtilsState(prev => ({ ...prev, videoFile: file, extractedFrame: null }));
     };
     const setExtractedFrame = (frame: string | null) => {
-        setVideoUtilsState(prev => ({ ...prev, extractedFrame: frame }));
+        updateVideoUtilsState(prev => ({ ...prev, extractedFrame: frame }));
     };
     const setColorPickerState = (updater: (prevState: ColorPickerState) => ColorPickerState) => {
-        setVideoUtilsState(prev => ({
+        updateVideoUtilsState(prev => ({
             ...prev,
             colorPicker: updater(prev.colorPicker),
         }));

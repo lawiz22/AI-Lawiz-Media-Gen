@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
 import {
@@ -15,6 +15,11 @@ import {
     updateProgress, setGeneratedImages, setLastUsedPrompt, resetGenerationState,
     selectIsReadyToGenerate
 } from './store/generationSlice';
+import {
+    setVideoStartFrame, setVideoEndFrame, setGeneratedVideoUrl, setGenerationOptionsForSave,
+    setVideoUtilsState, setActiveVideoUtilsSubTab, resetVideoGenerationState,
+    resetVideoUtilsState, selectIsVideoReady
+} from './store/videoSlice';
 
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 // Fix: Import 'AppSliceState' to resolve missing type error.
@@ -77,21 +82,6 @@ const initialExtractorState: ExtractorState = {
     isGeneratingFont: false,
     generatedFontChart: null,
     fontError: null,
-};
-
-const initialVideoUtilsState: VideoUtilsState = {
-    videoFile: null,
-    extractedFrame: null,
-    colorPicker: {
-        imageFile: null,
-        palette: [],
-        paletteName: '',
-        colorCount: 8,
-        isExtracting: false,
-        error: null,
-        dominantColorPool: [],
-        pickingColorIndex: null,
-    },
 };
 
 const initialLogoThemeState: LogoThemeState = {
@@ -171,6 +161,12 @@ const App: React.FC = () => {
         backgroundImage, previewedBackgroundImage, previewedClothingImage, maskImage, elementImages,
         options, isLoading, progressMessage, progressValue, generatedImages, lastUsedPrompt
     } = useSelector((state: RootState) => state.generation);
+
+    // --- Video State (from videoSlice) ---
+    const {
+        videoStartFrame, videoEndFrame, generatedVideoUrl, generationOptionsForSave,
+        videoUtilsState, activeVideoUtilsSubTab
+    } = useSelector((state: RootState) => state.video);
     
     // --- Local Component State ---
     // --- Prompt Generation State ---
@@ -186,17 +182,6 @@ const App: React.FC = () => {
     });
     const [activePromptToolsSubTab, setActivePromptToolsSubTab] = useState<string>('from-image');
 
-
-    // --- Video Generation State ---
-    const [videoStartFrame, setVideoStartFrame] = useState<File | null>(null);
-    const [videoEndFrame, setVideoEndFrame] = useState<File | null>(null);
-    const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
-    const [generationOptionsForSave, setGenerationOptionsForSave] = useState<GenerationOptions | null>(null);
-
-    // --- Video Utilities State ---
-    const [videoUtilsState, setVideoUtilsState] = useState<VideoUtilsState>(initialVideoUtilsState);
-    const [activeVideoUtilsSubTab, setActiveVideoUtilsSubTab] = useState<string>('frames');
-    
     // --- Extractor Tools State ---
     const [extractorState, setExtractorState] = useState<ExtractorState>(initialExtractorState);
     const [activeExtractorSubTab, setActiveExtractorSubTab] = useState<string>('clothes');
@@ -207,20 +192,26 @@ const App: React.FC = () => {
 
     // --- Computed State ---
     const isReadyToGenerate = useSelector(selectIsReadyToGenerate);
-    
-    const isVideoReady = useMemo(() => {
-        if (isLoading) return false;
-        if (options.videoProvider === 'gemini') {
-            return !!options.geminiVidPrompt?.trim();
-        } else { // comfyui
-            return !!videoStartFrame;
-        }
-    }, [isLoading, options.videoProvider, options.geminiVidPrompt, videoStartFrame]);
+    const isVideoReady = useSelector(selectIsVideoReady);
     
     // --- Memoized Handlers for Redux ---
     const handleSetOptions = useCallback((newOptions: GenerationOptions) => {
         dispatch(setOptions(newOptions));
     }, [dispatch]);
+
+    const handleSetVideoStartFrame = useCallback((file: File | null) => {
+        dispatch(setVideoStartFrame(file));
+    }, [dispatch]);
+
+    const handleSetVideoEndFrame = useCallback((file: File | null) => {
+        dispatch(setVideoEndFrame(file));
+    }, [dispatch]);
+
+    const handleSetVideoUtilsState = useCallback((updater: React.SetStateAction<VideoUtilsState>) => {
+        const newState = typeof updater === 'function' ? updater(videoUtilsState) : updater;
+        dispatch(setVideoUtilsState(newState));
+    }, [dispatch, videoUtilsState]);
+
 
     // --- Effects ---
     const checkComfyUIConnection = useCallback(async (url: string) => {
@@ -312,10 +303,7 @@ const App: React.FC = () => {
     };
     
     const handleVideoReset = () => {
-        setVideoStartFrame(null);
-        setVideoEndFrame(null);
-        setGeneratedVideo(null);
-        setGenerationOptionsForSave(null);
+        dispatch(resetVideoGenerationState());
     };
 
     const handleExtractorReset = () => {
@@ -331,8 +319,8 @@ const App: React.FC = () => {
     }, []);
 
     const handleVideoUtilsReset = useCallback(() => {
-        setVideoUtilsState(initialVideoUtilsState);
-    }, []);
+        dispatch(resetVideoUtilsState());
+    }, [dispatch]);
 
     const handleGenerate = async () => {
         dispatch(setLoadingState({ isLoading: true }));
@@ -397,10 +385,10 @@ const App: React.FC = () => {
     
     const handleGenerateVideo = async () => {
         dispatch(setLoadingState({ isLoading: true }));
-        setGeneratedVideo(null);
+        dispatch(setGeneratedVideoUrl(null));
         dispatch(setLastUsedPrompt(null));
         dispatch(setGlobalError(null));
-        setGenerationOptionsForSave(options);
+        dispatch(setGenerationOptionsForSave(options));
 
         const localUpdateProgress = (message: string, value: number) => {
             dispatch(updateProgress({ message, value }));
@@ -412,7 +400,7 @@ const App: React.FC = () => {
                 const { videoUrl, finalPrompt } = await generateComfyUIVideo(
                     videoStartFrame, videoEndFrame, options, localUpdateProgress
                 );
-                setGeneratedVideo(videoUrl);
+                dispatch(setGeneratedVideoUrl(videoUrl));
                 dispatch(setLastUsedPrompt(finalPrompt));
             } else if (options.videoProvider === 'gemini') {
                 const { videoUrl, finalPrompt } = await generateGeminiVideo(
@@ -420,7 +408,7 @@ const App: React.FC = () => {
                     videoStartFrame, // This is optional for the service
                     localUpdateProgress
                 );
-                setGeneratedVideo(videoUrl);
+                dispatch(setGeneratedVideoUrl(videoUrl));
                 dispatch(setLastUsedPrompt(finalPrompt));
             } else {
                  throw new Error("Selected video provider is not implemented.");
@@ -514,17 +502,17 @@ const App: React.FC = () => {
                 dispatch(setActiveTab('image-generator'));
                 break;
             case 'video':
-                setVideoStartFrame(sourceToSet);
+                dispatch(setVideoStartFrame(sourceToSet));
                 if (item.endFrame) {
                     try {
                          const response = await fetch(item.endFrame);
                          const blob = await response.blob();
-                         setVideoEndFrame(new File([blob], "library-end-frame.jpeg", { type: "image/jpeg" }));
+                         dispatch(setVideoEndFrame(new File([blob], "library-end-frame.jpeg", { type: "image/jpeg" })));
                     } catch(e) { console.error("Could not load library end frame image:", e); }
                 } else {
-                    setVideoEndFrame(null);
+                    dispatch(setVideoEndFrame(null));
                 }
-                setGeneratedVideo(item.media);
+                dispatch(setGeneratedVideoUrl(item.media));
                 dispatch(setActiveTab('video-generator'));
                 break;
             case 'clothes':
@@ -900,14 +888,14 @@ const App: React.FC = () => {
                         setOptions={handleSetOptions}
                         comfyUIObjectInfo={comfyUIObjectInfo}
                         startFrame={videoStartFrame}
-                        setStartFrame={setVideoStartFrame}
+                        setStartFrame={handleSetVideoStartFrame}
                         endFrame={videoEndFrame}
-                        setEndFrame={setVideoEndFrame}
+                        setEndFrame={handleSetVideoEndFrame}
                         onGenerate={handleGenerateVideo}
                         isReady={isVideoReady}
                         isLoading={isLoading}
                         error={globalError ? globalError.message : null}
-                        generatedVideo={generatedVideo}
+                        generatedVideo={generatedVideoUrl}
                         lastUsedPrompt={lastUsedPrompt}
                         progressMessage={progressMessage}
                         progressValue={progressValue}
@@ -990,16 +978,14 @@ const App: React.FC = () => {
                 
                  <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
                     <VideoUtilsPanel
-                        setStartFrame={setVideoStartFrame}
-                        // Fix: The 'setEndFrame' prop was being passed an undefined variable. Changed to use the correct state setter 'setVideoEndFrame'.
-                        setEndFrame={setVideoEndFrame}
+                        setStartFrame={handleSetVideoStartFrame}
+                        setEndFrame={handleSetVideoEndFrame}
                         videoUtilsState={videoUtilsState}
-                        setVideoUtilsState={setVideoUtilsState}
+                        updateVideoUtilsState={handleSetVideoUtilsState}
                         onOpenLibrary={() => openModal('isColorImagePickerOpen')}
                         onOpenVideoLibrary={() => openModal('isVideoUtilsPickerOpen')}
                         activeSubTab={activeVideoUtilsSubTab}
-                        // Fix: The 'setActiveSubTab' prop was being passed an undefined variable. Changed to use the correct state setter 'setActiveVideoUtilsSubTab'.
-                        setActiveSubTab={setActiveVideoUtilsSubTab}
+                        setActiveSubTab={(tab) => dispatch(setActiveVideoUtilsSubTab(tab as 'frames' | 'colors'))}
                         onReset={handleVideoUtilsReset}
                     />
                 </div>
@@ -1161,7 +1147,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_start_frame.jpeg", { type: blob.type });
-                        setVideoStartFrame(file);
+                        dispatch(setVideoStartFrame(file));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1174,7 +1160,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_end_frame.jpeg", { type: blob.type });
-                        setVideoEndFrame(file);
+                        dispatch(setVideoEndFrame(file));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1187,7 +1173,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_gemini_source.jpeg", { type: blob.type });
-                        setVideoStartFrame(file); // Gemini uses the start frame state
+                        dispatch(setVideoStartFrame(file)); // Gemini uses the start frame state
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1266,10 +1252,10 @@ const App: React.FC = () => {
                         const blob = await res.blob();
                         const file = new File([blob], item.name || "library_color_source.jpeg", { type: blob.type });
                         const paletteName = `Palette from "${item.name || 'Library Item'}"`;
-                        setVideoUtilsState(prev => ({
-                            ...prev,
+                        dispatch(setVideoUtilsState({
+                            ...videoUtilsState,
                             colorPicker: { 
-                                ...prev.colorPicker, 
+                                ...videoUtilsState.colorPicker, 
                                 imageFile: file,
                                 paletteName: paletteName,
                                 palette: [],
@@ -1288,8 +1274,8 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], item.name || "library_video.mp4", { type: blob.type });
-                        setVideoUtilsState(prev => ({
-                            ...prev,
+                        dispatch(setVideoUtilsState({
+                            ...videoUtilsState,
                             videoFile: file,
                             extractedFrame: null,
                         }));
