@@ -136,9 +136,10 @@ const App: React.FC = () => {
         dispatch(setExtractorState(newState));
     }, [dispatch, extractorState]);
 
-    const handleSetLogoThemeState = useCallback((newState: LogoThemeState) => {
+    const handleSetLogoThemeState = useCallback((updater: React.SetStateAction<LogoThemeState>) => {
+        const newState = typeof updater === 'function' ? updater(logoThemeState) : updater;
         dispatch(setLogoThemeState(newState));
-    }, [dispatch]);
+    }, [dispatch, logoThemeState]);
 
 
     // --- Effects ---
@@ -1198,7 +1199,7 @@ const App: React.FC = () => {
                     onClose={() => closeModal('isLogoRefPickerOpen')}
                     onSelectItem={() => {}} // Single select not used here
                     onSelectMultiple={(items) => {
-                        handleSetLogoThemeState({ ...logoThemeState, referenceItems: [...(logoThemeState.referenceItems || []), ...items] });
+                        handleSetLogoThemeState(prev => ({ ...prev, referenceItems: [...(prev.referenceItems || []), ...items] }));
                     }}
                     filter={imageLikeFilter}
                     multiSelect
@@ -1209,7 +1210,7 @@ const App: React.FC = () => {
                     isOpen={isLogoPalettePickerOpen}
                     onClose={() => closeModal('isLogoPalettePickerOpen')}
                     onSelectItem={(item) => {
-                        handleSetLogoThemeState({ ...logoThemeState, selectedPalette: item });
+                        handleSetLogoThemeState(prev => ({ ...prev, selectedPalette: item }));
                     }}
                     filter="color-palette"
                 />
@@ -1219,7 +1220,7 @@ const App: React.FC = () => {
                     isOpen={isLogoFontPickerOpen}
                     onClose={() => closeModal('isLogoFontPickerOpen')}
                     onSelectItem={(item) => {
-                        handleSetLogoThemeState({ ...logoThemeState, selectedFont: item, fontReferenceImage: null });
+                        handleSetLogoThemeState(prev => ({ ...prev, selectedFont: item, fontReferenceImage: null }));
                     }}
                     filter="font"
                 />
@@ -1231,7 +1232,7 @@ const App: React.FC = () => {
                     // Fix: Add the required 'onSelectItem' prop. It's a no-op because this modal is in multi-select mode.
                     onSelectItem={() => {}}
                     onSelectMultiple={(items) => {
-                        handleSetLogoThemeState({ ...logoThemeState, bannerReferenceItems: [...(logoThemeState.bannerReferenceItems || []), ...items] });
+                        handleSetLogoThemeState(prev => ({ ...prev, bannerReferenceItems: [...(prev.bannerReferenceItems || []), ...items] }));
                     }}
                     filter={imageLikeFilter}
                     multiSelect
@@ -1242,7 +1243,7 @@ const App: React.FC = () => {
                     isOpen={isBannerPalettePickerOpen}
                     onClose={() => closeModal('isBannerPalettePickerOpen')}
                     onSelectItem={(item) => {
-                        handleSetLogoThemeState({ ...logoThemeState, bannerSelectedPalette: item });
+                        handleSetLogoThemeState(prev => ({ ...prev, bannerSelectedPalette: item }));
                     }}
                     filter="color-palette"
                 />
@@ -1252,7 +1253,7 @@ const App: React.FC = () => {
                     isOpen={isBannerLogoPickerOpen}
                     onClose={() => closeModal('isBannerLogoPickerOpen')}
                     onSelectItem={(item) => {
-                        handleSetLogoThemeState({ ...logoThemeState, bannerSelectedLogo: item });
+                        handleSetLogoThemeState(prev => ({ ...prev, bannerSelectedLogo: item }));
                     }}
                     filter="logo"
                 />
@@ -1262,7 +1263,7 @@ const App: React.FC = () => {
                     isOpen={isBannerFontPickerOpen}
                     onClose={() => closeModal('isBannerFontPickerOpen')}
                     onSelectItem={(item) => {
-                        handleSetLogoThemeState({ ...logoThemeState, bannerSelectedFont: item, bannerFontReferenceImage: null });
+                        handleSetLogoThemeState(prev => ({ ...prev, bannerSelectedFont: item, bannerFontReferenceImage: null }));
                     }}
                     filter="font"
                 />
@@ -1273,7 +1274,7 @@ const App: React.FC = () => {
                     onClose={() => closeModal('isAlbumCoverRefPickerOpen')}
                     onSelectItem={() => {}}
                     onSelectMultiple={(items) => {
-                        handleSetLogoThemeState({ ...logoThemeState, albumReferenceItems: [...(logoThemeState.albumReferenceItems || []), ...items] });
+                        handleSetLogoThemeState(prev => ({ ...prev, albumReferenceItems: [...(prev.albumReferenceItems || []), ...items] }));
                     }}
                     filter={imageLikeFilter}
                     multiSelect
@@ -1284,7 +1285,7 @@ const App: React.FC = () => {
                     isOpen={isAlbumCoverPalettePickerOpen}
                     onClose={() => closeModal('isAlbumCoverPalettePickerOpen')}
                     onSelectItem={(item) => {
-                        handleSetLogoThemeState({ ...logoThemeState, albumSelectedPalette: item });
+                        handleSetLogoThemeState(prev => ({ ...prev, albumSelectedPalette: item }));
                     }}
                     filter="color-palette"
                 />
@@ -1294,7 +1295,7 @@ const App: React.FC = () => {
                     isOpen={isAlbumCoverLogoPickerOpen}
                     onClose={() => closeModal('isAlbumCoverLogoPickerOpen')}
                     onSelectItem={(item) => {
-                        handleSetLogoThemeState({ ...logoThemeState, albumSelectedLogo: item });
+                        handleSetLogoThemeState(prev => ({ ...prev, albumSelectedLogo: item }));
                     }}
                     filter="logo"
                 />
@@ -1304,7 +1305,7 @@ const App: React.FC = () => {
                     isOpen={isAlbumCoverFontPickerOpen}
                     onClose={() => closeModal('isAlbumCoverFontPickerOpen')}
                     onSelectItem={(item) => {
-                        handleSetLogoThemeState({ ...logoThemeState, albumSelectedFont: item, albumFontReferenceImage: null });
+                        handleSetLogoThemeState(prev => ({ ...prev, albumSelectedFont: item, albumFontReferenceImage: null }));
                     }}
                     filter="font"
                 />

@@ -19,7 +19,7 @@ const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
 
 interface LogoThemeGeneratorPanelProps {
     state: LogoThemeState;
-    setState: (newState: LogoThemeState) => void;
+    setState: React.Dispatch<React.SetStateAction<LogoThemeState>>;
     activeSubTab: string;
     setActiveSubTab: (tabId: string) => void;
     onOpenLibraryForReferences: () => void;
@@ -244,20 +244,21 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     };
 
     const handleGenerateLogos = async () => {
-        const loadingState = { ...state, isGeneratingLogos: true, logoError: null, generatedLogos: [] };
-        setState(loadingState);
+        setState(prev => ({ ...prev, isGeneratingLogos: true, logoError: null, generatedLogos: [] }));
         try {
-            const logos = await generateLogos(loadingState);
-            setState({ ...loadingState, isGeneratingLogos: false, generatedLogos: logos.map(src => ({ src, saved: 'idle' })) });
+            const logos = await generateLogos(state);
+            setState(prev => ({ ...prev, isGeneratingLogos: false, generatedLogos: logos.map(src => ({ src, saved: 'idle' })) }));
         } catch (err: any) {
-            setState({ ...loadingState, isGeneratingLogos: false, logoError: err.message || "An unknown error occurred." });
+            setState(prev => ({ ...prev, isGeneratingLogos: false, logoError: err.message || "An unknown error occurred." }));
         }
     };
     
     const handleSaveLogo = async (logoSrc: string, index: number) => {
-        const updatedLogos = [...(state.generatedLogos || [])];
-        updatedLogos[index] = { ...updatedLogos[index], saved: 'saving' };
-        setState({ ...state, generatedLogos: updatedLogos });
+        setState(prev => {
+            const updatedLogos = [...(prev.generatedLogos || [])];
+            if (updatedLogos[index]) updatedLogos[index] = { ...updatedLogos[index], saved: 'saving' };
+            return { ...prev, generatedLogos: updatedLogos };
+        });
 
         try {
             let logoName = 'Logo';
@@ -283,14 +284,19 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                 thumbnail: await dataUrlToThumbnail(logoSrc, 256),
                 themeOptions: themeOptions,
             });
-            const finalLogos = [...(state.generatedLogos || [])];
-            finalLogos[index] = { ...finalLogos[index], saved: 'saved' };
-            setState({ ...state, generatedLogos: finalLogos });
+
+            setState(prev => {
+                const finalLogos = [...(prev.generatedLogos || [])];
+                if (finalLogos[index]) finalLogos[index] = { ...finalLogos[index], saved: 'saved' };
+                return { ...prev, generatedLogos: finalLogos };
+            });
         } catch (e) {
             console.error("Failed to save logo to library", e);
-            const revertedLogos = [...(state.generatedLogos || [])];
-            revertedLogos[index] = { ...revertedLogos[index], saved: 'idle' };
-            setState({ ...state, generatedLogos: revertedLogos });
+            setState(prev => {
+                const revertedLogos = [...(prev.generatedLogos || [])];
+                if (revertedLogos[index]) revertedLogos[index] = { ...revertedLogos[index], saved: 'idle' };
+                return { ...prev, generatedLogos: revertedLogos };
+            });
         }
     };
 
@@ -316,20 +322,22 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     };
 
     const handleGenerateBanners = async () => {
-        const loadingState = { ...state, isGeneratingBanners: true, bannerError: null, generatedBanners: [] };
-        setState(loadingState);
+        setState(prev => ({ ...prev, isGeneratingBanners: true, bannerError: null, generatedBanners: [] }));
         try {
-            const banners = await generateBanners(loadingState);
-            setState({ ...loadingState, isGeneratingBanners: false, generatedBanners: banners.map(src => ({ src, saved: 'idle' })) });
+            const banners = await generateBanners(state);
+            setState(prev => ({ ...prev, isGeneratingBanners: false, generatedBanners: banners.map(src => ({ src, saved: 'idle' })) }));
         } catch (err: any) {
-            setState({ ...loadingState, isGeneratingBanners: false, bannerError: err.message || "An unknown error occurred." });
+            setState(prev => ({ ...prev, isGeneratingBanners: false, bannerError: err.message || "An unknown error occurred." }));
         }
     };
 
     const handleSaveBanner = async (bannerSrc: string, index: number) => {
-        const updatedBanners = [...(state.generatedBanners || [])];
-        updatedBanners[index] = { ...updatedBanners[index], saved: 'saving' };
-        setState({ ...state, generatedBanners: updatedBanners });
+        setState(prev => {
+            const updatedBanners = [...(prev.generatedBanners || [])];
+            if (updatedBanners[index]) updatedBanners[index] = { ...updatedBanners[index], saved: 'saving' };
+            return { ...prev, generatedBanners: updatedBanners };
+        });
+
         try {
             const name = state.bannerTitle || state.bannerPrompt?.substring(0, 30) || 'Banner';
             
@@ -347,14 +355,19 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
             };
 
             await saveToLibrary({ mediaType: 'banner', name: `Banner: ${name}`, media: bannerSrc, thumbnail: await dataUrlToThumbnail(bannerSrc, 256), themeOptions });
-            const finalBanners = [...(state.generatedBanners || [])];
-            finalBanners[index] = { ...finalBanners[index], saved: 'saved' };
-            setState({ ...state, generatedBanners: finalBanners });
+            
+            setState(prev => {
+                const finalBanners = [...(prev.generatedBanners || [])];
+                if (finalBanners[index]) finalBanners[index] = { ...finalBanners[index], saved: 'saved' };
+                return { ...prev, generatedBanners: finalBanners };
+            });
         } catch(e) {
             console.error("Failed to save banner", e);
-            const revertedBanners = [...(state.generatedBanners || [])];
-            revertedBanners[index] = { ...revertedBanners[index], saved: 'idle' };
-            setState({ ...state, generatedBanners: revertedBanners });
+            setState(prev => {
+                const revertedBanners = [...(prev.generatedBanners || [])];
+                if (revertedBanners[index]) revertedBanners[index] = { ...revertedBanners[index], saved: 'idle' };
+                return { ...prev, generatedBanners: revertedBanners };
+            });
         }
     };
 
@@ -379,20 +392,22 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     };
 
     const handleGenerateAlbumCovers = async () => {
-        const loadingState = { ...state, isGeneratingAlbumCovers: true, albumCoverError: null, generatedAlbumCovers: [] };
-        setState(loadingState);
+        setState(prev => ({ ...prev, isGeneratingAlbumCovers: true, albumCoverError: null, generatedAlbumCovers: [] }));
         try {
-            const covers = await generateAlbumCovers(loadingState);
-            setState({ ...loadingState, isGeneratingAlbumCovers: false, generatedAlbumCovers: covers.map(src => ({ src, saved: 'idle' })) });
+            const covers = await generateAlbumCovers(state);
+            setState(prev => ({ ...prev, isGeneratingAlbumCovers: false, generatedAlbumCovers: covers.map(src => ({ src, saved: 'idle' })) }));
         } catch (err: any) {
-            setState({ ...loadingState, isGeneratingAlbumCovers: false, albumCoverError: err.message || "An unknown error occurred." });
+            setState(prev => ({ ...prev, isGeneratingAlbumCovers: false, albumCoverError: err.message || "An unknown error occurred." }));
         }
     };
 
     const handleSaveAlbumCover = async (coverSrc: string, index: number) => {
-        const updated = [...(state.generatedAlbumCovers || [])];
-        updated[index] = { ...updated[index], saved: 'saving' };
-        setState({ ...state, generatedAlbumCovers: updated });
+        setState(prev => {
+            const updated = [...(prev.generatedAlbumCovers || [])];
+            if (updated[index]) updated[index] = { ...updated[index], saved: 'saving' };
+            return { ...prev, generatedAlbumCovers: updated };
+        });
+
         try {
             const name = `${state.artistName || 'Artist'} - ${state.albumTitle || 'Album'}`;
 
@@ -412,14 +427,19 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
             };
 
             await saveToLibrary({ mediaType: 'album-cover', name: name, media: coverSrc, thumbnail: await dataUrlToThumbnail(coverSrc, 256), themeOptions });
-            const final = [...(state.generatedAlbumCovers || [])];
-            final[index] = { ...final[index], saved: 'saved' };
-            setState({ ...state, generatedAlbumCovers: final });
+            
+            setState(prev => {
+                const final = [...(prev.generatedAlbumCovers || [])];
+                if (final[index]) final[index] = { ...final[index], saved: 'saved' };
+                return { ...prev, generatedAlbumCovers: final };
+            });
         } catch(e) {
             console.error("Failed to save album cover", e);
-            const reverted = [...(state.generatedAlbumCovers || [])];
-            reverted[index] = { ...reverted[index], saved: 'idle' };
-            setState({ ...state, generatedAlbumCovers: reverted });
+            setState(prev => {
+                const reverted = [...(prev.generatedAlbumCovers || [])];
+                if (reverted[index]) reverted[index] = { ...reverted[index], saved: 'idle' };
+                return { ...prev, generatedAlbumCovers: reverted };
+            });
         }
     };
 
