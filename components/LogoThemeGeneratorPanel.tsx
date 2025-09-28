@@ -19,7 +19,7 @@ const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
 
 interface LogoThemeGeneratorPanelProps {
     state: LogoThemeState;
-    setState: React.Dispatch<React.SetStateAction<LogoThemeState>>;
+    setState: (newState: LogoThemeState) => void;
     activeSubTab: string;
     setActiveSubTab: (tabId: string) => void;
     onOpenLibraryForReferences: () => void;
@@ -177,38 +177,38 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     ];
 
     const handleInputChange = (field: keyof LogoThemeState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        setState(prev => ({ ...prev, [field]: e.target.value }));
+        setState({ ...state, [field]: e.target.value });
     };
     
     const handleStyleChange = (style: LogoStyle) => {
-        setState(prev => ({ ...prev, logoStyle: style }));
+        setState({ ...state, logoStyle: style });
     };
     
     const handleBgChange = (bg: LogoBackground) => {
-        setState(prev => ({ ...prev, backgroundColor: bg }));
+        setState({ ...state, backgroundColor: bg });
     };
     
     const handleSliderChange = (field: keyof LogoThemeState) => (e: React.ChangeEvent<HTMLInputElement>) => {
-        setState(prev => ({ ...prev, [field]: parseInt(e.target.value, 10) }));
+        setState({ ...state, [field]: parseInt(e.target.value, 10) });
     };
 
     const handleRemoveReference = (id: number, type: 'logo' | 'banner' | 'album-cover') => {
         if (type === 'logo') {
-            setState(prev => ({ ...prev, referenceItems: prev.referenceItems?.filter(item => item.id !== id) }));
+            setState({ ...state, referenceItems: state.referenceItems?.filter(item => item.id !== id) });
         } else if (type === 'banner') {
-            setState(prev => ({ ...prev, bannerReferenceItems: prev.bannerReferenceItems?.filter(item => item.id !== id) }));
+            setState({ ...state, bannerReferenceItems: state.bannerReferenceItems?.filter(item => item.id !== id) });
         } else {
-            setState(prev => ({ ...prev, albumReferenceItems: prev.albumReferenceItems?.filter(item => item.id !== id) }));
+            setState({ ...state, albumReferenceItems: state.albumReferenceItems?.filter(item => item.id !== id) });
         }
     };
 
     const handleClearPalette = (type: 'logo' | 'banner' | 'album-cover') => {
         if (type === 'logo') {
-            setState(prev => ({ ...prev, selectedPalette: null }));
+            setState({ ...state, selectedPalette: undefined });
         } else if (type === 'banner') {
-            setState(prev => ({ ...prev, bannerSelectedPalette: null }));
+            setState({ ...state, bannerSelectedPalette: undefined });
         } else {
-            setState(prev => ({ ...prev, albumSelectedPalette: null }));
+            setState({ ...state, albumSelectedPalette: undefined });
         }
     };
 
@@ -225,42 +225,39 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         }));
     
         if (type === 'logo') {
-            setState(prev => ({ ...prev, referenceItems: [...(prev.referenceItems || []), ...newItems] }));
+            setState({ ...state, referenceItems: [...(state.referenceItems || []), ...newItems] });
         } else if (type === 'banner') {
-            setState(prev => ({ ...prev, bannerReferenceItems: [...(prev.bannerReferenceItems || []), ...newItems] }));
+            setState({ ...state, bannerReferenceItems: [...(state.bannerReferenceItems || []), ...newItems] });
         } else {
-            setState(prev => ({ ...prev, albumReferenceItems: [...(prev.albumReferenceItems || []), ...newItems] }));
+            setState({ ...state, albumReferenceItems: [...(state.albumReferenceItems || []), ...newItems] });
         }
         e.target.value = '';
     };
 
     const handleLogoReset = () => {
-        setState(prev => ({
-            ...prev,
+        setState({
+            ...state,
             logoPrompt: '', brandName: '', slogan: '', logoStyle: 'symbolic',
             fontReferenceImage: null, selectedFont: null,
-            referenceItems: [], selectedPalette: null, generatedLogos: [], logoError: null
-        }));
+            referenceItems: [], selectedPalette: undefined, generatedLogos: [], logoError: null
+        });
     };
 
     const handleGenerateLogos = async () => {
-        setState(prev => ({ ...prev, isGeneratingLogos: true, logoError: null, generatedLogos: [] }));
+        const loadingState = { ...state, isGeneratingLogos: true, logoError: null, generatedLogos: [] };
+        setState(loadingState);
         try {
-            const logos = await generateLogos(state);
-            setState(prev => ({ ...prev, generatedLogos: logos.map(src => ({ src, saved: 'idle' })) }));
+            const logos = await generateLogos(loadingState);
+            setState({ ...loadingState, isGeneratingLogos: false, generatedLogos: logos.map(src => ({ src, saved: 'idle' })) });
         } catch (err: any) {
-            setState(prev => ({ ...prev, logoError: err.message || "An unknown error occurred." }));
-        } finally {
-            setState(prev => ({ ...prev, isGeneratingLogos: false }));
+            setState({ ...loadingState, isGeneratingLogos: false, logoError: err.message || "An unknown error occurred." });
         }
     };
     
     const handleSaveLogo = async (logoSrc: string, index: number) => {
-        setState(prev => {
-            const updatedLogos = [...(prev.generatedLogos || [])];
-            updatedLogos[index] = { ...updatedLogos[index], saved: 'saving' };
-            return { ...prev, generatedLogos: updatedLogos };
-        });
+        const updatedLogos = [...(state.generatedLogos || [])];
+        updatedLogos[index] = { ...updatedLogos[index], saved: 'saving' };
+        setState({ ...state, generatedLogos: updatedLogos });
 
         try {
             let logoName = 'Logo';
@@ -286,18 +283,14 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                 thumbnail: await dataUrlToThumbnail(logoSrc, 256),
                 themeOptions: themeOptions,
             });
-             setState(prev => {
-                const updatedLogos = [...(prev.generatedLogos || [])];
-                updatedLogos[index] = { ...updatedLogos[index], saved: 'saved' };
-                return { ...prev, generatedLogos: updatedLogos };
-            });
+            const finalLogos = [...(state.generatedLogos || [])];
+            finalLogos[index] = { ...finalLogos[index], saved: 'saved' };
+            setState({ ...state, generatedLogos: finalLogos });
         } catch (e) {
             console.error("Failed to save logo to library", e);
-             setState(prev => {
-                const updatedLogos = [...(prev.generatedLogos || [])];
-                updatedLogos[index] = { ...updatedLogos[index], saved: 'idle' };
-                return { ...prev, generatedLogos: updatedLogos };
-            });
+            const revertedLogos = [...(state.generatedLogos || [])];
+            revertedLogos[index] = { ...revertedLogos[index], saved: 'idle' };
+            setState({ ...state, generatedLogos: revertedLogos });
         }
     };
 
@@ -313,33 +306,30 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     };
     
     const handleBannerReset = () => {
-        setState(prev => ({
-            ...prev,
+        setState({
+            ...state,
             bannerPrompt: '', bannerTitle: '', bannerAspectRatio: '16:9', bannerStyle: 'corporate-clean',
             bannerFontReferenceImage: null, bannerSelectedFont: null,
-            bannerReferenceItems: [], bannerSelectedPalette: null, bannerSelectedLogo: null, bannerLogoPlacement: 'top-left',
+            bannerReferenceItems: [], bannerSelectedPalette: undefined, bannerSelectedLogo: null, bannerLogoPlacement: 'top-left',
             generatedBanners: [], bannerError: null
-        }));
+        });
     };
 
     const handleGenerateBanners = async () => {
-        setState(prev => ({ ...prev, isGeneratingBanners: true, bannerError: null, generatedBanners: [] }));
+        const loadingState = { ...state, isGeneratingBanners: true, bannerError: null, generatedBanners: [] };
+        setState(loadingState);
         try {
-            const banners = await generateBanners(state);
-            setState(prev => ({ ...prev, generatedBanners: banners.map(src => ({ src, saved: 'idle' })) }));
+            const banners = await generateBanners(loadingState);
+            setState({ ...loadingState, isGeneratingBanners: false, generatedBanners: banners.map(src => ({ src, saved: 'idle' })) });
         } catch (err: any) {
-            setState(prev => ({ ...prev, bannerError: err.message || "An unknown error occurred." }));
-        } finally {
-            setState(prev => ({ ...prev, isGeneratingBanners: false }));
+            setState({ ...loadingState, isGeneratingBanners: false, bannerError: err.message || "An unknown error occurred." });
         }
     };
 
     const handleSaveBanner = async (bannerSrc: string, index: number) => {
-        setState(prev => {
-            const updatedBanners = [...(prev.generatedBanners || [])];
-            updatedBanners[index] = { ...updatedBanners[index], saved: 'saving' };
-            return { ...prev, generatedBanners: updatedBanners };
-        });
+        const updatedBanners = [...(state.generatedBanners || [])];
+        updatedBanners[index] = { ...updatedBanners[index], saved: 'saving' };
+        setState({ ...state, generatedBanners: updatedBanners });
         try {
             const name = state.bannerTitle || state.bannerPrompt?.substring(0, 30) || 'Banner';
             
@@ -357,18 +347,14 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
             };
 
             await saveToLibrary({ mediaType: 'banner', name: `Banner: ${name}`, media: bannerSrc, thumbnail: await dataUrlToThumbnail(bannerSrc, 256), themeOptions });
-            setState(prev => {
-                const updatedBanners = [...(prev.generatedBanners || [])];
-                updatedBanners[index] = { ...updatedBanners[index], saved: 'saved' };
-                return { ...prev, generatedBanners: updatedBanners };
-            });
+            const finalBanners = [...(state.generatedBanners || [])];
+            finalBanners[index] = { ...finalBanners[index], saved: 'saved' };
+            setState({ ...state, generatedBanners: finalBanners });
         } catch(e) {
             console.error("Failed to save banner", e);
-            setState(prev => {
-                const updatedBanners = [...(prev.generatedBanners || [])];
-                updatedBanners[index] = { ...updatedBanners[index], saved: 'idle' };
-                return { ...prev, generatedBanners: updatedBanners };
-            });
+            const revertedBanners = [...(state.generatedBanners || [])];
+            revertedBanners[index] = { ...revertedBanners[index], saved: 'idle' };
+            setState({ ...state, generatedBanners: revertedBanners });
         }
     };
 
@@ -384,32 +370,29 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     };
 
     const handleAlbumCoverReset = () => {
-        setState(prev => ({
-            ...prev,
+        setState({
+            ...state,
             albumPrompt: '', albumTitle: '', artistName: '', musicStyle: 'rock', customMusicStyle: '', albumEra: 'modern', albumMediaType: 'digital',
-            addVinylWear: false, albumFontReferenceImage: null, albumSelectedFont: null, albumReferenceItems: [], albumSelectedPalette: null, albumSelectedLogo: null,
+            addVinylWear: false, albumFontReferenceImage: null, albumSelectedFont: null, albumReferenceItems: [], albumSelectedPalette: undefined, albumSelectedLogo: null,
             generatedAlbumCovers: [], albumCoverError: null
-        }));
+        });
     };
 
     const handleGenerateAlbumCovers = async () => {
-        setState(prev => ({ ...prev, isGeneratingAlbumCovers: true, albumCoverError: null, generatedAlbumCovers: [] }));
+        const loadingState = { ...state, isGeneratingAlbumCovers: true, albumCoverError: null, generatedAlbumCovers: [] };
+        setState(loadingState);
         try {
-            const covers = await generateAlbumCovers(state);
-            setState(prev => ({ ...prev, generatedAlbumCovers: covers.map(src => ({ src, saved: 'idle' })) }));
+            const covers = await generateAlbumCovers(loadingState);
+            setState({ ...loadingState, isGeneratingAlbumCovers: false, generatedAlbumCovers: covers.map(src => ({ src, saved: 'idle' })) });
         } catch (err: any) {
-            setState(prev => ({ ...prev, albumCoverError: err.message || "An unknown error occurred." }));
-        } finally {
-            setState(prev => ({ ...prev, isGeneratingAlbumCovers: false }));
+            setState({ ...loadingState, isGeneratingAlbumCovers: false, albumCoverError: err.message || "An unknown error occurred." });
         }
     };
 
     const handleSaveAlbumCover = async (coverSrc: string, index: number) => {
-        setState(prev => {
-            const updated = [...(prev.generatedAlbumCovers || [])];
-            updated[index] = { ...updated[index], saved: 'saving' };
-            return { ...prev, generatedAlbumCovers: updated };
-        });
+        const updated = [...(state.generatedAlbumCovers || [])];
+        updated[index] = { ...updated[index], saved: 'saving' };
+        setState({ ...state, generatedAlbumCovers: updated });
         try {
             const name = `${state.artistName || 'Artist'} - ${state.albumTitle || 'Album'}`;
 
@@ -429,18 +412,14 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
             };
 
             await saveToLibrary({ mediaType: 'album-cover', name: name, media: coverSrc, thumbnail: await dataUrlToThumbnail(coverSrc, 256), themeOptions });
-            setState(prev => {
-                const updated = [...(prev.generatedAlbumCovers || [])];
-                updated[index] = { ...updated[index], saved: 'saved' };
-                return { ...prev, generatedAlbumCovers: updated };
-            });
+            const final = [...(state.generatedAlbumCovers || [])];
+            final[index] = { ...final[index], saved: 'saved' };
+            setState({ ...state, generatedAlbumCovers: final });
         } catch(e) {
             console.error("Failed to save album cover", e);
-             setState(prev => {
-                const updated = [...(prev.generatedAlbumCovers || [])];
-                updated[index] = { ...updated[index], saved: 'idle' };
-                return { ...prev, generatedAlbumCovers: updated };
-            });
+            const reverted = [...(state.generatedAlbumCovers || [])];
+            reverted[index] = { ...reverted[index], saved: 'idle' };
+            setState({ ...state, generatedAlbumCovers: reverted });
         }
     };
 
@@ -459,58 +438,58 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     const handleFontImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         const file = e.target.files[0];
-        setState(prev => ({
-            ...prev,
+        setState({
+            ...state,
             fontReferenceImage: file,
             selectedFont: null, // Clear library selection
-        }));
+        });
         e.target.value = ''; // Allow re-upload
     };
     
     const handleBannerFontImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         const file = e.target.files[0];
-        setState(prev => ({
-            ...prev,
+        setState({
+            ...state,
             bannerFontReferenceImage: file,
             bannerSelectedFont: null,
-        }));
+        });
         e.target.value = '';
     };
 
     const handleAlbumFontImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         const file = e.target.files[0];
-        setState(prev => ({
-            ...prev,
+        setState({
+            ...state,
             albumFontReferenceImage: file,
             albumSelectedFont: null,
-        }));
+        });
         e.target.value = '';
     };
 
     const handleClearFont = () => {
-        setState(prev => ({
-            ...prev,
+        setState({
+            ...state,
             fontReferenceImage: null,
             selectedFont: null,
-        }));
+        });
     };
     
     const handleClearBannerFont = () => {
-        setState(prev => ({
-            ...prev,
+        setState({
+            ...state,
             bannerFontReferenceImage: null,
             bannerSelectedFont: null,
-        }));
+        });
     };
 
     const handleClearAlbumFont = () => {
-        setState(prev => ({
-            ...prev,
+        setState({
+            ...state,
             albumFontReferenceImage: null,
             albumSelectedFont: null,
-        }));
+        });
     };
 
     const selectedPaletteColors = state.selectedPalette ? JSON.parse(state.selectedPalette.media) as PaletteColor[] : [];
@@ -687,7 +666,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                 <input type="text" value={state.bannerTitle} onChange={handleInputChange('bannerTitle')} placeholder="Banner Title / Main Text" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm" />
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Banner Style</h3>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{BANNER_STYLE_OPTIONS.map(style => <button key={style.id} onClick={() => setState(p => ({...p, bannerStyle: style.id}))} title={style.description} className={`p-3 text-center rounded-lg text-sm transition-colors ${state.bannerStyle === style.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>{style.label}</button>)}</div>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{BANNER_STYLE_OPTIONS.map(style => <button key={style.id} onClick={() => setState({ ...state, bannerStyle: style.id })} title={style.description} className={`p-3 text-center rounded-lg text-sm transition-colors ${state.bannerStyle === style.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>{style.label}</button>)}</div>
                                 </div>
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Font (Optional)</h3>
@@ -726,7 +705,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                         <button onClick={onOpenLibraryForBannerLogo} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover"><LibraryIcon className="w-5 h-5"/> Logo</button>
                                     </div>
                                     <div className="flex flex-wrap gap-4">
-                                        {state.bannerSelectedLogo && <div className="relative group"><img src={state.bannerSelectedLogo.thumbnail} className="w-16 h-16 object-contain rounded bg-bg-primary/50 p-1"/><button onClick={() => setState(p => ({...p, bannerSelectedLogo: null}))} className="absolute -top-1 -right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>}
+                                        {state.bannerSelectedLogo && <div className="relative group"><img src={state.bannerSelectedLogo.thumbnail} className="w-16 h-16 object-contain rounded bg-bg-primary/50 p-1"/><button onClick={() => setState({ ...state, bannerSelectedLogo: null })} className="absolute -top-1 -right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>}
                                         {state.bannerSelectedPalette && <div className="relative group flex items-center gap-2 p-2 rounded-md bg-bg-primary/50"><div className="flex -space-x-2">{bannerSelectedPaletteColors.slice(0, 4).map(c => <div key={c.hex} className="w-8 h-8 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}</div><button onClick={() => handleClearPalette('banner')} className="p-1 text-text-secondary hover:text-white opacity-0 group-hover:opacity-100"><CloseIcon className="w-4 h-4"/></button></div>}
                                     </div>
                                     {(state.bannerReferenceItems && state.bannerReferenceItems.length > 0) && <div className="p-2 bg-bg-primary/50 rounded-md"><div className="grid grid-cols-4 gap-2">{state.bannerReferenceItems.map(item => <div key={item.id} className="relative group"><img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/><button onClick={() => handleRemoveReference(item.id, 'banner')} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>)}</div></div>}
@@ -735,8 +714,8 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Settings</h3>
                                     <div className="p-4 bg-bg-tertiary rounded-lg space-y-4">
                                         <div><label className="block text-sm font-medium text-text-secondary">Number of Banners: {state.numBanners}</label><input type="range" min="1" max="4" step="1" value={state.numBanners} onChange={handleSliderChange('numBanners')} className="w-full h-2 mt-1 bg-bg-primary rounded-lg" /></div>
-                                        <div><label className="block text-sm font-medium text-text-secondary mb-2">Aspect Ratio</label><select value={state.bannerAspectRatio} onChange={(e) => setState(p=>({...p, bannerAspectRatio: e.target.value as BannerAspectRatio}))} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{BANNER_ASPECT_RATIO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
-                                        <div><label className="block text-sm font-medium text-text-secondary mb-2">Logo Placement</label><div className="grid grid-cols-3 gap-2">{BANNER_LOGO_PLACEMENT_OPTIONS.map(opt => <button key={opt.id} onClick={() => setState(p=>({...p, bannerLogoPlacement: opt.id}))} className={`p-2 text-xs rounded-md ${state.bannerLogoPlacement === opt.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{opt.label}</button>)}</div></div>
+                                        <div><label className="block text-sm font-medium text-text-secondary mb-2">Aspect Ratio</label><select value={state.bannerAspectRatio} onChange={(e) => setState({ ...state, bannerAspectRatio: e.target.value as BannerAspectRatio })} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{BANNER_ASPECT_RATIO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                                        <div><label className="block text-sm font-medium text-text-secondary mb-2">Logo Placement</label><div className="grid grid-cols-3 gap-2">{BANNER_LOGO_PLACEMENT_OPTIONS.map(opt => <button key={opt.id} onClick={() => setState({ ...state, bannerLogoPlacement: opt.id })} className={`p-2 text-xs rounded-md ${state.bannerLogoPlacement === opt.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{opt.label}</button>)}</div></div>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 pt-4">
@@ -803,12 +782,12 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Style</h3>
                                     <div className="p-4 bg-bg-tertiary rounded-lg space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Music Style</label><select value={state.musicStyle} onChange={(e) => setState(p => ({...p, musicStyle: e.target.value as MusicStyle}))} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{MUSIC_STYLES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
-                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Era</label><select value={state.albumEra} onChange={(e) => setState(p => ({...p, albumEra: e.target.value as AlbumEra}))} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{ALBUM_ERAS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</select></div>
-                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Media Format</label><select value={state.albumMediaType} onChange={(e) => setState(p => ({...p, albumMediaType: e.target.value as AlbumMediaType}))} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{ALBUM_MEDIA_TYPES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
+                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Music Style</label><select value={state.musicStyle} onChange={(e) => setState({ ...state, musicStyle: e.target.value as MusicStyle })} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{MUSIC_STYLES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Era</label><select value={state.albumEra} onChange={(e) => setState({ ...state, albumEra: e.target.value as AlbumEra })} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{ALBUM_ERAS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</select></div>
+                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Media Format</label><select value={state.albumMediaType} onChange={(e) => setState({ ...state, albumMediaType: e.target.value as AlbumMediaType })} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{ALBUM_MEDIA_TYPES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
                                         </div>
                                         {state.musicStyle === 'other' && <input type="text" value={state.customMusicStyle} onChange={handleInputChange('customMusicStyle')} placeholder="Enter custom music style" className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm" />}
-                                        {state.albumMediaType === 'vinyl' && <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer pt-2"><input type="checkbox" checked={state.addVinylWear} onChange={(e) => setState(p => ({...p, addVinylWear: e.target.checked}))} className="rounded text-accent focus:ring-accent" />Add wear & tear (scratches, ring wear)</label>}
+                                        {state.albumMediaType === 'vinyl' && <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer pt-2"><input type="checkbox" checked={state.addVinylWear} onChange={(e) => setState({ ...state, addVinylWear: e.target.checked })} className="rounded text-accent focus:ring-accent" />Add wear & tear (scratches, ring wear)</label>}
                                     </div>
                                 </div>
                                 <div>
@@ -848,7 +827,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                         <button onClick={onOpenLibraryForAlbumCoverLogo} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover"><LibraryIcon className="w-5 h-5"/> Logo</button>
                                     </div>
                                     <div className="flex flex-wrap gap-4">
-                                        {state.albumSelectedLogo && <div className="relative group"><img src={state.albumSelectedLogo.thumbnail} className="w-16 h-16 object-contain rounded bg-bg-primary/50 p-1"/><button onClick={() => setState(p => ({...p, albumSelectedLogo: null}))} className="absolute -top-1 -right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>}
+                                        {state.albumSelectedLogo && <div className="relative group"><img src={state.albumSelectedLogo.thumbnail} className="w-16 h-16 object-contain rounded bg-bg-primary/50 p-1"/><button onClick={() => setState({ ...state, albumSelectedLogo: null })} className="absolute -top-1 -right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>}
                                         {state.albumSelectedPalette && <div className="relative group flex items-center gap-2 p-2 rounded-md bg-bg-primary/50"><div className="flex -space-x-2">{albumSelectedPaletteColors.slice(0, 4).map(c => <div key={c.hex} className="w-8 h-8 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}</div><button onClick={() => handleClearPalette('album-cover')} className="p-1 text-text-secondary hover:text-white opacity-0 group-hover:opacity-100"><CloseIcon className="w-4 h-4"/></button></div>}
                                     </div>
                                     {(state.albumReferenceItems && state.albumReferenceItems.length > 0) && <div className="p-2 bg-bg-primary/50 rounded-md"><div className="grid grid-cols-4 gap-2">{state.albumReferenceItems.map(item => <div key={item.id} className="relative group"><img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/><button onClick={() => handleRemoveReference(item.id, 'album-cover')} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>)}</div></div>}
