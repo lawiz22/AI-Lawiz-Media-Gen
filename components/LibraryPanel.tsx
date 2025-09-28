@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { getLibraryItems, deleteLibraryItem, exportLibraryAsJson, clearLibrary } from '../services/libraryService';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '../store/store';
+import { deleteFromLibrary } from '../store/librarySlice';
 import type { LibraryItem, LibraryItemType, GenerationOptions, ThemeGenerationInfo, PaletteColor } from '../types';
 import {
   CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon,
@@ -7,7 +9,8 @@ import {
   BannerIcon, AlbumCoverIcon, TrashIcon, LoadIcon, FileExportIcon, UploadIconSimple, GoogleDriveIcon,
   PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon
 } from './icons';
-import { dataUrlToBlob, createPaletteThumbnail } from '../utils/imageUtils';
+import { createPaletteThumbnail } from '../utils/imageUtils';
+import { exportLibraryAsJson, clearLibrary } from '../services/libraryService';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -293,8 +296,9 @@ const renderThemeOptionsDetails = (themeOptions: ThemeGenerationInfo) => {
 type ViewMode = 'grid' | 'smallGrid' | 'list';
 
 export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveConnected, onSyncWithDrive, isSyncing, syncMessage, isDriveConfigured }) => {
-  const [items, setItems] = useState<LibraryItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const dispatch: AppDispatch = useDispatch();
+  const { items, status: libraryStatus } = useSelector((state: RootState) => state.library);
+  
   const [filter, setFilter] = useState<LibraryItemType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -304,22 +308,6 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  const fetchItems = useCallback(() => {
-    setIsLoading(true);
-    getLibraryItems()
-      .then(setItems)
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
-  }, []);
-
-  useEffect(() => {
-    fetchItems();
-    window.addEventListener('libraryUpdated', fetchItems);
-    return () => {
-      window.removeEventListener('libraryUpdated', fetchItems);
-    };
-  }, [fetchItems]);
-  
   const handleFilterClick = (type: LibraryItemType) => {
     setFilter(prev => {
       if (prev.includes(type)) {
@@ -339,7 +327,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
     if (window.confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
       setDeletingId(id);
       try {
-        await deleteLibraryItem(id);
+        await dispatch(deleteFromLibrary(id)).unwrap();
+        if (selectedItemModal?.id === id) {
+            setSelectedItemModal(null);
+        }
       } catch (err) {
         console.error("Failed to delete item:", err);
       } finally {
@@ -361,6 +352,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
     if (window.confirm("ARE YOU SURE you want to delete your ENTIRE local library? This action cannot be undone and will permanently remove all saved items from this browser.")) {
         if (window.confirm("This is your final warning. Are you absolutely certain you wish to proceed?")) {
             await clearLibrary();
+            dispatch(deleteFromLibrary(-1)); // Bogus dispatch to trigger re-render
         }
     }
   };
@@ -374,7 +366,8 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
       const lowerSearch = searchTerm.toLowerCase();
       filtered = filtered.filter(item => item.name?.toLowerCase().includes(lowerSearch));
     }
-    return filtered;
+    // Fix: Create a shallow copy before sorting to avoid mutating Redux state.
+    return [...filtered].sort((a, b) => b.id - a.id);
   }, [items, filter, searchTerm]);
   
   useEffect(() => {
@@ -412,7 +405,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
   };
   
   const renderItemViews = () => {
-    if (isLoading) {
+    if (libraryStatus === 'loading') {
         return <div className="flex justify-center items-center py-16"><SpinnerIcon className="w-12 h-12 text-accent animate-spin" /></div>;
     }
     if (filteredItems.length === 0) {

@@ -1,8 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { AppDispatch } from '../store/store';
+import { setLogoSaveStatus, setBannerSaveStatus, setAlbumCoverSaveStatus } from '../store/logoThemeSlice';
+import { addToLibrary } from '../store/librarySlice';
 import type { LogoThemeState, LibraryItem, LogoStyle, LogoBackground, PaletteColor, BannerStyle, BannerLogoPlacement, BannerAspectRatio, MusicStyle, AlbumEra, AlbumMediaType, ThemeGenerationInfo } from '../types';
 import { GenerateIcon, ResetIcon, SpinnerIcon, LibraryIcon, CloseIcon, SaveIcon, CheckIcon, DownloadIcon, UploadIconSimple, ChevronLeftIcon, ChevronRightIcon, ZoomIcon } from './icons';
 import { generateLogos, generateBanners, generateAlbumCovers } from '../services/geminiService';
-import { saveToLibrary } from '../services/libraryService';
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { BANNER_ASPECT_RATIO_OPTIONS, BANNER_STYLE_OPTIONS, BANNER_LOGO_PLACEMENT_OPTIONS } from '../constants';
 
@@ -132,6 +135,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     onOpenLibraryForBannerReferences, onOpenLibraryForBannerPalette, onOpenLibraryForBannerLogo, onOpenLibraryForBannerFont,
     onOpenLibraryForAlbumCoverReferences, onOpenLibraryForAlbumCoverPalette, onOpenLibraryForAlbumCoverLogo, onOpenLibraryForAlbumCoverFont
 }) => {
+    const dispatch: AppDispatch = useDispatch();
     const [zoomedLogoIndex, setZoomedLogoIndex] = useState<number | null>(null);
     const [zoomedBannerIndex, setZoomedBannerIndex] = useState<number | null>(null);
     const [zoomedAlbumCoverIndex, setZoomedAlbumCoverIndex] = useState<number | null>(null);
@@ -217,7 +221,6 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         const files = Array.from(e.target.files);
         if (files.length === 0) return;
     
-        // Fix: Explicitly type the `file` parameter as `File` to resolve TS inference errors.
         const newItems: LibraryItem[] = await Promise.all(files.map(async (file: File, index) => {
             const media = await fileToDataUrl(file);
             const thumbnail = await dataUrlToThumbnail(media, 128);
@@ -254,11 +257,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     };
     
     const handleSaveLogo = async (logoSrc: string, index: number) => {
-        setState(prev => {
-            const updatedLogos = [...(prev.generatedLogos || [])];
-            if (updatedLogos[index]) updatedLogos[index] = { ...updatedLogos[index], saved: 'saving' };
-            return { ...prev, generatedLogos: updatedLogos };
-        });
+        dispatch(setLogoSaveStatus({ index, status: 'saving' }));
 
         try {
             let logoName = 'Logo';
@@ -277,26 +276,19 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                 fontReferenceImage: state.fontReferenceImage ? await dataUrlToThumbnail(await fileToDataUrl(state.fontReferenceImage), 64) : undefined,
             };
 
-            await saveToLibrary({
+            const libraryItem: Omit<LibraryItem, 'id'> = {
                 mediaType: 'logo', 
                 name: logoName, 
                 media: logoSrc, 
                 thumbnail: await dataUrlToThumbnail(logoSrc, 256),
                 themeOptions: themeOptions,
-            });
+            };
 
-            setState(prev => {
-                const finalLogos = [...(prev.generatedLogos || [])];
-                if (finalLogos[index]) finalLogos[index] = { ...finalLogos[index], saved: 'saved' };
-                return { ...prev, generatedLogos: finalLogos };
-            });
+            await dispatch(addToLibrary(libraryItem)).unwrap();
+            dispatch(setLogoSaveStatus({ index, status: 'saved' }));
         } catch (e) {
             console.error("Failed to save logo to library", e);
-            setState(prev => {
-                const revertedLogos = [...(prev.generatedLogos || [])];
-                if (revertedLogos[index]) revertedLogos[index] = { ...revertedLogos[index], saved: 'idle' };
-                return { ...prev, generatedLogos: revertedLogos };
-            });
+            dispatch(setLogoSaveStatus({ index, status: 'idle' }));
         }
     };
 
@@ -332,12 +324,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     };
 
     const handleSaveBanner = async (bannerSrc: string, index: number) => {
-        setState(prev => {
-            const updatedBanners = [...(prev.generatedBanners || [])];
-            if (updatedBanners[index]) updatedBanners[index] = { ...updatedBanners[index], saved: 'saving' };
-            return { ...prev, generatedBanners: updatedBanners };
-        });
-
+        dispatch(setBannerSaveStatus({ index, status: 'saving' }));
         try {
             const name = state.bannerTitle || state.bannerPrompt?.substring(0, 30) || 'Banner';
             
@@ -354,20 +341,13 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                 fontReferenceImage: state.bannerFontReferenceImage ? await dataUrlToThumbnail(await fileToDataUrl(state.bannerFontReferenceImage), 64) : undefined,
             };
 
-            await saveToLibrary({ mediaType: 'banner', name: `Banner: ${name}`, media: bannerSrc, thumbnail: await dataUrlToThumbnail(bannerSrc, 256), themeOptions });
+            const libraryItem: Omit<LibraryItem, 'id'> = { mediaType: 'banner', name: `Banner: ${name}`, media: bannerSrc, thumbnail: await dataUrlToThumbnail(bannerSrc, 256), themeOptions };
             
-            setState(prev => {
-                const finalBanners = [...(prev.generatedBanners || [])];
-                if (finalBanners[index]) finalBanners[index] = { ...finalBanners[index], saved: 'saved' };
-                return { ...prev, generatedBanners: finalBanners };
-            });
+            await dispatch(addToLibrary(libraryItem)).unwrap();
+            dispatch(setBannerSaveStatus({ index, status: 'saved' }));
         } catch(e) {
             console.error("Failed to save banner", e);
-            setState(prev => {
-                const revertedBanners = [...(prev.generatedBanners || [])];
-                if (revertedBanners[index]) revertedBanners[index] = { ...revertedBanners[index], saved: 'idle' };
-                return { ...prev, generatedBanners: revertedBanners };
-            });
+            dispatch(setBannerSaveStatus({ index, status: 'idle' }));
         }
     };
 
@@ -402,11 +382,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     };
 
     const handleSaveAlbumCover = async (coverSrc: string, index: number) => {
-        setState(prev => {
-            const updated = [...(prev.generatedAlbumCovers || [])];
-            if (updated[index]) updated[index] = { ...updated[index], saved: 'saving' };
-            return { ...prev, generatedAlbumCovers: updated };
-        });
+        dispatch(setAlbumCoverSaveStatus({ index, status: 'saving' }));
 
         try {
             const name = `${state.artistName || 'Artist'} - ${state.albumTitle || 'Album'}`;
@@ -425,21 +401,13 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                 selectedFont: state.albumSelectedFont ? { name: state.albumSelectedFont.name!, thumbnail: state.albumSelectedFont.thumbnail } : undefined,
                 fontReferenceImage: state.albumFontReferenceImage ? await dataUrlToThumbnail(await fileToDataUrl(state.albumFontReferenceImage), 64) : undefined,
             };
-
-            await saveToLibrary({ mediaType: 'album-cover', name: name, media: coverSrc, thumbnail: await dataUrlToThumbnail(coverSrc, 256), themeOptions });
+            const libraryItem: Omit<LibraryItem, 'id'> = { mediaType: 'album-cover', name: name, media: coverSrc, thumbnail: await dataUrlToThumbnail(coverSrc, 256), themeOptions };
             
-            setState(prev => {
-                const final = [...(prev.generatedAlbumCovers || [])];
-                if (final[index]) final[index] = { ...final[index], saved: 'saved' };
-                return { ...prev, generatedAlbumCovers: final };
-            });
+            await dispatch(addToLibrary(libraryItem)).unwrap();
+            dispatch(setAlbumCoverSaveStatus({ index, status: 'saved' }));
         } catch(e) {
             console.error("Failed to save album cover", e);
-            setState(prev => {
-                const reverted = [...(prev.generatedAlbumCovers || [])];
-                if (reverted[index]) reverted[index] = { ...reverted[index], saved: 'idle' };
-                return { ...prev, generatedAlbumCovers: reverted };
-            });
+            dispatch(setAlbumCoverSaveStatus({ index, status: 'idle' }));
         }
     };
 

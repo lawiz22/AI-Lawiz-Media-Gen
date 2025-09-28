@@ -1,10 +1,13 @@
 import React, { useState, useMemo, ChangeEvent, useEffect, useRef } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '../store/store';
+import { addToLibrary } from '../store/librarySlice';
+import { setVideoSaveStatus } from '../store/videoSlice';
 import { GenerateIcon, ResetIcon, VideoIcon, SpinnerIcon, CopyIcon, SaveIcon, FilmIcon, DownloadIcon, StartFrameIcon, EndFrameIcon, CheckIcon, LibraryIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { Loader } from './Loader';
 import type { GenerationOptions, LibraryItem } from '../types';
 import { resizeImageFile } from '../utils/imageProcessing';
-import { saveToLibrary } from '../services/libraryService';
 import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromFile, dataUrlToFile, createVideoPlaceholderThumbnail } from '../utils/imageUtils';
 
 // --- Prop Types ---
@@ -20,7 +23,7 @@ interface VideoGeneratorPanelProps {
   isReady: boolean;
   isLoading: boolean;
   error: string | null;
-  generatedVideo: string | null;
+  generatedVideo: { url: string; saved: 'idle' | 'saving' | 'saved' } | null;
   lastUsedPrompt: string | null;
   progressMessage: string;
   progressValue: number;
@@ -100,12 +103,12 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     progressMessage, progressValue, onReset, generationOptionsForSave,
     onOpenLibraryForStartFrame, onOpenLibraryForEndFrame, onOpenLibraryForGeminiSource
 }) => {
+    const dispatch: AppDispatch = useDispatch();
     const [copyButtonText, setCopyButtonText] = useState('Copy');
     const [originalStartFrame, setOriginalStartFrame] = useState<File | null>(null);
     const [originalEndFrame, setOriginalEndFrame] = useState<File | null>(null);
     const [frameResizeScale, setFrameResizeScale] = useState(1.0); // 1.0 = 100%
     const [isResizing, setIsResizing] = useState(false);
-    const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
     
     // State and refs for frame extractor
     const [extractedFrame, setExtractedFrame] = useState<string | null>(null);
@@ -115,12 +118,10 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [frameSavingState, setFrameSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-    // Reset frame extractor and save states when a new video is generated
     useEffect(() => {
         setExtractedFrame(null);
         setCurrentTime(0);
         setDuration(0);
-        setSavingState('idle');
     }, [generatedVideo]);
 
     useEffect(() => {
@@ -136,10 +137,9 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const comfyVaes = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name), [comfyUIObjectInfo]);
     const comfyClipVision = useMemo(() => {
         if (!comfyUIObjectInfo) return [];
-        // More robustly check for CLIP Vision models, as custom nodes might use different names.
         const sources = [
-            comfyUIObjectInfo?.CLIPVisionLoader?.input?.required?.clip_vision_name, // Standard
-            comfyUIObjectInfo?.CLIPVisionLoader?.input?.required?.clip_name, // Some use this
+            comfyUIObjectInfo?.CLIPVisionLoader?.input?.required?.clip_vision_name,
+            comfyUIObjectInfo?.CLIPVisionLoader?.input?.required?.clip_name,
         ];
         const modelSet = new Set<string>();
         for (const source of sources) {
@@ -154,35 +154,25 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const comfySamplers = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.KSamplerAdvanced?.input?.required?.sampler_name), [comfyUIObjectInfo]);
     const comfySchedulers = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.KSamplerAdvanced?.input?.required?.scheduler), [comfyUIObjectInfo]);
     
-    // This effect populates the WAN 2.2 I2V workflow with sensible defaults
-    // whenever it's selected, ensuring it's ready to use immediately.
     useEffect(() => {
         if (options.videoProvider === 'comfyui' && options.comfyVidModelType === 'wan-i2v' && comfyUIObjectInfo) {
-            // Guard against running if no models are found, which would set incorrect fallbacks.
             if (comfyGgufModels.length === 0) return;
 
             setOptions({
                 ...options,
-                // --- Models ---
                 comfyVidWanI2VHighNoiseModel: comfyGgufModels.find(m => m.toLowerCase().includes('highnoise')) || comfyGgufModels[0],
                 comfyVidWanI2VLowNoiseModel: comfyGgufModels.find(m => m.toLowerCase().includes('lownoise')) || (comfyGgufModels.length > 1 ? comfyGgufModels[1] : comfyGgufModels[0]),
                 comfyVidWanI2VClipModel: comfyGgufClipModels.find(m => m.includes('umt5')) || comfyGgufClipModels[0],
                 comfyVidWanI2VVaeModel: comfyVaes.find(v => v.includes('wan_2.1')) || comfyVaes[0],
                 comfyVidWanI2VClipVisionModel: comfyClipVision.find(cv => cv.includes('clip_vision_h')) || comfyClipVision[0],
-
-                // --- Prompts (keep user's if they exist) ---
                 comfyVidWanI2VPositivePrompt: options.comfyVidWanI2VPositivePrompt || 'cinematic shot of a majestic lion walking through the savanna',
                 comfyVidWanI2VNegativePrompt: options.comfyVidWanI2VNegativePrompt || 'blurry, bad quality, low-res, ugly, deformed, disfigured, text, watermark',
-
-                // --- Core Settings ---
                 comfyVidWanI2VSteps: 6,
                 comfyVidWanI2VCfg: 1,
                 comfyVidWanI2VSampler: 'euler',
                 comfyVidWanI2VScheduler: 'simple',
                 comfyVidWanI2VFrameCount: 65,
                 comfyVidWanI2VRefinerStartStep: 3,
-
-                // --- LoRAs (Lightning enabled by default for speed) ---
                 comfyVidWanI2VUseLightningLora: true,
                 comfyVidWanI2VHighNoiseLora: 
                     comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('high')) 
@@ -194,17 +184,11 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                     || comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('low')) 
                     || (comfyLoras.length > 1 ? comfyLoras[1] : comfyLoras[0]),
                 comfyVidWanI2VLowNoiseLoraStrength: 1.0,
-
-                // --- Post-Processing ---
                 comfyVidWanI2VUseFilmGrain: true,
                 comfyVidWanI2VFilmGrainIntensity: 0.02,
                 comfyVidWanI2VFilmGrainSize: 0.3,
-
-                // --- Video Format ---
                 comfyVidWanI2VFrameRate: 24,
                 comfyVidWanI2VVideoFormat: 'video/nvenc_h264-mp4',
-                
-                // --- End Frame Logic ---
                 comfyVidWanI2VUseEndFrame: !!endFrame,
                 comfyVidWanI2VEndFrameStrength: 1.0,
             });
@@ -304,7 +288,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const handleSaveToLibrary = async () => {
         if (!generatedVideo) return;
         
-        setSavingState('saving');
+        dispatch(setVideoSaveStatus('saving'));
         try {
             const optionsToSave = { ...(generationOptionsForSave || options) };
             
@@ -312,14 +296,13 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
             if (startFrame) {
                 thumbnail = await dataUrlToThumbnail(await fileToResizedDataUrl(startFrame, 256), 256);
             } else {
-                // No start frame (e.g., Gemini text-to-video), create a placeholder.
                 thumbnail = createVideoPlaceholderThumbnail();
             }
 
             if (optionsToSave.videoProvider === 'comfyui') {
                 optionsToSave.width = optionsToSave.comfyVidWanI2VWidth;
                 optionsToSave.height = optionsToSave.comfyVidWanI2VHeight;
-            } else if (startFrame) { // Covers Gemini with input image
+            } else if (startFrame) { 
                 const { width, height } = await getImageDimensionsFromFile(startFrame);
                 optionsToSave.width = width;
                 optionsToSave.height = height;
@@ -327,17 +310,18 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
 
             const item: Omit<LibraryItem, 'id'> = {
                 mediaType: 'video',
-                media: generatedVideo,
+                media: generatedVideo.url,
                 thumbnail: thumbnail,
                 options: optionsToSave,
                 startFrame: startFrame ? await fileToResizedDataUrl(startFrame, 512) : undefined,
                 endFrame: endFrame ? await fileToResizedDataUrl(endFrame, 512) : undefined,
             };
-            await saveToLibrary(item);
-            setSavingState('saved');
+
+            await dispatch(addToLibrary(item)).unwrap();
+            dispatch(setVideoSaveStatus('saved'));
         } catch (err) {
             console.error("Failed to save video to library:", err);
-            setSavingState('idle'); // Allow retry on error
+            dispatch(setVideoSaveStatus('idle'));
         }
     };
 
@@ -356,9 +340,8 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
             }
         };
 
-        if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+        if (video.readyState >= 2) { 
             video.currentTime = time;
-            // The 'seeked' event ensures the frame is ready to be drawn
             const onSeeked = () => {
                 captureFrame();
                 video.removeEventListener('seeked', onSeeked);
@@ -403,7 +386,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                 thumbnail: await dataUrlToThumbnail(extractedFrame, 256),
                 name: `Frame at ${formatTime(currentTime)} from ${videoName}`,
             };
-            await saveToLibrary(item);
+            await dispatch(addToLibrary(item)).unwrap();
             setFrameSavingState('saved');
         } catch (err) {
             console.error("Failed to save frame to library:", err);
@@ -411,7 +394,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
         }
     };
     
-    const videoSavingStatus = savingState;
+    const videoSavingStatus = generatedVideo?.saved || 'idle';
     const frameSavingStatus = frameSavingState;
 
     const renderProviderSwitch = () => (
@@ -588,177 +571,3 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                             <SelectInput label="Low-Noise LoRA" value={options.comfyVidWanI2VLowNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
                                             <NumberSlider label={`Low-Noise Strength`} value={options.comfyVidWanI2VLowNoiseLoraStrength || 1.0} onChange={handleSliderChange('comfyVidWanI2VLowNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
                                         </div>
-                                    )}
-                                </div>
-                            </OptionSection>
-
-                            <OptionSection title="Sampler">
-                                <SelectInput label="Sampler" value={options.comfyVidWanI2VSampler || 'euler'} onChange={handleOptionChange('comfyVidWanI2VSampler')} options={comfySamplers.map(s => ({value: s, label: s}))} disabled={isLoading} />
-                                <SelectInput label="Scheduler" value={options.comfyVidWanI2VScheduler || 'simple'} onChange={handleOptionChange('comfyVidWanI2VScheduler')} options={comfySchedulers.map(s => ({value: s, label: s}))} disabled={isLoading} />
-                                <NumberSlider label={`Steps`} value={options.comfyVidWanI2VSteps || 6} onChange={handleSliderChange('comfyVidWanI2VSteps')} min={4} max={20} step={1} disabled={isLoading} />
-                                <NumberSlider label={`CFG`} value={options.comfyVidWanI2VCfg || 1} onChange={handleSliderChange('comfyVidWanI2VCfg')} min={1} max={5} step={0.1} disabled={isLoading} />
-                                <NumberSlider label={`Refiner Start Step`} value={options.comfyVidWanI2VRefinerStartStep || 3} onChange={handleSliderChange('comfyVidWanI2VRefinerStartStep')} min={1} max={(options.comfyVidWanI2VSteps || 6) - 1} step={1} disabled={isLoading} />
-                            </OptionSection>
-                            
-                            <OptionSection title="Post-Processing">
-                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                    <input type="checkbox" checked={options.comfyVidWanI2VUseFilmGrain} onChange={handleOptionChange('comfyVidWanI2VUseFilmGrain')} disabled={isLoading} className="rounded text-accent focus:ring-accent" />
-                                    Add Film Grain
-                                </label>
-                                {options.comfyVidWanI2VUseFilmGrain && (
-                                    <div className="space-y-4 pl-4 border-l-2 border-border-primary">
-                                        <NumberSlider label={`Intensity`} value={options.comfyVidWanI2VFilmGrainIntensity || 0.02} onChange={handleSliderChange('comfyVidWanI2VFilmGrainIntensity')} min={0} max={0.2} step={0.01} disabled={isLoading} />
-                                        <NumberSlider label={`Saturation Mix`} value={options.comfyVidWanI2VFilmGrainSize || 0.3} onChange={handleSliderChange('comfyVidWanI2VFilmGrainSize')} min={0.1} max={1} step={0.05} disabled={isLoading} />
-                                    </div>
-                                )}
-                            </OptionSection>
-                        </div>
-                    )}
-
-                    <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                        <h3 className="text-lg font-bold text-accent tracking-wider uppercase border-b-2 border-accent/30 pb-2">Actions</h3>
-                        <div className="space-y-4 pt-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <button onClick={onReset} disabled={isLoading} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
-                                    <ResetIcon className="w-5 h-5"/> Reset
-                                </button>
-                                <button onClick={onGenerate} disabled={!isReady} style={isReady ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
-                                    <GenerateIcon className="w-5 h-5"/> Generate
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right column for results */}
-                <div className="lg:col-span-2 sticky top-24">
-                    { !isLoading && error ? (
-                        <div className="bg-danger-bg text-danger p-4 rounded-lg text-center">
-                            <h3 className="font-bold mb-2">Generation Failed</h3>
-                            <p className="text-sm">{error}</p>
-                        </div>
-                    ) : generatedVideo ? (
-                        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-6">
-                            <div>
-                                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                                    <h2 className="text-xl font-bold text-accent">Generated Video</h2>
-                                    <button
-                                        onClick={handleSaveToLibrary}
-                                        title={videoSavingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
-                                        disabled={videoSavingStatus !== 'idle'}
-                                        className={`flex items-center justify-center gap-2 font-semibold py-2 px-3 rounded-lg transition-all duration-200 ${
-                                            videoSavingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' :
-                                            videoSavingStatus === 'saving' ? 'bg-bg-tertiary text-text-secondary cursor-wait' :
-                                            'bg-bg-tertiary text-text-secondary hover:bg-accent hover:text-accent-text'
-                                        }`}
-                                    >
-                                        {videoSavingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : videoSavingStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                        {videoSavingStatus === 'saving' ? 'Saving...' : videoSavingStatus === 'saved' ? 'Saved!' : 'Save to Library'}
-                                    </button>
-                                </div>
-                                {lastUsedPrompt && (
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-medium text-text-secondary mb-1">Final Prompt Used</label>
-                                        <div className="relative">
-                                            <textarea readOnly value={lastUsedPrompt} className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-xs text-text-secondary focus:ring-accent focus:border-accent" rows={2}/>
-                                            <button onClick={handleCopyPrompt} title="Copy Prompt" className="absolute top-2 right-2 flex items-center gap-1.5 bg-bg-primary/80 text-text-secondary text-xs font-semibold py-1 px-2 rounded-full hover:bg-accent hover:text-accent-text transition-colors">
-                                                <CopyIcon className="w-3 h-3" /> {copyButtonText}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                                <video 
-                                    ref={videoRef}
-                                    src={generatedVideo} 
-                                    controls 
-                                    autoPlay 
-                                    loop 
-                                    className="w-full rounded-lg bg-black"
-                                    onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                                    onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                                />
-                            </div>
-                            
-                            {/* Frame Extractor UI */}
-                            <div className="space-y-4 pt-6 border-t border-border-primary">
-                                <div className="flex items-center gap-3">
-                                    <FilmIcon className="w-6 h-6 text-accent"/>
-                                    <h3 className="text-lg font-bold text-accent">Frame Extractor</h3>
-                                </div>
-                                <div>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max={duration || 0}
-                                        step="0.01"
-                                        value={currentTime}
-                                        onChange={(e) => {
-                                            if (videoRef.current) {
-                                                videoRef.current.currentTime = parseFloat(e.target.value);
-                                            }
-                                        }}
-                                        className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
-                                    />
-                                    <div className="text-center text-sm font-mono text-text-secondary mt-2">
-                                        {formatTime(currentTime)} / {formatTime(duration)}
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <button
-                                        onClick={() => handleExtractFrame(currentTime)}
-                                        className="bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
-                                    >
-                                        Save Current Frame
-                                    </button>
-                                    <button
-                                        onClick={() => handleExtractFrame(duration)}
-                                        className="bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"
-                                    >
-                                        Save Last Frame
-                                    </button>
-                                </div>
-                                {extractedFrame && (
-                                    <div className="text-center p-4 bg-bg-primary/50 rounded-lg space-y-4">
-                                        <h3 className="text-lg font-semibold text-text-primary">Frame Preview</h3>
-                                        <img src={extractedFrame} alt="Extracted Frame" className="max-w-full mx-auto rounded-md shadow-lg" />
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                                            <button onClick={handleDownloadFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
-                                                <DownloadIcon className="w-5 h-5"/> Download
-                                            </button>
-                                            <button onClick={handleSetAsStartFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
-                                                <StartFrameIcon className="w-5 h-5"/> Set as Start
-                                            </button>
-                                            <button onClick={handleSetAsEndFrame} className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors">
-                                                <EndFrameIcon className="w-5 h-5"/> Set as End
-                                            </button>
-                                            <button
-                                                onClick={handleSaveFrameToLibrary}
-                                                disabled={frameSavingState !== 'idle'}
-                                                className={`flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors ${
-                                                    frameSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 
-                                                    frameSavingState === 'saving' ? 'bg-bg-tertiary cursor-wait' :
-                                                    'bg-bg-tertiary hover:bg-accent hover:text-accent-text'
-                                                }`}
-                                            >
-                                                {frameSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : frameSavingState === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
-                                                {frameSavingState === 'saved' ? 'Saved!' : 'Save to Library'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
-                            <VideoIcon className="w-16 h-16 text-border-primary mb-4" />
-                            <h3 className="text-lg font-bold text-text-primary">Your generated video will appear here</h3>
-                            <p className="text-text-secondary max-w-xs">Configure your options and click "Generate".</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-            {/* Canvas for frame extraction (hidden) */}
-            <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-        </>
-    );
-};

@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
@@ -8,6 +10,7 @@ import {
     openFeatureAnalysisModal, closeFeatureAnalysisModal, openOAuthHelper, closeOAuthHelper,
     setModalOpen
 } from './store/appSlice';
+// Fix: Imported the `selectIsReadyToGenerate` selector to resolve the "Cannot find name" error.
 import {
     setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
     setClothingImage, setBackgroundImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
@@ -29,16 +32,13 @@ import {
 import {
     setLogoThemeState, setActiveLogoThemeSubTab, resetLogoThemeState
 } from './store/logoThemeSlice';
+import { fetchLibrary } from './store/librarySlice';
 
-
-// Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
-// Fix: Import 'AppSliceState' to resolve missing type error.
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
 import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage } from './services/geminiService';
-// Fix: Import 'checkConnection' to resolve missing name error.
 import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution } from './services/comfyUIService';
 import { Login } from './components/Login';
 import { AdminPanel } from './components/AdminPanel';
@@ -49,7 +49,7 @@ import { ImageGrid } from './components/ImageGrid';
 import { Loader } from './components/Loader';
 import { ConnectionSettingsModal } from './components/ComfyUIConnection';
 import { LibraryPanel } from './components/LibraryPanel';
-// Fix: Corrected import to use `ExtractorToolsPanel`, which is the correct export from the module.
+// Fix: The imported component name `ClothesExtractorPanel` did not match the exported component `ExtractorToolsPanel`. Corrected the import to use the correct component name.
 import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
 import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
@@ -189,6 +189,10 @@ const App: React.FC = () => {
                 }
             });
         }
+        
+        // Fetch library items on initial load
+        dispatch(fetchLibrary());
+
     }, [dispatch, checkComfyUIConnection]);
     
     useEffect(() => {
@@ -525,7 +529,6 @@ const App: React.FC = () => {
         dispatch(setActiveTab(tabId));
     };
     
-    // Fix: Add the AppSliceState type to resolve TypeScript errors on the next line.
     const openModal = (modal: keyof AppSliceState) => dispatch(setModalOpen({ modal, isOpen: true }));
     const closeModal = (modal: keyof AppSliceState) => dispatch(setModalOpen({ modal, isOpen: false }));
 
@@ -544,7 +547,6 @@ const App: React.FC = () => {
         { id: 'video-utils', label: 'Video Utilities', icon: <VideoUtilsIcon className="w-5 h-5"/> },
     ];
 
-    // Fix: Explicitly type filter arrays as LibraryItemType[] to fix TypeScript assignment errors.
     const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'object', 'extracted-frame', 'pose', 'font'];
     const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'extracted-frame', 'object', 'pose', 'font'];
 
@@ -1229,7 +1231,6 @@ const App: React.FC = () => {
                 <LibraryPickerModal
                     isOpen={isBannerRefPickerOpen}
                     onClose={() => closeModal('isBannerRefPickerOpen')}
-                    // Fix: Add the required 'onSelectItem' prop. It's a no-op because this modal is in multi-select mode.
                     onSelectItem={() => {}}
                     onSelectMultiple={(items) => {
                         handleSetLogoThemeState(prev => ({ ...prev, bannerReferenceItems: [...(prev.bannerReferenceItems || []), ...items] }));

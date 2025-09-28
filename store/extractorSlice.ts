@@ -54,6 +54,31 @@ const extractorSlice = createSlice({
     resetExtractorState: (state) => {
       state.extractorState = initialState.extractorState;
     },
+    setExtractorItemSaveStatus: (state, action: PayloadAction<{ itemType: 'clothes' | 'objects' | 'poses' | 'font', index?: number, status: 'idle' | 'saving' | 'saved' }>) => {
+        const { itemType, index, status } = action.payload;
+        switch (itemType) {
+            case 'clothes':
+                if (typeof index === 'number' && state.extractorState.generatedClothes[index]) {
+                    state.extractorState.generatedClothes[index].saved = status;
+                }
+                break;
+            case 'objects':
+                if (typeof index === 'number' && state.extractorState.generatedObjects[index]) {
+                    state.extractorState.generatedObjects[index].saved = status;
+                }
+                break;
+            case 'poses':
+                if (typeof index === 'number' && state.extractorState.generatedPoses[index]) {
+                    state.extractorState.generatedPoses[index].saved = status;
+                }
+                break;
+            case 'font':
+                if (state.extractorState.generatedFontChart) {
+                    state.extractorState.generatedFontChart.saved = status;
+                }
+                break;
+        }
+    },
   },
 });
 
@@ -61,6 +86,7 @@ export const {
   setExtractorState,
   setActiveExtractorSubTab,
   resetExtractorState,
+  setExtractorItemSaveStatus,
 } = extractorSlice.actions;
 
 export default extractorSlice.reducer;

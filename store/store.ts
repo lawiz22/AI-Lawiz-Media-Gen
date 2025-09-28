@@ -5,6 +5,7 @@ import videoReducer from './videoSlice';
 import promptGenReducer from './promptGenSlice';
 import extractorReducer from './extractorSlice';
 import logoThemeReducer from './logoThemeSlice';
+import libraryReducer from './librarySlice';
 
 export const store = configureStore({
   reducer: {
@@ -14,6 +15,7 @@ export const store = configureStore({
     promptGen: promptGenReducer,
     extractor: extractorReducer,
     logoTheme: logoThemeReducer,
+    library: libraryReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

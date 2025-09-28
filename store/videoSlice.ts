@@ -37,7 +37,16 @@ const videoSlice = createSlice({
       state.videoEndFrame = action.payload;
     },
     setGeneratedVideoUrl: (state, action: PayloadAction<string | null>) => {
-      state.generatedVideoUrl = action.payload;
+      if (action.payload) {
+        state.generatedVideoUrl = { url: action.payload, saved: 'idle' };
+      } else {
+        state.generatedVideoUrl = null;
+      }
+    },
+    setVideoSaveStatus: (state, action: PayloadAction<'idle' | 'saving' | 'saved'>) => {
+        if (state.generatedVideoUrl) {
+            state.generatedVideoUrl.saved = action.payload;
+        }
     },
     setGenerationOptionsForSave: (state, action: PayloadAction<GenerationOptions | null>) => {
       state.generationOptionsForSave = action.payload;
@@ -70,6 +79,7 @@ export const {
     setVideoStartFrame,
     setVideoEndFrame,
     setGeneratedVideoUrl,
+    setVideoSaveStatus,
     setGenerationOptionsForSave,
     setVideoUtilsState,
     updateColorPickerState,
@@ -93,7 +103,8 @@ export const selectIsVideoReady = createSelector(
     if (options.videoProvider === 'gemini') {
         return !!options.geminiVidPrompt?.trim();
     } else { // comfyui
-        return !!videoStartFrame;
+        // Fix: Added a check for the ComfyUI positive prompt to ensure all required fields are present before enabling generation.
+        return !!videoStartFrame && !!options.comfyVidWanI2VPositivePrompt?.trim();
     }
   }
 );

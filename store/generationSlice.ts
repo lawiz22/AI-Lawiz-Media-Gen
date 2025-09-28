@@ -102,7 +102,13 @@ const generationSlice = createSlice({
         state.progressValue = action.payload.value;
     },
     setGeneratedImages: (state, action: PayloadAction<string[]>) => {
-      state.generatedImages = action.payload;
+      state.generatedImages = action.payload.map(src => ({ src, saved: 'idle' }));
+    },
+    setImageSaveStatus: (state, action: PayloadAction<{ index: number; status: 'idle' | 'saving' | 'saved' }>) => {
+        const { index, status } = action.payload;
+        if (state.generatedImages[index]) {
+            state.generatedImages[index].saved = status;
+        }
     },
     setLastUsedPrompt: (state, action: PayloadAction<string | null>) => {
       state.lastUsedPrompt = action.payload;
@@ -141,7 +147,7 @@ export const {
     setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
     setClothingImage, setBackgroundImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
     setMaskImage, setElementImages, setOptions, updateOptions, setLoadingState,
-    updateProgress, setGeneratedImages, setLastUsedPrompt, resetGenerationState
+    updateProgress, setGeneratedImages, setImageSaveStatus, setLastUsedPrompt, resetGenerationState
 } = generationSlice.actions;
 
 // --- Selectors ---

@@ -74,6 +74,24 @@ const logoThemeSlice = createSlice({
     resetLogoThemeState: (state) => {
       state.logoThemeState = initialLogoThemeState;
     },
+    setLogoSaveStatus: (state, action: PayloadAction<{ index: number; status: 'idle' | 'saving' | 'saved' }>) => {
+        const { index, status } = action.payload;
+        if (state.logoThemeState.generatedLogos && state.logoThemeState.generatedLogos[index]) {
+            state.logoThemeState.generatedLogos[index].saved = status;
+        }
+    },
+    setBannerSaveStatus: (state, action: PayloadAction<{ index: number; status: 'idle' | 'saving' | 'saved' }>) => {
+        const { index, status } = action.payload;
+        if (state.logoThemeState.generatedBanners && state.logoThemeState.generatedBanners[index]) {
+            state.logoThemeState.generatedBanners[index].saved = status;
+        }
+    },
+    setAlbumCoverSaveStatus: (state, action: PayloadAction<{ index: number; status: 'idle' | 'saving' | 'saved' }>) => {
+        const { index, status } = action.payload;
+        if (state.logoThemeState.generatedAlbumCovers && state.logoThemeState.generatedAlbumCovers[index]) {
+            state.logoThemeState.generatedAlbumCovers[index].saved = status;
+        }
+    },
   },
 });
 
@@ -81,6 +99,9 @@ export const {
   setLogoThemeState,
   setActiveLogoThemeSubTab,
   resetLogoThemeState,
+  setLogoSaveStatus,
+  setBannerSaveStatus,
+  setAlbumCoverSaveStatus,
 } = logoThemeSlice.actions;
 
 export default logoThemeSlice.reducer;

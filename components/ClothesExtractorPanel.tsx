@@ -1,14 +1,17 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React from 'react';
+import { useDispatch } from 'react-redux';
+import { AppDispatch } from '../store/store';
+import { setExtractorItemSaveStatus } from '../store/extractorSlice';
+import { addToLibrary } from '../store/librarySlice';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
 import { ExtractorResultsGrid } from './ExtractorResultsGrid';
 import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage, generatePoseMannequin, generatePoseDescription, generateFontChart } from '../services/geminiService';
 import { detectPosesInImage } from '../services/mediaPipeService';
 import { mediaPipeToOpenPose, renderPoseSkeleton } from '../utils/poseRenderer';
-import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose, MannequinStyle } from '../types';
-// Fix: Add the missing 'DownloadIcon' to the import list to resolve a ReferenceError.
-import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon, FontIcon, ZoomIcon, CloseIcon, SaveIcon, CheckIcon, DownloadIcon } from './icons';
-import { saveToLibrary } from '../services/libraryService';
+import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose, MannequinStyle, LibraryItem } from '../types';
+// Fix: Imported the missing icon components (DownloadIcon, SaveIcon, CheckIcon) to resolve "Cannot find name" errors.
+import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon, FontIcon, DownloadIcon, SaveIcon, CheckIcon } from './icons';
 import { dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 
 // --- Helper Components ---
@@ -68,8 +71,6 @@ interface ExtractorToolsPanelProps {
 
 
 // --- Main Component ---
-// This is the component being exported. The user likely intended to rename the file or the component, but they are mismatched.
-// Fix: Renamed component from ClothesExtractorPanel to ExtractorToolsPanel to match the import in App.tsx.
 export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     state,
     setState,
@@ -82,6 +83,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     activeSubTab,
     setActiveSubTab,
 }) => {
+    const dispatch: AppDispatch = useDispatch();
     const {
         clothesSourceFile, clothesDetails, isIdentifying, identifiedItems, isGenerating, generatedClothes, clothesError, generateFolded, excludeAccessories,
         objectSourceFile, objectHints, maxObjects, isIdentifyingObjects, identifiedObjects, isGeneratingObjects, generatedObjects, objectError,
@@ -131,32 +133,21 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     };
     
     const handleSaveClothing = async (item: GeneratedClothing, index: number) => {
-        setState(prev => {
-            const updated = [...prev.generatedClothes];
-            updated[index] = { ...item, saved: 'saving' };
-            return { ...prev, generatedClothes: updated };
-        });
+        if (!clothesSourceFile) return;
+        dispatch(setExtractorItemSaveStatus({ itemType: 'clothes', index, status: 'saving' }));
         try {
-            const thumbnail = await dataUrlToThumbnail(item.laidOutImage, 256);
-            await saveToLibrary({
+            const libraryItem: Omit<LibraryItem, 'id'> = {
                 mediaType: 'clothes',
                 name: item.itemName,
-                media: item.laidOutImage, // Save only the laid out image
-                thumbnail: thumbnail,
-                sourceImage: await fileToResizedDataUrl(clothesSourceFile!, 512),
-            });
-            setState(prev => {
-                const updated = [...prev.generatedClothes];
-                updated[index] = { ...item, saved: 'saved' };
-                return { ...prev, generatedClothes: updated };
-            });
+                media: item.laidOutImage,
+                thumbnail: await dataUrlToThumbnail(item.laidOutImage, 256),
+                sourceImage: await fileToResizedDataUrl(clothesSourceFile, 512),
+            };
+            await dispatch(addToLibrary(libraryItem)).unwrap();
+            dispatch(setExtractorItemSaveStatus({ itemType: 'clothes', index, status: 'saved' }));
         } catch (err) {
             console.error("Failed to save clothing to library:", err);
-            setState(prev => {
-                const updated = [...prev.generatedClothes];
-                updated[index] = { ...item, saved: 'idle' };
-                return { ...prev, generatedClothes: updated };
-            });
+            dispatch(setExtractorItemSaveStatus({ itemType: 'clothes', index, status: 'idle' }));
         }
     };
 
@@ -194,29 +185,19 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     };
 
     const handleSaveObject = async (item: GeneratedObject, index: number) => {
-        setState(prev => {
-            const updated = [...prev.generatedObjects];
-            updated[index] = { ...item, saved: 'saving' };
-            return { ...prev, generatedObjects: updated };
-        });
+        if (!objectSourceFile) return;
+        dispatch(setExtractorItemSaveStatus({ itemType: 'objects', index, status: 'saving' }));
         try {
-            await saveToLibrary({
+            const libraryItem: Omit<LibraryItem, 'id'> = {
                 mediaType: 'object', name: item.name, media: item.image,
                 thumbnail: await dataUrlToThumbnail(item.image, 256),
-                sourceImage: await fileToResizedDataUrl(objectSourceFile!, 512),
-            });
-            setState(prev => {
-                const updated = [...prev.generatedObjects];
-                updated[index] = { ...item, saved: 'saved' };
-                return { ...prev, generatedObjects: updated };
-            });
+                sourceImage: await fileToResizedDataUrl(objectSourceFile, 512),
+            };
+            await dispatch(addToLibrary(libraryItem)).unwrap();
+            dispatch(setExtractorItemSaveStatus({ itemType: 'objects', index, status: 'saved' }));
         } catch (err) {
             console.error("Failed to save object:", err);
-            setState(prev => {
-                const updated = [...prev.generatedObjects];
-                updated[index] = { ...item, saved: 'idle' };
-                return { ...prev, generatedObjects: updated };
-            });
+            dispatch(setExtractorItemSaveStatus({ itemType: 'objects', index, status: 'idle' }));
         }
     };
     
@@ -250,31 +231,21 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     };
     
     const handleSavePose = async (item: GeneratedPose, index: number) => {
-        setState(prev => {
-            const updated = [...prev.generatedPoses];
-            updated[index] = { ...item, saved: 'saving' };
-            return { ...prev, generatedPoses: updated };
-        });
+        if (!poseSourceFile) return;
+        dispatch(setExtractorItemSaveStatus({ itemType: 'poses', index, status: 'saving' }));
         try {
-            await saveToLibrary({
+            const libraryItem: Omit<LibraryItem, 'id'> = {
                 mediaType: 'pose', name: item.description, media: item.image,
                 thumbnail: await dataUrlToThumbnail(item.image, 256),
-                sourceImage: await fileToResizedDataUrl(poseSourceFile!, 512),
+                sourceImage: await fileToResizedDataUrl(poseSourceFile, 512),
                 poseJson: JSON.stringify(item.poseJson),
                 skeletonImage: item.skeletonImage,
-            });
-            setState(prev => {
-                const updated = [...prev.generatedPoses];
-                updated[index] = { ...item, saved: 'saved' };
-                return { ...prev, generatedPoses: updated };
-            });
+            };
+            await dispatch(addToLibrary(libraryItem)).unwrap();
+            dispatch(setExtractorItemSaveStatus({ itemType: 'poses', index, status: 'saved' }));
         } catch (err) {
             console.error("Failed to save pose:", err);
-            setState(prev => {
-                const updated = [...prev.generatedPoses];
-                updated[index] = { ...item, saved: 'idle' };
-                return { ...prev, generatedPoses: updated };
-            });
+            dispatch(setExtractorItemSaveStatus({ itemType: 'poses', index, status: 'idle' }));
         }
     };
 
@@ -294,19 +265,20 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
 
     const handleSaveFont = async () => {
         if (!generatedFontChart || !fontSourceFile) return;
-        setState(prev => ({ ...prev, generatedFontChart: { ...prev.generatedFontChart!, saved: 'saving' } }));
+        dispatch(setExtractorItemSaveStatus({ itemType: 'font', status: 'saving' }));
         try {
-            await saveToLibrary({
+            const libraryItem: Omit<LibraryItem, 'id'> = {
                 mediaType: 'font',
                 name: `Font from ${fontSourceFile.name}`,
                 media: generatedFontChart.src,
                 thumbnail: await dataUrlToThumbnail(generatedFontChart.src, 256),
-                sourceImage: await fileToResizedDataUrl(fontSourceFile!, 512),
-            });
-            setState(prev => ({ ...prev, generatedFontChart: { ...prev.generatedFontChart!, saved: 'saved' } }));
+                sourceImage: await fileToResizedDataUrl(fontSourceFile, 512),
+            };
+            await dispatch(addToLibrary(libraryItem)).unwrap();
+            dispatch(setExtractorItemSaveStatus({ itemType: 'font', status: 'saved' }));
         } catch (err) {
             console.error("Failed to save font:", err);
-            setState(prev => ({ ...prev, generatedFontChart: { ...prev.generatedFontChart!, saved: 'idle' } }));
+            dispatch(setExtractorItemSaveStatus({ itemType: 'font', status: 'idle' }));
         }
     };
 

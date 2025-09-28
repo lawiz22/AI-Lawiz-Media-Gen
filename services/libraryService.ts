@@ -37,7 +37,7 @@ export async function initializeDriveSync(onProgress: (message: string) => void)
     onProgress("Initial sync process complete.");
 }
 
-export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void> => {
+export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<LibraryItem> => {
   const itemToSave = { ...item };
 
   // If a name is missing for an image, video, or character, try to generate one.
@@ -76,7 +76,6 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
   }
   
   const newItem = await idbService.saveToLibrary(itemToSave);
-  window.dispatchEvent(new CustomEvent('libraryUpdated'));
 
   if (driveService?.isConnected()) {
     try {
@@ -85,7 +84,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
       if (newItem.mediaType === 'prompt' || newItem.mediaType === 'color-palette') {
           index.items[newItem.id] = newItem;
           await driveService.updateLibraryIndex(index, indexFileId);
-          return;
+          return newItem;
       }
 
       const blob = await dataUrlToBlob(newItem.media);
@@ -117,6 +116,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<void
       console.error("Failed to sync to Google Drive, but item is saved locally.", e);
     }
   }
+  return newItem;
 };
 
 
@@ -291,7 +291,7 @@ export const updateLibraryItem = idbService.updateLibraryItem;
 export const deleteLibraryItem = async (id: number): Promise<void> => {
   const itemToDelete = await idbService.getItemById(id);
   await idbService.deleteLibraryItem(id);
-  window.dispatchEvent(new CustomEvent('libraryUpdated'));
+  // Event dispatch is removed as Redux now handles state updates.
 
   if (driveService?.isConnected() && itemToDelete) {
       try {
@@ -313,7 +313,7 @@ export const deleteLibraryItem = async (id: number): Promise<void> => {
 
 export const clearLibrary = async (): Promise<void> => {
     await idbService.clearLibrary();
-    window.dispatchEvent(new CustomEvent('libraryUpdated'));
+    // Event dispatch is removed as Redux now handles state updates.
     if (driveService?.isConnected()) {
         try {
             const { fileId } = await driveService.getLibraryIndex();

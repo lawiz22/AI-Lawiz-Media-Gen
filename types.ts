@@ -225,7 +225,6 @@ export interface GeneratedPose {
     poseJson: object; // The ControlNet JSON object
     mannequinStyle: MannequinStyle; // The style used for generation
     saved?: 'idle' | 'saving' | 'saved'; // UI state
-    // Fix: Add optional 'generationPrompt' to store the prompt used for mannequin creation.
     generationPrompt?: string;
 }
 
@@ -315,7 +314,6 @@ export interface LibraryItem {
     startFrame?: string; // data URL for video generations
     endFrame?: string; // data URL for video generations
     promptType?: PromptCategory;
-    // Fix: Widened the type to include all possible prompt model types to match the implementation in the PromptGeneratorPanel.
     promptModelType?: ComfyModelType | 'gemini';
     driveFileId?: string; // Google Drive file ID for the media
     previewThumbnail?: string; // AI-generated visual thumbnail for prompts
@@ -393,7 +391,6 @@ export interface LogoThemeState {
     bannerReferenceItems?: LibraryItem[];
     bannerSelectedPalette?: LibraryItem | null;
     bannerSelectedLogo?: LibraryItem | null;
-    // Fix: Corrected typo from BannerPlacement to BannerLogoPlacement.
     bannerLogoPlacement?: BannerLogoPlacement;
     numBanners?: number;
     isGeneratingBanners?: boolean;
@@ -490,7 +487,7 @@ export interface GenerationSliceState {
   isLoading: boolean;
   progressMessage: string;
   progressValue: number;
-  generatedImages: string[];
+  generatedImages: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
   lastUsedPrompt: string | null;
 }
 
@@ -498,10 +495,16 @@ export interface VideoSliceState {
   // Video Generation
   videoStartFrame: File | null;
   videoEndFrame: File | null;
-  generatedVideoUrl: string | null;
+  generatedVideoUrl: { url: string; saved: 'idle' | 'saving' | 'saved' } | null;
   generationOptionsForSave: GenerationOptions | null;
   
   // Video Utilities
   videoUtilsState: VideoUtilsState;
   activeVideoUtilsSubTab: 'frames' | 'colors';
+}
+
+export interface LibrarySliceState {
+    items: LibraryItem[];
+    status: 'idle' | 'loading' | 'succeeded' | 'failed';
+    error: string | null;
 }

@@ -1,38 +1,30 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '../store/store';
+import { addToLibrary } from '../store/librarySlice';
+import { setImageSaveStatus } from '../store/generationSlice';
 import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon, CheckIcon, CharacterIcon } from './icons';
 import { enhanceImageResolution } from '../services/geminiService';
-import { saveToLibrary } from '../services/libraryService';
 import type { GenerationOptions, LibraryItem } from '../types';
-// Fix: Import the missing `dataUrlToFile` utility function.
 import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromDataUrl, dataUrlToFile } from '../utils/imageUtils';
 
-/**
- * Creates a simple, readable description of the character generation settings.
- * @param options The generation options used.
- * @returns A string like "random pose; clothing original; bg natural studio; photorealistic".
- */
 const generateCharacterDescription = (options: GenerationOptions): string => {
     const parts = [];
-    // Pose
     parts.push(`${options.poseMode} pose`);
     
-    // Fix: Explicitly type `clothing` as `string` to allow assigning a descriptive string. This resolves a TypeScript error where the variable was inferred as the strict literal type `ClothingMode`.
     let clothing: string = options.clothing;
     if ((clothing === 'prompt' || clothing === 'random') && options.customClothingPrompt) {
          clothing = `'${options.customClothingPrompt.substring(0, 15).trim()}...'`;
     }
     parts.push(`clothing ${clothing}`);
     
-    // Fix: Explicitly type `bg` as `string` to allow assigning a descriptive string. This resolves a TypeScript error where the variable was inferred as the strict literal type `BackgroundMode`.
     let bg: string = options.background;
     if ((bg === 'prompt' || bg === 'random') && options.customBackground) {
         bg = `'${options.customBackground.substring(0, 15).trim()}...'`;
     }
     parts.push(`bg ${bg}`);
     
-    // Style
     parts.push(options.imageStyle);
     
     return parts.join('; ');
@@ -51,7 +43,7 @@ const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
 
 
 interface ImageGridProps {
-  images: string[];
+  images: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
   onSendToI2I: (imageData: string) => void;
   onSendToCharacter: (imageData: string) => void;
   lastUsedPrompt?: string | null;
@@ -62,22 +54,18 @@ interface ImageGridProps {
 }
 
 export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSendToCharacter, lastUsedPrompt, options, sourceImage, characterName, activeTab }) => {
+  const dispatch: AppDispatch = useDispatch();
   const [enhancedImages, setEnhancedImages] = useState<Record<number, string>>({});
   const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
   const [errorIndex, setErrorIndex] = useState<Record<number, string>>({});
   const [zoomedImageIndex, setZoomedImageIndex] = useState<number | null>(null);
   const [isZipping, setIsZipping] = useState<boolean>(false);
   const [copyButtonText, setCopyButtonText] = useState('Copy');
-  const [savingState, setSavingState] = useState<Record<number, 'idle' | 'saving' | 'saved'>>({});
 
-  // This useEffect hook is crucial. It resets all the local state related to a specific
-  // set of images whenever a *new* set of images is passed in from a new generation.
-  // This prevents old enhanced images, errors, or save states from persisting incorrectly.
   useEffect(() => {
     setEnhancedImages({});
     setEnhancingIndex(null);
     setErrorIndex({});
-    setSavingState({});
   }, [images]);
 
   const handleDownload = (imageSrc: string, index: number) => {
@@ -110,9 +98,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
     try {
         const enhancedSrc = await enhanceImageResolution(imageSrc);
         setEnhancedImages(prev => ({...prev, [index]: enhancedSrc}));
-        // Fix: Reset the save state for this image slot because the enhanced
-        // image is a new, unsaved entity, allowing it to be saved.
-        setSavingState(prev => ({ ...prev, [index]: 'idle' }));
+        dispatch(setImageSaveStatus({ index, status: 'idle' }));
     } catch (err: any) {
         console.error("Enhancement failed:", err);
         setErrorIndex(prev => ({ ...prev, [index]: err.message || 'Failed to enhance image.' }));
@@ -122,7 +108,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
   };
   
   const handleSaveToLibrary = async (imageSrc: string, index: number) => {
-    setSavingState(prev => ({ ...prev, [index]: 'saving' }));
+    dispatch(setImageSaveStatus({ index, status: 'saving' }));
     try {
       const isEnhanced = !!enhancedImages[index];
       const { width, height } = await getImageDimensionsFromDataUrl(imageSrc);
@@ -132,10 +118,8 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
       let itemName: string | undefined;
       let sourceImageToSave: File | null = sourceImage;
       
-      // Determine if the generation was Text-to-Image to prevent saving a lingering source image from a previous run.
       const isGeminiT2I = options.provider === 'gemini' && options.geminiMode === 't2i';
       
-      // An i2i workflow requires a source image. If the model type is one of these, it's i2i.
       const comfyI2IWorkflows: (GenerationOptions['comfyModelType'])[] = ['nunchaku-kontext-flux', 'face-detailer-sd1.5'];
       const isComfyT2I = options.provider === 'comfyui' && !comfyI2IWorkflows.includes(options.comfyModelType);
 
@@ -149,22 +133,18 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
         const baseName = characterName || (isCharacter ? `Character #${index + 1}` : `Image #${index + 1}`);
         itemName = `${baseName} (Enhanced)`;
 
-        // For an enhanced T2I image, its "source" is the image *before* enhancement.
-        // For an enhanced I2I image, its "source" is the original I2I input image.
-        if (!sourceImage) { // If original had no source, it was T2I.
-            sourceImageToSave = await dataUrlToFile(images[index], 't2i_source.jpeg');
+        if (!sourceImage) { 
+            sourceImageToSave = await dataUrlToFile(images[index].src, 't2i_source.jpeg');
         } else {
-            sourceImageToSave = sourceImage; // Keep the original I2I source.
+            sourceImageToSave = sourceImage;
         }
       } else {
-        // This is a normal, non-enhanced generation.
         optionsToSave = { ...options, width, height };
         if (isCharacter) {
           const description = generateCharacterDescription(optionsToSave as GenerationOptions);
           itemName = `${characterName || 'Character'}: ${description}`;
         }
         
-        // If it's T2I, ensure no source image is saved.
         if (isGeminiT2I || isComfyT2I) {
             sourceImageToSave = null;
         }
@@ -179,11 +159,11 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
         name: itemName,
       };
 
-      await saveToLibrary(item);
-      setSavingState(prev => ({ ...prev, [index]: 'saved' }));
+      await dispatch(addToLibrary(item)).unwrap();
+      dispatch(setImageSaveStatus({ index, status: 'saved' }));
     } catch (err: any) {
       console.error("Failed to save to library:", err);
-      setSavingState(prev => ({ ...prev, [index]: 'idle' })); // Allow retry on error
+      dispatch(setImageSaveStatus({ index, status: 'idle' }));
     }
   };
 
@@ -216,8 +196,8 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
       if (!baseName) { baseName = 'generated_images'; }
       const zipBaseName = baseName;
 
-      images.forEach((src, index) => {
-        const finalSrc = enhancedImages[index] || src;
+      images.forEach((image, index) => {
+        const finalSrc = enhancedImages[index] || image.src;
         const base64Data = finalSrc.split(',')[1];
         if (base64Data) {
           const isEnhanced = !!enhancedImages[index];
@@ -295,7 +275,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
     return null;
   }
 
-  const currentZoomedSrc = zoomedImageIndex !== null ? (enhancedImages[zoomedImageIndex] || images[zoomedImageIndex]) : null;
+  const currentZoomedSrc = zoomedImageIndex !== null ? (enhancedImages[zoomedImageIndex] || images[zoomedImageIndex].src) : null;
 
   return (
     <>
@@ -339,11 +319,11 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {images.map((src, index) => {
+              {images.map((image, index) => {
                   const isEnhancing = enhancingIndex === index;
-                  const finalSrc = enhancedImages[index] || src;
+                  const finalSrc = enhancedImages[index] || image.src;
                   const hasError = !!errorIndex[index];
-                  const savingStatus = savingState[index] || 'idle';
+                  const savingStatus = image.saved;
 
                   return (
                       <div key={index} className="group relative aspect-w-1 aspect-h-1 bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
@@ -398,7 +378,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                                               </button>
                                               {!enhancedImages[index] && (
                                                   <button
-                                                      onClick={() => handleEnhance(src, index)}
+                                                      onClick={() => handleEnhance(image.src, index)}
                                                       disabled={enhancingIndex !== null}
                                                       title="Enhance Quality"
                                                       className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -519,7 +499,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                 </div>
             ) : !enhancedImages[zoomedImageIndex] && (
                 <button
-                    onClick={() => handleEnhance(images[zoomedImageIndex], zoomedImageIndex)}
+                    onClick={() => handleEnhance(images[zoomedImageIndex].src, zoomedImageIndex)}
                     disabled={enhancingIndex !== null}
                     title="Enhance Quality"
                     aria-label="Enhance image quality"
