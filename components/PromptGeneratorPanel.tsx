@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { ImageUploader } from './ImageUploader';
 import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup } from '../services/comfyUIService';
 import { saveToLibrary } from '../services/libraryService';
-import type { LibraryItem } from '../types';
+import type { LibraryItem, PromptGenState } from '../types';
 import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon } from './icons';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 
@@ -11,21 +10,8 @@ interface PromptGeneratorPanelProps {
     activeSubTab: string;
     setActiveSubTab: (tabId: string) => void;
     onUsePrompt: (prompt: string) => void;
-    image: File | null;
-    setImage: (file: File | null) => void;
-    prompt: string;
-    setPrompt: (prompt: string) => void;
-    bgImage: File | null;
-    setBgImage: (file: File | null) => void;
-    bgPrompt: string;
-    setBgPrompt: (prompt: string) => void;
-    subjectImage: File | null;
-    setSubjectImage: (file: File | null) => void;
-    subjectPrompt: string;
-    setSubjectPrompt: (prompt: string) => void;
-    soupPrompt: string;
-    setSoupPrompt: (prompt: string) => void;
-    soupHistory: string[];
+    state: PromptGenState;
+    setState: (updater: React.SetStateAction<PromptGenState>) => void;
     onAddSoupToHistory: (soup: string) => void;
     onOpenLibraryForImage: () => void;
     onOpenLibraryForBg: () => void;
@@ -115,15 +101,16 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     activeSubTab,
     setActiveSubTab,
     onUsePrompt,
-    image, setImage, prompt, setPrompt,
-    bgImage, setBgImage, bgPrompt, setBgPrompt,
-    subjectImage, setSubjectImage, subjectPrompt, setSubjectPrompt,
-    soupPrompt, setSoupPrompt, soupHistory, onAddSoupToHistory,
+    state,
+    setState,
+    onAddSoupToHistory,
     onOpenLibraryForImage,
     onOpenLibraryForBg,
     onOpenLibraryForSubject,
     onReset
 }) => {
+    const { image, prompt, bgImage, bgPrompt, subjectImage, subjectPrompt, soupPrompt, soupHistory } = state;
+
     // --- Ephemeral state (not persisted) ---
     const [modelType, setModelType] = useState<PromptModelType>('sdxl');
     const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -196,7 +183,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setError(null);
         try {
             const generatedPrompt = await generateComfyUIPromptFromSource(image, modelType);
-            setPrompt(generatedPrompt);
+            setState(prev => ({ ...prev, prompt: generatedPrompt }));
         } catch (err: any) {
             setError(err.message || 'An unknown error occurred.');
         } finally {
@@ -232,7 +219,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setBgError(null);
         try {
             const generatedPrompt = await extractBackgroundPromptFromImage(bgImage, bgModelType);
-            setBgPrompt(generatedPrompt);
+            setState(prev => ({ ...prev, bgPrompt: generatedPrompt }));
         } catch (err: any) {
             setBgError(err.message || 'An unknown error occurred.');
         } finally {
@@ -268,7 +255,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setSubjectError(null);
         try {
             const generatedPrompt = await extractSubjectPromptFromImage(subjectImage, subjectModelType);
-            setSubjectPrompt(generatedPrompt);
+            setState(prev => ({ ...prev, subjectPrompt: generatedPrompt }));
         } catch (err: any) {
             setSubjectError(err.message || 'An unknown error occurred.');
         } finally {
@@ -405,7 +392,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                     <ImageUploader 
                                         label="Upload Photo"
                                         id="prompt-gen-image"
-                                        onImageUpload={setImage}
+                                        onImageUpload={file => setState(prev => ({ ...prev, image: file }))}
                                         sourceFile={image}
                                     />
                                 </div>
@@ -437,7 +424,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <textarea
                                     id="generated-prompt"
                                     value={prompt}
-                                    onChange={(e) => setPrompt(e.target.value)}
+                                    onChange={(e) => setState(prev => ({ ...prev, prompt: e.target.value }))}
                                     readOnly={isLoading}
                                     placeholder="Your generated prompt will appear here..."
                                     className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-accent font-medium"
@@ -472,7 +459,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div className="space-y-4">
                             <div className="flex items-center gap-2">
                                 <div className="flex-grow">
-                                    <ImageUploader label="Upload Photo" id="bg-extract-image" onImageUpload={setBgImage} sourceFile={bgImage} />
+                                    <ImageUploader label="Upload Photo" id="bg-extract-image" onImageUpload={file => setState(prev => ({ ...prev, bgImage: file }))} sourceFile={bgImage} />
                                 </div>
                                 <button onClick={onOpenLibraryForBg} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library"><LibraryIcon className="w-6 h-6"/></button>
                             </div>
@@ -484,7 +471,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div className="space-y-4">
                             <div>
                                 <label htmlFor="generated-bg-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Background Prompt</label>
-                                <textarea id="generated-bg-prompt" value={bgPrompt} onChange={(e) => setBgPrompt(e.target.value)} readOnly={isBgLoading} placeholder="Your generated background prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-green font-medium" rows={10}/>
+                                <textarea id="generated-bg-prompt" value={bgPrompt} onChange={(e) => setState(prev => ({ ...prev, bgPrompt: e.target.value }))} readOnly={isBgLoading} placeholder="Your generated background prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-green font-medium" rows={10}/>
                             </div>
                             {bgError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{bgError}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -514,7 +501,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div className="space-y-4">
                             <div className="flex items-center gap-2">
                                 <div className="flex-grow">
-                                    <ImageUploader label="Upload Photo" id="subject-extract-image" onImageUpload={setSubjectImage} sourceFile={subjectImage} />
+                                    <ImageUploader label="Upload Photo" id="subject-extract-image" onImageUpload={file => setState(prev => ({ ...prev, subjectImage: file }))} sourceFile={subjectImage} />
                                 </div>
                                 <button onClick={onOpenLibraryForSubject} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library"><LibraryIcon className="w-6 h-6"/></button>
                             </div>
@@ -526,7 +513,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div className="space-y-4">
                             <div>
                                 <label htmlFor="generated-subject-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Subject Prompt</label>
-                                <textarea id="generated-subject-prompt" value={subjectPrompt} onChange={(e) => setSubjectPrompt(e.target.value)} readOnly={isSubjectLoading} placeholder="Your generated subject prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-yellow font-medium" rows={10}/>
+                                <textarea id="generated-subject-prompt" value={subjectPrompt} onChange={(e) => setState(prev => ({ ...prev, subjectPrompt: e.target.value }))} readOnly={isSubjectLoading} placeholder="Your generated subject prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-yellow font-medium" rows={10}/>
                             </div>
                             {subjectError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{subjectError}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -590,7 +577,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                     <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md border border-border-primary/50">
                                         {soupHistory.map((soup, index) => (
                                             <div key={index} className="group bg-bg-tertiary p-2 rounded-md flex items-center justify-between gap-2">
-                                                <p className="text-xs text-text-secondary truncate cursor-pointer hover:text-text-primary transition-colors" title={soup} onClick={() => { setSoupPrompt(soup); setSoupPromptParts([]); }}>{soup}</p>
+                                                <p className="text-xs text-text-secondary truncate cursor-pointer hover:text-text-primary transition-colors" title={soup} onClick={() => { setState(prev => ({...prev, soupPrompt: soup})); setSoupPromptParts([]); }}>{soup}</p>
                                                 <button onClick={() => handleHistoryItemCopy(soup, index)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full bg-bg-secondary text-text-secondary hover:bg-accent hover:text-accent-text" title={historyCopyStates[index] || "Copy"}>
                                                     <CopyIcon className="w-4 h-4" />
                                                 </button>

@@ -20,6 +20,16 @@ import {
     setVideoUtilsState, setActiveVideoUtilsSubTab, resetVideoGenerationState,
     resetVideoUtilsState, selectIsVideoReady
 } from './store/videoSlice';
+import {
+    setPromptGenState, addSoupToHistory, setActivePromptToolsSubTab, resetPromptGenState
+} from './store/promptGenSlice';
+import {
+    setExtractorState, setActiveExtractorSubTab, resetExtractorState
+} from './store/extractorSlice';
+import {
+    setLogoThemeState, setActiveLogoThemeSubTab, resetLogoThemeState
+} from './store/logoThemeSlice';
+
 
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
 // Fix: Import 'AppSliceState' to resolve missing type error.
@@ -53,89 +63,6 @@ import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, Extr
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
 
-const initialExtractorState: ExtractorState = {
-    clothesSourceFile: null,
-    clothesDetails: '',
-    isIdentifying: false,
-    identifiedItems: [],
-    isGenerating: false,
-    generatedClothes: [],
-    clothesError: null,
-    generateFolded: false,
-    excludeAccessories: true,
-    objectSourceFile: null,
-    objectHints: '',
-    maxObjects: 5,
-    isIdentifyingObjects: false,
-    identifiedObjects: [],
-    isGeneratingObjects: false,
-    generatedObjects: [],
-    objectError: null,
-    poseSourceFile: null,
-    isGeneratingPoses: false,
-    generatedPoses: [],
-    poseError: null,
-    // Fix: Removed 'posesKeepClothes' as it does not exist in the ExtractorState type.
-    mannequinStyle: 'wooden-artist',
-    mannequinReferenceFile: null,
-    fontSourceFile: null,
-    isGeneratingFont: false,
-    generatedFontChart: null,
-    fontError: null,
-};
-
-const initialLogoThemeState: LogoThemeState = {
-    logoPrompt: '',
-    brandName: '',
-    slogan: '',
-    logoStyle: 'symbolic',
-    fontReferenceImage: null,
-    selectedFont: null,
-    referenceItems: [],
-    selectedPalette: null,
-    numLogos: 4,
-    backgroundColor: 'transparent',
-    isGeneratingLogos: false,
-    generatedLogos: [],
-    logoError: null,
-    
-    // Banner Generator State
-    bannerPrompt: '',
-    bannerTitle: '',
-    bannerAspectRatio: '16:9',
-    bannerStyle: 'corporate-clean',
-    bannerFontReferenceImage: null,
-    bannerSelectedFont: null,
-    bannerReferenceItems: [],
-    bannerSelectedPalette: null,
-    bannerSelectedLogo: null,
-    bannerLogoPlacement: 'top-left',
-    numBanners: 4,
-    isGeneratingBanners: false,
-    generatedBanners: [],
-    bannerError: null,
-    
-    // Album Cover Generator State
-    albumPrompt: '',
-    albumTitle: '',
-    artistName: '',
-    musicStyle: 'rock',
-    customMusicStyle: '',
-    albumEra: 'modern',
-    albumMediaType: 'digital',
-    addVinylWear: false,
-    albumFontReferenceImage: null,
-    albumSelectedFont: null,
-    albumReferenceItems: [],
-    albumSelectedPalette: null,
-    albumSelectedLogo: null,
-    numAlbumCovers: 1,
-    isGeneratingAlbumCovers: false,
-    generatedAlbumCovers: [],
-    albumCoverError: null,
-};
-
-
 const App: React.FC = () => {
     // --- Redux Dispatch ---
     const dispatch: AppDispatch = useDispatch();
@@ -167,29 +94,16 @@ const App: React.FC = () => {
         videoStartFrame, videoEndFrame, generatedVideoUrl, generationOptionsForSave,
         videoUtilsState, activeVideoUtilsSubTab
     } = useSelector((state: RootState) => state.video);
-    
-    // --- Local Component State ---
-    // --- Prompt Generation State ---
-    const [promptGenState, setPromptGenState] = useState<PromptGenState>({
-        image: null,
-        prompt: '',
-        bgImage: null,
-        bgPrompt: '',
-        subjectImage: null,
-        subjectPrompt: '',
-        soupPrompt: '',
-        soupHistory: [],
-    });
-    const [activePromptToolsSubTab, setActivePromptToolsSubTab] = useState<string>('from-image');
 
-    // --- Extractor Tools State ---
-    const [extractorState, setExtractorState] = useState<ExtractorState>(initialExtractorState);
-    const [activeExtractorSubTab, setActiveExtractorSubTab] = useState<string>('clothes');
+    // --- Prompt Gen State (from promptGenSlice) ---
+    const { promptGenState, activePromptToolsSubTab } = useSelector((state: RootState) => state.promptGen);
     
-    // --- Logo & Theme State ---
-    const [logoThemeState, setLogoThemeState] = useState<LogoThemeState>(initialLogoThemeState);
-    const [activeLogoThemeSubTab, setActiveLogoThemeSubTab] = useState<string>('logo');
-
+    // --- Extractor State (from extractorSlice) ---
+    const { extractorState, activeExtractorSubTab } = useSelector((state: RootState) => state.extractor);
+    
+    // --- Logo & Theme State (from logoThemeSlice) ---
+    const { logoThemeState, activeLogoThemeSubTab } = useSelector((state: RootState) => state.logoTheme);
+    
     // --- Computed State ---
     const isReadyToGenerate = useSelector(selectIsReadyToGenerate);
     const isVideoReady = useSelector(selectIsVideoReady);
@@ -211,6 +125,21 @@ const App: React.FC = () => {
         const newState = typeof updater === 'function' ? updater(videoUtilsState) : updater;
         dispatch(setVideoUtilsState(newState));
     }, [dispatch, videoUtilsState]);
+
+    const handleSetPromptGenState = useCallback((updater: React.SetStateAction<PromptGenState>) => {
+        const newState = typeof updater === 'function' ? updater(promptGenState) : updater;
+        dispatch(setPromptGenState(newState));
+    }, [dispatch, promptGenState]);
+
+    const handleSetExtractorState = useCallback((updater: React.SetStateAction<ExtractorState>) => {
+        const newState = typeof updater === 'function' ? updater(extractorState) : updater;
+        dispatch(setExtractorState(newState));
+    }, [dispatch, extractorState]);
+
+    const handleSetLogoThemeState = useCallback((updater: React.SetStateAction<LogoThemeState>) => {
+        const newState = typeof updater === 'function' ? updater(logoThemeState) : updater;
+        dispatch(setLogoThemeState(newState));
+    }, [dispatch, logoThemeState]);
 
 
     // --- Effects ---
@@ -286,20 +215,11 @@ const App: React.FC = () => {
     };
 
     const onAddSoupToHistory = (soup: string) => {
-        setPromptGenState(prev => ({
-            ...prev,
-            soupPrompt: soup,
-            soupHistory: [soup, ...prev.soupHistory].slice(0, 5)
-        }));
+        dispatch(addSoupToHistory(soup));
     };
     
     const handleReset = () => {
         dispatch(resetGenerationState());
-        setPromptGenState({
-            image: null, prompt: '', bgImage: null, bgPrompt: '',
-            subjectImage: null, subjectPrompt: '', soupPrompt: '',
-            soupHistory: [],
-        });
     };
     
     const handleVideoReset = () => {
@@ -307,16 +227,12 @@ const App: React.FC = () => {
     };
 
     const handleExtractorReset = () => {
-        setExtractorState(initialExtractorState);
+        dispatch(resetExtractorState());
     };
     
     const handlePromptGenReset = useCallback(() => {
-        setPromptGenState({
-            image: null, prompt: '', bgImage: null, bgPrompt: '',
-            subjectImage: null, subjectPrompt: '', soupPrompt: '',
-            soupHistory: [],
-        });
-    }, []);
+        dispatch(resetPromptGenState());
+    }, [dispatch]);
 
     const handleVideoUtilsReset = useCallback(() => {
         dispatch(resetVideoUtilsState());
@@ -910,9 +826,9 @@ const App: React.FC = () => {
                 <div className={activeTab === 'logo-theme-generator' ? 'block' : 'hidden'}>
                     <LogoThemeGeneratorPanel
                         state={logoThemeState}
-                        setState={setLogoThemeState}
+                        setState={handleSetLogoThemeState}
                         activeSubTab={activeLogoThemeSubTab}
-                        setActiveSubTab={setActiveLogoThemeSubTab}
+                        setActiveSubTab={(tab) => dispatch(setActiveLogoThemeSubTab(tab))}
                         onOpenLibraryForReferences={() => openModal('isLogoRefPickerOpen')}
                         onOpenLibraryForPalette={() => openModal('isLogoPalettePickerOpen')}
                         onOpenLibraryForFont={() => openModal('isLogoFontPickerOpen')}
@@ -942,16 +858,11 @@ const App: React.FC = () => {
                     <div className={activeTab === 'prompt-generator' ? 'block' : 'hidden'}>
                         <PromptGeneratorPanel 
                             activeSubTab={activePromptToolsSubTab}
-                            setActiveSubTab={setActivePromptToolsSubTab}
+                            setActiveSubTab={(tab) => dispatch(setActivePromptToolsSubTab(tab))}
                             onUsePrompt={handleUsePrompt}
-                            image={promptGenState.image} setImage={file => setPromptGenState(prev => ({...prev, image: file}))}
-                            prompt={promptGenState.prompt} setPrompt={p => setPromptGenState(prev => ({...prev, prompt: p}))}
-                            bgImage={promptGenState.bgImage} setBgImage={file => setPromptGenState(prev => ({...prev, bgImage: file}))}
-                            bgPrompt={promptGenState.bgPrompt} setBgPrompt={p => setPromptGenState(prev => ({...prev, bgPrompt: p}))}
-                            subjectImage={promptGenState.subjectImage} setSubjectImage={file => setPromptGenState(prev => ({...prev, subjectImage: file}))}
-                            subjectPrompt={promptGenState.subjectPrompt} setSubjectPrompt={p => setPromptGenState(prev => ({...prev, subjectPrompt: p}))}
-                            soupPrompt={promptGenState.soupPrompt} setSoupPrompt={p => setPromptGenState(prev => ({...prev, soupPrompt: p}))}
-                            soupHistory={promptGenState.soupHistory} onAddSoupToHistory={onAddSoupToHistory}
+                            state={promptGenState}
+                            setState={handleSetPromptGenState}
+                            onAddSoupToHistory={onAddSoupToHistory}
                             onOpenLibraryForImage={() => openModal('isPromptGenImagePickerOpen')}
                             onOpenLibraryForBg={() => openModal('isPromptGenBgImagePickerOpen')}
                             onOpenLibraryForSubject={() => openModal('isPromptGenSubjectImagePickerOpen')}
@@ -963,7 +874,7 @@ const App: React.FC = () => {
                 <div className={activeTab === 'extractor-tools' ? 'block' : 'hidden'}>
                     <ExtractorToolsPanel 
                         state={extractorState} 
-                        setState={setExtractorState} 
+                        setState={handleSetExtractorState} 
                         onReset={handleExtractorReset} 
                         onOpenLibraryForClothes={() => openModal('isClothesSourcePickerOpen')}
                         onOpenLibraryForObjects={() => openModal('isObjectSourcePickerOpen')}
@@ -971,8 +882,7 @@ const App: React.FC = () => {
                         onOpenLibraryForMannequinRef={() => openModal('isMannequinRefPickerOpen')}
                         onOpenLibraryForFont={() => openModal('isFontSourcePickerOpen')}
                         activeSubTab={activeExtractorSubTab}
-                        // Fix: The 'setActiveSubTab' prop was being passed an undefined variable. Changed to use the correct state setter 'setActiveExtractorSubTab'.
-                        setActiveSubTab={setActiveExtractorSubTab}
+                        setActiveSubTab={(tab) => dispatch(setActiveExtractorSubTab(tab))}
                     />
                 </div>
                 
@@ -1186,7 +1096,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_clothes_source.jpeg", { type: blob.type });
-                        setExtractorState(prev => ({ ...prev, clothesSourceFile: file }));
+                        handleSetExtractorState(prev => ({ ...prev, clothesSourceFile: file }));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1199,7 +1109,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_object_source.jpeg", { type: blob.type });
-                        setExtractorState(prev => ({ ...prev, objectSourceFile: file }));
+                        handleSetExtractorState(prev => ({ ...prev, objectSourceFile: file }));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1212,7 +1122,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_pose_source.jpeg", { type: blob.type });
-                        setExtractorState(prev => ({ ...prev, poseSourceFile: file }));
+                        handleSetExtractorState(prev => ({ ...prev, poseSourceFile: file }));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1225,7 +1135,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_mannequin_ref.jpeg", { type: blob.type });
-                        setExtractorState(prev => ({ ...prev, mannequinReferenceFile: file }));
+                        handleSetExtractorState(prev => ({ ...prev, mannequinReferenceFile: file }));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1238,7 +1148,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_font_source.jpeg", { type: blob.type });
-                        setExtractorState(prev => ({ ...prev, fontSourceFile: file }));
+                        handleSetExtractorState(prev => ({ ...prev, fontSourceFile: file }));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1289,7 +1199,7 @@ const App: React.FC = () => {
                     onClose={() => closeModal('isLogoRefPickerOpen')}
                     onSelectItem={() => {}} // Single select not used here
                     onSelectMultiple={(items) => {
-                        setLogoThemeState(prev => ({ ...prev, referenceItems: [...(prev.referenceItems || []), ...items] }));
+                        handleSetLogoThemeState(prev => ({ ...prev, referenceItems: [...(prev.referenceItems || []), ...items] }));
                     }}
                     filter={imageLikeFilter}
                     multiSelect
@@ -1300,7 +1210,7 @@ const App: React.FC = () => {
                     isOpen={isLogoPalettePickerOpen}
                     onClose={() => closeModal('isLogoPalettePickerOpen')}
                     onSelectItem={(item) => {
-                        setLogoThemeState(prev => ({ ...prev, selectedPalette: item }));
+                        handleSetLogoThemeState(prev => ({ ...prev, selectedPalette: item }));
                     }}
                     filter="color-palette"
                 />
@@ -1310,7 +1220,7 @@ const App: React.FC = () => {
                     isOpen={isLogoFontPickerOpen}
                     onClose={() => closeModal('isLogoFontPickerOpen')}
                     onSelectItem={(item) => {
-                        setLogoThemeState(prev => ({ ...prev, selectedFont: item, fontReferenceImage: null }));
+                        handleSetLogoThemeState(prev => ({ ...prev, selectedFont: item, fontReferenceImage: null }));
                     }}
                     filter="font"
                 />
@@ -1322,7 +1232,7 @@ const App: React.FC = () => {
                     // Fix: Add the required 'onSelectItem' prop. It's a no-op because this modal is in multi-select mode.
                     onSelectItem={() => {}}
                     onSelectMultiple={(items) => {
-                        setLogoThemeState(prev => ({ ...prev, bannerReferenceItems: [...(prev.bannerReferenceItems || []), ...items] }));
+                        handleSetLogoThemeState(prev => ({ ...prev, bannerReferenceItems: [...(prev.bannerReferenceItems || []), ...items] }));
                     }}
                     filter={imageLikeFilter}
                     multiSelect
@@ -1333,7 +1243,7 @@ const App: React.FC = () => {
                     isOpen={isBannerPalettePickerOpen}
                     onClose={() => closeModal('isBannerPalettePickerOpen')}
                     onSelectItem={(item) => {
-                        setLogoThemeState(prev => ({ ...prev, bannerSelectedPalette: item }));
+                        handleSetLogoThemeState(prev => ({ ...prev, bannerSelectedPalette: item }));
                     }}
                     filter="color-palette"
                 />
@@ -1343,7 +1253,7 @@ const App: React.FC = () => {
                     isOpen={isBannerLogoPickerOpen}
                     onClose={() => closeModal('isBannerLogoPickerOpen')}
                     onSelectItem={(item) => {
-                        setLogoThemeState(prev => ({ ...prev, bannerSelectedLogo: item }));
+                        handleSetLogoThemeState(prev => ({ ...prev, bannerSelectedLogo: item }));
                     }}
                     filter="logo"
                 />
@@ -1353,7 +1263,7 @@ const App: React.FC = () => {
                     isOpen={isBannerFontPickerOpen}
                     onClose={() => closeModal('isBannerFontPickerOpen')}
                     onSelectItem={(item) => {
-                        setLogoThemeState(prev => ({ ...prev, bannerSelectedFont: item, bannerFontReferenceImage: null }));
+                        handleSetLogoThemeState(prev => ({ ...prev, bannerSelectedFont: item, bannerFontReferenceImage: null }));
                     }}
                     filter="font"
                 />
@@ -1364,7 +1274,7 @@ const App: React.FC = () => {
                     onClose={() => closeModal('isAlbumCoverRefPickerOpen')}
                     onSelectItem={() => {}}
                     onSelectMultiple={(items) => {
-                        setLogoThemeState(prev => ({ ...prev, albumReferenceItems: [...(prev.albumReferenceItems || []), ...items] }));
+                        handleSetLogoThemeState(prev => ({ ...prev, albumReferenceItems: [...(prev.albumReferenceItems || []), ...items] }));
                     }}
                     filter={imageLikeFilter}
                     multiSelect
@@ -1375,7 +1285,7 @@ const App: React.FC = () => {
                     isOpen={isAlbumCoverPalettePickerOpen}
                     onClose={() => closeModal('isAlbumCoverPalettePickerOpen')}
                     onSelectItem={(item) => {
-                        setLogoThemeState(prev => ({ ...prev, albumSelectedPalette: item }));
+                        handleSetLogoThemeState(prev => ({ ...prev, albumSelectedPalette: item }));
                     }}
                     filter="color-palette"
                 />
@@ -1385,7 +1295,7 @@ const App: React.FC = () => {
                     isOpen={isAlbumCoverLogoPickerOpen}
                     onClose={() => closeModal('isAlbumCoverLogoPickerOpen')}
                     onSelectItem={(item) => {
-                        setLogoThemeState(prev => ({ ...prev, albumSelectedLogo: item }));
+                        handleSetLogoThemeState(prev => ({ ...prev, albumSelectedLogo: item }));
                     }}
                     filter="logo"
                 />
@@ -1395,7 +1305,7 @@ const App: React.FC = () => {
                     isOpen={isAlbumCoverFontPickerOpen}
                     onClose={() => closeModal('isAlbumCoverFontPickerOpen')}
                     onSelectItem={(item) => {
-                        setLogoThemeState(prev => ({ ...prev, albumSelectedFont: item, albumFontReferenceImage: null }));
+                        handleSetLogoThemeState(prev => ({ ...prev, albumSelectedFont: item, albumFontReferenceImage: null }));
                     }}
                     filter="font"
                 />
@@ -1408,7 +1318,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], item.name || "library_image.jpeg", { type: blob.type });
-                        setPromptGenState(prev => ({...prev, image: file}));
+                        handleSetPromptGenState(prev => ({...prev, image: file}));
                     }}
                     filter={imageLikeFilter}
                 />
@@ -1421,7 +1331,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], item.name || "library_image.jpeg", { type: blob.type });
-                        setPromptGenState(prev => ({...prev, bgImage: file}));
+                        handleSetPromptGenState(prev => ({...prev, bgImage: file}));
                     }}
                     filter={imageLikeFilter}
                 />
@@ -1434,7 +1344,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], item.name || "library_image.jpeg", { type: blob.type });
-                        setPromptGenState(prev => ({...prev, subjectImage: file}));
+                        handleSetPromptGenState(prev => ({...prev, subjectImage: file}));
                     }}
                     filter={imageLikeFilter}
                 />
