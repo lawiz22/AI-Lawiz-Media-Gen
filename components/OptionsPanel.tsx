@@ -154,7 +154,8 @@ const ElementImageManager: React.FC<{
 }> = ({ elementImages, setElementImages, disabled, onOpenElementPicker }) => {
   const handleAddImages = (files: File[]) => {
     if (files.length > 0) {
-      setElementImages(prev => [...prev, ...files].slice(0, 5));
+      // Fix: The 'setElementImages' prop expects a File array, not a function. Refactored to compute the new array directly using the 'elementImages' prop.
+      setElementImages([...elementImages, ...files].slice(0, 5));
     }
   };
 

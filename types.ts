@@ -419,3 +419,58 @@ export interface LogoThemeState {
     generatedAlbumCovers?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
     albumCoverError?: string | null;
 }
+
+export interface AppSliceState {
+  currentUser: User | null;
+  theme: string;
+  activeTab: string;
+  isComfyUIConnected: boolean | null;
+  comfyUIObjectInfo: any | null;
+  versionInfo: VersionInfo | null;
+  globalError: { title: string; message: string } | null;
+  
+  // Modals & Panels
+  isSettingsModalOpen: boolean;
+  isAdminPanelOpen: boolean;
+  isFeatureAnalysisModalOpen: boolean;
+  isClothingPickerOpen: boolean;
+  isBackgroundPickerOpen: boolean;
+  isPosePickerOpen: boolean;
+  isColorImagePickerOpen: boolean;
+  isVideoUtilsPickerOpen: boolean;
+  isStartFramePickerOpen: boolean;
+  isEndFramePickerOpen: boolean;
+  isLogoRefPickerOpen: boolean;
+  isLogoPalettePickerOpen: boolean;
+  isLogoFontPickerOpen: boolean;
+  isOAuthHelperOpen: boolean;
+  isPromptGenImagePickerOpen: boolean;
+  isPromptGenBgImagePickerOpen: boolean;
+  isPromptGenSubjectImagePickerOpen: boolean;
+  isNunchakuSourcePickerOpen: boolean;
+  isCharacterSourcePickerOpen: boolean;
+  isVideoStartFramePickerOpen: boolean;
+  isVideoEndFramePickerOpen: boolean;
+  isGeminiVideoSourcePickerOpen: boolean;
+  isClothesSourcePickerOpen: boolean;
+  isObjectSourcePickerOpen: boolean;
+  isPoseSourcePickerOpen: boolean;
+  isBannerRefPickerOpen: boolean;
+  isBannerPalettePickerOpen: boolean;
+  isBannerLogoPickerOpen: boolean;
+  isBannerFontPickerOpen: boolean;
+  isAlbumCoverRefPickerOpen: boolean;
+  isAlbumCoverPalettePickerOpen: boolean;
+  isAlbumCoverLogoPickerOpen: boolean;
+  isAlbumCoverFontPickerOpen: boolean;
+  isMannequinRefPickerOpen: boolean;
+  isFontSourcePickerOpen: boolean;
+  isMaskPickerOpen: boolean;
+  isElementPickerOpen: boolean;
+
+  // Google Drive State
+  driveFolder: DriveFolder | null;
+  isSyncing: boolean;
+  syncMessage: string;
+  isDriveConfigured: boolean;
+}

@@ -1,6 +1,19 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from './store/store';
+import {
+    setCurrentUser, setTheme, setActiveTab, setIsComfyUIConnected, setComfyUIObjectInfo, setVersionInfo,
+    setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
+    openSettingsModal, closeSettingsModal, openAdminPanel, closeAdminPanel,
+    openFeatureAnalysisModal, closeFeatureAnalysisModal, openOAuthHelper, closeOAuthHelper,
+    setModalOpen
+} from './store/appSlice';
+
 // Fix: Added LibraryItemType to the import to allow for explicit typing of filter arrays.
-import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle } from './types';
+// Fix: Import 'AppSliceState' to resolve missing type error.
+import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState } from './types';
 import { authenticateUser } from './services/cloudUserService';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
@@ -129,14 +142,23 @@ const initialLogoThemeState: LogoThemeState = {
 
 
 const App: React.FC = () => {
-    // --- App State ---
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [theme, setTheme] = useState<string>('cyberpunk');
-    const [activeTab, setActiveTab] = useState<string>('image-generator');
-    const [isComfyUIConnected, setIsComfyUIConnected] = useState<boolean | null>(null);
-    const [comfyUIObjectInfo, setComfyUIObjectInfo] = useState<any | null>(null);
-    const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
+    // --- Redux State ---
+    const dispatch: AppDispatch = useDispatch();
+    const {
+        currentUser, theme, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
+        isSettingsModalOpen, isAdminPanelOpen, isFeatureAnalysisModalOpen, isOAuthHelperOpen,
+        isClothingPickerOpen, isBackgroundPickerOpen, isPosePickerOpen, isColorImagePickerOpen, isVideoUtilsPickerOpen,
+        isStartFramePickerOpen, isEndFramePickerOpen, isLogoRefPickerOpen, isLogoPalettePickerOpen, isLogoFontPickerOpen,
+        isPromptGenImagePickerOpen, isPromptGenBgImagePickerOpen, isPromptGenSubjectImagePickerOpen,
+        isNunchakuSourcePickerOpen, isCharacterSourcePickerOpen, isVideoStartFramePickerOpen, isVideoEndFramePickerOpen,
+        isGeminiVideoSourcePickerOpen, isClothesSourcePickerOpen, isObjectSourcePickerOpen, isPoseSourcePickerOpen,
+        isBannerRefPickerOpen, isBannerPalettePickerOpen, isBannerLogoPickerOpen, isBannerFontPickerOpen,
+        isAlbumCoverRefPickerOpen, isAlbumCoverPalettePickerOpen, isAlbumCoverLogoPickerOpen, isAlbumCoverFontPickerOpen,
+        isMannequinRefPickerOpen, isFontSourcePickerOpen, isMaskPickerOpen, isElementPickerOpen,
+        driveFolder, isSyncing, syncMessage, isDriveConfigured
+    } = useSelector((state: RootState) => state.app);
 
+    // --- Local Component State ---
     // --- Image Generation State ---
     const [sourceImage, setSourceImage] = useState<File | null>(null);
     const [generationMode, setGenerationMode] = useState<'t2i' | 'i2i'>('t2i');
@@ -185,7 +207,6 @@ const App: React.FC = () => {
     const [progressValue, setProgressValue] = useState<number>(0);
     const [generatedImages, setGeneratedImages] = useState<string[]>([]);
     const [lastUsedPrompt, setLastUsedPrompt] = useState<string | null>(null);
-    const [globalError, setGlobalError] = useState<{ title: string; message: string } | null>(null);
     
     // --- Prompt Generation State ---
     const [promptGenState, setPromptGenState] = useState<PromptGenState>({
@@ -218,53 +239,6 @@ const App: React.FC = () => {
     // --- Logo & Theme State ---
     const [logoThemeState, setLogoThemeState] = useState<LogoThemeState>(initialLogoThemeState);
     const [activeLogoThemeSubTab, setActiveLogoThemeSubTab] = useState<string>('logo');
-
-
-    // --- UI Modals & Panels State ---
-    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-    const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
-    const [isFeatureAnalysisModalOpen, setIsFeatureAnalysisModalOpen] = useState(false);
-    const [isClothingPickerOpen, setIsClothingPickerOpen] = useState(false);
-    const [isBackgroundPickerOpen, setIsBackgroundPickerOpen] = useState(false);
-    const [isPosePickerOpen, setIsPosePickerOpen] = useState(false);
-    const [isColorImagePickerOpen, setIsColorImagePickerOpen] = useState(false);
-    const [isVideoUtilsPickerOpen, setIsVideoUtilsPickerOpen] = useState(false);
-    const [isStartFramePickerOpen, setIsStartFramePickerOpen] = useState(false);
-    const [isEndFramePickerOpen, setIsEndFramePickerOpen] = useState(false);
-    const [isLogoRefPickerOpen, setIsLogoRefPickerOpen] = useState(false);
-    const [isLogoPalettePickerOpen, setIsLogoPalettePickerOpen] = useState(false);
-    const [isLogoFontPickerOpen, setIsLogoFontPickerOpen] = useState(false);
-    const [isOAuthHelperOpen, setIsOAuthHelperOpen] = useState(false);
-    const [isPromptGenImagePickerOpen, setIsPromptGenImagePickerOpen] = useState(false);
-    const [isPromptGenBgImagePickerOpen, setIsPromptGenBgImagePickerOpen] = useState(false);
-    const [isPromptGenSubjectImagePickerOpen, setIsPromptGenSubjectImagePickerOpen] = useState(false);
-    const [isNunchakuSourcePickerOpen, setIsNunchakuSourcePickerOpen] = useState(false);
-    const [isCharacterSourcePickerOpen, setIsCharacterSourcePickerOpen] = useState(false);
-    const [isVideoStartFramePickerOpen, setIsVideoStartFramePickerOpen] = useState(false);
-    const [isVideoEndFramePickerOpen, setIsVideoEndFramePickerOpen] = useState(false);
-    const [isGeminiVideoSourcePickerOpen, setIsGeminiVideoSourcePickerOpen] = useState(false);
-    const [isClothesSourcePickerOpen, setIsClothesSourcePickerOpen] = useState(false);
-    const [isObjectSourcePickerOpen, setIsObjectSourcePickerOpen] = useState(false);
-    const [isPoseSourcePickerOpen, setIsPoseSourcePickerOpen] = useState(false);
-    const [isBannerRefPickerOpen, setIsBannerRefPickerOpen] = useState(false);
-    const [isBannerPalettePickerOpen, setIsBannerPalettePickerOpen] = useState(false);
-    const [isBannerLogoPickerOpen, setIsBannerLogoPickerOpen] = useState(false);
-    const [isBannerFontPickerOpen, setIsBannerFontPickerOpen] = useState(false);
-    const [isAlbumCoverRefPickerOpen, setIsAlbumCoverRefPickerOpen] = useState(false);
-    const [isAlbumCoverPalettePickerOpen, setIsAlbumCoverPalettePickerOpen] = useState(false);
-    const [isAlbumCoverLogoPickerOpen, setIsAlbumCoverLogoPickerOpen] = useState(false);
-    const [isAlbumCoverFontPickerOpen, setIsAlbumCoverFontPickerOpen] = useState(false);
-    const [isMannequinRefPickerOpen, setIsMannequinRefPickerOpen] = useState(false);
-    const [isFontSourcePickerOpen, setIsFontSourcePickerOpen] = useState(false);
-    const [isMaskPickerOpen, setIsMaskPickerOpen] = useState(false);
-    const [isElementPickerOpen, setIsElementPickerOpen] = useState(false);
-
-    
-    // --- Google Drive State ---
-    const [driveFolder, setDriveFolder] = useState<DriveFolder | null>(null);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [syncMessage, setSyncMessage] = useState('');
-    const [isDriveConfigured, setIsDriveConfigured] = useState(false);
 
     // --- Computed State ---
     const isReadyToGenerate = useMemo(() => {
@@ -311,24 +285,38 @@ const App: React.FC = () => {
     }, [isLoading, options.videoProvider, options.geminiVidPrompt, videoStartFrame]);
 
     // --- Effects ---
+    const checkComfyUIConnection = useCallback(async (url: string) => {
+        dispatch(setIsComfyUIConnected(null)); // Set to loading state
+        const { success } = await checkConnection(url);
+        dispatch(setIsComfyUIConnected(success));
+        if (success) {
+            try {
+                const info = await getComfyUIObjectInfo();
+                dispatch(setComfyUIObjectInfo(info));
+            } catch (err) {
+                console.error("Failed to get ComfyUI object info:", err);
+                dispatch(setGlobalError({ title: "ComfyUI Error", message: "Connected to ComfyUI, but failed to retrieve model information. Check the server console for errors." }));
+            }
+        }
+    }, [dispatch]);
+
     useEffect(() => {
-        fetch('/version.json').then(res => res.json()).then(setVersionInfo).catch(console.error);
+        fetch('/version.json').then(res => res.json()).then(data => dispatch(setVersionInfo(data))).catch(console.error);
         const savedTheme = localStorage.getItem('theme') || 'cyberpunk';
-        setTheme(savedTheme);
-        document.documentElement.setAttribute('data-theme', savedTheme);
+        dispatch(setTheme(savedTheme));
 
         const savedUser = sessionStorage.getItem('currentUser');
-        if (savedUser) setCurrentUser(JSON.parse(savedUser));
+        if (savedUser) dispatch(setCurrentUser(JSON.parse(savedUser)));
         
         const savedComfyUrl = localStorage.getItem('comfyui_url') || '';
         if (savedComfyUrl) {
             checkComfyUIConnection(savedComfyUrl);
         } else {
-            setIsComfyUIConnected(false);
+            dispatch(setIsComfyUIConnected(false));
         }
         
         const savedClientId = localStorage.getItem('google_client_id') || '';
-        setIsDriveConfigured(!!savedClientId);
+        dispatch(setIsDriveConfigured(!!savedClientId));
         
         if (savedClientId) {
             setDriveService(driveService);
@@ -337,49 +325,35 @@ const App: React.FC = () => {
                     const savedFolder = localStorage.getItem('drive_folder');
                     if (savedFolder) {
                         const folder = JSON.parse(savedFolder);
-                        setDriveFolder(folder);
+                        dispatch(setDriveFolder(folder));
                         driveService.setFolder(folder);
                     }
                 }
             });
         }
-        
-    }, []);
+    }, [dispatch, checkComfyUIConnection]);
+    
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+    }, [theme]);
 
-    const checkComfyUIConnection = async (url: string) => {
-        setIsComfyUIConnected(null); // Set to loading state
-        const { success } = await checkConnection(url);
-        setIsComfyUIConnected(success);
-        if (success) {
-            try {
-                const info = await getComfyUIObjectInfo();
-                setComfyUIObjectInfo(info);
-            } catch (err) {
-                console.error("Failed to get ComfyUI object info:", err);
-                setGlobalError({ title: "ComfyUI Error", message: "Connected to ComfyUI, but failed to retrieve model information. Check the server console for errors." });
-            }
-        }
-    };
     
     const handleLogin = async (username: string, password: string): Promise<string | true> => {
         const user = await authenticateUser(username, password);
         if (user) {
-            setCurrentUser(user);
-            sessionStorage.setItem('currentUser', JSON.stringify(user));
+            dispatch(setCurrentUser(user));
             return true;
         }
         return "Invalid username or password.";
     };
 
     const handleLogout = () => {
-        setCurrentUser(null);
-        sessionStorage.removeItem('currentUser');
+        dispatch(setCurrentUser(null));
     };
 
     const handleThemeChange = (newTheme: string) => {
-        setTheme(newTheme);
-        localStorage.setItem('theme', newTheme);
-        document.documentElement.setAttribute('data-theme', newTheme);
+        dispatch(setTheme(newTheme));
     };
 
     const updateProgress = (message: string, value: number) => {
@@ -455,7 +429,7 @@ const App: React.FC = () => {
         setIsLoading(true);
         setGeneratedImages([]);
         setLastUsedPrompt(null);
-        setGlobalError(null);
+        dispatch(setGlobalError(null));
         if (!shouldGenerateCharacterName) {
              setCharacterName('');
         }
@@ -501,7 +475,7 @@ const App: React.FC = () => {
             if (err.message?.includes('cancelled by the user')) {
                 console.log("Generation promise rejected due to cancellation.");
             } else {
-                setGlobalError({ title: "Generation Error", message: err.message || 'An unknown error occurred during generation.' });
+                dispatch(setGlobalError({ title: "Generation Error", message: err.message || 'An unknown error occurred during generation.' }));
             }
         } finally {
             setIsLoading(false);
@@ -514,7 +488,7 @@ const App: React.FC = () => {
         setIsLoading(true);
         setGeneratedVideo(null);
         setLastUsedPrompt(null);
-        setGlobalError(null);
+        dispatch(setGlobalError(null));
         setGenerationOptionsForSave(options);
 
         try {
@@ -541,7 +515,7 @@ const App: React.FC = () => {
             if (err.message?.includes('cancelled by the user')) {
                 console.log("Video generation promise rejected due to cancellation.");
             } else {
-                setGlobalError({ title: "Video Generation Error", message: err.message || 'An unknown error occurred during video generation.' });
+                dispatch(setGlobalError({ title: "Video Generation Error", message: err.message || 'An unknown error occurred during video generation.' }));
             }
         } finally {
             setIsLoading(false);
@@ -554,7 +528,7 @@ const App: React.FC = () => {
         localStorage.setItem('comfyui_url', comfyUIUrl);
         localStorage.setItem('google_client_id', googleClientId);
         checkComfyUIConnection(comfyUIUrl);
-        setIsDriveConfigured(!!googleClientId);
+        dispatch(setIsDriveConfigured(!!googleClientId));
         if (googleClientId) {
             setDriveService(driveService); // Re-initialize with new client ID
         } else {
@@ -570,11 +544,11 @@ const App: React.FC = () => {
             const file = new File([blob], "i2i_source_image.jpeg", { type: "image/jpeg" });
             setSourceImage(file);
             setGenerationMode('i2i');
-            setActiveTab('image-generator');
+            dispatch(setActiveTab('image-generator'));
             setCharacterName('');
         } catch (error) {
             console.error("Error setting image for I2I:", error);
-            setGlobalError({ title: "File Error", message: "Could not use the selected image as a new source for I2I." });
+            dispatch(setGlobalError({ title: "File Error", message: "Could not use the selected image as a new source for I2I." }));
         }
     };
 
@@ -585,10 +559,10 @@ const App: React.FC = () => {
             const file = new File([blob], "character_source_image.jpeg", { type: "image/jpeg" });
             setSourceImage(file);
             setCharacterName('');
-            setActiveTab('character-generator');
+            dispatch(setActiveTab('character-generator'));
         } catch (error) {
             console.error("Error setting new source image for character:", error);
-            setGlobalError({ title: "File Error", message: "Could not use the selected image as a new character source." });
+            dispatch(setGlobalError({ title: "File Error", message: "Could not use the selected image as a new character source." }));
         }
     };
     
@@ -616,7 +590,7 @@ const App: React.FC = () => {
                 // When loading a character, parse the name to separate it from the description
                 const [namePart] = (item.name || '').split(':');
                 setCharacterName(namePart.trim());
-                setActiveTab('character-generator');
+                dispatch(setActiveTab('character-generator'));
                 break;
             case 'image':
                 setSourceImage(sourceToSet);
@@ -624,7 +598,7 @@ const App: React.FC = () => {
                 setCharacterName('');
                 const isI2I = !!sourceToSet || item.options?.geminiMode === 'i2i';
                 setGenerationMode(isI2I ? 'i2i' : 't2i');
-                setActiveTab('image-generator');
+                dispatch(setActiveTab('image-generator'));
                 break;
             case 'video':
                 setVideoStartFrame(sourceToSet);
@@ -638,7 +612,7 @@ const App: React.FC = () => {
                     setVideoEndFrame(null);
                 }
                 setGeneratedVideo(item.media);
-                setActiveTab('video-generator');
+                dispatch(setActiveTab('video-generator'));
                 break;
             case 'clothes':
             case 'prompt':
@@ -649,15 +623,14 @@ const App: React.FC = () => {
     
     const handleUsePrompt = (prompt: string) => {
         setOptions(prev => ({ ...prev, comfyPrompt: prompt, provider: 'comfyui' }));
-        setActiveTab('image-generator');
+        dispatch(setActiveTab('image-generator'));
     };
     
     const handleDriveConnect = async () => {
         try {
             const folder = await driveService.connectAndPickFolder();
             if (folder) {
-                setDriveFolder(folder);
-                localStorage.setItem('drive_folder', JSON.stringify(folder));
+                dispatch(setDriveFolder(folder));
                 await handleSyncWithDrive();
             }
         } catch (error: any) {
@@ -665,36 +638,35 @@ const App: React.FC = () => {
               return; // User cancelled, do nothing.
             }
             if (error.message?.includes("invalid client") || error.message?.includes("Check your OAuth Client ID")) {
-                setIsOAuthHelperOpen(true);
+                dispatch(openOAuthHelper());
             } else if (error.message?.includes("Check API Key")) {
-                setIsOAuthHelperOpen(true);
+                dispatch(openOAuthHelper());
             }
             else {
-                setGlobalError({ title: "Google Drive Connection Error", message: error.message || "An unknown error occurred." });
+                dispatch(setGlobalError({ title: "Google Drive Connection Error", message: error.message || "An unknown error occurred." }));
             }
         }
     };
     
     const handleSyncWithDrive = async () => {
         if (!driveFolder) {
-            setGlobalError({ title: "Sync Error", message: "You must connect to a Drive folder first." });
+            dispatch(setGlobalError({ title: "Sync Error", message: "You must connect to a Drive folder first." }));
             return;
         }
-        setIsSyncing(true);
+        dispatch(setIsSyncing(true));
         try {
-            await initializeDriveSync((msg) => setSyncMessage(msg));
+            await initializeDriveSync((msg) => dispatch(setSyncMessage(msg)));
         } catch (error: any) {
-            setGlobalError({ title: "Google Drive Sync Error", message: error.message || "An unknown sync error occurred." });
+            dispatch(setGlobalError({ title: "Google Drive Sync Error", message: error.message || "An unknown sync error occurred." }));
         } finally {
-            setIsSyncing(false);
-            setSyncMessage('');
+            dispatch(setIsSyncing(false));
+            dispatch(setSyncMessage(''));
         }
     };
 
     const handleDriveDisconnect = () => {
         driveService.disconnect();
-        setDriveFolder(null);
-        localStorage.removeItem('drive_folder');
+        dispatch(setDriveFolder(null));
     };
 
     const handleExport = async () => {
@@ -702,7 +674,7 @@ const App: React.FC = () => {
         try {
             await exportComfyUIWorkflow(options, sourceImage);
         } catch (error: any) {
-            setGlobalError({ title: "Workflow Export Error", message: error.message || 'Failed to export workflow.' });
+            dispatch(setGlobalError({ title: "Workflow Export Error", message: error.message || 'Failed to export workflow.' }));
         }
     };
 
@@ -711,9 +683,9 @@ const App: React.FC = () => {
         if (options.provider === 'comfyui' || options.videoProvider === 'comfyui') {
             try {
                 await cancelComfyUIExecution();
-                setGlobalError({ title: "Operation Cancelled", message: "The generation was successfully cancelled." });
+                dispatch(setGlobalError({ title: "Operation Cancelled", message: "The generation was successfully cancelled." }));
             } catch (e: any) {
-                setGlobalError({ title: "Cancellation Error", message: e.message || "Could not cancel the operation." });
+                dispatch(setGlobalError({ title: "Cancellation Error", message: e.message || "Could not cancel the operation." }));
             }
         } else {
             console.warn("Cancellation is not supported for the current provider.");
@@ -735,8 +707,12 @@ const App: React.FC = () => {
                 setOptions(prev => ({ ...prev, geminiMode: 't2i' }));
             }
         }
-        setActiveTab(tabId);
+        dispatch(setActiveTab(tabId));
     };
+    
+    // Fix: Add the AppSliceState type to resolve TypeScript errors on the next line.
+    const openModal = (modal: keyof AppSliceState) => dispatch(setModalOpen({ modal, isOpen: true }));
+    const closeModal = (modal: keyof AppSliceState) => dispatch(setModalOpen({ modal, isOpen: false }));
 
     if (!currentUser) {
         return <Login onLogin={handleLogin} />;
@@ -764,9 +740,9 @@ const App: React.FC = () => {
                 setTheme={handleThemeChange} 
                 onLogout={handleLogout} 
                 currentUser={currentUser}
-                onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
-                onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
-                onOpenFeatureAnalysisModal={() => setIsFeatureAnalysisModalOpen(true)}
+                onOpenSettingsModal={() => dispatch(openSettingsModal())}
+                onOpenAdminPanel={() => dispatch(openAdminPanel())}
+                onOpenFeatureAnalysisModal={() => dispatch(openFeatureAnalysisModal())}
                 isComfyUIConnected={isComfyUIConnected}
                 versionInfo={versionInfo}
                 driveFolder={driveFolder}
@@ -814,7 +790,7 @@ const App: React.FC = () => {
                                             />
                                         </div>
                                         <button 
-                                            onClick={() => setIsNunchakuSourcePickerOpen(true)} 
+                                            onClick={() => openModal('isNunchakuSourcePickerOpen')} 
                                             className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
                                             title="Select from Library"
                                         >
@@ -849,8 +825,8 @@ const App: React.FC = () => {
                                 setMaskImage={setMaskImage}
                                 elementImages={elementImages}
                                 setElementImages={setElementImages}
-                                onOpenMaskPicker={() => setIsMaskPickerOpen(true)}
-                                onOpenElementPicker={() => setIsElementPickerOpen(true)}
+                                onOpenMaskPicker={() => openModal('isMaskPickerOpen')}
+                                onOpenElementPicker={() => openModal('isElementPickerOpen')}
                             />
                         </div>
 
@@ -893,7 +869,7 @@ const App: React.FC = () => {
                                         />
                                     </div>
                                     <button 
-                                        onClick={() => setIsCharacterSourcePickerOpen(true)} 
+                                        onClick={() => openModal('isCharacterSourcePickerOpen')} 
                                         className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
                                         title="Select from Library"
                                     >
@@ -933,7 +909,7 @@ const App: React.FC = () => {
                                         {options.clothing === 'image' && (
                                             <div className="flex items-center gap-2">
                                                 <ImageUploader label="Clothing" id="clothing-image" onImageUpload={setClothingImage} sourceFile={clothingImage} />
-                                                <button onClick={() => setIsClothingPickerOpen(true)} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
+                                                <button onClick={() => openModal('isClothingPickerOpen')} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
                                                     <LibraryIcon className="w-6 h-6"/>
                                                 </button>
                                             </div>
@@ -941,7 +917,7 @@ const App: React.FC = () => {
                                         {options.background === 'image' && (
                                             <div className="flex items-center gap-2">
                                                 <ImageUploader label="Background" id="background-image" onImageUpload={setBackgroundImage} sourceFile={backgroundImage}/>
-                                                <button onClick={() => setIsBackgroundPickerOpen(true)} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
+                                                <button onClick={() => openModal('isBackgroundPickerOpen')} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
                                                     <LibraryIcon className="w-6 h-6"/>
                                                 </button>
                                             </div>
@@ -959,7 +935,7 @@ const App: React.FC = () => {
                                 onGenerate={handleGenerate}
                                 onReset={handleReset}
                                 onGeneratePrompt={() => {}}
-                                onOpenPosePicker={() => setIsPosePickerOpen(true)}
+                                onOpenPosePicker={() => openModal('isPosePickerOpen')}
                                 onExportWorkflow={handleExport}
                                 isDisabled={isLoading}
                                 isReady={isReadyToGenerate}
@@ -1026,9 +1002,9 @@ const App: React.FC = () => {
                         progressValue={progressValue}
                         onReset={handleVideoReset}
                         generationOptionsForSave={generationOptionsForSave}
-                        onOpenLibraryForStartFrame={() => setIsVideoStartFramePickerOpen(true)}
-                        onOpenLibraryForEndFrame={() => setIsVideoEndFramePickerOpen(true)}
-                        onOpenLibraryForGeminiSource={() => setIsGeminiVideoSourcePickerOpen(true)}
+                        onOpenLibraryForStartFrame={() => openModal('isVideoStartFramePickerOpen')}
+                        onOpenLibraryForEndFrame={() => openModal('isVideoEndFramePickerOpen')}
+                        onOpenLibraryForGeminiSource={() => openModal('isGeminiVideoSourcePickerOpen')}
                     />
                 </div>
 
@@ -1038,17 +1014,17 @@ const App: React.FC = () => {
                         setState={setLogoThemeState}
                         activeSubTab={activeLogoThemeSubTab}
                         setActiveSubTab={setActiveLogoThemeSubTab}
-                        onOpenLibraryForReferences={() => setIsLogoRefPickerOpen(true)}
-                        onOpenLibraryForPalette={() => setIsLogoPalettePickerOpen(true)}
-                        onOpenLibraryForFont={() => setIsLogoFontPickerOpen(true)}
-                        onOpenLibraryForBannerReferences={() => setIsBannerRefPickerOpen(true)}
-                        onOpenLibraryForBannerPalette={() => setIsBannerPalettePickerOpen(true)}
-                        onOpenLibraryForBannerLogo={() => setIsBannerLogoPickerOpen(true)}
-                        onOpenLibraryForBannerFont={() => setIsBannerFontPickerOpen(true)}
-                        onOpenLibraryForAlbumCoverReferences={() => setIsAlbumCoverRefPickerOpen(true)}
-                        onOpenLibraryForAlbumCoverPalette={() => setIsAlbumCoverPalettePickerOpen(true)}
-                        onOpenLibraryForAlbumCoverLogo={() => setIsAlbumCoverLogoPickerOpen(true)}
-                        onOpenLibraryForAlbumCoverFont={() => setIsAlbumCoverFontPickerOpen(true)}
+                        onOpenLibraryForReferences={() => openModal('isLogoRefPickerOpen')}
+                        onOpenLibraryForPalette={() => openModal('isLogoPalettePickerOpen')}
+                        onOpenLibraryForFont={() => openModal('isLogoFontPickerOpen')}
+                        onOpenLibraryForBannerReferences={() => openModal('isBannerRefPickerOpen')}
+                        onOpenLibraryForBannerPalette={() => openModal('isBannerPalettePickerOpen')}
+                        onOpenLibraryForBannerLogo={() => openModal('isBannerLogoPickerOpen')}
+                        onOpenLibraryForBannerFont={() => openModal('isBannerFontPickerOpen')}
+                        onOpenLibraryForAlbumCoverReferences={() => openModal('isAlbumCoverRefPickerOpen')}
+                        onOpenLibraryForAlbumCoverPalette={() => openModal('isAlbumCoverPalettePickerOpen')}
+                        onOpenLibraryForAlbumCoverLogo={() => openModal('isAlbumCoverLogoPickerOpen')}
+                        onOpenLibraryForAlbumCoverFont={() => openModal('isAlbumCoverFontPickerOpen')}
                     />
                 </div>
 
@@ -1077,9 +1053,9 @@ const App: React.FC = () => {
                             subjectPrompt={promptGenState.subjectPrompt} setSubjectPrompt={p => setPromptGenState(prev => ({...prev, subjectPrompt: p}))}
                             soupPrompt={promptGenState.soupPrompt} setSoupPrompt={p => setPromptGenState(prev => ({...prev, soupPrompt: p}))}
                             soupHistory={promptGenState.soupHistory} onAddSoupToHistory={onAddSoupToHistory}
-                            onOpenLibraryForImage={() => setIsPromptGenImagePickerOpen(true)}
-                            onOpenLibraryForBg={() => setIsPromptGenBgImagePickerOpen(true)}
-                            onOpenLibraryForSubject={() => setIsPromptGenSubjectImagePickerOpen(true)}
+                            onOpenLibraryForImage={() => openModal('isPromptGenImagePickerOpen')}
+                            onOpenLibraryForBg={() => openModal('isPromptGenBgImagePickerOpen')}
+                            onOpenLibraryForSubject={() => openModal('isPromptGenSubjectImagePickerOpen')}
                             onReset={handlePromptGenReset}
                         />
                     </div>
@@ -1090,11 +1066,11 @@ const App: React.FC = () => {
                         state={extractorState} 
                         setState={setExtractorState} 
                         onReset={handleExtractorReset} 
-                        onOpenLibraryForClothes={() => setIsClothesSourcePickerOpen(true)}
-                        onOpenLibraryForObjects={() => setIsObjectSourcePickerOpen(true)}
-                        onOpenLibraryForPoses={() => setIsPoseSourcePickerOpen(true)}
-                        onOpenLibraryForMannequinRef={() => setIsMannequinRefPickerOpen(true)}
-                        onOpenLibraryForFont={() => setIsFontSourcePickerOpen(true)}
+                        onOpenLibraryForClothes={() => openModal('isClothesSourcePickerOpen')}
+                        onOpenLibraryForObjects={() => openModal('isObjectSourcePickerOpen')}
+                        onOpenLibraryForPoses={() => openModal('isPoseSourcePickerOpen')}
+                        onOpenLibraryForMannequinRef={() => openModal('isMannequinRefPickerOpen')}
+                        onOpenLibraryForFont={() => openModal('isFontSourcePickerOpen')}
                         activeSubTab={activeExtractorSubTab}
                         // Fix: The 'setActiveSubTab' prop was being passed an undefined variable. Changed to use the correct state setter 'setActiveExtractorSubTab'.
                         setActiveSubTab={setActiveExtractorSubTab}
@@ -1108,8 +1084,8 @@ const App: React.FC = () => {
                         setEndFrame={setVideoEndFrame}
                         videoUtilsState={videoUtilsState}
                         setVideoUtilsState={setVideoUtilsState}
-                        onOpenLibrary={() => setIsColorImagePickerOpen(true)}
-                        onOpenVideoLibrary={() => setIsVideoUtilsPickerOpen(true)}
+                        onOpenLibrary={() => openModal('isColorImagePickerOpen')}
+                        onOpenVideoLibrary={() => openModal('isVideoUtilsPickerOpen')}
                         activeSubTab={activeVideoUtilsSubTab}
                         // Fix: The 'setActiveSubTab' prop was being passed an undefined variable. Changed to use the correct state setter 'setActiveVideoUtilsSubTab'.
                         setActiveSubTab={setActiveVideoUtilsSubTab}
@@ -1134,7 +1110,7 @@ const App: React.FC = () => {
             {isSettingsModalOpen && (
                 <ConnectionSettingsModal
                     isOpen={isSettingsModalOpen}
-                    onClose={() => setIsSettingsModalOpen(false)}
+                    onClose={() => dispatch(closeSettingsModal())}
                     initialComfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                     initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
                     onSave={handleSaveSettings}
@@ -1146,7 +1122,7 @@ const App: React.FC = () => {
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="admin-panel-title"
-                    onClick={() => setIsAdminPanelOpen(false)}
+                    onClick={() => dispatch(closeAdminPanel())}
                 >
                     <div
                         className="bg-bg-secondary w-full max-w-4xl p-6 rounded-2xl shadow-lg border border-border-primary flex flex-col max-h-[90vh]"
@@ -1158,7 +1134,7 @@ const App: React.FC = () => {
                                 Admin Panel
                             </h2>
                             <button
-                                onClick={() => setIsAdminPanelOpen(false)}
+                                onClick={() => dispatch(closeAdminPanel())}
                                 className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
                                 aria-label="Close"
                             >
@@ -1174,13 +1150,13 @@ const App: React.FC = () => {
             {isFeatureAnalysisModalOpen && (
                 <FeatureAnalysisModal
                     isOpen={isFeatureAnalysisModalOpen}
-                    onClose={() => setIsFeatureAnalysisModalOpen(false)}
+                    onClose={() => dispatch(closeFeatureAnalysisModal())}
                 />
             )}
             {isClothingPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isClothingPickerOpen}
-                    onClose={() => setIsClothingPickerOpen(false)}
+                    onClose={() => closeModal('isClothingPickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1192,7 +1168,7 @@ const App: React.FC = () => {
             {isBackgroundPickerOpen && (
                  <LibraryPickerModal
                     isOpen={isBackgroundPickerOpen}
-                    onClose={() => setIsBackgroundPickerOpen(false)}
+                    onClose={() => closeModal('isBackgroundPickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1204,7 +1180,7 @@ const App: React.FC = () => {
              {isNunchakuSourcePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isNunchakuSourcePickerOpen}
-                    onClose={() => setIsNunchakuSourcePickerOpen(false)}
+                    onClose={() => closeModal('isNunchakuSourcePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1216,7 +1192,7 @@ const App: React.FC = () => {
             {isCharacterSourcePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isCharacterSourcePickerOpen}
-                    onClose={() => setIsCharacterSourcePickerOpen(false)}
+                    onClose={() => closeModal('isCharacterSourcePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1230,7 +1206,7 @@ const App: React.FC = () => {
             {isPosePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isPosePickerOpen}
-                    onClose={() => setIsPosePickerOpen(false)}
+                    onClose={() => closeModal('isPosePickerOpen')}
                     onSelectItem={() => {}}
                     onSelectMultiple={(items) => {
                         setOptions(prev => ({ ...prev, poseLibraryItems: items.slice(0, prev.numImages) }));
@@ -1242,7 +1218,7 @@ const App: React.FC = () => {
             {isMaskPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isMaskPickerOpen}
-                    onClose={() => setIsMaskPickerOpen(false)}
+                    onClose={() => closeModal('isMaskPickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1254,7 +1230,7 @@ const App: React.FC = () => {
             {isElementPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isElementPickerOpen}
-                    onClose={() => setIsElementPickerOpen(false)}
+                    onClose={() => closeModal('isElementPickerOpen')}
                     onSelectItem={() => {}} // single select no-op
                     onSelectMultiple={async (items) => {
                         const files = await Promise.all(
@@ -1269,7 +1245,7 @@ const App: React.FC = () => {
             {isVideoStartFramePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isVideoStartFramePickerOpen}
-                    onClose={() => setIsVideoStartFramePickerOpen(false)}
+                    onClose={() => closeModal('isVideoStartFramePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1282,7 +1258,7 @@ const App: React.FC = () => {
             {isVideoEndFramePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isVideoEndFramePickerOpen}
-                    onClose={() => setIsVideoEndFramePickerOpen(false)}
+                    onClose={() => closeModal('isVideoEndFramePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1295,7 +1271,7 @@ const App: React.FC = () => {
             {isGeminiVideoSourcePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isGeminiVideoSourcePickerOpen}
-                    onClose={() => setIsGeminiVideoSourcePickerOpen(false)}
+                    onClose={() => closeModal('isGeminiVideoSourcePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1308,7 +1284,7 @@ const App: React.FC = () => {
             {isClothesSourcePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isClothesSourcePickerOpen}
-                    onClose={() => setIsClothesSourcePickerOpen(false)}
+                    onClose={() => closeModal('isClothesSourcePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1321,7 +1297,7 @@ const App: React.FC = () => {
             {isObjectSourcePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isObjectSourcePickerOpen}
-                    onClose={() => setIsObjectSourcePickerOpen(false)}
+                    onClose={() => closeModal('isObjectSourcePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1334,7 +1310,7 @@ const App: React.FC = () => {
             {isPoseSourcePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isPoseSourcePickerOpen}
-                    onClose={() => setIsPoseSourcePickerOpen(false)}
+                    onClose={() => closeModal('isPoseSourcePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1347,7 +1323,7 @@ const App: React.FC = () => {
              {isMannequinRefPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isMannequinRefPickerOpen}
-                    onClose={() => setIsMannequinRefPickerOpen(false)}
+                    onClose={() => closeModal('isMannequinRefPickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1360,7 +1336,7 @@ const App: React.FC = () => {
             {isFontSourcePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isFontSourcePickerOpen}
-                    onClose={() => setIsFontSourcePickerOpen(false)}
+                    onClose={() => closeModal('isFontSourcePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1373,7 +1349,7 @@ const App: React.FC = () => {
             {isColorImagePickerOpen && (
                  <LibraryPickerModal
                     isOpen={isColorImagePickerOpen}
-                    onClose={() => setIsColorImagePickerOpen(false)}
+                    onClose={() => closeModal('isColorImagePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1396,7 +1372,7 @@ const App: React.FC = () => {
             {isVideoUtilsPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isVideoUtilsPickerOpen}
-                    onClose={() => setIsVideoUtilsPickerOpen(false)}
+                    onClose={() => closeModal('isVideoUtilsPickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1413,7 +1389,7 @@ const App: React.FC = () => {
              {isLogoRefPickerOpen && (
                  <LibraryPickerModal
                     isOpen={isLogoRefPickerOpen}
-                    onClose={() => setIsLogoRefPickerOpen(false)}
+                    onClose={() => closeModal('isLogoRefPickerOpen')}
                     onSelectItem={() => {}} // Single select not used here
                     onSelectMultiple={(items) => {
                         setLogoThemeState(prev => ({ ...prev, referenceItems: [...(prev.referenceItems || []), ...items] }));
@@ -1425,7 +1401,7 @@ const App: React.FC = () => {
             {isLogoPalettePickerOpen && (
                  <LibraryPickerModal
                     isOpen={isLogoPalettePickerOpen}
-                    onClose={() => setIsLogoPalettePickerOpen(false)}
+                    onClose={() => closeModal('isLogoPalettePickerOpen')}
                     onSelectItem={(item) => {
                         setLogoThemeState(prev => ({ ...prev, selectedPalette: item }));
                     }}
@@ -1435,7 +1411,7 @@ const App: React.FC = () => {
              {isLogoFontPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isLogoFontPickerOpen}
-                    onClose={() => setIsLogoFontPickerOpen(false)}
+                    onClose={() => closeModal('isLogoFontPickerOpen')}
                     onSelectItem={(item) => {
                         setLogoThemeState(prev => ({ ...prev, selectedFont: item, fontReferenceImage: null }));
                     }}
@@ -1445,7 +1421,7 @@ const App: React.FC = () => {
             {isBannerRefPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isBannerRefPickerOpen}
-                    onClose={() => setIsBannerRefPickerOpen(false)}
+                    onClose={() => closeModal('isBannerRefPickerOpen')}
                     // Fix: Add the required 'onSelectItem' prop. It's a no-op because this modal is in multi-select mode.
                     onSelectItem={() => {}}
                     onSelectMultiple={(items) => {
@@ -1458,7 +1434,7 @@ const App: React.FC = () => {
             {isBannerPalettePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isBannerPalettePickerOpen}
-                    onClose={() => setIsBannerPalettePickerOpen(false)}
+                    onClose={() => closeModal('isBannerPalettePickerOpen')}
                     onSelectItem={(item) => {
                         setLogoThemeState(prev => ({ ...prev, bannerSelectedPalette: item }));
                     }}
@@ -1468,7 +1444,7 @@ const App: React.FC = () => {
             {isBannerLogoPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isBannerLogoPickerOpen}
-                    onClose={() => setIsBannerLogoPickerOpen(false)}
+                    onClose={() => closeModal('isBannerLogoPickerOpen')}
                     onSelectItem={(item) => {
                         setLogoThemeState(prev => ({ ...prev, bannerSelectedLogo: item }));
                     }}
@@ -1478,7 +1454,7 @@ const App: React.FC = () => {
             {isBannerFontPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isBannerFontPickerOpen}
-                    onClose={() => setIsBannerFontPickerOpen(false)}
+                    onClose={() => closeModal('isBannerFontPickerOpen')}
                     onSelectItem={(item) => {
                         setLogoThemeState(prev => ({ ...prev, bannerSelectedFont: item, bannerFontReferenceImage: null }));
                     }}
@@ -1488,7 +1464,7 @@ const App: React.FC = () => {
             {isAlbumCoverRefPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isAlbumCoverRefPickerOpen}
-                    onClose={() => setIsAlbumCoverRefPickerOpen(false)}
+                    onClose={() => closeModal('isAlbumCoverRefPickerOpen')}
                     onSelectItem={() => {}}
                     onSelectMultiple={(items) => {
                         setLogoThemeState(prev => ({ ...prev, albumReferenceItems: [...(prev.albumReferenceItems || []), ...items] }));
@@ -1500,7 +1476,7 @@ const App: React.FC = () => {
             {isAlbumCoverPalettePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isAlbumCoverPalettePickerOpen}
-                    onClose={() => setIsAlbumCoverPalettePickerOpen(false)}
+                    onClose={() => closeModal('isAlbumCoverPalettePickerOpen')}
                     onSelectItem={(item) => {
                         setLogoThemeState(prev => ({ ...prev, albumSelectedPalette: item }));
                     }}
@@ -1510,7 +1486,7 @@ const App: React.FC = () => {
             {isAlbumCoverLogoPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isAlbumCoverLogoPickerOpen}
-                    onClose={() => setIsAlbumCoverLogoPickerOpen(false)}
+                    onClose={() => closeModal('isAlbumCoverLogoPickerOpen')}
                     onSelectItem={(item) => {
                         setLogoThemeState(prev => ({ ...prev, albumSelectedLogo: item }));
                     }}
@@ -1520,7 +1496,7 @@ const App: React.FC = () => {
              {isAlbumCoverFontPickerOpen && (
                 <LibraryPickerModal
                     isOpen={isAlbumCoverFontPickerOpen}
-                    onClose={() => setIsAlbumCoverFontPickerOpen(false)}
+                    onClose={() => closeModal('isAlbumCoverFontPickerOpen')}
                     onSelectItem={(item) => {
                         setLogoThemeState(prev => ({ ...prev, albumSelectedFont: item, albumFontReferenceImage: null }));
                     }}
@@ -1530,7 +1506,7 @@ const App: React.FC = () => {
             {isPromptGenImagePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isPromptGenImagePickerOpen}
-                    onClose={() => setIsPromptGenImagePickerOpen(false)}
+                    onClose={() => closeModal('isPromptGenImagePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1543,7 +1519,7 @@ const App: React.FC = () => {
             {isPromptGenBgImagePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isPromptGenBgImagePickerOpen}
-                    onClose={() => setIsPromptGenBgImagePickerOpen(false)}
+                    onClose={() => closeModal('isPromptGenBgImagePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1556,7 +1532,7 @@ const App: React.FC = () => {
             {isPromptGenSubjectImagePickerOpen && (
                 <LibraryPickerModal
                     isOpen={isPromptGenSubjectImagePickerOpen}
-                    onClose={() => setIsPromptGenSubjectImagePickerOpen(false)}
+                    onClose={() => closeModal('isPromptGenSubjectImagePickerOpen')}
                     onSelectItem={async (item) => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
@@ -1570,15 +1546,15 @@ const App: React.FC = () => {
                 <ErrorModal 
                     title={globalError.title}
                     message={globalError.message}
-                    onClose={() => setGlobalError(null)}
+                    onClose={() => dispatch(setGlobalError(null))}
                 />
             )}
             {isOAuthHelperOpen && (
                 <OAuthHelperModal
                     isOpen={isOAuthHelperOpen}
-                    onClose={() => setIsOAuthHelperOpen(false)}
+                    onClose={() => dispatch(closeOAuthHelper())}
                     onProceed={() => {
-                        setIsOAuthHelperOpen(false);
+                        dispatch(closeOAuthHelper());
                         handleDriveConnect();
                     }}
                     clientId={localStorage.getItem('google_client_id') || ''}
