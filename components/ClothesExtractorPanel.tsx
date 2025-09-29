@@ -146,6 +146,19 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
             dispatch(setExtractorItemSaveStatus({ itemType: 'clothes', index, status: 'idle' }));
         }
     };
+    
+    const handleToggleClothingItem = (index: number) => {
+        const newItems = identifiedItems.map((item, i) => 
+            i === index ? { ...item, selected: !item.selected } : item
+        );
+        dispatch(updateExtractorState({ identifiedItems: newItems }));
+    };
+
+    const handleSelectAllClothes = (select: boolean) => {
+        const newItems = identifiedItems.map(item => ({ ...item, selected: select }));
+        dispatch(updateExtractorState({ identifiedItems: newItems }));
+    };
+
 
     // --- Objects ---
     const handleIdentifyObjects = async () => {
@@ -195,6 +208,18 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
             console.error("Failed to save object:", err);
             dispatch(setExtractorItemSaveStatus({ itemType: 'objects', index, status: 'idle' }));
         }
+    };
+
+    const handleToggleObjectItem = (index: number) => {
+        const newItems = identifiedObjects.map((item, i) => 
+            i === index ? { ...item, selected: !item.selected } : item
+        );
+        dispatch(updateExtractorState({ identifiedObjects: newItems }));
+    };
+
+    const handleSelectAllObjects = (select: boolean) => {
+        const newItems = identifiedObjects.map(item => ({ ...item, selected: select }));
+        dispatch(updateExtractorState({ identifiedObjects: newItems }));
     };
     
     // --- Poses ---
@@ -314,10 +339,23 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                         {clothesError && <p className="text-danger bg-danger-bg p-3 rounded-md">{clothesError}</p>}
                         {identifiedItems.length > 0 && (
                             <div className="space-y-4">
-                                <h3 className="text-xl font-bold text-accent">Identified Items</h3>
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-xl font-bold text-accent">Identified Items</h3>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => handleSelectAllClothes(true)} className="text-xs font-semibold text-text-secondary hover:text-accent transition-colors">Check All</button>
+                                        <span className="text-text-muted">|</span>
+                                        <button onClick={() => handleSelectAllClothes(false)} className="text-xs font-semibold text-text-secondary hover:text-accent transition-colors">Uncheck All</button>
+                                    </div>
+                                </div>
                                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">
                                     {identifiedItems.map((item, index) => (
-                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer"><input type="checkbox" checked={item.selected} onChange={() => { const newItems = [...identifiedItems]; newItems[index].selected = !newItems[index].selected; dispatch(updateExtractorState({ identifiedItems: newItems })); }} className="mt-1 rounded text-accent focus:ring-accent" /><div><p className="font-semibold text-text-primary">{item.itemName}</p><p className="text-sm text-text-secondary">{item.description}</p></div></label>
+                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer">
+                                            <input type="checkbox" checked={item.selected} onChange={() => handleToggleClothingItem(index)} className="mt-1 rounded text-accent focus:ring-accent" />
+                                            <div>
+                                                <p className="font-semibold text-text-primary">{item.itemName}</p>
+                                                <p className="text-sm text-text-secondary">{item.description}</p>
+                                            </div>
+                                        </label>
                                     ))}
                                 </div>
                                 <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={generateFolded} onChange={e => dispatch(updateExtractorState({ generateFolded: e.target.checked }))} className="rounded text-accent focus:ring-accent" />Also generate folded version</label>
@@ -344,8 +382,25 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                         {objectError && <p className="text-danger bg-danger-bg p-3 rounded-md">{objectError}</p>}
                         {identifiedObjects.length > 0 && (
                             <div className="space-y-4">
-                                <h3 className="text-xl font-bold text-accent">Identified Objects</h3>
-                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">{identifiedObjects.map((item, index) => (<label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer"><input type="checkbox" checked={item.selected} onChange={() => { const newItems = [...identifiedObjects]; newItems[index].selected = !newItems[index].selected; dispatch(updateExtractorState({ identifiedObjects: newItems })); }} className="mt-1 rounded text-accent focus:ring-accent" /><div><p className="font-semibold text-text-primary">{item.name}</p><p className="text-sm text-text-secondary">{item.description}</p></div></label>))}</div>
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-xl font-bold text-accent">Identified Objects</h3>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => handleSelectAllObjects(true)} className="text-xs font-semibold text-text-secondary hover:text-accent transition-colors">Check All</button>
+                                        <span className="text-text-muted">|</span>
+                                        <button onClick={() => handleSelectAllObjects(false)} className="text-xs font-semibold text-text-secondary hover:text-accent transition-colors">Uncheck All</button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">
+                                    {identifiedObjects.map((item, index) => (
+                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer">
+                                            <input type="checkbox" checked={item.selected} onChange={() => handleToggleObjectItem(index)} className="mt-1 rounded text-accent focus:ring-accent" />
+                                            <div>
+                                                <p className="font-semibold text-text-primary">{item.name}</p>
+                                                <p className="text-sm text-text-secondary">{item.description}</p>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
                                 <button onClick={handleGenerateObjects} disabled={isGeneratingObjects || identifiedObjects.every(i => !i.selected)} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingObjects ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : '2. Generate Selected'}</button>
                             </div>
                         )}
