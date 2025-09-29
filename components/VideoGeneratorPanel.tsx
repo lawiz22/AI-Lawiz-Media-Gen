@@ -2,7 +2,7 @@ import React, { useState, useMemo, ChangeEvent, useEffect, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
 import { addToLibrary } from '../store/librarySlice';
-import { setVideoSaveStatus } from '../store/videoSlice';
+import { setVideoSaveStatus, setVideoStartFrame, setVideoEndFrame } from '../store/videoSlice';
 import { GenerateIcon, ResetIcon, VideoIcon, SpinnerIcon, CopyIcon, SaveIcon, FilmIcon, DownloadIcon, StartFrameIcon, EndFrameIcon, CheckIcon, LibraryIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { Loader } from './Loader';
@@ -98,17 +98,22 @@ const NumberSlider: React.FC<{ label: string, value: number, onChange: (e: Chang
 // --- Main Component ---
 export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     options, setOptions, comfyUIObjectInfo,
-    startFrame, setStartFrame, endFrame, setEndFrame,
+    startFrame, setStartFrame: setStartFrameAction,
+    endFrame, setEndFrame: setEndFrameAction,
     onGenerate, isReady, isLoading, error, generatedVideo, lastUsedPrompt,
     progressMessage, progressValue, onReset, generationOptionsForSave,
     onOpenLibraryForStartFrame, onOpenLibraryForEndFrame, onOpenLibraryForGeminiSource
 }) => {
     const dispatch: AppDispatch = useDispatch();
     const [copyButtonText, setCopyButtonText] = useState('Copy');
+    
+    // Local state to hold the 'master' copy of the frame files.
+    // This allows resizing logic to work consistently for both uploads and library items.
     const [originalStartFrame, setOriginalStartFrame] = useState<File | null>(null);
     const [originalEndFrame, setOriginalEndFrame] = useState<File | null>(null);
-    const [frameResizeScale, setFrameResizeScale] = useState(1.0); // 1.0 = 100%
+    const [frameResizeScale, setFrameResizeScale] = useState(1.0);
     const [isResizing, setIsResizing] = useState(false);
+    const isResizingRef = useRef(false); // Ref to prevent resize loops
     
     // State and refs for frame extractor
     const [extractedFrame, setExtractedFrame] = useState<string | null>(null);
@@ -154,99 +159,60 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const comfySamplers = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.KSamplerAdvanced?.input?.required?.sampler_name), [comfyUIObjectInfo]);
     const comfySchedulers = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.KSamplerAdvanced?.input?.required?.scheduler), [comfyUIObjectInfo]);
     
-    // This effect runs when ComfyUI info is available to populate the default models.
     useEffect(() => {
         if (options.videoProvider === 'comfyui' && options.comfyVidModelType === 'wan-i2v' && comfyUIObjectInfo) {
-            
-            // This logic is to prevent re-running this on every render, only when ComfyUI data is first loaded.
-            // We check if a model has been set. If so, we assume defaults have been populated.
-            if (options.comfyVidWanI2VHighNoiseModel) {
-                return;
-            }
-
+            if (options.comfyVidWanI2VHighNoiseModel) return;
             const updates: Partial<GenerationOptions> = {};
-            
             if (comfyGgufModels.length > 0) {
                 updates.comfyVidWanI2VHighNoiseModel = comfyGgufModels.find(m => m.toLowerCase().includes('highnoise')) || comfyGgufModels[0];
                 updates.comfyVidWanI2VLowNoiseModel = comfyGgufModels.find(m => m.toLowerCase().includes('lownoise')) || (comfyGgufModels.length > 1 ? comfyGgufModels[1] : comfyGgufModels[0]);
             }
-            if (comfyGgufClipModels.length > 0) {
-                updates.comfyVidWanI2VClipModel = comfyGgufClipModels.find(m => m.includes('umt5')) || comfyGgufClipModels[0];
-            }
-            if (comfyVaes.length > 0) {
-                updates.comfyVidWanI2VVaeModel = comfyVaes.find(v => v.includes('wan_2.1')) || comfyVaes[0];
-            }
-            if (comfyClipVision.length > 0) {
-                updates.comfyVidWanI2VClipVisionModel = comfyClipVision.find(cv => cv.includes('clip_vision_h')) || comfyClipVision[0];
-            }
+            if (comfyGgufClipModels.length > 0) updates.comfyVidWanI2VClipModel = comfyGgufClipModels.find(m => m.includes('umt5')) || comfyGgufClipModels[0];
+            if (comfyVaes.length > 0) updates.comfyVidWanI2VVaeModel = comfyVaes.find(v => v.includes('wan_2.1')) || comfyVaes[0];
+            if (comfyClipVision.length > 0) updates.comfyVidWanI2VClipVisionModel = comfyClipVision.find(cv => cv.includes('clip_vision_h')) || comfyClipVision[0];
             if (comfyLoras.length > 0) {
-                 updates.comfyVidWanI2VHighNoiseLora = comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('high')) 
-                    || comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('high')) 
-                    || comfyLoras[0];
-                 updates.comfyVidWanI2VLowNoiseLora = comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('low')) 
-                    || comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('low')) 
-                    || (comfyLoras.length > 1 ? comfyLoras[1] : comfyLoras[0]);
+                 updates.comfyVidWanI2VHighNoiseLora = comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('high')) || comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('high')) || comfyLoras[0];
+                 updates.comfyVidWanI2VLowNoiseLora = comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('low')) || comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('low')) || (comfyLoras.length > 1 ? comfyLoras[1] : comfyLoras[0]);
             }
-
-            if (Object.keys(updates).length > 0) {
-                setOptions({ ...options, ...updates });
-            }
+            if (Object.keys(updates).length > 0) setOptions({ ...options, ...updates });
         }
-    }, [
-        options.videoProvider, 
-        options.comfyVidModelType, 
-        comfyUIObjectInfo,
-        // Using lengths as a proxy for the arrays being populated, to avoid deep comparison issues.
-        comfyGgufModels.length,
-        comfyLoras.length,
-        comfyGgufClipModels.length,
-        comfyVaes.length,
-        comfyClipVision.length,
-    ]);
-    
-    // This effect ensures the `useEndFrame` checkbox stays in sync with the presence of an end frame file.
+    }, [options.videoProvider, options.comfyVidModelType, comfyUIObjectInfo, comfyGgufModels.length, comfyLoras.length, comfyGgufClipModels.length, comfyVaes.length, comfyClipVision.length]);
+
+    // Sync Redux state changes (e.g., from library) to the local 'original' state for resizing.
     useEffect(() => {
-        if (options.comfyVidWanI2VUseEndFrame !== !!endFrame) {
-            setOptions({
-                ...options,
-                comfyVidWanI2VUseEndFrame: !!endFrame,
-            });
-        }
-    }, [endFrame, options.comfyVidWanI2VUseEndFrame, setOptions]);
+        if (!isResizingRef.current) setOriginalStartFrame(startFrame);
+    }, [startFrame]);
 
-    const handleStartFrameUpload = (file: File | null) => {
-        setOriginalStartFrame(file);
-    };
-
-    const handleEndFrameUpload = (file: File | null) => {
-        setOriginalEndFrame(file);
-    };
+    useEffect(() => {
+        if (!isResizingRef.current) setOriginalEndFrame(endFrame);
+    }, [endFrame]);
     
+    // Effect to apply resizing when originals or scale change, then updates Redux.
     useEffect(() => {
         const applyResize = async () => {
             if (!originalStartFrame && !originalEndFrame) return;
-            
+
+            isResizingRef.current = true;
             setIsResizing(true);
             try {
-                if (frameResizeScale < 1.0) {
-                    if (originalStartFrame) setStartFrame(await resizeImageFile(originalStartFrame, frameResizeScale));
-                    else setStartFrame(null);
-                    if (originalEndFrame) setEndFrame(await resizeImageFile(originalEndFrame, frameResizeScale));
-                    else setEndFrame(null);
-                } else {
-                    setStartFrame(originalStartFrame);
-                    setEndFrame(originalEndFrame);
-                }
+                const newStart = originalStartFrame ? (frameResizeScale < 1.0 ? await resizeImageFile(originalStartFrame, frameResizeScale) : originalStartFrame) : null;
+                const newEnd = originalEndFrame ? (frameResizeScale < 1.0 ? await resizeImageFile(originalEndFrame, frameResizeScale) : originalEndFrame) : null;
+                
+                if (newStart !== startFrame) dispatch(setVideoStartFrame(newStart));
+                if (newEnd !== endFrame) dispatch(setVideoEndFrame(newEnd));
+
             } catch (e) {
                 console.error("Error during image resize:", e);
-                setStartFrame(originalStartFrame);
-                setEndFrame(originalEndFrame);
+                if(originalStartFrame !== startFrame) dispatch(setVideoStartFrame(originalStartFrame));
+                if(originalEndFrame !== endFrame) dispatch(setVideoEndFrame(originalEndFrame));
             } finally {
                 setIsResizing(false);
+                setTimeout(() => { isResizingRef.current = false; }, 0);
             }
         };
         applyResize();
-    }, [frameResizeScale, originalStartFrame, originalEndFrame, setStartFrame, setEndFrame]);
+    }, [frameResizeScale, originalStartFrame, originalEndFrame, dispatch]);
+
     
     useEffect(() => {
         const detectAndSetDimensions = (file: File) => {
@@ -288,7 +254,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
         const isChecked = e.target.checked;
         setOptions({ ...options, comfyVidWanI2VUseEndFrame: isChecked });
         if (!isChecked) {
-            setEndFrame(null);
+            setEndFrameAction(null);
             setOriginalEndFrame(null);
         }
     };
@@ -371,13 +337,13 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const handleSetAsStartFrame = async () => {
         if (!extractedFrame) return;
         const file = await dataUrlToFile(extractedFrame, 'start_frame.jpeg');
-        setStartFrame(file);
+        setStartFrameAction(file);
     };
 
     const handleSetAsEndFrame = async () => {
         if (!extractedFrame) return;
         const file = await dataUrlToFile(extractedFrame, 'end_frame.jpeg');
-        setEndFrame(file);
+        setEndFrameAction(file);
     };
 
     const handleSaveFrameToLibrary = async () => {
@@ -459,7 +425,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                             <ImageUploader
                                                 label="Input Image (Optional)"
                                                 id="gemini-vid-input"
-                                                onImageUpload={setStartFrame}
+                                                onImageUpload={setStartFrameAction}
                                                 sourceFile={startFrame}
                                             />
                                         </div>
@@ -490,7 +456,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                 <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Frames</h2>
                                 <div className="flex items-center gap-2">
                                     <div className="flex-grow">
-                                        <ImageUploader label="Start Frame" id="start-frame" onImageUpload={handleStartFrameUpload} sourceFile={startFrame} />
+                                        <ImageUploader label="Start Frame" id="start-frame" onImageUpload={setOriginalStartFrame} sourceFile={startFrame} />
                                     </div>
                                     <button 
                                         onClick={onOpenLibraryForStartFrame} 
@@ -508,7 +474,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                     {options.comfyVidWanI2VUseEndFrame && (
                                         <div className="flex items-center gap-2">
                                             <div className="flex-grow">
-                                                <ImageUploader label="End Frame" id="end-frame" onImageUpload={handleEndFrameUpload} sourceFile={endFrame} />
+                                                <ImageUploader label="End Frame" id="end-frame" onImageUpload={setOriginalEndFrame} sourceFile={endFrame} />
                                             </div>
                                             <button 
                                                 onClick={onOpenLibraryForEndFrame} 

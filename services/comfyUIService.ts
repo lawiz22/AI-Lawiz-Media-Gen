@@ -301,7 +301,7 @@ const executeWorkflow = async (
                     onProgress("Fetching results...", 0.95);
                     const promptId = data.data.prompt_id;
 
-                    const retries = isLongJob ? 60 : 15;
+                    const retries = isLongJob ? 150 : 15;
                     const delay = 3000;
 
                     const fetchHistoryWithRetries = async (retries: number, delay: number): Promise<any> => {
