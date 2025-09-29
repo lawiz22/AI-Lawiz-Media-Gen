@@ -1,5 +1,3 @@
-
-
 import { GoogleGenAI, Part, Type, Modality } from "@google/genai";
 // Fix: Corrected typo in type name from 'ManquinnequinStyle' to 'MannequinStyle'.
 import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState, PaletteColor } from '../types';
@@ -642,6 +640,122 @@ export const summarizePrompt = async (prompt: string): Promise<string> => {
     const summary = result.text?.trim().replace(/["']/g, '');
     if (!summary) return prompt.substring(0, 40) + '...';
     return summary;
+};
+
+// --- ComfyUI Prompt Generation ---
+type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5';
+
+const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
+    switch(modelType) {
+        case 'sd1.5':
+        case 'face-detailer-sd1.5':
+            return 'Your response MUST be a very simple, comma-separated list of keywords. Do not use sentences.';
+        case 'flux':
+        case 'nunchaku-flux-image':
+        case 'flux-krea':
+            return 'Your response MUST be a single, detailed, artistic, and descriptive paragraph. Use rich vocabulary.';
+        case 'gemini':
+            return 'Your response MUST be a detailed, narrative paragraph written in natural language. Describe the scene as if you were writing a story or giving instructions to a human artist. Use full, descriptive sentences.';
+        case 'wan2.2':
+        case 'sdxl':
+        case 'nunchaku-kontext-flux': // I2I prompt is often best as a sentence
+        default:
+            return 'Your response MUST be a single, concise, natural language sentence.';
+    }
+};
+
+export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: ComfyPromptModelType): Promise<string> => {
+    const processedImage = await cropImageToAspectRatio(sourceImage, '1:1');
+    const imagePart = await fileToGenerativePart(processedImage);
+    const instruction = getPromptStyleInstruction(modelType) + ' Start the prompt directly without any preamble.';
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, { text: instruction }] },
+        config: { temperature: 0.3 }
+    });
+    
+    const text = result.text?.trim().replace(/['"`]/g, '');
+    if (!text) throw new Error('AI failed to generate a prompt.');
+    return text;
+};
+
+export const extractBackgroundPromptFromImage = async (sourceImage: File, modelType: ComfyPromptModelType): Promise<string> => {
+    const processedImage = await cropImageToAspectRatio(sourceImage, '1:1');
+    const imagePart = await fileToGenerativePart(processedImage);
+    const styleInstruction = getPromptStyleInstruction(modelType);
+    const instruction = `Analyze ONLY the background of this image, ignoring any people or foreground subjects. Describe the environment in detail. ${styleInstruction}`;
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, { text: instruction }] },
+        config: { temperature: 0.4 }
+    });
+    
+    const text = result.text?.trim().replace(/['"`]/g, '');
+    if (!text) throw new Error('AI failed to generate a background prompt.');
+    return text;
+};
+
+export const extractSubjectPromptFromImage = async (sourceImage: File, modelType: ComfyPromptModelType): Promise<string> => {
+    const processedImage = await cropImageToAspectRatio(sourceImage, '1:1');
+    const imagePart = await fileToGenerativePart(processedImage);
+    const styleInstruction = getPromptStyleInstruction(modelType);
+    const instruction = `Analyze ONLY the main subject (person or object) of this image, ignoring the background. Describe the subject in detail, including appearance, clothing, and any defining features. ${styleInstruction}`;
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, { text: instruction }] },
+        config: { temperature: 0.4 }
+    });
+    
+    const text = result.text?.trim().replace(/['"`]/g, '');
+    if (!text) throw new Error('AI failed to generate a subject prompt.');
+    return text;
+};
+
+export const generateMagicalPromptSoup = async (
+    fullPrompt: string,
+    bgPrompt: string,
+    subjectPrompt: string,
+    modelType: ComfyPromptModelType,
+    creativity: number
+): Promise<{ text: string; source: number }[]> => {
+    let instruction = `You are a creative assistant for generating image prompts. Combine the following elements into a new, cohesive, and imaginative prompt suitable for a '${modelType}' model.
+    
+    Creativity Level: ${creativity} (0 is a simple combination, 1 is a wild, artistic reinterpretation).
+
+    **Elements to combine:**`;
+    if (fullPrompt) instruction += `\n1. Full Scene Idea: "${fullPrompt}"`;
+    if (bgPrompt) instruction += `\n2. Background Idea: "${bgPrompt}"`;
+    if (subjectPrompt) instruction += `\n3. Subject Idea: "${subjectPrompt}"`;
+
+    instruction += `\n\nYour task is to merge these ideas. You MUST respond with a valid JSON object containing a single key "prompt_parts", which is an array of objects. Each object in the array must have two keys: "text" (a small segment of the final prompt) and "source" (an integer: 0 for new/combined ideas, 1 for elements from the Full Scene, 2 for Background, 3 for Subject).
+    
+    Example response format:
+    { "prompt_parts": [ {"text": "A beautiful portrait of", "source": 1}, {"text": "an astronaut", "source": 3}, {"text": "on a neon-lit alien world", "source": 2}, {"text": "in a impressionistic style", "source": 0} ] }
+    `;
+    
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [{ text: instruction }] },
+        config: { 
+            temperature: creativity,
+            responseMimeType: 'application/json'
+        },
+    });
+
+    try {
+        const jsonText = result.text.trim();
+        const parsed = JSON.parse(jsonText);
+        if (parsed.prompt_parts && Array.isArray(parsed.prompt_parts)) {
+            return parsed.prompt_parts;
+        }
+        throw new Error("Invalid JSON format from AI.");
+    } catch (e) {
+        console.error("Failed to parse prompt soup from AI:", result.text, e);
+        throw new Error("AI returned an invalid response for the prompt soup.");
+    }
 };
 
 export const generateLogos = async (state: LogoThemeState): Promise<string[]> => {

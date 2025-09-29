@@ -429,7 +429,7 @@ const App: React.FC = () => {
             const folder = await driveService.connectAndPickFolder();
             if (folder) {
                 dispatch(setDriveFolder(folder));
-                await handleSyncWithDrive();
+                await handleSyncWithDrive(folder);
             }
         } catch (error: any) {
             if (error.message?.includes("popup_closed_by_user")) {
@@ -446,8 +446,9 @@ const App: React.FC = () => {
         }
     };
     
-    const handleSyncWithDrive = async () => {
-        if (!driveFolder) {
+    const handleSyncWithDrive = async (newFolder?: DriveFolder) => {
+        const folderToSync = newFolder || driveFolder;
+        if (!folderToSync) {
             dispatch(setGlobalError({ title: "Sync Error", message: "You must connect to a Drive folder first." }));
             return;
         }
