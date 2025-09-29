@@ -187,6 +187,8 @@ export interface GenerationOptions {
     comfyVidWanI2VHeight?: number;
     comfyVidWanI2VUseEndFrame?: boolean;
     comfyVidWanI2VEndFrameStrength?: number;
+    comfyVidWanI2VNoiseSeed?: number;
+    comfyVidWanI2VSeedControl?: 'fixed' | 'randomize';
 }
 
 export interface IdentifiedClothing {

@@ -723,7 +723,7 @@ export const generateComfyUIVideo = async (
     
     workflow["52"].inputs.image = startFrameInfo.name;
     workflow["72"].inputs.image = endFrameInfo.name;
-    workflow["6"].inputs.text = options.comfyVidWanI2VPositivePrompt;
+    workflow["112"].inputs.string = options.comfyVidWanI2VPositivePrompt;
     workflow["7"].inputs.text = options.comfyVidWanI2VNegativePrompt;
 
     const sampler1 = workflow["101"];
@@ -734,6 +734,9 @@ export const generateComfyUIVideo = async (
     sampler1.inputs.scheduler = sampler2.inputs.scheduler = options.comfyVidWanI2VScheduler;
     sampler1.inputs.end_at_step = options.comfyVidWanI2VRefinerStartStep;
     sampler2.inputs.start_at_step = options.comfyVidWanI2VRefinerStartStep;
+
+    sampler1.inputs.noise_seed = options.comfyVidWanI2VNoiseSeed ?? Math.floor(Math.random() * 1e15);
+    sampler1.inputs.control_after_generate = options.comfyVidWanI2VSeedControl || 'randomize';
 
     if (options.comfyVidWanI2VUseLightningLora) {
         workflow["94"].inputs.lora_name = options.comfyVidWanI2VHighNoiseLora;

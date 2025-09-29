@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
 import { addToLibrary } from '../store/librarySlice';
 import { setVideoSaveStatus, setVideoStartFrame, setVideoEndFrame } from '../store/videoSlice';
-import { GenerateIcon, ResetIcon, VideoIcon, SpinnerIcon, CopyIcon, SaveIcon, FilmIcon, DownloadIcon, StartFrameIcon, EndFrameIcon, CheckIcon, LibraryIcon } from './icons';
+import { GenerateIcon, ResetIcon, VideoIcon, SpinnerIcon, CopyIcon, SaveIcon, FilmIcon, DownloadIcon, StartFrameIcon, EndFrameIcon, CheckIcon, LibraryIcon, RefreshIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { Loader } from './Loader';
 import type { GenerationOptions, LibraryItem } from '../types';
@@ -555,6 +555,36 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                 <NumberSlider label={`Refiner Start Step`} value={options.comfyVidWanI2VRefinerStartStep || 3} onChange={handleSliderChange('comfyVidWanI2VRefinerStartStep')} min={1} max={(options.comfyVidWanI2VSteps || 6) - 1} step={1} disabled={isLoading} />
                                 <SelectInput label="Sampler" value={options.comfyVidWanI2VSampler || 'euler'} onChange={handleOptionChange('comfyVidWanI2VSampler')} options={comfySamplers.map(s => ({value: s, label: s}))} disabled={isLoading}/>
                                 <SelectInput label="Scheduler" value={options.comfyVidWanI2VScheduler || 'simple'} onChange={handleOptionChange('comfyVidWanI2VScheduler')} options={comfySchedulers.map(s => ({value: s, label: s}))} disabled={isLoading}/>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <SelectInput 
+                                        label="High-Noise Seed"
+                                        value={options.comfyVidWanI2VSeedControl || 'randomize'}
+                                        onChange={handleOptionChange('comfyVidWanI2VSeedControl')}
+                                        options={[{value: 'randomize', label: 'Randomize'}, {value: 'fixed', label: 'Fixed'}]}
+                                        disabled={isLoading}
+                                    />
+                                    <div>
+                                        <label className="block text-sm font-medium text-text-secondary">Seed Value</label>
+                                        <div className="flex items-center gap-1">
+                                            <input 
+                                                type="number"
+                                                value={options.comfyVidWanI2VNoiseSeed ?? ''}
+                                                onChange={(e) => setOptions({...options, comfyVidWanI2VNoiseSeed: e.target.value ? parseInt(e.target.value, 10) : undefined })}
+                                                placeholder="Random"
+                                                className="mt-1 block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                                disabled={isLoading}
+                                            />
+                                            <button
+                                                onClick={() => setOptions({...options, comfyVidWanI2VNoiseSeed: Math.floor(Math.random() * 1e15)})}
+                                                className="mt-1 p-2 bg-bg-primary rounded-md hover:bg-bg-tertiary-hover"
+                                                title="Generate Random Seed"
+                                                disabled={isLoading}
+                                            >
+                                                <RefreshIcon className="w-5 h-5"/>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                                 <SelectInput label="Video Format" value={options.comfyVidWanI2VVideoFormat || 'video/nvenc_h264-mp4'} onChange={handleOptionChange('comfyVidWanI2VVideoFormat')} options={[{value: 'video/nvenc_h264-mp4', label: 'H.264 (MP4)'}, {value: 'video/webm', label: 'WebM'}, {value: 'image/gif', label: 'GIF'}]} disabled={isLoading} />
                                 <div className="space-y-4 p-4 mt-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
                                     <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">

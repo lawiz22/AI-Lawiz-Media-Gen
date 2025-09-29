@@ -850,7 +850,7 @@ export const COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE = {
 
 // --- ComfyUI WAN 2.2 Image-to-Video (First/Last Frame) Workflow ---
 export const COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE = {
-  "6": { "inputs": { "text": "positive prompt", "clip": [ "107", 0 ] }, "class_type": "CLIPTextEncode", "_meta": { "title": "CLIP Text Encode (Positive Prompt)" } },
+  "6": { "inputs": { "text": ["112", 0], "clip": [ "107", 0 ] }, "class_type": "CLIPTextEncode", "_meta": { "title": "CLIP Text Encode (Positive Prompt)" } },
   "7": { "inputs": { "text": "negative prompt", "clip": [ "107", 0 ] }, "class_type": "CLIPTextEncode", "_meta": { "title": "CLIP Text Encode (Negative Prompt)" } },
   "8": { "inputs": { "samples": [ "102", 0 ], "vae": [ "39", 0 ] }, "class_type": "VAEDecode", "_meta": { "title": "VAEDecode" } },
   "39": { "inputs": { "vae_name": "wan_2.1_vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "VAELoader" } },
@@ -872,6 +872,7 @@ export const COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE = {
   "106": { "inputs": { "unet_name": "Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf" }, "class_type": "UnetLoaderGGUF", "_meta": { "title": "UnetLoaderGGUF" } },
   "107": { "inputs": { "clip_name": "umt5-xxl-encoder-Q5_K_M.gguf", "type": "wan" }, "class_type": "CLIPLoaderGGUF", "_meta": { "title": "CLIPLoaderGGUF" } },
   "111": { "inputs": { "frame_rate": 24, "loop_count": 0, "filename_prefix": "GeneratedVideo_", "format": "video/nvenc_h264-mp4", "pix_fmt": "yuv420p", "bitrate": 10, "megabit": true, "save_metadata": true, "pingpong": false, "save_output": true, "images": [ "114", 0 ] }, "class_type": "VHS_VideoCombine", "_meta": { "title": "Video Final" } },
+  "112": { "inputs": { "string": "positive prompt", "strip_newlines": true }, "class_type": "StringConstantMultiline", "_meta": { "title": "Prompt Action" }},
   "114": { "inputs": { "grain_intensity": 0.02, "saturation_mix": 0.3, "images": [ "8", 0 ] }, "class_type": "FastFilmGrain", "_meta": { "title": "FastFilmGrain" } }
 };
 
