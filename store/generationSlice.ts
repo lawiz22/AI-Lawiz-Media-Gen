@@ -70,8 +70,10 @@ const initialState: GenerationSliceState = {
     isLoading: false,
     progressMessage: '',
     progressValue: 0,
-    generatedImages: [],
-    lastUsedPrompt: null,
+    generatedContent: {
+        'image-generator': { images: [], lastUsedPrompt: null },
+        'character-generator': { images: [], lastUsedPrompt: null },
+    },
 };
 
 const generationSlice = createSlice({
@@ -123,17 +125,25 @@ const generationSlice = createSlice({
         state.progressMessage = action.payload.message;
         state.progressValue = action.payload.value;
     },
-    setGeneratedImages: (state, action: PayloadAction<string[]>) => {
-      state.generatedImages = action.payload.map(src => ({ src, saved: 'idle' }));
+    setGeneratedImages: (state, action: PayloadAction<{ tabId: string; images: string[] }>) => {
+      const { tabId, images } = action.payload;
+      if (!state.generatedContent[tabId]) {
+          state.generatedContent[tabId] = { images: [], lastUsedPrompt: null };
+      }
+      state.generatedContent[tabId].images = images.map(src => ({ src, saved: 'idle' }));
     },
-    setImageSaveStatus: (state, action: PayloadAction<{ index: number; status: 'idle' | 'saving' | 'saved' }>) => {
-        const { index, status } = action.payload;
-        if (state.generatedImages[index]) {
-            state.generatedImages[index].saved = status;
+    setImageSaveStatus: (state, action: PayloadAction<{ tabId: string; index: number; status: 'idle' | 'saving' | 'saved' }>) => {
+        const { tabId, index, status } = action.payload;
+        if (state.generatedContent[tabId] && state.generatedContent[tabId].images[index]) {
+            state.generatedContent[tabId].images[index].saved = status;
         }
     },
-    setLastUsedPrompt: (state, action: PayloadAction<string | null>) => {
-      state.lastUsedPrompt = action.payload;
+    setLastUsedPrompt: (state, action: PayloadAction<{ tabId: string, prompt: string | null }>) => {
+      const { tabId, prompt } = action.payload;
+       if (!state.generatedContent[tabId]) {
+          state.generatedContent[tabId] = { images: [], lastUsedPrompt: null };
+      }
+      state.generatedContent[tabId].lastUsedPrompt = prompt;
     },
     resetGenerationState: (state) => {
         state.sourceImage = null;
@@ -141,8 +151,10 @@ const generationSlice = createSlice({
         state.backgroundImage = null;
         state.previewedBackgroundImage = null;
         state.previewedClothingImage = null;
-        state.generatedImages = [];
-        state.lastUsedPrompt = null;
+        state.generatedContent = {
+            'image-generator': { images: [], lastUsedPrompt: null },
+            'character-generator': { images: [], lastUsedPrompt: null },
+        };
         state.characterName = '';
         state.shouldGenerateCharacterName = false;
         state.maskImage = null;

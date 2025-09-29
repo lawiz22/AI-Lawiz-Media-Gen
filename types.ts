@@ -493,8 +493,12 @@ export interface GenerationSliceState {
   isLoading: boolean;
   progressMessage: string;
   progressValue: number;
-  generatedImages: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
-  lastUsedPrompt: string | null;
+  generatedContent: {
+    [tabId: string]: {
+      images: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
+      lastUsedPrompt: string | null;
+    }
+  };
 }
 
 export interface VideoSliceState {

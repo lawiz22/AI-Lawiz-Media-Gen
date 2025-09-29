@@ -86,7 +86,7 @@ const App: React.FC = () => {
     const {
         sourceImage, generationMode, characterName, shouldGenerateCharacterName, clothingImage,
         backgroundImage, previewedBackgroundImage, previewedClothingImage, maskImage, elementImages,
-        options, isLoading, progressMessage, progressValue, generatedImages, lastUsedPrompt
+        options, isLoading, progressMessage, progressValue, generatedContent
     } = useSelector((state: RootState) => state.generation);
 
     // --- Video State (from videoSlice) ---
@@ -218,8 +218,8 @@ const App: React.FC = () => {
 
     const handleGenerate = async () => {
         dispatch(setLoadingState({ isLoading: true }));
-        dispatch(setGeneratedImages([]));
-        dispatch(setLastUsedPrompt(null));
+        dispatch(setGeneratedImages({ tabId: activeTab, images: [] }));
+        dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: null }));
         dispatch(setGlobalError(null));
         if (!shouldGenerateCharacterName) {
              dispatch(setCharacterName(''));
@@ -249,8 +249,8 @@ const App: React.FC = () => {
                 result = await generateComfyUIPortraits(sourceImage, options, localUpdateProgress);
             }
             
-            dispatch(setGeneratedImages(result.images));
-            dispatch(setLastUsedPrompt(result.finalPrompt));
+            dispatch(setGeneratedImages({ tabId: activeTab, images: result.images }));
+            dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: result.finalPrompt }));
             
             if(result.images.length > 0) {
                 if (activeTab === 'character-generator' && shouldGenerateCharacterName) {
@@ -280,7 +280,7 @@ const App: React.FC = () => {
     const handleGenerateVideo = async () => {
         dispatch(setLoadingState({ isLoading: true }));
         dispatch(setGeneratedVideoUrl(null));
-        dispatch(setLastUsedPrompt(null));
+        dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: null }));
         dispatch(setGlobalError(null));
         dispatch(setGenerationOptionsForSave(options));
 
@@ -295,7 +295,7 @@ const App: React.FC = () => {
                     videoStartFrame, videoEndFrame, options, localUpdateProgress
                 );
                 dispatch(setGeneratedVideoUrl(videoUrl));
-                dispatch(setLastUsedPrompt(finalPrompt));
+                dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: finalPrompt }));
             } else if (options.videoProvider === 'gemini') {
                 const { videoUrl, finalPrompt } = await generateGeminiVideo(
                     options,
@@ -303,7 +303,7 @@ const App: React.FC = () => {
                     localUpdateProgress
                 );
                 dispatch(setGeneratedVideoUrl(videoUrl));
-                dispatch(setLastUsedPrompt(finalPrompt));
+                dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: finalPrompt }));
             } else {
                  throw new Error("Selected video provider is not implemented.");
             }
@@ -381,7 +381,9 @@ const App: React.FC = () => {
         switch (item.mediaType) {
             case 'character':
                 dispatch(setSourceImage(sourceToSet));
-                dispatch(setGeneratedImages([item.media]));
+                dispatch(setGeneratedImages({ tabId: 'character-generator', images: [item.media] }));
+                dispatch(setGeneratedImages({ tabId: 'image-generator', images: [] }));
+                dispatch(setLastUsedPrompt({ tabId: 'image-generator', prompt: null }));
                 // When loading a character, parse the name to separate it from the description
                 const [namePart] = (item.name || '').split(':');
                 dispatch(setCharacterName(namePart.trim()));
@@ -389,7 +391,9 @@ const App: React.FC = () => {
                 break;
             case 'image':
                 dispatch(setSourceImage(sourceToSet));
-                dispatch(setGeneratedImages([item.media]));
+                dispatch(setGeneratedImages({ tabId: 'image-generator', images: [item.media] }));
+                dispatch(setGeneratedImages({ tabId: 'character-generator', images: [] }));
+                dispatch(setLastUsedPrompt({ tabId: 'character-generator', prompt: null }));
                 dispatch(setCharacterName(''));
                 const isI2I = !!sourceToSet || item.options?.geminiMode === 'i2i';
                 dispatch(setGenerationMode(isI2I ? 'i2i' : 't2i'));
@@ -524,6 +528,9 @@ const App: React.FC = () => {
 
     const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'object', 'extracted-frame', 'pose', 'font'];
     const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'extracted-frame', 'object', 'pose', 'font'];
+    
+    const imageGenContent = generatedContent['image-generator'] || { images: [], lastUsedPrompt: null };
+    const charGenContent = generatedContent['character-generator'] || { images: [], lastUsedPrompt: null };
 
     return (
         <div className="min-h-screen bg-bg-primary text-text-primary font-sans">
@@ -625,16 +632,16 @@ const App: React.FC = () => {
                         {/* --- Results Column (Right) --- */}
                         <div className="lg:col-span-2">
                            <ImageGrid 
-                                images={generatedImages} 
+                                images={imageGenContent.images} 
                                 onSendToI2I={handleSendToI2I}
                                 onSendToCharacter={handleSendToCharacter}
-                                lastUsedPrompt={lastUsedPrompt}
+                                lastUsedPrompt={imageGenContent.lastUsedPrompt}
                                 options={options}
                                 sourceImage={sourceImage}
                                 characterName={characterName}
                                 activeTab={activeTab}
                             />
-                             {generatedImages.length === 0 && !isLoading && (
+                             {imageGenContent.images.length === 0 && !isLoading && (
                                 <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
                                     <ImageGeneratorIcon className="w-16 h-16 text-border-primary mb-4" />
                                     <h3 className="text-lg font-bold text-text-primary">Your generated images will appear here</h3>
@@ -755,16 +762,16 @@ const App: React.FC = () => {
                         {/* --- Results Column (Right) --- */}
                         <div className="lg:col-span-2">
                            <ImageGrid 
-                                images={generatedImages} 
+                                images={charGenContent.images} 
                                 onSendToI2I={handleSendToI2I}
                                 onSendToCharacter={handleSendToCharacter}
-                                lastUsedPrompt={lastUsedPrompt}
+                                lastUsedPrompt={charGenContent.lastUsedPrompt}
                                 options={options}
                                 sourceImage={sourceImage}
                                 characterName={characterName}
                                 activeTab={activeTab}
                             />
-                             {generatedImages.length === 0 && !isLoading && (
+                             {charGenContent.images.length === 0 && !isLoading && (
                                 <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
                                     <CharacterIcon className="w-16 h-16 text-border-primary mb-4" />
                                     <h3 className="text-lg font-bold text-text-primary">Your generated characters will appear here</h3>
@@ -789,7 +796,7 @@ const App: React.FC = () => {
                         isLoading={isLoading}
                         error={globalError ? globalError.message : null}
                         generatedVideo={generatedVideoUrl}
-                        lastUsedPrompt={lastUsedPrompt}
+                        lastUsedPrompt={generatedContent[activeTab]?.lastUsedPrompt || null}
                         progressMessage={progressMessage}
                         progressValue={progressValue}
                         onReset={handleVideoReset}

@@ -98,7 +98,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
     try {
         const enhancedSrc = await enhanceImageResolution(imageSrc);
         setEnhancedImages(prev => ({...prev, [index]: enhancedSrc}));
-        dispatch(setImageSaveStatus({ index, status: 'idle' }));
+        dispatch(setImageSaveStatus({ tabId: activeTab, index, status: 'idle' }));
     } catch (err: any) {
         console.error("Enhancement failed:", err);
         setErrorIndex(prev => ({ ...prev, [index]: err.message || 'Failed to enhance image.' }));
@@ -108,7 +108,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
   };
   
   const handleSaveToLibrary = async (imageSrc: string, index: number) => {
-    dispatch(setImageSaveStatus({ index, status: 'saving' }));
+    dispatch(setImageSaveStatus({ tabId: activeTab, index, status: 'saving' }));
     try {
       const isEnhanced = !!enhancedImages[index];
       const { width, height } = await getImageDimensionsFromDataUrl(imageSrc);
@@ -160,10 +160,10 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
       };
 
       await dispatch(addToLibrary(item)).unwrap();
-      dispatch(setImageSaveStatus({ index, status: 'saved' }));
+      dispatch(setImageSaveStatus({ tabId: activeTab, index, status: 'saved' }));
     } catch (err: any) {
       console.error("Failed to save to library:", err);
-      dispatch(setImageSaveStatus({ index, status: 'idle' }));
+      dispatch(setImageSaveStatus({ tabId: activeTab, index, status: 'idle' }));
     }
   };
 
