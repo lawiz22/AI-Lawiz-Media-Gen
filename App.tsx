@@ -24,13 +24,13 @@ import {
     resetVideoUtilsState, selectIsVideoReady
 } from './store/videoSlice';
 import {
-    addSoupToHistory, setActivePromptToolsSubTab, resetPromptGenState
+    addSoupToHistory, setActivePromptToolsSubTab, resetPromptGenState, updatePromptGenState
 } from './store/promptGenSlice';
 import {
-    setActiveExtractorSubTab
+    setActiveExtractorSubTab, updateExtractorState
 } from './store/extractorSlice';
 import {
-    setActiveLogoThemeSubTab, resetLogoThemeState
+    setActiveLogoThemeSubTab, resetLogoThemeState, updateLogoThemeState
 } from './store/logoThemeSlice';
 import { fetchLibrary } from './store/librarySlice';
 
@@ -90,19 +90,22 @@ const App: React.FC = () => {
     } = useSelector((state: RootState) => state.generation);
 
     // --- Video State (from videoSlice) ---
-    const {
-        videoStartFrame, videoEndFrame, generatedVideoUrl, generationOptionsForSave,
-        videoUtilsState, activeVideoUtilsSubTab
-    } = useSelector((state: RootState) => state.video);
+    const videoStartFrame = useSelector((state: RootState) => state.video.videoStartFrame);
+    const videoEndFrame = useSelector((state: RootState) => state.video.videoEndFrame);
+    const generatedVideoUrl = useSelector((state: RootState) => state.video.generatedVideoUrl);
+    const generationOptionsForSave = useSelector((state: RootState) => state.video.generationOptionsForSave);
+    const videoUtilsState = useSelector((state: RootState) => state.video.videoUtilsState);
+    const activeVideoUtilsSubTab = useSelector((state: RootState) => state.video.activeVideoUtilsSubTab);
 
     // --- Prompt Gen State (from promptGenSlice) ---
-    const { activePromptToolsSubTab } = useSelector((state: RootState) => state.promptGen);
+    const activePromptToolsSubTab = useSelector((state: RootState) => state.promptGen.activePromptToolsSubTab);
     
     // --- Extractor State (from extractorSlice) ---
-    const { activeExtractorSubTab } = useSelector((state: RootState) => state.extractor);
+    const activeExtractorSubTab = useSelector((state: RootState) => state.extractor.activeExtractorSubTab);
     
     // --- Logo & Theme State (from logoThemeSlice) ---
-    const { activeLogoThemeSubTab } = useSelector((state: RootState) => state.logoTheme);
+    const logoThemeState = useSelector((state: RootState) => state.logoTheme.logoThemeState);
+    const activeLogoThemeSubTab = useSelector((state: RootState) => state.logoTheme.activeLogoThemeSubTab);
     
     // --- Computed State ---
     const isReadyToGenerate = useSelector(selectIsReadyToGenerate);
@@ -1059,7 +1062,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_clothes_source.jpeg", { type: blob.type });
-                        // This component now dispatches directly to Redux
+                        dispatch(updateExtractorState({ clothesSourceFile: file, identifiedItems: [], generatedClothes: [] }));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1072,7 +1075,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_object_source.jpeg", { type: blob.type });
-                        // This component now dispatches directly to Redux
+                        dispatch(updateExtractorState({ objectSourceFile: file, identifiedObjects: [], generatedObjects: [] }));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1085,7 +1088,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_pose_source.jpeg", { type: blob.type });
-                        // This component now dispatches directly to Redux
+                        dispatch(updateExtractorState({ poseSourceFile: file, generatedPoses: [] }));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1098,7 +1101,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_mannequin_ref.jpeg", { type: blob.type });
-                        // This component now dispatches directly to Redux
+                        dispatch(updateExtractorState({ mannequinReferenceFile: file }));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1111,7 +1114,7 @@ const App: React.FC = () => {
                         const res = await fetch(item.media);
                         const blob = await res.blob();
                         const file = new File([blob], "library_font_source.jpeg", { type: blob.type });
-                        // This component now dispatches directly to Redux
+                        dispatch(updateExtractorState({ fontSourceFile: file, generatedFontChart: null }));
                     }}
                     filter={broadImagePickerFilter}
                 />
@@ -1162,7 +1165,8 @@ const App: React.FC = () => {
                     onClose={() => closeModal('isLogoRefPickerOpen')}
                     onSelectItem={() => {}} // Single select not used here
                     onSelectMultiple={(items) => {
-                        // This component now dispatches directly to Redux
+                        const currentItems = logoThemeState?.referenceItems || [];
+                        dispatch(updateLogoThemeState({ referenceItems: [...currentItems, ...items] }));
                     }}
                     filter={imageLikeFilter}
                     multiSelect
@@ -1173,7 +1177,7 @@ const App: React.FC = () => {
                     isOpen={isLogoPalettePickerOpen}
                     onClose={() => closeModal('isLogoPalettePickerOpen')}
                     onSelectItem={(item) => {
-                        // This component now dispatches directly to Redux
+                        dispatch(updateLogoThemeState({ selectedPalette: item }));
                     }}
                     filter="color-palette"
                 />
@@ -1183,7 +1187,7 @@ const App: React.FC = () => {
                     isOpen={isLogoFontPickerOpen}
                     onClose={() => closeModal('isLogoFontPickerOpen')}
                     onSelectItem={(item) => {
-                        // This component now dispatches directly to Redux
+                        dispatch(updateLogoThemeState({ selectedFont: item, fontReferenceImage: null }));
                     }}
                     filter="font"
                 />
@@ -1194,7 +1198,8 @@ const App: React.FC = () => {
                     onClose={() => closeModal('isBannerRefPickerOpen')}
                     onSelectItem={() => {}}
                     onSelectMultiple={(items) => {
-                        // This component now dispatches directly to Redux
+                        const currentItems = logoThemeState?.bannerReferenceItems || [];
+                        dispatch(updateLogoThemeState({ bannerReferenceItems: [...currentItems, ...items] }));
                     }}
                     filter={imageLikeFilter}
                     multiSelect
@@ -1205,7 +1210,7 @@ const App: React.FC = () => {
                     isOpen={isBannerPalettePickerOpen}
                     onClose={() => closeModal('isBannerPalettePickerOpen')}
                     onSelectItem={(item) => {
-                        // This component now dispatches directly to Redux
+                        dispatch(updateLogoThemeState({ bannerSelectedPalette: item }));
                     }}
                     filter="color-palette"
                 />
@@ -1215,7 +1220,7 @@ const App: React.FC = () => {
                     isOpen={isBannerLogoPickerOpen}
                     onClose={() => closeModal('isBannerLogoPickerOpen')}
                     onSelectItem={(item) => {
-                        // This component now dispatches directly to Redux
+                        dispatch(updateLogoThemeState({ bannerSelectedLogo: item }));
                     }}
                     filter="logo"
                 />
@@ -1225,7 +1230,7 @@ const App: React.FC = () => {
                     isOpen={isBannerFontPickerOpen}
                     onClose={() => closeModal('isBannerFontPickerOpen')}
                     onSelectItem={(item) => {
-                        // This component now dispatches directly to Redux
+                        dispatch(updateLogoThemeState({ bannerSelectedFont: item, bannerFontReferenceImage: null }));
                     }}
                     filter="font"
                 />
@@ -1236,7 +1241,8 @@ const App: React.FC = () => {
                     onClose={() => closeModal('isAlbumCoverRefPickerOpen')}
                     onSelectItem={() => {}}
                     onSelectMultiple={(items) => {
-                        // This component now dispatches directly to Redux
+                        const currentItems = logoThemeState?.albumReferenceItems || [];
+                        dispatch(updateLogoThemeState({ albumReferenceItems: [...currentItems, ...items] }));
                     }}
                     filter={imageLikeFilter}
                     multiSelect
@@ -1247,7 +1253,7 @@ const App: React.FC = () => {
                     isOpen={isAlbumCoverPalettePickerOpen}
                     onClose={() => closeModal('isAlbumCoverPalettePickerOpen')}
                     onSelectItem={(item) => {
-                        // This component now dispatches directly to Redux
+                        dispatch(updateLogoThemeState({ albumSelectedPalette: item }));
                     }}
                     filter="color-palette"
                 />
@@ -1257,7 +1263,7 @@ const App: React.FC = () => {
                     isOpen={isAlbumCoverLogoPickerOpen}
                     onClose={() => closeModal('isAlbumCoverLogoPickerOpen')}
                     onSelectItem={(item) => {
-                        // This component now dispatches directly to Redux
+                        dispatch(updateLogoThemeState({ albumSelectedLogo: item }));
                     }}
                     filter="logo"
                 />
@@ -1267,7 +1273,7 @@ const App: React.FC = () => {
                     isOpen={isAlbumCoverFontPickerOpen}
                     onClose={() => closeModal('isAlbumCoverFontPickerOpen')}
                     onSelectItem={(item) => {
-                        // This component now dispatches directly to Redux
+                        dispatch(updateLogoThemeState({ albumSelectedFont: item, albumFontReferenceImage: null }));
                     }}
                     filter="font"
                 />
@@ -1277,7 +1283,10 @@ const App: React.FC = () => {
                     isOpen={isPromptGenImagePickerOpen}
                     onClose={() => closeModal('isPromptGenImagePickerOpen')}
                     onSelectItem={async (item) => {
-                        // This component now dispatches directly to Redux
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], item.name || "library_prompt_source.jpeg", { type: blob.type });
+                        dispatch(updatePromptGenState({ image: file, prompt: '' }));
                     }}
                     filter={imageLikeFilter}
                 />
@@ -1287,7 +1296,10 @@ const App: React.FC = () => {
                     isOpen={isPromptGenBgImagePickerOpen}
                     onClose={() => closeModal('isPromptGenBgImagePickerOpen')}
                     onSelectItem={async (item) => {
-                        // This component now dispatches directly to Redux
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], item.name || "library_prompt_bg_source.jpeg", { type: blob.type });
+                        dispatch(updatePromptGenState({ bgImage: file, bgPrompt: '' }));
                     }}
                     filter={imageLikeFilter}
                 />
@@ -1297,7 +1309,10 @@ const App: React.FC = () => {
                     isOpen={isPromptGenSubjectImagePickerOpen}
                     onClose={() => closeModal('isPromptGenSubjectImagePickerOpen')}
                     onSelectItem={async (item) => {
-                        // This component now dispatches directly to Redux
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], item.name || "library_prompt_subject_source.jpeg", { type: blob.type });
+                        dispatch(updatePromptGenState({ subjectImage: file, subjectPrompt: '' }));
                     }}
                     filter={imageLikeFilter}
                 />
