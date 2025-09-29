@@ -224,12 +224,20 @@ export async function getLibraryIndex(): Promise<{ index: LibraryIndex; fileId: 
             headers: { 'Authorization': `Bearer ${window.gapi.client.getToken().access_token}` }
         });
         if (!fileResponse.ok) throw new Error("Could not download library index from Google Drive.");
+        
+        const textContent = await fileResponse.text();
+        if (!textContent.trim()) {
+            return { index: { version: 1, items: {} }, fileId: file.id };
+        }
         try {
-            const index = await fileResponse.json();
+            const index = JSON.parse(textContent);
+            if (typeof index.version !== 'number' || typeof index.items !== 'object' || index.items === null) {
+                throw new Error("Parsed JSON does not match expected LibraryIndex structure.");
+            }
             return { index, fileId: file.id };
         } catch (e) {
-             console.error("Failed to parse library.json from Drive. It might be corrupted.", e);
-             return { index: { version: 1, items: {} }, fileId: file.id };
+             console.error("Failed to parse library.json from Drive. It is likely corrupted.", e);
+             throw new Error("Failed to parse library.json from Google Drive. The file may be corrupted. Please resolve the issue on Google Drive or disconnect and reconnect to create a new one.");
         }
     }
 

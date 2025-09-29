@@ -13,6 +13,10 @@ import { generateTitleForImage, summarizePrompt } from './geminiService';
 
 let driveService: typeof googleDriveService | null = null;
 
+// Fix: Redefined types to match googleDriveService to resolve 'any' type issues.
+type LibraryItemMetadata = Omit<LibraryItem, 'media' | 'thumbnail'> | LibraryItem;
+type LibraryIndex = { version: number; items: Record<string, LibraryItemMetadata> };
+
 export function setDriveService(service: typeof googleDriveService | null) {
     driveService = service;
 }
@@ -23,14 +27,16 @@ export async function initializeDriveSync(onProgress: (message: string) => void)
     }
     
     onProgress("Checking for existing library on Google Drive...");
-    const { fileId } = await driveService.getLibraryIndex();
+    // Fix: Cast the return type to ensure `remoteIndex` is properly typed.
+    const { index: remoteIndex, fileId } = await driveService.getLibraryIndex() as { index: LibraryIndex; fileId: string | null };
 
     if (fileId === null) {
         onProgress("No library found on Drive. Creating from local items...");
         await syncLibraryToDrive(onProgress);
     } else {
         onProgress("Library found on Drive. Merging with local library...");
-        await syncLibraryFromDrive(onProgress);
+        // Fix: Passed the correct object structure to `syncLibraryFromDrive`.
+        await syncLibraryFromDrive(onProgress, { index: remoteIndex, fileId });
         await syncLibraryToDrive(onProgress);
     }
     
@@ -120,18 +126,20 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<Libr
 };
 
 
-export const syncLibraryFromDrive = async (onProgress: (message: string) => void): Promise<void> => {
+export const syncLibraryFromDrive = async (onProgress: (message: string) => void, remoteIndexData?: { index: LibraryIndex, fileId: string | null }): Promise<void> => {
     if (!driveService || !driveService.isConnected()) {
         throw new Error("Not connected to Google Drive.");
     }
 
     onProgress("Fetching library index from Google Drive...");
-    const { index: remoteIndex } = await driveService.getLibraryIndex();
+    const { index: remoteIndex } = remoteIndexData || await driveService.getLibraryIndex() as { index: LibraryIndex, fileId: string | null };
+
     if (!remoteIndex || !remoteIndex.items) {
         onProgress("Remote library is empty or invalid.");
         return;
     }
-    const remoteItems = Object.values(remoteIndex.items);
+    // Fix: Cast the items from the remote index to the correct type to resolve property access errors.
+    const remoteItems = Object.values(remoteIndex.items) as LibraryItemMetadata[];
     
     onProgress(`Found ${remoteItems.length} items in Drive index. Checking against local library...`);
     const localItems = await idbService.getLibraryItems();
@@ -177,8 +185,6 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
             console.error(`Failed to download or save file for item ${itemMetadata.id}`, e);
         }
     }
-    window.dispatchEvent(new CustomEvent('libraryUpdated'));
-    onProgress("Sync from Drive complete!");
 };
 
 export const syncLibraryToDrive = async (onProgress: (message: string) => void): Promise<void> => {
@@ -188,28 +194,34 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
 
     onProgress("Checking for local items to upload...");
     const localItems = await idbService.getLibraryItems();
-    const { index, fileId: initialFileId } = await driveService.getLibraryIndex();
+    const { index: remoteIndex, fileId: initialFileId } = await driveService.getLibraryIndex();
 
-    const textBasedTypes = ['prompt', 'color-palette'];
-    const itemsToUpload = localItems.filter(item => !item.driveFileId && !textBasedTypes.includes(item.mediaType));
-    const promptsToSync = localItems.filter(item => textBasedTypes.includes(item.mediaType) && !index.items[item.id]);
-
-    if (itemsToUpload.length === 0 && promptsToSync.length === 0) {
-        onProgress("All local items are already synced to Drive.");
+    // An item needs to be synced to remote if it exists locally but not in the remote index.
+    // This covers brand new items and items from a previously failed sync.
+    const itemsToSyncToRemote = localItems.filter(item => !remoteIndex.items[item.id]);
+    
+    if (itemsToSyncToRemote.length === 0) {
+        onProgress("All local items are already in the Drive index.");
         return;
     }
 
+    onProgress(`Found ${itemsToSyncToRemote.length} local items to sync to Drive...`);
     let indexNeedsUpdate = false;
     const uploadErrors: string[] = [];
+    const updatedIndex = { ...remoteIndex }; // Work on a copy
 
-    if (itemsToUpload.length > 0) {
+    for (let i = 0; i < itemsToSyncToRemote.length; i++) {
+        const item = itemsToSyncToRemote[i];
+        const itemName = item.name || `${item.mediaType} #${item.id}`;
+        onProgress(`Syncing "${itemName}" (${i + 1}/${itemsToSyncToRemote.length})...`);
         indexNeedsUpdate = true;
-        onProgress(`Uploading ${itemsToUpload.length} unsynced media file(s)... This may take a while.`);
-        for (let i = 0; i < itemsToUpload.length; i++) {
-            const item = itemsToUpload[i];
-            const itemName = item.name || `${item.mediaType} #${item.id}`;
-            onProgress(`Uploading "${itemName}" (${i + 1}/${itemsToUpload.length})...`);
-            try {
+
+        try {
+            const isTextBased = ['prompt', 'color-palette'].includes(item.mediaType);
+            let currentDriveFileId = item.driveFileId;
+            
+            // If it's not text-based and doesn't have a driveFileId, it needs uploading.
+            if (!isTextBased && !currentDriveFileId) {
                 const blob = await dataUrlToBlob(item.media);
                 let subfolderName: string;
                 switch (item.mediaType) {
@@ -226,29 +238,24 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
                 const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
                 const filename = `${item.mediaType}_${item.id}.${extension}`;
 
-                const driveFileId = await driveService.uploadMediaFile(blob, filename, parentFolderId);
-                await idbService.updateLibraryItem(item.id, { driveFileId });
-                const { media, ...metadata } = item;
-                index.items[item.id] = { ...metadata, driveFileId };
-            } catch (e: any) {
-                console.error(`Failed to upload item ${item.id} to Drive:`, e);
-                uploadErrors.push(`- ${itemName}: ${e.message}`);
+                currentDriveFileId = await driveService.uploadMediaFile(blob, filename, parentFolderId);
+                await idbService.updateLibraryItem(item.id, { driveFileId: currentDriveFileId });
             }
+            
+            // Add/update the item in the in-memory index.
+            const { media, ...metadata } = item;
+            updatedIndex.items[item.id] = { ...metadata, driveFileId: currentDriveFileId };
+
+        } catch (e: any) {
+            console.error(`Failed to sync item ${item.id} to Drive:`, e);
+            uploadErrors.push(`- ${itemName}: ${e.message}`);
         }
-    }
-    
-    if (promptsToSync.length > 0) {
-        indexNeedsUpdate = true;
-        onProgress(`Syncing metadata for ${promptsToSync.length} new prompt(s)...`);
-        promptsToSync.forEach(item => {
-            index.items[item.id] = item;
-        });
     }
 
     if (indexNeedsUpdate) {
         onProgress("Finalizing by updating library index file...");
         try {
-            await driveService.updateLibraryIndex(index, initialFileId);
+            await driveService.updateLibraryIndex(updatedIndex, initialFileId);
         } catch(e: any) {
             uploadErrors.push(`- CRITICAL: Failed to update library.json. Error: ${e.message}`);
         }
@@ -256,9 +263,9 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
     
     if (uploadErrors.length > 0) {
         onProgress("Upload sync complete with some errors.");
-        throw new Error(`The following items failed to upload:\n${uploadErrors.join('\n')}`);
+        throw new Error(`The following items failed to sync:\n${uploadErrors.join('\n')}`);
     } else {
-        onProgress("Upload to Drive complete!");
+        onProgress("Sync to Drive complete!");
     }
 };
 

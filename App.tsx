@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
@@ -455,6 +454,8 @@ const App: React.FC = () => {
         dispatch(setIsSyncing(true));
         try {
             await initializeDriveSync((msg) => dispatch(setSyncMessage(msg)));
+            // After sync, re-fetch the library to update the UI with any changes.
+            dispatch(fetchLibrary());
         } catch (error: any) {
             dispatch(setGlobalError({ title: "Google Drive Sync Error", message: error.message || "An unknown sync error occurred." }));
         } finally {
