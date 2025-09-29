@@ -492,6 +492,7 @@ const App: React.FC = () => {
     const handleTabClick = (tabId: string) => {
         if (tabId === 'character-generator') {
             // This tab is Gemini I2I only
+            dispatch(setGenerationMode('i2i'));
             dispatch(updateOptions({ provider: 'gemini', geminiMode: 'i2i', geminiI2iMode: 'general' }));
         } else if (tabId === 'image-generator') {
             // Reset to T2I when coming back to this tab
