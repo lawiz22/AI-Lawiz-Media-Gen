@@ -68,6 +68,9 @@ const logoThemeSlice = createSlice({
     setLogoThemeState: (state, action: PayloadAction<LogoThemeState>) => {
       state.logoThemeState = action.payload;
     },
+    updateLogoThemeState: (state, action: PayloadAction<Partial<LogoThemeState>>) => {
+        state.logoThemeState = { ...state.logoThemeState, ...action.payload };
+    },
     setActiveLogoThemeSubTab: (state, action: PayloadAction<string>) => {
       state.activeLogoThemeSubTab = action.payload;
     },
@@ -97,6 +100,7 @@ const logoThemeSlice = createSlice({
 
 export const {
   setLogoThemeState,
+  updateLogoThemeState,
   setActiveLogoThemeSubTab,
   resetLogoThemeState,
   setLogoSaveStatus,

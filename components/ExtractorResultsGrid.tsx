@@ -23,13 +23,15 @@ const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
 };
 
 export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ items, onSave, title }) => {
-    const [selectedItemModal, setSelectedItemModal] = useState<(GeneratedClothing | GeneratedObject | GeneratedPose) & { index: number } | null>(null);
+    const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
     const [textViewer, setTextViewer] = useState<{ title: string; content: string } | null>(null);
     const [textCopyButton, setTextCopyButton] = useState('Copy');
     const [zoomedImage, setZoomedImage] = useState<{ src: string, alt: string } | null>(null);
+    
+    const selectedItemModal = selectedItemIndex !== null ? { ...items[selectedItemIndex], index: selectedItemIndex } : null;
 
     const handleCloseModals = useCallback(() => {
-        setSelectedItemModal(null);
+        setSelectedItemIndex(null);
         setTextViewer(null);
         setZoomedImage(null);
     }, []);
@@ -102,7 +104,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                                 <img src={image} alt={name} className="object-contain w-full h-full p-2" />
                                 
                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2"
-                                    onClick={() => setSelectedItemModal({ ...item, index })}
+                                    onClick={() => setSelectedItemIndex(index)}
                                 >
                                     <div className="text-center text-white">
                                         <p className="text-sm font-bold truncate">{name}</p>

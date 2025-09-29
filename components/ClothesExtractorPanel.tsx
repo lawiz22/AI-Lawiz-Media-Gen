@@ -1,7 +1,7 @@
 import React from 'react';
-import { useDispatch } from 'react-redux';
-import { AppDispatch } from '../store/store';
-import { setExtractorItemSaveStatus } from '../store/extractorSlice';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '../store/store';
+import { setExtractorItemSaveStatus, updateExtractorState, resetExtractorState } from '../store/extractorSlice';
 import { addToLibrary } from '../store/librarySlice';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
@@ -57,9 +57,6 @@ const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
 
 
 interface ExtractorToolsPanelProps {
-    state: ExtractorState;
-    setState: React.Dispatch<React.SetStateAction<ExtractorState>>;
-    onReset: () => void;
     onOpenLibraryForClothes: () => void;
     onOpenLibraryForObjects: () => void;
     onOpenLibraryForPoses: () => void;
@@ -72,9 +69,6 @@ interface ExtractorToolsPanelProps {
 
 // --- Main Component ---
 export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
-    state,
-    setState,
-    onReset,
     onOpenLibraryForClothes,
     onOpenLibraryForObjects,
     onOpenLibraryForPoses,
@@ -84,6 +78,8 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     setActiveSubTab,
 }) => {
     const dispatch: AppDispatch = useDispatch();
+    const state = useSelector((state: RootState) => state.extractor.extractorState);
+
     const {
         clothesSourceFile, clothesDetails, isIdentifying, identifiedItems, isGenerating, generatedClothes, clothesError, generateFolded, excludeAccessories,
         objectSourceFile, objectHints, maxObjects, isIdentifyingObjects, identifiedObjects, isGeneratingObjects, generatedObjects, objectError,
@@ -94,14 +90,14 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     // --- Clothes ---
     const handleIdentify = async () => {
         if (!clothesSourceFile) return;
-        setState(prev => ({ ...prev, isIdentifying: true, identifiedItems: [], clothesError: null, generatedClothes: [] }));
+        dispatch(updateExtractorState({ isIdentifying: true, identifiedItems: [], clothesError: null, generatedClothes: [] }));
         try {
             const items = await identifyClothing(clothesSourceFile, clothesDetails, excludeAccessories);
-            setState(prev => ({ ...prev, identifiedItems: items.map(item => ({ ...item, selected: true })) }));
+            dispatch(updateExtractorState({ identifiedItems: items.map(item => ({ ...item, selected: true })) }));
         } catch (err: any) {
-            setState(prev => ({ ...prev, clothesError: err.message || "Failed to identify clothing." }));
+            dispatch(updateExtractorState({ clothesError: err.message || "Failed to identify clothing." }));
         } finally {
-            setState(prev => ({ ...prev, isIdentifying: false }));
+            dispatch(updateExtractorState({ isIdentifying: false }));
         }
     };
 
@@ -109,7 +105,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         const selected = identifiedItems.filter(item => item.selected);
         if (!clothesSourceFile || selected.length === 0) return;
 
-        setState(prev => ({ ...prev, isGenerating: true, generatedClothes: [], clothesError: null }));
+        dispatch(updateExtractorState({ isGenerating: true, generatedClothes: [], clothesError: null }));
         const results: GeneratedClothing[] = [];
         try {
             for (const item of selected) {
@@ -124,11 +120,11 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                 }
                 results.push({ itemName: item.itemName, laidOutImage, foldedImage, saved: 'idle' });
             }
-            setState(prev => ({ ...prev, generatedClothes: results }));
+            dispatch(updateExtractorState({ generatedClothes: results }));
         } catch (err: any) {
-            setState(prev => ({ ...prev, clothesError: err.message || "Failed to generate clothing images." }));
+            dispatch(updateExtractorState({ clothesError: err.message || "Failed to generate clothing images." }));
         } finally {
-            setState(prev => ({ ...prev, isGenerating: false }));
+            dispatch(updateExtractorState({ isGenerating: false }));
         }
     };
     
@@ -154,14 +150,14 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     // --- Objects ---
     const handleIdentifyObjects = async () => {
         if (!objectSourceFile) return;
-        setState(prev => ({ ...prev, isIdentifyingObjects: true, identifiedObjects: [], objectError: null, generatedObjects: [] }));
+        dispatch(updateExtractorState({ isIdentifyingObjects: true, identifiedObjects: [], objectError: null, generatedObjects: [] }));
         try {
             const items = await identifyObjects(objectSourceFile, maxObjects, objectHints);
-            setState(prev => ({ ...prev, identifiedObjects: items.map(item => ({ ...item, selected: true })) }));
+            dispatch(updateExtractorState({ identifiedObjects: items.map(item => ({ ...item, selected: true })) }));
         } catch (err: any) {
-            setState(prev => ({ ...prev, objectError: err.message || "Failed to identify objects." }));
+            dispatch(updateExtractorState({ objectError: err.message || "Failed to identify objects." }));
         } finally {
-            setState(prev => ({ ...prev, isIdentifyingObjects: false }));
+            dispatch(updateExtractorState({ isIdentifyingObjects: false }));
         }
     };
     
@@ -169,18 +165,18 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         const selected = identifiedObjects.filter(item => item.selected);
         if (!objectSourceFile || selected.length === 0) return;
 
-        setState(prev => ({ ...prev, isGeneratingObjects: true, generatedObjects: [], objectError: null }));
+        dispatch(updateExtractorState({ isGeneratingObjects: true, generatedObjects: [], objectError: null }));
         const results: GeneratedObject[] = [];
         try {
             for (const item of selected) {
                 const image = await generateObjectImage(objectSourceFile, item.name);
                 results.push({ name: item.name, image, saved: 'idle' });
             }
-            setState(prev => ({ ...prev, generatedObjects: results }));
+            dispatch(updateExtractorState({ generatedObjects: results }));
         } catch (err: any) {
-            setState(prev => ({ ...prev, objectError: err.message || "Failed to generate object images." }));
+            dispatch(updateExtractorState({ objectError: err.message || "Failed to generate object images." }));
         } finally {
-            setState(prev => ({ ...prev, isGeneratingObjects: false }));
+            dispatch(updateExtractorState({ isGeneratingObjects: false }));
         }
     };
 
@@ -204,7 +200,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     // --- Poses ---
     const handleGeneratePoses = async () => {
         if (!poseSourceFile) return;
-        setState(prev => ({ ...prev, isGeneratingPoses: true, generatedPoses: [], poseError: null }));
+        dispatch(updateExtractorState({ isGeneratingPoses: true, generatedPoses: [], poseError: null }));
         try {
             const { poseLandmarks, handLandmarks, handedness, faceLandmarks, width, height } = await detectPosesInImage(poseSourceFile);
             if (poseLandmarks.length === 0) {
@@ -222,11 +218,11 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                     mannequinStyle, generationPrompt, saved: 'idle',
                 });
             }
-            setState(prev => ({ ...prev, generatedPoses: allGeneratedPoses }));
+            dispatch(updateExtractorState({ generatedPoses: allGeneratedPoses }));
         } catch (err: any) {
-            setState(prev => ({ ...prev, poseError: err.message || "An unknown error occurred during pose generation." }));
+            dispatch(updateExtractorState({ poseError: err.message || "An unknown error occurred during pose generation." }));
         } finally {
-            setState(prev => ({ ...prev, isGeneratingPoses: false }));
+            dispatch(updateExtractorState({ isGeneratingPoses: false }));
         }
     };
     
@@ -252,14 +248,14 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     // --- Font ---
     const handleGenerateFont = async () => {
         if (!fontSourceFile) return;
-        setState(prev => ({ ...prev, isGeneratingFont: true, generatedFontChart: null, fontError: null }));
+        dispatch(updateExtractorState({ isGeneratingFont: true, generatedFontChart: null, fontError: null }));
         try {
             const chartSrc = await generateFontChart(fontSourceFile);
-            setState(prev => ({ ...prev, generatedFontChart: { src: chartSrc, saved: 'idle' } }));
+            dispatch(updateExtractorState({ generatedFontChart: { src: chartSrc, saved: 'idle' } }));
         } catch (err: any) {
-            setState(prev => ({ ...prev, fontError: err.message || "An unknown error occurred." }));
+            dispatch(updateExtractorState({ fontError: err.message || "An unknown error occurred." }));
         } finally {
-            setState(prev => ({ ...prev, isGeneratingFont: false }));
+            dispatch(updateExtractorState({ isGeneratingFont: false }));
         }
     };
 
@@ -282,6 +278,10 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         }
     };
 
+    const handleReset = () => {
+        dispatch(resetExtractorState());
+    };
+
     const subTabs = [
         { id: 'clothes', label: 'Clothes' },
         { id: 'objects', label: 'Objects' },
@@ -300,12 +300,12 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                     <div className="lg:col-span-1 space-y-6">
                         <div className="flex items-center gap-2">
                             <div className="flex-grow">
-                                <ImageUploader label="Upload Image" id="clothes-source" onImageUpload={file => setState(prev => ({ ...prev, clothesSourceFile: file, identifiedItems: [], generatedClothes: [] }))} sourceFile={clothesSourceFile} />
+                                <ImageUploader label="Upload Image" id="clothes-source" onImageUpload={file => dispatch(updateExtractorState({ clothesSourceFile: file, identifiedItems: [], generatedClothes: [] }))} sourceFile={clothesSourceFile} />
                             </div>
                             <button onClick={onOpenLibraryForClothes} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button>
                         </div>
-                        <textarea value={clothesDetails} onChange={e => setState(p => ({...p, clothesDetails: e.target.value}))} placeholder="Optional: add details or hints, e.g., 'focus on the jacket'" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent" rows={2}/>
-                        <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={excludeAccessories} onChange={e => setState(p => ({...p, excludeAccessories: e.target.checked}))} className="rounded text-accent focus:ring-accent" />Exclude accessories (hats, glasses, etc.)</label>
+                        <textarea value={clothesDetails} onChange={e => dispatch(updateExtractorState({ clothesDetails: e.target.value }))} placeholder="Optional: add details or hints, e.g., 'focus on the jacket'" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent" rows={2}/>
+                        <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={excludeAccessories} onChange={e => dispatch(updateExtractorState({ excludeAccessories: e.target.checked }))} className="rounded text-accent focus:ring-accent" />Exclude accessories (hats, glasses, etc.)</label>
                         <button onClick={handleIdentify} disabled={!clothesSourceFile || isIdentifying} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isIdentifying ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Identifying...</> : '1. Identify Clothing'}</button>
                     </div>
                     {/* --- Identification & Generation Column --- */}
@@ -317,10 +317,10 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                                 <h3 className="text-xl font-bold text-accent">Identified Items</h3>
                                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">
                                     {identifiedItems.map((item, index) => (
-                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer"><input type="checkbox" checked={item.selected} onChange={() => setState(p => { const newItems = [...p.identifiedItems]; newItems[index].selected = !newItems[index].selected; return {...p, identifiedItems: newItems}; })} className="mt-1 rounded text-accent focus:ring-accent" /><div><p className="font-semibold text-text-primary">{item.itemName}</p><p className="text-sm text-text-secondary">{item.description}</p></div></label>
+                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer"><input type="checkbox" checked={item.selected} onChange={() => { const newItems = [...identifiedItems]; newItems[index].selected = !newItems[index].selected; dispatch(updateExtractorState({ identifiedItems: newItems })); }} className="mt-1 rounded text-accent focus:ring-accent" /><div><p className="font-semibold text-text-primary">{item.itemName}</p><p className="text-sm text-text-secondary">{item.description}</p></div></label>
                                     ))}
                                 </div>
-                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={generateFolded} onChange={e => setState(p => ({...p, generateFolded: e.target.checked}))} className="rounded text-accent focus:ring-accent" />Also generate folded version</label>
+                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={generateFolded} onChange={e => dispatch(updateExtractorState({ generateFolded: e.target.checked }))} className="rounded text-accent focus:ring-accent" />Also generate folded version</label>
                                 <button onClick={handleGenerateClothes} disabled={isGenerating || identifiedItems.every(i => !i.selected)} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGenerating ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : '2. Generate Selected'}</button>
                             </div>
                         )}
@@ -334,9 +334,9 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                  <ToolHeader icon={<CubeIcon className="w-8 h-8"/>} title="Object Extractor" description="Identify individual objects in an image and generate new product-style photos of them." />
                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     <div className="lg:col-span-1 space-y-6">
-                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image" id="object-source" onImageUpload={file => setState(prev => ({ ...prev, objectSourceFile: file, identifiedObjects: [], generatedObjects: [] }))} sourceFile={objectSourceFile} /></div><button onClick={onOpenLibraryForObjects} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
-                        <textarea value={objectHints} onChange={e => setState(p => ({...p, objectHints: e.target.value}))} placeholder="Optional: hints to guide identification, e.g., 'focus on the electronic devices'" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm" rows={2}/>
-                        <div><label className="block text-sm font-medium text-text-secondary">Max Objects: {maxObjects}</label><input type="range" min="1" max="10" value={maxObjects} onChange={e => setState(p => ({...p, maxObjects: parseInt(e.target.value)}))} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" /></div>
+                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image" id="object-source" onImageUpload={file => dispatch(updateExtractorState({ objectSourceFile: file, identifiedObjects: [], generatedObjects: [] }))} sourceFile={objectSourceFile} /></div><button onClick={onOpenLibraryForObjects} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                        <textarea value={objectHints} onChange={e => dispatch(updateExtractorState({ objectHints: e.target.value }))} placeholder="Optional: hints to guide identification, e.g., 'focus on the electronic devices'" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm" rows={2}/>
+                        <div><label className="block text-sm font-medium text-text-secondary">Max Objects: {maxObjects}</label><input type="range" min="1" max="10" value={maxObjects} onChange={e => dispatch(updateExtractorState({ maxObjects: parseInt(e.target.value) }))} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" /></div>
                         <button onClick={handleIdentifyObjects} disabled={!objectSourceFile || isIdentifyingObjects} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isIdentifyingObjects ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Identifying...</> : '1. Identify Objects'}</button>
                     </div>
                      <div className="lg:col-span-2">
@@ -345,7 +345,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                         {identifiedObjects.length > 0 && (
                             <div className="space-y-4">
                                 <h3 className="text-xl font-bold text-accent">Identified Objects</h3>
-                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">{identifiedObjects.map((item, index) => (<label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer"><input type="checkbox" checked={item.selected} onChange={() => setState(p => { const newItems = [...p.identifiedObjects]; newItems[index].selected = !newItems[index].selected; return {...p, identifiedObjects: newItems}; })} className="mt-1 rounded text-accent focus:ring-accent" /><div><p className="font-semibold text-text-primary">{item.name}</p><p className="text-sm text-text-secondary">{item.description}</p></div></label>))}</div>
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">{identifiedObjects.map((item, index) => (<label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer"><input type="checkbox" checked={item.selected} onChange={() => { const newItems = [...identifiedObjects]; newItems[index].selected = !newItems[index].selected; dispatch(updateExtractorState({ identifiedObjects: newItems })); }} className="mt-1 rounded text-accent focus:ring-accent" /><div><p className="font-semibold text-text-primary">{item.name}</p><p className="text-sm text-text-secondary">{item.description}</p></div></label>))}</div>
                                 <button onClick={handleGenerateObjects} disabled={isGeneratingObjects || identifiedObjects.every(i => !i.selected)} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingObjects ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : '2. Generate Selected'}</button>
                             </div>
                         )}
@@ -359,14 +359,14 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                 <ToolHeader icon={<PoseIcon className="w-8 h-8"/>} title="Pose Extractor" description="Extract human poses from an image and render them onto a stylized mannequin. Generates pose data compatible with ControlNet." />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     <div className="lg:col-span-1 space-y-6">
-                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image" id="pose-source" onImageUpload={file => setState(p => ({...p, poseSourceFile: file, generatedPoses: []}))} sourceFile={poseSourceFile} /></div><button onClick={onOpenLibraryForPoses} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image" id="pose-source" onImageUpload={file => dispatch(updateExtractorState({ poseSourceFile: file, generatedPoses: [] }))} sourceFile={poseSourceFile} /></div><button onClick={onOpenLibraryForPoses} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
                         <div>
                             <label className="block text-sm font-medium text-text-secondary mb-2">Mannequin Style</label>
                             <div className="grid grid-cols-2 gap-2">
-                                {(['wooden-artist', 'neutral-gray', 'wireframe', 'comic-outline', 'custom-reference'] as MannequinStyle[]).map(style => <button key={style} onClick={() => setState(p=>({...p, mannequinStyle: style}))} className={`p-2 text-xs rounded-md ${mannequinStyle === style ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>{style.replace(/-/g, ' ')}</button>)}
+                                {(['wooden-artist', 'neutral-gray', 'wireframe', 'comic-outline', 'custom-reference'] as MannequinStyle[]).map(style => <button key={style} onClick={() => dispatch(updateExtractorState({ mannequinStyle: style }))} className={`p-2 text-xs rounded-md ${mannequinStyle === style ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>{style.replace(/-/g, ' ')}</button>)}
                             </div>
                         </div>
-                        {mannequinStyle === 'custom-reference' && <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Mannequin Reference Image" id="mannequin-ref" onImageUpload={file => setState(p=>({...p, mannequinReferenceFile: file}))} sourceFile={mannequinReferenceFile} /></div><button onClick={onOpenLibraryForMannequinRef} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>}
+                        {mannequinStyle === 'custom-reference' && <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Mannequin Reference Image" id="mannequin-ref" onImageUpload={file => dispatch(updateExtractorState({ mannequinReferenceFile: file }))} sourceFile={mannequinReferenceFile} /></div><button onClick={onOpenLibraryForMannequinRef} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>}
                         <button onClick={handleGeneratePoses} disabled={!poseSourceFile || isGeneratingPoses} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingPoses ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : 'Generate Poses'}</button>
                     </div>
                     <div className="lg:col-span-2">
@@ -381,7 +381,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                 <ToolHeader icon={<FontIcon className="w-8 h-8"/>} title="Font Extractor" description="Identify the font style from text in an image and generate a full A-Z, 0-9 character chart." />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     <div className="lg:col-span-1 space-y-6">
-                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image with Text" id="font-source" onImageUpload={file => setState(p => ({...p, fontSourceFile: file, generatedFontChart: null}))} sourceFile={fontSourceFile} /></div><button onClick={onOpenLibraryForFont} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image with Text" id="font-source" onImageUpload={file => dispatch(updateExtractorState({ fontSourceFile: file, generatedFontChart: null }))} sourceFile={fontSourceFile} /></div><button onClick={onOpenLibraryForFont} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
                         <button onClick={handleGenerateFont} disabled={!fontSourceFile || isGeneratingFont} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingFont ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : 'Generate Font Chart'}</button>
                     </div>
                     <div className="lg:col-span-2">
@@ -410,7 +410,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
             
             {(activeSubTab === 'clothes' || activeSubTab === 'objects' || activeSubTab === 'poses' || activeSubTab === 'font') && (
                 <div className="mt-8 pt-4 border-t border-danger-bg">
-                    <button onClick={onReset} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
+                    <button onClick={handleReset} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
                         <ResetIcon className="w-5 h-5" /> Reset All Extractor Tools
                     </button>
                 </div>

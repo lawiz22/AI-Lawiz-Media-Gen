@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../store/store';
+import { addToLibrary } from '../store/librarySlice';
+import { setPromptSaveStatus, updatePromptGenState } from '../store/promptGenSlice';
 import { ImageUploader } from './ImageUploader';
 import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup } from '../services/comfyUIService';
-import { saveToLibrary } from '../services/libraryService';
 import type { LibraryItem, PromptGenState } from '../types';
 import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon } from './icons';
-import { fileToDataUrl, fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
+import { fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 
 interface PromptGeneratorPanelProps {
     activeSubTab: string;
     setActiveSubTab: (tabId: string) => void;
     onUsePrompt: (prompt: string) => void;
-    state: PromptGenState;
-    setState: (updater: React.SetStateAction<PromptGenState>) => void;
-    onAddSoupToHistory: (soup: string) => void;
     onOpenLibraryForImage: () => void;
     onOpenLibraryForBg: () => void;
     onOpenLibraryForSubject: () => void;
@@ -101,76 +101,68 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     activeSubTab,
     setActiveSubTab,
     onUsePrompt,
-    state,
-    setState,
-    onAddSoupToHistory,
     onOpenLibraryForImage,
     onOpenLibraryForBg,
     onOpenLibraryForSubject,
     onReset
 }) => {
-    const { image, prompt, bgImage, bgPrompt, subjectImage, subjectPrompt, soupPrompt, soupHistory } = state;
+    const dispatch: AppDispatch = useDispatch();
+    const state = useSelector((state: RootState) => state.promptGen.promptGenState);
+    const { 
+        image, prompt, bgImage, bgPrompt, subjectImage, subjectPrompt, soupPrompt, soupHistory,
+        promptSaveStatus, bgPromptSaveStatus, subjectPromptSaveStatus, soupPromptSaveStatus
+    } = state;
 
     // --- Ephemeral state (not persisted) ---
     const [modelType, setModelType] = useState<PromptModelType>('sdxl');
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [copyButtonText, setCopyButtonText] = useState('Copy Prompt');
-    const [savingState, setSavingState] = useState<'idle'|'saving'|'saved'>('idle');
 
     const [bgModelType, setBgModelType] = useState<PromptModelType>('sdxl');
     const [isBgLoading, setIsBgLoading] = useState<boolean>(false);
     const [bgError, setBgError] = useState<string | null>(null);
     const [bgCopyButtonText, setBgCopyButtonText] = useState('Copy Prompt');
-    const [bgSavingState, setBgSavingState] = useState<'idle'|'saving'|'saved'>('idle');
 
     const [subjectModelType, setSubjectModelType] = useState<PromptModelType>('sdxl');
     const [isSubjectLoading, setIsSubjectLoading] = useState<boolean>(false);
     const [subjectError, setSubjectError] = useState<string | null>(null);
     const [subjectCopyButtonText, setSubjectCopyButtonText] = useState('Copy Prompt');
-    const [subjectSavingState, setSubjectSavingState] = useState<'idle'|'saving'|'saved'>('idle');
 
     const [soupModelType, setSoupModelType] = useState<PromptModelType>('sdxl');
     const [soupCreativity, setSoupCreativity] = useState<number>(0.7);
     const [isSoupLoading, setIsSoupLoading] = useState<boolean>(false);
     const [soupError, setSoupError] = useState<string | null>(null);
     const [soupCopyButtonText, setSoupCopyButtonText] = useState('Copy Prompt');
-    const [soupSavingState, setSoupSavingState] = useState<'idle'|'saving'|'saved'>('idle');
     
     const [historyCopyStates, setHistoryCopyStates] = useState<Record<number, string>>({});
     const [soupPromptParts, setSoupPromptParts] = useState<PromptPart[]>([]);
 
-    useEffect(() => { setSavingState('idle'); }, [prompt]);
-    useEffect(() => { setBgSavingState('idle'); }, [bgPrompt]);
-    useEffect(() => { setSubjectSavingState('idle'); }, [subjectPrompt]);
-    useEffect(() => { setSoupSavingState('idle'); }, [soupPrompt]);
-
     const handleSavePrompt = async (
         promptToSave: string, 
         type: PromptCategory,
-        modelType: PromptModelType,
-        setSaveState: React.Dispatch<React.SetStateAction<'idle'|'saving'|'saved'>>,
+        modelTypeToSave: PromptModelType,
         sourceFile: File | null
     ) => {
         if (!promptToSave.trim()) return;
-        setSaveState('saving');
+        dispatch(setPromptSaveStatus({ type, status: 'saving' }));
         try {
             const item: Omit<LibraryItem, 'id'> = {
                 mediaType: 'prompt',
                 promptType: type,
-                promptModelType: modelType,
-                name: `${type.charAt(0).toUpperCase() + type.slice(1)} Prompt (${modelType.toUpperCase()})`,
+                promptModelType: modelTypeToSave,
+                name: `${type.charAt(0).toUpperCase() + type.slice(1)} Prompt (${modelTypeToSave.toUpperCase()})`,
                 media: promptToSave,
-                thumbnail: createPromptThumbnail(promptToSave, type, modelType),
+                thumbnail: createPromptThumbnail(promptToSave, type, modelTypeToSave),
                 sourceImage: sourceFile
                     ? await fileToResizedDataUrl(sourceFile, 512)
                     : undefined,
             };
-            await saveToLibrary(item);
-            setSaveState('saved');
+            await dispatch(addToLibrary(item)).unwrap();
+            dispatch(setPromptSaveStatus({ type, status: 'saved' }));
         } catch (err) {
             console.error("Failed to save prompt:", err);
-            setSaveState('idle'); // Allow retry on error
+            dispatch(setPromptSaveStatus({ type, status: 'idle' }));
         }
     };
 
@@ -183,7 +175,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setError(null);
         try {
             const generatedPrompt = await generateComfyUIPromptFromSource(image, modelType);
-            setState(prev => ({ ...prev, prompt: generatedPrompt }));
+            dispatch(updatePromptGenState({ prompt: generatedPrompt }));
         } catch (err: any) {
             setError(err.message || 'An unknown error occurred.');
         } finally {
@@ -219,7 +211,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setBgError(null);
         try {
             const generatedPrompt = await extractBackgroundPromptFromImage(bgImage, bgModelType);
-            setState(prev => ({ ...prev, bgPrompt: generatedPrompt }));
+            dispatch(updatePromptGenState({ bgPrompt: generatedPrompt }));
         } catch (err: any) {
             setBgError(err.message || 'An unknown error occurred.');
         } finally {
@@ -255,7 +247,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setSubjectError(null);
         try {
             const generatedPrompt = await extractSubjectPromptFromImage(subjectImage, subjectModelType);
-            setState(prev => ({ ...prev, subjectPrompt: generatedPrompt }));
+            dispatch(updatePromptGenState({ subjectPrompt: generatedPrompt }));
         } catch (err: any) {
             setSubjectError(err.message || 'An unknown error occurred.');
         } finally {
@@ -299,7 +291,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             );
             const fullPromptString = generatedParts.map(p => p.text).join(' ');
             setSoupPromptParts(generatedParts);
-            onAddSoupToHistory(fullPromptString);
+            dispatch(updatePromptGenState({ 
+                soupPrompt: fullPromptString,
+                soupHistory: [fullPromptString, ...soupHistory].slice(0, 5)
+            }));
 
         } catch (err: any) {
             setSoupError(err.message || 'An unknown error occurred.');
@@ -392,7 +387,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                     <ImageUploader 
                                         label="Upload Photo"
                                         id="prompt-gen-image"
-                                        onImageUpload={file => setState(prev => ({ ...prev, image: file }))}
+                                        onImageUpload={file => dispatch(updatePromptGenState({ image: file, prompt: '' }))}
                                         sourceFile={image}
                                     />
                                 </div>
@@ -424,7 +419,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <textarea
                                     id="generated-prompt"
                                     value={prompt}
-                                    onChange={(e) => setState(prev => ({ ...prev, prompt: e.target.value }))}
+                                    onChange={(e) => dispatch(updatePromptGenState({ prompt: e.target.value }))}
                                     readOnly={isLoading}
                                     placeholder="Your generated prompt will appear here..."
                                     className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-accent font-medium"
@@ -433,9 +428,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             </div>
                             {error && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{error}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <button onClick={() => handleSavePrompt(prompt, 'image', modelType, setSavingState, image)} disabled={!prompt || isLoading || savingState !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${savingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
-                                    {savingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : savingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                    {savingState === 'saved' ? 'Saved!' : 'Save'}
+                                <button onClick={() => handleSavePrompt(prompt, 'image', modelType, image)} disabled={!prompt || isLoading || promptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${promptSaveStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                                    {promptSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : promptSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                    {promptSaveStatus === 'saved' ? 'Saved!' : 'Save'}
                                 </button>
                                 <button onClick={handleCopy} disabled={!prompt || isLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <CopyIcon className="w-5 h-5" />{copyButtonText}
@@ -459,7 +454,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div className="space-y-4">
                             <div className="flex items-center gap-2">
                                 <div className="flex-grow">
-                                    <ImageUploader label="Upload Photo" id="bg-extract-image" onImageUpload={file => setState(prev => ({ ...prev, bgImage: file }))} sourceFile={bgImage} />
+                                    <ImageUploader label="Upload Photo" id="bg-extract-image" onImageUpload={file => dispatch(updatePromptGenState({ bgImage: file, bgPrompt: '' }))} sourceFile={bgImage} />
                                 </div>
                                 <button onClick={onOpenLibraryForBg} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library"><LibraryIcon className="w-6 h-6"/></button>
                             </div>
@@ -471,13 +466,13 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div className="space-y-4">
                             <div>
                                 <label htmlFor="generated-bg-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Background Prompt</label>
-                                <textarea id="generated-bg-prompt" value={bgPrompt} onChange={(e) => setState(prev => ({ ...prev, bgPrompt: e.target.value }))} readOnly={isBgLoading} placeholder="Your generated background prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-green font-medium" rows={10}/>
+                                <textarea id="generated-bg-prompt" value={bgPrompt} onChange={(e) => dispatch(updatePromptGenState({ bgPrompt: e.target.value }))} readOnly={isBgLoading} placeholder="Your generated background prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-green font-medium" rows={10}/>
                             </div>
                             {bgError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{bgError}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <button onClick={() => handleSavePrompt(bgPrompt, 'background', bgModelType, setBgSavingState, bgImage)} disabled={!bgPrompt || isBgLoading || bgSavingState !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${bgSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
-                                    {bgSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : bgSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                    {bgSavingState === 'saved' ? 'Saved!' : 'Save'}
+                                <button onClick={() => handleSavePrompt(bgPrompt, 'background', bgModelType, bgImage)} disabled={!bgPrompt || isBgLoading || bgPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${bgPromptSaveStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                                    {bgPromptSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : bgPromptSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                    {bgPromptSaveStatus === 'saved' ? 'Saved!' : 'Save'}
                                 </button>
                                 <button onClick={handleBgCopy} disabled={!bgPrompt || isBgLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <CopyIcon className="w-5 h-5" />{bgCopyButtonText}
@@ -501,7 +496,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div className="space-y-4">
                             <div className="flex items-center gap-2">
                                 <div className="flex-grow">
-                                    <ImageUploader label="Upload Photo" id="subject-extract-image" onImageUpload={file => setState(prev => ({ ...prev, subjectImage: file }))} sourceFile={subjectImage} />
+                                    <ImageUploader label="Upload Photo" id="subject-extract-image" onImageUpload={file => dispatch(updatePromptGenState({ subjectImage: file, subjectPrompt: '' }))} sourceFile={subjectImage} />
                                 </div>
                                 <button onClick={onOpenLibraryForSubject} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library"><LibraryIcon className="w-6 h-6"/></button>
                             </div>
@@ -513,13 +508,13 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div className="space-y-4">
                             <div>
                                 <label htmlFor="generated-subject-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Subject Prompt</label>
-                                <textarea id="generated-subject-prompt" value={subjectPrompt} onChange={(e) => setState(prev => ({ ...prev, subjectPrompt: e.target.value }))} readOnly={isSubjectLoading} placeholder="Your generated subject prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-yellow font-medium" rows={10}/>
+                                <textarea id="generated-subject-prompt" value={subjectPrompt} onChange={(e) => dispatch(updatePromptGenState({ subjectPrompt: e.target.value }))} readOnly={isSubjectLoading} placeholder="Your generated subject prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-yellow font-medium" rows={10}/>
                             </div>
                             {subjectError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{subjectError}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <button onClick={() => handleSavePrompt(subjectPrompt, 'subject', subjectModelType, setSubjectSavingState, subjectImage)} disabled={!subjectPrompt || isSubjectLoading || subjectSavingState !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${subjectSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
-                                    {subjectSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : subjectSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                    {subjectSavingState === 'saved' ? 'Saved!' : 'Save'}
+                                <button onClick={() => handleSavePrompt(subjectPrompt, 'subject', subjectModelType, subjectImage)} disabled={!subjectPrompt || isSubjectLoading || subjectPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${subjectPromptSaveStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                                    {subjectPromptSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : subjectPromptSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                    {subjectPromptSaveStatus === 'saved' ? 'Saved!' : 'Save'}
                                 </button>
                                 <button onClick={handleSubjectCopy} disabled={!subjectPrompt || isSubjectLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <CopyIcon className="w-5 h-5" />{subjectCopyButtonText}
@@ -560,9 +555,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             </div>
                             {soupError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{soupError}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <button onClick={() => handleSavePrompt(soupPrompt, 'soup', soupModelType, setSoupSavingState, null)} disabled={!soupPrompt || isSoupLoading || soupSavingState !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${soupSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
-                                    {soupSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : soupSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                    {soupSavingState === 'saved' ? 'Saved!' : 'Save'}
+                                <button onClick={() => handleSavePrompt(soupPrompt, 'soup', soupModelType, null)} disabled={!soupPrompt || isSoupLoading || soupPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${soupPromptSaveStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                                    {soupPromptSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : soupPromptSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                    {soupPromptSaveStatus === 'saved' ? 'Saved!' : 'Save'}
                                 </button>
                                 <button onClick={handleSoupCopy} disabled={!soupPrompt || isSoupLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <CopyIcon className="w-5 h-5" />{soupCopyButtonText}
@@ -577,7 +572,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                     <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md border border-border-primary/50">
                                         {soupHistory.map((soup, index) => (
                                             <div key={index} className="group bg-bg-tertiary p-2 rounded-md flex items-center justify-between gap-2">
-                                                <p className="text-xs text-text-secondary truncate cursor-pointer hover:text-text-primary transition-colors" title={soup} onClick={() => { setState(prev => ({...prev, soupPrompt: soup})); setSoupPromptParts([]); }}>{soup}</p>
+                                                <p className="text-xs text-text-secondary truncate cursor-pointer hover:text-text-primary transition-colors" title={soup} onClick={() => { dispatch(updatePromptGenState({soupPrompt: soup})); setSoupPromptParts([]); }}>{soup}</p>
                                                 <button onClick={() => handleHistoryItemCopy(soup, index)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full bg-bg-secondary text-text-secondary hover:bg-accent hover:text-accent-text" title={historyCopyStates[index] || "Copy"}>
                                                     <CopyIcon className="w-4 h-4" />
                                                 </button>

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
-import { deleteFromLibrary } from '../store/librarySlice';
+import { deleteFromLibrary, clearLibraryItems } from '../store/librarySlice';
 import type { LibraryItem, LibraryItemType, GenerationOptions, ThemeGenerationInfo, PaletteColor } from '../types';
 import {
   CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon,
@@ -10,7 +10,7 @@ import {
   PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon
 } from './icons';
 import { createPaletteThumbnail } from '../utils/imageUtils';
-import { exportLibraryAsJson, clearLibrary } from '../services/libraryService';
+import { exportLibraryAsJson } from '../services/libraryService';
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -351,8 +351,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
   const handleClearLibrary = async () => {
     if (window.confirm("ARE YOU SURE you want to delete your ENTIRE local library? This action cannot be undone and will permanently remove all saved items from this browser.")) {
         if (window.confirm("This is your final warning. Are you absolutely certain you wish to proceed?")) {
-            await clearLibrary();
-            dispatch(deleteFromLibrary(-1)); // Bogus dispatch to trigger re-render
+            dispatch(clearLibraryItems());
         }
     }
   };

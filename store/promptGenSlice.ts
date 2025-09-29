@@ -1,5 +1,6 @@
+
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import type { PromptGenState } from '../types';
+import type { PromptGenState, PromptCategory } from '../types';
 
 interface PromptGenSliceState {
   promptGenState: PromptGenState;
@@ -10,11 +11,15 @@ const initialState: PromptGenSliceState = {
   promptGenState: {
     image: null,
     prompt: '',
+    promptSaveStatus: 'idle',
     bgImage: null,
     bgPrompt: '',
+    bgPromptSaveStatus: 'idle',
     subjectImage: null,
     subjectPrompt: '',
+    subjectPromptSaveStatus: 'idle',
     soupPrompt: '',
+    soupPromptSaveStatus: 'idle',
     soupHistory: [],
   },
   activePromptToolsSubTab: 'from-image',
@@ -24,12 +29,33 @@ const promptGenSlice = createSlice({
   name: 'promptGen',
   initialState,
   reducers: {
-    setPromptGenState: (state, action: PayloadAction<PromptGenState>) => {
-      state.promptGenState = action.payload;
+    updatePromptGenState: (state, action: PayloadAction<Partial<PromptGenState>>) => {
+        const updates = action.payload;
+
+        // When a prompt's text is being updated, first check if it's different from the current state.
+        // If it is, reset the corresponding save status to 'idle'. This ensures editing a "Saved!" prompt
+        // correctly resets the button back to "Save".
+        if (updates.prompt !== undefined && updates.prompt !== state.promptGenState.prompt) {
+            state.promptGenState.promptSaveStatus = 'idle';
+        }
+        if (updates.bgPrompt !== undefined && updates.bgPrompt !== state.promptGenState.bgPrompt) {
+            state.promptGenState.bgPromptSaveStatus = 'idle';
+        }
+        if (updates.subjectPrompt !== undefined && updates.subjectPrompt !== state.promptGenState.subjectPrompt) {
+            state.promptGenState.subjectPromptSaveStatus = 'idle';
+        }
+        if (updates.soupPrompt !== undefined && updates.soupPrompt !== state.promptGenState.soupPrompt) {
+            state.promptGenState.soupPromptSaveStatus = 'idle';
+        }
+        
+        // Apply all updates to the state using direct mutation, which is handled correctly by Immer.
+        Object.assign(state.promptGenState, updates);
     },
     addSoupToHistory: (state, action: PayloadAction<string>) => {
+        const newHistory = [action.payload, ...state.promptGenState.soupHistory].slice(0, 5);
+        state.promptGenState.soupHistory = newHistory;
         state.promptGenState.soupPrompt = action.payload;
-        state.promptGenState.soupHistory = [action.payload, ...state.promptGenState.soupHistory].slice(0, 5);
+        state.promptGenState.soupPromptSaveStatus = 'idle';
     },
     setActivePromptToolsSubTab: (state, action: PayloadAction<string>) => {
       state.activePromptToolsSubTab = action.payload;
@@ -37,14 +63,32 @@ const promptGenSlice = createSlice({
     resetPromptGenState: (state) => {
       state.promptGenState = initialState.promptGenState;
     },
+    setPromptSaveStatus: (state, action: PayloadAction<{ type: PromptCategory; status: 'idle' | 'saving' | 'saved' }>) => {
+        const { type, status } = action.payload;
+        switch(type) {
+            case 'image': 
+                state.promptGenState.promptSaveStatus = status;
+                break;
+            case 'background': 
+                state.promptGenState.bgPromptSaveStatus = status;
+                break;
+            case 'subject': 
+                state.promptGenState.subjectPromptSaveStatus = status;
+                break;
+            case 'soup': 
+                state.promptGenState.soupPromptSaveStatus = status;
+                break;
+        }
+    }
   },
 });
 
 export const {
-  setPromptGenState,
+  updatePromptGenState,
   addSoupToHistory,
   setActivePromptToolsSubTab,
   resetPromptGenState,
+  setPromptSaveStatus,
 } = promptGenSlice.actions;
 
 export default promptGenSlice.reducer;

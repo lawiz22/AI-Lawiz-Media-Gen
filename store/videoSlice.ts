@@ -5,6 +5,7 @@ import type { RootState } from './store';
 const initialVideoUtilsState: VideoUtilsState = {
     videoFile: null,
     extractedFrame: null,
+    extractedFrameSaveStatus: 'idle',
     colorPicker: {
         imageFile: null,
         palette: [],
@@ -14,6 +15,7 @@ const initialVideoUtilsState: VideoUtilsState = {
         error: null,
         dominantColorPool: [],
         pickingColorIndex: null,
+        paletteSaveStatus: 'idle',
     },
 };
 
@@ -51,14 +53,24 @@ const videoSlice = createSlice({
     setGenerationOptionsForSave: (state, action: PayloadAction<GenerationOptions | null>) => {
       state.generationOptionsForSave = action.payload;
     },
-    setVideoUtilsState: (state, action: PayloadAction<VideoUtilsState>) => {
-      state.videoUtilsState = action.payload;
+    updateVideoUtilsState: (state, action: PayloadAction<Partial<VideoUtilsState>>) => {
+        const updates = action.payload;
+        // Reset save status if the relevant content has changed
+        if ('extractedFrame' in updates && updates.extractedFrame !== state.videoUtilsState.extractedFrame) {
+            state.videoUtilsState.extractedFrameSaveStatus = 'idle';
+        }
+        state.videoUtilsState = { ...state.videoUtilsState, ...updates };
     },
     updateColorPickerState: (state, action: PayloadAction<Partial<ColorPickerState>>) => {
+        const oldPalette = JSON.stringify(state.videoUtilsState.colorPicker.palette);
         state.videoUtilsState.colorPicker = {
             ...state.videoUtilsState.colorPicker,
             ...action.payload,
         };
+        const newPalette = JSON.stringify(state.videoUtilsState.colorPicker.palette);
+        if (newPalette !== oldPalette) {
+            state.videoUtilsState.colorPicker.paletteSaveStatus = 'idle';
+        }
     },
     setActiveVideoUtilsSubTab: (state, action: PayloadAction<'frames' | 'colors'>) => {
       state.activeVideoUtilsSubTab = action.payload;
@@ -72,6 +84,12 @@ const videoSlice = createSlice({
     resetVideoUtilsState: (state) => {
       state.videoUtilsState = initialVideoUtilsState;
     },
+    setFrameSaveStatus: (state, action: PayloadAction<'idle' | 'saving' | 'saved'>) => {
+        state.videoUtilsState.extractedFrameSaveStatus = action.payload;
+    },
+    setPaletteSaveStatus: (state, action: PayloadAction<'idle' | 'saving' | 'saved'>) => {
+        state.videoUtilsState.colorPicker.paletteSaveStatus = action.payload;
+    },
   },
 });
 
@@ -81,11 +99,13 @@ export const {
     setGeneratedVideoUrl,
     setVideoSaveStatus,
     setGenerationOptionsForSave,
-    setVideoUtilsState,
+    updateVideoUtilsState,
     updateColorPickerState,
     setActiveVideoUtilsSubTab,
     resetVideoGenerationState,
     resetVideoUtilsState,
+    setFrameSaveStatus,
+    setPaletteSaveStatus,
 } = videoSlice.actions;
 
 // --- Selectors ---

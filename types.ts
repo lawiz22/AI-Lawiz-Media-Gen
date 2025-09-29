@@ -345,23 +345,29 @@ export interface ColorPickerState {
     isExtracting: boolean;
     error: string | null;
     dominantColorPool: string[]; // Store a large pool of hex codes for reshuffling
+    paletteSaveStatus: 'idle' | 'saving' | 'saved';
     pickingColorIndex: number | null; // The index of the color swatch being replaced by the eyedropper
 }
 
 export interface VideoUtilsState {
     videoFile: File | null;
     extractedFrame: string | null;
+    extractedFrameSaveStatus: 'idle' | 'saving' | 'saved';
     colorPicker: ColorPickerState;
 }
 
 export interface PromptGenState {
     image: File | null;
     prompt: string;
+    promptSaveStatus: 'idle' | 'saving' | 'saved';
     bgImage: File | null;
     bgPrompt: string;
+    bgPromptSaveStatus: 'idle' | 'saving' | 'saved';
     subjectImage: File | null;
     subjectPrompt: string;
+    subjectPromptSaveStatus: 'idle' | 'saving' | 'saved';
     soupPrompt: string;
+    soupPromptSaveStatus: 'idle' | 'saving' | 'saved';
     soupHistory: string[];
 }
 

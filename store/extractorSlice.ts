@@ -48,6 +48,9 @@ const extractorSlice = createSlice({
     setExtractorState: (state, action: PayloadAction<ExtractorState>) => {
       state.extractorState = action.payload;
     },
+    updateExtractorState: (state, action: PayloadAction<Partial<ExtractorState>>) => {
+        state.extractorState = { ...state.extractorState, ...action.payload };
+    },
     setActiveExtractorSubTab: (state, action: PayloadAction<string>) => {
       state.activeExtractorSubTab = action.payload;
     },
@@ -59,22 +62,32 @@ const extractorSlice = createSlice({
         switch (itemType) {
             case 'clothes':
                 if (typeof index === 'number' && state.extractorState.generatedClothes[index]) {
-                    state.extractorState.generatedClothes[index].saved = status;
+                    // Create a new array with the updated item to ensure re-render
+                    state.extractorState.generatedClothes = state.extractorState.generatedClothes.map((item, i) =>
+                        i === index ? { ...item, saved: status } : item
+                    );
                 }
                 break;
             case 'objects':
                 if (typeof index === 'number' && state.extractorState.generatedObjects[index]) {
-                    state.extractorState.generatedObjects[index].saved = status;
+                    state.extractorState.generatedObjects = state.extractorState.generatedObjects.map((item, i) =>
+                        i === index ? { ...item, saved: status } : item
+                    );
                 }
                 break;
             case 'poses':
                 if (typeof index === 'number' && state.extractorState.generatedPoses[index]) {
-                    state.extractorState.generatedPoses[index].saved = status;
+                    state.extractorState.generatedPoses = state.extractorState.generatedPoses.map((item, i) =>
+                        i === index ? { ...item, saved: status } : item
+                    );
                 }
                 break;
             case 'font':
                 if (state.extractorState.generatedFontChart) {
-                    state.extractorState.generatedFontChart.saved = status;
+                    state.extractorState.generatedFontChart = {
+                        ...state.extractorState.generatedFontChart,
+                        saved: status
+                    };
                 }
                 break;
         }
@@ -84,6 +97,7 @@ const extractorSlice = createSlice({
 
 export const {
   setExtractorState,
+  updateExtractorState,
   setActiveExtractorSubTab,
   resetExtractorState,
   setExtractorItemSaveStatus,

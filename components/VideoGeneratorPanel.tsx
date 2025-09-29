@@ -154,57 +154,65 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const comfySamplers = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.KSamplerAdvanced?.input?.required?.sampler_name), [comfyUIObjectInfo]);
     const comfySchedulers = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.KSamplerAdvanced?.input?.required?.scheduler), [comfyUIObjectInfo]);
     
+    // This effect runs when ComfyUI info is available to populate the default models.
     useEffect(() => {
         if (options.videoProvider === 'comfyui' && options.comfyVidModelType === 'wan-i2v' && comfyUIObjectInfo) {
-            if (comfyGgufModels.length === 0) return;
+            
+            // This logic is to prevent re-running this on every render, only when ComfyUI data is first loaded.
+            // We check if a model has been set. If so, we assume defaults have been populated.
+            if (options.comfyVidWanI2VHighNoiseModel) {
+                return;
+            }
 
-            setOptions({
-                ...options,
-                comfyVidWanI2VHighNoiseModel: comfyGgufModels.find(m => m.toLowerCase().includes('highnoise')) || comfyGgufModels[0],
-                comfyVidWanI2VLowNoiseModel: comfyGgufModels.find(m => m.toLowerCase().includes('lownoise')) || (comfyGgufModels.length > 1 ? comfyGgufModels[1] : comfyGgufModels[0]),
-                comfyVidWanI2VClipModel: comfyGgufClipModels.find(m => m.includes('umt5')) || comfyGgufClipModels[0],
-                comfyVidWanI2VVaeModel: comfyVaes.find(v => v.includes('wan_2.1')) || comfyVaes[0],
-                comfyVidWanI2VClipVisionModel: comfyClipVision.find(cv => cv.includes('clip_vision_h')) || comfyClipVision[0],
-                comfyVidWanI2VPositivePrompt: options.comfyVidWanI2VPositivePrompt || 'cinematic shot of a majestic lion walking through the savanna',
-                comfyVidWanI2VNegativePrompt: options.comfyVidWanI2VNegativePrompt || 'blurry, bad quality, low-res, ugly, deformed, disfigured, text, watermark',
-                comfyVidWanI2VSteps: 6,
-                comfyVidWanI2VCfg: 1,
-                comfyVidWanI2VSampler: 'euler',
-                comfyVidWanI2VScheduler: 'simple',
-                comfyVidWanI2VFrameCount: 65,
-                comfyVidWanI2VRefinerStartStep: 3,
-                comfyVidWanI2VUseLightningLora: true,
-                comfyVidWanI2VHighNoiseLora: 
-                    comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('high')) 
+            const updates: Partial<GenerationOptions> = {};
+            
+            if (comfyGgufModels.length > 0) {
+                updates.comfyVidWanI2VHighNoiseModel = comfyGgufModels.find(m => m.toLowerCase().includes('highnoise')) || comfyGgufModels[0];
+                updates.comfyVidWanI2VLowNoiseModel = comfyGgufModels.find(m => m.toLowerCase().includes('lownoise')) || (comfyGgufModels.length > 1 ? comfyGgufModels[1] : comfyGgufModels[0]);
+            }
+            if (comfyGgufClipModels.length > 0) {
+                updates.comfyVidWanI2VClipModel = comfyGgufClipModels.find(m => m.includes('umt5')) || comfyGgufClipModels[0];
+            }
+            if (comfyVaes.length > 0) {
+                updates.comfyVidWanI2VVaeModel = comfyVaes.find(v => v.includes('wan_2.1')) || comfyVaes[0];
+            }
+            if (comfyClipVision.length > 0) {
+                updates.comfyVidWanI2VClipVisionModel = comfyClipVision.find(cv => cv.includes('clip_vision_h')) || comfyClipVision[0];
+            }
+            if (comfyLoras.length > 0) {
+                 updates.comfyVidWanI2VHighNoiseLora = comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('high')) 
                     || comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('high')) 
-                    || comfyLoras[0],
-                comfyVidWanI2VHighNoiseLoraStrength: 2.0,
-                comfyVidWanI2VLowNoiseLora: 
-                    comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('low')) 
+                    || comfyLoras[0];
+                 updates.comfyVidWanI2VLowNoiseLora = comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('low')) 
                     || comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('low')) 
-                    || (comfyLoras.length > 1 ? comfyLoras[1] : comfyLoras[0]),
-                comfyVidWanI2VLowNoiseLoraStrength: 1.0,
-                comfyVidWanI2VUseFilmGrain: true,
-                comfyVidWanI2VFilmGrainIntensity: 0.02,
-                comfyVidWanI2VFilmGrainSize: 0.3,
-                comfyVidWanI2VFrameRate: 24,
-                comfyVidWanI2VVideoFormat: 'video/nvenc_h264-mp4',
-                comfyVidWanI2VUseEndFrame: !!endFrame,
-                comfyVidWanI2VEndFrameStrength: 1.0,
-            });
+                    || (comfyLoras.length > 1 ? comfyLoras[1] : comfyLoras[0]);
+            }
+
+            if (Object.keys(updates).length > 0) {
+                setOptions({ ...options, ...updates });
+            }
         }
     }, [
         options.videoProvider, 
         options.comfyVidModelType, 
-        comfyUIObjectInfo, 
-        comfyGgufModels, 
-        comfyLoras,
-        comfyGgufClipModels, 
-        comfyVaes, 
-        comfyClipVision, 
-        endFrame, 
-        setOptions
+        comfyUIObjectInfo,
+        // Using lengths as a proxy for the arrays being populated, to avoid deep comparison issues.
+        comfyGgufModels.length,
+        comfyLoras.length,
+        comfyGgufClipModels.length,
+        comfyVaes.length,
+        comfyClipVision.length,
     ]);
+    
+    // This effect ensures the `useEndFrame` checkbox stays in sync with the presence of an end frame file.
+    useEffect(() => {
+        if (options.comfyVidWanI2VUseEndFrame !== !!endFrame) {
+            setOptions({
+                ...options,
+                comfyVidWanI2VUseEndFrame: !!endFrame,
+            });
+        }
+    }, [endFrame, options.comfyVidWanI2VUseEndFrame, setOptions]);
 
     const handleStartFrameUpload = (file: File | null) => {
         setOriginalStartFrame(file);
@@ -571,3 +579,80 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                             <SelectInput label="Low-Noise LoRA" value={options.comfyVidWanI2VLowNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
                                             <NumberSlider label={`Low-Noise Strength`} value={options.comfyVidWanI2VLowNoiseLoraStrength || 1.0} onChange={handleSliderChange('comfyVidWanI2VLowNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
                                         </div>
+                                    )}
+                                </div>
+                            </OptionSection>
+
+                            <OptionSection title="Sampler & Post-Processing">
+                                <NumberSlider label={`Steps`} value={options.comfyVidWanI2VSteps || 6} onChange={handleSliderChange('comfyVidWanI2VSteps')} min={4} max={12} step={1} disabled={isLoading} />
+                                <NumberSlider label={`CFG`} value={options.comfyVidWanI2VCfg || 1} onChange={handleSliderChange('comfyVidWanI2VCfg')} min={1} max={3} step={0.1} disabled={isLoading} />
+                                <NumberSlider label={`Refiner Start Step`} value={options.comfyVidWanI2VRefinerStartStep || 3} onChange={handleSliderChange('comfyVidWanI2VRefinerStartStep')} min={1} max={(options.comfyVidWanI2VSteps || 6) - 1} step={1} disabled={isLoading} />
+                                <SelectInput label="Sampler" value={options.comfyVidWanI2VSampler || 'euler'} onChange={handleOptionChange('comfyVidWanI2VSampler')} options={comfySamplers.map(s => ({value: s, label: s}))} disabled={isLoading}/>
+                                <SelectInput label="Scheduler" value={options.comfyVidWanI2VScheduler || 'simple'} onChange={handleOptionChange('comfyVidWanI2VScheduler')} options={comfySchedulers.map(s => ({value: s, label: s}))} disabled={isLoading}/>
+                                <SelectInput label="Video Format" value={options.comfyVidWanI2VVideoFormat || 'video/nvenc_h264-mp4'} onChange={handleOptionChange('comfyVidWanI2VVideoFormat')} options={[{value: 'video/nvenc_h264-mp4', label: 'H.264 (MP4)'}, {value: 'video/webm', label: 'WebM'}, {value: 'image/gif', label: 'GIF'}]} disabled={isLoading} />
+                                <div className="space-y-4 p-4 mt-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                                    <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                                        <input type="checkbox" checked={options.comfyVidWanI2VUseFilmGrain} onChange={handleOptionChange('comfyVidWanI2VUseFilmGrain')} disabled={isLoading} className="rounded text-accent focus:ring-accent" />
+                                        Add Film Grain
+                                    </label>
+                                    {options.comfyVidWanI2VUseFilmGrain && (
+                                        <div className="space-y-4 pl-4 border-l-2 border-border-primary">
+                                            <NumberSlider label={`Grain Intensity`} value={options.comfyVidWanI2VFilmGrainIntensity || 0.02} onChange={handleSliderChange('comfyVidWanI2VFilmGrainIntensity')} min={0} max={0.5} step={0.01} disabled={isLoading} />
+                                            <NumberSlider label={`Saturation Mix`} value={options.comfyVidWanI2VFilmGrainSize || 0.3} onChange={handleSliderChange('comfyVidWanI2VFilmGrainSize')} min={0} max={1} step={0.05} disabled={isLoading} />
+                                        </div>
+                                    )}
+                                </div>
+                            </OptionSection>
+                        </div>
+                    )}
+
+                    <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg grid grid-cols-2 gap-4">
+                        <button onClick={onReset} disabled={isLoading} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                            <ResetIcon className="w-5 h-5"/> Reset
+                        </button>
+                        <button onClick={onGenerate} disabled={!isReady} style={isReady ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
+                            <GenerateIcon className="w-5 h-5"/> Generate
+                        </button>
+                    </div>
+                </div>
+
+                {/* Right Column for Results */}
+                <div className="lg:col-span-2">
+                    {generatedVideo ? (
+                        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-4">
+                            <h2 className="text-xl font-bold text-accent">Generated Video</h2>
+                             {lastUsedPrompt && (
+                                <div className="relative">
+                                    <textarea readOnly value={lastUsedPrompt} className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-xs text-text-secondary focus:ring-accent focus:border-accent" rows={2}/>
+                                    <button onClick={handleCopyPrompt} title="Copy Prompt" className="absolute top-2 right-2 flex items-center gap-1.5 bg-bg-primary/80 backdrop-blur-sm text-text-secondary text-xs font-semibold py-1 px-2 rounded-full hover:bg-accent hover:text-accent-text transition-colors duration-200 shadow"><CopyIcon className="w-3 h-3" />{copyButtonText}</button>
+                                </div>
+                            )}
+                            <video key={generatedVideo.url} src={generatedVideo.url} controls className="w-full rounded-lg bg-black" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <a href={generatedVideo.url} download target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                                    <DownloadIcon className="w-5 h-5"/> Download Video
+                                </a>
+                                <button
+                                    onClick={handleSaveToLibrary}
+                                    disabled={videoSavingStatus !== 'idle'}
+                                    className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors ${videoSavingStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-accent text-accent-text hover:bg-accent-hover'}`}
+                                >
+                                    {videoSavingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : videoSavingStatus === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
+                                    {videoSavingStatus === 'saving' ? 'Saving...' : videoSavingStatus === 'saved' ? 'Saved' : 'Save to Library'}
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
+                            <VideoIcon className="w-16 h-16 text-border-primary mb-4" />
+                            <h3 className="text-lg font-bold text-text-primary">Your generated video will appear here</h3>
+                            <p className="text-text-secondary max-w-xs">Upload your start frame, configure options, and click "Generate".</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+            
+            <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+        </>
+    );
+};

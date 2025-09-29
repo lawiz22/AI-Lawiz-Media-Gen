@@ -1,7 +1,10 @@
 import React, { useState, useRef, ChangeEvent, useMemo, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../store/store';
+import { addToLibrary } from '../store/librarySlice';
+import { setFrameSaveStatus, setPaletteSaveStatus, updateVideoUtilsState, updateColorPickerState } from '../store/videoSlice';
 import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, ResetIcon } from './icons';
 import { dataUrlToFile, dataUrlToThumbnail, createPaletteThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
-import { saveToLibrary } from '../services/libraryService';
 import type { LibraryItem, VideoUtilsState, PaletteColor, ColorPickerState } from '../types';
 import { ImageUploader } from './ImageUploader';
 
@@ -223,8 +226,6 @@ const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
 interface VideoUtilsPanelProps {
     setStartFrame: (file: File | null) => void;
     setEndFrame: (file: File | null) => void;
-    videoUtilsState: VideoUtilsState;
-    updateVideoUtilsState: (updater: React.SetStateAction<VideoUtilsState>) => void;
     onOpenLibrary: () => void;
     onOpenVideoLibrary: () => void;
     activeSubTab: string;
@@ -235,63 +236,49 @@ interface VideoUtilsPanelProps {
 export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({ 
     setStartFrame, 
     setEndFrame,
-    videoUtilsState,
-    updateVideoUtilsState,
     onOpenLibrary,
     onOpenVideoLibrary,
     activeSubTab,
     setActiveSubTab,
     onReset
 }) => {
-    const { videoFile, extractedFrame, colorPicker } = videoUtilsState;
+    const dispatch: AppDispatch = useDispatch();
+    const videoUtilsState = useSelector((state: RootState) => state.video.videoUtilsState);
+    const { videoFile, extractedFrame, colorPicker, extractedFrameSaveStatus } = videoUtilsState;
 
     // --- State Setters ---
     const setVideoFile = (file: File | null) => {
-        updateVideoUtilsState(prev => ({ ...prev, videoFile: file, extractedFrame: null }));
+        dispatch(updateVideoUtilsState({ videoFile: file, extractedFrame: null }));
     };
     const setExtractedFrame = (frame: string | null) => {
-        updateVideoUtilsState(prev => ({ ...prev, extractedFrame: frame }));
-    };
-    const setColorPickerState = (updater: (prevState: ColorPickerState) => ColorPickerState) => {
-        updateVideoUtilsState(prev => ({
-            ...prev,
-            colorPicker: updater(prev.colorPicker),
-        }));
-    };
-    const setPaletteName = (name: string) => {
-        setColorPickerState(prev => ({...prev, paletteName: name}));
+        dispatch(updateVideoUtilsState({ extractedFrame: frame }));
     };
 
      const handleColorImageUpload = (file: File | null) => {
-        setColorPickerState(prev => ({ ...prev, imageFile: file, palette: [], error: null, dominantColorPool: [], pickingColorIndex: null }));
+        dispatch(updateColorPickerState({ imageFile: file, palette: [], error: null, dominantColorPool: [], pickingColorIndex: null }));
         if (file) {
             const defaultName = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
-            setPaletteName(`Palette from "${defaultName}"`);
+            dispatch(updateColorPickerState({ paletteName: `Palette from "${defaultName}"` }));
         } else {
-            setPaletteName('');
+            dispatch(updateColorPickerState({ paletteName: '' }));
         }
     };
 
     // --- Frame Extractor Local State ---
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
-    const [frameSavingState, setFrameSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
     const [frameRate, setFrameRate] = useState<number>(24);
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoSrc = useMemo(() => videoFile ? URL.createObjectURL(videoFile) : null, [videoFile]);
     
     // --- Color Picker Local State & Refs ---
-    const [paletteSavingState, setPaletteSavingState] = useState<'idle'|'saving'|'saved'>('idle');
     const [copiedHex, setCopiedHex] = useState<string | null>(null);
     const imageCanvasRef = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
         return () => { if (videoSrc) URL.revokeObjectURL(videoSrc); };
     }, [videoSrc]);
-
-    useEffect(() => { setFrameSavingState('idle'); }, [extractedFrame]);
-    useEffect(() => { setPaletteSavingState('idle'); }, [colorPicker.palette]);
 
     // Effect to draw the image onto the canvas for color picking
     useEffect(() => {
@@ -376,7 +363,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
 
     const handleSaveFrameToLibrary = async () => {
         if (!extractedFrame) return;
-        setFrameSavingState('saving');
+        dispatch(setFrameSaveStatus('saving'));
         try {
             const videoName = videoFile?.name || 'video';
             const item: Omit<LibraryItem, 'id'> = {
@@ -385,11 +372,11 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                 thumbnail: await dataUrlToThumbnail(extractedFrame, 256),
                 name: `Frame from ${videoName} at ${formatTime(currentTime)}`,
             };
-            await saveToLibrary(item);
-            setFrameSavingState('saved');
+            await dispatch(addToLibrary(item)).unwrap();
+            dispatch(setFrameSaveStatus('saved'));
         } catch (err) {
             console.error("Failed to save frame to library:", err);
-            setFrameSavingState('idle');
+            dispatch(setFrameSaveStatus('idle'));
         }
     };
 
@@ -404,7 +391,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
 
     const handleExtractPalette = async () => {
         if (!colorPicker.imageFile) return;
-        setColorPickerState(prev => ({ ...prev, isExtracting: true, error: null, palette: [], dominantColorPool: [], pickingColorIndex: null }));
+        dispatch(updateColorPickerState({ isExtracting: true, error: null, palette: [], dominantColorPool: [], pickingColorIndex: null }));
         try {
             const DOMINANT_COLOR_POOL_SIZE = 64;
             const allHexCodes = await quantizeImage(colorPicker.imageFile, DOMINANT_COLOR_POOL_SIZE);
@@ -416,14 +403,13 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                 hex, name: findClosestColorName(hex),
             }));
 
-            setColorPickerState(prev => ({ 
-                ...prev, 
+            dispatch(updateColorPickerState({ 
                 palette: finalPalette, 
                 dominantColorPool: allHexCodes,
                 isExtracting: false 
             }));
         } catch (err: any) {
-            setColorPickerState(prev => ({ ...prev, error: err.message, isExtracting: false }));
+            dispatch(updateColorPickerState({ error: err.message, isExtracting: false }));
         }
     };
 
@@ -437,13 +423,12 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
             hex, name: findClosestColorName(hex),
         }));
 
-        setColorPickerState(prev => ({ ...prev, palette: newPalette }));
+        dispatch(updateColorPickerState({ palette: newPalette }));
     };
 
     const handleColorSwatchClick = (index: number) => {
-        setColorPickerState(prev => ({
-            ...prev,
-            pickingColorIndex: prev.pickingColorIndex === index ? null : index,
+        dispatch(updateColorPickerState({
+            pickingColorIndex: colorPicker.pickingColorIndex === index ? null : index,
         }));
     };
     
@@ -470,8 +455,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
         const updatedPalette = [...colorPicker.palette];
         updatedPalette[colorPicker.pickingColorIndex] = newColor;
 
-        setColorPickerState(prev => ({
-            ...prev,
+        dispatch(updateColorPickerState({
             palette: updatedPalette,
             pickingColorIndex: null, // Deactivate picking mode
         }));
@@ -486,7 +470,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
 
     const handleSavePalette = async () => {
         if (colorPicker.palette.length === 0) return;
-        setPaletteSavingState('saving');
+        dispatch(setPaletteSaveStatus('saving'));
         try {
             let sourceImageDataUrl: string | undefined = undefined;
             if (colorPicker.imageFile) {
@@ -500,11 +484,11 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                 thumbnail: createPaletteThumbnail(colorPicker.palette),
                 sourceImage: sourceImageDataUrl,
             };
-            await saveToLibrary(item);
-            setPaletteSavingState('saved');
+            await dispatch(addToLibrary(item)).unwrap();
+            dispatch(setPaletteSaveStatus('saved'));
         } catch (err) {
             console.error("Failed to save palette:", err);
-            setPaletteSavingState('idle');
+            dispatch(setPaletteSaveStatus('idle'));
         }
     };
 
@@ -625,15 +609,15 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                                         </button>
                                         <button
                                             onClick={handleSaveFrameToLibrary}
-                                            disabled={frameSavingState !== 'idle'}
+                                            disabled={extractedFrameSaveStatus !== 'idle'}
                                             className={`flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors ${
-                                                frameSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 
-                                                frameSavingState === 'saving' ? 'bg-bg-tertiary cursor-wait' :
+                                                extractedFrameSaveStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 
+                                                extractedFrameSaveStatus === 'saving' ? 'bg-bg-tertiary cursor-wait' :
                                                 'bg-bg-tertiary hover:bg-accent hover:text-accent-text'
                                             }`}
                                         >
-                                            {frameSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : frameSavingState === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
-                                            {frameSavingState === 'saved' ? 'Saved!' : 'Save to Library'}
+                                            {extractedFrameSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : extractedFrameSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
+                                            {extractedFrameSaveStatus === 'saved' ? 'Saved!' : 'Save to Library'}
                                         </button>
                                     </div>
                                 </div>
@@ -691,7 +675,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                                 <input
                                     type="range" min="2" max="16" step="1"
                                     value={colorPicker.colorCount}
-                                    onChange={e => setColorPickerState(prev => ({...prev, colorCount: Number(e.target.value)}))}
+                                    onChange={e => dispatch(updateColorPickerState({colorCount: Number(e.target.value)}))}
                                     className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
                                     disabled={colorPicker.isExtracting}
                                 />
@@ -743,7 +727,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                                                 id="palette-name"
                                                 type="text"
                                                 value={colorPicker.paletteName}
-                                                onChange={(e) => setPaletteName(e.target.value)}
+                                                onChange={(e) => dispatch(updateColorPickerState({ paletteName: e.target.value }))}
                                                 className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
                                                 placeholder="Enter a name for your palette"
                                             />
@@ -751,20 +735,20 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                                         <div className="grid grid-cols-2 gap-2">
                                             <button
                                                 onClick={handleShuffle}
-                                                disabled={paletteSavingState !== 'idle' || colorPicker.isExtracting}
+                                                disabled={colorPicker.paletteSaveStatus !== 'idle' || colorPicker.isExtracting}
                                                 className="w-full flex items-center justify-center gap-2 font-semibold py-2 px-3 rounded-lg transition-colors duration-200 disabled:opacity-50 bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover"
                                             >
                                                 <RefreshIcon className="w-5 h-5"/> Re-shuffle
                                             </button>
                                             <button
                                                 onClick={handleSavePalette}
-                                                disabled={paletteSavingState !== 'idle' || colorPicker.isExtracting}
+                                                disabled={colorPicker.paletteSaveStatus !== 'idle' || colorPicker.isExtracting}
                                                 className={`w-full flex items-center justify-center gap-2 font-semibold py-2 px-3 rounded-lg transition-colors duration-200 disabled:opacity-50 ${
-                                                    paletteSavingState === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'
+                                                    colorPicker.paletteSaveStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'
                                                 }`}
                                             >
-                                                {paletteSavingState === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : paletteSavingState === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                                {paletteSavingState === 'saved' ? 'Saved' : 'Save'}
+                                                {colorPicker.paletteSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : colorPicker.paletteSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                                {colorPicker.paletteSaveStatus === 'saved' ? 'Saved' : 'Save'}
                                             </button>
                                         </div>
                                     </div>

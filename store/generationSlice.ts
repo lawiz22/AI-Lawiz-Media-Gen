@@ -29,8 +29,30 @@ const initialOptions: GenerationOptions = {
     comfyCfg: 5.5,
     comfySampler: 'euler',
     comfyScheduler: 'normal',
+    
+    // Video Generation
     videoProvider: 'comfyui',
+    
+    // ComfyUI Video Defaults
     comfyVidModelType: 'wan-i2v',
+    comfyVidWanI2VPositivePrompt: 'cinematic shot of a majestic lion walking through the savanna',
+    comfyVidWanI2VNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed, disfigured, text, watermark',
+    comfyVidWanI2VSteps: 6,
+    comfyVidWanI2VCfg: 1,
+    comfyVidWanI2VSampler: 'euler',
+    comfyVidWanI2VScheduler: 'simple',
+    comfyVidWanI2VFrameCount: 65,
+    comfyVidWanI2VRefinerStartStep: 3,
+    comfyVidWanI2VUseLightningLora: true,
+    comfyVidWanI2VHighNoiseLoraStrength: 2.0,
+    comfyVidWanI2VLowNoiseLoraStrength: 1.0,
+    comfyVidWanI2VUseFilmGrain: true,
+    comfyVidWanI2VFilmGrainIntensity: 0.02,
+    comfyVidWanI2VFilmGrainSize: 0.3, // Saturation Mix
+    comfyVidWanI2VFrameRate: 24,
+    comfyVidWanI2VVideoFormat: 'video/nvenc_h264-mp4',
+    comfyVidWanI2VUseEndFrame: false,
+    comfyVidWanI2VEndFrameStrength: 1.0,
 };
 
 const initialState: GenerationSliceState = {

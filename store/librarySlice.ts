@@ -20,6 +20,10 @@ export const deleteFromLibrary = createAsyncThunk('library/deleteFromLibrary', a
     return id; // Return the ID for the reducer to identify which item to remove.
 });
 
+export const clearLibraryItems = createAsyncThunk('library/clearLibrary', async () => {
+    await libraryService.clearLibrary();
+});
+
 
 const initialState: LibrarySliceState = { 
     items: [], 
@@ -50,6 +54,10 @@ const librarySlice = createSlice({
             })
             .addCase(deleteFromLibrary.fulfilled, (state, action: PayloadAction<number>) => {
                 state.items = state.items.filter(item => item.id !== action.payload);
+            })
+            .addCase(clearLibraryItems.fulfilled, (state) => {
+                state.items = [];
+                state.status = 'succeeded';
             });
     }
 });
