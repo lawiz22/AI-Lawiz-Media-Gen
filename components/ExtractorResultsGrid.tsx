@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { GeneratedClothing, GeneratedObject, GeneratedPose } from '../types';
-import { DownloadIcon, SaveIcon, SpinnerIcon, CheckIcon, CloseIcon, CodeBracketIcon, CopyIcon, DocumentTextIcon, ZoomIcon } from './icons';
+import { DownloadIcon, SaveIcon, SpinnerIcon, CheckIcon, CloseIcon, CodeBracketIcon, CopyIcon, DocumentTextIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 
 interface ExtractorResultsGridProps {
   items: (GeneratedClothing | GeneratedObject | GeneratedPose)[];
@@ -26,32 +26,45 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
     const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
     const [textViewer, setTextViewer] = useState<{ title: string; content: string } | null>(null);
     const [textCopyButton, setTextCopyButton] = useState('Copy');
-    const [zoomedImage, setZoomedImage] = useState<{ src: string, alt: string } | null>(null);
     
     const selectedItemModal = selectedItemIndex !== null ? { ...items[selectedItemIndex], index: selectedItemIndex } : null;
 
     const handleCloseModals = useCallback(() => {
         setSelectedItemIndex(null);
         setTextViewer(null);
-        setZoomedImage(null);
     }, []);
+
+    const handleNextItem = useCallback(() => {
+        if (selectedItemIndex !== null && items.length > 1) {
+            setSelectedItemIndex(prev => (prev! + 1) % items.length);
+        }
+    }, [selectedItemIndex, items.length]);
+
+    const handlePrevItem = useCallback(() => {
+        if (selectedItemIndex !== null && items.length > 1) {
+            setSelectedItemIndex(prev => (prev! - 1 + items.length) % items.length);
+        }
+    }, [selectedItemIndex, items.length]);
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         if (e.key === 'Escape') {
-            if (zoomedImage) setZoomedImage(null);
-            else if (textViewer) setTextViewer(null);
+            if (textViewer) setTextViewer(null);
             else handleCloseModals();
         }
-    }, [zoomedImage, textViewer, handleCloseModals]);
+         if (selectedItemModal) {
+            if (e.key === 'ArrowRight') handleNextItem();
+            if (e.key === 'ArrowLeft') handlePrevItem();
+        }
+    }, [textViewer, handleCloseModals, selectedItemModal, handleNextItem, handlePrevItem]);
 
     useEffect(() => {
-        if (selectedItemModal !== null || textViewer !== null || zoomedImage !== null) {
+        if (selectedItemModal !== null || textViewer !== null) {
             window.addEventListener('keydown', handleKeyDown);
         }
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [selectedItemModal, textViewer, zoomedImage, handleKeyDown]);
+    }, [selectedItemModal, textViewer, handleKeyDown]);
     
     const handleDownload = (dataUrl: string, name: string) => {
         const link = document.createElement('a');
@@ -100,15 +113,12 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                         else { name = (item as GeneratedObject).name; image = item.image; }
 
                         return (
-                             <div key={index} className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
+                             <div key={index} className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer" onClick={() => setSelectedItemIndex(index)}>
                                 <img src={image} alt={name} className="object-contain w-full h-full p-2" />
                                 
-                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2"
-                                    onClick={() => setSelectedItemIndex(index)}
-                                >
+                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
                                     <div className="text-center text-white">
                                         <p className="text-sm font-bold truncate">{name}</p>
-                                        <p className="text-xs">Click for details</p>
                                     </div>
                                 </div>
                             </div>
@@ -117,72 +127,68 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                 </div>
             </div>
 
-            {/* Zoomed Image Modal */}
-            {zoomedImage && (
-                <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setZoomedImage(null)}>
-                    <div className="relative" onClick={e => e.stopPropagation()}>
-                        <img src={zoomedImage.src} alt={zoomedImage.alt} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }} />
-                        <button onClick={() => setZoomedImage(null)} className="absolute -top-2 -right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75"><CloseIcon className="w-5 h-5"/></button>
-                    </div>
-                </div>
-            )}
-
-            {/* Details Modal */}
+            {/* Details/Zoom Modal */}
             {selectedItemModal && (
-                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={handleCloseModals}>
-                    <div className="bg-bg-secondary w-full max-w-2xl p-6 rounded-2xl shadow-lg border border-border-primary flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={handleCloseModals}>
+                    {items.length > 1 && (
+                        <>
+                            <button onClick={(e) => { e.stopPropagation(); handlePrevItem(); }} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text transition-colors" aria-label="Previous item">
+                                <ChevronLeftIcon className="w-8 h-8" />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleNextItem(); }} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text transition-colors" aria-label="Next item">
+                                <ChevronRightIcon className="w-8 h-8" />
+                            </button>
+                        </>
+                    )}
+                    <div className="bg-bg-secondary w-full max-w-5xl p-6 rounded-2xl shadow-lg border border-border-primary flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-start justify-between mb-4 flex-shrink-0">
                             <h3 className="text-xl font-bold text-accent">{isClothing(selectedItemModal) ? selectedItemModal.itemName : isPose(selectedItemModal) ? selectedItemModal.description : (selectedItemModal as GeneratedObject).name}</h3>
                             <button onClick={handleCloseModals} className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover"><CloseIcon className="w-5 h-5"/></button>
                         </div>
 
-                        <div className="flex-grow overflow-y-auto pr-2 -mr-2">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Images */}
-                                <div className="space-y-4">
-                                   {isClothing(selectedItemModal) ? (
-                                        <>
-                                            <div className="relative"><img src={selectedItemModal.laidOutImage} alt="Laid out" className="w-full rounded-lg"/><button onClick={() => setZoomedImage({src: selectedItemModal.laidOutImage, alt: 'Laid out'})} className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white"><ZoomIcon className="w-5 h-5"/></button></div>
-                                            {selectedItemModal.foldedImage && <div className="relative"><img src={selectedItemModal.foldedImage} alt="Folded" className="w-full rounded-lg"/><button onClick={() => setZoomedImage({src: selectedItemModal.foldedImage, alt: 'Folded'})} className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white"><ZoomIcon className="w-5 h-5"/></button></div>}
-                                        </>
-                                   ) : isPose(selectedItemModal) ? (
-                                        <>
-                                            <div><h4 className="text-sm font-semibold text-text-secondary mb-1">Mannequin</h4><div className="relative"><img src={selectedItemModal.image} alt="Mannequin" className="w-full rounded-lg bg-white p-2"/><button onClick={() => setZoomedImage({src: selectedItemModal.image, alt: 'Mannequin'})} className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white"><ZoomIcon className="w-5 h-5"/></button></div></div>
-                                            <div><h4 className="text-sm font-semibold text-text-secondary mb-1">Skeleton</h4><div className="relative"><img src={selectedItemModal.skeletonImage} alt="Skeleton" className="w-full rounded-lg bg-black p-2" style={{filter: 'invert(1)'}}/><button onClick={() => setZoomedImage({src: selectedItemModal.skeletonImage, alt: 'Skeleton'})} className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white"><ZoomIcon className="w-5 h-5"/></button></div></div>
-                                        </>
-                                   ) : (
-                                        <div className="relative"><img src={(selectedItemModal as GeneratedObject).image} alt={(selectedItemModal as GeneratedObject).name} className="w-full rounded-lg"/><button onClick={() => setZoomedImage({src: (selectedItemModal as GeneratedObject).image, alt: (selectedItemModal as GeneratedObject).name})} className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white"><ZoomIcon className="w-5 h-5"/></button></div>
-                                   )}
+                        <div className="flex-grow overflow-y-auto pr-2 -mr-2 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                           {isClothing(selectedItemModal) ? (
+                                <>
+                                    <div className="space-y-2"><h4 className="text-sm font-semibold text-text-secondary text-center">Laid Out</h4><img src={selectedItemModal.laidOutImage} alt="Laid out" className="w-full rounded-lg bg-bg-primary p-2"/></div>
+                                    {selectedItemModal.foldedImage && <div className="space-y-2"><h4 className="text-sm font-semibold text-text-secondary text-center">Folded</h4><img src={selectedItemModal.foldedImage} alt="Folded" className="w-full rounded-lg bg-bg-primary p-2"/></div>}
+                                </>
+                           ) : isPose(selectedItemModal) ? (
+                                <>
+                                    <div className="space-y-2"><h4 className="text-sm font-semibold text-text-secondary text-center">Mannequin</h4><img src={selectedItemModal.image} alt="Mannequin" className="w-full rounded-lg bg-white p-2"/></div>
+                                    <div className="space-y-2"><h4 className="text-sm font-semibold text-text-secondary text-center">Skeleton</h4><img src={selectedItemModal.skeletonImage} alt="Skeleton" className="w-full rounded-lg bg-black p-2"/></div>
+                                </>
+                           ) : (
+                                <div className="md:col-span-2 flex items-center justify-center">
+                                    <img src={(selectedItemModal as GeneratedObject).image} alt={(selectedItemModal as GeneratedObject).name} className="max-w-full max-h-[60vh] object-contain rounded-lg"/>
                                 </div>
-                                {/* Actions and Details */}
-                                <div className="space-y-4">
-                                    {isPose(selectedItemModal) && selectedItemModal.generationPrompt && (
-                                        <button onClick={() => setTextViewer({title: 'Mannequin Generation Prompt', content: selectedItemModal.generationPrompt || ''})} className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover"><DocumentTextIcon className="w-5 h-5"/> View Prompt</button>
-                                    )}
-                                    {isPose(selectedItemModal) && selectedItemModal.poseJson && (
-                                        <button onClick={() => setTextViewer({title: 'Pose JSON (ControlNet)', content: JSON.stringify(selectedItemModal.poseJson, null, 2)})} className="w-full flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover"><CodeBracketIcon className="w-5 h-5"/> View JSON</button>
-                                    )}
-                                    <div className="grid grid-cols-2 gap-4">
-                                         <button
-                                            onClick={() => handleDownload(
-                                                isClothing(selectedItemModal) ? selectedItemModal.laidOutImage : isPose(selectedItemModal) ? selectedItemModal.image : (selectedItemModal as GeneratedObject).image,
-                                                isClothing(selectedItemModal) ? selectedItemModal.itemName : isPose(selectedItemModal) ? selectedItemModal.description : (selectedItemModal as GeneratedObject).name
-                                            )}
-                                            className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover"
-                                        >
-                                            <DownloadIcon className="w-5 h-5"/> Download
-                                        </button>
-                                        <button
-                                            onClick={() => onSave(selectedItemModal, selectedItemModal.index)}
-                                            disabled={selectedItemModal.saved !== 'idle'}
-                                            className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors ${selectedItemModal.saved === 'saved' ? 'bg-green-500 text-white' : 'bg-accent text-accent-text hover:bg-accent-hover'}`}
-                                        >
-                                            {selectedItemModal.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : selectedItemModal.saved === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
-                                            {selectedItemModal.saved === 'saving' ? 'Saving...' : selectedItemModal.saved === 'saved' ? 'Saved' : 'Save'}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                           )}
+                        </div>
+
+                        <div className="mt-6 pt-4 border-t border-border-primary flex-shrink-0 flex flex-wrap items-center justify-center gap-4">
+                           {isClothing(selectedItemModal) && (
+                                <>
+                                    <button onClick={() => handleDownload(selectedItemModal.laidOutImage, `${selectedItemModal.itemName}_laid_out`)} className="flex items-center gap-2 px-4 py-2 bg-bg-tertiary text-text-secondary font-semibold rounded-lg hover:bg-bg-tertiary-hover"><DownloadIcon className="w-5 h-5"/> Download Laid Out</button>
+                                    {selectedItemModal.foldedImage && <button onClick={() => handleDownload(selectedItemModal.foldedImage, `${selectedItemModal.itemName}_folded`)} className="flex items-center gap-2 px-4 py-2 bg-bg-tertiary text-text-secondary font-semibold rounded-lg hover:bg-bg-tertiary-hover"><DownloadIcon className="w-5 h-5"/> Download Folded</button>}
+                                </>
+                           )}
+                           {isPose(selectedItemModal) && (
+                                <>
+                                    <button onClick={() => handleDownload(selectedItemModal.image, `${selectedItemModal.description}_mannequin`)} className="flex items-center gap-2 px-4 py-2 bg-bg-tertiary text-text-secondary font-semibold rounded-lg hover:bg-bg-tertiary-hover"><DownloadIcon className="w-5 h-5"/> Mannequin</button>
+                                    <button onClick={() => handleDownload(selectedItemModal.skeletonImage, `${selectedItemModal.description}_skeleton`)} className="flex items-center gap-2 px-4 py-2 bg-bg-tertiary text-text-secondary font-semibold rounded-lg hover:bg-bg-tertiary-hover"><DownloadIcon className="w-5 h-5"/> Skeleton</button>
+                                    <button onClick={() => setTextViewer({title: 'Mannequin Generation Prompt', content: selectedItemModal.generationPrompt || ''})} className="flex items-center gap-2 px-4 py-2 bg-bg-tertiary text-text-secondary font-semibold rounded-lg hover:bg-bg-tertiary-hover"><DocumentTextIcon className="w-5 h-5"/> Prompt</button>
+                                    <button onClick={() => setTextViewer({title: 'Pose JSON (ControlNet)', content: JSON.stringify(selectedItemModal.poseJson, null, 2)})} className="flex items-center gap-2 px-4 py-2 bg-bg-tertiary text-text-secondary font-semibold rounded-lg hover:bg-bg-tertiary-hover"><CodeBracketIcon className="w-5 h-5"/> JSON</button>
+                                </>
+                           )}
+                           {!isClothing(selectedItemModal) && !isPose(selectedItemModal) && <button onClick={() => handleDownload((selectedItemModal as GeneratedObject).image, (selectedItemModal as GeneratedObject).name)} className="flex items-center gap-2 px-4 py-2 bg-bg-tertiary text-text-secondary font-semibold rounded-lg hover:bg-bg-tertiary-hover"><DownloadIcon className="w-5 h-5"/> Download</button>}
+
+                            <button
+                                onClick={() => onSave(selectedItemModal, selectedItemModal.index)}
+                                disabled={selectedItemModal.saved !== 'idle'}
+                                className={`flex items-center gap-2 px-4 py-2 font-semibold rounded-lg transition-colors ${selectedItemModal.saved === 'saved' ? 'bg-green-500 text-white' : 'bg-accent text-accent-text hover:bg-accent-hover'}`}
+                            >
+                                {selectedItemModal.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : selectedItemModal.saved === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
+                                {selectedItemModal.saved === 'saving' ? 'Saving...' : selectedItemModal.saved === 'saved' ? 'Saved' : 'Save to Library'}
+                            </button>
                         </div>
                     </div>
                 </div>
