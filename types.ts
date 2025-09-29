@@ -186,7 +186,6 @@ export interface GenerationOptions {
     comfyVidWanI2VWidth?: number;
     comfyVidWanI2VHeight?: number;
     comfyVidWanI2VUseEndFrame?: boolean;
-    comfyVidWanI2VEndFrameStrength?: number;
     comfyVidWanI2VNoiseSeed?: number;
     comfyVidWanI2VSeedControl?: 'fixed' | 'randomize';
 }

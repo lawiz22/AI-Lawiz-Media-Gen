@@ -82,7 +82,7 @@ const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
         case 'flux-krea':
             return 'Your response MUST be a single, detailed, artistic, and descriptive paragraph. Use rich vocabulary.';
         case 'gemini':
-            return 'Your response MUST be a detailed, narrative paragraph written in natural language. Describe the scene as if you were writing a story or giving instructions to a human artist. Use full, descriptive sentences.';
+            return 'Your response MUST be a detailed, narrative paragraph written in a natural language. Describe the scene as if you were writing a story or giving instructions to a human artist. Use full, descriptive sentences.';
         case 'wan2.2':
         case 'sdxl':
         case 'nunchaku-kontext-flux': // I2I prompt is often best as a sentence
@@ -702,30 +702,39 @@ export const generateComfyUIVideo = async (
 ): Promise<{ videoUrl: string, finalPrompt: string }> => {
     const workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE));
     
-    const effectiveEndFrame = (endFrame && options.comfyVidWanI2VUseEndFrame) ? endFrame : startFrame;
-    
+    // --- Uploads and common settings ---
     updateProgress("Uploading start frame...", 0.05);
     const startFrameInfo = await uploadImage(startFrame);
-    updateProgress("Uploading end frame...", 0.1);
-    const endFrameInfo = await uploadImage(effectiveEndFrame);
     
+    workflow["52"].inputs.image = startFrameInfo.name;
     workflow["105"].inputs.unet_name = options.comfyVidWanI2VHighNoiseModel;
     workflow["106"].inputs.unet_name = options.comfyVidWanI2VLowNoiseModel;
     workflow["107"].inputs.clip_name = options.comfyVidWanI2VClipModel;
     workflow["39"].inputs.vae_name = options.comfyVidWanI2VVaeModel;
     workflow["49"].inputs.clip_name = options.comfyVidWanI2VClipVisionModel;
+    workflow["112"].inputs.string = options.comfyVidWanI2VPositivePrompt;
+    workflow["7"].inputs.text = options.comfyVidWanI2VNegativePrompt;
     
     const mainNode = workflow["83"];
     mainNode.inputs.length = options.comfyVidWanI2VFrameCount;
     mainNode.inputs.width = options.comfyVidWanI2VWidth;
     mainNode.inputs.height = options.comfyVidWanI2VHeight;
-    mainNode.inputs.end_frame_strength = options.comfyVidWanI2VUseEndFrame ? options.comfyVidWanI2VEndFrameStrength : 0;
     
-    workflow["52"].inputs.image = startFrameInfo.name;
-    workflow["72"].inputs.image = endFrameInfo.name;
-    workflow["112"].inputs.string = options.comfyVidWanI2VPositivePrompt;
-    workflow["7"].inputs.text = options.comfyVidWanI2VNegativePrompt;
+    // --- Handle End Frame Logic ---
+    const useEndFrame = endFrame && options.comfyVidWanI2VUseEndFrame;
+    if (useEndFrame) {
+        updateProgress("Uploading end frame...", 0.1);
+        const endFrameInfo = await uploadImage(endFrame);
+        workflow["72"].inputs.image = endFrameInfo.name;
+    } else {
+        // "Disable" end frame nodes and inputs by removing them from the workflow
+        delete workflow["72"]; // LoadImage end frame
+        delete workflow["87"]; // CLIPVisionEncode end frame
+        delete mainNode.inputs.end_image;
+        delete mainNode.inputs.clip_vision_end_image;
+    }
 
+    // --- Sampler settings ---
     const sampler1 = workflow["101"];
     const sampler2 = workflow["102"];
     sampler1.inputs.steps = sampler2.inputs.steps = options.comfyVidWanI2VSteps;
@@ -734,10 +743,10 @@ export const generateComfyUIVideo = async (
     sampler1.inputs.scheduler = sampler2.inputs.scheduler = options.comfyVidWanI2VScheduler;
     sampler1.inputs.end_at_step = options.comfyVidWanI2VRefinerStartStep;
     sampler2.inputs.start_at_step = options.comfyVidWanI2VRefinerStartStep;
-
     sampler1.inputs.noise_seed = options.comfyVidWanI2VNoiseSeed ?? Math.floor(Math.random() * 1e15);
     sampler1.inputs.control_after_generate = options.comfyVidWanI2VSeedControl || 'randomize';
 
+    // --- LoRA settings ---
     if (options.comfyVidWanI2VUseLightningLora) {
         workflow["94"].inputs.lora_name = options.comfyVidWanI2VHighNoiseLora;
         workflow["94"].inputs.strength_model = options.comfyVidWanI2VHighNoiseLoraStrength;
@@ -750,6 +759,7 @@ export const generateComfyUIVideo = async (
         workflow["93"].inputs.model = ["106", 0];
     }
     
+    // --- Post-processing settings ---
     workflow["111"].inputs.frame_rate = options.comfyVidWanI2VFrameRate;
     workflow["111"].inputs.format = options.comfyVidWanI2VVideoFormat;
     
@@ -761,6 +771,7 @@ export const generateComfyUIVideo = async (
         workflow["111"].inputs.images = ["8", 0]; 
     }
     
+    // --- Execution ---
     const { videoUrl } = await executeWorkflow(workflow, updateProgress, true);
     if (!videoUrl) throw new Error("Generation finished, but no video file was found.");
     

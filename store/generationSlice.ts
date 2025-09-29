@@ -52,7 +52,6 @@ const initialOptions: GenerationOptions = {
     comfyVidWanI2VFrameRate: 24,
     comfyVidWanI2VVideoFormat: 'video/nvenc_h264-mp4',
     comfyVidWanI2VUseEndFrame: false,
-    comfyVidWanI2VEndFrameStrength: 1.0,
     comfyVidWanI2VNoiseSeed: undefined,
     comfyVidWanI2VSeedControl: 'randomize',
 };
