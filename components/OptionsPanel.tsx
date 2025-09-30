@@ -21,8 +21,12 @@ import { dataUrlToFile, fileToDataUrl, dataUrlToThumbnail, fileToResizedDataUrl 
 interface OptionsPanelProps {
   options: GenerationOptions;
   setOptions: (options: GenerationOptions) => void;
+  updateOptions: (options: Partial<GenerationOptions>) => void;
   generationMode: 't2i' | 'i2i';
-  setGenerationMode: React.Dispatch<React.SetStateAction<'t2i' | 'i2i'>>;
+  // Fix: Corrected the prop type for `setGenerationMode` to a simple callback function.
+  // The previous `React.Dispatch` type was overly specific to `useState` and incompatible
+  // with the Redux dispatch function used in the parent `App` component, causing a type error.
+  setGenerationMode: (mode: 't2i' | 'i2i') => void;
   previewedBackgroundImage: string | null;
   setPreviewedBackgroundImage: (url: string | null) => void;
   previewedClothingImage: string | null;
@@ -209,7 +213,7 @@ const ElementImageManager: React.FC<{
 
 // --- Main Component ---
 export const OptionsPanel: React.FC<OptionsPanelProps> = ({
-  options, setOptions,
+  options, setOptions, updateOptions,
   generationMode, setGenerationMode,
   previewedBackgroundImage, setPreviewedBackgroundImage,
   previewedClothingImage, setPreviewedClothingImage,
@@ -402,8 +406,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         if (field === 'imageStyle') {
             if (options.provider === 'gemini') {
                 const newStyle = value as ImageStyle;
-                setOptions({
-                    ...options,
+                updateOptions({
                     imageStyle: newStyle,
                     creativity: newStyle === 'photorealistic' ? undefined : (options.creativity ?? 0.7)
                 });
@@ -413,8 +416,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         
         if (field === 'geminiT2IModel') {
             const newModel = value as 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image-preview';
-            setOptions({
-                ...options,
+            updateOptions({
                 geminiT2IModel: newModel,
                 aspectRatio: newModel === 'gemini-2.5-flash-image-preview' ? '1:1' : '3:4', // 3:4 is default
             });
@@ -444,7 +446,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             
             const newPrompt = `${newPrefix}${currentPrompt}`;
             
-            setOptions({ ...options, [field]: value, comfyPrompt: newPrompt });
+            updateOptions({ [field]: value, comfyPrompt: newPrompt });
             return;
         }
         
@@ -622,16 +624,16 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 });
             }
         } else {
-            setOptions({ ...options, [field]: value });
+            updateOptions({ [field]: value });
         }
     };
 
     const handleSliderChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement>) => {
-        setOptions({ ...options, [field]: parseFloat(e.target.value) });
+        updateOptions({ [field]: parseFloat(e.target.value) });
     };
     
     const handleNumberInputChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement>) => {
-        setOptions({ ...options, [field]: parseInt(e.target.value, 10) || 0 });
+        updateOptions({ [field]: parseInt(e.target.value, 10) || 0 });
     };
 
     const handlePoseSelection = (poseValue: string) => {
@@ -643,7 +645,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         } else {
             newSelectedPoses = [...poseSelection, poseValue];
         }
-        setOptions({ ...options, poseSelection: newSelectedPoses });
+        updateOptions({ poseSelection: newSelectedPoses });
     };
 
     const handleCustomPoseChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -652,12 +654,12 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             .map(p => p.trim())
             .filter(Boolean)
             .slice(0, 13); // Max 13 poses
-        setOptions({ ...options, poseSelection: poses });
+        updateOptions({ poseSelection: poses });
     };
 
     const handleRandomizeCustomPoses = () => {
         const randomPoses = generateRandomPosePrompts(options.numImages);
-        setOptions({ ...options, poseSelection: randomPoses });
+        updateOptions({ poseSelection: randomPoses });
     };
     
     const handleGenerateBgPreview = async () => {
@@ -697,15 +699,15 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     };
     
     const handleRandomizeClothing = () => {
-        setOptions({ ...options, customClothingPrompt: generateRandomClothingPrompt() });
+        updateOptions({ customClothingPrompt: generateRandomClothingPrompt() });
     };
 
     const handleRandomizeBackground = () => {
-        setOptions({ ...options, customBackground: generateRandomBackgroundPrompt() });
+        updateOptions({ customBackground: generateRandomBackgroundPrompt() });
     };
     
     const handleRandomizeTextObject = () => {
-        setOptions({ ...options, textObjectPrompt: getRandomTextObjectPrompt() });
+        updateOptions({ textObjectPrompt: getRandomTextObjectPrompt() });
     };
 
     const handleGenerateMask = async (subject: 'person' | 'clothing') => {
@@ -779,7 +781,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             {(['general', 'inpaint', 'compose'] as const).map(mode => (
                                  <button 
                                     key={mode}
-                                    onClick={() => setOptions({ ...options, geminiI2iMode: mode })} 
+                                    onClick={() => updateOptions({ geminiI2iMode: mode })} 
                                     disabled={isDisabled}
                                     className={`px-2 py-2 text-xs font-bold rounded-full transition-colors capitalize ${options.geminiI2iMode === mode ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
                                 >
@@ -1161,7 +1163,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                 <input
                                     type="number"
                                     value={options.comfySeed ?? ''}
-                                    onChange={(e) => setOptions({ ...options, comfySeed: e.target.value ? parseInt(e.target.value, 10) : undefined })}
+                                    onChange={(e) => updateOptions({ comfySeed: e.target.value ? parseInt(e.target.value, 10) : undefined })}
                                     placeholder="Random"
                                     className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
                                     disabled={isDisabled}
@@ -1186,7 +1188,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                 <input
                                     type="number"
                                     value={options.comfySeedIncrement ?? 1}
-                                    onChange={(e) => setOptions({ ...options, comfySeedIncrement: parseInt(e.target.value, 10) || 1 })}
+                                    onChange={(e) => updateOptions({ comfySeedIncrement: parseInt(e.target.value, 10) || 1 })}
                                     min="1"
                                     className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
                                     disabled={isDisabled}
@@ -1235,14 +1237,14 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         {!hideProviderSwitch && (
             <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
                 <button 
-                    onClick={() => setOptions({ ...options, provider: 'gemini'})} 
+                    onClick={() => updateOptions({ provider: 'gemini'})} 
                     disabled={isDisabled}
                     className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'gemini' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
                 >
                     Gemini
                 </button>
                 <button 
-                    onClick={() => setOptions({ ...options, provider: 'comfyui'})} 
+                    onClick={() => updateOptions({ provider: 'comfyui'})} 
                     disabled={isDisabled || !comfyUIUrl}
                     className={`px-4 py-2 text-sm font-bold rounded-full transition-colors disabled:opacity-50 ${options.provider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
                 >

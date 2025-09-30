@@ -115,6 +115,10 @@ const App: React.FC = () => {
         dispatch(setOptions(newOptions));
     }, [dispatch]);
 
+    const handleUpdateOptions = useCallback((opts: Partial<GenerationOptions>) => {
+        dispatch(updateOptions(opts));
+    }, [dispatch]);
+
     const handleSetVideoStartFrame = useCallback((file: File | null) => {
         dispatch(setVideoStartFrame(file));
     }, [dispatch]);
@@ -604,6 +608,7 @@ const App: React.FC = () => {
                                 title={generationMode === 'i2i' ? "2. Configure Options" : "1. Configure Options"}
                                 options={options} 
                                 setOptions={handleSetOptions}
+                                updateOptions={handleUpdateOptions}
                                 generationMode={generationMode}
                                 setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
                                 onGenerate={handleGenerate}
@@ -731,6 +736,7 @@ const App: React.FC = () => {
                                 title="2. Configure Options"
                                 options={options} 
                                 setOptions={handleSetOptions}
+                                updateOptions={handleUpdateOptions}
                                 generationMode={generationMode}
                                 setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
                                 onGenerate={handleGenerate}
@@ -787,7 +793,7 @@ const App: React.FC = () => {
                 <div className={activeTab === 'video-generator' ? 'block' : 'hidden'}>
                      <VideoGeneratorPanel
                         options={options}
-                        setOptions={handleSetOptions}
+                        setOptions={handleUpdateOptions}
                         comfyUIObjectInfo={comfyUIObjectInfo}
                         startFrame={videoStartFrame}
                         setStartFrame={handleSetVideoStartFrame}
