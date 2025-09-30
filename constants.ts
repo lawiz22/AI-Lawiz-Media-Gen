@@ -8,7 +8,7 @@ export const MAX_IMAGES = 12;
 export const POSES = [
   "QSBwcm9mZXNzaW9uYWwgaGVhZHNob3QsIGZhY2luZyBmb3J3YXJkLCB3aXRoIGEgZ2VudGxlIHNtaWxlLg==",
   "VGhyZWUtcXVhcnRlciBwcm9maWxlLCBsb29raW5nIHRob3VnaHRmdWxseSBvdmVyIHRoZSBsZWZ0IHNob3VsZGVyIHRvd2FyZHMgdGhlIGNhbWVyYS4=",
-  "QSBjYW5kaWQgc2hvdCwgc3ViamVjdCBsYXVnaGluZywgaGVhZCB0aWx0ZWQgc2xpZ2h0bHkgYmFjay4=",
+  "QSBjYW5kaWQgc2hvdCwgc3ViamVjdCBsYXVnaGluZywgaGVhZCB0aWx0ZWQgc2xpZhtseSBibmFjay4=",
   "UHJvZmlsZSB2aWV3LCBsb29raW5nIGF3YXkgZnJvbSB0aGUgY2FtZXJhIGludG8gdGhlIGRpc3RhbmNlLCBzZXJlbmUgZXhwcmVzc2lvbi4=",
   "QXJtcyByYWlzZWQgb3ZlcmhlYWQsIGhhbmRzIGZvcm1pbmcgYSBjcmVhdGl2ZSBzaGFwZSwgbG9va2luZyBkaXJlY3RseSBhdCB0aGUgY2FtZXJhIHdpdGggY29uZmlkZW5jZS4=",
   "TGVhbmluZyBmb3J3YXJkIG9uIGEgdGFibGUsIGhhbmRzIGNsYXNwZWQsIG1ha2luZyBkaXJlY3QgZXllIGNvbnRhY3Qgd2l0aCB0aGUgY2FtZXJhLg==",
@@ -125,6 +125,46 @@ export const ERA_STYLE_OPTIONS = [
     { value: 'a classical Dutch Master painting', label: 'Dutch Master Painting' },
     { value: 'a high-fashion Vogue magazine shot', label: 'Vogue Fashion Shot' },
 ];
+
+export const CAMERA_MOVES = [
+    { value: '', label: 'None' },
+    { value: 'pan', label: 'Pan (left-right)' },
+    { value: 'tilt', label: 'Tilt (up-down)' },
+    { value: 'tracking shot', label: 'Tracking / Dolly' },
+    { value: 'push-in', label: 'Push-in (closer)' },
+    { value: 'pull-out', label: 'Pull-out (further)' },
+    { value: 'crane shot', label: 'Crane shot (lifts above)' },
+    { value: 'orbit', label: 'Orbit (circles subject)' },
+    { value: 'POV', label: 'POV (subject’s eyes)' },
+    { value: 'over-the-shoulder', label: 'Over-the-shoulder' },
+    { value: 'steadicam', label: 'Steadicam (smooth handheld)' },
+    { value: 'slow motion', label: 'Slow motion' },
+    { value: 'time-lapse', label: 'Time-lapse' },
+    { value: 'rack focus', label: 'Rack focus (shifting focus)' },
+];
+
+export const WAN_VIDEO_PROMPT_BLOCKS = {
+  fantasy: {
+    subjects: ['A knight in shining armor', 'A sorceress with glowing runes', 'A dragon with massive wings', 'A ghostly warrior with a flaming sword'],
+    environments: ['in a misty enchanted forest', 'on top of a crumbling castle tower', 'inside a glowing crystal cave', 'in a battlefield under a blood-red moon'],
+    styles: ['epic cinematic lighting', 'dark and gothic atmosphere', 'high fantasy illustration style', 'painterly oil-painting look'],
+  },
+  'sci-fi': {
+    subjects: ['A cyberpunk woman with neon hair', 'A giant mech robot with glowing eyes', 'A hacker wearing a glowing VR visor', 'A spaceship shaped like a blade'],
+    environments: ['in a rainy neon-lit alley', 'on a futuristic rooftop at night', 'inside a high-tech control room', 'hovering above a desert planet with two suns'],
+    styles: ['cinematic 4K, lens flare', 'neon glow, vaporwave colors', 'ultra-realistic sci-fi look', 'animated anime cyberpunk style'],
+  },
+  nature: {
+    subjects: ['A lion running across the savannah', 'A flock of birds flying in formation', 'A surfer riding a massive wave', 'A lone explorer climbing a snowy mountain'],
+    environments: ['at sunrise with golden light', 'in a storm with heavy rain', 'underwater with glowing coral', 'on a windy desert dune'],
+    styles: ['documentary realism', 'cinematic time-lapse', 'National Geographic style', 'dreamlike pastel color grading'],
+  },
+  artistic: {
+    subjects: ['A giant floating jellyfish', 'A ballerina made of glass', 'A fox painted in watercolor style', 'A shadow figure glowing with light'],
+    environments: ['in a dreamlike void of pastel clouds', 'on a rooftop above a glowing city', 'inside a swirling galaxy', 'in a landscape melting like paint'],
+    styles: ['surreal dreamlike visuals', 'watercolor painting', 'VHS retro glitch', 'trippy kaleidoscope effect'],
+  },
+};
 
 // --- For Clothing Randomization ---
 export const CLOTHING_ADJECTIVES = ['stylish', 'elegant', 'casual', 'formal', 'vintage', 'modern', 'cozy', 'rugged', 'chic', 'minimalist', 'bohemian', 'vibrant', 'dark', 'lightweight', 'tailored'];

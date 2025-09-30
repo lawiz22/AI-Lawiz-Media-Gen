@@ -265,7 +265,7 @@ export interface ExtractorState {
 }
 
 export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font';
-export type PromptCategory = 'image' | 'background' | 'subject' | 'soup';
+export type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video';
 
 export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';
 export type LogoBackground = 'transparent' | 'white' | 'black';
@@ -370,6 +370,17 @@ export interface PromptGenState {
     soupPrompt: string;
     soupPromptSaveStatus: 'idle' | 'saving' | 'saved';
     soupHistory: string[];
+    // WAN 2.2 Video Prompt Builder
+    wanVideoImage: File | null;
+    wanVideoBasePrompt: string;
+    wanVideoCategory: 'fantasy' | 'sci-fi' | 'nature' | 'artistic';
+    wanVideoSubject: string;
+    wanVideoAction: string;
+    wanVideoEnvironment: string;
+    wanVideoCameraMove: string;
+    wanVideoStyle: string;
+    wanVideoFinalPrompt: string;
+    wanVideoPromptSaveStatus: 'idle' | 'saving' | 'saved';
 }
 
 export interface LogoThemeState {
@@ -471,6 +482,7 @@ export interface AppSliceState {
   isFontSourcePickerOpen: boolean;
   isMaskPickerOpen: boolean;
   isElementPickerOpen: boolean;
+  isWanVideoImagePickerOpen: boolean;
 
   // Google Drive State
   driveFolder: DriveFolder | null;

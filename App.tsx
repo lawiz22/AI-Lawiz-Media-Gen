@@ -78,6 +78,7 @@ const App: React.FC = () => {
         isBannerRefPickerOpen, isBannerPalettePickerOpen, isBannerLogoPickerOpen, isBannerFontPickerOpen,
         isAlbumCoverRefPickerOpen, isAlbumCoverPalettePickerOpen, isAlbumCoverLogoPickerOpen, isAlbumCoverFontPickerOpen,
         isMannequinRefPickerOpen, isFontSourcePickerOpen, isMaskPickerOpen, isElementPickerOpen,
+        isWanVideoImagePickerOpen,
         driveFolder, isSyncing, syncMessage, isDriveConfigured
     } = useSelector((state: RootState) => state.app);
 
@@ -853,6 +854,7 @@ const App: React.FC = () => {
                             onOpenLibraryForImage={() => openModal('isPromptGenImagePickerOpen')}
                             onOpenLibraryForBg={() => openModal('isPromptGenBgImagePickerOpen')}
                             onOpenLibraryForSubject={() => openModal('isPromptGenSubjectImagePickerOpen')}
+                            onOpenLibraryForWanVideoImage={() => openModal('isWanVideoImagePickerOpen')}
                             onReset={handlePromptGenReset}
                         />
                     </div>
@@ -1329,6 +1331,19 @@ const App: React.FC = () => {
                         const blob = await res.blob();
                         const file = new File([blob], item.name || "library_prompt_subject_source.jpeg", { type: blob.type });
                         dispatch(updatePromptGenState({ subjectImage: file, subjectPrompt: '' }));
+                    }}
+                    filter={imageLikeFilter}
+                />
+            )}
+            {isWanVideoImagePickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isWanVideoImagePickerOpen}
+                    onClose={() => closeModal('isWanVideoImagePickerOpen')}
+                    onSelectItem={async (item) => {
+                        const res = await fetch(item.media);
+                        const blob = await res.blob();
+                        const file = new File([blob], item.name || "library_wan_video_source.jpeg", { type: blob.type });
+                        dispatch(updatePromptGenState({ wanVideoImage: file, wanVideoBasePrompt: '' }));
                     }}
                     filter={imageLikeFilter}
                 />

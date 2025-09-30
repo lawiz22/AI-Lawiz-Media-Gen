@@ -1,4 +1,3 @@
-
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { PromptGenState, PromptCategory } from '../types';
 
@@ -21,6 +20,16 @@ const initialState: PromptGenSliceState = {
     soupPrompt: '',
     soupPromptSaveStatus: 'idle',
     soupHistory: [],
+    wanVideoImage: null,
+    wanVideoBasePrompt: '',
+    wanVideoCategory: 'sci-fi',
+    wanVideoSubject: '',
+    wanVideoAction: '',
+    wanVideoEnvironment: '',
+    wanVideoCameraMove: '',
+    wanVideoStyle: '',
+    wanVideoFinalPrompt: '',
+    wanVideoPromptSaveStatus: 'idle',
   },
   activePromptToolsSubTab: 'from-image',
 };
@@ -46,6 +55,9 @@ const promptGenSlice = createSlice({
         }
         if (updates.soupPrompt !== undefined && updates.soupPrompt !== state.promptGenState.soupPrompt) {
             state.promptGenState.soupPromptSaveStatus = 'idle';
+        }
+        if (updates.wanVideoFinalPrompt !== undefined && updates.wanVideoFinalPrompt !== state.promptGenState.wanVideoFinalPrompt) {
+            state.promptGenState.wanVideoPromptSaveStatus = 'idle';
         }
         
         // Apply all updates to the state using direct mutation, which is handled correctly by Immer.
@@ -77,6 +89,9 @@ const promptGenSlice = createSlice({
                 break;
             case 'soup': 
                 state.promptGenState.soupPromptSaveStatus = status;
+                break;
+            case 'wan-video':
+                state.promptGenState.wanVideoPromptSaveStatus = status;
                 break;
         }
     }

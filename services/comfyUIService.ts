@@ -106,6 +106,22 @@ export const generateComfyUIPromptFromSource = async (sourceImage: File, modelTy
     return text;
 };
 
+export const generateWanVideoPromptFromImage = async (sourceImage: File): Promise<string> => {
+    const imagePart = await fileToGenerativePart(sourceImage);
+    const instruction = `Analyze this image. Describe the main subject and its environment in a concise, cinematic phrase suitable for a text-to-video prompt. For example: "A lion running across the savannah" or "A cyberpunk woman with neon hair in a rainy neon-lit alley". Respond with only the descriptive phrase.`;
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, { text: instruction }] },
+        config: { temperature: 0.3 }
+    });
+
+    const text = result.text?.trim().replace(/['"`]/g, '');
+    if (!text) throw new Error('AI failed to generate a video prompt from the image.');
+    return text;
+};
+
+
 export const extractBackgroundPromptFromImage = async (sourceImage: File, modelType: ComfyPromptModelType): Promise<string> => {
     const imagePart = await fileToGenerativePart(sourceImage);
     const styleInstruction = getPromptStyleInstruction(modelType);
