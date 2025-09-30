@@ -25,6 +25,12 @@ const getDb = (): Promise<IDBPDatabase<MyDB>> => {
         store.createIndex('mediaType', 'mediaType');
         store.createIndex('driveFileId', 'driveFileId', { unique: false });
       },
+      terminated() {
+        // This is called if the connection is terminated abnormally.
+        // We null out the dbPromise so a new connection will be opened on the next call.
+        dbPromise = null;
+        console.error('The IndexedDB connection was terminated unexpectedly. A new connection will be attempted on the next operation.');
+      }
     });
   }
   return dbPromise;
