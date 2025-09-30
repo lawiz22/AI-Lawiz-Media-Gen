@@ -17,7 +17,7 @@ export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image-preview';
 export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5';
-export type ComfyVideoModelType = 'wan-i2v' | 'svd';
+export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui';
 export type VideoProvider = 'gemini' | 'comfyui';
 export type ClothingStyleConsistency = 'varied' | 'strict';
@@ -188,6 +188,37 @@ export interface GenerationOptions {
     comfyVidWanI2VUseEndFrame?: boolean;
     comfyVidWanI2VNoiseSeed?: number;
     comfyVidWanI2VSeedControl?: 'fixed' | 'randomize';
+
+    // WAN 2.2 T2I specific (new)
+    comfyVidWanT2VPositivePrompt?: string;
+    comfyVidWanT2VNegativePrompt?: string;
+    comfyVidWanT2VWidth?: number;
+    comfyVidWanT2VHeight?: number;
+    comfyVidWanT2VFrameCount?: number;
+    comfyVidWanT2VSteps?: number;
+    comfyVidWanT2VCfg?: number;
+    comfyVidWanT2VSampler?: string;
+    comfyVidWanT2VScheduler?: string;
+    comfyVidWanT2VRefinerStartStep?: number;
+    comfyVidWanT2VNoiseSeed?: number;
+    comfyVidWanT2VSeedControl?: 'fixed' | 'randomize';
+    comfyVidWanT2VUseLightningLora?: boolean;
+    comfyVidWanT2VLightningLoraHigh?: string;
+    comfyVidWanT2VLightningLoraStrengthHigh?: number;
+    comfyVidWanT2VLightningLoraLow?: string;
+    comfyVidWanT2VLightningLoraStrengthLow?: number;
+    comfyVidWanT2VUseOptionalLora?: boolean;
+    comfyVidWanT2VOptionalLoraName?: string;
+    comfyVidWanT2VOptionalLoraStrength?: number;
+    comfyVidWanT2VUseFilmGrain?: boolean;
+    comfyVidWanT2VFilmGrainIntensity?: number;
+    comfyVidWanT2VFilmGrainSaturation?: number;
+    comfyVidWanT2VFrameRate?: number;
+    comfyVidWanT2VVideoFormat?: string;
+    comfyVidWanT2VHighNoiseModel?: string;
+    comfyVidWanT2VLowNoiseModel?: string;
+    comfyVidWanT2VClipModel?: string;
+    comfyVidWanT2VVaeModel?: string;
 }
 
 export interface IdentifiedClothing {

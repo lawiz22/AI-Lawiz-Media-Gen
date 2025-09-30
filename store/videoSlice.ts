@@ -123,7 +123,10 @@ export const selectIsVideoReady = createSelector(
     if (options.videoProvider === 'gemini') {
         return !!options.geminiVidPrompt?.trim();
     } else { // comfyui
-        // Fix: Added a check for the ComfyUI positive prompt to ensure all required fields are present before enabling generation.
+        if (options.comfyVidModelType === 'wan-t2v') {
+            return !!options.comfyVidWanT2VPositivePrompt?.trim();
+        }
+        // Existing logic for I2V
         return !!videoStartFrame && !!options.comfyVidWanI2VPositivePrompt?.trim();
     }
   }

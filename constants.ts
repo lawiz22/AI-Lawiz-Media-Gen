@@ -171,6 +171,13 @@ export const WAN_VIDEO_PROMPT_BLOCKS = {
   },
 };
 
+export const WAN_T2V_ASPECT_RATIO_OPTIONS = [
+    { value: '856x480', label: 'Landscape (SD - 856x480)' },
+    { value: '1280x720', label: 'Landscape (HD - 1280x720)' },
+    { value: '480x856', label: 'Portrait (SD - 480x856)' },
+    { value: '720x1280', label: 'Portrait (HD - 720x1280)' },
+];
+
 // --- For Clothing Randomization ---
 export const CLOTHING_ADJECTIVES = ['stylish', 'elegant', 'casual', 'formal', 'vintage', 'modern', 'cozy', 'rugged', 'chic', 'minimalist', 'bohemian', 'vibrant', 'dark', 'lightweight', 'tailored'];
 export const CLOTHING_COLORS = ['black', 'white', 'charcoal gray', 'navy blue', 'khaki', 'olive green', 'burgundy', 'crimson red', 'pastel pink', 'sky blue', 'sunflower yellow', 'cream', 'beige', 'forest green'];
@@ -920,6 +927,65 @@ export const COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE = {
   "112": { "inputs": { "string": "positive prompt", "strip_newlines": true }, "class_type": "StringConstantMultiline", "_meta": { "title": "Prompt Action" }},
   "114": { "inputs": { "grain_intensity": 0.02, "saturation_mix": 0.3, "images": [ "8", 0 ] }, "class_type": "FastFilmGrain", "_meta": { "title": "FastFilmGrain" } }
 };
+
+// --- ComfyUI WAN 2.2 Text-to-Video Workflow ---
+export const COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE = {
+  "6": {
+    "inputs": { "text": "A confident woman with red hair in a vibrant patterned dress against a plain green background., at sunrise with golden light, a steady tracking shot, the camera moves alongside the subject", "clip": [ "107", 0 ] },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "CLIP Text Encode (Positive Prompt)" }
+  },
+  "7": {
+    "inputs": { "text": "blurry, low quality, pixelated, distorted, out of frame, cropped, watermark, text, bad anatomy, disfigured, mutated, extra limbs, extra arms, extra legs, extra fingers, fused fingers, deformed hands, disconnected limbs, broken body, twisted posture, bad face, deformed face, asymmetrical face, mutated eyes, long neck, short limbs, unnatural body, flickering, jitter, duplicated body, ghosting, static pose, unnatural movement, stiff animation, camera shake, distorted perspective, ugly, poorly drawn, cartoon, 3d render, cgi", "clip": [ "107", 0 ] },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "CLIP Text Encode (Negative Prompt)" }
+  },
+  "8": { "inputs": { "samples": [ "102", 0 ], "vae": [ "39", 0 ] }, "class_type": "VAEDecode", "_meta": { "title": "VAE Decode" } },
+  "39": { "inputs": { "vae_name": "wan_2.1_vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Charger VAE" } },
+  "79": { "inputs": { "shift": 8, "model": [ "94", 0 ] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModèleÉchantillonnageSD3" } },
+  "93": { "inputs": { "shift": 8, "model": [ "95", 0 ] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModèleÉchantillonnageSD3" } },
+  "94": {
+    "inputs": { "lora_name": "Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors", "strength_model": 2.0, "model": [ "105", 0 ] },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": { "title": "LoraLoaderModelOnly" }
+  },
+  "95": {
+    "inputs": { "lora_name": "Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors", "strength_model": 1, "model": [ "106", 0 ] },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": { "title": "LoraLoaderModelOnly" }
+  },
+  "96": { "inputs": { "sage_attention": "auto", "model": [ "79", 0 ] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "Patch Sage Attention KJ" } },
+  "98": { "inputs": { "sage_attention": "auto", "model": [ "93", 0 ] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "Patch Sage Attention KJ" } },
+  "101": {
+    "inputs": { "add_noise": "enable", "noise_seed": 1115662785009348, "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 0, "end_at_step": 3, "return_with_leftover_noise": "enable", "model": [ "96", 0 ], "positive": [ "117", 0 ], "negative": [ "117", 1 ], "latent_image": [ "117", 2 ] },
+    "class_type": "KSamplerAdvanced",
+    "_meta": { "title": "High Noise - KSampler (Advanced)" }
+  },
+  "102": {
+    "inputs": { "add_noise": "disable", "noise_seed": 0, "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 3, "end_at_step": 10000, "return_with_leftover_noise": "disable", "model": [ "98", 0 ], "positive": [ "6", 0 ], "negative": [ "7", 0 ], "latent_image": [ "101", 0 ] },
+    "class_type": "KSamplerAdvanced",
+    "_meta": { "title": "Low Noise - KSampler (Advanced)" }
+  },
+  "105": { "inputs": { "unet_name": "Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf" }, "class_type": "UnetLoaderGGUF", "_meta": { "title": "Unet Loader (GGUF)" } },
+  "106": { "inputs": { "unet_name": "Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf" }, "class_type": "UnetLoaderGGUF", "_meta": { "title": "Unet Loader (GGUF)" } },
+  "107": { "inputs": { "clip_name": "umt5-xxl-encoder-Q5_K_M.gguf", "type": "wan" }, "class_type": "CLIPLoaderGGUF", "_meta": { "title": "CLIPLoader (GGUF)" } },
+  "111": {
+    "inputs": { "frame_rate": 17.599853515625, "loop_count": 0, "filename_prefix": "WAN/2025-09-30/131656_", "format": "video/nvenc_h264-mp4", "pix_fmt": "yuv420p", "bitrate": 10, "megabit": true, "save_metadata": true, "pingpong": false, "save_output": true, "images": [ "114", 0 ] },
+    "class_type": "VHS_VideoCombine",
+    "_meta": { "title": "Video Final" }
+  },
+  "114": {
+    "inputs": { "grain_intensity": 0.02, "saturation_mix": 0.3, "images": [ "8", 0 ] },
+    "class_type": "FastFilmGrain",
+    "_meta": { "title": "🎞️ Fast Film Grain" }
+  },
+  "117": {
+    "inputs": { "width": 736, "height": 416, "length": 57, "batch_size": 1, "positive": [ "6", 0 ], "negative": [ "7", 0 ], "vae": [ "39", 0 ] },
+    "class_type": "WanImageToVideo",
+    "_meta": { "title": "WanImageVersVidéo" }
+  }
+};
+
 
 // --- ComfyUI Face Detailer Workflow (SD 1.5) ---
 export const COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE = {

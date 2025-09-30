@@ -33,7 +33,7 @@ const initialOptions: GenerationOptions = {
     // Video Generation
     videoProvider: 'comfyui',
     
-    // ComfyUI Video Defaults
+    // ComfyUI Video Defaults (I2V)
     comfyVidModelType: 'wan-i2v',
     comfyVidWanI2VPositivePrompt: 'cinematic shot of a majestic lion walking through the savanna',
     comfyVidWanI2VNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed, disfigured, text, watermark',
@@ -50,10 +50,41 @@ const initialOptions: GenerationOptions = {
     comfyVidWanI2VFilmGrainIntensity: 0.02,
     comfyVidWanI2VFilmGrainSize: 0.3, // Saturation Mix
     comfyVidWanI2VFrameRate: 24,
-    comfyVidWanI2VVideoFormat: 'video/nvenc_h264-mp4',
+    comfyVidWanI2VVideoFormat: 'video/nvenc_h24-mp4',
     comfyVidWanI2VUseEndFrame: false,
     comfyVidWanI2VNoiseSeed: undefined,
     comfyVidWanI2VSeedControl: 'randomize',
+
+    // ComfyUI Video Defaults (T2V)
+    comfyVidWanT2VHighNoiseModel: 'Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf',
+    comfyVidWanT2VLowNoiseModel: 'Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf',
+    comfyVidWanT2VClipModel: 'umt5-xxl-encoder-Q5_K_M.gguf',
+    comfyVidWanT2VVaeModel: 'wan_2.1_vae.safetensors',
+    comfyVidWanT2VPositivePrompt: 'A confident woman with red hair in a vibrant patterned dress against a plain green background., at sunrise with golden light, a steady tracking shot, the camera moves alongside the subject',
+    comfyVidWanT2VNegativePrompt: 'blurry, low quality, pixelated, distorted, out of frame, cropped, watermark, text, bad anatomy, disfigured, mutated, extra limbs, extra arms, extra legs, extra fingers, fused fingers, deformed hands, disconnected limbs, broken body, twisted posture, bad face, deformed face, asymmetrical face, mutated eyes, long neck, short limbs, unnatural body, flickering, jitter, duplicated body, ghosting, static pose, unnatural movement, stiff animation, camera shake, distorted perspective, ugly, poorly drawn, cartoon, 3d render, cgi',
+    comfyVidWanT2VWidth: 856,
+    comfyVidWanT2VHeight: 480,
+    comfyVidWanT2VFrameCount: 57,
+    comfyVidWanT2VSteps: 6,
+    comfyVidWanT2VCfg: 1,
+    comfyVidWanT2VSampler: 'euler',
+    comfyVidWanT2VScheduler: 'simple',
+    comfyVidWanT2VRefinerStartStep: 3,
+    comfyVidWanT2VNoiseSeed: undefined,
+    comfyVidWanT2VSeedControl: 'randomize',
+    comfyVidWanT2VUseLightningLora: true,
+    comfyVidWanT2VLightningLoraHigh: 'Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors',
+    comfyVidWanT2VLightningLoraStrengthHigh: 2.0,
+    comfyVidWanT2VLightningLoraLow: 'Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors',
+    comfyVidWanT2VLightningLoraStrengthLow: 1.0,
+    comfyVidWanT2VUseOptionalLora: false,
+    comfyVidWanT2VOptionalLoraName: '',
+    comfyVidWanT2VOptionalLoraStrength: 1.0,
+    comfyVidWanT2VUseFilmGrain: true,
+    comfyVidWanT2VFilmGrainIntensity: 0.02,
+    comfyVidWanT2VFilmGrainSaturation: 0.3,
+    comfyVidWanT2VFrameRate: 17.6,
+    comfyVidWanT2VVideoFormat: 'video/nvenc_h264-mp4',
 };
 
 const initialState: GenerationSliceState = {

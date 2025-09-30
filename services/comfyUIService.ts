@@ -9,6 +9,7 @@ import {
   COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE,
   COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE,
   COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE,
+  COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE,
   COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE,
 } from "../constants";
 
@@ -711,87 +712,154 @@ export const generateComfyUIPortraits = async (
 };
 
 export const generateComfyUIVideo = async (
-    startFrame: File,
+    startFrame: File | null,
     endFrame: File | null,
     options: GenerationOptions,
     updateProgress: (message: string, value: number) => void
 ): Promise<{ videoUrl: string, finalPrompt: string }> => {
-    const workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE));
-    
-    // --- Uploads and common settings ---
-    updateProgress("Uploading start frame...", 0.05);
-    const startFrameInfo = await uploadImage(startFrame);
-    
-    workflow["52"].inputs.image = startFrameInfo.name;
-    workflow["105"].inputs.unet_name = options.comfyVidWanI2VHighNoiseModel;
-    workflow["106"].inputs.unet_name = options.comfyVidWanI2VLowNoiseModel;
-    workflow["107"].inputs.clip_name = options.comfyVidWanI2VClipModel;
-    workflow["39"].inputs.vae_name = options.comfyVidWanI2VVaeModel;
-    workflow["49"].inputs.clip_name = options.comfyVidWanI2VClipVisionModel;
-    workflow["112"].inputs.string = options.comfyVidWanI2VPositivePrompt;
-    workflow["7"].inputs.text = options.comfyVidWanI2VNegativePrompt;
-    
-    const mainNode = workflow["83"];
-    mainNode.inputs.length = options.comfyVidWanI2VFrameCount;
-    mainNode.inputs.width = options.comfyVidWanI2VWidth;
-    mainNode.inputs.height = options.comfyVidWanI2VHeight;
-    
-    // --- Handle End Frame Logic ---
-    const useEndFrame = endFrame && options.comfyVidWanI2VUseEndFrame;
-    if (useEndFrame) {
-        updateProgress("Uploading end frame...", 0.1);
-        const endFrameInfo = await uploadImage(endFrame);
-        workflow["72"].inputs.image = endFrameInfo.name;
-    } else {
-        // "Disable" end frame nodes and inputs by removing them from the workflow
-        delete workflow["72"]; // LoadImage end frame
-        delete workflow["87"]; // CLIPVisionEncode end frame
-        delete mainNode.inputs.end_image;
-        delete mainNode.inputs.clip_vision_end_image;
+    let workflow;
+    let finalPrompt = '';
+
+    if (options.comfyVidModelType === 'wan-t2v') {
+        workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE));
+        finalPrompt = options.comfyVidWanT2VPositivePrompt || '';
+        
+        workflow["6"].inputs.text = options.comfyVidWanT2VPositivePrompt;
+        workflow["7"].inputs.text = options.comfyVidWanT2VNegativePrompt;
+        
+        // Models
+        workflow["105"].inputs.unet_name = options.comfyVidWanT2VHighNoiseModel;
+        workflow["106"].inputs.unet_name = options.comfyVidWanT2VLowNoiseModel;
+        workflow["107"].inputs.clip_name = options.comfyVidWanT2VClipModel;
+        workflow["39"].inputs.vae_name = options.comfyVidWanT2VVaeModel;
+        
+        // Latent
+        const latentNode = workflow["117"];
+        latentNode.inputs.width = options.comfyVidWanT2VWidth;
+        latentNode.inputs.height = options.comfyVidWanT2VHeight;
+        latentNode.inputs.length = options.comfyVidWanT2VFrameCount;
+
+        // Samplers
+        const sampler1 = workflow["101"];
+        const sampler2 = workflow["102"];
+        sampler1.inputs.steps = sampler2.inputs.steps = options.comfyVidWanT2VSteps;
+        sampler1.inputs.cfg = sampler2.inputs.cfg = options.comfyVidWanT2VCfg;
+        sampler1.inputs.sampler_name = sampler2.inputs.sampler_name = options.comfyVidWanT2VSampler;
+        sampler1.inputs.scheduler = sampler2.inputs.scheduler = options.comfyVidWanT2VScheduler;
+        sampler1.inputs.end_at_step = options.comfyVidWanT2VRefinerStartStep;
+        sampler2.inputs.start_at_step = options.comfyVidWanT2VRefinerStartStep;
+        sampler1.inputs.noise_seed = options.comfyVidWanT2VNoiseSeed ?? Math.floor(Math.random() * 1e15);
+        sampler1.inputs.control_after_generate = options.comfyVidWanT2VSeedControl || 'randomize';
+        
+        // LoRA Chaining
+        let highNoiseModelInput: [string, number] = ["105", 0];
+        let lowNoiseModelInput: [string, number] = ["106", 0];
+
+        if (options.comfyVidWanT2VUseOptionalLora && options.comfyVidWanT2VOptionalLoraName) {
+            workflow["optional_lora_high"] = { inputs: { lora_name: options.comfyVidWanT2VOptionalLoraName, strength_model: options.comfyVidWanT2VOptionalLoraStrength, model: highNoiseModelInput }, class_type: "LoraLoaderModelOnly" };
+            workflow["optional_lora_low"] = { inputs: { lora_name: options.comfyVidWanT2VOptionalLoraName, strength_model: options.comfyVidWanT2VOptionalLoraStrength, model: lowNoiseModelInput }, class_type: "LoraLoaderModelOnly" };
+            highNoiseModelInput = ["optional_lora_high", 0];
+            lowNoiseModelInput = ["optional_lora_low", 0];
+        }
+
+        if (options.comfyVidWanT2VUseLightningLora) {
+            workflow["94"].inputs.model = highNoiseModelInput;
+            workflow["94"].inputs.lora_name = options.comfyVidWanT2VLightningLoraHigh;
+            workflow["94"].inputs.strength_model = options.comfyVidWanT2VLightningLoraStrengthHigh;
+            workflow["95"].inputs.model = lowNoiseModelInput;
+            workflow["95"].inputs.lora_name = options.comfyVidWanT2VLightningLoraLow;
+            workflow["95"].inputs.strength_model = options.comfyVidWanT2VLightningLoraStrengthLow;
+        } else {
+            delete workflow["94"];
+            delete workflow["95"];
+            workflow["79"].inputs.model = highNoiseModelInput;
+            workflow["93"].inputs.model = lowNoiseModelInput;
+        }
+
+        // Post-processing
+        workflow["111"].inputs.frame_rate = options.comfyVidWanT2VFrameRate;
+        workflow["111"].inputs.format = options.comfyVidWanT2VVideoFormat;
+        if (options.comfyVidWanT2VUseFilmGrain) {
+            workflow["114"].inputs.grain_intensity = options.comfyVidWanT2VFilmGrainIntensity;
+            workflow["114"].inputs.saturation_mix = options.comfyVidWanT2VFilmGrainSaturation;
+        } else {
+            delete workflow["114"];
+            workflow["111"].inputs.images = ["8", 0];
+        }
+    } else { // Existing I2V logic
+        if (!startFrame) throw new Error("A start frame is required for Image-to-Video generation.");
+        workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE));
+        finalPrompt = options.comfyVidWanI2VPositivePrompt || '';
+
+        updateProgress("Uploading start frame...", 0.05);
+        const startFrameInfo = await uploadImage(startFrame);
+        
+        workflow["52"].inputs.image = startFrameInfo.name;
+        workflow["105"].inputs.unet_name = options.comfyVidWanI2VHighNoiseModel;
+        workflow["106"].inputs.unet_name = options.comfyVidWanI2VLowNoiseModel;
+        workflow["107"].inputs.clip_name = options.comfyVidWanI2VClipModel;
+        workflow["39"].inputs.vae_name = options.comfyVidWanI2VVaeModel;
+        workflow["49"].inputs.clip_name = options.comfyVidWanI2VClipVisionModel;
+        workflow["112"].inputs.string = options.comfyVidWanI2VPositivePrompt;
+        workflow["7"].inputs.text = options.comfyVidWanI2VNegativePrompt;
+        
+        const mainNode = workflow["83"];
+        mainNode.inputs.length = options.comfyVidWanI2VFrameCount;
+        mainNode.inputs.width = options.comfyVidWanI2VWidth;
+        mainNode.inputs.height = options.comfyVidWanI2VHeight;
+        
+        const useEndFrame = endFrame && options.comfyVidWanI2VUseEndFrame;
+        if (useEndFrame) {
+            updateProgress("Uploading end frame...", 0.1);
+            const endFrameInfo = await uploadImage(endFrame);
+            workflow["72"].inputs.image = endFrameInfo.name;
+        } else {
+            delete workflow["72"];
+            delete workflow["87"];
+            delete mainNode.inputs.end_image;
+            delete mainNode.inputs.clip_vision_end_image;
+        }
+
+        const sampler1 = workflow["101"];
+        const sampler2 = workflow["102"];
+        sampler1.inputs.steps = sampler2.inputs.steps = options.comfyVidWanI2VSteps;
+        sampler1.inputs.cfg = sampler2.inputs.cfg = options.comfyVidWanI2VCfg;
+        sampler1.inputs.sampler_name = sampler2.inputs.sampler_name = options.comfyVidWanI2VSampler;
+        sampler1.inputs.scheduler = sampler2.inputs.scheduler = options.comfyVidWanI2VScheduler;
+        sampler1.inputs.end_at_step = options.comfyVidWanI2VRefinerStartStep;
+        sampler2.inputs.start_at_step = options.comfyVidWanI2VRefinerStartStep;
+        sampler1.inputs.noise_seed = options.comfyVidWanI2VNoiseSeed ?? Math.floor(Math.random() * 1e15);
+        sampler1.inputs.control_after_generate = options.comfyVidWanI2VSeedControl || 'randomize';
+
+        if (options.comfyVidWanI2VUseLightningLora) {
+            workflow["94"].inputs.lora_name = options.comfyVidWanI2VHighNoiseLora;
+            workflow["94"].inputs.strength_model = options.comfyVidWanI2VHighNoiseLoraStrength;
+            workflow["95"].inputs.lora_name = options.comfyVidWanI2VLowNoiseLora;
+            workflow["95"].inputs.strength_model = options.comfyVidWanI2VLowNoiseLoraStrength;
+        } else {
+            delete workflow["94"];
+            delete workflow["95"];
+            workflow["79"].inputs.model = ["105", 0];
+            workflow["93"].inputs.model = ["106", 0];
+        }
+        
+        workflow["111"].inputs.frame_rate = options.comfyVidWanI2VFrameRate;
+        workflow["111"].inputs.format = options.comfyVidWanI2VVideoFormat;
+        
+        if (options.comfyVidWanI2VUseFilmGrain) {
+            workflow["114"].inputs.grain_intensity = options.comfyVidWanI2VFilmGrainIntensity;
+            workflow["114"].inputs.saturation_mix = options.comfyVidWanI2VFilmGrainSize; 
+        } else {
+            delete workflow["114"];
+            workflow["111"].inputs.images = ["8", 0]; 
+        }
     }
 
-    // --- Sampler settings ---
-    const sampler1 = workflow["101"];
-    const sampler2 = workflow["102"];
-    sampler1.inputs.steps = sampler2.inputs.steps = options.comfyVidWanI2VSteps;
-    sampler1.inputs.cfg = sampler2.inputs.cfg = options.comfyVidWanI2VCfg;
-    sampler1.inputs.sampler_name = sampler2.inputs.sampler_name = options.comfyVidWanI2VSampler;
-    sampler1.inputs.scheduler = sampler2.inputs.scheduler = options.comfyVidWanI2VScheduler;
-    sampler1.inputs.end_at_step = options.comfyVidWanI2VRefinerStartStep;
-    sampler2.inputs.start_at_step = options.comfyVidWanI2VRefinerStartStep;
-    sampler1.inputs.noise_seed = options.comfyVidWanI2VNoiseSeed ?? Math.floor(Math.random() * 1e15);
-    sampler1.inputs.control_after_generate = options.comfyVidWanI2VSeedControl || 'randomize';
-
-    // --- LoRA settings ---
-    if (options.comfyVidWanI2VUseLightningLora) {
-        workflow["94"].inputs.lora_name = options.comfyVidWanI2VHighNoiseLora;
-        workflow["94"].inputs.strength_model = options.comfyVidWanI2VHighNoiseLoraStrength;
-        workflow["95"].inputs.lora_name = options.comfyVidWanI2VLowNoiseLora;
-        workflow["95"].inputs.strength_model = options.comfyVidWanI2VLowNoiseLoraStrength;
-    } else {
-        delete workflow["94"];
-        delete workflow["95"];
-        workflow["79"].inputs.model = ["105", 0];
-        workflow["93"].inputs.model = ["106", 0];
-    }
-    
-    // --- Post-processing settings ---
-    workflow["111"].inputs.frame_rate = options.comfyVidWanI2VFrameRate;
-    workflow["111"].inputs.format = options.comfyVidWanI2VVideoFormat;
-    
-    if (options.comfyVidWanI2VUseFilmGrain) {
-        workflow["114"].inputs.grain_intensity = options.comfyVidWanI2VFilmGrainIntensity;
-        workflow["114"].inputs.saturation_mix = options.comfyVidWanI2VFilmGrainSize; 
-    } else {
-        delete workflow["114"];
-        workflow["111"].inputs.images = ["8", 0]; 
-    }
-    
     // --- Execution ---
     const { videoUrl } = await executeWorkflow(workflow, updateProgress, true);
     if (!videoUrl) throw new Error("Generation finished, but no video file was found.");
     
-    return { videoUrl, finalPrompt: options.comfyVidWanI2VPositivePrompt || '' };
+    return { videoUrl, finalPrompt };
 };
 
 export const exportComfyUIWorkflow = async (options: GenerationOptions, sourceFile: File | null): Promise<void> => {

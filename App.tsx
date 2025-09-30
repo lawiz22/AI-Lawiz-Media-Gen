@@ -294,7 +294,6 @@ const App: React.FC = () => {
 
         try {
             if (options.videoProvider === 'comfyui') {
-                if (!videoStartFrame) throw new Error("A start frame is required for video generation.");
                 const { videoUrl, finalPrompt } = await generateComfyUIVideo(
                     videoStartFrame, videoEndFrame, options, localUpdateProgress
                 );

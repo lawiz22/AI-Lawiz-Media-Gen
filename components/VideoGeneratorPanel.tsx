@@ -9,6 +9,7 @@ import { Loader } from './Loader';
 import type { GenerationOptions, LibraryItem } from '../types';
 import { resizeImageFile } from '../utils/imageProcessing';
 import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromFile, dataUrlToFile, createVideoPlaceholderThumbnail } from '../utils/imageUtils';
+import { WAN_T2V_ASPECT_RATIO_OPTIONS } from '../constants';
 
 // --- Prop Types ---
 interface VideoGeneratorPanelProps {
@@ -215,24 +216,26 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
 
     
     useEffect(() => {
-        const detectAndSetDimensions = (file: File) => {
-            try {
-                const img = new Image();
-                const objectUrl = URL.createObjectURL(file);
-                img.onload = () => {
-                    const width = Math.round(img.naturalWidth / 8) * 8;
-                    const height = Math.round(img.naturalHeight / 8) * 8;
-                    setOptions({ ...options, comfyVidWanI2VWidth: width, comfyVidWanI2VHeight: height });
-                    URL.revokeObjectURL(objectUrl);
-                };
-                img.onerror = () => URL.revokeObjectURL(objectUrl);
-                img.src = objectUrl;
-            } catch (error) { console.error("Error detecting image dimensions:", error); }
-        };
+        if (options.comfyVidModelType === 'wan-i2v') {
+            const detectAndSetDimensions = (file: File) => {
+                try {
+                    const img = new Image();
+                    const objectUrl = URL.createObjectURL(file);
+                    img.onload = () => {
+                        const width = Math.round(img.naturalWidth / 8) * 8;
+                        const height = Math.round(img.naturalHeight / 8) * 8;
+                        setOptions({ ...options, comfyVidWanI2VWidth: width, comfyVidWanI2VHeight: height });
+                        URL.revokeObjectURL(objectUrl);
+                    };
+                    img.onerror = () => URL.revokeObjectURL(objectUrl);
+                    img.src = objectUrl;
+                } catch (error) { console.error("Error detecting image dimensions:", error); }
+            };
 
-        if (startFrame) detectAndSetDimensions(startFrame);
-        else setOptions({ ...options, comfyVidWanI2VWidth: 848, comfyVidWanI2VHeight: 560 });
-    }, [startFrame, setOptions]);
+            if (startFrame) detectAndSetDimensions(startFrame);
+            else setOptions({ ...options, comfyVidWanI2VWidth: 848, comfyVidWanI2VHeight: 560 });
+        }
+    }, [startFrame, options.comfyVidModelType, setOptions]);
 
     const handleOptionChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
@@ -274,8 +277,13 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
             }
 
             if (optionsToSave.videoProvider === 'comfyui') {
-                optionsToSave.width = optionsToSave.comfyVidWanI2VWidth;
-                optionsToSave.height = optionsToSave.comfyVidWanI2VHeight;
+                 if (optionsToSave.comfyVidModelType === 'wan-t2v') {
+                    optionsToSave.width = optionsToSave.comfyVidWanT2VWidth;
+                    optionsToSave.height = optionsToSave.comfyVidWanT2VHeight;
+                 } else { // wan-i2v
+                    optionsToSave.width = optionsToSave.comfyVidWanI2VWidth;
+                    optionsToSave.height = optionsToSave.comfyVidWanI2VHeight;
+                 }
             } else if (startFrame) { 
                 const { width, height } = await getImageDimensionsFromFile(startFrame);
                 optionsToSave.width = width;
@@ -390,6 +398,113 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
         </div>
     );
 
+    const renderComfyUIOptions = () => {
+        const isT2V = options.comfyVidModelType === 'wan-t2v';
+        const isI2V = options.comfyVidModelType === 'wan-i2v';
+
+        return (
+            <div className="space-y-4">
+                <h2 className="text-xl font-bold mb-4 text-accent">{isT2V ? '1. Configure Generation' : '1. Upload Frames'}</h2>
+                {!isT2V && (
+                     <>
+                        <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                                <ImageUploader label="Start Frame" id="start-frame" onImageUpload={setOriginalStartFrame} sourceFile={startFrame} />
+                            </div>
+                            <button onClick={onOpenLibraryForStartFrame} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library"><LibraryIcon className="w-6 h-6"/></button>
+                        </div>
+                        <div className="pt-2 space-y-2">
+                            <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={options.comfyVidWanI2VUseEndFrame} onChange={handleUseEndFrameChange} disabled={isLoading} className="rounded text-accent focus:ring-accent" />Use End Frame</label>
+                            {options.comfyVidWanI2VUseEndFrame && (<div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="End Frame" id="end-frame" onImageUpload={setOriginalEndFrame} sourceFile={endFrame} /></div><button onClick={onOpenLibraryForEndFrame} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library"><LibraryIcon className="w-6 h-6"/></button></div>)}
+                        </div>
+                        <div className="pt-2">
+                            <NumberSlider label={`Frame Size (${Math.round(frameResizeScale * 100)}%)`} value={frameResizeScale} onChange={(e) => setFrameResizeScale(parseFloat(e.target.value))} min={0.25} max={1.0} step={0.25} disabled={isLoading || isResizing}/>
+                            <p className="text-xs text-text-muted mt-1 flex items-center gap-2">Resize frames to reduce VRAM usage. 100% is original size.{isResizing && <SpinnerIcon className="w-4 h-4 animate-spin text-accent" />}</p>
+                        </div>
+                    </>
+                )}
+                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-8 mt-8">
+                    <div>
+                        <h2 className="text-xl font-bold mb-4 text-accent">2. Configure Generation</h2>
+                        <SelectInput label="Video Workflow" value={options.comfyVidModelType || 'wan-i2v'} onChange={handleOptionChange('comfyVidModelType')} options={[{value: 'wan-i2v', label: 'Wan 2.2 I2V (First/Last Frame)'}, {value: 'wan-t2v', label: 'Wan 2.2 T2I (Text to Video)'}]} disabled={isLoading} />
+                    </div>
+                    {isI2V && (
+                        <>
+                            <OptionSection title="Prompts & Core Settings" defaultOpen>
+                                <TextInput label="Positive Prompt" value={options.comfyVidWanI2VPositivePrompt || ''} onChange={handleOptionChange('comfyVidWanI2VPositivePrompt')} disabled={isLoading} isTextArea placeholder="A cinematic shot of..."/>
+                                <TextInput label="Negative Prompt" value={options.comfyVidWanI2VNegativePrompt || ''} onChange={handleOptionChange('comfyVidWanI2VNegativePrompt')} disabled={isLoading} isTextArea />
+                                <NumberSlider label={`Frame Count`} value={options.comfyVidWanI2VFrameCount || 65} onChange={handleSliderChange('comfyVidWanI2VFrameCount')} min={16} max={128} step={1} disabled={isLoading} />
+                                <NumberSlider label={`Frame Rate`} value={options.comfyVidWanI2VFrameRate || 24} onChange={handleSliderChange('comfyVidWanI2VFrameRate')} min={8} max={60} step={1} disabled={isLoading} />
+                                <div className="text-sm text-text-secondary p-2 bg-bg-tertiary rounded-md border border-border-primary/50"><p>Video Dimensions: <span className="font-semibold text-text-primary ml-2">{options.comfyVidWanI2VWidth}px × {options.comfyVidWanI2VHeight}px</span></p><p className="text-xs text-text-muted mt-1">Dimensions are based on your start frame and rounded for model compatibility.</p></div>
+                            </OptionSection>
+                            <OptionSection title="Models & LoRAs">
+                                <SelectInput label="High-Noise Unet" value={options.comfyVidWanI2VHighNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                                <SelectInput label="Low-Noise Unet" value={options.comfyVidWanI2VLowNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                                <SelectInput label="CLIP Model (GGUF)" value={options.comfyVidWanI2VClipModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipModel')} options={comfyGgufClipModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                                <SelectInput label="VAE Model" value={options.comfyVidWanI2VVaeModel || ''} onChange={handleOptionChange('comfyVidWanI2VVaeModel')} options={comfyVaes.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                                <SelectInput label="CLIP Vision Model" value={options.comfyVidWanI2VClipVisionModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipVisionModel')} options={comfyClipVision.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                                <div className="space-y-4 p-4 mt-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
+                                    <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={options.comfyVidWanI2VUseLightningLora} onChange={handleOptionChange('comfyVidWanI2VUseLightningLora')} disabled={isLoading} className="rounded text-accent focus:ring-accent" />Use Lightning LoRA</label>
+                                    {options.comfyVidWanI2VUseLightningLora && (<div className="space-y-4 pl-4 border-l-2 border-border-primary"><SelectInput label="High-Noise LoRA" value={options.comfyVidWanI2VHighNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} /><NumberSlider label={`High-Noise Strength`} value={options.comfyVidWanI2VHighNoiseLoraStrength || 2.0} onChange={handleSliderChange('comfyVidWanI2VHighNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} /><SelectInput label="Low-Noise LoRA" value={options.comfyVidWanI2VLowNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} /><NumberSlider label={`Low-Noise Strength`} value={options.comfyVidWanI2VLowNoiseLoraStrength || 1.0} onChange={handleSliderChange('comfyVidWanI2VLowNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} /></div>)}
+                                </div>
+                            </OptionSection>
+                            <OptionSection title="Sampler & Post-Processing">
+                                <NumberSlider label={`Steps`} value={options.comfyVidWanI2VSteps || 6} onChange={handleSliderChange('comfyVidWanI2VSteps')} min={4} max={12} step={1} disabled={isLoading} />
+                                <NumberSlider label={`CFG`} value={options.comfyVidWanI2VCfg || 1} onChange={handleSliderChange('comfyVidWanI2VCfg')} min={1} max={3} step={0.1} disabled={isLoading} />
+                                <NumberSlider label={`Refiner Start Step`} value={options.comfyVidWanI2VRefinerStartStep || 3} onChange={handleSliderChange('comfyVidWanI2VRefinerStartStep')} min={1} max={(options.comfyVidWanI2VSteps || 6) - 1} step={1} disabled={isLoading} />
+                                <SelectInput label="Sampler" value={options.comfyVidWanI2VSampler || 'euler'} onChange={handleOptionChange('comfyVidWanI2VSampler')} options={comfySamplers.map(s => ({value: s, label: s}))} disabled={isLoading}/><SelectInput label="Scheduler" value={options.comfyVidWanI2VScheduler || 'simple'} onChange={handleOptionChange('comfyVidWanI2VScheduler')} options={comfySchedulers.map(s => ({value: s, label: s}))} disabled={isLoading}/>
+                                <div className="grid grid-cols-2 gap-4"><SelectInput label="High-Noise Seed" value={options.comfyVidWanI2VSeedControl || 'randomize'} onChange={handleOptionChange('comfyVidWanI2VSeedControl')} options={[{value: 'randomize', label: 'Randomize'}, {value: 'fixed', label: 'Fixed'}]} disabled={isLoading}/><div><label className="block text-sm font-medium text-text-secondary">Seed Value</label><div className="flex items-center gap-1"><input type="number" value={options.comfyVidWanI2VNoiseSeed ?? ''} onChange={(e) => setOptions({...options, comfyVidWanI2VNoiseSeed: e.target.value ? parseInt(e.target.value, 10) : undefined })} placeholder="Random" className="mt-1 block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm" disabled={isLoading}/><button onClick={() => setOptions({...options, comfyVidWanI2VNoiseSeed: Math.floor(Math.random() * 1e15)})} className="mt-1 p-2 bg-bg-primary rounded-md hover:bg-bg-tertiary-hover" title="Generate Random Seed" disabled={isLoading}><RefreshIcon className="w-5 h-5"/></button></div></div></div>
+                                <SelectInput label="Video Format" value={options.comfyVidWanI2VVideoFormat || 'video/nvenc_h264-mp4'} onChange={handleOptionChange('comfyVidWanI2VVideoFormat')} options={[{value: 'video/nvenc_h264-mp4', label: 'H.264 (MP4)'}, {value: 'video/webm', label: 'WebM'}, {value: 'image/gif', label: 'GIF'}]} disabled={isLoading} />
+                                <div className="space-y-4 p-4 mt-4 bg-bg-primary/30 rounded-lg border border-border-primary/50"><label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={options.comfyVidWanI2VUseFilmGrain} onChange={handleOptionChange('comfyVidWanI2VUseFilmGrain')} disabled={isLoading} className="rounded text-accent focus:ring-accent" />Add Film Grain</label>{options.comfyVidWanI2VUseFilmGrain && (<div className="space-y-4 pl-4 border-l-2 border-border-primary"><NumberSlider label={`Grain Intensity`} value={options.comfyVidWanI2VFilmGrainIntensity || 0.02} onChange={handleSliderChange('comfyVidWanI2VFilmGrainIntensity')} min={0} max={0.5} step={0.01} disabled={isLoading} /><NumberSlider label={`Saturation Mix`} value={options.comfyVidWanI2VFilmGrainSize || 0.3} onChange={handleSliderChange('comfyVidWanI2VFilmGrainSize')} min={0} max={1} step={0.05} disabled={isLoading} /></div>)}</div>
+                            </OptionSection>
+                        </>
+                    )}
+                    {isT2V && (
+                         <>
+                            <OptionSection title="Prompts & Core Settings" defaultOpen>
+                                <TextInput label="Positive Prompt" value={options.comfyVidWanT2VPositivePrompt || ''} onChange={handleOptionChange('comfyVidWanT2VPositivePrompt')} disabled={isLoading} isTextArea placeholder="A cinematic shot of..."/>
+                                <TextInput label="Negative Prompt" value={options.comfyVidWanT2VNegativePrompt || ''} onChange={handleOptionChange('comfyVidWanT2VNegativePrompt')} disabled={isLoading} isTextArea />
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div className="sm:col-span-2">
+                                        <SelectInput
+                                            label="Resolution"
+                                            value={`${options.comfyVidWanT2VWidth || 856}x${options.comfyVidWanT2VHeight || 480}`}
+                                            onChange={(e) => {
+                                                const [width, height] = e.target.value.split('x').map(Number);
+                                                setOptions({ ...options, comfyVidWanT2VWidth: width, comfyVidWanT2VHeight: height });
+                                            }}
+                                            options={WAN_T2V_ASPECT_RATIO_OPTIONS}
+                                            disabled={isLoading}
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-1"><label className="block text-sm font-medium text-text-secondary">Frame Count</label><input type="number" value={options.comfyVidWanT2VFrameCount || 57} onChange={(e) => setOptions({...options, comfyVidWanT2VFrameCount: Number(e.target.value)})} className="mt-1 w-full bg-bg-primary p-2 rounded-md border border-border-primary" /></div>
+                                </div>
+                                <NumberSlider label={`Frame Rate`} value={options.comfyVidWanT2VFrameRate || 17.6} onChange={handleSliderChange('comfyVidWanT2VFrameRate')} min={8} max={60} step={0.1} disabled={isLoading} />
+                            </OptionSection>
+                            <OptionSection title="Models & LoRAs">
+                                <SelectInput label="High-Noise Unet" value={options.comfyVidWanT2VHighNoiseModel || ''} onChange={handleOptionChange('comfyVidWanT2VHighNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                                <SelectInput label="Low-Noise Unet" value={options.comfyVidWanT2VLowNoiseModel || ''} onChange={handleOptionChange('comfyVidWanT2VLowNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                                <SelectInput label="CLIP Model (GGUF)" value={options.comfyVidWanT2VClipModel || ''} onChange={handleOptionChange('comfyVidWanT2VClipModel')} options={comfyGgufClipModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                                <SelectInput label="VAE Model" value={options.comfyVidWanT2VVaeModel || ''} onChange={handleOptionChange('comfyVidWanT2VVaeModel')} options={comfyVaes.map(m => ({value: m, label: m}))} disabled={isLoading} />
+                                <div className="space-y-4 p-4 mt-4 bg-bg-primary/30 rounded-lg border border-border-primary/50"><label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={options.comfyVidWanT2VUseLightningLora} onChange={handleOptionChange('comfyVidWanT2VUseLightningLora')} disabled={isLoading} className="rounded text-accent focus:ring-accent" />Use Lightning LoRA</label>{options.comfyVidWanT2VUseLightningLora && (<div className="space-y-4 pl-4 border-l-2 border-border-primary"><SelectInput label="High-Noise LoRA" value={options.comfyVidWanT2VLightningLoraHigh || ''} onChange={handleOptionChange('comfyVidWanT2VLightningLoraHigh')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} /><NumberSlider label={`High-Noise Strength`} value={options.comfyVidWanT2VLightningLoraStrengthHigh || 2.0} onChange={handleSliderChange('comfyVidWanT2VLightningLoraStrengthHigh')} min={0} max={3} step={0.1} disabled={isLoading} /><SelectInput label="Low-Noise LoRA" value={options.comfyVidWanT2VLightningLoraLow || ''} onChange={handleOptionChange('comfyVidWanT2VLightningLoraLow')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} /><NumberSlider label={`Low-Noise Strength`} value={options.comfyVidWanT2VLightningLoraStrengthLow || 1.0} onChange={handleSliderChange('comfyVidWanT2VLightningLoraStrengthLow')} min={0} max={3} step={0.1} disabled={isLoading} /></div>)}</div>
+                                <div className="space-y-4 p-4 mt-4 bg-bg-primary/30 rounded-lg border border-border-primary/50"><label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={options.comfyVidWanT2VUseOptionalLora} onChange={handleOptionChange('comfyVidWanT2VUseOptionalLora')} disabled={isLoading} className="rounded text-accent focus:ring-accent" />Use Optional LoRA</label>{options.comfyVidWanT2VUseOptionalLora && (<div className="space-y-4 pl-4 border-l-2 border-border-primary"><SelectInput label="Optional LoRA" value={options.comfyVidWanT2VOptionalLoraName || ''} onChange={handleOptionChange('comfyVidWanT2VOptionalLoraName')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} /><NumberSlider label={`Strength`} value={options.comfyVidWanT2VOptionalLoraStrength || 1.0} onChange={handleSliderChange('comfyVidWanT2VOptionalLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} /></div>)}</div>
+                            </OptionSection>
+                            <OptionSection title="Sampler & Post-Processing">
+                                <NumberSlider label={`Steps`} value={options.comfyVidWanT2VSteps || 6} onChange={handleSliderChange('comfyVidWanT2VSteps')} min={4} max={12} step={1} disabled={isLoading} />
+                                <NumberSlider label={`CFG`} value={options.comfyVidWanT2VCfg || 1} onChange={handleSliderChange('comfyVidWanT2VCfg')} min={1} max={3} step={0.1} disabled={isLoading} />
+                                <NumberSlider label={`Refiner Start Step`} value={options.comfyVidWanT2VRefinerStartStep || 3} onChange={handleSliderChange('comfyVidWanT2VRefinerStartStep')} min={1} max={(options.comfyVidWanT2VSteps || 6) - 1} step={1} disabled={isLoading} />
+                                <SelectInput label="Sampler" value={options.comfyVidWanT2VSampler || 'euler'} onChange={handleOptionChange('comfyVidWanT2VSampler')} options={comfySamplers.map(s => ({value: s, label: s}))} disabled={isLoading}/><SelectInput label="Scheduler" value={options.comfyVidWanT2VScheduler || 'simple'} onChange={handleOptionChange('comfyVidWanT2VScheduler')} options={comfySchedulers.map(s => ({value: s, label: s}))} disabled={isLoading}/>
+                                <div className="grid grid-cols-2 gap-4"><SelectInput label="Seed Control" value={options.comfyVidWanT2VSeedControl || 'randomize'} onChange={handleOptionChange('comfyVidWanT2VSeedControl')} options={[{value: 'randomize', label: 'Randomize'}, {value: 'fixed', label: 'Fixed'}]} disabled={isLoading}/><div><label className="block text-sm font-medium text-text-secondary">Seed Value</label><div className="flex items-center gap-1"><input type="number" value={options.comfyVidWanT2VNoiseSeed ?? ''} onChange={(e) => setOptions({...options, comfyVidWanT2VNoiseSeed: e.target.value ? parseInt(e.target.value, 10) : undefined })} placeholder="Random" className="mt-1 block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm" disabled={isLoading}/><button onClick={() => setOptions({...options, comfyVidWanT2VNoiseSeed: Math.floor(Math.random() * 1e15)})} className="mt-1 p-2 bg-bg-primary rounded-md hover:bg-bg-tertiary-hover" title="Generate Random Seed" disabled={isLoading}><RefreshIcon className="w-5 h-5"/></button></div></div></div>
+                                <SelectInput label="Video Format" value={options.comfyVidWanT2VVideoFormat || 'video/nvenc_h264-mp4'} onChange={handleOptionChange('comfyVidWanT2VVideoFormat')} options={[{value: 'video/nvenc_h264-mp4', label: 'H.264 (MP4)'}, {value: 'video/webm', label: 'WebM'}, {value: 'image/gif', label: 'GIF'}]} disabled={isLoading} />
+                                <div className="space-y-4 p-4 mt-4 bg-bg-primary/30 rounded-lg border border-border-primary/50"><label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={options.comfyVidWanT2VUseFilmGrain} onChange={handleOptionChange('comfyVidWanT2VUseFilmGrain')} disabled={isLoading} className="rounded text-accent focus:ring-accent" />Add Film Grain</label>{options.comfyVidWanT2VUseFilmGrain && (<div className="space-y-4 pl-4 border-l-2 border-border-primary"><NumberSlider label={`Grain Intensity`} value={options.comfyVidWanT2VFilmGrainIntensity || 0.02} onChange={handleSliderChange('comfyVidWanT2VFilmGrainIntensity')} min={0} max={0.5} step={0.01} disabled={isLoading} /><NumberSlider label={`Saturation Mix`} value={options.comfyVidWanT2VFilmGrainSaturation || 0.3} onChange={handleSliderChange('comfyVidWanT2VFilmGrainSaturation')} min={0} max={1} step={0.05} disabled={isLoading} /></div>)}</div>
+                            </OptionSection>
+                         </>
+                    )}
+                </div>
+            </div>
+        )
+    };
+
     return (
         <>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -452,152 +567,9 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                 </div>
                             </>
                         ) : (
-                            <div className="space-y-4">
-                                <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Frames</h2>
-                                <div className="flex items-center gap-2">
-                                    <div className="flex-grow">
-                                        <ImageUploader label="Start Frame" id="start-frame" onImageUpload={setOriginalStartFrame} sourceFile={startFrame} />
-                                    </div>
-                                    <button 
-                                        onClick={onOpenLibraryForStartFrame} 
-                                        className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                        title="Select from Library"
-                                    >
-                                        <LibraryIcon className="w-6 h-6"/>
-                                    </button>
-                                </div>
-                                <div className="pt-2 space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                        <input type="checkbox" checked={options.comfyVidWanI2VUseEndFrame} onChange={handleUseEndFrameChange} disabled={isLoading} className="rounded text-accent focus:ring-accent" />
-                                        Use End Frame
-                                    </label>
-                                    {options.comfyVidWanI2VUseEndFrame && (
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex-grow">
-                                                <ImageUploader label="End Frame" id="end-frame" onImageUpload={setOriginalEndFrame} sourceFile={endFrame} />
-                                            </div>
-                                            <button 
-                                                onClick={onOpenLibraryForEndFrame} 
-                                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                                title="Select from Library"
-                                            >
-                                                <LibraryIcon className="w-6 h-6"/>
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="pt-2">
-                                    <NumberSlider 
-                                        label={`Frame Size (${Math.round(frameResizeScale * 100)}%)`}
-                                        value={frameResizeScale}
-                                        onChange={(e) => setFrameResizeScale(parseFloat(e.target.value))}
-                                        min={0.25}
-                                        max={1.0}
-                                        step={0.25}
-                                        disabled={isLoading || isResizing}
-                                    />
-                                    <p className="text-xs text-text-muted mt-1 flex items-center gap-2">
-                                        Resize frames to reduce VRAM usage. 100% is original size.
-                                        {isResizing && <SpinnerIcon className="w-4 h-4 animate-spin text-accent" />}
-                                    </p>
-                                </div>
-                            </div>
+                            renderComfyUIOptions()
                         )}
                     </div>
-
-                    {options.videoProvider === 'comfyui' && (
-                        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-8">
-                            <div>
-                                <h2 className="text-xl font-bold mb-4 text-accent">2. Configure Generation</h2>
-                                <SelectInput label="Video Workflow" value={options.comfyVidModelType || 'wan-i2v'} onChange={handleOptionChange('comfyVidModelType')} options={[{value: 'wan-i2v', label: 'Wan 2.2 First/Last Frame'}]} disabled={isLoading} />
-                            </div>
-                            
-                            <OptionSection title="Prompts & Core Settings" defaultOpen>
-                                <TextInput label="Positive Prompt" value={options.comfyVidWanI2VPositivePrompt || ''} onChange={handleOptionChange('comfyVidWanI2VPositivePrompt')} disabled={isLoading} isTextArea placeholder="A cinematic shot of..."/>
-                                <TextInput label="Negative Prompt" value={options.comfyVidWanI2VNegativePrompt || ''} onChange={handleOptionChange('comfyVidWanI2VNegativePrompt')} disabled={isLoading} isTextArea />
-                                <NumberSlider label={`Frame Count`} value={options.comfyVidWanI2VFrameCount || 65} onChange={handleSliderChange('comfyVidWanI2VFrameCount')} min={16} max={128} step={1} disabled={isLoading} />
-                                <NumberSlider label={`Frame Rate`} value={options.comfyVidWanI2VFrameRate || 24} onChange={handleSliderChange('comfyVidWanI2VFrameRate')} min={8} max={60} step={1} disabled={isLoading} />
-                                <div className="text-sm text-text-secondary p-2 bg-bg-tertiary rounded-md border border-border-primary/50">
-                                    <p>Video Dimensions: <span className="font-semibold text-text-primary ml-2">{options.comfyVidWanI2VWidth}px × {options.comfyVidWanI2VHeight}px</span></p>
-                                    <p className="text-xs text-text-muted mt-1">Dimensions are based on your start frame and rounded for model compatibility.</p>
-                                </div>
-                            </OptionSection>
-                            
-                            <OptionSection title="Models & LoRAs">
-                                <SelectInput label="High-Noise Unet" value={options.comfyVidWanI2VHighNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
-                                <SelectInput label="Low-Noise Unet" value={options.comfyVidWanI2VLowNoiseModel || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
-                                <SelectInput label="CLIP Model (GGUF)" value={options.comfyVidWanI2VClipModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipModel')} options={comfyGgufClipModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
-                                <SelectInput label="VAE Model" value={options.comfyVidWanI2VVaeModel || ''} onChange={handleOptionChange('comfyVidWanI2VVaeModel')} options={comfyVaes.map(m => ({value: m, label: m}))} disabled={isLoading} />
-                                <SelectInput label="CLIP Vision Model" value={options.comfyVidWanI2VClipVisionModel || ''} onChange={handleOptionChange('comfyVidWanI2VClipVisionModel')} options={comfyClipVision.map(m => ({value: m, label: m}))} disabled={isLoading} />
-                                
-                                <div className="space-y-4 p-4 mt-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                        <input type="checkbox" checked={options.comfyVidWanI2VUseLightningLora} onChange={handleOptionChange('comfyVidWanI2VUseLightningLora')} disabled={isLoading} className="rounded text-accent focus:ring-accent" />
-                                        Use Lightning LoRA
-                                    </label>
-                                    {options.comfyVidWanI2VUseLightningLora && (
-                                        <div className="space-y-4 pl-4 border-l-2 border-border-primary">
-                                            <SelectInput label="High-Noise LoRA" value={options.comfyVidWanI2VHighNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VHighNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
-                                            <NumberSlider label={`High-Noise Strength`} value={options.comfyVidWanI2VHighNoiseLoraStrength || 2.0} onChange={handleSliderChange('comfyVidWanI2VHighNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
-                                            <SelectInput label="Low-Noise LoRA" value={options.comfyVidWanI2VLowNoiseLora || ''} onChange={handleOptionChange('comfyVidWanI2VLowNoiseLora')} options={comfyLoras.map(l => ({value: l, label: l}))} disabled={isLoading} />
-                                            <NumberSlider label={`Low-Noise Strength`} value={options.comfyVidWanI2VLowNoiseLoraStrength || 1.0} onChange={handleSliderChange('comfyVidWanI2VLowNoiseLoraStrength')} min={0} max={3} step={0.1} disabled={isLoading} />
-                                        </div>
-                                    )}
-                                </div>
-                            </OptionSection>
-
-                            <OptionSection title="Sampler & Post-Processing">
-                                <NumberSlider label={`Steps`} value={options.comfyVidWanI2VSteps || 6} onChange={handleSliderChange('comfyVidWanI2VSteps')} min={4} max={12} step={1} disabled={isLoading} />
-                                <NumberSlider label={`CFG`} value={options.comfyVidWanI2VCfg || 1} onChange={handleSliderChange('comfyVidWanI2VCfg')} min={1} max={3} step={0.1} disabled={isLoading} />
-                                <NumberSlider label={`Refiner Start Step`} value={options.comfyVidWanI2VRefinerStartStep || 3} onChange={handleSliderChange('comfyVidWanI2VRefinerStartStep')} min={1} max={(options.comfyVidWanI2VSteps || 6) - 1} step={1} disabled={isLoading} />
-                                <SelectInput label="Sampler" value={options.comfyVidWanI2VSampler || 'euler'} onChange={handleOptionChange('comfyVidWanI2VSampler')} options={comfySamplers.map(s => ({value: s, label: s}))} disabled={isLoading}/>
-                                <SelectInput label="Scheduler" value={options.comfyVidWanI2VScheduler || 'simple'} onChange={handleOptionChange('comfyVidWanI2VScheduler')} options={comfySchedulers.map(s => ({value: s, label: s}))} disabled={isLoading}/>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <SelectInput 
-                                        label="High-Noise Seed"
-                                        value={options.comfyVidWanI2VSeedControl || 'randomize'}
-                                        onChange={handleOptionChange('comfyVidWanI2VSeedControl')}
-                                        options={[{value: 'randomize', label: 'Randomize'}, {value: 'fixed', label: 'Fixed'}]}
-                                        disabled={isLoading}
-                                    />
-                                    <div>
-                                        <label className="block text-sm font-medium text-text-secondary">Seed Value</label>
-                                        <div className="flex items-center gap-1">
-                                            <input 
-                                                type="number"
-                                                value={options.comfyVidWanI2VNoiseSeed ?? ''}
-                                                onChange={(e) => setOptions({...options, comfyVidWanI2VNoiseSeed: e.target.value ? parseInt(e.target.value, 10) : undefined })}
-                                                placeholder="Random"
-                                                className="mt-1 block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                                                disabled={isLoading}
-                                            />
-                                            <button
-                                                onClick={() => setOptions({...options, comfyVidWanI2VNoiseSeed: Math.floor(Math.random() * 1e15)})}
-                                                className="mt-1 p-2 bg-bg-primary rounded-md hover:bg-bg-tertiary-hover"
-                                                title="Generate Random Seed"
-                                                disabled={isLoading}
-                                            >
-                                                <RefreshIcon className="w-5 h-5"/>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <SelectInput label="Video Format" value={options.comfyVidWanI2VVideoFormat || 'video/nvenc_h264-mp4'} onChange={handleOptionChange('comfyVidWanI2VVideoFormat')} options={[{value: 'video/nvenc_h264-mp4', label: 'H.264 (MP4)'}, {value: 'video/webm', label: 'WebM'}, {value: 'image/gif', label: 'GIF'}]} disabled={isLoading} />
-                                <div className="space-y-4 p-4 mt-4 bg-bg-primary/30 rounded-lg border border-border-primary/50">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                        <input type="checkbox" checked={options.comfyVidWanI2VUseFilmGrain} onChange={handleOptionChange('comfyVidWanI2VUseFilmGrain')} disabled={isLoading} className="rounded text-accent focus:ring-accent" />
-                                        Add Film Grain
-                                    </label>
-                                    {options.comfyVidWanI2VUseFilmGrain && (
-                                        <div className="space-y-4 pl-4 border-l-2 border-border-primary">
-                                            <NumberSlider label={`Grain Intensity`} value={options.comfyVidWanI2VFilmGrainIntensity || 0.02} onChange={handleSliderChange('comfyVidWanI2VFilmGrainIntensity')} min={0} max={0.5} step={0.01} disabled={isLoading} />
-                                            <NumberSlider label={`Saturation Mix`} value={options.comfyVidWanI2VFilmGrainSize || 0.3} onChange={handleSliderChange('comfyVidWanI2VFilmGrainSize')} min={0} max={1} step={0.05} disabled={isLoading} />
-                                        </div>
-                                    )}
-                                </div>
-                            </OptionSection>
-                        </div>
-                    )}
 
                     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg grid grid-cols-2 gap-4">
                         <button onClick={onReset} disabled={isLoading} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
