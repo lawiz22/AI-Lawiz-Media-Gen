@@ -996,7 +996,7 @@ export const COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE = {
     "_meta": { "title": "High Noise - KSampler (Advanced)" }
   },
   "102": {
-    "inputs": { "add_noise": "disable", "noise_seed": 0, "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 3, "end_at_step": 10000, "return_with_leftover_noise": "disable", "model": [ "98", 0 ], "positive": [ "6", 0 ], "negative": [ "7", 0 ], "latent_image": [ "101", 0 ] },
+    "inputs": { "add_noise": "disable", "noise_seed": 0, "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 3, "end_at_step": 10000, "return_with_leftover_noise": "disable", "model": [ "98", 0 ], "positive": [ "117", 0 ], "negative": [ "117", 1 ], "latent_image": [ "101", 0 ] },
     "class_type": "KSamplerAdvanced",
     "_meta": { "title": "Low Noise - KSampler (Advanced)" }
   },
