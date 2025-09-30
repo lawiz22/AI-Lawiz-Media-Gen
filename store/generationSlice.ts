@@ -83,7 +83,7 @@ const initialOptions: GenerationOptions = {
     comfyVidWanT2VUseFilmGrain: true,
     comfyVidWanT2VFilmGrainIntensity: 0.02,
     comfyVidWanT2VFilmGrainSaturation: 0.3,
-    comfyVidWanT2VFrameRate: 17.6,
+    comfyVidWanT2VFrameRate: 24,
     comfyVidWanT2VVideoFormat: 'video/nvenc_h264-mp4',
 };
 

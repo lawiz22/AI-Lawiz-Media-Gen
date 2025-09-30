@@ -146,6 +146,12 @@ export const CAMERA_MOVES = [
     { value: 'a Dutch angle shot, with the camera tilted to create a sense of unease or dynamism', label: 'Dutch Angle (Tilted)' },
     { value: 'a close-up on the face, with dramatic focus', label: 'Close-up (Face)'},
     { value: 'a wide shot showing the full environment and subject', label: 'Wide Shot (Full Scene)'},
+    { value: 'Tracking shot across the disco dance floor', label: 'Tracking (Disco Floor)' },
+    { value: 'Slow dolly-in on the singer under a spotlight', label: 'Dolly-in (Spotlight)' },
+    { value: 'Wide shot of dancers moving in sync under the mirror ball', label: 'Wide Shot (Mirror Ball)' },
+    { value: 'Orbit shot around a funky guitarist on stage', label: 'Orbit (Stage)' },
+    { value: 'Crane shot lifting above the dance crowd', label: 'Crane Shot (Crowd)' },
+    { value: 'POV shot gliding through the roller disco', label: 'POV (Roller Disco)' },
 ];
 
 export const WAN_VIDEO_PROMPT_BLOCKS = {
@@ -169,13 +175,41 @@ export const WAN_VIDEO_PROMPT_BLOCKS = {
     environments: ['in a dreamlike void of pastel clouds', 'on a rooftop above a glowing city', 'inside a swirling galaxy', 'in a landscape melting like paint'],
     styles: ['surreal dreamlike visuals', 'watercolor painting', 'VHS retro glitch', 'trippy kaleidoscope effect'],
   },
+  '70s-vibes': {
+    subjects: [
+      'A disco dancer in a sparkling jumpsuit',
+      'A funky band on stage with colorful lights',
+      'A roller skater with afro hair and neon clothes',
+      'A vintage muscle car cruising at night',
+      'A glamorous diva singing into a golden microphone',
+      'A secret agent in bell-bottoms with sunglasses'
+    ],
+    environments: [
+      'Inside a retro discotheque with a spinning mirror ball',
+      'A smoky jazz lounge with velvet curtains',
+      'A neon-lit city street with vintage cars parked outside',
+      'A roller disco rink with glowing floors',
+      'A psychedelic light show with swirling colors',
+      'A 1970s living room with shag carpet and lava lamps'
+    ],
+    styles: [
+      'Cinematic film grain, retro color grading',
+      'Warm saturated tones, soft lens glow',
+      '1970s movie trailer aesthetic',
+      'Psychedelic poster art look',
+      'Soul Train TV show style',
+      'Giallo-inspired lighting (deep reds, yellows, neon)'
+    ],
+  },
 };
 
 export const WAN_T2V_ASPECT_RATIO_OPTIONS = [
-    { value: '856x480', label: 'Landscape (SD - 856x480)' },
-    { value: '1280x720', label: 'Landscape (HD - 1280x720)' },
-    { value: '480x856', label: 'Portrait (SD - 480x856)' },
-    { value: '720x1280', label: 'Portrait (HD - 720x1280)' },
+    { value: '1280x720', label: 'Landscape (HD 16:9 - 1280x720)' },
+    { value: '856x480', label: 'Landscape (SD 16:9 - 856x480)' },
+    { value: '640x360', label: 'Landscape (Low SD 16:9 - 640x360)' },
+    { value: '720x1280', label: 'Portrait (HD 9:16 - 720x1280)' },
+    { value: '480x856', label: 'Portrait (SD 9:16 - 480x856)' },
+    { value: '360x640', label: 'Portrait (Low SD 9:16 - 360x640)' },
 ];
 
 // --- For Clothing Randomization ---

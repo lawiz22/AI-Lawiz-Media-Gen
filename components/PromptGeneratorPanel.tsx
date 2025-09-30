@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../store/store';
 import { addToLibrary } from '../store/librarySlice';
@@ -148,6 +148,14 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const [isWanVideoLoading, setIsWanVideoLoading] = useState(false);
     const [wanVideoError, setWanVideoError] = useState<string | null>(null);
     const [wanVideoCopyButtonText, setWanVideoCopyButtonText] = useState('Copy Prompt');
+
+    const allWanEnvironments = useMemo(() => {
+        return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.environments))];
+    }, []);
+
+    const allWanStyles = useMemo(() => {
+        return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.styles))];
+    }, []);
 
     const handleSavePrompt = async (
         promptToSave: string, 
@@ -674,14 +682,14 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <label className="block text-sm font-medium text-text-secondary">Environment</label>
                             <select value={wanVideoEnvironment} onChange={e => dispatch(updatePromptGenState({ wanVideoEnvironment: e.target.value }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
                                 <option value="">-- Select Environment --</option>
-                                {WAN_VIDEO_PROMPT_BLOCKS[wanVideoCategory].environments.map(e => <option key={e} value={e}>{e}</option>)}
+                                {(wanVideoMode === 'image' ? allWanEnvironments : WAN_VIDEO_PROMPT_BLOCKS[wanVideoCategory].environments).map(e => <option key={e} value={e}>{e}</option>)}
                             </select>
                         </div>
                         <div className="lg:col-span-2">
                             <label className="block text-sm font-medium text-text-secondary">Style / Mood</label>
                             <select value={wanVideoStyle} onChange={e => dispatch(updatePromptGenState({ wanVideoStyle: e.target.value }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
                                 <option value="">-- Select Style --</option>
-                                {WAN_VIDEO_PROMPT_BLOCKS[wanVideoCategory].styles.map(s => <option key={s} value={s}>{s}</option>)}
+                                {(wanVideoMode === 'image' ? allWanStyles : WAN_VIDEO_PROMPT_BLOCKS[wanVideoCategory].styles).map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
                         <div>

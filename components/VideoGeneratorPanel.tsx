@@ -479,7 +479,18 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                     </div>
                                     <div className="sm:col-span-1"><label className="block text-sm font-medium text-text-secondary">Frame Count</label><input type="number" value={options.comfyVidWanT2VFrameCount || 57} onChange={(e) => setOptions({...options, comfyVidWanT2VFrameCount: Number(e.target.value)})} className="mt-1 w-full bg-bg-primary p-2 rounded-md border border-border-primary" /></div>
                                 </div>
-                                <NumberSlider label={`Frame Rate`} value={options.comfyVidWanT2VFrameRate || 17.6} onChange={handleSliderChange('comfyVidWanT2VFrameRate')} min={8} max={60} step={0.1} disabled={isLoading} />
+                                <SelectInput
+                                    label="Frame Rate"
+                                    value={String(options.comfyVidWanT2VFrameRate || 24)}
+                                    onChange={(e) => setOptions({ ...options, comfyVidWanT2VFrameRate: parseFloat(e.target.value) })}
+                                    options={[
+                                        { value: '12', label: '12 fps (Animation)' },
+                                        { value: '16', label: '16 fps (Old Film)' },
+                                        { value: '24', label: '24 fps (Standard Film)' },
+                                        { value: '30', label: '30 fps (Video)' },
+                                    ]}
+                                    disabled={isLoading}
+                                />
                             </OptionSection>
                             <OptionSection title="Models & LoRAs">
                                 <SelectInput label="High-Noise Unet" value={options.comfyVidWanT2VHighNoiseModel || ''} onChange={handleOptionChange('comfyVidWanT2VHighNoiseModel')} options={comfyGgufModels.map(m => ({value: m, label: m}))} disabled={isLoading} />
