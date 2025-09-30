@@ -50,7 +50,7 @@ const initialOptions: GenerationOptions = {
     comfyVidWanI2VFilmGrainIntensity: 0.02,
     comfyVidWanI2VFilmGrainSize: 0.3, // Saturation Mix
     comfyVidWanI2VFrameRate: 24,
-    comfyVidWanI2VVideoFormat: 'video/nvenc_h24-mp4',
+    comfyVidWanI2VVideoFormat: 'video/nvenc_h264-mp4',
     comfyVidWanI2VUseEndFrame: false,
     comfyVidWanI2VNoiseSeed: undefined,
     comfyVidWanI2VSeedControl: 'randomize',
