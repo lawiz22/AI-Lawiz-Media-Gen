@@ -1,16 +1,80 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
-import { deleteFromLibrary, clearLibraryItems } from '../store/librarySlice';
+import { deleteFromLibrary, clearLibraryItems, importLibraryItems, fetchLibrary } from '../store/librarySlice';
 import type { LibraryItem, LibraryItemType, GenerationOptions, ThemeGenerationInfo, PaletteColor } from '../types';
 import {
   CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon,
   DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon,
   BannerIcon, AlbumCoverIcon, TrashIcon, LoadIcon, FileExportIcon, UploadIconSimple, GoogleDriveIcon,
-  PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon
+  PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, WarningIcon
 } from './icons';
 import { createPaletteThumbnail } from '../utils/imageUtils';
 import { exportLibraryAsJson } from '../services/libraryService';
+
+// --- Confirmation Modal Component (defined in-file to avoid adding new files) ---
+interface ConfirmationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: React.ReactNode;
+  confirmText?: string;
+  cancelText?: string;
+}
+
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm, title, message, confirmText = 'Confirm', cancelText = 'Cancel' }) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    if (isOpen) {
+        window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div 
+        className="fixed inset-0 bg-black/80 z-60 flex items-center justify-center p-4 animate-fade-in"
+        role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title"
+        onClick={onClose}
+    >
+      <div 
+          className="bg-bg-secondary w-full max-w-md p-6 rounded-2xl shadow-lg border border-border-primary"
+          onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+                <div className="bg-danger-bg p-2 rounded-full">
+                    <WarningIcon className="w-6 h-6 text-danger" />
+                </div>
+                <h2 id="confirm-modal-title" className="text-xl font-bold text-text-primary">{title}</h2>
+            </div>
+            <button onClick={onClose} className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover" aria-label="Close">
+                <CloseIcon className="w-5 h-5" />
+            </button>
+        </div>
+        
+        <div className="text-sm text-text-secondary">{message}</div>
+        
+        <div className="mt-6 flex justify-end gap-4">
+            <button onClick={onClose} className="bg-bg-tertiary text-text-secondary font-semibold py-2 px-5 rounded-lg hover:bg-bg-tertiary-hover transition-colors">
+                {cancelText}
+            </button>
+            <button onClick={onConfirm} className="bg-danger text-white font-bold py-2 px-5 rounded-lg hover:bg-red-700 transition-colors">
+                {confirmText}
+            </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
@@ -297,7 +361,7 @@ type ViewMode = 'grid' | 'smallGrid' | 'list';
 
 export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveConnected, onSyncWithDrive, isSyncing, syncMessage, isDriveConfigured }) => {
   const dispatch: AppDispatch = useDispatch();
-  const { items, status: libraryStatus } = useSelector((state: RootState) => state.library);
+  const { items, status: libraryStatus, error: libraryError } = useSelector((state: RootState) => state.library);
   
   const [filter, setFilter] = useState<LibraryItemType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -307,6 +371,101 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
   const [hoveredSource, setHoveredSource] = useState<{ src: string; x: number; y: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  const [isImporting, setIsImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: React.ReactNode;
+    onConfirm: () => void;
+    confirmText?: string;
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, confirmText: 'Confirm' });
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setImportMessage('Reading import file...');
+    try {
+        const text = await file.text();
+        const importedItems: LibraryItem[] = JSON.parse(text);
+
+        if (!Array.isArray(importedItems)) {
+            throw new Error('Invalid file format: JSON is not an array.');
+        }
+
+        setImportMessage('Checking for conflicts...');
+        const localItemIds = new Set(items.map(item => item.id));
+
+        const newItems: LibraryItem[] = [];
+        const conflictingItems: LibraryItem[] = [];
+
+        for (const item of importedItems) {
+            if (typeof item.id !== 'number' || !item.mediaType || !item.media || !item.thumbnail) {
+                console.warn('Skipping invalid item during import:', item);
+                continue;
+            }
+
+            if (localItemIds.has(item.id)) {
+                conflictingItems.push(item);
+            } else {
+                newItems.push(item);
+            }
+        }
+
+        let itemsToSave = [...newItems];
+        if (conflictingItems.length > 0) {
+            const confirmed = window.confirm(
+                `${conflictingItems.length} item(s) in the import file conflict with existing items in your library (they have the same internal ID).\n\n` +
+                `Do you want to OVERWRITE the existing items with the imported ones?\n\n` +
+                `Click "OK" to overwrite, or "Cancel" to skip conflicting items and only import new ones.`
+            );
+            if (confirmed) {
+                itemsToSave.push(...conflictingItems);
+            }
+        }
+        
+        if (itemsToSave.length === 0) {
+            setImportMessage('No new or updated items to import.');
+            setTimeout(() => { setIsImporting(false); setImportMessage(''); }, 2000);
+            return;
+        }
+
+        setImportMessage(`Importing ${itemsToSave.length} item(s)...`);
+        await dispatch(importLibraryItems(itemsToSave)).unwrap();
+
+        setImportMessage('Import complete! Refreshing library...');
+        await dispatch(fetchLibrary());
+
+        if (isDriveConnected) {
+            setImportMessage('Library refreshed. Now syncing with Google Drive...');
+            onSyncWithDrive(); // This triggers the global sync UI
+        } else {
+            setImportMessage('Import process finished!');
+        }
+
+    } catch (err: any) {
+        alert(`Import failed: ${err.message}`);
+        console.error("Import error:", err);
+    } finally {
+        // Let the global sync UI take over if it's running, otherwise clear local state
+        if (!isDriveConnected) {
+             setTimeout(() => { setIsImporting(false); setImportMessage(''); }, 2000);
+        } else {
+            setIsImporting(false);
+            setImportMessage('');
+        }
+        if (e.target) e.target.value = '';
+    }
+  };
 
   const handleFilterClick = (type: LibraryItemType) => {
     setFilter(prev => {
@@ -323,20 +482,27 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
     setSearchTerm('');
   };
 
-  const handleDelete = async (id: number, name: string) => {
-    if (window.confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
-      setDeletingId(id);
-      try {
-        await dispatch(deleteFromLibrary(id)).unwrap();
-        if (selectedItemModal?.id === id) {
-            setSelectedItemModal(null);
+  const handleDelete = (id: number, name: string) => {
+    setConfirmModal({
+        isOpen: true,
+        title: 'Confirm Deletion',
+        message: <p>Are you sure you want to delete <strong className="text-text-primary">{name}</strong>? This action cannot be undone.</p>,
+        confirmText: 'Delete',
+        onConfirm: async () => {
+            setConfirmModal(prev => ({ ...prev, isOpen: false })); // Close modal immediately
+            setDeletingId(id);
+            try {
+                await dispatch(deleteFromLibrary(id)).unwrap();
+                if (selectedItemModal?.id === id) {
+                    setSelectedItemModal(null);
+                }
+            } catch (err) {
+                console.error("Delete operation failed:", err);
+            } finally {
+                setDeletingId(null);
+            }
         }
-      } catch (err) {
-        console.error("Failed to delete item:", err);
-      } finally {
-        setDeletingId(null);
-      }
-    }
+    });
   };
   
   const handleExport = async () => {
@@ -348,12 +514,22 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
     }
   };
 
-  const handleClearLibrary = async () => {
-    if (window.confirm("ARE YOU SURE you want to delete your ENTIRE local library? This action cannot be undone and will permanently remove all saved items from this browser.")) {
-        if (window.confirm("This is your final warning. Are you absolutely certain you wish to proceed?")) {
+  const handleClearLibrary = () => {
+    setConfirmModal({
+        isOpen: true,
+        title: 'Clear Entire Library',
+        message: (
+            <div className="space-y-2">
+                <p>ARE YOU SURE you want to delete your <strong className="text-danger">ENTIRE</strong> local library?</p>
+                <p>This will permanently remove all saved items from this browser. This action cannot be undone.</p>
+            </div>
+        ),
+        confirmText: 'Yes, Clear Everything',
+        onConfirm: () => {
+            setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {} });
             dispatch(clearLibraryItems());
         }
-    }
+    });
   };
 
   const filteredItems = useMemo(() => {
@@ -526,18 +702,35 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
             </div>
           <div className="flex items-center gap-2">
             {isDriveConfigured && (
-              <button onClick={onSyncWithDrive} disabled={!isDriveConnected || isSyncing} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+              <button onClick={onSyncWithDrive} disabled={!isDriveConnected || isSyncing || isImporting} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                   {isSyncing ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GoogleDriveIcon className="w-5 h-5"/>}
                   {isSyncing ? 'Syncing...' : 'Sync with Drive'}
               </button>
             )}
-            <button onClick={handleExport} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200">
+            <button onClick={handleImportClick} disabled={isImporting || isSyncing} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                {isImporting ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <UploadIconSimple className="w-5 h-5"/>}
+                {isImporting ? 'Importing...' : 'Import'}
+            </button>
+            <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".json,application/json"
+                onChange={handleFileSelected}
+            />
+            <button onClick={handleExport} disabled={items.length === 0 || isImporting || isSyncing} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                 <FileExportIcon className="w-5 h-5"/> Export
             </button>
           </div>
         </div>
         
-        {isSyncing && <p className="text-sm text-accent text-center mb-4">{syncMessage}</p>}
+        {(isSyncing || isImporting) && <p className="text-sm text-accent text-center mb-4">{isImporting ? importMessage : syncMessage}</p>}
+        {libraryError && libraryStatus === 'failed' && (
+            <div className="bg-danger-bg text-danger text-sm p-3 rounded-md mb-4 animate-fade-in" role="alert">
+                <p className="font-bold">A library operation failed:</p>
+                <p>{libraryError}</p>
+            </div>
+        )}
 
         {/* Filters */}
         <div className="mb-6 p-4 bg-bg-primary/50 rounded-lg border border-border-primary/50">
@@ -576,12 +769,22 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
          <div className="mt-8 pt-4 border-t border-danger-bg">
             <button
                 onClick={handleClearLibrary}
-                className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors"
+                disabled={isImporting || isSyncing}
+                className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors disabled:opacity-50"
             >
                 <TrashIcon className="w-5 h-5" /> Clear Entire Local Library
             </button>
          </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+      />
 
       {hoveredSource && (
         <div 

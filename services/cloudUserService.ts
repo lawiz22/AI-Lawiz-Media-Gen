@@ -35,7 +35,8 @@ const saveUsers = async (users: User[]): Promise<void> => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
     } catch (e) {
         console.error("Failed to save users to localStorage", e);
-        // In a real app, you might want to throw an error here.
+        // Throw an error to ensure the calling function knows the operation failed.
+        throw new Error("Could not save user data. Local storage might be full or disabled.");
     }
 };
 

@@ -118,13 +118,21 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<Libr
       
       await driveService.updateLibraryIndex(index, indexFileId);
 
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to sync to Google Drive, but item is saved locally.", e);
+      throw new Error(`Item saved locally, but failed to sync to Google Drive: ${e.message}`);
     }
   }
   return newItem;
 };
 
+export const bulkSaveToLibrary = async (items: LibraryItem[]): Promise<void> => {
+    // This function will overwrite existing items with the same ID.
+    await idbService.bulkSaveToLibrary(items);
+
+    // Drive sync will be handled separately by the component calling syncLibraryToDrive
+    // This keeps the service functions focused.
+};
 
 export const syncLibraryFromDrive = async (onProgress: (message: string) => void, remoteIndexData?: { index: LibraryIndex, fileId: string | null }): Promise<void> => {
     if (!driveService || !driveService.isConnected()) {
@@ -296,37 +304,22 @@ export const getLibraryItems = idbService.getLibraryItems;
 export const updateLibraryItem = idbService.updateLibraryItem;
 
 export const deleteLibraryItem = async (id: number): Promise<void> => {
-  const itemToDelete = await idbService.getItemById(id);
-  await idbService.deleteLibraryItem(id);
-  // Event dispatch is removed as Redux now handles state updates.
-
-  if (driveService?.isConnected() && itemToDelete) {
-      try {
-          const { index, fileId } = await driveService.getLibraryIndex();
-          if (index.items[id]) {
-              const fileToDeleteId = index.items[id].driveFileId;
-              delete index.items[id];
-              await driveService.updateLibraryIndex(index, fileId);
-              // We now also delete the actual file from Drive.
-              if (fileToDeleteId) {
-                  await driveService.deleteMediaFile(fileToDeleteId);
-              }
-          }
-      } catch (e) {
-           console.error(`Failed to remove item ${id} from Google Drive. It may need to be deleted manually.`, e);
-      }
-  }
+    // This function now ONLY handles local deletion to ensure it is fast and reliable.
+    // Syncing the deletion to Google Drive will be handled by the main `syncLibraryToDrive` function,
+    // not by the immediate delete action.
+    await idbService.deleteLibraryItem(id);
 };
+
 
 export const clearLibrary = async (): Promise<void> => {
     await idbService.clearLibrary();
-    // Event dispatch is removed as Redux now handles state updates.
     if (driveService?.isConnected()) {
         try {
             const { fileId } = await driveService.getLibraryIndex();
             await driveService.updateLibraryIndex({ version: 1, items: {} }, fileId);
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to clear remote library index.", e);
+            throw new Error(`Local library cleared, but failed to clear remote index: ${e.message}`);
         }
     }
 };

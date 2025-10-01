@@ -73,10 +73,22 @@ export const getItemById = async (id: number): Promise<LibraryItem | undefined> 
 
 export const deleteLibraryItem = async (id: number): Promise<void> => {
   const db = await getDb();
+  // Using the idb library's simple, high-level shortcut for deletion.
+  // This is much more reliable than managing transactions manually and should
+  // correctly propagate any errors if the deletion fails.
   await db.delete(STORE_NAME, id);
 };
 
 export const clearLibrary = async (): Promise<void> => {
   const db = await getDb();
   await db.clear(STORE_NAME);
+};
+
+export const bulkSaveToLibrary = async (items: LibraryItem[]): Promise<void> => {
+    const db = await getDb();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    // Use Promise.all to perform all put operations concurrently within the transaction.
+    await Promise.all(items.map(item => store.put(item)));
+    await tx.done; // Ensure the transaction completes successfully.
 };

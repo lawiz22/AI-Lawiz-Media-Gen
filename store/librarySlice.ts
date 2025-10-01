@@ -3,25 +3,47 @@ import type { LibraryItem, LibrarySliceState } from '../types';
 import * as idb from '../services/idbLibraryService';
 import * as libraryService from '../services/libraryService';
 
-export const fetchLibrary = createAsyncThunk('library/fetchLibrary', async () => {
-    const items = await idb.getLibraryItems();
-    return items;
+export const fetchLibrary = createAsyncThunk('library/fetchLibrary', async (_, thunkAPI) => {
+    try {
+        const items = await idb.getLibraryItems();
+        return items;
+    } catch (err: any) {
+        return thunkAPI.rejectWithValue(err.message);
+    }
 });
 
-export const addToLibrary = createAsyncThunk('library/addToLibrary', async (item: Omit<LibraryItem, 'id'>) => {
-    // The service handles saving to IDB/Drive and returns the full item with an ID.
-    const newItem = await libraryService.saveToLibrary(item); 
-    return newItem;
+export const addToLibrary = createAsyncThunk('library/addToLibrary', async (item: Omit<LibraryItem, 'id'>, thunkAPI) => {
+    try {
+        const newItem = await libraryService.saveToLibrary(item); 
+        return newItem;
+    } catch (err: any) {
+        return thunkAPI.rejectWithValue(err.message);
+    }
 });
 
-export const deleteFromLibrary = createAsyncThunk('library/deleteFromLibrary', async (id: number) => {
-    // The service handles deleting from IDB/Drive.
-    await libraryService.deleteLibraryItem(id);
-    return id; // Return the ID for the reducer to identify which item to remove.
+export const importLibraryItems = createAsyncThunk('library/importLibraryItems', async (items: LibraryItem[], thunkAPI) => {
+    try {
+        await libraryService.bulkSaveToLibrary(items);
+    } catch (err: any) {
+        return thunkAPI.rejectWithValue(err.message);
+    }
 });
 
-export const clearLibraryItems = createAsyncThunk('library/clearLibrary', async () => {
-    await libraryService.clearLibrary();
+export const deleteFromLibrary = createAsyncThunk('library/deleteFromLibrary', async (id: number, thunkAPI) => {
+    try {
+        await libraryService.deleteLibraryItem(id);
+        return id;
+    } catch (err: any) {
+        return thunkAPI.rejectWithValue(err.message);
+    }
+});
+
+export const clearLibraryItems = createAsyncThunk('library/clearLibrary', async (_, thunkAPI) => {
+    try {
+        await libraryService.clearLibrary();
+    } catch (err: any) {
+        return thunkAPI.rejectWithValue(err.message);
+    }
 });
 
 
@@ -43,21 +65,46 @@ const librarySlice = createSlice({
             .addCase(fetchLibrary.fulfilled, (state, action) => {
                 state.status = 'succeeded';
                 state.items = action.payload;
+                state.error = null;
             })
             .addCase(fetchLibrary.rejected, (state, action) => {
                 state.status = 'failed';
-                state.error = action.error.message || 'Failed to fetch library';
+                state.error = action.payload as string || 'Failed to fetch library';
             })
             .addCase(addToLibrary.fulfilled, (state, action: PayloadAction<LibraryItem>) => {
-                // Add the new item to the beginning of the array to show the most recent first.
                 state.items.unshift(action.payload);
+                state.error = null;
+                 state.status = 'succeeded';
+            })
+            .addCase(addToLibrary.rejected, (state, action) => {
+                state.status = 'failed';
+                state.error = action.payload as string || 'Failed to add item to library';
             })
             .addCase(deleteFromLibrary.fulfilled, (state, action: PayloadAction<number>) => {
                 state.items = state.items.filter(item => item.id !== action.payload);
+                state.error = null;
+                 state.status = 'succeeded';
+            })
+            .addCase(deleteFromLibrary.rejected, (state, action) => {
+                state.status = 'failed';
+                state.error = action.payload as string || 'Failed to delete item';
             })
             .addCase(clearLibraryItems.fulfilled, (state) => {
                 state.items = [];
                 state.status = 'succeeded';
+                state.error = null;
+            })
+            .addCase(clearLibraryItems.rejected, (state, action) => {
+                state.status = 'failed';
+                state.error = action.payload as string || 'Failed to clear library';
+            })
+            .addCase(importLibraryItems.fulfilled, (state) => {
+                state.status = 'succeeded'; // The component will trigger a fetch, no need to change items here
+                state.error = null;
+            })
+            .addCase(importLibraryItems.rejected, (state, action) => {
+                state.status = 'failed';
+                state.error = action.payload as string || 'Failed to import library';
             });
     }
 });
