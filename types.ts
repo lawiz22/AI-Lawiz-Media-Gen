@@ -296,7 +296,7 @@ export interface ExtractorState {
 }
 
 export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font';
-export type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video';
+export type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
 
 export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';
 export type LogoBackground = 'transparent' | 'white' | 'black';
@@ -412,6 +412,15 @@ export interface PromptGenState {
     wanVideoStyle: string;
     wanVideoFinalPrompt: string;
     wanVideoPromptSaveStatus: 'idle' | 'saving' | 'saved';
+    // Qwen Image Prompt Builder
+    qwenTitle: string;
+    qwenUseTextInImage: boolean;
+    qwenTextPosition: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+    qwenTextContent: string;
+    qwenTextStyle: string;
+    qwenStyleModifiers: string;
+    qwenFinalPrompt: string;
+    qwenPromptSaveStatus: 'idle' | 'saving' | 'saved';
 }
 
 export interface LogoThemeState {

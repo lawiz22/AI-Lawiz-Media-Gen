@@ -30,6 +30,15 @@ const initialState: PromptGenSliceState = {
     wanVideoStyle: '',
     wanVideoFinalPrompt: '',
     wanVideoPromptSaveStatus: 'idle',
+    // Qwen Image pre-filled with an example
+    qwenTitle: 'A majestic cyberpunk phoenix, wings made of neon data streams, soaring through a rainy city at night.',
+    qwenUseTextInImage: true,
+    qwenTextPosition: 'bottom-center',
+    qwenTextContent: 'CYBER PHOENIX',
+    qwenTextStyle: 'glowing, futuristic font',
+    qwenStyleModifiers: 'hyperrealistic, 8k, cinematic lighting, volumetric fog, trending on artstation',
+    qwenFinalPrompt: '',
+    qwenPromptSaveStatus: 'idle',
   },
   activePromptToolsSubTab: 'from-image',
 };
@@ -58,6 +67,9 @@ const promptGenSlice = createSlice({
         }
         if (updates.wanVideoFinalPrompt !== undefined && updates.wanVideoFinalPrompt !== state.promptGenState.wanVideoFinalPrompt) {
             state.promptGenState.wanVideoPromptSaveStatus = 'idle';
+        }
+        if (updates.qwenFinalPrompt !== undefined && updates.qwenFinalPrompt !== state.promptGenState.qwenFinalPrompt) {
+            state.promptGenState.qwenPromptSaveStatus = 'idle';
         }
         
         // Apply all updates to the state using direct mutation, which is handled correctly by Immer.
@@ -92,6 +104,9 @@ const promptGenSlice = createSlice({
                 break;
             case 'wan-video':
                 state.promptGenState.wanVideoPromptSaveStatus = status;
+                break;
+            case 'qwen-image':
+                state.promptGenState.qwenPromptSaveStatus = status;
                 break;
         }
     }

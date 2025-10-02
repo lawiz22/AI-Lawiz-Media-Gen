@@ -6,7 +6,7 @@ import { setPromptSaveStatus, updatePromptGenState } from '../store/promptGenSli
 import { ImageUploader } from './ImageUploader';
 import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup, generateWanVideoPromptFromImage } from '../services/comfyUIService';
 import type { LibraryItem, PromptGenState } from '../types';
-import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon } from './icons';
+import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon, CodeBracketIcon } from './icons';
 import { fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 import { WAN_VIDEO_PROMPT_BLOCKS, CAMERA_MOVES } from '../constants';
 
@@ -27,15 +27,16 @@ interface PromptPart {
 }
 
 type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
-type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video';
+type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
 
-const createPromptThumbnail = (text: string, type: PromptCategory, modelType: PromptModelType | 'wan2.2'): string => {
+const createPromptThumbnail = (text: string, type: PromptCategory, modelType: PromptModelType | 'wan2.2' | 'qwen-image'): string => {
     const colors: Record<PromptCategory, string> = {
         image: '#06b6d4',
         background: '#4ade80',
         subject: '#facc15',
         soup: '#a78bfa',
         'wan-video': '#ec4899',
+        'qwen-image': '#3b82f6',
     };
     const borderColor = colors[type] || '#374151';
     const bgColor = '#1f2937';
@@ -73,6 +74,7 @@ const createPromptThumbnail = (text: string, type: PromptCategory, modelType: Pr
 interface SubTab {
   id: string;
   label: string;
+  icon?: React.ReactNode;
 }
 
 interface SubTabsProps {
@@ -87,12 +89,13 @@ const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
             <button
                 key={tab.id}
                 onClick={() => onTabClick(tab.id)}
-                className={`px-4 py-2 text-sm font-semibold transition-colors duration-200 border-b-2 ${
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold transition-colors duration-200 border-b-2 ${
                     activeTab === tab.id
                     ? 'border-accent text-accent'
                     : 'border-transparent text-text-secondary hover:text-text-primary'
                 }`}
             >
+                {tab.icon}
                 {tab.label}
             </button>
         ))}
@@ -116,7 +119,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         image, prompt, bgImage, bgPrompt, subjectImage, subjectPrompt, soupPrompt, soupHistory,
         promptSaveStatus, bgPromptSaveStatus, subjectPromptSaveStatus, soupPromptSaveStatus,
         wanVideoImage, wanVideoBasePrompt, wanVideoCategory, wanVideoSubject, wanVideoAction,
-        wanVideoEnvironment, wanVideoCameraMove, wanVideoStyle, wanVideoFinalPrompt, wanVideoPromptSaveStatus
+        wanVideoEnvironment, wanVideoCameraMove, wanVideoStyle, wanVideoFinalPrompt, wanVideoPromptSaveStatus,
+        qwenTitle, qwenUseTextInImage, qwenTextPosition, qwenTextContent, qwenTextStyle, qwenStyleModifiers,
+        qwenFinalPrompt, qwenPromptSaveStatus
     } = state;
 
     // --- Ephemeral state (not persisted) ---
@@ -148,6 +153,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const [isWanVideoLoading, setIsWanVideoLoading] = useState(false);
     const [wanVideoError, setWanVideoError] = useState<string | null>(null);
     const [wanVideoCopyButtonText, setWanVideoCopyButtonText] = useState('Copy Prompt');
+    
+    const [qwenCopyButtonText, setQwenCopyButtonText] = useState('Copy Prompt');
 
     const allWanEnvironments = useMemo(() => {
         return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.environments))];
@@ -157,10 +164,30 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.styles))];
     }, []);
 
+    useEffect(() => {
+        let finalPrompt = `${qwenTitle.trim()}\n`;
+
+        if (qwenUseTextInImage && qwenTextContent.trim()) {
+            finalPrompt += `[text-in-image]\n`;
+            finalPrompt += `position: ${qwenTextPosition}\n`;
+            finalPrompt += `content: ${qwenTextContent.trim()}\n`;
+            if (qwenTextStyle.trim()) {
+                finalPrompt += `style: ${qwenTextStyle.trim()}\n`;
+            }
+        }
+
+        if (qwenStyleModifiers.trim()) {
+            finalPrompt += `[style]\n`;
+            finalPrompt += `${qwenStyleModifiers.trim()}\n`;
+        }
+
+        dispatch(updatePromptGenState({ qwenFinalPrompt: finalPrompt.trim() }));
+    }, [qwenTitle, qwenUseTextInImage, qwenTextPosition, qwenTextContent, qwenTextStyle, qwenStyleModifiers, dispatch]);
+
     const handleSavePrompt = async (
         promptToSave: string, 
         type: PromptCategory,
-        modelTypeToSave: PromptModelType | 'wan2.2',
+        modelTypeToSave: PromptModelType | 'wan2.2' | 'qwen-image',
         sourceFile: File | null
     ) => {
         if (!promptToSave.trim()) return;
@@ -169,7 +196,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             const item: Omit<LibraryItem, 'id'> = {
                 mediaType: 'prompt',
                 promptType: type,
-                promptModelType: modelTypeToSave,
+                promptModelType: modelTypeToSave === 'qwen-image' ? 'sdxl' : modelTypeToSave, // Save as sdxl for now
                 name: `${type.charAt(0).toUpperCase() + type.slice(1)} Prompt (${modelTypeToSave.toUpperCase()})`,
                 media: promptToSave,
                 thumbnail: createPromptThumbnail(promptToSave, type, modelTypeToSave),
@@ -377,6 +404,14 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             setTimeout(() => setWanVideoCopyButtonText('Copy Prompt'), 2000);
         });
     };
+    
+    const handleQwenCopy = () => {
+        if (!qwenFinalPrompt) return;
+        navigator.clipboard.writeText(qwenFinalPrompt).then(() => {
+            setQwenCopyButtonText('Copied!');
+            setTimeout(() => setQwenCopyButtonText('Copy Prompt'), 2000);
+        });
+    };
 
 
     const renderPromptTypeButtons = (currentType: PromptModelType, setType: (type: PromptModelType) => void) => {
@@ -408,6 +443,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         { id: 'extract-subject', label: 'Extract Subject' },
         { id: 'prompt-soup', label: 'Magical Prompt Soup' },
         { id: 'wan-video', label: 'WAN 2.2 Video' },
+        { id: 'qwen-image', label: 'Qwen Prompt Tool', icon: <CodeBracketIcon className="w-5 h-5"/>},
     ];
 
     return (
@@ -710,6 +746,116 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             </button>
                             <button onClick={handleWanVideoCopy} disabled={!wanVideoFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><CopyIcon className="w-5 h-5" /> {wanVideoCopyButtonText}</button>
                             <button onClick={() => handleUsePrompt(wanVideoFinalPrompt)} disabled={!wanVideoFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><SendIcon className="w-5 h-5" />Use</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeSubTab === 'qwen-image' && (
+                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-blue-400 space-y-8">
+                    <h2 className="text-2xl font-bold text-blue-400">Qwen Image Prompt Builder</h2>
+                    <p className="text-sm text-text-secondary -mt-6">
+                        Construct a structured prompt for Qwen Image models using this formula-based builder.
+                    </p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Left Column: Controls */}
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary">1. Main Subject / Scene</label>
+                                <textarea 
+                                    value={qwenTitle}
+                                    onChange={e => dispatch(updatePromptGenState({ qwenTitle: e.target.value }))}
+                                    placeholder="e.g., A majestic cyberpunk phoenix..." 
+                                    className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
+                                    rows={4}
+                                />
+                            </div>
+                            
+                            <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary/50">
+                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={qwenUseTextInImage}
+                                        onChange={e => dispatch(updatePromptGenState({ qwenUseTextInImage: e.target.checked }))}
+                                        className="rounded text-accent focus:ring-accent"
+                                    />
+                                    2. Add Text-in-Image (Optional)
+                                </label>
+                                {qwenUseTextInImage && (
+                                    <div className="space-y-4 pl-6 border-l-2 border-border-primary">
+                                         <input 
+                                            type="text" 
+                                            value={qwenTextContent}
+                                            onChange={e => dispatch(updatePromptGenState({ qwenTextContent: e.target.value }))}
+                                            placeholder="Text content" 
+                                            className="block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm"
+                                        />
+                                        <div>
+                                            <label className="block text-xs font-medium text-text-muted">Position</label>
+                                            <select 
+                                                value={qwenTextPosition}
+                                                onChange={e => dispatch(updatePromptGenState({ qwenTextPosition: e.target.value as any }))}
+                                                className="mt-1 block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm"
+                                            >
+                                                {['top-left', 'top-center', 'top-right', 'middle-left', 'middle-center', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right'].map(pos => (
+                                                    <option key={pos} value={pos}>{pos.replace('-', ' ')}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <input 
+                                            type="text" 
+                                            value={qwenTextStyle}
+                                            onChange={e => dispatch(updatePromptGenState({ qwenTextStyle: e.target.value }))}
+                                            placeholder="Font / Style (e.g., glowing, futuristic)" 
+                                            className="block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary">3. Style Modifiers</label>
+                                 <textarea 
+                                    value={qwenStyleModifiers}
+                                    onChange={e => dispatch(updatePromptGenState({ qwenStyleModifiers: e.target.value }))}
+                                    placeholder="e.g., hyperrealistic, 8k, cinematic..." 
+                                    className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm"
+                                    rows={4}
+                                />
+                            </div>
+                             <div>
+                                <h4 className="text-xs font-semibold text-text-secondary mb-2">Preset Styles</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {['Cinematic', 'Photorealistic', 'Anime', '3D Render', 'Oil Painting', 'Watercolor'].map(style => (
+                                         <button 
+                                            key={style}
+                                            onClick={() => dispatch(updatePromptGenState({ qwenStyleModifiers: (qwenStyleModifiers ? qwenStyleModifiers + ', ' : '') + style.toLowerCase() }))}
+                                            className="px-3 py-1.5 text-xs font-semibold rounded-md transition-colors bg-bg-primary hover:bg-bg-tertiary-hover"
+                                        >
+                                            + {style}
+                                        </button>
+                                    ))}
+                                </div>
+                             </div>
+                        </div>
+                        
+                        {/* Right Column: Result */}
+                        <div className="space-y-4">
+                            <label className="block text-sm font-medium text-text-secondary">Final Prompt</label>
+                             <textarea 
+                                value={qwenFinalPrompt}
+                                readOnly 
+                                className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm h-96 text-blue-300 font-mono"
+                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <button onClick={() => handleSavePrompt(qwenFinalPrompt, 'qwen-image', 'qwen-image', null)} disabled={!qwenFinalPrompt || qwenPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${qwenPromptSaveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                                    {qwenPromptSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : qwenPromptSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
+                                    {qwenPromptSaveStatus === 'saved' ? 'Saved!' : 'Save'}
+                                </button>
+                                <button onClick={handleQwenCopy} disabled={!qwenFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><CopyIcon className="w-5 h-5" /> {qwenCopyButtonText}</button>
+                                <button onClick={() => handleUsePrompt(qwenFinalPrompt)} disabled={!qwenFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><SendIcon className="w-5 h-5" />Use</button>
+                            </div>
                         </div>
                     </div>
                 </div>
