@@ -6,7 +6,7 @@
         "description": "Takes a source image of a person and generates variations based on detailed text prompts for pose, clothing, and background. Can also combine with reference images for clothing/background.",
         "implementationDetails": {
           "serviceFunctions": ["generatePortraits (i2i mode)"],
-          "modelsUsed": ["gemini-2.5-flash-image-preview"],
+          "modelsUsed": ["gemini-2.5-flash-image"],
           "apiMethods": ["ai.models.generateContent"],
           "keyTechniques": "Complex multi-modal generation. It combines multiple input images (source person, optional clothing, optional background) with a detailed, structured text prompt to guide the AI's edits. The response modality is set to IMAGE."
         },
@@ -17,7 +17,7 @@
         "description": "Takes a generated image and increases its resolution, sharpness, and detail using an AI enhancement process.",
         "implementationDetails": {
           "serviceFunctions": ["enhanceImageResolution"],
-          "modelsUsed": ["gemini-2.5-flash-image-preview"],
+          "modelsUsed": ["gemini-2.5-flash-image"],
           "apiMethods": ["ai.models.generateContent"],
           "keyTechniques": "Image-to-image prompting where the instruction is to enhance the input without changing the content. The response modality is set to IMAGE."
         },
@@ -39,7 +39,7 @@
         "description": "Extracts a specific clothing item or object identified in a source photo and redraws it on a clean, white background.",
         "implementationDetails": {
           "serviceFunctions": ["generateClothingImage", "generateObjectImage"],
-          "modelsUsed": ["gemini-2.5-flash-image-preview"],
+          "modelsUsed": ["gemini-2.5-flash-image"],
           "apiMethods": ["ai.models.generateContent"],
           "keyTechniques": "Multi-modal inpainting. The prompt instructs the model to isolate a specific item from the source image and place it on a new background, effectively removing everything else."
         },
@@ -50,7 +50,7 @@
         "description": "Takes a source image with a person's pose and a reference image of a mannequin style, and generates an image of the mannequin in the source pose.",
         "implementationDetails": {
           "serviceFunctions": ["generatePoseMannequin"],
-          "modelsUsed": ["gemini-2.5-flash-image-preview"],
+          "modelsUsed": ["gemini-2.5-flash-image"],
           "apiMethods": ["ai.models.generateContent"],
           "keyTechniques": "Advanced multi-modal prompting with two source images. A highly specific 'persona' prompt instructs the AI to use one image for 'style' and the other for 'pose', ensuring it doesn't get confused by clothes or other features."
         },
@@ -61,7 +61,7 @@
         "description": "Generates specialized content like logos or banners. Uses simple text-to-image if no references are provided, but switches to a more powerful multi-modal approach when inspiration images are included.",
         "implementationDetails": {
           "serviceFunctions": ["generateLogos", "generateBanners", "generateAlbumCovers"],
-          "modelsUsed": ["imagen-4.0-generate-001", "gemini-2.5-flash-image-preview"],
+          "modelsUsed": ["imagen-4.0-generate-001", "gemini-2.5-flash-image"],
           "apiMethods": ["ai.models.generateImages", "ai.models.generateContent"],
           "keyTechniques": "Conditionally switches between two generation methods. For simple T2I, it uses `generateImages`. For complex, reference-based generation, it uses `generateContent` with multiple image and text parts."
         },

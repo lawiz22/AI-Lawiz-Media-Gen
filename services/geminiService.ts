@@ -40,16 +40,23 @@ export const generatePortraits = async (
     
             const images = response.generatedImages.map(img => `data:image/jpeg;base64,${img.image.imageBytes}`);
             return { images, finalPrompt: options.geminiPrompt };
-        } else if (model === 'gemini-2.5-flash-image-preview') {
+        } else if (model === 'gemini-2.5-flash-image') {
             const allImages: string[] = [];
             const totalSteps = options.numImages;
+
+            // Create a blank image to satisfy the model's potential requirement for an image input.
+            const blankImageFile = await createBlankImageFile(128, 128, 'black', 'blank.png');
+            const blankImagePart = await fileToGenerativePart(blankImageFile);
+            
+            // Modify the prompt to instruct the model to ignore the blank input.
+            const t2iPrompt = `IMPORTANT: Ignore the blank black input image. Your task is to generate a completely new image from scratch based ONLY on the following description: "${options.geminiPrompt}"`;
 
             for (let i = 0; i < options.numImages; i++) {
                 updateProgress(`Generating image ${i + 1}/${totalSteps}...`, i / totalSteps);
                 
                 const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash-image-preview',
-                    contents: { parts: [{ text: options.geminiPrompt }] },
+                    model: 'gemini-2.5-flash-image',
+                    contents: { parts: [blankImagePart, { text: t2iPrompt }] },
                     config: {
                         responseModalities: [Modality.IMAGE, Modality.TEXT],
                     },
@@ -102,7 +109,7 @@ export const generatePortraits = async (
         for (let i = 0; i < totalSteps; i++) {
             updateProgress(`Generating inpaint variation ${i + 1}/${totalSteps}...`, i / totalSteps);
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image-preview',
+                model: 'gemini-2.5-flash-image',
                 contents: { parts: [sourcePart, {text: "This is the mask, where white is the area to edit and black is the area to keep."}, maskPart, { text: prompt }] },
                 config: { responseModalities: [Modality.IMAGE] },
             });
@@ -127,7 +134,7 @@ export const generatePortraits = async (
         for (let i = 0; i < totalSteps; i++) {
             updateProgress(`Generating composition ${i + 1}/${totalSteps}...`, i / totalSteps);
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image-preview',
+                model: 'gemini-2.5-flash-image',
                 contents: { parts },
                 config: { responseModalities: [Modality.IMAGE] },
             });
@@ -225,7 +232,7 @@ export const generatePortraits = async (
         }
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image-preview',
+            model: 'gemini-2.5-flash-image',
             contents: { parts: currentParts },
             config: config,
         });
@@ -251,7 +258,7 @@ export const generateMaskForImage = async (sourceImage: File, maskSubject: 'pers
     }
 
     const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: { parts: [imagePart, { text: promptText }] },
         config: {
             responseModalities: [Modality.IMAGE],
@@ -387,7 +394,7 @@ export const enhanceImageResolution = async (imageDataUrl: string): Promise<stri
     const imagePart = await fileToGenerativePart(file);
 
     const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: {
             parts: [
                 imagePart,
@@ -446,7 +453,7 @@ export const generateClothingImage = async (sourceFile: File, itemName: string, 
     const prompt = `From the source image, extract the "${itemName}". Generate a new, photorealistic image of ONLY this item. The item should be ${style} flat on a clean, plain white background, as if for an e-commerce product listing. Remove the person and any other background elements.`;
 
     const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: { parts: [imagePart, { text: prompt }] },
         config: {
             responseModalities: [Modality.IMAGE],
@@ -499,7 +506,7 @@ export const generateObjectImage = async (sourceFile: File, objectName: string):
     const prompt = `From the source image, find the object described as "${objectName}". Generate a new, photorealistic image of ONLY this object on a clean, plain white background, suitable for a product listing. Remove all other objects, people, and background elements.`;
     
     const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: { parts: [imagePart, { text: prompt }] },
         config: {
             responseModalities: [Modality.IMAGE],
@@ -558,7 +565,7 @@ CRITICAL INSTRUCTIONS:
     }
 
     const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: { 
             parts: [
                 stylePart,    // STYLE REFERENCE is FIRST
@@ -594,7 +601,7 @@ The chart must include:
 The background must be a clean, solid white. The output must be a single, high-quality PNG image showing only the alphabet chart. Do not include any other text, explanations, or elements.`;
 
     const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: { parts: [imagePart, { text: prompt }] },
         config: {
             responseModalities: [Modality.IMAGE],
@@ -802,7 +809,7 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
         const allImages: string[] = [];
         for (let i = 0; i < (state.numLogos || 1); i++) {
             const result = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image-preview',
+                model: 'gemini-2.5-flash-image',
                 contents: { parts },
                 config: { responseModalities: [Modality.IMAGE] }
             });
@@ -895,7 +902,7 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
     const allImages: string[] = [];
     for (let i = 0; i < (state.numBanners || 1); i++) {
         const result = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image-preview',
+            model: 'gemini-2.5-flash-image',
             contents: { parts },
             config: { responseModalities: [Modality.IMAGE] }
         });
@@ -965,7 +972,7 @@ export const generateAlbumCovers = async (state: LogoThemeState): Promise<string
         const allImages: string[] = [];
         for (let i = 0; i < (state.numAlbumCovers || 1); i++) {
             const result = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image-preview',
+                model: 'gemini-2.5-flash-image',
                 contents: { parts },
                 config: { responseModalities: [Modality.IMAGE] }
             });

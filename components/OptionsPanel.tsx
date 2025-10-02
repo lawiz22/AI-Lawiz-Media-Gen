@@ -415,10 +415,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         }
         
         if (field === 'geminiT2IModel') {
-            const newModel = value as 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image-preview';
+            const newModel = value as 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image';
             updateOptions({
                 geminiT2IModel: newModel,
-                aspectRatio: newModel === 'gemini-2.5-flash-image-preview' ? '1:1' : '3:4', // 3:4 is default
+                aspectRatio: newModel === 'gemini-2.5-flash-image' ? '1:1' : '3:4', // 3:4 is default
             });
             return;
         }
@@ -759,7 +759,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     onChange={handleOptionChange('geminiT2IModel')}
                     options={[
                         { value: 'imagen-4.0-generate-001', label: 'Imagen 4.0 (High Quality)' },
-                        { value: 'gemini-2.5-flash-image-preview', label: 'Gemini Flash (Fast/Cheap)' },
+                        { value: 'gemini-2.5-flash-image', label: 'Gemini Flash (Fast/Cheap)' },
                     ]}
                     disabled={isDisabled}
                 />
@@ -1270,7 +1270,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 value={options.aspectRatio}
                 onChange={handleOptionChange('aspectRatio')}
                 options={ASPECT_RATIO_OPTIONS}
-                disabled={isDisabled || (options.provider === 'gemini' && options.geminiMode === 't2i' && options.geminiT2IModel === 'gemini-2.5-flash-image-preview')}
+                disabled={isDisabled || (options.provider === 'gemini' && options.geminiMode === 't2i' && options.geminiT2IModel === 'gemini-2.5-flash-image')}
             />
         )}
       </OptionSection>
