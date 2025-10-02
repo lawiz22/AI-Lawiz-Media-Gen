@@ -469,6 +469,7 @@ export interface LogoThemeState {
 export interface AppSliceState {
   currentUser: User | null;
   theme: string;
+  projectName: string;
   activeTab: string;
   isComfyUIConnected: boolean | null;
   comfyUIObjectInfo: any | null;

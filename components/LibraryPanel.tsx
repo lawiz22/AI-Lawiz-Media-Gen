@@ -362,6 +362,7 @@ type ViewMode = 'grid' | 'smallGrid' | 'list';
 export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveConnected, onSyncWithDrive, isSyncing, syncMessage, isDriveConfigured }) => {
   const dispatch: AppDispatch = useDispatch();
   const { items, status: libraryStatus, error: libraryError } = useSelector((state: RootState) => state.library);
+  const projectName = useSelector((state: RootState) => state.app.projectName);
   
   const [filter, setFilter] = useState<LibraryItemType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -507,7 +508,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
   
   const handleExport = async () => {
     try {
-        await exportLibraryAsJson();
+        await exportLibraryAsJson(projectName);
     } catch(e) {
         console.error("Export failed", e);
         alert("Failed to export library. See console for details.");

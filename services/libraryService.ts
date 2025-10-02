@@ -277,7 +277,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
     }
 };
 
-export const exportLibraryAsJson = async (): Promise<void> => {
+export const exportLibraryAsJson = async (projectName: string): Promise<void> => {
     try {
         const items = await idbService.getLibraryItems();
         if (items.length === 0) {
@@ -289,7 +289,8 @@ export const exportLibraryAsJson = async (): Promise<void> => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'library_backup.json';
+        const sanitizedName = projectName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        a.download = `${sanitizedName || 'library'}_backup.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

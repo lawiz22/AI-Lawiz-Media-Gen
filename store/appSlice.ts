@@ -4,6 +4,7 @@ import type { User, VersionInfo, DriveFolder, AppSliceState } from '../types';
 const initialState: AppSliceState = {
   currentUser: null,
   theme: 'cyberpunk',
+  projectName: 'Project Lawiz 1',
   activeTab: 'image-generator',
   isComfyUIConnected: null,
   comfyUIObjectInfo: null,
@@ -71,6 +72,10 @@ const appSlice = createSlice({
     setTheme: (state, action: PayloadAction<string>) => {
       state.theme = action.payload;
     },
+    setProjectName: (state, action: PayloadAction<string>) => {
+      state.projectName = action.payload;
+      localStorage.setItem('projectName', action.payload);
+    },
     setActiveTab: (state, action: PayloadAction<string>) => {
       state.activeTab = action.payload;
     },
@@ -127,6 +132,7 @@ const appSlice = createSlice({
 export const {
   setCurrentUser,
   setTheme,
+  setProjectName,
   setActiveTab,
   setIsComfyUIConnected,
   setComfyUIObjectInfo,

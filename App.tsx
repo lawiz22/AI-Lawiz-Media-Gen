@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
 import {
-    setCurrentUser, setTheme, setActiveTab, setIsComfyUIConnected, setComfyUIObjectInfo, setVersionInfo,
+    setCurrentUser, setTheme, setProjectName, setActiveTab, setIsComfyUIConnected, setComfyUIObjectInfo, setVersionInfo,
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
     openSettingsModal, closeSettingsModal, openAdminPanel, closeAdminPanel,
     openOAuthHelper, closeOAuthHelper,
@@ -68,7 +68,7 @@ const App: React.FC = () => {
     
     // --- App State (from appSlice) ---
     const {
-        currentUser, theme, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
+        currentUser, theme, projectName, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
         isSettingsModalOpen, isAdminPanelOpen, isOAuthHelperOpen,
         isClothingPickerOpen, isBackgroundPickerOpen, isPosePickerOpen, isColorImagePickerOpen, isVideoUtilsPickerOpen,
         isStartFramePickerOpen, isEndFramePickerOpen, isLogoRefPickerOpen, isLogoPalettePickerOpen, isLogoFontPickerOpen,
@@ -149,6 +149,11 @@ const App: React.FC = () => {
         const savedTheme = localStorage.getItem('theme') || 'cyberpunk';
         dispatch(setTheme(savedTheme));
 
+        const savedProjectName = localStorage.getItem('projectName');
+        if (savedProjectName) {
+            dispatch(setProjectName(savedProjectName));
+        }
+
         const savedUser = sessionStorage.getItem('currentUser');
         if (savedUser) dispatch(setCurrentUser(JSON.parse(savedUser)));
         
@@ -202,6 +207,10 @@ const App: React.FC = () => {
 
     const handleThemeChange = (newTheme: string) => {
         dispatch(setTheme(newTheme));
+    };
+
+    const handleProjectNameChange = (newName: string) => {
+        dispatch(setProjectName(newName));
     };
     
     const handleReset = () => {
@@ -547,6 +556,8 @@ const App: React.FC = () => {
                 setTheme={handleThemeChange} 
                 onLogout={handleLogout} 
                 currentUser={currentUser}
+                projectName={projectName}
+                onProjectNameChange={handleProjectNameChange}
                 onOpenSettingsModal={() => dispatch(openSettingsModal())}
                 onOpenAdminPanel={() => dispatch(openAdminPanel())}
                 isComfyUIConnected={isComfyUIConnected}
