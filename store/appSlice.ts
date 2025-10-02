@@ -13,7 +13,6 @@ const initialState: AppSliceState = {
   // Modals & Panels
   isSettingsModalOpen: false,
   isAdminPanelOpen: false,
-  isFeatureAnalysisModalOpen: false,
   isClothingPickerOpen: false,
   isBackgroundPickerOpen: false,
   isPosePickerOpen: false,
@@ -110,8 +109,6 @@ const appSlice = createSlice({
     closeSettingsModal: state => { state.isSettingsModalOpen = false; },
     openAdminPanel: state => { state.isAdminPanelOpen = true; },
     closeAdminPanel: state => { state.isAdminPanelOpen = false; },
-    openFeatureAnalysisModal: state => { state.isFeatureAnalysisModalOpen = true; },
-    closeFeatureAnalysisModal: state => { state.isFeatureAnalysisModalOpen = false; },
     openOAuthHelper: state => { state.isOAuthHelperOpen = true; },
     closeOAuthHelper: state => { state.isOAuthHelperOpen = false; },
     
@@ -143,8 +140,6 @@ export const {
   closeSettingsModal,
   openAdminPanel,
   closeAdminPanel,
-  openFeatureAnalysisModal,
-  closeFeatureAnalysisModal,
   openOAuthHelper,
   closeOAuthHelper,
   setModalOpen,

@@ -478,7 +478,6 @@ export interface AppSliceState {
   // Modals & Panels
   isSettingsModalOpen: boolean;
   isAdminPanelOpen: boolean;
-  isFeatureAnalysisModalOpen: boolean;
   isClothingPickerOpen: boolean;
   isBackgroundPickerOpen: boolean;
   isPosePickerOpen: boolean;

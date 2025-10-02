@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
@@ -8,7 +6,7 @@ import {
     setCurrentUser, setTheme, setActiveTab, setIsComfyUIConnected, setComfyUIObjectInfo, setVersionInfo,
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
     openSettingsModal, closeSettingsModal, openAdminPanel, closeAdminPanel,
-    openFeatureAnalysisModal, closeFeatureAnalysisModal, openOAuthHelper, closeOAuthHelper,
+    openOAuthHelper, closeOAuthHelper,
     setModalOpen
 } from './store/appSlice';
 // Fix: Imported the `selectIsReadyToGenerate` selector to resolve the "Cannot find name" error.
@@ -60,7 +58,6 @@ import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
-import { FeatureAnalysisModal } from './components/FeatureAnalysisModal';
 import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon } from './components/icons';
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
@@ -72,7 +69,7 @@ const App: React.FC = () => {
     // --- App State (from appSlice) ---
     const {
         currentUser, theme, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
-        isSettingsModalOpen, isAdminPanelOpen, isFeatureAnalysisModalOpen, isOAuthHelperOpen,
+        isSettingsModalOpen, isAdminPanelOpen, isOAuthHelperOpen,
         isClothingPickerOpen, isBackgroundPickerOpen, isPosePickerOpen, isColorImagePickerOpen, isVideoUtilsPickerOpen,
         isStartFramePickerOpen, isEndFramePickerOpen, isLogoRefPickerOpen, isLogoPalettePickerOpen, isLogoFontPickerOpen,
         isPromptGenImagePickerOpen, isPromptGenBgImagePickerOpen, isPromptGenSubjectImagePickerOpen,
@@ -552,7 +549,6 @@ const App: React.FC = () => {
                 currentUser={currentUser}
                 onOpenSettingsModal={() => dispatch(openSettingsModal())}
                 onOpenAdminPanel={() => dispatch(openAdminPanel())}
-                onOpenFeatureAnalysisModal={() => dispatch(openFeatureAnalysisModal())}
                 isComfyUIConnected={isComfyUIConnected}
                 versionInfo={versionInfo}
                 driveFolder={driveFolder}
@@ -922,9 +918,6 @@ const App: React.FC = () => {
                         <AdminPanel />
                     </div>
                 </div>
-            )}
-             {isFeatureAnalysisModalOpen && (
-                 <FeatureAnalysisModal isOpen={isFeatureAnalysisModalOpen} onClose={() => dispatch(closeFeatureAnalysisModal())} />
             )}
             {isOAuthHelperOpen && (
                 <OAuthHelperModal
