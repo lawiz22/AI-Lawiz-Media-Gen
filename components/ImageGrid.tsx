@@ -326,7 +326,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                   const savingStatus = image.saved;
 
                   return (
-                      <div key={index} className="group relative aspect-w-1 aspect-h-1 bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
+                      <div key={index} className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
                           <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="object-cover w-full h-full" />
                           
                           {/* Unified hover overlay for all actions */}

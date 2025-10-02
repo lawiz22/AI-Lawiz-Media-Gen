@@ -1,42 +1,38 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="cyberpunk">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lawiz's AI Media Generator</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <style>
+      :root {
+        font-family: 'Inter', sans-serif;
+      }
+      body {
+        margin: 0;
+        background-color: var(--color-bg-primary, #111827);
+      }
+    </style>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      function onGapiLoad() {
-        window.gapiLoaded = true;
-        window.dispatchEvent(new Event('gapiLoaded'));
-      }
-      function onGisLoad() {
-        window.gisLoaded = true;
-        window.dispatchEvent(new Event('gisLoaded'));
-      }
-    </script>
-    <script async defer src="https://apis.google.com/js/api.js?onload=onGapiLoad"></script>
-    <script async defer src="https://accounts.google.com/gsi/client" onload="onGisLoad"></script>
-  <script type="importmap">
+    <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.17.0",
-    "react/": "https://aistudiocdn.com/react@^19.1.1/",
-    "react": "https://aistudiocdn.com/react@^19.1.1",
-    "@reduxjs/toolkit": "https://aistudiocdn.com/@reduxjs/toolkit@^2.2.6",
-    "react-redux": "https://aistudiocdn.com/react-redux@^9.1.2",
-    "@mediapipe/tasks-vision": "https://aistudiocdn.com/@mediapipe/tasks-vision@^0.10.14",
-    "jszip": "https://aistudiocdn.com/jszip@^3.10.1/dist/jszip.min.js",
-    "idb": "https://aistudiocdn.com/idb@^8.0.3",
-    "url": "https://aistudiocdn.com/url@^0.11.4"
+    "react-redux": "https://esm.sh/react-redux@9.2.0",
+    "@reduxjs/toolkit": "https://esm.sh/@reduxjs/toolkit@2.2.6",
+    "@google/genai": "https://esm.sh/@google/genai@0.14.0",
+    "@mediapipe/tasks-vision": "https://esm.sh/@mediapipe/tasks-vision@0.10.14",
+    "jszip": "https://esm.sh/jszip@3.10.1",
+    "idb": "https://esm.sh/idb@8.0.0",
+    "url": "https://esm.sh/url@0.11.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.0/",
+    "react-dom/client": "https://esm.sh/react-dom@19/client",
+    "react/": "https://esm.sh/react@19/",
+    "react": "https://esm.sh/react@19"
   }
 }
 </script>
+
 <style>
   :root[data-theme="cyberpunk"] {
     --color-bg-primary: #030712;
@@ -161,9 +157,11 @@
       },
     };
   </script>
-</head>
-  <body class="bg-bg-primary text-text-primary">
+  </head>
+  <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script async src="https://apis.google.com/js/api.js"></script>
+    <script async src="https://accounts.google.com/gsi/client"></script>
   </body>
 </html>

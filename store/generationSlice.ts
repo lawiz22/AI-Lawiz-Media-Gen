@@ -223,7 +223,7 @@ const selectApp = (state: RootState) => state.app;
 export const selectIsReadyToGenerate = createSelector(
   [selectGeneration, selectApp],
   (generation, app) => {
-    const { isLoading, options, sourceImage, elementImages, generationMode } = generation;
+    const { isLoading, options, sourceImage, maskImage, elementImages, generationMode } = generation;
     const { isComfyUIConnected, activeTab } = app;
 
     if (isLoading) return false;
@@ -237,7 +237,13 @@ export const selectIsReadyToGenerate = createSelector(
                 return !!sourceImage && !!options.geminiGeneralEditPrompt?.trim();
             }
             if (options.geminiI2iMode === 'inpaint') {
-                return !!sourceImage; // Mask is optional
+                const task = options.geminiInpaintTask;
+                const taskReady = 
+                    (task === 'remove') ||
+                    (task === 'replace' && !!options.geminiInpaintTargetPrompt?.trim()) ||
+                    (task === 'changeColor' && !!options.geminiInpaintTargetPrompt?.trim()) ||
+                    (task === 'custom' && !!options.geminiInpaintCustomPrompt?.trim());
+                return !!sourceImage && !!maskImage && taskReady;
             }
             if (options.geminiI2iMode === 'compose') {
                 return !!sourceImage && elementImages.length > 0 && !!options.geminiComposePrompt?.trim();

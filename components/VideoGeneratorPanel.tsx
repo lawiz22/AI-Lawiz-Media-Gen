@@ -14,7 +14,7 @@ import { WAN_T2V_ASPECT_RATIO_OPTIONS } from '../constants';
 // --- Prop Types ---
 interface VideoGeneratorPanelProps {
   options: GenerationOptions;
-  setOptions: (options: GenerationOptions) => void;
+  setOptions: (options: Partial<GenerationOptions>) => void;
   comfyUIObjectInfo: any | null;
   startFrame: File | null;
   setStartFrame: (file: File | null) => void;
@@ -43,7 +43,7 @@ const formatTime = (seconds: number): string => {
     const s = Math.floor(seconds % 60);
     const ms = Math.round((seconds - Math.floor(seconds)) * 1000);
 
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(3, '0')}`;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
 };
 
 const OptionSection: React.FC<{ title: string, children: React.ReactNode, defaultOpen?: boolean }> = ({ title, children, defaultOpen = false }) => {
@@ -162,7 +162,9 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     
     useEffect(() => {
         if (options.videoProvider === 'comfyui' && options.comfyVidModelType === 'wan-i2v' && comfyUIObjectInfo) {
+            // Guard to prevent re-running if defaults are already set. This is key to preventing loops.
             if (options.comfyVidWanI2VHighNoiseModel) return;
+
             const updates: Partial<GenerationOptions> = {};
             if (comfyGgufModels.length > 0) {
                 updates.comfyVidWanI2VHighNoiseModel = comfyGgufModels.find(m => m.toLowerCase().includes('highnoise')) || comfyGgufModels[0];
@@ -175,9 +177,11 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                  updates.comfyVidWanI2VHighNoiseLora = comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('high')) || comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('high')) || comfyLoras[0];
                  updates.comfyVidWanI2VLowNoiseLora = comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('4step') && l.toLowerCase().includes('low')) || comfyLoras.find(l => l.toLowerCase().includes('lightning') && l.toLowerCase().includes('low')) || (comfyLoras.length > 1 ? comfyLoras[1] : comfyLoras[0]);
             }
-            if (Object.keys(updates).length > 0) setOptions({ ...options, ...updates });
+            if (Object.keys(updates).length > 0) {
+                setOptions(updates);
+            }
         }
-    }, [options.videoProvider, options.comfyVidModelType, comfyUIObjectInfo, comfyGgufModels.length, comfyLoras.length, comfyGgufClipModels.length, comfyVaes.length, comfyClipVision.length]);
+    }, [options, setOptions, comfyUIObjectInfo, comfyGgufModels, comfyLoras, comfyGgufClipModels, comfyVaes, comfyClipVision]);
 
     // Sync Redux state changes (e.g., from library) to the local 'original' state for resizing.
     useEffect(() => {
@@ -239,11 +243,11 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
 
     const handleOptionChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
-        setOptions({ ...options, [field]: value });
+        setOptions({ [field]: value });
     };
 
     const handleSliderChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement>) => {
-        setOptions({ ...options, [field]: parseFloat(e.target.value) });
+        setOptions({ [field]: parseFloat(e.target.value) });
     };
 
     const handleCopyPrompt = () => {
@@ -255,7 +259,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
 
     const handleUseEndFrameChange = (e: ChangeEvent<HTMLInputElement>) => {
         const isChecked = e.target.checked;
-        setOptions({ ...options, comfyVidWanI2VUseEndFrame: isChecked });
+        setOptions({ comfyVidWanI2VUseEndFrame: isChecked });
         if (!isChecked) {
             setEndFrameAction(null);
             setOriginalEndFrame(null);
@@ -382,14 +386,14 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
     const renderProviderSwitch = () => (
         <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1 mb-6">
             <button 
-                onClick={() => setOptions({ ...options, videoProvider: 'comfyui'})} 
+                onClick={() => setOptions({ videoProvider: 'comfyui'})} 
                 disabled={isLoading}
                 className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.videoProvider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
             >
                 ComfyUI
             </button>
             <button 
-                onClick={() => setOptions({ ...options, videoProvider: 'gemini'})} 
+                onClick={() => setOptions({ videoProvider: 'gemini'})} 
                 disabled={isLoading}
                 className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.videoProvider === 'gemini' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}
             >
@@ -471,18 +475,18 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                             value={`${options.comfyVidWanT2VWidth || 856}x${options.comfyVidWanT2VHeight || 480}`}
                                             onChange={(e) => {
                                                 const [width, height] = e.target.value.split('x').map(Number);
-                                                setOptions({ ...options, comfyVidWanT2VWidth: width, comfyVidWanT2VHeight: height });
+                                                setOptions({ comfyVidWanT2VWidth: width, comfyVidWanT2VHeight: height });
                                             }}
                                             options={WAN_T2V_ASPECT_RATIO_OPTIONS}
                                             disabled={isLoading}
                                         />
                                     </div>
-                                    <div className="sm:col-span-1"><label className="block text-sm font-medium text-text-secondary">Frame Count</label><input type="number" value={options.comfyVidWanT2VFrameCount || 57} onChange={(e) => setOptions({...options, comfyVidWanT2VFrameCount: Number(e.target.value)})} className="mt-1 w-full bg-bg-primary p-2 rounded-md border border-border-primary" /></div>
+                                    <div className="sm:col-span-1"><label className="block text-sm font-medium text-text-secondary">Frame Count</label><input type="number" value={options.comfyVidWanT2VFrameCount || 57} onChange={(e) => setOptions({comfyVidWanT2VFrameCount: Number(e.target.value)})} className="mt-1 w-full bg-bg-primary p-2 rounded-md border border-border-primary" /></div>
                                 </div>
                                 <SelectInput
                                     label="Frame Rate"
                                     value={String(options.comfyVidWanT2VFrameRate || 24)}
-                                    onChange={(e) => setOptions({ ...options, comfyVidWanT2VFrameRate: parseFloat(e.target.value) })}
+                                    onChange={(e) => setOptions({ comfyVidWanT2VFrameRate: parseFloat(e.target.value) })}
                                     options={[
                                         { value: '12', label: '12 fps (Animation)' },
                                         { value: '16', label: '16 fps (Old Film)' },
@@ -505,7 +509,7 @@ export const VideoGeneratorPanel: React.FC<VideoGeneratorPanelProps> = ({
                                 <NumberSlider label={`CFG`} value={options.comfyVidWanT2VCfg || 1} onChange={handleSliderChange('comfyVidWanT2VCfg')} min={1} max={3} step={0.1} disabled={isLoading} />
                                 <NumberSlider label={`Refiner Start Step`} value={options.comfyVidWanT2VRefinerStartStep || 3} onChange={handleSliderChange('comfyVidWanT2VRefinerStartStep')} min={1} max={(options.comfyVidWanT2VSteps || 6) - 1} step={1} disabled={isLoading} />
                                 <SelectInput label="Sampler" value={options.comfyVidWanT2VSampler || 'euler'} onChange={handleOptionChange('comfyVidWanT2VSampler')} options={comfySamplers.map(s => ({value: s, label: s}))} disabled={isLoading}/><SelectInput label="Scheduler" value={options.comfyVidWanT2VScheduler || 'simple'} onChange={handleOptionChange('comfyVidWanT2VScheduler')} options={comfySchedulers.map(s => ({value: s, label: s}))} disabled={isLoading}/>
-                                <div className="grid grid-cols-2 gap-4"><SelectInput label="Seed Control" value={options.comfyVidWanT2VSeedControl || 'randomize'} onChange={handleOptionChange('comfyVidWanT2VSeedControl')} options={[{value: 'randomize', label: 'Randomize'}, {value: 'fixed', label: 'Fixed'}]} disabled={isLoading}/><div><label className="block text-sm font-medium text-text-secondary">Seed Value</label><div className="flex items-center gap-1"><input type="number" value={options.comfyVidWanT2VNoiseSeed ?? ''} onChange={(e) => setOptions({...options, comfyVidWanT2VNoiseSeed: e.target.value ? parseInt(e.target.value, 10) : undefined })} placeholder="Random" className="mt-1 block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm" disabled={isLoading}/><button onClick={() => setOptions({...options, comfyVidWanT2VNoiseSeed: Math.floor(Math.random() * 1e15)})} className="mt-1 p-2 bg-bg-primary rounded-md hover:bg-bg-tertiary-hover" title="Generate Random Seed" disabled={isLoading}><RefreshIcon className="w-5 h-5"/></button></div></div></div>
+                                <div className="grid grid-cols-2 gap-4"><SelectInput label="Seed Control" value={options.comfyVidWanT2VSeedControl || 'randomize'} onChange={handleOptionChange('comfyVidWanT2VSeedControl')} options={[{value: 'randomize', label: 'Randomize'}, {value: 'fixed', label: 'Fixed'}]} disabled={isLoading}/><div><label className="block text-sm font-medium text-text-secondary">Seed Value</label><div className="flex items-center gap-1"><input type="number" value={options.comfyVidWanT2VNoiseSeed ?? ''} onChange={(e) => setOptions({comfyVidWanT2VNoiseSeed: e.target.value ? parseInt(e.target.value, 10) : undefined })} placeholder="Random" className="mt-1 block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm" disabled={isLoading}/><button onClick={() => setOptions({comfyVidWanT2VNoiseSeed: Math.floor(Math.random() * 1e15)})} className="mt-1 p-2 bg-bg-primary rounded-md hover:bg-bg-tertiary-hover" title="Generate Random Seed" disabled={isLoading}><RefreshIcon className="w-5 h-5"/></button></div></div></div>
                                 <SelectInput label="Video Format" value={options.comfyVidWanT2VVideoFormat || 'video/nvenc_h264-mp4'} onChange={handleOptionChange('comfyVidWanT2VVideoFormat')} options={[{value: 'video/nvenc_h264-mp4', label: 'H.264 (MP4)'}, {value: 'video/webm', label: 'WebM'}, {value: 'image/gif', label: 'GIF'}]} disabled={isLoading} />
                                 <div className="space-y-4 p-4 mt-4 bg-bg-primary/30 rounded-lg border border-border-primary/50"><label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={options.comfyVidWanT2VUseFilmGrain} onChange={handleOptionChange('comfyVidWanT2VUseFilmGrain')} disabled={isLoading} className="rounded text-accent focus:ring-accent" />Add Film Grain</label>{options.comfyVidWanT2VUseFilmGrain && (<div className="space-y-4 pl-4 border-l-2 border-border-primary"><NumberSlider label={`Grain Intensity`} value={options.comfyVidWanT2VFilmGrainIntensity || 0.02} onChange={handleSliderChange('comfyVidWanT2VFilmGrainIntensity')} min={0} max={0.5} step={0.01} disabled={isLoading} /><NumberSlider label={`Saturation Mix`} value={options.comfyVidWanT2VFilmGrainSaturation || 0.3} onChange={handleSliderChange('comfyVidWanT2VFilmGrainSaturation')} min={0} max={1} step={0.05} disabled={isLoading} /></div>)}</div>
                             </OptionSection>

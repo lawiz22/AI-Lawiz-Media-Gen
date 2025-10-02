@@ -116,7 +116,9 @@ const appSlice = createSlice({
     closeOAuthHelper: state => { state.isOAuthHelperOpen = false; },
     
     // Dynamic Modal Toggler
-    setModalOpen: (state, action: PayloadAction<{ modal: keyof AppSliceState; isOpen: boolean }>) => {
+    // Fix: Narrowed the 'modal' payload type to only accept keys matching the 'is...Open' pattern.
+    // This makes the reducer type-safe and resolves downstream type inference errors.
+    setModalOpen: (state, action: PayloadAction<{ modal: Extract<keyof AppSliceState, `is${string}Open`>; isOpen: boolean }>) => {
         const { modal, isOpen } = action.payload;
         if (modal.startsWith('is') && modal.endsWith('Open')) {
             (state as any)[modal] = isOpen;

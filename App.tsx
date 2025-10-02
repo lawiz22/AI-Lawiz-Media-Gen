@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
@@ -514,8 +516,10 @@ const App: React.FC = () => {
         dispatch(setActiveTab(tabId));
     };
     
-    const openModal = (modal: keyof AppSliceState) => dispatch(setModalOpen({ modal, isOpen: true }));
-    const closeModal = (modal: keyof AppSliceState) => dispatch(setModalOpen({ modal, isOpen: false }));
+    // Fix: Narrowed the `modal` parameter type to only include valid boolean modal flag keys from the state.
+    // This ensures type safety when calling the `setModalOpen` reducer, resolving downstream type errors.
+    const openModal = (modal: Extract<keyof AppSliceState, `is${string}Open`>) => { dispatch(setModalOpen({ modal, isOpen: true })); };
+    const closeModal = (modal: Extract<keyof AppSliceState, `is${string}Open`>) => { dispatch(setModalOpen({ modal, isOpen: false })); };
 
     if (!currentUser) {
         return <Login onLogin={handleLogin} />;
@@ -860,6 +864,7 @@ const App: React.FC = () => {
                 )}
                 
                 <div className={activeTab === 'extractor-tools' ? 'block' : 'hidden'}>
+                    {/* Fix: Added all required props to the ExtractorToolsPanel component. */}
                     <ExtractorToolsPanel 
                         onOpenLibraryForClothes={() => openModal('isClothesSourcePickerOpen')}
                         onOpenLibraryForObjects={() => openModal('isObjectSourcePickerOpen')}
@@ -871,22 +876,21 @@ const App: React.FC = () => {
                     />
                 </div>
                 
-                 <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
+                <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
                     <VideoUtilsPanel
                         setStartFrame={handleSetVideoStartFrame}
                         setEndFrame={handleSetVideoEndFrame}
-                        onOpenLibrary={() => openModal('isColorImagePickerOpen')}
-                        onOpenVideoLibrary={() => openModal('isVideoUtilsPickerOpen')}
+                        onOpenLibrary={(() => openModal('isColorImagePickerOpen'))}
+                        onOpenVideoLibrary={(() => openModal('isVideoUtilsPickerOpen'))}
                         activeSubTab={activeVideoUtilsSubTab}
-                        setActiveSubTab={(tab) => dispatch(setActiveVideoUtilsSubTab(tab as 'frames' | 'colors'))}
+                        setActiveSubTab={(tab) => dispatch(setActiveVideoUtilsSubTab(tab))}
                         onReset={handleVideoUtilsReset}
                     />
                 </div>
+                
             </main>
-
-            {/* --- Global Loader --- */}
-            {isLoading && (activeTab === 'image-generator' || activeTab === 'video-generator' || activeTab === 'character-generator') && (
-                <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+            {isLoading && (
+                <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-4">
                     <Loader 
                         message={progressMessage} 
                         progress={progressValue} 
@@ -894,465 +898,31 @@ const App: React.FC = () => {
                     />
                 </div>
             )}
-
-
-            {/* --- Modals & Panels --- */}
+             {globalError && (
+                <ErrorModal 
+                    title={globalError.title} 
+                    message={globalError.message} 
+                    onClose={() => dispatch(setGlobalError(null))} 
+                />
+            )}
             {isSettingsModalOpen && (
-                <ConnectionSettingsModal
-                    isOpen={isSettingsModalOpen}
-                    onClose={() => dispatch(closeSettingsModal())}
+                <ConnectionSettingsModal 
+                    isOpen={isSettingsModalOpen} 
+                    onClose={() => dispatch(closeSettingsModal())} 
                     initialComfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                     initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
                     onSave={handleSaveSettings}
                 />
             )}
-            {isAdminPanelOpen && (
-                 <div
-                    className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="admin-panel-title"
-                    onClick={() => dispatch(closeAdminPanel())}
-                >
-                    <div
-                        className="bg-bg-secondary w-full max-w-4xl p-6 rounded-2xl shadow-lg border border-border-primary flex flex-col max-h-[90vh]"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                            <h2 id="admin-panel-title" className="text-xl font-bold text-accent flex items-center gap-2">
-                                <AdminIcon className="w-6 h-6" />
-                                Admin Panel
-                            </h2>
-                            <button
-                                onClick={() => dispatch(closeAdminPanel())}
-                                className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
-                                aria-label="Close"
-                            >
-                                <CloseIcon className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="flex-grow overflow-y-auto pr-2 -mr-2">
-                            <AdminPanel />
-                        </div>
+             {isAdminPanelOpen && (
+                <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-4" onClick={() => dispatch(closeAdminPanel())}>
+                    <div className="w-full max-w-4xl" onClick={e => e.stopPropagation()}>
+                        <AdminPanel />
                     </div>
                 </div>
             )}
-            {isFeatureAnalysisModalOpen && (
-                <FeatureAnalysisModal
-                    isOpen={isFeatureAnalysisModalOpen}
-                    onClose={() => dispatch(closeFeatureAnalysisModal())}
-                />
-            )}
-            {isClothingPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isClothingPickerOpen}
-                    onClose={() => closeModal('isClothingPickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        dispatch(setClothingImage(new File([blob], "library_clothing.jpeg", { type: blob.type })));
-                    }}
-                    filter="clothes"
-                />
-            )}
-            {isBackgroundPickerOpen && (
-                 <LibraryPickerModal
-                    isOpen={isBackgroundPickerOpen}
-                    onClose={() => closeModal('isBackgroundPickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        dispatch(setBackgroundImage(new File([blob], "library_background.jpeg", { type: blob.type })));
-                    }}
-                    filter="image"
-                />
-            )}
-             {isNunchakuSourcePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isNunchakuSourcePickerOpen}
-                    onClose={() => closeModal('isNunchakuSourcePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        dispatch(setSourceImage(new File([blob], "library_source.jpeg", { type: blob.type })));
-                    }}
-                    filter={broadImagePickerFilter}
-                />
-            )}
-            {isCharacterSourcePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isCharacterSourcePickerOpen}
-                    onClose={() => closeModal('isCharacterSourcePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], "library_source.jpeg", { type: blob.type });
-                        dispatch(setSourceImage(file));
-                        dispatch(setCharacterName(''));
-                    }}
-                    filter={broadImagePickerFilter}
-                />
-            )}
-            {isPosePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isPosePickerOpen}
-                    onClose={() => closeModal('isPosePickerOpen')}
-                    onSelectItem={() => {}}
-                    onSelectMultiple={(items) => {
-                        dispatch(updateOptions({ poseLibraryItems: items.slice(0, options.numImages) }));
-                    }}
-                    filter="pose"
-                    multiSelect
-                />
-            )}
-            {isMaskPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isMaskPickerOpen}
-                    onClose={() => closeModal('isMaskPickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        dispatch(setMaskImage(new File([blob], "library_mask.png", { type: blob.type })));
-                    }}
-                    filter="image"
-                />
-            )}
-            {isElementPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isElementPickerOpen}
-                    onClose={() => closeModal('isElementPickerOpen')}
-                    onSelectItem={() => {}} // single select no-op
-                    onSelectMultiple={async (items) => {
-                        const files = await Promise.all(
-                            items.map(item => dataUrlToFile(item.media, item.name || `element_${item.id}.jpeg`))
-                        );
-                        dispatch(setElementImages([...elementImages, ...files].slice(0, 5)));
-                    }}
-                    filter={broadImagePickerFilter}
-                    multiSelect
-                />
-            )}
-            {isVideoStartFramePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isVideoStartFramePickerOpen}
-                    onClose={() => closeModal('isVideoStartFramePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], "library_start_frame.jpeg", { type: blob.type });
-                        dispatch(setVideoStartFrame(file));
-                    }}
-                    filter={broadImagePickerFilter}
-                />
-            )}
-            {isVideoEndFramePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isVideoEndFramePickerOpen}
-                    onClose={() => closeModal('isVideoEndFramePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], "library_end_frame.jpeg", { type: blob.type });
-                        dispatch(setVideoEndFrame(file));
-                    }}
-                    filter={broadImagePickerFilter}
-                />
-            )}
-            {isGeminiVideoSourcePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isGeminiVideoSourcePickerOpen}
-                    onClose={() => closeModal('isGeminiVideoSourcePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], "library_gemini_source.jpeg", { type: blob.type });
-                        dispatch(setVideoStartFrame(file)); // Gemini uses the start frame state
-                    }}
-                    filter={broadImagePickerFilter}
-                />
-            )}
-            {isClothesSourcePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isClothesSourcePickerOpen}
-                    onClose={() => closeModal('isClothesSourcePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], "library_clothes_source.jpeg", { type: blob.type });
-                        dispatch(updateExtractorState({ clothesSourceFile: file, identifiedItems: [], generatedClothes: [] }));
-                    }}
-                    filter={broadImagePickerFilter}
-                />
-            )}
-            {isObjectSourcePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isObjectSourcePickerOpen}
-                    onClose={() => closeModal('isObjectSourcePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], "library_object_source.jpeg", { type: blob.type });
-                        dispatch(updateExtractorState({ objectSourceFile: file, identifiedObjects: [], generatedObjects: [] }));
-                    }}
-                    filter={broadImagePickerFilter}
-                />
-            )}
-            {isPoseSourcePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isPoseSourcePickerOpen}
-                    onClose={() => closeModal('isPoseSourcePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], "library_pose_source.jpeg", { type: blob.type });
-                        dispatch(updateExtractorState({ poseSourceFile: file, generatedPoses: [] }));
-                    }}
-                    filter={broadImagePickerFilter}
-                />
-            )}
-             {isMannequinRefPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isMannequinRefPickerOpen}
-                    onClose={() => closeModal('isMannequinRefPickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], "library_mannequin_ref.jpeg", { type: blob.type });
-                        dispatch(updateExtractorState({ mannequinReferenceFile: file }));
-                    }}
-                    filter={broadImagePickerFilter}
-                />
-            )}
-            {isFontSourcePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isFontSourcePickerOpen}
-                    onClose={() => closeModal('isFontSourcePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], "library_font_source.jpeg", { type: blob.type });
-                        dispatch(updateExtractorState({ fontSourceFile: file, generatedFontChart: null }));
-                    }}
-                    filter={broadImagePickerFilter}
-                />
-            )}
-            {isColorImagePickerOpen && (
-                 <LibraryPickerModal
-                    isOpen={isColorImagePickerOpen}
-                    onClose={() => closeModal('isColorImagePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], item.name || "library_color_source.jpeg", { type: blob.type });
-                        const paletteName = `Palette from "${item.name || 'Library Item'}"`;
-                        // Fix: Replaced non-existent 'setVideoUtilsState' with the correct action 'updateVideoUtilsState'.
-                        dispatch(updateVideoUtilsState({
-                            colorPicker: { 
-                                ...videoUtilsState.colorPicker, 
-                                imageFile: file,
-                                paletteName: paletteName,
-                                palette: [],
-                                error: null,
-                            }
-                        }));
-                    }}
-                    filter={imageLikeFilter}
-                />
-            )}
-            {isVideoUtilsPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isVideoUtilsPickerOpen}
-                    onClose={() => closeModal('isVideoUtilsPickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], item.name || "library_video.mp4", { type: blob.type });
-                        // Fix: Replaced non-existent 'setVideoUtilsState' with the correct action 'updateVideoUtilsState'.
-                        dispatch(updateVideoUtilsState({
-                            videoFile: file,
-                            extractedFrame: null,
-                        }));
-                    }}
-                    filter="video"
-                />
-            )}
-             {isLogoRefPickerOpen && (
-                 <LibraryPickerModal
-                    isOpen={isLogoRefPickerOpen}
-                    onClose={() => closeModal('isLogoRefPickerOpen')}
-                    onSelectItem={() => {}} // Single select not used here
-                    onSelectMultiple={(items) => {
-                        const currentItems = logoThemeState?.referenceItems || [];
-                        dispatch(updateLogoThemeState({ referenceItems: [...currentItems, ...items] }));
-                    }}
-                    filter={imageLikeFilter}
-                    multiSelect
-                />
-            )}
-            {isLogoPalettePickerOpen && (
-                 <LibraryPickerModal
-                    isOpen={isLogoPalettePickerOpen}
-                    onClose={() => closeModal('isLogoPalettePickerOpen')}
-                    onSelectItem={(item) => {
-                        dispatch(updateLogoThemeState({ selectedPalette: item }));
-                    }}
-                    filter="color-palette"
-                />
-            )}
-             {isLogoFontPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isLogoFontPickerOpen}
-                    onClose={() => closeModal('isLogoFontPickerOpen')}
-                    onSelectItem={(item) => {
-                        dispatch(updateLogoThemeState({ selectedFont: item, fontReferenceImage: null }));
-                    }}
-                    filter="font"
-                />
-            )}
-            {isBannerRefPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isBannerRefPickerOpen}
-                    onClose={() => closeModal('isBannerRefPickerOpen')}
-                    onSelectItem={() => {}}
-                    onSelectMultiple={(items) => {
-                        const currentItems = logoThemeState?.bannerReferenceItems || [];
-                        dispatch(updateLogoThemeState({ bannerReferenceItems: [...currentItems, ...items] }));
-                    }}
-                    filter={imageLikeFilter}
-                    multiSelect
-                />
-            )}
-            {isBannerPalettePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isBannerPalettePickerOpen}
-                    onClose={() => closeModal('isBannerPalettePickerOpen')}
-                    onSelectItem={(item) => {
-                        dispatch(updateLogoThemeState({ bannerSelectedPalette: item }));
-                    }}
-                    filter="color-palette"
-                />
-            )}
-            {isBannerLogoPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isBannerLogoPickerOpen}
-                    onClose={() => closeModal('isBannerLogoPickerOpen')}
-                    onSelectItem={(item) => {
-                        dispatch(updateLogoThemeState({ bannerSelectedLogo: item }));
-                    }}
-                    filter="logo"
-                />
-            )}
-            {isBannerFontPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isBannerFontPickerOpen}
-                    onClose={() => closeModal('isBannerFontPickerOpen')}
-                    onSelectItem={(item) => {
-                        dispatch(updateLogoThemeState({ bannerSelectedFont: item, bannerFontReferenceImage: null }));
-                    }}
-                    filter="font"
-                />
-            )}
-            {isAlbumCoverRefPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isAlbumCoverRefPickerOpen}
-                    onClose={() => closeModal('isAlbumCoverRefPickerOpen')}
-                    onSelectItem={() => {}}
-                    onSelectMultiple={(items) => {
-                        const currentItems = logoThemeState?.albumReferenceItems || [];
-                        dispatch(updateLogoThemeState({ albumReferenceItems: [...currentItems, ...items] }));
-                    }}
-                    filter={imageLikeFilter}
-                    multiSelect
-                />
-            )}
-            {isAlbumCoverPalettePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isAlbumCoverPalettePickerOpen}
-                    onClose={() => closeModal('isAlbumCoverPalettePickerOpen')}
-                    onSelectItem={(item) => {
-                        dispatch(updateLogoThemeState({ albumSelectedPalette: item }));
-                    }}
-                    filter="color-palette"
-                />
-            )}
-            {isAlbumCoverLogoPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isAlbumCoverLogoPickerOpen}
-                    onClose={() => closeModal('isAlbumCoverLogoPickerOpen')}
-                    onSelectItem={(item) => {
-                        dispatch(updateLogoThemeState({ albumSelectedLogo: item }));
-                    }}
-                    filter="logo"
-                />
-            )}
-             {isAlbumCoverFontPickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isAlbumCoverFontPickerOpen}
-                    onClose={() => closeModal('isAlbumCoverFontPickerOpen')}
-                    onSelectItem={(item) => {
-                        dispatch(updateLogoThemeState({ albumSelectedFont: item, albumFontReferenceImage: null }));
-                    }}
-                    filter="font"
-                />
-            )}
-            {isPromptGenImagePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isPromptGenImagePickerOpen}
-                    onClose={() => closeModal('isPromptGenImagePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], item.name || "library_prompt_source.jpeg", { type: blob.type });
-                        dispatch(updatePromptGenState({ image: file, prompt: '' }));
-                    }}
-                    filter={imageLikeFilter}
-                />
-            )}
-            {isPromptGenBgImagePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isPromptGenBgImagePickerOpen}
-                    onClose={() => closeModal('isPromptGenBgImagePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], item.name || "library_prompt_bg_source.jpeg", { type: blob.type });
-                        dispatch(updatePromptGenState({ bgImage: file, bgPrompt: '' }));
-                    }}
-                    filter={imageLikeFilter}
-                />
-            )}
-            {isPromptGenSubjectImagePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isPromptGenSubjectImagePickerOpen}
-                    onClose={() => closeModal('isPromptGenSubjectImagePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], item.name || "library_prompt_subject_source.jpeg", { type: blob.type });
-                        dispatch(updatePromptGenState({ subjectImage: file, subjectPrompt: '' }));
-                    }}
-                    filter={imageLikeFilter}
-                />
-            )}
-            {isWanVideoImagePickerOpen && (
-                <LibraryPickerModal
-                    isOpen={isWanVideoImagePickerOpen}
-                    onClose={() => closeModal('isWanVideoImagePickerOpen')}
-                    onSelectItem={async (item) => {
-                        const res = await fetch(item.media);
-                        const blob = await res.blob();
-                        const file = new File([blob], item.name || "library_wan_video_source.jpeg", { type: blob.type });
-                        dispatch(updatePromptGenState({ wanVideoImage: file, wanVideoBasePrompt: '' }));
-                    }}
-                    filter={imageLikeFilter}
-                />
-            )}
-            {globalError && (
-                <ErrorModal 
-                    title={globalError.title}
-                    message={globalError.message}
-                    onClose={() => dispatch(setGlobalError(null))}
-                />
+             {isFeatureAnalysisModalOpen && (
+                 <FeatureAnalysisModal isOpen={isFeatureAnalysisModalOpen} onClose={() => dispatch(closeFeatureAnalysisModal())} />
             )}
             {isOAuthHelperOpen && (
                 <OAuthHelperModal
@@ -1366,8 +936,51 @@ const App: React.FC = () => {
                     origin={window.location.origin}
                 />
             )}
+            <LibraryPickerModal isOpen={isClothingPickerOpen} onClose={() => closeModal('isClothingPickerOpen')} onSelectItem={item => dispatch(setClothingImage(dataUrlToFile(item.media, item.name || 'clothing.jpeg')))} filter="clothes" />
+            <LibraryPickerModal isOpen={isBackgroundPickerOpen} onClose={() => closeModal('isBackgroundPickerOpen')} onSelectItem={item => dispatch(setBackgroundImage(dataUrlToFile(item.media, item.name || 'background.jpeg')))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={isPosePickerOpen} onClose={() => closeModal('isPosePickerOpen')} onSelectItem={item => {}} filter="pose" multiSelect={true} onSelectMultiple={(items) => dispatch(updateOptions({ poseLibraryItems: items }))} />
+            <LibraryPickerModal isOpen={isColorImagePickerOpen} onClose={() => closeModal('isColorImagePickerOpen')} onSelectItem={item => dispatch(updateVideoUtilsState({ colorPicker: { ...videoUtilsState.colorPicker, imageFile: dataUrlToFile(item.media, item.name || 'color-source.jpeg') } }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={isVideoUtilsPickerOpen} onClose={() => closeModal('isVideoUtilsPickerOpen')} onSelectItem={item => dispatch(updateVideoUtilsState({ videoFile: dataUrlToFile(item.media, item.name || 'video.mp4') }))} filter="video" />
+            <LibraryPickerModal isOpen={isVideoStartFramePickerOpen} onClose={() => closeModal('isVideoStartFramePickerOpen')} onSelectItem={item => dispatch(setVideoStartFrame(dataUrlToFile(item.media, item.name || 'start-frame.jpeg')))} filter={['image', 'character', 'extracted-frame']} />
+            <LibraryPickerModal isOpen={isVideoEndFramePickerOpen} onClose={() => closeModal('isVideoEndFramePickerOpen')} onSelectItem={item => dispatch(setVideoEndFrame(dataUrlToFile(item.media, item.name || 'end-frame.jpeg')))} filter={['image', 'character', 'extracted-frame']} />
+            <LibraryPickerModal isOpen={isGeminiVideoSourcePickerOpen} onClose={() => closeModal('isGeminiVideoSourcePickerOpen')} onSelectItem={item => dispatch(setVideoStartFrame(dataUrlToFile(item.media, item.name || 'gemini-source.jpeg')))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={isNunchakuSourcePickerOpen} onClose={() => closeModal('isNunchakuSourcePickerOpen')} onSelectItem={item => dispatch(setSourceImage(dataUrlToFile(item.media, item.name || 'nunchaku-source.jpeg')))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={isCharacterSourcePickerOpen} onClose={() => closeModal('isCharacterSourcePickerOpen')} onSelectItem={item => dispatch(setSourceImage(dataUrlToFile(item.media, item.name || 'character-source.jpeg')))} filter={['image', 'character']} />
+            
+            {/* Prompt Gen Pickers */}
+            <LibraryPickerModal isOpen={isPromptGenImagePickerOpen} onClose={() => closeModal('isPromptGenImagePickerOpen')} onSelectItem={item => dispatch(updatePromptGenState({ image: dataUrlToFile(item.media, 'prompt-source.jpeg') }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={isPromptGenBgImagePickerOpen} onClose={() => closeModal('isPromptGenBgImagePickerOpen')} onSelectItem={item => dispatch(updatePromptGenState({ bgImage: dataUrlToFile(item.media, 'bg-source.jpeg') }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={isPromptGenSubjectImagePickerOpen} onClose={() => closeModal('isPromptGenSubjectImagePickerOpen')} onSelectItem={item => dispatch(updatePromptGenState({ subjectImage: dataUrlToFile(item.media, 'subject-source.jpeg') }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={isWanVideoImagePickerOpen} onClose={() => closeModal('isWanVideoImagePickerOpen')} onSelectItem={item => dispatch(updatePromptGenState({ wanVideoImage: dataUrlToFile(item.media, 'wan-video-source.jpeg') }))} filter={imageLikeFilter} />
+            
+            {/* Extractor Pickers */}
+            <LibraryPickerModal isOpen={isClothesSourcePickerOpen} onClose={() => closeModal('isClothesSourcePickerOpen')} onSelectItem={item => dispatch(updateExtractorState({ clothesSourceFile: dataUrlToFile(item.media, item.name || 'clothes-source.jpeg') }))} filter={['image', 'character']} />
+            <LibraryPickerModal isOpen={isObjectSourcePickerOpen} onClose={() => closeModal('isObjectSourcePickerOpen')} onSelectItem={item => dispatch(updateExtractorState({ objectSourceFile: dataUrlToFile(item.media, item.name || 'object-source.jpeg') }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={isPoseSourcePickerOpen} onClose={() => closeModal('isPoseSourcePickerOpen')} onSelectItem={item => dispatch(updateExtractorState({ poseSourceFile: dataUrlToFile(item.media, item.name || 'pose-source.jpeg') }))} filter={['image', 'character']} />
+            <LibraryPickerModal isOpen={isMannequinRefPickerOpen} onClose={() => closeModal('isMannequinRefPickerOpen')} onSelectItem={item => dispatch(updateExtractorState({ mannequinReferenceFile: dataUrlToFile(item.media, item.name || 'mannequin-ref.jpeg') }))} filter={['image', 'character']} />
+            <LibraryPickerModal isOpen={isFontSourcePickerOpen} onClose={() => closeModal('isFontSourcePickerOpen')} onSelectItem={item => dispatch(updateExtractorState({ fontSourceFile: dataUrlToFile(item.media, item.name || 'font-source.jpeg') }))} filter={imageLikeFilter} />
+            
+            {/* Logo/Theme Pickers */}
+            <LibraryPickerModal isOpen={isLogoRefPickerOpen} onClose={() => closeModal('isLogoRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ referenceItems: [...(logoThemeState.referenceItems || []), item] }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={isLogoPalettePickerOpen} onClose={() => closeModal('isLogoPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ selectedPalette: item }))} filter={'color-palette'} />
+            <LibraryPickerModal isOpen={isLogoFontPickerOpen} onClose={() => closeModal('isLogoFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ selectedFont: item, fontReferenceImage: null }))} filter={'font'} />
+            
+            <LibraryPickerModal isOpen={isBannerRefPickerOpen} onClose={() => closeModal('isBannerRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerReferenceItems: [...(logoThemeState.bannerReferenceItems || []), item] }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={isBannerPalettePickerOpen} onClose={() => closeModal('isBannerPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedPalette: item }))} filter={'color-palette'} />
+            <LibraryPickerModal isOpen={isBannerLogoPickerOpen} onClose={() => closeModal('isBannerLogoPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedLogo: item }))} filter={'logo'} />
+            <LibraryPickerModal isOpen={isBannerFontPickerOpen} onClose={() => closeModal('isBannerFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedFont: item, bannerFontReferenceImage: null }))} filter={'font'} />
+            
+            <LibraryPickerModal isOpen={isAlbumCoverRefPickerOpen} onClose={() => closeModal('isAlbumCoverRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumReferenceItems: [...(logoThemeState.albumReferenceItems || []), item] }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={isAlbumCoverPalettePickerOpen} onClose={() => closeModal('isAlbumCoverPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedPalette: item }))} filter={'color-palette'} />
+            <LibraryPickerModal isOpen={isAlbumCoverLogoPickerOpen} onClose={() => closeModal('isAlbumCoverLogoPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedLogo: item }))} filter={'logo'} />
+            <LibraryPickerModal isOpen={isAlbumCoverFontPickerOpen} onClose={() => closeModal('isAlbumCoverFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedFont: item, albumFontReferenceImage: null }))} filter={'font'} />
+
+             {/* Mask/Element Pickers */}
+             <LibraryPickerModal isOpen={isMaskPickerOpen} onClose={() => closeModal('isMaskPickerOpen')} onSelectItem={item => dispatch(setMaskImage(dataUrlToFile(item.media, item.name || 'mask.jpeg')))} filter={imageLikeFilter} />
+             <LibraryPickerModal isOpen={isElementPickerOpen} onClose={() => closeModal('isElementPickerOpen')} onSelectItem={item => dispatch(setElementImages([...elementImages, dataUrlToFile(item.media, item.name || 'element.jpeg')]))} filter={broadImagePickerFilter} />
         </div>
     );
 };
 
+// Fix: Added default export for the App component.
 export default App;

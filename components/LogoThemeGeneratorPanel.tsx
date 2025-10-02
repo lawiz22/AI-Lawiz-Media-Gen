@@ -126,6 +126,31 @@ const ALBUM_MEDIA_TYPES: { id: AlbumMediaType, label: string }[] = [
     { id: 'cd', label: 'CD Booklet' },
 ];
 
+const useZoomModal = (itemCount: number, zoomedIndex: number | null, setZoomedIndex: (index: number | null) => void) => {
+    const handleClose = useCallback(() => setZoomedIndex(null), [setZoomedIndex]);
+    const handleNext = useCallback(() => {
+        if (zoomedIndex !== null && itemCount > 1) {
+            setZoomedIndex((zoomedIndex + 1) % itemCount);
+        }
+    }, [zoomedIndex, setZoomedIndex, itemCount]);
+    const handlePrev = useCallback(() => {
+        if (zoomedIndex !== null && itemCount > 1) {
+            setZoomedIndex((zoomedIndex - 1 + itemCount) % itemCount);
+        }
+    }, [zoomedIndex, setZoomedIndex, itemCount]);
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (zoomedIndex === null) return;
+            if (e.key === 'Escape') handleClose();
+            if (e.key === 'ArrowRight') handleNext();
+            if (e.key === 'ArrowLeft') handlePrev();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [zoomedIndex, handleClose, handleNext, handlePrev]);
+    return { handleClose, handleNext, handlePrev };
+};
+
 
 export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = ({ 
     activeSubTab, setActiveSubTab, 
@@ -480,34 +505,9 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     const currentZoomedAlbumCover = zoomedAlbumCoverIndex !== null ? state.generatedAlbumCovers?.[zoomedAlbumCoverIndex] : null;
 
     // --- Modal Logic ---
-    const useZoomModal = (itemCount: number, getZoomedIndex: () => number | null, setZoomedIndex: (index: number | null) => void) => {
-        const handleClose = useCallback(() => setZoomedIndex(null), [setZoomedIndex]);
-        const handleNext = useCallback(() => {
-            if (getZoomedIndex() !== null && itemCount > 1) {
-                setZoomedIndex((getZoomedIndex()! + 1) % itemCount);
-            }
-        }, [getZoomedIndex, setZoomedIndex, itemCount]);
-        const handlePrev = useCallback(() => {
-            if (getZoomedIndex() !== null && itemCount > 1) {
-                setZoomedIndex((getZoomedIndex()! - 1 + itemCount) % itemCount);
-            }
-        }, [getZoomedIndex, setZoomedIndex, itemCount]);
-        useEffect(() => {
-            const handleKeyDown = (e: KeyboardEvent) => {
-                if (getZoomedIndex() === null) return;
-                if (e.key === 'Escape') handleClose();
-                if (e.key === 'ArrowRight') handleNext();
-                if (e.key === 'ArrowLeft') handlePrev();
-            };
-            window.addEventListener('keydown', handleKeyDown);
-            return () => window.removeEventListener('keydown', handleKeyDown);
-        }, [getZoomedIndex, handleClose, handleNext, handlePrev]);
-        return { handleClose, handleNext, handlePrev };
-    };
-
-    const { handleClose: handleCloseLogoZoom, handleNext: handleNextLogo, handlePrev: handlePrevLogo } = useZoomModal(state.generatedLogos?.length || 0, () => zoomedLogoIndex, setZoomedLogoIndex);
-    const { handleClose: handleCloseBannerZoom, handleNext: handleNextBanner, handlePrev: handlePrevBanner } = useZoomModal(state.generatedBanners?.length || 0, () => zoomedBannerIndex, setZoomedBannerIndex);
-    const { handleClose: handleCloseAlbumCoverZoom, handleNext: handleNextAlbumCover, handlePrev: handlePrevAlbumCover } = useZoomModal(state.generatedAlbumCovers?.length || 0, () => zoomedAlbumCoverIndex, setZoomedAlbumCoverIndex);
+    const { handleClose: handleCloseLogoZoom, handleNext: handleNextLogo, handlePrev: handlePrevLogo } = useZoomModal(state.generatedLogos?.length || 0, zoomedLogoIndex, setZoomedLogoIndex);
+    const { handleClose: handleCloseBannerZoom, handleNext: handleNextBanner, handlePrev: handlePrevBanner } = useZoomModal(state.generatedBanners?.length || 0, zoomedBannerIndex, setZoomedBannerIndex);
+    const { handleClose: handleCloseAlbumCoverZoom, handleNext: handleNextAlbumCover, handlePrev: handlePrevAlbumCover } = useZoomModal(state.generatedAlbumCovers?.length || 0, zoomedAlbumCoverIndex, setZoomedAlbumCoverIndex);
 
     return (
         <>
