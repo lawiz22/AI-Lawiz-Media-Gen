@@ -20,7 +20,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
 
   useEffect(() => {
     if (sourceFile && !multiple) {
-      if (!sourceFile.type.startsWith('image/')) {
+      if (!sourceFile.type || !sourceFile.type.startsWith('image/')) {
         onImageUpload(null);
         return;
       }
@@ -41,9 +41,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
     // Fix: Explicitly type `files` as `File[]` to resolve type inference issues with `FileList` elements, which caused errors on lines 43 and 45.
     const files: File[] = e.target.files ? Array.from(e.target.files) : [];
     if (multiple && onImagesUpload) {
-        onImagesUpload(files.filter(f => f.type.startsWith('image/')));
+        onImagesUpload(files.filter(f => f.type && f.type.startsWith('image/')));
     } else {
-        onImageUpload(files.find(f => f.type.startsWith('image/')) || null);
+        onImageUpload(files.find(f => f.type && f.type.startsWith('image/')) || null);
     }
     e.target.value = '';
   };
@@ -67,9 +67,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
     // Fix: Explicitly type `files` as `File[]` to resolve type inference issues with `FileList` elements, which caused errors on lines 68 and 70.
     const files: File[] = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
     if (multiple && onImagesUpload) {
-        onImagesUpload(files.filter(f => f.type.startsWith('image/')));
+        onImagesUpload(files.filter(f => f.type && f.type.startsWith('image/')));
     } else {
-        const imageFile = files.find(f => f.type.startsWith('image/'));
+        const imageFile = files.find(f => f.type && f.type.startsWith('image/'));
         onImageUpload(imageFile || null);
     }
   };

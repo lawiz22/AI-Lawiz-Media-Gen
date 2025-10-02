@@ -66,3 +66,27 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 -   **Google Gemini API Key:** The application requires a Google Gemini API key. This must be configured as an environment variable named `API_KEY` in the deployment environment. The application includes an in-app guide to help you correctly configure your key's **"HTTP referrer"** restrictions in the Google Cloud Console, which is crucial for it to work.
 -   **Google Cloud OAuth Client ID (Optional):** To enable Google Drive library syncing, you must create an OAuth 2.0 Client ID in your Google Cloud project. The application provides a detailed, step-by-step guide to help you configure this, including setting the correct URIs.
 -   **ComfyUI Instance (Optional):** To use the ComfyUI features, you must have a running instance of ComfyUI accessible from your browser. You will need to configure the URL to your instance within this application's settings. For certain workflows (e.g., WAN 2.2, Nunchaku), you may need to install specific custom nodes via the ComfyUI Manager.
+
+
+
+| Feature Name                            | Uses Gemini | Uses ComfyUI |
+|-----------------------------------------|:-----------:|:------------:|
+| Image Generation (t2i/i2i)              |     ✅      |      ✅      |
+| Batch Image Generation                  |     ✅      |      ✅      |
+| Advanced Workflow Selection             |     ❌      |      ✅      |
+| Model/LoRA/Checkpoint Loading           |     ❌      |      ✅      |
+| Artistic Style/Era Selection            |     ✅      |      ✅      |
+| Pose Manipulation                       |     ✅      |      ✅      |
+| Clothing/Background Replacement         |     ✅      |      ✅      |
+| Face Enhancement/Detailer               |     ✅      |      ✅      |
+| Post-Processing (Upscale/Enhance)       |     ✅      |      ❌      |
+| Video Generation (t2v/i2v)              |     ✅      |      ✅      |
+| Gemini Workflow Helper for ComfyUI      |     ✅      |      ✅      |
+| Library Management (Google Drive sync)  |     ✅      |      ❌      |
+| Node-based Workflow Editor              |     ❌      |      ✅      |
+| Custom Negative Prompt                  |     ✅      |      ✅      |
+| Mask/Inpaint/Remove-Replace Task        |     ✅      |      ✅      |
+
+Legend:
+- ✅ = Supported by provider
+- ❌ = Not supported
