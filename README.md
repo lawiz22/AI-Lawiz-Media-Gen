@@ -34,7 +34,7 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
   - **Clothes & Object Extractor:** AI automatically detects clothing items or objects and generates professional "product shots" on a clean white background.
   - **Pose Extractor:** Utilizes MediaPipe for accurate pose detection, generating a ControlNet-compatible JSON skeleton. A robust 'Pose Transfer' AI technique applies the pose to various stylized mannequins.
   - **Font Extractor:** Identifies a font style from an image and generates a full A-Z, 0-9 character chart.
-- **Video & Color Utilities:**
+- **Video & Color Utilities:** dfdf
   - **Frame Extractor:** Upload any video to select and save any frame as a high-quality JPEG.
   - **Color Palette Extractor:** Upload an image to automatically extract a beautiful color palette, which can be refined with an eyedropper and saved to the library.
 
@@ -46,6 +46,9 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 - **One-Click Restoration:** Load any item from the library to instantly restore the entire generation setup—including prompts, models, and all settings—making it easy to iterate or create variations.
 
 ### 7. User Experience & Admin Tools
+
+
+
 - **User Authentication:** Secure login system with roles for regular users and administrators.
 - **Admin Panel:** Administrators can manage the user base by adding or deleting users.
 - **Intelligent Prompting Tools (Admin):** Automatically generate descriptive text prompts from an uploaded image, extract prompts for just the background or subject, and creatively merge multiple prompt ideas into a new "prompt soup".

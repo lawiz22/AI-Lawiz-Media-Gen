@@ -7,10 +7,13 @@ import {
   CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon,
   DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon,
   BannerIcon, AlbumCoverIcon, TrashIcon, LoadIcon, FileExportIcon, UploadIconSimple, GoogleDriveIcon,
-  PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, WarningIcon
+  PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, WarningIcon,
+  SendIcon, WorkflowIcon, GenerateIcon
 } from './icons';
 import { createPaletteThumbnail } from '../utils/imageUtils';
 import { exportLibraryAsJson } from '../services/libraryService';
+import { updateOptions, setGenerationMode } from '../store/generationSlice';
+import { setActiveTab } from '../store/appSlice';
 
 // --- Confirmation Modal Component (defined in-file to avoid adding new files) ---
 interface ConfirmationModalProps {
@@ -357,6 +360,121 @@ const renderThemeOptionsDetails = (themeOptions: ThemeGenerationInfo) => {
     );
 };
 
+interface PromptDestinationPickerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  prompt: string;
+}
+
+const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> = ({ isOpen, onClose, prompt }) => {
+  const dispatch: AppDispatch = useDispatch();
+
+  const handleSelectDestination = (provider: 'gemini' | 'comfyui', comfyModelType?: GenerationOptions['comfyModelType']) => {
+    let optionsUpdate: Partial<GenerationOptions> = {
+      provider,
+      comfyPrompt: prompt,
+      geminiPrompt: prompt,
+    };
+
+    if (provider === 'gemini') {
+      optionsUpdate.geminiMode = 't2i';
+    } else {
+      optionsUpdate.comfyModelType = comfyModelType;
+    }
+    
+    dispatch(updateOptions(optionsUpdate));
+    dispatch(setGenerationMode('t2i'));
+    dispatch(setActiveTab('image-generator'));
+    onClose();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    if (isOpen) {
+        window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const comfyT2iWorkflows = [
+    { id: 'sdxl', label: 'SDXL' },
+    { id: 'sd1.5', label: 'SD 1.5' },
+    { id: 'flux', label: 'FLUX' },
+    { id: 'wan2.2', label: 'WAN 2.2' },
+    { id: 'nunchaku-flux-image', label: 'Nunchaku FLUX' },
+    { id: 'flux-krea', label: 'FLUX Krea' },
+  ];
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 animate-fade-in"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="prompt-destination-title"
+    >
+      <div 
+        className="bg-bg-secondary w-full max-w-2xl p-6 rounded-2xl shadow-lg border border-border-primary"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 id="prompt-destination-title" className="text-xl font-bold text-accent flex items-center gap-2">
+            <SendIcon className="w-6 h-6" />
+            Use Prompt In...
+          </h2>
+          <button onClick={onClose} className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover">
+            <CloseIcon className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <p className="text-sm text-text-secondary mb-6">Where would you like to use this generated prompt?</p>
+
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold text-text-primary mb-3">Gemini</h3>
+            <button
+              onClick={() => handleSelectDestination('gemini')}
+              className="w-full text-left p-4 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors flex items-center gap-4"
+            >
+              <GenerateIcon className="w-8 h-8 text-accent flex-shrink-0" />
+              <div>
+                <p className="font-bold">Gemini T2I</p>
+                <p className="text-xs text-text-secondary">Use Google's powerful text-to-image models.</p>
+              </div>
+            </button>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-text-primary mb-3">ComfyUI (T2I Workflows)</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {comfyT2iWorkflows.map(wf => (
+                <button
+                  key={wf.id}
+                  onClick={() => handleSelectDestination('comfyui', wf.id as GenerationOptions['comfyModelType'])}
+                  className="w-full text-left p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors flex items-center gap-3"
+                >
+                  <WorkflowIcon className="w-6 h-6 text-highlight-green flex-shrink-0" />
+                   <div>
+                    <p className="font-semibold">{wf.label}</p>
+                    <p className="text-xs text-text-secondary">Switch to Image Generator with this workflow.</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 type ViewMode = 'grid' | 'smallGrid' | 'list';
 
 export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveConnected, onSyncWithDrive, isSyncing, syncMessage, isDriveConfigured }) => {
@@ -384,6 +502,9 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
     onConfirm: () => void;
     confirmText?: string;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, confirmText: 'Confirm' });
+
+  const [isPickerOpen, setPickerOpen] = useState(false);
+  const [promptToUse, setPromptToUse] = useState('');
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
@@ -890,15 +1011,27 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
                     }
 
                     <div className="pt-4 flex flex-wrap gap-2">
-                         <button
-                            onClick={() => {
-                                onLoadItem(selectedItemModal);
-                                setSelectedItemModal(null);
-                            }}
-                            className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"
-                        >
-                            <LoadIcon className="w-5 h-5"/> Load in Generator
-                        </button>
+                        {selectedItemModal.mediaType === 'prompt' ? (
+                            <button
+                                onClick={() => {
+                                    setPromptToUse(selectedItemModal.media);
+                                    setPickerOpen(true);
+                                }}
+                                className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"
+                            >
+                                <SendIcon className="w-5 h-5"/> Use
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => {
+                                    onLoadItem(selectedItemModal);
+                                    setSelectedItemModal(null);
+                                }}
+                                className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"
+                            >
+                                <LoadIcon className="w-5 h-5"/> Load in Generator
+                            </button>
+                        )}
                         <button
                             onClick={() => handleDelete(selectedItemModal.id, selectedItemModal.name || `Item #${selectedItemModal.id}`)}
                             disabled={deletingId === selectedItemModal.id}
@@ -913,6 +1046,11 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
           </div>
         </div>
       )}
+      <PromptDestinationPickerModal
+        isOpen={isPickerOpen}
+        onClose={() => setPickerOpen(false)}
+        prompt={promptToUse}
+      />
     </>
   );
 };

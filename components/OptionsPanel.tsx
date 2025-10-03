@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, ChangeEvent } from 'react';
+import React, { useState, useEffect, useMemo, ChangeEvent, useRef } from 'react';
 // Fix: Import `NunchakuAttention` type to be used for casting.
 import type { GenerationOptions, NunchakuAttention, ImageStyle } from '../types';
 import {
@@ -337,8 +337,182 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const comfyBboxModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.UltralyticsDetectorProvider?.input?.required?.model_name), [comfyUIObjectInfo]);
     const comfySamModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.SAMLoader?.input?.required?.model_name), [comfyUIObjectInfo]);
 
-    // This effect synchronizes the model types whenever the provider or generation mode changes.
-    // It ensures the correct model and its default settings are loaded.
+    const prevComfyModelType = useRef<GenerationOptions['comfyModelType']>();
+
+    // FIX: This useEffect now acts as the single source of truth for applying workflow defaults.
+    // It triggers whenever the comfyModelType changes (either from user selection or programmatically),
+    // ensuring the detailed parameters are always in sync with the selected workflow.
+    useEffect(() => {
+        if (options.provider === 'comfyui' && options.comfyModelType !== prevComfyModelType.current) {
+            const newModelType = options.comfyModelType;
+            let defaultOptions: Partial<GenerationOptions> = {};
+
+            if (newModelType === 'sd1.5') {
+                 const sd15Model = comfyModels.find((m: string) => m.toLowerCase().includes('1.5') || m.toLowerCase().includes('15') || m.toLowerCase().includes('realisticvision')) || (comfyModels.length > 0 ? comfyModels[0] : '');
+                 defaultOptions = {
+                    comfyModelType: 'sd1.5',
+                    comfyModel: sd15Model,
+                    comfySteps: 20,
+                    comfyCfg: 7,
+                    comfySampler: 'euler',
+                    comfyScheduler: 'normal',
+                    comfySeed: undefined,
+                    comfySeedControl: 'randomize',
+                    comfySeedIncrement: 1,
+                };
+            } else if (newModelType === 'flux') {
+                const specificFluxModel = comfyModels.find((m: string) => m === 'flux1-dev-fp8.safetensors');
+                const genericFluxModel = comfyModels.find((m: string) => m.toLowerCase().includes('flux'));
+                defaultOptions = {
+                    comfyModelType: 'flux',
+                    comfyModel: specificFluxModel || genericFluxModel || 'flux1-dev-fp8.safetensors',
+                    comfySteps: 20,
+                    comfyCfg: 1,
+                    comfySampler: 'euler',
+                    comfyScheduler: 'normal',
+                    comfyFluxGuidance: 3.5,
+                };
+            } else if (newModelType === 'wan2.2') {
+                 const allT5Models = [...t5GgufEncoderModels, ...t5SafetensorEncoderModels];
+                 defaultOptions = {
+                    comfyModelType: 'wan2.2',
+                    comfySteps: 6,
+                    comfyCfg: 1,
+                    comfySampler: 'res_2s',
+                    comfyScheduler: 'bong_tangent',
+                    comfyWanRefinerStartStep: 3,
+                    comfyWanHighNoiseModel: comfyGgufModels.find(m => m.includes('HighNoise')) || comfyGgufModels[0] || 'Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf',
+                    comfyWanLowNoiseModel: comfyGgufModels.find(m => m.includes('LowNoise')) || comfyGgufModels[1] || 'Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf',
+                    comfyWanClipModel: allT5Models.find(t => t.includes('umt5')) || allT5Models[0] || 'umt5-xxl-encoder-Q5_K_M.gguf',
+                    comfyWanVaeModel: comfyVaes.find(v => v.includes('wan_2.1')) || comfyVaes[0] || 'wan_2.1_vae.safetensors',
+                    comfyWanUseFusionXLora: true,
+                    comfyWanFusionXLoraStrength: 0.8,
+                    comfyWanFusionXLoraName: comfyLoras.find(l => l.includes('FusionX')) || comfyLoras[0] || 'Wan2.1_T2V_14B_FusionX_LoRA.safetensors',
+                    comfyWanUseLightningLora: true,
+                    comfyWanLightningLoraStrength: 0.6,
+                    comfyWanLightningLoraNameHigh: comfyLoras.find(l => l.includes('Lightning') && l.includes('HIGH')) || comfyLoras[0] || 'Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors',
+                    comfyWanLightningLoraNameLow: comfyLoras.find(l => l.includes('Lightning') && l.includes('LOW')) || comfyLoras[1] || 'Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors',
+                    comfyWanUseStockPhotoLora: true,
+                    comfyWanStockPhotoLoraStrength: 1.5,
+                    comfyWanStockPhotoLoraNameHigh: comfyLoras.find(l => l.includes('stock') && l.includes('HIGH')) || comfyLoras[0] || 'stock_photography_wan22_HIGH_v1.safetensors',
+                    comfyWanStockPhotoLoraNameLow: comfyLoras.find(l => l.includes('stock') && l.includes('LOW')) || comfyLoras[1] || 'stock_photography_wan22_LOW_v1.safetensors',
+                };
+            } else if (newModelType === 'nunchaku-kontext-flux') {
+                 defaultOptions = {
+                    comfyModelType: 'nunchaku-kontext-flux',
+                    comfySteps: 10,
+                    comfyCfg: 1,
+                    comfySampler: 'euler',
+                    comfyScheduler: 'simple',
+                    comfyNegativePrompt: '',
+                    comfyFluxGuidanceKontext: 2.5,
+                    comfyNunchakuModel: nunchakuModels.find(m => m.includes('kontext-dev')) || nunchakuModels[0] || 'svdq-int4_r32-flux.1-kontext-dev.safetensors',
+                    comfyNunchakuVae: comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors',
+                    comfyNunchakuClipL: comfyClips.find(c => c.includes('ViT-L')) || comfyClips[0] || 'ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors',
+                    comfyNunchakuT5XXL: t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp8_e4m3fn_scaled.safetensors',
+                    comfyNunchakuCacheThreshold: 0.12,
+                    comfyNunchakuCpuOffload: 'enable',
+                    comfyNunchakuAttention: (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention,
+                    comfyNunchakuUseTurboLora: true,
+                    comfyNunchakuTurboLoraName: comfyLoras.find(l => l.includes('turbo')) || comfyLoras[0] || 'flux-turbo.safetensors',
+                    comfyNunchakuTurboLoraStrength: 1.0,
+                    comfyNunchakuUseNudifyLora: true,
+                    comfyNunchakuNudifyLoraName: comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors',
+                    comfyNunchakuNudifyLoraStrength: 1.0,
+                    comfyNunchakuUseDetailLora: false,
+                    comfyNunchakuDetailLoraName: comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors',
+                    comfyNunchakuDetailLoraStrength: 1.0,
+                };
+            } else if (newModelType === 'nunchaku-flux-image') {
+                 defaultOptions = {
+                    comfyModelType: 'nunchaku-flux-image',
+                    comfySteps: 10,
+                    comfySampler: 'res_2s',
+                    comfyScheduler: 'bong_tangent',
+                    comfyFluxGuidanceKontext: 3.5,
+                    comfyNegativePrompt: '',
+                    comfyNunchakuBaseShift: 1.0,
+                    comfyNunchakuMaxShift: 1.15,
+                    comfyNunchakuModel: nunchakuModels.find(m => m.includes('kontext-dev')) || nunchakuModels[0] || 'svdq-int4_r32-flux.1-kontext-dev.safetensors',
+                    comfyNunchakuVae: comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors',
+                    comfyNunchakuClipL: comfyClips.find(c => c.includes('clip_l')) || comfyClips[0] || 'clip_l.safetensors',
+                    comfyNunchakuT5XXL: t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp16.safetensors',
+                    comfyNunchakuCacheThreshold: 0,
+                    comfyNunchakuCpuOffload: 'enable',
+                    comfyNunchakuAttention: (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention,
+                    comfyNunchakuUseTurboLora: true,
+                    comfyNunchakuTurboLoraName: comfyLoras.find(l => l.includes('turbo')) || comfyLoras[0] || 'flux-turbo.safetensors',
+                    comfyNunchakuTurboLoraStrength: 1.0,
+                    comfyNunchakuUseNudifyLora: true,
+                    comfyNunchakuNudifyLoraName: comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors',
+                    comfyNunchakuNudifyLoraStrength: 1.12,
+                    comfyNunchakuUseDetailLora: false,
+                    comfyNunchakuDetailLoraName: comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors',
+                    comfyNunchakuDetailLoraStrength: 1.0,
+                };
+            } else if (newModelType === 'flux-krea') {
+                defaultOptions = {
+                    comfyModelType: 'flux-krea',
+                    comfySteps: 20,
+                    comfyCfg: 1,
+                    comfySampler: 'res_2s',
+                    comfyScheduler: 'bong_tangent',
+                    comfyNegativePrompt: '',
+                    comfyFluxGuidance: 3.5,
+                    comfyFluxKreaModel: comfyGgufModels.find(m => m.includes('krea')) || comfyGgufModels[0] || 'flux1-krea-dev-Q5_K_M.gguf',
+                    comfyFluxKreaClipT5: t5GgufEncoderModels.find(t => t.includes('t5-v1_1')) || t5GgufEncoderModels[0] || 't5-v1_1-xxl-encoder-Q5_K_M.gguf',
+                    comfyFluxKreaClipL: comfyClips.find(c => c.includes('clip_l')) || comfyClips[0] || 'clip_l.safetensors',
+                    comfyFluxKreaVae: comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors',
+                    useP1x4r0maWomanLora: false,
+                    p1x4r0maWomanLoraName: comfyLoras.find(l => l.includes('p1x4r0ma')) || comfyLoras[0] || 'p1x4r0ma_woman.safetensors',
+                    p1x4r0maWomanLoraStrength: 0.9,
+                    useNippleDiffusionLora: true,
+                    nippleDiffusionLoraName: comfyLoras.find(l => l.includes('nipple')) || comfyLoras[0] || 'nipplediffusion-saggy-f1.safetensors',
+                    nippleDiffusionLoraStrength: 1.0,
+                    usePussyDiffusionLora: false,
+                    pussyDiffusionLoraName: comfyLoras.find(l => l.includes('pussy')) || comfyLoras[0] || 'pussydiffusion-f1.safetensors',
+                    pussyDiffusionLoraStrength: 1.0,
+                    comfyFluxKreaUseUpscaler: true,
+                    comfyFluxKreaUpscaleModel: comfyUpscaleModels.find(m => m.includes('Siax')) || comfyUpscaleModels[0] || '4x_NMKD-Siax_200k.pth',
+                    comfyFluxKreaDenoise: 0.8,
+                    comfyFluxKreaUpscalerSteps: 10,
+                };
+            } else if (newModelType === 'face-detailer-sd1.5') {
+                const sd15Model = comfyModels.find((m: string) => m.toLowerCase().includes('1.5') || m.toLowerCase().includes('15') || m.toLowerCase().includes('epicphotogasm')) || (comfyModels.length > 0 ? comfyModels[0] : '');
+                defaultOptions = {
+                    comfyModelType: 'face-detailer-sd1.5',
+                    comfyModel: sd15Model,
+                    comfyPrompt: 'Female, young adult, dark long wavy hair, smiling, sunglasses, light-medium skin tone, green crop top, white trim, 85 on shirt, black wide-leg pants, barefoot, small earrings, bracelet, bare midriff, forearm tattoo.',
+                    comfyNegativePrompt: 'embedding:easynegative, embedding:badhandv4, paintings, sketches, (worst quality:1.4, low quality, normal quality), lowres, normal quality, (monochrome), (grayscale), skin spots, acnes, skin blemishes, age spot, glans,  watermark, signature, text, bad anatomy, (six_fingers), (nail_art), nail polish, blush, fruit,',
+                    comfyDetailerBboxModel: comfyBboxModels.find(m => m.includes('face_yolov8m')) || comfyBboxModels[0],
+                    comfyDetailerSamModel: comfySamModels.find(m => m.includes('sam_vit_b')) || comfySamModels[0],
+                    comfyDetailerSteps: 20,
+                    comfyDetailerCfg: 8,
+                    comfyDetailerSampler: 'euler',
+                    comfyDetailerScheduler: 'normal',
+                    comfyDetailerDenoise: 0.5,
+                    comfyDetailerFeather: 5,
+                    comfyDetailerBboxThreshold: 0.70,
+                    comfyDetailerBboxDilation: 0,
+                    comfyDetailerBboxCropFactor: 3.0,
+                };
+            } else { // 'sdxl' or default
+                const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
+                defaultOptions = {
+                    comfyModelType: 'sdxl',
+                    comfyModel: sdxlModel || (comfyModels.length > 0 ? comfyModels[0] : ''),
+                    comfySteps: 25,
+                    comfyCfg: 5.5,
+                    comfySampler: 'euler',
+                    comfyScheduler: 'normal',
+                };
+            }
+            updateOptions(defaultOptions);
+        }
+        prevComfyModelType.current = options.comfyModelType;
+    }, [options.provider, options.comfyModelType, updateOptions, comfyModels, comfyLoras, comfyVaes, comfyClips, comfyGgufModels, t5GgufEncoderModels, t5SafetensorEncoderModels, comfySamplers, comfySchedulers, nunchakuModels, nunchakuAttentions, comfyUpscaleModels, comfyBboxModels, comfySamModels]);
+
+
     useEffect(() => {
         let newOptions = { ...options };
         let optionsChanged = false;
@@ -346,42 +520,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         if (newOptions.provider === 'comfyui') {
             const isI2IModel = ['nunchaku-kontext-flux', 'face-detailer-sd1.5'].includes(newOptions.comfyModelType!);
             if (generationMode === 'i2i' && !isI2IModel) {
-                // Switching TO I2I mode for Comfy
                 optionsChanged = true;
                 newOptions.comfyModelType = 'nunchaku-kontext-flux';
-                // Reset to nunchaku defaults (copied from handleOptionChange)
-                newOptions.comfySteps = 10;
-                newOptions.comfyCfg = 1;
-                newOptions.comfySampler = 'euler';
-                newOptions.comfyScheduler = 'simple';
-                newOptions.comfyNegativePrompt = '';
-                newOptions.comfyFluxGuidanceKontext = 2.5;
-                newOptions.comfyNunchakuModel = nunchakuModels.find(m => m.includes('kontext-dev')) || nunchakuModels[0] || 'svdq-int4_r32-flux.1-kontext-dev.safetensors';
-                newOptions.comfyNunchakuVae = comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors';
-                newOptions.comfyNunchakuClipL = comfyClips.find(c => c.includes('ViT-L')) || comfyClips[0] || 'ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors';
-                newOptions.comfyNunchakuT5XXL = t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp8_e4m3fn_scaled.safetensors';
-                newOptions.comfyNunchakuCacheThreshold = 0.12;
-                newOptions.comfyNunchakuCpuOffload = 'enable';
-                newOptions.comfyNunchakuAttention = (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention;
-                newOptions.comfyNunchakuUseTurboLora = true;
-                newOptions.comfyNunchakuTurboLoraName = comfyLoras.find(l => l.includes('turbo')) || comfyLoras[0] || 'flux-turbo.safetensors';
-                newOptions.comfyNunchakuTurboLoraStrength = 1.0;
-                newOptions.comfyNunchakuUseNudifyLora = true;
-                newOptions.comfyNunchakuNudifyLoraName = comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors';
-                newOptions.comfyNunchakuNudifyLoraStrength = 1.0;
-                newOptions.comfyNunchakuUseDetailLora = false;
-                newOptions.comfyNunchakuDetailLoraName = comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors';
-                newOptions.comfyNunchakuDetailLoraStrength = 1.0;
             } else if (generationMode === 't2i' && isI2IModel) {
-                // Switching FROM I2I mode for Comfy
                 optionsChanged = true;
-                const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
                 newOptions.comfyModelType = 'sdxl';
-                newOptions.comfyModel = sdxlModel || (comfyModels.length > 0 ? comfyModels[0] : '');
-                newOptions.comfySteps = 25;
-                newOptions.comfyCfg = 5.5;
-                newOptions.comfySampler = 'euler';
-                newOptions.comfyScheduler = 'normal';
             }
         } else if (newOptions.provider === 'gemini') {
             if (newOptions.geminiMode !== generationMode) {
@@ -391,9 +534,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         }
         
         if (optionsChanged) {
-            setOptions(newOptions);
+            updateOptions({ comfyModelType: newOptions.comfyModelType, geminiMode: newOptions.geminiMode });
         }
-    }, [options.provider, generationMode, setOptions, comfyModels, comfyVaes, comfyClips, comfyLoras, nunchakuModels, nunchakuAttentions, t5SafetensorEncoderModels]);
+    }, [options.provider, generationMode, updateOptions]);
 
 
     const handleGenerationModeChange = (mode: 't2i' | 'i2i') => {
@@ -423,7 +566,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             return;
         }
 
-        // Fix: Refactor to use a clearer if/else if structure to avoid TS comparison error.
+        // FIX: The getStylePrefix function was defined incorrectly, taking no arguments but trying to use `opts`.
+        // It now correctly takes `opts` as an argument. The calls have been updated to pass the correct options object.
         const getStylePrefix = (opts: GenerationOptions) => {
             if (opts.imageStyle === 'photorealistic') {
                 return `${opts.photoStyle}, ${opts.eraStyle}, `;
@@ -451,178 +595,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         }
         
         if (field === 'comfyModelType') {
-            const newModelType = value as 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5';
-            if (newModelType === 'sd1.5') {
-                 const sd15Model = comfyModels.find((m: string) => m.toLowerCase().includes('1.5') || m.toLowerCase().includes('15') || m.toLowerCase().includes('realisticvision')) || (comfyModels.length > 0 ? comfyModels[0] : '');
-                 setOptions({
-                    ...options,
-                    comfyModelType: 'sd1.5',
-                    comfyModel: sd15Model,
-                    comfySteps: 20,
-                    comfyCfg: 7,
-                    comfySampler: 'euler',
-                    comfyScheduler: 'normal',
-                    comfySeed: undefined,
-                    comfySeedControl: 'randomize',
-                    comfySeedIncrement: 1,
-                });
-            } else if (newModelType === 'flux') {
-                const specificFluxModel = comfyModels.find((m: string) => m === 'flux1-dev-fp8.safetensors');
-                const genericFluxModel = comfyModels.find((m: string) => m.toLowerCase().includes('flux'));
-                
-                setOptions({
-                    ...options,
-                    comfyModelType: 'flux',
-                    comfyModel: specificFluxModel || genericFluxModel || 'flux1-dev-fp8.safetensors',
-                    comfySteps: 20,
-                    comfyCfg: 1,
-                    comfySampler: 'euler',
-                    comfyScheduler: 'normal',
-                    comfyFluxGuidance: 3.5,
-                });
-            } else if (newModelType === 'wan2.2') {
-                 const allT5Models = [...t5GgufEncoderModels, ...t5SafetensorEncoderModels];
-                 setOptions({
-                    ...options,
-                    comfyModelType: 'wan2.2',
-                    comfySteps: 6,
-                    comfyCfg: 1,
-                    comfySampler: 'res_2s',
-                    comfyScheduler: 'bong_tangent',
-                    comfyWanRefinerStartStep: 3,
-                    comfyWanHighNoiseModel: comfyGgufModels.find(m => m.includes('HighNoise')) || comfyGgufModels[0] || 'Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf',
-                    comfyWanLowNoiseModel: comfyGgufModels.find(m => m.includes('LowNoise')) || comfyGgufModels[1] || 'Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf',
-                    comfyWanClipModel: allT5Models.find(t => t.includes('umt5')) || allT5Models[0] || 'umt5-xxl-encoder-Q5_K_M.gguf',
-                    comfyWanVaeModel: comfyVaes.find(v => v.includes('wan_2.1')) || comfyVaes[0] || 'wan_2.1_vae.safetensors',
-                    comfyWanUseFusionXLora: true,
-                    comfyWanFusionXLoraStrength: 0.8,
-                    comfyWanFusionXLoraName: comfyLoras.find(l => l.includes('FusionX')) || comfyLoras[0] || 'Wan2.1_T2V_14B_FusionX_LoRA.safetensors',
-                    comfyWanUseLightningLora: true,
-                    comfyWanLightningLoraStrength: 0.6,
-                    comfyWanLightningLoraNameHigh: comfyLoras.find(l => l.includes('Lightning') && l.includes('HIGH')) || comfyLoras[0] || 'Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors',
-                    comfyWanLightningLoraNameLow: comfyLoras.find(l => l.includes('Lightning') && l.includes('LOW')) || comfyLoras[1] || 'Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors',
-                    comfyWanUseStockPhotoLora: true,
-                    comfyWanStockPhotoLoraStrength: 1.5,
-                    comfyWanStockPhotoLoraNameHigh: comfyLoras.find(l => l.includes('stock') && l.includes('HIGH')) || comfyLoras[0] || 'stock_photography_wan22_HIGH_v1.safetensors',
-                    comfyWanStockPhotoLoraNameLow: comfyLoras.find(l => l.includes('stock') && l.includes('LOW')) || comfyLoras[1] || 'stock_photography_wan22_LOW_v1.safetensors',
-                });
-            } else if (newModelType === 'nunchaku-kontext-flux') {
-                 setOptions({
-                    ...options,
-                    comfyModelType: 'nunchaku-kontext-flux',
-                    comfySteps: 10,
-                    comfyCfg: 1,
-                    comfySampler: 'euler',
-                    comfyScheduler: 'simple',
-                    comfyNegativePrompt: '',
-                    comfyFluxGuidanceKontext: 2.5,
-                    comfyNunchakuModel: nunchakuModels.find(m => m.includes('kontext-dev')) || nunchakuModels[0] || 'svdq-int4_r32-flux.1-kontext-dev.safetensors',
-                    comfyNunchakuVae: comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors',
-                    comfyNunchakuClipL: comfyClips.find(c => c.includes('ViT-L')) || comfyClips[0] || 'ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors',
-                    comfyNunchakuT5XXL: t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp8_e4m3fn_scaled.safetensors',
-                    comfyNunchakuCacheThreshold: 0.12,
-                    comfyNunchakuCpuOffload: 'enable',
-                    // Fix: Cast the string value to the NunchakuAttention type to resolve TypeScript error.
-                    comfyNunchakuAttention: (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention,
-                    comfyNunchakuUseTurboLora: true,
-                    comfyNunchakuTurboLoraName: comfyLoras.find(l => l.includes('turbo')) || comfyLoras[0] || 'flux-turbo.safetensors',
-                    comfyNunchakuTurboLoraStrength: 1.0,
-                    comfyNunchakuUseNudifyLora: true,
-                    comfyNunchakuNudifyLoraName: comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors',
-                    comfyNunchakuNudifyLoraStrength: 1.0,
-                    comfyNunchakuUseDetailLora: false,
-                    comfyNunchakuDetailLoraName: comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors',
-                    comfyNunchakuDetailLoraStrength: 1.0,
-                });
-            } else if (newModelType === 'nunchaku-flux-image') {
-                 setOptions({
-                    ...options,
-                    comfyModelType: 'nunchaku-flux-image',
-                    comfySteps: 10,
-                    comfySampler: 'res_2s',
-                    comfyScheduler: 'bong_tangent',
-                    comfyFluxGuidanceKontext: 3.5,
-                    comfyNegativePrompt: '',
-                    comfyNunchakuBaseShift: 1.0,
-                    comfyNunchakuMaxShift: 1.15,
-                    comfyNunchakuModel: nunchakuModels.find(m => m.includes('kontext-dev')) || nunchakuModels[0] || 'svdq-int4_r32-flux.1-kontext-dev.safetensors',
-                    comfyNunchakuVae: comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors',
-                    comfyNunchakuClipL: comfyClips.find(c => c.includes('clip_l')) || comfyClips[0] || 'clip_l.safetensors',
-                    comfyNunchakuT5XXL: t5SafetensorEncoderModels.find(t => t.includes('t5xxl')) || t5SafetensorEncoderModels[0] || 't5xxl_fp16.safetensors',
-                    comfyNunchakuCacheThreshold: 0,
-                    comfyNunchakuCpuOffload: 'enable',
-                    // Fix: Cast the string value to the NunchakuAttention type to resolve TypeScript error.
-                    comfyNunchakuAttention: (nunchakuAttentions[0] || 'nunchaku-fp16') as NunchakuAttention,
-                    comfyNunchakuUseTurboLora: true,
-                    comfyNunchakuTurboLoraName: comfyLoras.find(l => l.includes('turbo')) || comfyLoras[0] || 'flux-turbo.safetensors',
-                    comfyNunchakuTurboLoraStrength: 1.0,
-                    comfyNunchakuUseNudifyLora: true,
-                    comfyNunchakuNudifyLoraName: comfyLoras.find(l => l.includes('Nudify')) || comfyLoras[0] || 'JD3s_Nudify_Kontext.safetensors',
-                    comfyNunchakuNudifyLoraStrength: 1.12,
-                    comfyNunchakuUseDetailLora: false,
-                    comfyNunchakuDetailLoraName: comfyLoras.find(l => l.includes('nipples')) || comfyLoras[0] || 'flux_nipples_saggy_breasts.safetensors',
-                    comfyNunchakuDetailLoraStrength: 1.0,
-                });
-            } else if (newModelType === 'flux-krea') {
-                setOptions({
-                    ...options,
-                    comfyModelType: 'flux-krea',
-                    comfySteps: 20,
-                    comfyCfg: 1,
-                    comfySampler: 'res_2s',
-                    comfyScheduler: 'bong_tangent',
-                    comfyNegativePrompt: '',
-                    comfyFluxGuidance: 3.5,
-                    comfyFluxKreaModel: comfyGgufModels.find(m => m.includes('krea')) || comfyGgufModels[0] || 'flux1-krea-dev-Q5_K_M.gguf',
-                    comfyFluxKreaClipT5: t5GgufEncoderModels.find(t => t.includes('t5-v1_1')) || t5GgufEncoderModels[0] || 't5-v1_1-xxl-encoder-Q5_K_M.gguf',
-                    comfyFluxKreaClipL: comfyClips.find(c => c.includes('clip_l')) || comfyClips[0] || 'clip_l.safetensors',
-                    comfyFluxKreaVae: comfyVaes.find(v => v.includes('ae')) || comfyVaes[0] || 'ae.safetensors',
-                    useP1x4r0maWomanLora: false,
-                    p1x4r0maWomanLoraName: comfyLoras.find(l => l.includes('p1x4r0ma')) || comfyLoras[0] || 'p1x4r0ma_woman.safetensors',
-                    p1x4r0maWomanLoraStrength: 0.9,
-                    useNippleDiffusionLora: true,
-                    nippleDiffusionLoraName: comfyLoras.find(l => l.includes('nipple')) || comfyLoras[0] || 'nipplediffusion-saggy-f1.safetensors',
-                    nippleDiffusionLoraStrength: 1.0,
-                    usePussyDiffusionLora: false,
-                    pussyDiffusionLoraName: comfyLoras.find(l => l.includes('pussy')) || comfyLoras[0] || 'pussydiffusion-f1.safetensors',
-                    pussyDiffusionLoraStrength: 1.0,
-                    comfyFluxKreaUseUpscaler: true,
-                    comfyFluxKreaUpscaleModel: comfyUpscaleModels.find(m => m.includes('Siax')) || comfyUpscaleModels[0] || '4x_NMKD-Siax_200k.pth',
-                    comfyFluxKreaDenoise: 0.8,
-                    comfyFluxKreaUpscalerSteps: 10,
-                });
-            } else if (newModelType === 'face-detailer-sd1.5') {
-                const sd15Model = comfyModels.find((m: string) => m.toLowerCase().includes('1.5') || m.toLowerCase().includes('15') || m.toLowerCase().includes('epicphotogasm')) || (comfyModels.length > 0 ? comfyModels[0] : '');
-                setOptions({
-                    ...options,
-                    comfyModelType: 'face-detailer-sd1.5',
-                    comfyModel: sd15Model,
-                    comfyPrompt: 'Female, young adult, dark long wavy hair, smiling, sunglasses, light-medium skin tone, green crop top, white trim, 85 on shirt, black wide-leg pants, barefoot, small earrings, bracelet, bare midriff, forearm tattoo.',
-                    comfyNegativePrompt: 'embedding:easynegative, embedding:badhandv4, paintings, sketches, (worst quality:1.4, low quality, normal quality), lowres, normal quality, (monochrome), (grayscale), skin spots, acnes, skin blemishes, age spot, glans,  watermark, signature, text, bad anatomy, (six_fingers), (nail_art), nail polish, blush, fruit,',
-                    comfyDetailerBboxModel: comfyBboxModels.find(m => m.includes('face_yolov8m')) || comfyBboxModels[0],
-                    comfyDetailerSamModel: comfySamModels.find(m => m.includes('sam_vit_b')) || comfySamModels[0],
-                    comfyDetailerSteps: 20,
-                    comfyDetailerCfg: 8,
-                    comfyDetailerSampler: 'euler',
-                    comfyDetailerScheduler: 'normal',
-                    comfyDetailerDenoise: 0.5,
-                    comfyDetailerFeather: 5,
-                    comfyDetailerBboxThreshold: 0.70,
-                    comfyDetailerBboxDilation: 0,
-                    comfyDetailerBboxCropFactor: 3.0,
-                });
-            } else { // Switching back to 'sdxl'
-                const sdxlModel = comfyModels.find((m: string) => m.toLowerCase().includes('sdxl'));
-                setOptions({
-                    ...options,
-                    comfyModelType: 'sdxl',
-                    comfyModel: sdxlModel || (comfyModels.length > 0 ? comfyModels[0] : ''),
-                    comfySteps: 25, // Default for SDXL
-                    comfyCfg: 5.5, // Default for SDXL
-                    comfySampler: 'euler',
-                    comfyScheduler: 'normal',
-                });
-            }
+            // The useEffect hook now handles setting the defaults when the model type changes.
+            // Here, we just update the model type in the state.
+            updateOptions({ comfyModelType: value as GenerationOptions['comfyModelType'] });
         } else {
             updateOptions({ [field]: value });
         }

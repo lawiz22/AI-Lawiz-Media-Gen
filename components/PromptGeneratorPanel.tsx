@@ -4,22 +4,15 @@ import { AppDispatch, RootState } from '../store/store';
 import { addToLibrary } from '../store/librarySlice';
 import { setPromptSaveStatus, updatePromptGenState } from '../store/promptGenSlice';
 import { ImageUploader } from './ImageUploader';
+// Fix: Corrected typo in imported function name from 'extractSubjectFromImage' to 'extractSubjectPromptFromImage'.
 import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup, generateWanVideoPromptFromImage } from '../services/comfyUIService';
-import type { LibraryItem, PromptGenState } from '../types';
-import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon, CodeBracketIcon } from './icons';
+import type { LibraryItem, PromptGenState, GenerationOptions } from '../types';
+import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon, CodeBracketIcon, WorkflowIcon, CloseIcon } from './icons';
 import { fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 import { WAN_VIDEO_PROMPT_BLOCKS, CAMERA_MOVES } from '../constants';
+import { updateOptions, setGenerationMode } from '../store/generationSlice';
+import { setActiveTab } from '../store/appSlice';
 
-interface PromptGeneratorPanelProps {
-    activeSubTab: string;
-    setActiveSubTab: (tabId: string) => void;
-    onUsePrompt: (prompt: string) => void;
-    onOpenLibraryForImage: () => void;
-    onOpenLibraryForBg: () => void;
-    onOpenLibraryForSubject: () => void;
-    onOpenLibraryForWanVideoImage: () => void;
-    onReset: () => void;
-}
 
 interface PromptPart {
   text: string;
@@ -69,6 +62,132 @@ const createPromptThumbnail = (text: string, type: PromptCategory, modelType: Pr
 
     return `data:image/svg+xml;base64,${btoa(finalSvg)}`;
 };
+
+interface PromptDestinationPickerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  prompt: string;
+}
+
+const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> = ({ isOpen, onClose, prompt }) => {
+  const dispatch: AppDispatch = useDispatch();
+
+  const handleSelectDestination = (provider: 'gemini' | 'comfyui', comfyModelType?: GenerationOptions['comfyModelType']) => {
+    let optionsUpdate: Partial<GenerationOptions> = {
+      provider,
+      comfyPrompt: prompt, // Always set for comfy
+      geminiPrompt: prompt, // Always set for Gemini
+    };
+
+    if (provider === 'gemini') {
+      optionsUpdate.geminiMode = 't2i';
+    } else { // comfyui
+      optionsUpdate.comfyModelType = comfyModelType;
+    }
+    
+    dispatch(updateOptions(optionsUpdate));
+    dispatch(setGenerationMode('t2i'));
+    dispatch(setActiveTab('image-generator'));
+    onClose();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    if (isOpen) {
+        window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const comfyT2iWorkflows = [
+    { id: 'sdxl', label: 'SDXL' },
+    { id: 'sd1.5', label: 'SD 1.5' },
+    { id: 'flux', label: 'FLUX' },
+    { id: 'wan2.2', label: 'WAN 2.2' },
+    { id: 'nunchaku-flux-image', label: 'Nunchaku FLUX' },
+    { id: 'flux-krea', label: 'FLUX Krea' },
+  ];
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="prompt-destination-title"
+    >
+      <div 
+        className="bg-bg-secondary w-full max-w-2xl p-6 rounded-2xl shadow-lg border border-border-primary"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 id="prompt-destination-title" className="text-xl font-bold text-accent flex items-center gap-2">
+            <SendIcon className="w-6 h-6" />
+            Use Prompt In...
+          </h2>
+          <button onClick={onClose} className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover">
+            <CloseIcon className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <p className="text-sm text-text-secondary mb-6">Where would you like to use this generated prompt?</p>
+
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold text-text-primary mb-3">Gemini</h3>
+            <button
+              onClick={() => handleSelectDestination('gemini')}
+              className="w-full text-left p-4 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors flex items-center gap-4"
+            >
+              <GenerateIcon className="w-8 h-8 text-accent flex-shrink-0" />
+              <div>
+                <p className="font-bold">Gemini T2I</p>
+                <p className="text-xs text-text-secondary">Use Google's powerful text-to-image models.</p>
+              </div>
+            </button>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-text-primary mb-3">ComfyUI (T2I Workflows)</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {comfyT2iWorkflows.map(wf => (
+                <button
+                  key={wf.id}
+                  onClick={() => handleSelectDestination('comfyui', wf.id as GenerationOptions['comfyModelType'])}
+                  className="w-full text-left p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors flex items-center gap-3"
+                >
+                  <WorkflowIcon className="w-6 h-6 text-highlight-green flex-shrink-0" />
+                   <div>
+                    <p className="font-semibold">{wf.label}</p>
+                    <p className="text-xs text-text-secondary">Switch to Image Generator with this workflow.</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+interface PromptGeneratorPanelProps {
+    activeSubTab: string;
+    setActiveSubTab: (tabId: string) => void;
+    onUsePrompt: (prompt: string) => void;
+    onOpenLibraryForImage: () => void;
+    onOpenLibraryForBg: () => void;
+    onOpenLibraryForSubject: () => void;
+    onOpenLibraryForWanVideoImage: () => void;
+    onReset: () => void;
+}
 
 
 interface SubTab {
@@ -155,6 +274,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const [wanVideoCopyButtonText, setWanVideoCopyButtonText] = useState('Copy Prompt');
     
     const [qwenCopyButtonText, setQwenCopyButtonText] = useState('Copy Prompt');
+    
+    // State for the new destination picker modal
+    const [isPickerOpen, setPickerOpen] = useState(false);
+    const [promptToUse, setPromptToUse] = useState<string>('');
+
 
     const allWanEnvironments = useMemo(() => {
         return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.environments))];
@@ -242,9 +366,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             });
     };
 
-    const handleUsePrompt = (p: string) => {
-        if (p) {
-            onUsePrompt(p);
+    const handleUsePromptClick = (prompt: string) => {
+        if (prompt) {
+          setPromptToUse(prompt);
+          setPickerOpen(true);
         }
     };
 
@@ -443,7 +568,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         { id: 'extract-subject', label: 'Extract Subject' },
         { id: 'prompt-soup', label: 'Magical Prompt Soup' },
         { id: 'wan-video', label: 'WAN 2.2 Video' },
-        { id: 'qwen-image', label: 'Qwen Prompt Tool', icon: <CodeBracketIcon className="w-5 h-5"/>},
+        { id: 'qwen-image', label: 'Qwen Prompt Tool'},
     ];
 
     return (
@@ -511,7 +636,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <button onClick={handleCopy} disabled={!prompt || isLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <CopyIcon className="w-5 h-5" />{copyButtonText}
                                 </button>
-                                <button onClick={() => handleUsePrompt(prompt)} disabled={!prompt || isLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                <button onClick={() => handleUsePromptClick(prompt)} disabled={!prompt || isLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <SendIcon className="w-5 h-5" />Use
                                 </button>
                             </div>
@@ -553,7 +678,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <button onClick={handleBgCopy} disabled={!bgPrompt || isBgLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <CopyIcon className="w-5 h-5" />{bgCopyButtonText}
                                 </button>
-                                <button onClick={() => handleUsePrompt(bgPrompt)} disabled={!bgPrompt || isBgLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                <button onClick={() => handleUsePromptClick(bgPrompt)} disabled={!bgPrompt || isBgLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <SendIcon className="w-5 h-5" />Use
                                 </button>
                             </div>
@@ -595,7 +720,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <button onClick={handleSubjectCopy} disabled={!subjectPrompt || isSubjectLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <CopyIcon className="w-5 h-5" />{subjectCopyButtonText}
                                 </button>
-                                <button onClick={() => handleUsePrompt(subjectPrompt)} disabled={!subjectPrompt || isSubjectLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                <button onClick={() => handleUsePromptClick(subjectPrompt)} disabled={!subjectPrompt || isSubjectLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <SendIcon className="w-5 h-5" />Use
                                 </button>
                             </div>
@@ -638,7 +763,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <button onClick={handleSoupCopy} disabled={!soupPrompt || isSoupLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <CopyIcon className="w-5 h-5" />{soupCopyButtonText}
                                 </button>
-                                <button onClick={() => handleUsePrompt(soupPrompt)} disabled={!soupPrompt || isSoupLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
+                                <button onClick={() => handleUsePromptClick(soupPrompt)} disabled={!soupPrompt || isSoupLoading} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                                     <SendIcon className="w-5 h-5" />Use
                                 </button>
                             </div>
@@ -745,7 +870,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 {wanVideoPromptSaveStatus === 'saved' ? 'Saved!' : 'Save'}
                             </button>
                             <button onClick={handleWanVideoCopy} disabled={!wanVideoFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><CopyIcon className="w-5 h-5" /> {wanVideoCopyButtonText}</button>
-                            <button onClick={() => handleUsePrompt(wanVideoFinalPrompt)} disabled={!wanVideoFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><SendIcon className="w-5 h-5" />Use</button>
+                            <button onClick={() => onUsePrompt(wanVideoFinalPrompt)} disabled={!wanVideoFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><SendIcon className="w-5 h-5" />Use</button>
                         </div>
                     </div>
                 </div>
@@ -854,7 +979,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                     {qwenPromptSaveStatus === 'saved' ? 'Saved!' : 'Save'}
                                 </button>
                                 <button onClick={handleQwenCopy} disabled={!qwenFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><CopyIcon className="w-5 h-5" /> {qwenCopyButtonText}</button>
-                                <button onClick={() => handleUsePrompt(qwenFinalPrompt)} disabled={!qwenFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><SendIcon className="w-5 h-5" />Use</button>
+                                <button onClick={() => onUsePrompt(qwenFinalPrompt)} disabled={!qwenFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><SendIcon className="w-5 h-5" />Use</button>
                             </div>
                         </div>
                     </div>
@@ -866,6 +991,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                     <ResetIcon className="w-5 h-5" /> Reset All Prompt Tools
                 </button>
             </div>
+             <PromptDestinationPickerModal
+                isOpen={isPickerOpen}
+                onClose={() => setPickerOpen(false)}
+                prompt={promptToUse}
+            />
         </div>
     );
 };

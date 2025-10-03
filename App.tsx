@@ -1,4 +1,7 @@
 
+
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
@@ -914,25 +917,28 @@ const App: React.FC = () => {
                     onClose={() => dispatch(setGlobalError(null))} 
                 />
             )}
-            {isSettingsModalOpen && (
+            {/* FIX: Add explicit boolean cast to conditional rendering to prevent 'unknown' type errors. */}
+{!!isSettingsModalOpen && (
                 <ConnectionSettingsModal 
-                    isOpen={isSettingsModalOpen} 
+                    isOpen={!!isSettingsModalOpen} 
                     onClose={() => dispatch(closeSettingsModal())} 
                     initialComfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                     initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
                     onSave={handleSaveSettings}
                 />
             )}
-             {isAdminPanelOpen && (
+            {/* FIX: Add explicit boolean cast to conditional rendering to prevent 'unknown' type errors. */}
+{!!isAdminPanelOpen && (
                 <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-4" onClick={() => dispatch(closeAdminPanel())}>
                     <div className="w-full max-w-4xl" onClick={e => e.stopPropagation()}>
                         <AdminPanel />
                     </div>
                 </div>
             )}
-            {isOAuthHelperOpen && (
+            {/* FIX: Add explicit boolean cast to conditional rendering to prevent 'unknown' type errors. */}
+{!!isOAuthHelperOpen && (
                 <OAuthHelperModal
-                    isOpen={isOAuthHelperOpen}
+                    isOpen={!!isOAuthHelperOpen}
                     onClose={() => dispatch(closeOAuthHelper())}
                     onProceed={() => {
                         dispatch(closeOAuthHelper());
@@ -943,48 +949,49 @@ const App: React.FC = () => {
                 />
             )}
             {/* Fix: Made all 'onSelectItem' callbacks async and awaited 'dataUrlToFile' to handle the Promise<File> return type. */}
-            <LibraryPickerModal isOpen={isClothingPickerOpen} onClose={() => closeModal('isClothingPickerOpen')} onSelectItem={async item => dispatch(setClothingImage(await dataUrlToFile(item.media, item.name || 'clothing.jpeg')))} filter="clothes" />
-            <LibraryPickerModal isOpen={isBackgroundPickerOpen} onClose={() => closeModal('isBackgroundPickerOpen')} onSelectItem={async item => dispatch(setBackgroundImage(await dataUrlToFile(item.media, item.name || 'background.jpeg')))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={isPosePickerOpen} onClose={() => closeModal('isPosePickerOpen')} onSelectItem={item => {}} filter="pose" multiSelect={true} onSelectMultiple={(items) => dispatch(updateOptions({ poseLibraryItems: items }))} />
-            <LibraryPickerModal isOpen={isColorImagePickerOpen} onClose={() => closeModal('isColorImagePickerOpen')} onSelectItem={async item => dispatch(updateVideoUtilsState({ colorPicker: { ...videoUtilsState.colorPicker, imageFile: await dataUrlToFile(item.media, item.name || 'color-source.jpeg') } }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={isVideoUtilsPickerOpen} onClose={() => closeModal('isVideoUtilsPickerOpen')} onSelectItem={async item => dispatch(updateVideoUtilsState({ videoFile: await dataUrlToFile(item.media, item.name || 'video.mp4') }))} filter="video" />
-            <LibraryPickerModal isOpen={isVideoStartFramePickerOpen} onClose={() => closeModal('isVideoStartFramePickerOpen')} onSelectItem={async item => dispatch(setVideoStartFrame(await dataUrlToFile(item.media, item.name || 'start-frame.jpeg')))} filter={['image', 'character', 'extracted-frame']} />
-            <LibraryPickerModal isOpen={isVideoEndFramePickerOpen} onClose={() => closeModal('isVideoEndFramePickerOpen')} onSelectItem={async item => dispatch(setVideoEndFrame(await dataUrlToFile(item.media, item.name || 'end-frame.jpeg')))} filter={['image', 'character', 'extracted-frame']} />
-            <LibraryPickerModal isOpen={isGeminiVideoSourcePickerOpen} onClose={() => closeModal('isGeminiVideoSourcePickerOpen')} onSelectItem={async item => dispatch(setVideoStartFrame(await dataUrlToFile(item.media, item.name || 'gemini-source.jpeg')))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={isNunchakuSourcePickerOpen} onClose={() => closeModal('isNunchakuSourcePickerOpen')} onSelectItem={async item => dispatch(setSourceImage(await dataUrlToFile(item.media, item.name || 'nunchaku-source.jpeg')))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={isCharacterSourcePickerOpen} onClose={() => closeModal('isCharacterSourcePickerOpen')} onSelectItem={async item => dispatch(setSourceImage(await dataUrlToFile(item.media, item.name || 'character-source.jpeg')))} filter={['image', 'character']} />
+{/* FIX: Explicitly cast all `is...Open` props to boolean using `!!` to resolve subtle 'unknown' type errors. */}
+<LibraryPickerModal isOpen={!!isClothingPickerOpen} onClose={() => closeModal('isClothingPickerOpen')} onSelectItem={async item => dispatch(setClothingImage(await dataUrlToFile(item.media, item.name || 'clothing.jpeg')))} filter="clothes" />
+            <LibraryPickerModal isOpen={!!isBackgroundPickerOpen} onClose={() => closeModal('isBackgroundPickerOpen')} onSelectItem={async item => dispatch(setBackgroundImage(await dataUrlToFile(item.media, item.name || 'background.jpeg')))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isPosePickerOpen} onClose={() => closeModal('isPosePickerOpen')} onSelectItem={item => {}} filter="pose" multiSelect={true} onSelectMultiple={(items) => dispatch(updateOptions({ poseLibraryItems: items }))} />
+            <LibraryPickerModal isOpen={!!isColorImagePickerOpen} onClose={() => closeModal('isColorImagePickerOpen')} onSelectItem={async item => dispatch(updateVideoUtilsState({ colorPicker: { ...videoUtilsState.colorPicker, imageFile: await dataUrlToFile(item.media, item.name || 'color-source.jpeg') } }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isVideoUtilsPickerOpen} onClose={() => closeModal('isVideoUtilsPickerOpen')} onSelectItem={async item => dispatch(updateVideoUtilsState({ videoFile: await dataUrlToFile(item.media, item.name || 'video.mp4') }))} filter="video" />
+            <LibraryPickerModal isOpen={!!isVideoStartFramePickerOpen} onClose={() => closeModal('isVideoStartFramePickerOpen')} onSelectItem={async item => dispatch(setVideoStartFrame(await dataUrlToFile(item.media, item.name || 'start-frame.jpeg')))} filter={['image', 'character', 'extracted-frame']} />
+            <LibraryPickerModal isOpen={!!isVideoEndFramePickerOpen} onClose={() => closeModal('isVideoEndFramePickerOpen')} onSelectItem={async item => dispatch(setVideoEndFrame(await dataUrlToFile(item.media, item.name || 'end-frame.jpeg')))} filter={['image', 'character', 'extracted-frame']} />
+            <LibraryPickerModal isOpen={!!isGeminiVideoSourcePickerOpen} onClose={() => closeModal('isGeminiVideoSourcePickerOpen')} onSelectItem={async item => dispatch(setVideoStartFrame(await dataUrlToFile(item.media, item.name || 'gemini-source.jpeg')))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isNunchakuSourcePickerOpen} onClose={() => closeModal('isNunchakuSourcePickerOpen')} onSelectItem={async item => dispatch(setSourceImage(await dataUrlToFile(item.media, item.name || 'nunchaku-source.jpeg')))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isCharacterSourcePickerOpen} onClose={() => closeModal('isCharacterSourcePickerOpen')} onSelectItem={async item => dispatch(setSourceImage(await dataUrlToFile(item.media, item.name || 'character-source.jpeg')))} filter={['image', 'character']} />
             
             {/* Prompt Gen Pickers */}
-            <LibraryPickerModal isOpen={isPromptGenImagePickerOpen} onClose={() => closeModal('isPromptGenImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ image: await dataUrlToFile(item.media, 'prompt-source.jpeg') }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={isPromptGenBgImagePickerOpen} onClose={() => closeModal('isPromptGenBgImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ bgImage: await dataUrlToFile(item.media, 'bg-source.jpeg') }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={isPromptGenSubjectImagePickerOpen} onClose={() => closeModal('isPromptGenSubjectImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ subjectImage: await dataUrlToFile(item.media, 'subject-source.jpeg') }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={isWanVideoImagePickerOpen} onClose={() => closeModal('isWanVideoImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ wanVideoImage: await dataUrlToFile(item.media, 'wan-video-source.jpeg') }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isPromptGenImagePickerOpen} onClose={() => closeModal('isPromptGenImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ image: await dataUrlToFile(item.media, 'prompt-source.jpeg') }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isPromptGenBgImagePickerOpen} onClose={() => closeModal('isPromptGenBgImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ bgImage: await dataUrlToFile(item.media, 'bg-source.jpeg') }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isPromptGenSubjectImagePickerOpen} onClose={() => closeModal('isPromptGenSubjectImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ subjectImage: await dataUrlToFile(item.media, 'subject-source.jpeg') }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isWanVideoImagePickerOpen} onClose={() => closeModal('isWanVideoImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ wanVideoImage: await dataUrlToFile(item.media, 'wan-video-source.jpeg') }))} filter={imageLikeFilter} />
             
             {/* Extractor Pickers */}
-            <LibraryPickerModal isOpen={isClothesSourcePickerOpen} onClose={() => closeModal('isClothesSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ clothesSourceFile: await dataUrlToFile(item.media, item.name || 'clothes-source.jpeg') }))} filter={['image', 'character']} />
-            <LibraryPickerModal isOpen={isObjectSourcePickerOpen} onClose={() => closeModal('isObjectSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ objectSourceFile: await dataUrlToFile(item.media, item.name || 'object-source.jpeg') }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={isPoseSourcePickerOpen} onClose={() => closeModal('isPoseSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ poseSourceFile: await dataUrlToFile(item.media, item.name || 'pose-source.jpeg') }))} filter={['image', 'character']} />
-            <LibraryPickerModal isOpen={isMannequinRefPickerOpen} onClose={() => closeModal('isMannequinRefPickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ mannequinReferenceFile: await dataUrlToFile(item.media, item.name || 'mannequin-ref.jpeg') }))} filter={['image', 'character']} />
-            <LibraryPickerModal isOpen={isFontSourcePickerOpen} onClose={() => closeModal('isFontSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ fontSourceFile: await dataUrlToFile(item.media, item.name || 'font-source.jpeg') }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isClothesSourcePickerOpen} onClose={() => closeModal('isClothesSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ clothesSourceFile: await dataUrlToFile(item.media, item.name || 'clothes-source.jpeg') }))} filter={['image', 'character']} />
+            <LibraryPickerModal isOpen={!!isObjectSourcePickerOpen} onClose={() => closeModal('isObjectSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ objectSourceFile: await dataUrlToFile(item.media, item.name || 'object-source.jpeg') }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isPoseSourcePickerOpen} onClose={() => closeModal('isPoseSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ poseSourceFile: await dataUrlToFile(item.media, item.name || 'pose-source.jpeg') }))} filter={['image', 'character']} />
+            <LibraryPickerModal isOpen={!!isMannequinRefPickerOpen} onClose={() => closeModal('isMannequinRefPickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ mannequinReferenceFile: await dataUrlToFile(item.media, item.name || 'mannequin-ref.jpeg') }))} filter={['image', 'character']} />
+            <LibraryPickerModal isOpen={!!isFontSourcePickerOpen} onClose={() => closeModal('isFontSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ fontSourceFile: await dataUrlToFile(item.media, item.name || 'font-source.jpeg') }))} filter={imageLikeFilter} />
             
             {/* Logo/Theme Pickers */}
-            <LibraryPickerModal isOpen={isLogoRefPickerOpen} onClose={() => closeModal('isLogoRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ referenceItems: [...(logoThemeState.referenceItems || []), item] }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={isLogoPalettePickerOpen} onClose={() => closeModal('isLogoPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ selectedPalette: item }))} filter={'color-palette'} />
-            <LibraryPickerModal isOpen={isLogoFontPickerOpen} onClose={() => closeModal('isLogoFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ selectedFont: item, fontReferenceImage: null }))} filter={'font'} />
+            <LibraryPickerModal isOpen={!!isLogoRefPickerOpen} onClose={() => closeModal('isLogoRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ referenceItems: [...(logoThemeState.referenceItems || []), item] }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isLogoPalettePickerOpen} onClose={() => closeModal('isLogoPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ selectedPalette: item }))} filter={'color-palette'} />
+            <LibraryPickerModal isOpen={!!isLogoFontPickerOpen} onClose={() => closeModal('isLogoFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ selectedFont: item, fontReferenceImage: null }))} filter={'font'} />
             
-            <LibraryPickerModal isOpen={isBannerRefPickerOpen} onClose={() => closeModal('isBannerRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerReferenceItems: [...(logoThemeState.bannerReferenceItems || []), item] }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={isBannerPalettePickerOpen} onClose={() => closeModal('isBannerPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedPalette: item }))} filter={'color-palette'} />
-            <LibraryPickerModal isOpen={isBannerLogoPickerOpen} onClose={() => closeModal('isBannerLogoPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedLogo: item }))} filter={'logo'} />
-            <LibraryPickerModal isOpen={isBannerFontPickerOpen} onClose={() => closeModal('isBannerFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedFont: item, bannerFontReferenceImage: null }))} filter={'font'} />
+            <LibraryPickerModal isOpen={!!isBannerRefPickerOpen} onClose={() => closeModal('isBannerRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerReferenceItems: [...(logoThemeState.bannerReferenceItems || []), item] }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isBannerPalettePickerOpen} onClose={() => closeModal('isBannerPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedPalette: item }))} filter={'color-palette'} />
+            <LibraryPickerModal isOpen={!!isBannerLogoPickerOpen} onClose={() => closeModal('isBannerLogoPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedLogo: item }))} filter={'logo'} />
+            <LibraryPickerModal isOpen={!!isBannerFontPickerOpen} onClose={() => closeModal('isBannerFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedFont: item, bannerFontReferenceImage: null }))} filter={'font'} />
             
-            <LibraryPickerModal isOpen={isAlbumCoverRefPickerOpen} onClose={() => closeModal('isAlbumCoverRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumReferenceItems: [...(logoThemeState.albumReferenceItems || []), item] }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={isAlbumCoverPalettePickerOpen} onClose={() => closeModal('isAlbumCoverPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedPalette: item }))} filter={'color-palette'} />
-            <LibraryPickerModal isOpen={isAlbumCoverLogoPickerOpen} onClose={() => closeModal('isAlbumCoverLogoPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedLogo: item }))} filter={'logo'} />
-            <LibraryPickerModal isOpen={isAlbumCoverFontPickerOpen} onClose={() => closeModal('isAlbumCoverFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedFont: item, albumFontReferenceImage: null }))} filter={'font'} />
+            <LibraryPickerModal isOpen={!!isAlbumCoverRefPickerOpen} onClose={() => closeModal('isAlbumCoverRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumReferenceItems: [...(logoThemeState.albumReferenceItems || []), item] }))} filter={imageLikeFilter} />
+            <LibraryPickerModal isOpen={!!isAlbumCoverPalettePickerOpen} onClose={() => closeModal('isAlbumCoverPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedPalette: item }))} filter={'color-palette'} />
+            <LibraryPickerModal isOpen={!!isAlbumCoverLogoPickerOpen} onClose={() => closeModal('isAlbumCoverLogoPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedLogo: item }))} filter={'logo'} />
+            <LibraryPickerModal isOpen={!!isAlbumCoverFontPickerOpen} onClose={() => closeModal('isAlbumCoverFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedFont: item, albumFontReferenceImage: null }))} filter={'font'} />
 
              {/* Mask/Element Pickers */}
-             <LibraryPickerModal isOpen={isMaskPickerOpen} onClose={() => closeModal('isMaskPickerOpen')} onSelectItem={async item => dispatch(setMaskImage(await dataUrlToFile(item.media, item.name || 'mask.jpeg')))} filter={imageLikeFilter} />
-             <LibraryPickerModal isOpen={isElementPickerOpen} onClose={() => closeModal('isElementPickerOpen')} onSelectItem={async item => dispatch(setElementImages([...elementImages, await dataUrlToFile(item.media, item.name || 'element.jpeg')]))} filter={broadImagePickerFilter} />
+             <LibraryPickerModal isOpen={!!isMaskPickerOpen} onClose={() => closeModal('isMaskPickerOpen')} onSelectItem={async item => dispatch(setMaskImage(await dataUrlToFile(item.media, item.name || 'mask.jpeg')))} filter={imageLikeFilter} />
+             <LibraryPickerModal isOpen={!!isElementPickerOpen} onClose={() => closeModal('isElementPickerOpen')} onSelectItem={async item => dispatch(setElementImages([...elementImages, await dataUrlToFile(item.media, item.name || 'element.jpeg')]))} filter={broadImagePickerFilter} />
         </div>
     );
 };
