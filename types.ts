@@ -16,7 +16,7 @@ export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | '
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image';
-export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5';
+export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf';
 export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui';
 export type VideoProvider = 'gemini' | 'comfyui';
@@ -147,6 +147,30 @@ export interface GenerationOptions {
     comfyDetailerBboxThreshold?: number;
     comfyDetailerBboxDilation?: number;
     comfyDetailerBboxCropFactor?: number;
+    
+    // Qwen t2i GGUF specific
+    comfyQwenUnet?: string;
+    comfyQwenClip?: string;
+    comfyQwenVae?: string;
+    comfyQwenAuraFlowShift?: number;
+    comfyQwenMegaPixel?: string;
+    comfyQwenAspectRatio?: string;
+    comfyQwenCustomRatio?: boolean;
+    comfyQwenCustomAspectRatio?: string;
+    comfyQwenDivisibleBy?: number;
+    comfyQwenUseLora1?: boolean;
+    comfyQwenLora1Name?: string;
+    comfyQwenLora1Strength?: number;
+    comfyQwenUseLora2?: boolean;
+    comfyQwenLora2Name?: string;
+    comfyQwenLora2Strength?: number;
+    comfyQwenUseLora3?: boolean;
+    comfyQwenLora3Name?: string;
+    comfyQwenLora3Strength?: number;
+    comfyQwenUseLora4?: boolean;
+    comfyQwenLora4Name?: string;
+    comfyQwenLora4Strength?: number;
+
 
     // Video Generation
     videoProvider?: VideoProvider;

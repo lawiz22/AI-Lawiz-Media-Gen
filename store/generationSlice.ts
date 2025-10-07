@@ -22,13 +22,36 @@ const initialOptions: GenerationOptions = {
     geminiInpaintCustomPrompt: '',
     geminiInpaintTargetPrompt: '',
     geminiComposePrompt: '',
-    comfyModelType: 'sdxl',
+    comfyModelType: 'qwen-t2i-gguf',
     comfyPrompt: '',
     comfyNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed, disfigured',
     comfySteps: 25,
     comfyCfg: 5.5,
     comfySampler: 'euler',
     comfyScheduler: 'normal',
+
+    // Qwen t2i GGUF defaults
+    comfyQwenUnet: 'Qwen_Image-Q3_K_S.gguf',
+    comfyQwenClip: 'Qwen2.5-VL-7B-Instruct-Q3_K_S.gguf',
+    comfyQwenVae: 'qwen_image_vae.safetensors',
+    comfyQwenAuraFlowShift: 2.5,
+    comfyQwenMegaPixel: '1.0',
+    comfyQwenAspectRatio: '1:1 (Perfect Square)',
+    comfyQwenCustomRatio: false,
+    comfyQwenCustomAspectRatio: '1:1',
+    comfyQwenDivisibleBy: 64,
+    comfyQwenUseLora1: true,
+    comfyQwenLora1Name: 'Qwen-Image-Lightning-4steps-V1.0.safetensors',
+    comfyQwenLora1Strength: 1.0,
+    comfyQwenUseLora2: true,
+    comfyQwenLora2Name: 'Qwen-NSFW-Beta5.safetensors',
+    comfyQwenLora2Strength: 0.86,
+    comfyQwenUseLora3: true,
+    comfyQwenLora3Name: 'Qwen-Image_SmartphoneSnapshotPhotoReality_v4_by-AI_Characters_TRIGGER$amateur photo$.safetensors',
+    comfyQwenLora3Strength: 1.0,
+    comfyQwenUseLora4: false, // Inactive by default
+    comfyQwenLora4Name: '', // Empty by default
+    comfyQwenLora4Strength: 1.0,
     
     // Video Generation
     videoProvider: 'comfyui',

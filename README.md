@@ -13,7 +13,7 @@ Welcome to Lawiz's AI Media Generator, a powerful and versatile web application 
 ### 2. Advanced Image Generation
 - **Multi-Provider Support:** Seamlessly switch between Gemini and ComfyUI for image generation.
 - **Rich Configuration:** Fine-tune every aspect of your creation, including aspect ratio, artistic style, photo era, and number of images.
-- **Expanded ComfyUI Workflow Support:** The UI dynamically loads your installed models, with out-of-the-box support for popular workflows including SD 1.5, SDXL, FLUX, WAN 2.2, Nunchaku Kontext FLUX (i2i), Nunchaku FLUX Image, FLUX Krea, and a powerful **Face Detailer** workflow for enhancing and fixing faces in existing images.
+- **Expanded ComfyUI Workflow Support:** The UI dynamically loads your installed models, with out-of-the-box support for popular workflows including SD 1.5, SDXL, FLUX, WAN 2.2, Nunchaku Kontext FLUX (i2i), Nunchaku FLUX Image, FLUX Krea, a powerful **Face Detailer** workflow for enhancing and fixing faces in existing images, and the new **Qwen T2I GGUF** for fast, high-quality image generation with structured prompting.
 - **Post-Processing:** Enhance the resolution and quality of generated images with a single click using the Gemini API.
 
 ### 3. AI-Powered Video Generation

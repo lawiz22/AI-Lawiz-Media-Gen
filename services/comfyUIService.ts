@@ -11,6 +11,7 @@ import {
   COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE,
   COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE,
   COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE,
+  COMFYUI_QWEN_T2I_GGUF_WORKFLOW_TEMPLATE,
 } from "../constants";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
@@ -71,7 +72,7 @@ export const cancelComfyUIExecution = async (): Promise<void> => {
 };
 
 // --- Gemini-based Prompt Generation ---
-type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5';
+type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf';
 
 const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
     switch(modelType) {
@@ -81,6 +82,7 @@ const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
         case 'flux':
         case 'nunchaku-flux-image':
         case 'flux-krea':
+        case 'qwen-t2i-gguf':
             return 'Your response MUST be a single, detailed, artistic, and descriptive paragraph. Use rich vocabulary.';
         case 'gemini':
             return 'Your response MUST be a detailed, narrative paragraph written in a natural language. Describe the scene as if you were writing a story or giving instructions to a human artist. Use full, descriptive sentences.';
@@ -417,7 +419,20 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
     const findNodeKey = (wf: any, identifier: string, by: 'title' | 'class_type' | 'key') => {
         return Object.keys(wf).find(k => {
             const node = wf[k];
-            if (by === 'title') return node._meta?.title?.toLowerCase().includes(identifier.toLowerCase());
+            if (by === 'title') {
+                const title = node._meta?.title?.toLowerCase();
+                if (!title) return false;
+                
+                // Make prompt matching more robust to handle different naming conventions
+                if (identifier === 'Positive Prompt') {
+                    return title.includes('positive prompt') || title.includes('(positive)') || title === 'positive';
+                }
+                if (identifier === 'Negative Prompt') {
+                    return title.includes('negative prompt') || title.includes('(negative)') || title === 'negative';
+                }
+                
+                return title.includes(identifier.toLowerCase());
+            }
             if (by === 'class_type') return node.class_type.toLowerCase().startsWith(identifier.toLowerCase());
             if (by === 'key') return k === identifier;
             return false;
@@ -431,6 +446,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         case 'nunchaku-flux-image': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE)); break;
         case 'flux-krea': workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE)); break;
         case 'face-detailer-sd1.5': workflow = JSON.parse(JSON.stringify(COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE)); break;
+        case 'qwen-t2i-gguf': workflow = JSON.parse(JSON.stringify(COMFYUI_QWEN_T2I_GGUF_WORKFLOW_TEMPLATE)); break;
         case 'flux': {
             workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE));
             const ksamplerKey = findNodeKey(workflow, "KSampler", 'class_type');
@@ -649,7 +665,57 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         detailerNodeInputs.bbox_threshold = options.comfyDetailerBboxThreshold;
         detailerNodeInputs.bbox_dilation = options.comfyDetailerBboxDilation;
         detailerNodeInputs.bbox_crop_factor = options.comfyDetailerBboxCropFactor;
+    } else if (options.comfyModelType === 'qwen-t2i-gguf') {
+        workflow['80'].inputs.unet_name = options.comfyQwenUnet;
+        workflow['81'].inputs.clip_name = options.comfyQwenClip;
+        workflow['39'].inputs.vae_name = options.comfyQwenVae;
+
+        const ksampler = workflow['3'];
+        ksampler.inputs.steps = options.comfySteps;
+        ksampler.inputs.cfg = options.comfyCfg;
+        ksampler.inputs.sampler_name = options.comfySampler;
+        ksampler.inputs.scheduler = options.comfyScheduler;
+
+        workflow['66'].inputs.shift = options.comfyQwenAuraFlowShift;
+        
+        const resNode = workflow['86'];
+        resNode.inputs.megapixel = options.comfyQwenMegaPixel || '1.0';
+        resNode.inputs.aspect_ratio = options.comfyQwenAspectRatio;
+        resNode.inputs.custom_ratio = options.comfyQwenCustomRatio;
+        resNode.inputs.custom_aspect_ratio = options.comfyQwenCustomAspectRatio;
+        resNode.inputs.divisible_by = String(options.comfyQwenDivisibleBy);
+
+        const loraChain = [
+            { key: '74', use: options.comfyQwenUseLora1, name: options.comfyQwenLora1Name, strength: options.comfyQwenLora1Strength },
+            { key: '75', use: options.comfyQwenUseLora2, name: options.comfyQwenLora2Name, strength: options.comfyQwenLora2Strength },
+            { key: '82', use: options.comfyQwenUseLora3, name: options.comfyQwenLora3Name, strength: options.comfyQwenLora3Strength },
+            { key: 'lora_4_node', use: options.comfyQwenUseLora4, name: options.comfyQwenLora4Name, strength: options.comfyQwenLora4Strength }
+        ];
+
+        let lastActiveNodeKey = '80'; // Start with UnetLoader
+
+        for (const lora of loraChain) {
+            if (lora.use && lora.name) {
+                workflow[lora.key].inputs.lora_name = lora.name;
+                workflow[lora.key].inputs.strength_model = lora.strength;
+                workflow[lora.key].inputs.model = [lastActiveNodeKey, 0];
+                lastActiveNodeKey = lora.key;
+            } else {
+                delete workflow[lora.key];
+            }
+        }
+        
+        const allLoraKeys = ['74', '75', '82', 'lora_4_node'];
+        allLoraKeys.forEach(key => {
+            const isUsed = loraChain.some(l => l.key === key && l.use && l.name);
+            if (!isUsed) {
+                delete workflow[key];
+            }
+        });
+        
+        workflow['66'].inputs.model = [lastActiveNodeKey, 0];
     }
+
 
     return workflow;
 };
@@ -662,7 +728,7 @@ export const generateComfyUIPortraits = async (
     const allImages: string[] = [];
     const baseWorkflow = await buildWorkflow(options, sourceImage);
 
-    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5'].includes(options.comfyModelType!);
+    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf'].includes(options.comfyModelType!);
     const numImages = options.comfyModelType === 'face-detailer-sd1.5' ? 1 : options.numImages;
 
     let currentSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
