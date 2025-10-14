@@ -5,7 +5,7 @@ export const Logo: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     {...props}
     viewBox="0 0 52 52" 
     xmlns="http://www.w3.org/2000/svg" 
-    aria-label="Lawiz's AI Media Generator Logo"
+    aria-label="LAWIZ'S Media Generator Logo"
   >
     <defs>
       <clipPath id="clip0_lz_logo_v2">
