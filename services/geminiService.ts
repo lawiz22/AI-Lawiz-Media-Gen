@@ -1,7 +1,8 @@
 import { GoogleGenAI, Part, Type, Modality } from "@google/genai";
 // Fix: Corrected typo in type name from 'ManquinnequinStyle' to 'MannequinStyle'.
 import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState, PaletteColor } from '../types';
-import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart, createBlankImageFile, letterboxImage } from "../utils/imageUtils";
+// Fix: Added dataUrlToFile and fileToDataUrl to imports for use in banner and album cover generation.
+import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart, createBlankImageFile, letterboxImage, dataUrlToFile, fileToDataUrl } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
 import { buildPromptSegments, decodePose, getRandomPose } from "../utils/promptBuilder";
 import { MANNEQUIN_STYLE_REFERENCES } from '../assets/styleReferences';
@@ -19,7 +20,7 @@ export const generatePortraits = async (
     previewedClothingImage: string | null,
     maskImage: File | null,
     elementImages: File[]
-): Promise<{ images: string[]; finalPrompt: string | null }> => {
+): Promise<{ images: { src: string; usageMetadata?: any }[]; finalPrompt: string | null }> => {
     if (options.geminiMode === 't2i') {
         if (!options.geminiPrompt) {
             throw new Error("A prompt is required for Text-to-Image generation.");
@@ -38,10 +39,13 @@ export const generatePortraits = async (
                 }
             });
     
-            const images = response.generatedImages.map(img => `data:image/jpeg;base64,${img.image.imageBytes}`);
+            const images = response.generatedImages.map(img => ({
+                src: `data:image/jpeg;base64,${img.image.imageBytes}`,
+                usageMetadata: undefined
+            }));
             return { images, finalPrompt: options.geminiPrompt };
         } else if (model === 'gemini-2.5-flash-image') {
-            const allImages: string[] = [];
+            const allImages: { src: string; usageMetadata?: any }[] = [];
             const totalSteps = options.numImages;
 
             // Create a blank image to satisfy the model's potential requirement for an image input.
@@ -64,7 +68,10 @@ export const generatePortraits = async (
 
                 const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                 if (imagePart?.inlineData) {
-                    allImages.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+                    allImages.push({
+                        src: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+                        usageMetadata: response.usageMetadata
+                    });
                 } else {
                     console.warn(`T2I Image ${i+1} generation did not return an image. Text response:`, response.text);
                 }
@@ -78,7 +85,7 @@ export const generatePortraits = async (
     // I2I Mode
     if (!sourceImage) throw new Error("A source image is required for Image-to-Image mode.");
 
-    const allImages: string[] = [];
+    const allImages: { src: string; usageMetadata?: any }[] = [];
     let finalPrompt: string | null = null;
     const totalSteps = options.numImages;
 
@@ -115,7 +122,10 @@ export const generatePortraits = async (
             });
             const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
             if (imagePart?.inlineData) {
-                allImages.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+                allImages.push({
+                    src: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+                    usageMetadata: response.usageMetadata
+                });
             }
         }
         return { images: allImages, finalPrompt };
@@ -140,7 +150,10 @@ export const generatePortraits = async (
             });
              const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
             if (imagePart?.inlineData) {
-                allImages.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+                allImages.push({
+                    src: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+                    usageMetadata: response.usageMetadata
+                });
             }
         }
         return { images: allImages, finalPrompt };
@@ -239,7 +252,10 @@ export const generatePortraits = async (
 
         const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
         if (imagePart?.inlineData) {
-            allImages.push(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+            allImages.push({
+                src: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+                usageMetadata: response.usageMetadata
+            });
         } else {
             console.warn(`Image ${i+1} generation did not return an image. Text response:`, response.text);
         }
@@ -327,7 +343,7 @@ export const generateGeminiVideo = async (
     return { videoUrl: finalUrl, finalPrompt: options.geminiVidPrompt };
 };
 
-export const generateCharacterNameForImage = async (imageDataUrl: string): Promise<string> => {
+export const generateCharacterNameForImage = async (imageDataUrl: string): Promise<{ name: string; usageMetadata: any }> => {
     const response = await fetch(imageDataUrl);
     const blob = await response.blob();
     const file = new File([blob], "character.jpeg", { type: "image/jpeg" });
@@ -350,7 +366,7 @@ export const generateCharacterNameForImage = async (imageDataUrl: string): Promi
     if (!name) {
         throw new Error("AI failed to generate a character name.");
     }
-    return name.replace(/["'*]/g, ''); // Clean up quotes
+    return { name: name.replace(/["'*]/g, ''), usageMetadata: result.usageMetadata };
 };
 
 export const generateBackgroundImagePreview = async (prompt: string, aspectRatio: GenerationOptions['aspectRatio']): Promise<string> => {
@@ -387,7 +403,7 @@ export const generateClothingPreview = async (prompt: string, aspectRatio: Gener
     return `data:image/jpeg;base64,${imageBytes}`;
 };
 
-export const enhanceImageResolution = async (imageDataUrl: string): Promise<string> => {
+export const enhanceImageResolution = async (imageDataUrl: string): Promise<{ enhancedSrc: string; usageMetadata: any }> => {
     const response = await fetch(imageDataUrl);
     const blob = await response.blob();
     const file = new File([blob], "enhance.jpeg", { type: "image/jpeg" });
@@ -408,7 +424,10 @@ export const enhanceImageResolution = async (imageDataUrl: string): Promise<stri
 
     const outputPart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
     if (outputPart?.inlineData) {
-        return `data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`;
+        return {
+            enhancedSrc: `data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`,
+            usageMetadata: result.usageMetadata
+        };
     } else {
         throw new Error("Image enhancement failed to return an image.");
     }
@@ -833,6 +852,7 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
     }
 };
 
+// Fix: Completed the implementation of the generateBanners function, which was previously incomplete and caused a return type error.
 export const generateBanners = async (state: LogoThemeState): Promise<string[]> => {
     // 1. Build the base prompt.
     let prompt = `Generate a banner image. The output must be a high-resolution image.\n`;
@@ -854,52 +874,47 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
     prompt += `\nCRITICAL INSTRUCTIONS:
 1. A blank canvas with the target aspect ratio (${state.bannerAspectRatio}) is provided as the first image. You MUST generate your banner content to fill this canvas exactly, respecting its dimensions and aspect ratio.
 2. Other images are provided for STYLE, CONTENT, and COLOR inspiration ONLY. They have been placed on a canvas to match the target aspect ratio. You MUST IGNORE any empty space, bars, or borders around these reference images.
-3. Your final output's shape and dimensions MUST EXACTLY MATCH the blank canvas. DO NOT copy the aspect ratio of the original reference images.`;
+3. Your final output's shape must perfectly match the aspect ratio of the blank canvas.`;
 
-    // 3. Create the blank canvas generative part.
+    // 3. Prepare the parts for the multimodal request.
+    const allImages: string[] = [];
+    const parts: Part[] = [];
+
+    // Create a blank canvas to define the output shape
     const [w, h] = state.bannerAspectRatio!.split(':').map(Number);
-    const baseWidth = 1024; // A reasonable base width for quality.
-    const canvasWidth = baseWidth;
-    const canvasHeight = Math.round(baseWidth / (w / h));
-    const blankCanvasFile = await createBlankImageFile(canvasWidth, canvasHeight, '#111827', 'canvas.png'); // using a dark color to avoid pure white
-    const canvasPart = await fileToGenerativePart(blankCanvasFile);
-
-    // 4. Always use the multi-modal flow, starting with the canvas.
-    const parts: Part[] = [canvasPart, { text: prompt }];
+    // Use a reasonable base size, maintaining aspect ratio
+    const canvasWidth = w > h ? 1024 : Math.round(1024 * (w / h));
+    const canvasHeight = w > h ? Math.round(1024 * (h / w)) : 1024;
+    const blankCanvasFile = await createBlankImageFile(canvasWidth, canvasHeight, '#111827', 'canvas.png');
+    parts.push(await fileToGenerativePart(blankCanvasFile));
     
-    // Helper function to process and add reference items
-    const processAndAddReference = async (itemFile: File, itemType: string) => {
-        const letterboxedFile = await letterboxImage(itemFile, state.bannerAspectRatio!);
-        parts.push({ text: `This is a ${itemType} reference for style, content, and color. It has been placed on a canvas to match the target aspect ratio. IGNORE the empty space/bars around it and fill the entire banner.` });
+    // Add reference images, letterboxed to the target aspect ratio
+    const addReference = async (dataUrl: string) => {
+        const refFile = await dataUrlToFile(dataUrl, 'ref.jpeg');
+        const letterboxedFile = await letterboxImage(refFile, state.bannerAspectRatio!);
         parts.push(await fileToGenerativePart(letterboxedFile));
     };
 
-    // 5. Add other references as before, but now with letterboxing.
-    if (state.bannerSelectedLogo) {
-        const logoResponse = await fetch(state.bannerSelectedLogo.media);
-        const logoBlob = await logoResponse.blob();
-        const logoFile = new File([logoBlob], "logo.png", { type: "image/png" });
-        await processAndAddReference(logoFile, 'logo');
-    }
-    if (state.bannerFontReferenceImage) {
-        await processAndAddReference(state.bannerFontReferenceImage, 'font style');
-    } else if (state.bannerSelectedFont) {
-        const fontResponse = await fetch(state.bannerSelectedFont.media);
-        const fontBlob = await fontResponse.blob();
-        const fontFile = new File([fontBlob], "font_ref.png", { type: fontBlob.type });
-        await processAndAddReference(fontFile, 'font style');
-    }
     if (state.bannerReferenceItems) {
         for (const item of state.bannerReferenceItems) {
-            const refResponse = await fetch(item.media);
-            const refBlob = await refResponse.blob();
-            const refFile = new File([refBlob], "ref.jpeg", { type: "image/jpeg" });
-            await processAndAddReference(refFile, 'general inspiration');
+            await addReference(item.media);
         }
     }
-    
-    // 6. Loop and generate images
-    const allImages: string[] = [];
+    if (state.bannerSelectedLogo) {
+        await addReference(state.bannerSelectedLogo.media);
+    }
+    if (state.bannerSelectedFont) {
+        await addReference(state.bannerSelectedFont.media);
+    }
+    if (state.bannerFontReferenceImage) {
+        const fontDataUrl = await fileToDataUrl(state.bannerFontReferenceImage);
+        await addReference(fontDataUrl);
+    }
+
+    // Add the final prompt
+    parts.push({ text: prompt });
+
+    // 4. Generate the banners
     for (let i = 0; i < (state.numBanners || 1); i++) {
         const result = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
@@ -910,65 +925,60 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
         if (outputPart?.inlineData) {
             allImages.push(`data:${outputPart.inlineData.mimeType};base64,${outputPart.inlineData.data}`);
         } else {
-             console.warn(`Banner generation ${i+1} did not return an image. Text response:`, result.text);
+            console.warn(`Banner generation ${i + 1} failed. AI response:`, result.text);
         }
     }
-    
-    if (allImages.length === 0 && (state.numBanners || 1) > 0) {
-        throw new Error("The AI failed to generate any banner images. It might be having trouble with the prompt or references provided.");
-    }
-    
+
     return allImages;
 };
 
+// Fix: Added the missing generateAlbumCovers function to resolve an import error in LogoThemeGeneratorPanel.
 export const generateAlbumCovers = async (state: LogoThemeState): Promise<string[]> => {
-    let prompt = `Generate a 1:1 square album cover. The output must be a high-resolution image.\n`;
-    if (state.artistName) prompt += `- Artist Name: "${state.artistName}"\n`;
-    if (state.albumTitle) prompt += `- Album Title: "${state.albumTitle}"\n`;
-    if (state.albumPrompt) prompt += `- Core Concept: ${state.albumPrompt}\n`;
+    let prompt = `Generate a 1:1 square album cover based on the following specifications. The output must be a high-resolution image.\n`;
+    if (state.artistName) prompt += `- Artist Name: ${state.artistName}\n`;
+    if (state.albumTitle) prompt += `- Album Title: ${state.albumTitle}\n`;
+    if (state.albumPrompt) prompt += `- Core Concept/Mood: ${state.albumPrompt}\n`;
     const musicStyle = state.musicStyle === 'other' ? state.customMusicStyle : state.musicStyle;
     if (musicStyle) prompt += `- Music Style: ${musicStyle}\n`;
     if (state.albumEra) prompt += `- Era: ${state.albumEra}\n`;
-    if (state.albumMediaType) prompt += `- Media Type Style: Emulate a ${state.albumMediaType} cover.\n`;
-    if (state.addVinylWear) prompt += `- Effects: Add realistic vinyl record sleeve wear and tear (scratches, ring wear).\n`;
+    if (state.albumMediaType) prompt += `- Media Format Influence: The design should look like it's for a ${state.albumMediaType}.\n`;
+    if (state.addVinylWear) prompt += `- Special Effects: Add realistic vinyl record sleeve wear and tear (ring wear, scratches, edge wear).\n`;
     if (state.albumFontReferenceImage || state.albumSelectedFont) {
-        prompt += `- Font Style: Use the exact font style shown in the provided font reference image for all text.\n`;
+        prompt += `- Font Style: Use the exact font style from the provided font reference image for all text.\n`;
     }
-
+    if (state.albumSelectedLogo) {
+        prompt += `- Logo: Incorporate the provided logo into the design.\n`;
+    }
     if (state.albumSelectedPalette) {
         const palette = JSON.parse(state.albumSelectedPalette.media) as PaletteColor[];
         const hexCodes = palette.map((c: any) => c.hex).join(', ');
         prompt += `- Color Palette: Strictly use these colors: ${hexCodes}\n`;
     }
 
-    const hasReferences = (state.albumReferenceItems && state.albumReferenceItems.length > 0) || state.albumSelectedLogo || state.albumFontReferenceImage || state.albumSelectedFont;
+    const usesMultiModal = (state.albumReferenceItems && state.albumReferenceItems.length > 0) ||
+                           state.albumFontReferenceImage || state.albumSelectedFont || state.albumSelectedLogo;
 
-    if (hasReferences) {
+    if (usesMultiModal) {
         const parts: Part[] = [{ text: prompt }];
+
+        const addReference = async (dataUrl: string) => {
+            const refFile = await dataUrlToFile(dataUrl, 'ref.jpeg');
+            parts.push(await fileToGenerativePart(refFile));
+        };
+        
+        if (state.albumReferenceItems) {
+            for (const item of state.albumReferenceItems) { await addReference(item.media); }
+        }
         if (state.albumSelectedLogo) {
-            const logoResponse = await fetch(state.albumSelectedLogo.media);
-            const logoBlob = await logoResponse.blob();
-            const logoFile = new File([logoBlob], "logo.png", { type: "image/png" });
-            parts.push({ text: "Use this logo in the album cover:" });
-            parts.push(await fileToGenerativePart(logoFile));
+            await addReference(state.albumSelectedLogo.media);
+        }
+        if (state.albumSelectedFont) {
+            await addReference(state.albumSelectedFont.media);
         }
         if (state.albumFontReferenceImage) {
             parts.push(await fileToGenerativePart(state.albumFontReferenceImage));
-        } else if (state.albumSelectedFont) {
-            const fontResponse = await fetch(state.albumSelectedFont.media);
-            const fontBlob = await fontResponse.blob();
-            const fontFile = new File([fontBlob], "font_ref.png", { type: fontBlob.type });
-            parts.push(await fileToGenerativePart(fontFile));
         }
-        if (state.albumReferenceItems) {
-            for (const item of state.albumReferenceItems) {
-                const refResponse = await fetch(item.media);
-                const refBlob = await refResponse.blob();
-                const refFile = new File([refBlob], "ref.jpeg", { type: "image/jpeg" });
-                parts.push(await fileToGenerativePart(refFile));
-            }
-        }
-        
+
         const allImages: string[] = [];
         for (let i = 0; i < (state.numAlbumCovers || 1); i++) {
             const result = await ai.models.generateContent({

@@ -55,6 +55,13 @@ const initialState: AppSliceState = {
   isSyncing: false,
   syncMessage: '',
   isDriveConfigured: false,
+  
+  // Session Token Usage
+  sessionTokenUsage: {
+    promptTokenCount: 0,
+    candidatesTokenCount: 0,
+    totalTokenCount: 0,
+  },
 };
 
 const appSlice = createSlice({
@@ -109,6 +116,18 @@ const appSlice = createSlice({
         state.isDriveConfigured = action.payload;
     },
     
+    // Token Usage
+    addSessionTokenUsage: (state, action: PayloadAction<{ promptTokenCount: number; candidatesTokenCount: number; totalTokenCount: number }>) => {
+      if (action.payload) {
+        state.sessionTokenUsage.promptTokenCount += action.payload.promptTokenCount || 0;
+        state.sessionTokenUsage.candidatesTokenCount += action.payload.candidatesTokenCount || 0;
+        state.sessionTokenUsage.totalTokenCount += action.payload.totalTokenCount || 0;
+      }
+    },
+    resetSessionTokenUsage: (state) => {
+      state.sessionTokenUsage = { promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 };
+    },
+
     // Modal Toggles
     openSettingsModal: state => { state.isSettingsModalOpen = true; },
     closeSettingsModal: state => { state.isSettingsModalOpen = false; },
@@ -142,6 +161,8 @@ export const {
   setIsSyncing,
   setSyncMessage,
   setIsDriveConfigured,
+  addSessionTokenUsage,
+  resetSessionTokenUsage,
   openSettingsModal,
   closeSettingsModal,
   openAdminPanel,

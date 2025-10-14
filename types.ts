@@ -531,6 +531,7 @@ export interface AppSliceState {
   isVideoStartFramePickerOpen: boolean;
   isVideoEndFramePickerOpen: boolean;
   isGeminiVideoSourcePickerOpen: boolean;
+
   isClothesSourcePickerOpen: boolean;
   isObjectSourcePickerOpen: boolean;
   isPoseSourcePickerOpen: boolean;
@@ -553,6 +554,13 @@ export interface AppSliceState {
   isSyncing: boolean;
   syncMessage: string;
   isDriveConfigured: boolean;
+
+  // Session Token Usage
+  sessionTokenUsage: {
+    promptTokenCount: number;
+    candidatesTokenCount: number;
+    totalTokenCount: number;
+  };
 }
 
 export interface GenerationSliceState {
@@ -572,7 +580,15 @@ export interface GenerationSliceState {
   progressValue: number;
   generatedContent: {
     [tabId: string]: {
-      images: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
+      images: {
+        src: string;
+        saved: 'idle' | 'saving' | 'saved';
+        usageMetadata?: {
+          promptTokenCount: number;
+          candidatesTokenCount: number;
+          totalTokenCount: number;
+        };
+      }[];
       lastUsedPrompt: string | null;
     }
   };

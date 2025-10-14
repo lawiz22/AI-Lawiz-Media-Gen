@@ -3,8 +3,9 @@ import JSZip from 'jszip';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
 import { addToLibrary } from '../store/librarySlice';
+import { addSessionTokenUsage } from '../store/appSlice';
 import { setImageSaveStatus } from '../store/generationSlice';
-import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon, CheckIcon, CharacterIcon } from './icons';
+import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon, CheckIcon, CharacterIcon, InfoIcon } from './icons';
 import { enhanceImageResolution } from '../services/geminiService';
 import type { GenerationOptions, LibraryItem } from '../types';
 import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromDataUrl, dataUrlToFile } from '../utils/imageUtils';
@@ -43,7 +44,15 @@ const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
 
 
 interface ImageGridProps {
-  images: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
+  images: {
+    src: string;
+    saved: 'idle' | 'saving' | 'saved';
+    usageMetadata?: {
+      promptTokenCount: number;
+      candidatesTokenCount: number;
+      totalTokenCount: number;
+    };
+  }[];
   onSendToI2I: (imageData: string) => void;
   onSendToCharacter: (imageData: string) => void;
   lastUsedPrompt?: string | null;
@@ -96,7 +105,10 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
     setEnhancingIndex(index);
     setErrorIndex(prev => ({ ...prev, [index]: '' }));
     try {
-        const enhancedSrc = await enhanceImageResolution(imageSrc);
+        const { enhancedSrc, usageMetadata } = await enhanceImageResolution(imageSrc);
+        if (usageMetadata) {
+            dispatch(addSessionTokenUsage(usageMetadata));
+        }
         setEnhancedImages(prev => ({...prev, [index]: enhancedSrc}));
         dispatch(setImageSaveStatus({ tabId: activeTab, index, status: 'idle' }));
     } catch (err: any) {
@@ -324,13 +336,14 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                   const finalSrc = enhancedImages[index] || image.src;
                   const hasError = !!errorIndex[index];
                   const savingStatus = image.saved;
+                  const { usageMetadata } = image;
 
                   return (
                       <div key={index} className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
                           <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="object-cover w-full h-full" />
                           
                           {/* Unified hover overlay for all actions */}
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                               <div className="relative w-full h-full p-2">
                                   {/* Save to Library Button (Top Right) */}
                                   <div className="absolute top-2 right-2">
@@ -391,6 +404,20 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                                   </div>
                               </div>
                           </div>
+                          {/* Token Info Display - higher z-index to appear over the hover overlay */}
+                          {usageMetadata && (
+                            <div className="group/tooltip absolute bottom-2 left-2 z-20">
+                                <div className="p-1 bg-black/60 rounded-full text-white cursor-help">
+                                    <InfoIcon className="w-4 h-4" />
+                                </div>
+                                <div className="absolute bottom-full mb-2 -left-1 w-48 bg-bg-primary p-3 rounded-lg shadow-lg text-xs text-text-secondary opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-30 border border-border-primary">
+                                    <h5 className="font-bold text-text-primary mb-1">Gemini Token Usage</h5>
+                                    <p>Prompt Tokens: <span className="font-semibold text-text-primary">{usageMetadata.promptTokenCount}</span></p>
+                                    <p>Response Tokens: <span className="font-semibold text-text-primary">{usageMetadata.candidatesTokenCount}</span></p>
+                                    <p className="font-bold mt-1 pt-1 border-t border-border-primary">Total: <span className="text-accent">{usageMetadata.totalTokenCount}</span></p>
+                                </div>
+                            </div>
+                           )}
                       </div>
                   );
               })}

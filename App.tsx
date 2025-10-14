@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
@@ -10,7 +6,7 @@ import {
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
     openSettingsModal, closeSettingsModal, openAdminPanel, closeAdminPanel,
     openOAuthHelper, closeOAuthHelper,
-    setModalOpen
+    setModalOpen, addSessionTokenUsage, resetSessionTokenUsage
 } from './store/appSlice';
 // Fix: Imported the `selectIsReadyToGenerate` selector to resolve the "Cannot find name" error.
 import {
@@ -82,7 +78,7 @@ const App: React.FC = () => {
         isAlbumCoverRefPickerOpen, isAlbumCoverPalettePickerOpen, isAlbumCoverLogoPickerOpen, isAlbumCoverFontPickerOpen,
         isMannequinRefPickerOpen, isFontSourcePickerOpen, isMaskPickerOpen, isElementPickerOpen,
         isWanVideoImagePickerOpen,
-        driveFolder, isSyncing, syncMessage, isDriveConfigured
+        driveFolder, isSyncing, syncMessage, isDriveConfigured, sessionTokenUsage
     } = useSelector((state: RootState) => state.app);
 
     // --- Generation State (from generationSlice) ---
@@ -206,6 +202,7 @@ const App: React.FC = () => {
 
     const handleLogout = () => {
         dispatch(setCurrentUser(null));
+        dispatch(resetSessionTokenUsage());
     };
 
     const handleThemeChange = (newTheme: string) => {
@@ -246,34 +243,43 @@ const App: React.FC = () => {
         };
         
         try {
-            let result: { images: string[]; finalPrompt: string | null } = { images: [], finalPrompt: null };
+            let result: { images: { src: string; usageMetadata?: any }[], finalPrompt: string | null };
             
             if (options.provider === 'gemini') {
-                if (options.geminiMode === 't2i') {
-                    result = await generatePortraits(
-                        null, options, localUpdateProgress, null, null,
-                        previewedBackgroundImage, previewedClothingImage, null, []
-                    );
-                } else {
-                    if (!sourceImage) throw new Error("Source image is required for Image-to-Image mode.");
-                    result = await generatePortraits(
-                        sourceImage, options, localUpdateProgress, clothingImage, backgroundImage,
-                        previewedBackgroundImage, previewedClothingImage, maskImage, elementImages
-                    );
-                }
+                result = await generatePortraits(
+                    sourceImage, options, localUpdateProgress, clothingImage, backgroundImage,
+                    previewedBackgroundImage, previewedClothingImage, maskImage, elementImages
+                );
             } else if (options.provider === 'comfyui') {
-                result = await generateComfyUIPortraits(sourceImage, options, localUpdateProgress);
+                const comfyResult = await generateComfyUIPortraits(sourceImage, options, localUpdateProgress);
+                result = {
+                    images: comfyResult.images.map(src => ({ src, usageMetadata: undefined })),
+                    finalPrompt: comfyResult.finalPrompt
+                };
+            } else {
+                result = { images: [], finalPrompt: null };
             }
             
             dispatch(setGeneratedImages({ tabId: activeTab, images: result.images }));
             dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: result.finalPrompt }));
+
+            if (result.images) {
+                for (const image of result.images) {
+                    if (image.usageMetadata) {
+                        dispatch(addSessionTokenUsage(image.usageMetadata));
+                    }
+                }
+            }
             
             if(result.images.length > 0) {
                 if (activeTab === 'character-generator' && shouldGenerateCharacterName) {
                     localUpdateProgress("Generating character name...", 0.96);
                     try {
-                        const name = await generateCharacterNameForImage(result.images[0]);
+                        const { name, usageMetadata } = await generateCharacterNameForImage(result.images[0].src);
                         dispatch(setCharacterName(name));
+                        if (usageMetadata) {
+                            dispatch(addSessionTokenUsage(usageMetadata));
+                        }
                     } catch (nameError) {
                         console.warn("Could not generate character name:", nameError);
                         dispatch(setCharacterName('')); // Clear on error
@@ -396,7 +402,7 @@ const App: React.FC = () => {
         switch (item.mediaType) {
             case 'character':
                 dispatch(setSourceImage(sourceToSet));
-                dispatch(setGeneratedImages({ tabId: 'character-generator', images: [item.media] }));
+                dispatch(setGeneratedImages({ tabId: 'character-generator', images: [{ src: item.media }] }));
                 dispatch(setGeneratedImages({ tabId: 'image-generator', images: [] }));
                 dispatch(setLastUsedPrompt({ tabId: 'image-generator', prompt: null }));
                 // When loading a character, parse the name to separate it from the description
@@ -406,7 +412,7 @@ const App: React.FC = () => {
                 break;
             case 'image':
                 dispatch(setSourceImage(sourceToSet));
-                dispatch(setGeneratedImages({ tabId: 'image-generator', images: [item.media] }));
+                dispatch(setGeneratedImages({ tabId: 'image-generator', images: [{ src: item.media }] }));
                 dispatch(setGeneratedImages({ tabId: 'character-generator', images: [] }));
                 dispatch(setLastUsedPrompt({ tabId: 'character-generator', prompt: null }));
                 dispatch(setCharacterName(''));
@@ -569,6 +575,10 @@ const App: React.FC = () => {
                 onDriveConnect={handleDriveConnect}
                 onDriveDisconnect={handleDriveDisconnect}
                 isDriveConfigured={isDriveConfigured}
+                sessionTokenUsage={sessionTokenUsage}
+                onResetTokenUsage={() => dispatch(resetSessionTokenUsage())}
+                activeTab={activeTab}
+                provider={options.provider}
             />
             <main className="container mx-auto p-4 md:p-8">
                 <div className="flex flex-wrap items-center justify-center border-b-2 border-border-primary mb-8">

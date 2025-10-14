@@ -180,12 +180,12 @@ const generationSlice = createSlice({
         state.progressMessage = action.payload.message;
         state.progressValue = action.payload.value;
     },
-    setGeneratedImages: (state, action: PayloadAction<{ tabId: string; images: string[] }>) => {
+    setGeneratedImages: (state, action: PayloadAction<{ tabId: string; images: { src: string, usageMetadata?: any }[] }>) => {
       const { tabId, images } = action.payload;
       if (!state.generatedContent[tabId]) {
           state.generatedContent[tabId] = { images: [], lastUsedPrompt: null };
       }
-      state.generatedContent[tabId].images = images.map(src => ({ src, saved: 'idle' }));
+      state.generatedContent[tabId].images = images.map(({ src, usageMetadata }) => ({ src, saved: 'idle', usageMetadata }));
     },
     setImageSaveStatus: (state, action: PayloadAction<{ tabId: string; index: number; status: 'idle' | 'saving' | 'saved' }>) => {
         const { tabId, index, status } = action.payload;

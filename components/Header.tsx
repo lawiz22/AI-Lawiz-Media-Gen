@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Banner } from './Banner';
 import { ThemeSwitcher } from './ThemeSwitcher';
-import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, AdminIcon, PencilIcon } from './icons';
+import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, AdminIcon, PencilIcon, ResetIcon, PromptIcon } from './icons';
 import { Logo } from './Logo';
-import type { User, VersionInfo, DriveFolder } from '../types';
+import type { User, VersionInfo, DriveFolder, Provider } from '../types';
 
 interface HeaderProps {
     theme: string;
@@ -20,6 +20,14 @@ interface HeaderProps {
     onDriveConnect: () => void;
     onDriveDisconnect: () => void;
     isDriveConfigured: boolean;
+    sessionTokenUsage: {
+        promptTokenCount: number;
+        candidatesTokenCount: number;
+        totalTokenCount: number;
+    };
+    onResetTokenUsage: () => void;
+    activeTab: string;
+    provider: Provider;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -29,7 +37,11 @@ export const Header: React.FC<HeaderProps> = ({
     onOpenAdminPanel,
     isComfyUIConnected, versionInfo,
     driveFolder, onDriveConnect, onDriveDisconnect,
-    isDriveConfigured
+    isDriveConfigured,
+    sessionTokenUsage,
+    onResetTokenUsage,
+    activeTab,
+    provider
 }) => {
 
   const [isEditingName, setIsEditingName] = useState(false);
@@ -91,6 +103,20 @@ export const Header: React.FC<HeaderProps> = ({
                 <Logo />
             </div>
             <Banner />
+            {(activeTab === 'image-generator' || activeTab === 'character-generator') && (
+                <div className={`hidden lg:flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-lg border-2 ${
+                    provider === 'gemini' 
+                    ? 'border-accent text-accent bg-accent/10' 
+                    : 'border-highlight-green text-highlight-green bg-highlight-green/10'
+                }`}>
+                    {provider === 'gemini' ? (
+                        <PromptIcon className="w-5 h-5" />
+                    ) : (
+                        <WorkflowIcon className="w-5 h-5" />
+                    )}
+                    <span className="tracking-wider">{provider.toUpperCase()}</span>
+                </div>
+            )}
         </div>
         <div className="flex items-center gap-2 md:gap-4">
             <div className="text-right hidden sm:block">
@@ -141,6 +167,19 @@ export const Header: React.FC<HeaderProps> = ({
                         </div>
                     )}
                 </div>
+                 {sessionTokenUsage && sessionTokenUsage.totalTokenCount > 0 && (
+                    <div 
+                        className="mt-1 flex items-center justify-end gap-2 text-xs text-text-muted" 
+                        title={`Prompt: ${sessionTokenUsage.promptTokenCount.toLocaleString()} | Response: ${sessionTokenUsage.candidatesTokenCount.toLocaleString()}`}
+                    >
+                        <span>
+                            Session Tokens Used: <span className="font-semibold text-accent">{sessionTokenUsage.totalTokenCount.toLocaleString()}</span>
+                        </span>
+                        <button onClick={onResetTokenUsage} title="Reset Session Token Counter" className="text-text-muted hover:text-accent">
+                            <ResetIcon className="w-3 h-3"/>
+                        </button>
+                    </div>
+                )}
             </div>
             <ThemeSwitcher currentTheme={theme} setTheme={setTheme} />
              <button 
