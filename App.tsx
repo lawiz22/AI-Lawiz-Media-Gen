@@ -1,3 +1,6 @@
+
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
@@ -57,9 +60,10 @@ import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
-import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon } from './components/icons';
+import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon } from './components/icons';
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
+import GroupPhotoFusionPanel from './components/groupPhotoFusion/GroupPhotoFusionPanel';
 
 const App: React.FC = () => {
     // --- Redux Dispatch ---
@@ -544,6 +548,7 @@ const App: React.FC = () => {
     const TABS = [
         { id: 'image-generator', label: 'Image Generator', icon: <ImageGeneratorIcon className="w-5 h-5"/> },
         { id: 'character-generator', label: 'Character/Poses Generator', icon: <CharacterIcon className="w-5 h-5"/> },
+        { id: 'group-photo-fusion', label: 'Group Photo Fusion', icon: <GroupPhotoFusionIcon className="w-5 h-5"/> },
         { id: 'video-generator', label: 'Video Generator', icon: <VideoIcon className="w-5 h-5"/> },
         { id: 'logo-theme-generator', label: 'Logo/Theme Generator', icon: <SwatchIcon className="w-5 h-5"/> },
         { id: 'library', label: 'Library', icon: <LibraryIcon className="w-5 h-5"/> },
@@ -552,8 +557,8 @@ const App: React.FC = () => {
         { id: 'video-utils', label: 'Video Utilities', icon: <VideoUtilsIcon className="w-5 h-5"/> },
     ];
 
-    const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'object', 'extracted-frame', 'pose', 'font'];
-    const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'extracted-frame', 'object', 'pose', 'font'];
+    const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'object', 'extracted-frame', 'pose', 'font', 'group-fusion'];
+    const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'extracted-frame', 'object', 'pose', 'font', 'group-fusion'];
     
     const imageGenContent = generatedContent['image-generator'] || { images: [], lastUsedPrompt: null };
     const charGenContent = generatedContent['character-generator'] || { images: [], lastUsedPrompt: null };
@@ -814,6 +819,10 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 </div>
+
+                <div className={activeTab === 'group-photo-fusion' ? 'block' : 'hidden'}>
+                    <GroupPhotoFusionPanel />
+                </div>
                 
                 <div className={activeTab === 'video-generator' ? 'block' : 'hidden'}>
                      <VideoGeneratorPanel
@@ -920,14 +929,15 @@ const App: React.FC = () => {
                     />
                 </div>
             )}
-             {globalError && (
+{/* FIX: The `globalError` object is not a boolean. It must be explicitly cast to a boolean for conditional rendering to prevent type errors. */}
+             {!!globalError && (
                 <ErrorModal 
                     title={globalError.title} 
                     message={globalError.message} 
                     onClose={() => dispatch(setGlobalError(null))} 
                 />
             )}
-            {/* FIX: Add explicit boolean cast to conditional rendering to prevent 'unknown' type errors. */}
+            {/* FIX: Explicitly cast `isSettingsModalOpen` to a boolean to ensure type safety in conditional rendering. */}
 {!!isSettingsModalOpen && (
                 <ConnectionSettingsModal 
                     isOpen={!!isSettingsModalOpen} 
@@ -945,7 +955,7 @@ const App: React.FC = () => {
                     </div>
                 </div>
             )}
-            {/* FIX: Add explicit boolean cast to conditional rendering to prevent 'unknown' type errors. */}
+            {/* FIX: Explicitly cast `isOAuthHelperOpen` to a boolean to ensure type safety in conditional rendering. */}
 {!!isOAuthHelperOpen && (
                 <OAuthHelperModal
                     isOpen={!!isOAuthHelperOpen}
@@ -959,7 +969,7 @@ const App: React.FC = () => {
                 />
             )}
             {/* Fix: Made all 'onSelectItem' callbacks async and awaited 'dataUrlToFile' to handle the Promise<File> return type. */}
-{/* FIX: Explicitly cast all `is...Open` props to boolean using `!!` to resolve subtle 'unknown' type errors. */}
+{/* FIX: Explicitly cast all `is...Open` props to boolean using `!!` to resolve potential 'unknown' type errors during conditional rendering. */}
 <LibraryPickerModal isOpen={!!isClothingPickerOpen} onClose={() => closeModal('isClothingPickerOpen')} onSelectItem={async item => dispatch(setClothingImage(await dataUrlToFile(item.media, item.name || 'clothing.jpeg')))} filter="clothes" />
             <LibraryPickerModal isOpen={!!isBackgroundPickerOpen} onClose={() => closeModal('isBackgroundPickerOpen')} onSelectItem={async item => dispatch(setBackgroundImage(await dataUrlToFile(item.media, item.name || 'background.jpeg')))} filter={imageLikeFilter} />
             <LibraryPickerModal isOpen={!!isPosePickerOpen} onClose={() => closeModal('isPosePickerOpen')} onSelectItem={item => {}} filter="pose" multiSelect={true} onSelectMultiple={(items) => dispatch(updateOptions({ poseLibraryItems: items }))} />

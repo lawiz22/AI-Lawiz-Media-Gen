@@ -24,6 +24,7 @@ Welcome to LAWIZ'S Media Generator, a powerful and versatile web application des
 
 ### 4. Creative Suite
 - **Character/Poses Generator:** A dedicated tab for creating and iterating on characters using Gemini's powerful Image-to-Image capabilities, with advanced pose control and AI name suggestions.
+- **Group Photo Fusion:** A groundbreaking feature that merges multiple individual photos into a single, cohesive group shot. Upload 2-4 photos of different people, select a scenario, and let the AI intelligently combine them into a realistic group picture. Scenarios range from casual hangouts and professional team photos to creative concepts like cinematic movie posters, vintage photo booth strips, and atmospheric candid moments.
 - **Logo & Theme Generator:** A full suite for brand identity design.
   - **AI Logo Creation:** Generate unique logos from text, brand names, and slogans. Fine-tune with styles (e.g., Symbolic, 3D Clay), visual inspiration, and color palettes.
   - **Banner & Album Cover Design:** Create banners and 1:1 album covers with precise control over text, logos, styles, and media formats (e.g., emulating a vinyl sleeve with realistic wear and tear).

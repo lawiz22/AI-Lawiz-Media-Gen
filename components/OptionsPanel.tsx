@@ -1,3 +1,6 @@
+
+
+
 import React, { useState, useEffect, useMemo, ChangeEvent, useRef } from 'react';
 // Fix: Import `NunchakuAttention` type to be used for casting.
 import type { GenerationOptions, NunchakuAttention, ImageStyle } from '../types';
@@ -607,8 +610,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             return;
         }
 
-        // FIX: The getStylePrefix function was defined incorrectly, taking no arguments but trying to use `opts`.
-        // It now correctly takes `opts` as an argument. The calls have been updated to pass the correct options object.
+        // FIX: The getStylePrefix function expects one argument, but was called with zero. Passed the `options` object to resolve the error.
         const getStylePrefix = (opts: GenerationOptions) => {
             if (opts.imageStyle === 'photorealistic') {
                 return `${opts.photoStyle}, ${opts.eraStyle}, `;

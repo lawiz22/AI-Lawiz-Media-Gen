@@ -6,6 +6,7 @@ import promptGenReducer from './promptGenSlice';
 import extractorReducer from './extractorSlice';
 import logoThemeReducer from './logoThemeSlice';
 import libraryReducer from './librarySlice';
+import groupPhotoFusionReducer from './groupPhotoFusionSlice';
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +17,7 @@ export const store = configureStore({
     extractor: extractorReducer,
     logoTheme: logoThemeReducer,
     library: libraryReducer,
+    groupPhotoFusion: groupPhotoFusionReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -44,8 +46,16 @@ export const store = configureStore({
             'logoTheme.logoThemeState.fontReferenceImage',
             'logoTheme.logoThemeState.bannerFontReferenceImage',
             'logoTheme.logoThemeState.albumFontReferenceImage',
+            'groupPhotoFusion.uploadedFiles',
+            'groupPhotoFusion.backgroundFile',
+            'groupPhotoFusion.selectedPose'
         ],
-        ignoredActions: ['app/setDriveFolder'], // The folder object may not be serializable
+        ignoredActions: [
+            'app/setDriveFolder', 
+            'groupPhotoFusion/setUploadedFiles', 
+            'groupPhotoFusion/setBackgroundFile', 
+            'groupPhotoFusion/setSelectedPose'
+        ],
       },
     }),
 });
