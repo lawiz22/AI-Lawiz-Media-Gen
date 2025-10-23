@@ -1,5 +1,5 @@
-
 import React, { useEffect } from 'react';
+// FIX: Imported the missing WarningIcon component.
 import { CloseIcon, WarningIcon } from './icons';
 
 interface ErrorModalProps {

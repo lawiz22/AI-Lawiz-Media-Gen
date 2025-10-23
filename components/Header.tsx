@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Banner } from './Banner';
 import { ThemeSwitcher } from './ThemeSwitcher';
+// FIX: Imported the missing PromptIcon component.
 import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, AdminIcon, PencilIcon, ResetIcon, PromptIcon } from './icons';
 import { Logo } from './Logo';
 import type { User, VersionInfo, DriveFolder, Provider } from '../types';
@@ -115,6 +116,12 @@ export const Header: React.FC<HeaderProps> = ({
                         <WorkflowIcon className="w-5 h-5" />
                     )}
                     <span className="tracking-wider">{provider.toUpperCase()}</span>
+                </div>
+            )}
+            {activeTab === 'group-photo-fusion' && (
+                <div className="hidden lg:flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-lg border-2 border-accent text-accent bg-accent/10">
+                    <PromptIcon className="w-5 h-5" />
+                    <span className="tracking-wider">GEMINI</span>
                 </div>
             )}
         </div>

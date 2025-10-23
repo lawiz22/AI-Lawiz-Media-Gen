@@ -144,6 +144,45 @@ Final Image: The final image should be a single, cohesive photograph from a top-
     Final Image: The final image should be a single, cohesive photograph.
     `
     },
+    {
+        id: 'hug-pose',
+        title: 'Reunion Hug',
+        description: 'An emotional scene of friends reuniting with a warm hug.',
+        getPrompt: (personaDescriptions, quality, hasBackground) => `
+${getPersonaPrompt(personaDescriptions)}
+Scenario: This should be a close up photo. Their expressions should be joyous and genuine.
+Pose: Arrange them in a warm, emotional group hug, as if reuniting after a long time.
+Style: The image should be ${getQualityModifier(quality)}, with soft, emotional lighting.
+${hasBackground ? 'Background: Place them seamlessly into the provided background image.' : 'Background: A neutral, slightly blurred background that doesn\'t distract from the subjects, like an airport terminal or a front porch.'}
+Final Image: The final image should be a single, cohesive photograph that captures a feeling of joy and connection.
+`
+    },
+    {
+        id: 'intimate-scene',
+        title: 'Quiet Moment',
+        description: 'A close, personal moment capturing a deep, friendly connection.',
+        getPrompt: (personaDescriptions, quality, hasBackground) => `
+${getPersonaPrompt(personaDescriptions)}
+Scenario: Arrange the subjects close together in a comfortable, relaxed way. Their interaction should feel genuine, not posed for the camera.
+Pose: They are sitting closely together, sharing a quiet, friendly moment. They are looking at each other with warm, platonic affection.
+Style: The image should be ${getQualityModifier(quality)}, with soft, intimate lighting, perhaps from a window or a lamp.
+${hasBackground ? 'Background: Place them seamlessly into the provided background image.' : 'Background: A cozy, intimate setting like a quiet cafe corner, a sofa by a fireplace, or a bench in a park at dusk.'}
+Final Image: The final image should be a single, cohesive photograph that feels personal and captures a deep, friendly connection.
+`
+    },
+    {
+        id: 'group-photo',
+        title: 'Classic Group Photo',
+        description: 'A standard pose where everyone is looking at the camera, smiling.',
+        getPrompt: (personaDescriptions, quality, hasBackground) => `
+${getPersonaPrompt(personaDescriptions)}
+Scenario: Arrange all subjects in a standard group photo layout.
+Pose: A classic group photo layout, smiling and looking at the camera.
+Style: The image should be ${getQualityModifier(quality)}, with balanced, pleasant lighting.
+${hasBackground ? 'Background: Place them seamlessly into the provided background image.' : 'Background: A simple studio backdrop or a pleasant, slightly out-of-focus outdoor scene.'}
+Final Image: The final image should be a single, cohesive photograph.
+`
+    },
 ];
 
 export const PERSONAS: Persona[] = [

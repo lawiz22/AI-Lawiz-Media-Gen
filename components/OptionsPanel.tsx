@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useEffect, useMemo, ChangeEvent, useRef } from 'react';
 // Fix: Import `NunchakuAttention` type to be used for casting.
 import type { GenerationOptions, NunchakuAttention, ImageStyle } from '../types';
@@ -140,16 +139,18 @@ const NumberSlider: React.FC<{
 }> = ({ label, value, onChange, min, max, step, disabled }) => (
     <div>
         <label className="block text-sm font-medium text-text-secondary">{label}</label>
-        <input
-            type="range"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
-            onChange={onChange}
-            disabled={disabled}
-            className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
-        />
+        <div className="flex items-center gap-2">
+            <input
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={value}
+                onChange={onChange}
+                disabled={disabled}
+                className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
+            />
+        </div>
     </div>
 );
 
@@ -161,7 +162,7 @@ const ElementImageManager: React.FC<{
 }> = ({ elementImages, setElementImages, disabled, onOpenElementPicker }) => {
   const handleAddImages = (files: File[]) => {
     if (files.length > 0) {
-      // Fix: The 'setElementImages' prop expects a File array, not a function. Refactored to compute the new array directly using the 'elementImages' prop.
+      // FIX: The `setElementImages` prop expects a `File[]`, not a function. The previous code passed a function `(prev => ...)`, which is incorrect for this Redux dispatch prop. This is corrected to compute the new array directly using the `elementImages` prop from the component's scope.
       setElementImages([...elementImages, ...files].slice(0, 5));
     }
   };
@@ -610,7 +611,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             return;
         }
 
-        // FIX: The getStylePrefix function expects one argument, but was called with zero. Passed the `options` object to resolve the error.
         const getStylePrefix = (opts: GenerationOptions) => {
             if (opts.imageStyle === 'photorealistic') {
                 return `${opts.photoStyle}, ${opts.eraStyle}, `;
@@ -621,6 +621,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         };
 
         if (options.provider === 'comfyui' && ['imageStyle', 'photoStyle', 'eraStyle'].includes(field)) {
+            // FIX: Pass the `options` object to `getStylePrefix` as it expects one argument.
             const oldPrefix = getStylePrefix(options);
             const tempOptions = { ...options, [field]: value as string };
             const newPrefix = getStylePrefix(tempOptions);

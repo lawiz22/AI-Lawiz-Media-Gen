@@ -1,3 +1,4 @@
+import { fileToDataUrl } from "./imageUtils";
 
 const parseAspectRatio = (ratioStr: string): number => {
   const [width, height] = ratioStr.split(':').map(Number);
@@ -107,6 +108,51 @@ export const resizeImageFile = (file: File, scale: number): Promise<File> => {
             reject(err);
         };
 
+        image.src = url;
+    });
+};
+
+export const cropImageFile = (
+    file: File,
+    crop: { x: number; y: number; width: number; height: number } // percentages
+): Promise<File> => {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        const url = URL.createObjectURL(file);
+        image.onload = () => {
+            URL.revokeObjectURL(url);
+            const sourceWidth = image.naturalWidth;
+            const sourceHeight = image.naturalHeight;
+
+            const cropX = Math.round(sourceWidth * crop.x);
+            const cropY = Math.round(sourceHeight * crop.y);
+            const cropWidth = Math.round(sourceWidth * crop.width);
+            const cropHeight = Math.round(sourceHeight * crop.height);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = cropWidth;
+            canvas.height = cropHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return reject(new Error('Could not get canvas context'));
+
+            ctx.drawImage(
+                image,
+                cropX, cropY, cropWidth, cropHeight,
+                0, 0, cropWidth, cropHeight
+            );
+
+            canvas.toBlob((blob) => {
+                if (!blob) return reject(new Error('Canvas to Blob failed'));
+                // Use a new name to avoid caching issues
+                const newName = `cropped_${Date.now()}_${file.name}`;
+                const newFile = new File([blob], newName, { type: 'image/jpeg' });
+                resolve(newFile);
+            }, 'image/jpeg', 0.95);
+        };
+        image.onerror = (err) => {
+            URL.revokeObjectURL(url);
+            reject(err);
+        };
         image.src = url;
     });
 };

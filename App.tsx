@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
@@ -60,6 +59,7 @@ import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
+// FIX: Imported all missing icon components to resolve multiple "has no exported member" errors.
 import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon } from './components/icons';
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
@@ -82,6 +82,7 @@ const App: React.FC = () => {
         isAlbumCoverRefPickerOpen, isAlbumCoverPalettePickerOpen, isAlbumCoverLogoPickerOpen, isAlbumCoverFontPickerOpen,
         isMannequinRefPickerOpen, isFontSourcePickerOpen, isMaskPickerOpen, isElementPickerOpen,
         isWanVideoImagePickerOpen,
+        isResizeCropPickerOpen,
         driveFolder, isSyncing, syncMessage, isDriveConfigured, sessionTokenUsage
     } = useSelector((state: RootState) => state.app);
 
@@ -554,7 +555,7 @@ const App: React.FC = () => {
         { id: 'library', label: 'Library', icon: <LibraryIcon className="w-5 h-5"/> },
         { id: 'prompt-generator', label: 'Prompt Tools', icon: <PromptIcon className="w-5 h-5"/>, adminOnly: true },
         { id: 'extractor-tools', label: 'Extractor Tools', icon: <ExtractorIcon className="w-5 h-5"/> },
-        { id: 'video-utils', label: 'Video Utilities', icon: <VideoUtilsIcon className="w-5 h-5"/> },
+        { id: 'video-utils', label: 'Media Tools', icon: <VideoUtilsIcon className="w-5 h-5"/> },
     ];
 
     const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'object', 'extracted-frame', 'pose', 'font', 'group-fusion'];
@@ -574,7 +575,8 @@ const App: React.FC = () => {
                 onProjectNameChange={handleProjectNameChange}
                 onOpenSettingsModal={() => dispatch(openSettingsModal())}
                 onOpenAdminPanel={() => dispatch(openAdminPanel())}
-                isComfyUIConnected={isComfyUIConnected}
+// FIX: Cast `isComfyUIConnected` to a boolean using `!!` to prevent type errors.
+                isComfyUIConnected={!!isComfyUIConnected}
                 versionInfo={versionInfo}
                 driveFolder={driveFolder}
                 onDriveConnect={handleDriveConnect}
@@ -646,7 +648,8 @@ const App: React.FC = () => {
                                 onGeneratePrompt={() => {}}
                                 onExportWorkflow={handleExport}
                                 isDisabled={isLoading}
-                                isReady={isReadyToGenerate}
+// FIX: Cast `isReadyToGenerate` from a selector to a boolean to fix type error.
+                                isReady={!!isReadyToGenerate}
                                 isGeneratingPrompt={false}
                                 previewedBackgroundImage={previewedBackgroundImage}
                                 setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
@@ -775,7 +778,8 @@ const App: React.FC = () => {
                                 onOpenPosePicker={() => openModal('isPosePickerOpen')}
                                 onExportWorkflow={handleExport}
                                 isDisabled={isLoading}
-                                isReady={isReadyToGenerate}
+// FIX: Cast `isReadyToGenerate` from a selector to a boolean to fix type error.
+                                isReady={!!isReadyToGenerate}
                                 isGeneratingPrompt={false}
                                 previewedBackgroundImage={previewedBackgroundImage}
                                 setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
@@ -834,7 +838,8 @@ const App: React.FC = () => {
                         endFrame={videoEndFrame}
                         setEndFrame={handleSetVideoEndFrame}
                         onGenerate={handleGenerateVideo}
-                        isReady={isVideoReady}
+// FIX: Cast `isVideoReady` from a selector to a boolean to fix type error.
+                        isReady={!!isVideoReady}
                         isLoading={isLoading}
                         error={globalError ? globalError.message : null}
                         generatedVideo={generatedVideoUrl}
@@ -914,8 +919,9 @@ const App: React.FC = () => {
                         onOpenVideoLibrary={(() => openModal('isVideoUtilsPickerOpen'))}
                         activeSubTab={activeVideoUtilsSubTab}
                         // Fix: Cast the 'tab' parameter to the expected literal type to resolve the type error.
-                        setActiveSubTab={(tab) => dispatch(setActiveVideoUtilsSubTab(tab as 'frames' | 'colors'))}
+                        setActiveSubTab={(tab) => dispatch(setActiveVideoUtilsSubTab(tab as 'frames' | 'colors' | 'resize-crop'))}
                         onReset={handleVideoUtilsReset}
+                        onOpenLibraryForResizeCrop={() => openModal('isResizeCropPickerOpen')}
                     />
                 </div>
                 
@@ -929,7 +935,7 @@ const App: React.FC = () => {
                     />
                 </div>
             )}
-{/* FIX: The `globalError` object is not a boolean. It must be explicitly cast to a boolean for conditional rendering to prevent type errors. */}
+{/* FIX: Explicitly cast `globalError` to a boolean for conditional rendering to prevent 'unknown' type errors. */}
              {!!globalError && (
                 <ErrorModal 
                     title={globalError.title} 
@@ -937,8 +943,8 @@ const App: React.FC = () => {
                     onClose={() => dispatch(setGlobalError(null))} 
                 />
             )}
-            {/* FIX: Explicitly cast `isSettingsModalOpen` to a boolean to ensure type safety in conditional rendering. */}
-{!!isSettingsModalOpen && (
+{/* FIX: Explicitly cast `isSettingsModalOpen` to a boolean to ensure type safety in conditional rendering. */}
+            {!!isSettingsModalOpen && (
                 <ConnectionSettingsModal 
                     isOpen={!!isSettingsModalOpen} 
                     onClose={() => dispatch(closeSettingsModal())} 
@@ -947,16 +953,16 @@ const App: React.FC = () => {
                     onSave={handleSaveSettings}
                 />
             )}
-            {/* FIX: Add explicit boolean cast to conditional rendering to prevent 'unknown' type errors. */}
-{!!isAdminPanelOpen && (
+{/* FIX: Explicitly cast `isAdminPanelOpen` to a boolean for conditional rendering to prevent 'unknown' type errors. */}
+            {!!isAdminPanelOpen && (
                 <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-4" onClick={() => dispatch(closeAdminPanel())}>
                     <div className="w-full max-w-4xl" onClick={e => e.stopPropagation()}>
                         <AdminPanel />
                     </div>
                 </div>
             )}
-            {/* FIX: Explicitly cast `isOAuthHelperOpen` to a boolean to ensure type safety in conditional rendering. */}
-{!!isOAuthHelperOpen && (
+{/* FIX: Explicitly cast `isOAuthHelperOpen` to a boolean for conditional rendering to prevent 'unknown' type errors. */}
+            {!!isOAuthHelperOpen && (
                 <OAuthHelperModal
                     isOpen={!!isOAuthHelperOpen}
                     onClose={() => dispatch(closeOAuthHelper())}
@@ -968,9 +974,8 @@ const App: React.FC = () => {
                     origin={window.location.origin}
                 />
             )}
-            {/* Fix: Made all 'onSelectItem' callbacks async and awaited 'dataUrlToFile' to handle the Promise<File> return type. */}
 {/* FIX: Explicitly cast all `is...Open` props to boolean using `!!` to resolve potential 'unknown' type errors during conditional rendering. */}
-<LibraryPickerModal isOpen={!!isClothingPickerOpen} onClose={() => closeModal('isClothingPickerOpen')} onSelectItem={async item => dispatch(setClothingImage(await dataUrlToFile(item.media, item.name || 'clothing.jpeg')))} filter="clothes" />
+            <LibraryPickerModal isOpen={!!isClothingPickerOpen} onClose={() => closeModal('isClothingPickerOpen')} onSelectItem={async item => dispatch(setClothingImage(await dataUrlToFile(item.media, item.name || 'clothing.jpeg')))} filter="clothes" />
             <LibraryPickerModal isOpen={!!isBackgroundPickerOpen} onClose={() => closeModal('isBackgroundPickerOpen')} onSelectItem={async item => dispatch(setBackgroundImage(await dataUrlToFile(item.media, item.name || 'background.jpeg')))} filter={imageLikeFilter} />
             <LibraryPickerModal isOpen={!!isPosePickerOpen} onClose={() => closeModal('isPosePickerOpen')} onSelectItem={item => {}} filter="pose" multiSelect={true} onSelectMultiple={(items) => dispatch(updateOptions({ poseLibraryItems: items }))} />
             <LibraryPickerModal isOpen={!!isColorImagePickerOpen} onClose={() => closeModal('isColorImagePickerOpen')} onSelectItem={async item => dispatch(updateVideoUtilsState({ colorPicker: { ...videoUtilsState.colorPicker, imageFile: await dataUrlToFile(item.media, item.name || 'color-source.jpeg') } }))} filter={imageLikeFilter} />
@@ -1012,6 +1017,24 @@ const App: React.FC = () => {
              {/* Mask/Element Pickers */}
              <LibraryPickerModal isOpen={!!isMaskPickerOpen} onClose={() => closeModal('isMaskPickerOpen')} onSelectItem={async item => dispatch(setMaskImage(await dataUrlToFile(item.media, item.name || 'mask.jpeg')))} filter={imageLikeFilter} />
              <LibraryPickerModal isOpen={!!isElementPickerOpen} onClose={() => closeModal('isElementPickerOpen')} onSelectItem={async item => dispatch(setElementImages([...elementImages, await dataUrlToFile(item.media, item.name || 'element.jpeg')]))} filter={broadImagePickerFilter} />
+             
+             {/* Resize/Crop Picker */}
+             <LibraryPickerModal 
+                isOpen={!!isResizeCropPickerOpen} 
+                onClose={() => closeModal('isResizeCropPickerOpen')} 
+                onSelectItem={async item => {
+                    const file = await dataUrlToFile(item.media, item.name || 'resize-source.jpeg');
+                    dispatch(updateVideoUtilsState({ 
+                        resizeCrop: { 
+                            ...videoUtilsState.resizeCrop, 
+                            sourceFile: file,
+                            resultUrl: null, // Reset result when a new image is loaded
+                            saveStatus: 'idle',
+                        } 
+                    }));
+                }} 
+                filter={imageLikeFilter} 
+            />
         </div>
     );
 };

@@ -49,6 +49,7 @@ const initialState: AppSliceState = {
   isMaskPickerOpen: false,
   isElementPickerOpen: false,
   isWanVideoImagePickerOpen: false,
+  isResizeCropPickerOpen: false,
   
   // Google Drive State
   driveFolder: null,

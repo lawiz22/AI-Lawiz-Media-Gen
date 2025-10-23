@@ -1,11 +1,14 @@
 import React, { useState, useRef, ChangeEvent, useMemo, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../store/store';
+import ReactCrop, { centerCrop, makeAspectCrop, Crop, PixelCrop, PercentCrop } from 'react-image-crop';
 import { addToLibrary } from '../store/librarySlice';
-import { setFrameSaveStatus, setPaletteSaveStatus, updateVideoUtilsState, updateColorPickerState } from '../store/videoSlice';
-import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, ResetIcon } from './icons';
-import { dataUrlToFile, dataUrlToThumbnail, createPaletteThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
-import type { LibraryItem, VideoUtilsState, PaletteColor, ColorPickerState } from '../types';
+import { setFrameSaveStatus, setPaletteSaveStatus, updateVideoUtilsState, updateColorPickerState, updateResizeCropState, setResizeCropSaveStatus } from '../store/videoSlice';
+// Fix: Imported the missing ImageIcon to resolve the "Cannot find name" error.
+import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, ResetIcon, CropIcon, ResizeIcon, ImageIcon } from './icons';
+import { dataUrlToFile, dataUrlToThumbnail, createPaletteThumbnail, fileToResizedDataUrl, fileToDataUrl } from '../utils/imageUtils';
+import { resizeImageFile, cropImageFile } from '../utils/imageProcessing';
+import type { LibraryItem, VideoUtilsState, PaletteColor, ColorPickerState, ResizeCropState } from '../types';
 import { ImageUploader } from './ImageUploader';
 
 // --- Color Naming Utilities (Client-Side) ---
@@ -82,7 +85,7 @@ const formatTime = (seconds: number): string => {
     const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
     const ms = Math.round((seconds - Math.floor(seconds)) * 1000);
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(3, '0')}`;
 };
 
 const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
@@ -231,7 +234,198 @@ interface VideoUtilsPanelProps {
     activeSubTab: string;
     setActiveSubTab: (tabId: string) => void;
     onReset: () => void;
+    onOpenLibraryForResizeCrop: () => void;
 }
+
+const ResizeCropTool: React.FC<{
+    resizeCrop: ResizeCropState;
+    onOpenLibrary: () => void;
+}> = ({ resizeCrop, onOpenLibrary }) => {
+    const dispatch = useDispatch();
+    const [crop, setCrop] = useState<Crop>();
+    const imgRef = useRef<HTMLImageElement>(null);
+
+    const handleImageUpload = (file: File | null) => {
+        dispatch(updateResizeCropState({
+            sourceFile: file,
+            previewUrl: null, // this is important to trigger the effect
+            resultUrl: null,
+            saveStatus: 'idle',
+            crop: null,
+            scale: 100,
+        }));
+    };
+
+    // Fix: Corrected the useEffect hook to properly manage the object URL lifecycle.
+    // The previous implementation revoked the URL immediately after it was created,
+    // preventing the image from loading. This new logic ensures the URL is valid
+    // as long as the source image is present.
+    useEffect(() => {
+        // This effect manages the lifecycle of the preview object URL.
+        if (!resizeCrop.sourceFile) {
+            // If the source file is cleared, ensure the previewUrl is also cleared.
+            // The cleanup function from the previous render will handle revoking any existing URL.
+            if (resizeCrop.previewUrl) {
+                dispatch(updateResizeCropState({ previewUrl: null }));
+            }
+            return;
+        }
+
+        const objectUrl = URL.createObjectURL(resizeCrop.sourceFile);
+        dispatch(updateResizeCropState({ previewUrl: objectUrl }));
+
+        // The cleanup function for this effect will be called when the sourceFile changes again, or on unmount.
+        return () => {
+            URL.revokeObjectURL(objectUrl);
+        };
+        // The effect should only re-run when the source file itself changes.
+    }, [resizeCrop.sourceFile, dispatch]);
+
+    const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+        const { width, height } = e.currentTarget;
+        const aspectStr = resizeCrop.aspectRatio;
+        const aspect = aspectStr === 'free' ? undefined : (parseFloat(aspectStr.split(':')[0]) / parseFloat(aspectStr.split(':')[1]));
+        
+        const newCrop = centerCrop(
+            makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height),
+            width, height
+        );
+        setCrop(newCrop);
+        // Also update the redux state immediately
+        handleCropComplete(undefined, newCrop as PercentCrop);
+    };
+
+    const handleCropComplete = useCallback((_: PixelCrop | undefined, percentCrop: PercentCrop) => {
+        if (percentCrop.width > 0 && percentCrop.height > 0) {
+            dispatch(updateResizeCropState({
+                crop: {
+                    x: percentCrop.x / 100,
+                    y: percentCrop.y / 100,
+                    width: percentCrop.width / 100,
+                    height: percentCrop.height / 100,
+                }
+            }));
+        }
+    }, [dispatch]);
+
+    const handleApplyChanges = async () => {
+        if (!resizeCrop.sourceFile) return;
+        dispatch(updateResizeCropState({ isLoading: true, error: null, resultUrl: null }));
+        try {
+            let processedFile = resizeCrop.sourceFile;
+            if (resizeCrop.scale !== 100) {
+                processedFile = await resizeImageFile(processedFile, resizeCrop.scale / 100);
+            }
+            if (resizeCrop.crop && resizeCrop.crop.width > 0 && resizeCrop.crop.height > 0) {
+                processedFile = await cropImageFile(processedFile, resizeCrop.crop);
+            }
+            const resultDataUrl = await fileToDataUrl(processedFile);
+            dispatch(updateResizeCropState({ resultUrl: resultDataUrl }));
+        } catch (err: any) {
+            dispatch(updateResizeCropState({ error: err.message || 'An error occurred.' }));
+        } finally {
+            dispatch(updateResizeCropState({ isLoading: false }));
+        }
+    };
+    
+    const handleSaveResultToLibrary = async () => {
+        if (!resizeCrop.resultUrl || !resizeCrop.sourceFile) return;
+        dispatch(setResizeCropSaveStatus('saving'));
+        try {
+            const item: Omit<LibraryItem, 'id'> = {
+                mediaType: 'image', name: `Edited - ${resizeCrop.sourceFile.name}`,
+                media: resizeCrop.resultUrl, thumbnail: await dataUrlToThumbnail(resizeCrop.resultUrl, 256),
+                sourceImage: await fileToResizedDataUrl(resizeCrop.sourceFile, 512),
+            };
+            await dispatch(addToLibrary(item)).unwrap();
+            dispatch(setResizeCropSaveStatus('saved'));
+        } catch (err) {
+            console.error('Failed to save result:', err);
+            dispatch(setResizeCropSaveStatus('idle'));
+        }
+    };
+
+    const handleDownloadResult = () => {
+        if (!resizeCrop.resultUrl || !resizeCrop.sourceFile) return;
+        const link = document.createElement('a');
+        link.href = resizeCrop.resultUrl;
+        link.download = `edited_${resizeCrop.sourceFile.name}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    return (
+        <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-yellow">
+            <div className="flex items-center gap-3 mb-4">
+                <CropIcon className="w-8 h-8 text-highlight-yellow" />
+                <h2 className="text-2xl font-bold text-highlight-yellow">Resize & Crop</h2>
+            </div>
+            <p className="text-sm text-text-secondary mb-6">
+                Quickly resize or crop your images to a specific aspect ratio or scale.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                        <ImageUploader label="Upload Image" id="resize-crop-source" onImageUpload={handleImageUpload} sourceFile={resizeCrop.sourceFile} />
+                        <button onClick={onOpenLibrary} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library">
+                            <LibraryIcon className="w-6 h-6" />
+                        </button>
+                    </div>
+                    {resizeCrop.sourceFile && (
+                        <div className="space-y-4 pt-4 border-t border-border-primary">
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary">Resize: {resizeCrop.scale}%</label>
+                                <input type="range" min="10" max="200" step="1" value={resizeCrop.scale} onChange={(e) => dispatch(updateResizeCropState({ scale: Number(e.target.value) }))} disabled={resizeCrop.isLoading} className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary">Crop Aspect Ratio</label>
+                                <select value={resizeCrop.aspectRatio} onChange={e => dispatch(updateResizeCropState({ aspectRatio: e.target.value }))} className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
+                                    <option value="free">Freeform</option><option value="1:1">1:1 (Square)</option><option value="16:9">16:9 (Widescreen)</option><option value="9:16">9:16 (Tall)</option><option value="4:3">4:3 (Landscape)</option><option value="3:4">3:4 (Portrait)</option>
+                                </select>
+                            </div>
+                            <button onClick={handleApplyChanges} disabled={resizeCrop.isLoading} style={!resizeCrop.isLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
+                                {resizeCrop.isLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                {resizeCrop.isLoading ? 'Processing...' : 'Apply Changes'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+                <div className="space-y-4">
+                    <div className="bg-bg-primary p-2 rounded-lg min-h-[400px] flex items-center justify-center">
+                        {resizeCrop.previewUrl ? (
+                            <ReactCrop
+                                crop={crop}
+                                onChange={(_, percentCrop) => setCrop(percentCrop)}
+                                onComplete={handleCropComplete}
+                                aspect={resizeCrop.aspectRatio === 'free' ? undefined : (parseFloat(resizeCrop.aspectRatio.split(':')[0]) / parseFloat(resizeCrop.aspectRatio.split(':')[1]))}
+                                className="max-w-full"
+                            >
+                                <img ref={imgRef} src={resizeCrop.previewUrl} alt="Image to crop" onLoad={onImageLoad} style={{ maxHeight: '60vh' }}/>
+                            </ReactCrop>
+                        ) : (
+                            <div className="text-center text-text-secondary"><ImageIcon className="w-16 h-16 mx-auto mb-4 text-border-primary" /><p>Upload an image to begin editing.</p></div>
+                        )}
+                    </div>
+                    {resizeCrop.resultUrl && (
+                        <div className="pt-4 border-t border-border-primary">
+                            <h3 className="text-lg font-semibold text-text-primary mb-2">Result</h3>
+                            <img src={resizeCrop.resultUrl} alt="Processed result" className="w-full rounded-lg shadow-md" />
+                            <div className="grid grid-cols-2 gap-4 mt-4">
+                                <button onClick={handleDownloadResult} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover"><DownloadIcon className="w-5 h-5" /> Download</button>
+                                <button onClick={handleSaveResultToLibrary} disabled={resizeCrop.saveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors ${resizeCrop.saveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-accent text-accent-text hover:bg-accent-hover'}`}>
+                                    {resizeCrop.saveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : resizeCrop.saveStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                    {resizeCrop.saveStatus === 'saving' ? 'Saving...' : resizeCrop.saveStatus === 'saved' ? 'Saved' : 'Save to Library'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    {resizeCrop.error && <p className="text-danger text-center bg-danger-bg p-3 rounded-md mt-4">{resizeCrop.error}</p>}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({ 
     setStartFrame, 
@@ -240,11 +434,13 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     onOpenVideoLibrary,
     activeSubTab,
     setActiveSubTab,
-    onReset
+    onReset,
+    onOpenLibraryForResizeCrop,
 }) => {
-    const dispatch: AppDispatch = useDispatch();
+    // ... existing frame extractor and color picker logic will remain the same ...
+    const dispatch = useDispatch();
     const videoUtilsState = useSelector((state: RootState) => state.video.videoUtilsState);
-    const { videoFile, extractedFrame, colorPicker, extractedFrameSaveStatus } = videoUtilsState;
+    const { videoFile, extractedFrame, colorPicker, extractedFrameSaveStatus, resizeCrop } = videoUtilsState;
 
     // --- State Setters ---
     const setVideoFile = (file: File | null) => {
@@ -298,7 +494,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
             img.src = objectUrl;
         }
     }, [colorPicker.imageFile]);
-
+    
     // --- Frame Extractor Logic ---
     const handleExtractFrame = (time: number) => {
         const video = videoRef.current;
@@ -495,6 +691,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     const subTabs = [
         { id: 'frames', label: 'Frame Extractor' },
         { id: 'colors', label: 'Color Palette Extractor' },
+        { id: 'resize-crop', label: 'Resize & Crop' },
     ];
 
     return (
@@ -758,11 +955,18 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                     </div>
                 </div>
             </div>
+            
+             <div className={activeSubTab === 'resize-crop' ? 'block' : 'hidden'}>
+                <ResizeCropTool 
+                    resizeCrop={resizeCrop}
+                    onOpenLibrary={onOpenLibraryForResizeCrop}
+                />
+            </div>
 
             <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
              <div className="mt-8 pt-4 border-t border-danger-bg">
                 <button onClick={onReset} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
-                    <ResetIcon className="w-5 h-5" /> Reset All Video Utilities
+                    <ResetIcon className="w-5 h-5" /> Reset All Media Tools
                 </button>
             </div>
         </div>

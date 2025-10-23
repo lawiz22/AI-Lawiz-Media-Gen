@@ -49,6 +49,8 @@ export const generateGroupPhoto = async (files: File[], prompt: string): Promise
       },
     });
 
+    const usageMetadata = response.usageMetadata;
+
     if (!response.candidates || response.candidates.length === 0) {
       if (response.promptFeedback?.blockReason) {
           throw new Error(`Request was blocked due to ${response.promptFeedback.blockReason}.`);
@@ -71,6 +73,7 @@ export const generateGroupPhoto = async (files: File[], prompt: string): Promise
             return {
               imageBase64: imagePart.inlineData.data,
               responseText: responseText,
+              usageMetadata: usageMetadata,
             };
         }
     }

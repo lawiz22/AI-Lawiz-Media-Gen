@@ -1,4 +1,5 @@
 import React from 'react';
+// FIX: Imported the missing WarningIcon component.
 import { CloseIcon, WarningIcon, CopyIcon } from './icons';
 
 interface OAuthHelperModalProps {

@@ -6,9 +6,11 @@ import {
     setUploadedFiles, setBackgroundFile, setSelectedPose, setQuality,
     setGeneratedImages, updateGeneratedImage, setError, startOver,
     setIsDebugMode, addDebugInfo, setLoading, removeAllFiles,
-    removeUploadedFile, updatePersona, clearDebugInfos, setSaveStatus
+    removeUploadedFile, updatePersona, clearDebugInfos, setSaveStatus,
+    setNumImages
 } from '../../store/groupPhotoFusionSlice';
 import { addToLibrary } from '../../store/librarySlice';
+import { addSessionTokenUsage } from '../../store/appSlice';
 import { Pose, UploadedFile, Quality, DebugInfo, GeneratedImage } from '../../groupPhotoFusion/types';
 import { POSES, PERSONAS } from '../../groupPhotoFusion/constants';
 import { generateGroupPhoto } from '../../services/groupPhotoFusionService';
@@ -25,7 +27,7 @@ import { dataUrlToThumbnail } from '../../utils/imageUtils';
 const GroupPhotoFusionPanel: React.FC = () => {
   const dispatch: AppDispatch = useDispatch();
   const {
-      uploadedFiles, backgroundFile, selectedPose, quality,
+      uploadedFiles, backgroundFile, selectedPose, quality, numImages,
       isLoading, generatedImages, error, isDebugMode, debugInfos
   } = useSelector((state: RootState) => state.groupPhotoFusion);
 
@@ -65,7 +67,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
     dispatch(setError(null));
     dispatch(clearDebugInfos());
 
-    const placeholders: GeneratedImage[] = Array(4).fill(0).map(() => ({
+    const placeholders: GeneratedImage[] = Array(numImages).fill(0).map(() => ({
         id: crypto.randomUUID(),
         base64: null,
         status: 'generating',
@@ -89,7 +91,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
 
       const prompt = selectedPose.getPrompt(personaDescriptions, quality, !!backgroundToUse);
       
-      const generationPromises = Array(4).fill(0).map(() => generateGroupPhoto(allFiles, prompt));
+      const generationPromises = Array(numImages).fill(0).map(() => generateGroupPhoto(allFiles, prompt));
       const results = await Promise.allSettled(generationPromises);
       
       results.forEach((result, index) => {
@@ -100,6 +102,9 @@ const GroupPhotoFusionPanel: React.FC = () => {
             base64: `data:image/jpeg;base64,${result.value.imageBase64}`,
             status: 'success',
           }));
+          if (result.value.usageMetadata) {
+            dispatch(addSessionTokenUsage(result.value.usageMetadata));
+          }
           if (isDebugMode) {
             dispatch(addDebugInfo({
               prompt,
@@ -127,7 +132,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
     } finally {
       dispatch(setLoading(false));
     }
-  }, [selectedPose, uploadedFiles, quality, backgroundFile, isDebugMode, dispatch]);
+  }, [selectedPose, uploadedFiles, quality, backgroundFile, isDebugMode, dispatch, numImages]);
 
   const handleRetry = useCallback(async (id: string) => {
     dispatch(updateGeneratedImage({ id, status: 'generating', error: undefined }));
@@ -153,6 +158,9 @@ const GroupPhotoFusionPanel: React.FC = () => {
             base64: `data:image/jpeg;base64,${result.imageBase64}`,
             status: 'success'
         }));
+        if (result.usageMetadata) {
+            dispatch(addSessionTokenUsage(result.usageMetadata));
+        }
         if (isDebugMode) {
             dispatch(addDebugInfo({
                 prompt,
@@ -227,6 +235,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
 
     if (generatedImages) {
         const successfulGenerations = generatedImages.filter(img => img.status === 'success').length;
+        const totalGenerations = generatedImages.length;
         return (
         <>
           {zoomedImage && (
@@ -239,7 +248,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
           )}
           <div className="w-full max-w-5xl text-center">
             <h2 className="text-2xl font-bold text-text-primary mb-4">Your Fused Photos are Ready!</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+            <div className={`grid grid-cols-1 ${totalGenerations > 1 ? 'sm:grid-cols-2' : ''} gap-6 mb-8`}>
               {generatedImages.map((image, index) => (
                 <div key={image.id} className="relative group aspect-square bg-bg-tertiary rounded-lg flex items-center justify-center overflow-hidden">
                   {image.status === 'success' && image.base64 && (
@@ -340,6 +349,28 @@ const GroupPhotoFusionPanel: React.FC = () => {
               numFiles={uploadedFiles.length}
             />
             <QualitySelector selectedQuality={quality} onSelectQuality={(q) => dispatch(setQuality(q))} />
+          </div>
+          <div className="w-full max-w-4xl mx-auto mt-8">
+              <h2 className="text-xl font-semibold text-text-primary mb-4 text-center">Number of Pictures</h2>
+              <div className="p-4 bg-bg-tertiary rounded-lg">
+                  <label className="block text-sm font-medium text-text-secondary">Number of Images to Generate: {numImages}</label>
+                  <input
+                      type="range"
+                      min="1"
+                      max="4"
+                      step="1"
+                      value={numImages}
+                      onChange={(e) => dispatch(setNumImages(parseInt(e.target.value, 10)))}
+                      disabled={isLoading}
+                      className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer"
+                  />
+                  <div className="flex justify-between text-xs text-text-muted mt-1 px-1">
+                      <span>1</span>
+                      <span>2</span>
+                      <span>3</span>
+                      <span>4</span>
+                  </div>
+              </div>
           </div>
           <div className="mt-8 text-center">
             <button

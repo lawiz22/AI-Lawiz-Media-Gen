@@ -7,6 +7,7 @@ interface GroupPhotoFusionState {
   backgroundFile: UploadedFile | null;
   selectedPose: Pose | null;
   quality: Quality;
+  numImages: number;
   isLoading: boolean;
   generatedImages: GeneratedImage[] | null;
   error: string | null;
@@ -19,6 +20,7 @@ const initialState: GroupPhotoFusionState = {
   backgroundFile: null,
   selectedPose: POSES[0],
   quality: 'High',
+  numImages: 1,
   isLoading: false,
   generatedImages: null,
   error: null,
@@ -63,6 +65,9 @@ const groupPhotoFusionSlice = createSlice({
     },
     setQuality: (state, action: PayloadAction<Quality>) => {
       state.quality = action.payload;
+    },
+    setNumImages: (state, action: PayloadAction<number>) => {
+      state.numImages = action.payload;
     },
     setGeneratedImages: (state, action: PayloadAction<GeneratedImage[] | null>) => {
       state.generatedImages = action.payload?.map(img => ({ ...img, saveStatus: 'idle' })) || null;
@@ -112,6 +117,7 @@ export const {
     removeAllFiles,
     setSelectedPose,
     setQuality,
+    setNumImages,
     setGeneratedImages,
     updateGeneratedImage,
     setSaveStatus,

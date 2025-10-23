@@ -1,4 +1,4 @@
-# LAWIZ'S Media Generator v1.50
+# LAWIZ'S Media Generator v1.51
 
 Welcome to LAWIZ'S Media Generator, a powerful and versatile web application designed for creating stunning images and videos using state-of-the-art AI models. This tool provides a unified interface to interact with both Google's Gemini API and a self-hosted ComfyUI backend, offering a wide range of creative possibilities for both novice and advanced users.
 
@@ -7,7 +7,7 @@ Welcome to LAWIZ'S Media Generator, a powerful and versatile web application des
 ### 1. Core Technology & State Management
 - **Redux Toolkit Integration:** The entire application state is now managed by Redux Toolkit, providing a single source of truth, predictable state updates, and improved performance and maintainability.
 - **Dual AI Backends:**
-  - **Google Gemini:** Leverage Google's powerful `gemini-2.5-flash-image-preview` model for sophisticated image-to-image editing, including pose manipulation, clothing changes, background replacement, and style transfers. It also uses the `imagen` model for high-quality previews and `veo` for video generation.
+  - **Google Gemini:** Leverage Google's powerful `gemini-2.5-flash-image` model for sophisticated image-to-image editing, including pose manipulation, clothing changes, background replacement, and style transfers. It also uses the `imagen` model for high-quality previews and `veo` for video generation.
   - **ComfyUI Integration:** Connect directly to your local or remote ComfyUI instance to run complex, node-based workflows. The UI dynamically loads your installed models, samplers, and LoRAs.
 
 ### 2. Advanced Image Generation
@@ -35,9 +35,10 @@ Welcome to LAWIZ'S Media Generator, a powerful and versatile web application des
   - **Clothes & Object Extractor:** AI automatically detects clothing items or objects and generates professional "product shots" on a clean white background.
   - **Pose Extractor:** Utilizes MediaPipe for accurate pose detection, generating a ControlNet-compatible JSON skeleton. A robust 'Pose Transfer' AI technique applies the pose to various stylized mannequins.
   - **Font Extractor:** Identifies a font style from an image and generates a full A-Z, 0-9 character chart.
-- **Video & Color Utilities:** dfdf
-  - **Frame Extractor:** Upload any video to select and save any frame as a high-quality JPEG.
-  - **Color Palette Extractor:** Upload an image to automatically extract a beautiful color palette, which can be refined with an eyedropper and saved to the library.
+- **Media Tools:** A suite of utilities for processing images and videos.
+  - **Frame Extractor:** Upload any video to scrub through the timeline, step frame-by-frame, and save any frame as a high-quality JPEG.
+  - **Color Palette Extractor:** Upload an image to automatically extract a beautiful color palette. You can refine the palette using an interactive eyedropper and save it to your library for use in other tools.
+  - **Resize & Crop:** A fully interactive tool to resize images with a slider and crop them using a visual, draggable selection box with optional aspect ratio constraints.
 
 ### 6. Hybrid Local & Cloud Library
 - **Persistent Local Storage:** Save any generated item to a persistent local library in your browser (IndexedDB) for fast access.
@@ -47,9 +48,6 @@ Welcome to LAWIZ'S Media Generator, a powerful and versatile web application des
 - **One-Click Restoration:** Load any item from the library to instantly restore the entire generation setup—including prompts, models, and all settings—making it easy to iterate or create variations.
 
 ### 7. User Experience & Admin Tools
-
-
-
 - **User Authentication:** Secure login system with roles for regular users and administrators.
 - **Admin Panel:** Administrators can manage the user base by adding or deleting users.
 - **Intelligent Prompting Tools (Admin):** Automatically generate descriptive text prompts from an uploaded image, extract prompts for just the background or subject, and creatively merge multiple prompt ideas into a new "prompt soup".
@@ -68,5 +66,4 @@ Welcome to LAWIZ'S Media Generator, a powerful and versatile web application des
 ## Setup Requirements
 
 -   **Google Gemini API Key:** The application requires a Google Gemini API key. This must be configured as an environment variable named `API_KEY` in the deployment environment. The application includes an in-app guide to help you correctly configure your key's **"HTTP referrer"** restrictions in the Google Cloud Console, which is crucial for it to work.
--   **Google Cloud OAuth Client ID (Optional):** To enable Google Drive library syncing, you must create an OAuth 2.0 Client ID in your Google Cloud project. The application provides a detailed, step-by-step guide to help you configure this, including setting the correct URIs.
--   **ComfyUI Instance (Optional):** To use the ComfyUI features, you must have a running instance of ComfyUI accessible from your browser. You will need to configure the URL to your instance within this application's settings. For certain workflows (e.g., WAN 2.2, Nunchaku), you may need to install specific custom nodes via the ComfyUI Manager.
+-   **Google Cloud OAuth Client ID (Optional

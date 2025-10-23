@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getUsers, addUser, deleteUser } from '../services/cloudUserService';
 import type { User } from '../types';
+// FIX: Imported missing icons to resolve errors.
 import { TrashIcon, UserGroupIcon, SpinnerIcon } from './icons';
 
 export const AdminPanel: React.FC = () => {

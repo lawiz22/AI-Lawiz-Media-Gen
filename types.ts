@@ -405,11 +405,24 @@ export interface ColorPickerState {
     pickingColorIndex: number | null; // The index of the color swatch being replaced by the eyedropper
 }
 
+export interface ResizeCropState {
+    sourceFile: File | null;
+    previewUrl: string | null;
+    scale: number; // Percentage
+    crop: { x: number, y: number, width: number, height: number } | null; // In percentage
+    aspectRatio: string; // 'free', '1:1', '16:9', etc.
+    resultUrl: string | null;
+    isLoading: boolean;
+    error: string | null;
+    saveStatus: 'idle' | 'saving' | 'saved';
+}
+
 export interface VideoUtilsState {
     videoFile: File | null;
     extractedFrame: string | null;
     extractedFrameSaveStatus: 'idle' | 'saving' | 'saved';
     colorPicker: ColorPickerState;
+    resizeCrop: ResizeCropState;
 }
 
 export interface PromptGenState {
@@ -548,6 +561,7 @@ export interface AppSliceState {
   isMaskPickerOpen: boolean;
   isElementPickerOpen: boolean;
   isWanVideoImagePickerOpen: boolean;
+  isResizeCropPickerOpen: boolean;
 
   // Google Drive State
   driveFolder: DriveFolder | null;
@@ -603,7 +617,7 @@ export interface VideoSliceState {
   
   // Video Utilities
   videoUtilsState: VideoUtilsState;
-  activeVideoUtilsSubTab: 'frames' | 'colors';
+  activeVideoUtilsSubTab: 'frames' | 'colors' | 'resize-crop';
 }
 
 export interface LibrarySliceState {

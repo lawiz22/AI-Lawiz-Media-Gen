@@ -1,6 +1,18 @@
 import { createSlice, createSelector, PayloadAction } from '@reduxjs/toolkit';
-import type { VideoSliceState, GenerationOptions, VideoUtilsState, ColorPickerState } from '../types';
+import type { VideoSliceState, GenerationOptions, VideoUtilsState, ColorPickerState, ResizeCropState } from '../types';
 import type { RootState } from './store';
+
+const initialResizeCropState: ResizeCropState = {
+    sourceFile: null,
+    previewUrl: null,
+    scale: 100,
+    crop: null,
+    aspectRatio: 'free',
+    resultUrl: null,
+    isLoading: false,
+    error: null,
+    saveStatus: 'idle',
+};
 
 const initialVideoUtilsState: VideoUtilsState = {
     videoFile: null,
@@ -17,6 +29,7 @@ const initialVideoUtilsState: VideoUtilsState = {
         pickingColorIndex: null,
         paletteSaveStatus: 'idle',
     },
+    resizeCrop: initialResizeCropState,
 };
 
 const initialState: VideoSliceState = {
@@ -72,7 +85,13 @@ const videoSlice = createSlice({
             state.videoUtilsState.colorPicker.paletteSaveStatus = 'idle';
         }
     },
-    setActiveVideoUtilsSubTab: (state, action: PayloadAction<'frames' | 'colors'>) => {
+    updateResizeCropState: (state, action: PayloadAction<Partial<ResizeCropState>>) => {
+        state.videoUtilsState.resizeCrop = {
+            ...state.videoUtilsState.resizeCrop,
+            ...action.payload,
+        };
+    },
+    setActiveVideoUtilsSubTab: (state, action: PayloadAction<'frames' | 'colors' | 'resize-crop'>) => {
       state.activeVideoUtilsSubTab = action.payload;
     },
     resetVideoGenerationState: (state) => {
@@ -90,6 +109,9 @@ const videoSlice = createSlice({
     setPaletteSaveStatus: (state, action: PayloadAction<'idle' | 'saving' | 'saved'>) => {
         state.videoUtilsState.colorPicker.paletteSaveStatus = action.payload;
     },
+    setResizeCropSaveStatus: (state, action: PayloadAction<'idle' | 'saving' | 'saved'>) => {
+        state.videoUtilsState.resizeCrop.saveStatus = action.payload;
+    },
   },
 });
 
@@ -101,11 +123,13 @@ export const {
     setGenerationOptionsForSave,
     updateVideoUtilsState,
     updateColorPickerState,
+    updateResizeCropState,
     setActiveVideoUtilsSubTab,
     resetVideoGenerationState,
     resetVideoUtilsState,
     setFrameSaveStatus,
     setPaletteSaveStatus,
+    setResizeCropSaveStatus,
 } = videoSlice.actions;
 
 // --- Selectors ---

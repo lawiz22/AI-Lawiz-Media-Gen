@@ -17,6 +17,11 @@ export type Quality = 'Standard' | 'High' | 'Ultra High';
 export interface GeneratePhotoResult {
   imageBase64: string;
   responseText: string;
+  usageMetadata?: {
+    promptTokenCount: number;
+    candidatesTokenCount: number;
+    totalTokenCount: number;
+  };
 }
 
 export interface Persona {
