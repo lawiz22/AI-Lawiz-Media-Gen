@@ -8,7 +8,7 @@ import {
   DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon,
   BannerIcon, AlbumCoverIcon, TrashIcon, LoadIcon, FileExportIcon, UploadIconSimple, GoogleDriveIcon,
   PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, WarningIcon,
-  SendIcon, WorkflowIcon, GenerateIcon
+  SendIcon, WorkflowIcon, GenerateIcon, PastForwardIcon
 } from './icons';
 import { createPaletteThumbnail } from '../utils/imageUtils';
 import { exportLibraryAsJson } from '../services/libraryService';
@@ -104,6 +104,7 @@ const getCategoryIcon = (mediaType: LibraryItemType, className: string = "w-4 h-
         case 'color-palette': return <PaletteIcon {...props} />;
         case 'pose': return <PoseIcon {...props} />;
         case 'font': return <FontIcon {...props} />;
+        case 'past-forward-photo': return <PastForwardIcon {...props} />;
         default: return null;
     }
 };
@@ -111,6 +112,7 @@ const getCategoryIcon = (mediaType: LibraryItemType, className: string = "w-4 h-
 const FILTER_BUTTONS: { id: LibraryItemType; label: string; icon: React.ReactElement }[] = [
     { id: 'image', label: 'Images', icon: <PhotographIcon className="w-5 h-5"/> },
     { id: 'character', label: 'Characters', icon: <CharacterIcon className="w-5 h-5"/> },
+    { id: 'past-forward-photo', label: 'Past Forward', icon: <PastForwardIcon className="w-5 h-5"/> },
     { id: 'video', label: 'Videos', icon: <VideoIcon className="w-5 h-5"/> },
     { id: 'logo', label: 'Logos', icon: <LogoIconSimple className="w-5 h-5"/> },
     { id: 'banner', label: 'Banners', icon: <BannerIcon className="w-5 h-5"/> },

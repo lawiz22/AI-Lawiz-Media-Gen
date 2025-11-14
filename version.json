@@ -1,5 +1,5 @@
 {
-  "version": "1.50",
-  "date": "2024-08-18T12:00:00Z",
-  "changes": "Integrated a new 'Face Detailer' ComfyUI workflow. This image-to-image pipeline allows users to upload an image and automatically detect, enhance, and fix faces with high precision, using models like YOLO and SAM."
+  "version": "1.51",
+  "date": "2024-08-19T10:00:00Z",
+  "changes": "Added a major new 'Group Photo Fusion' feature to intelligently combine multiple individual photos into a single, cohesive group shot with various creative scenarios."
 }

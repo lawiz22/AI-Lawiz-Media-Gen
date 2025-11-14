@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Banner } from './Banner';
 import { ThemeSwitcher } from './ThemeSwitcher';
 // FIX: Imported the missing PromptIcon component.
-import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, AdminIcon, PencilIcon, ResetIcon, PromptIcon } from './icons';
+import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, PencilIcon, ResetIcon, PromptIcon } from './icons';
 import { Logo } from './Logo';
 import type { User, VersionInfo, DriveFolder, Provider } from '../types';
 
@@ -14,7 +14,6 @@ interface HeaderProps {
     onLogout: () => void;
     currentUser: User;
     onOpenSettingsModal: () => void;
-    onOpenAdminPanel: () => void;
     isComfyUIConnected: boolean | null;
     versionInfo: VersionInfo | null;
     driveFolder: DriveFolder | null;
@@ -35,7 +34,6 @@ export const Header: React.FC<HeaderProps> = ({
     theme, setTheme, onLogout, currentUser, 
     projectName, onProjectNameChange,
     onOpenSettingsModal,
-    onOpenAdminPanel,
     isComfyUIConnected, versionInfo,
     driveFolder, onDriveConnect, onDriveDisconnect,
     isDriveConfigured,
@@ -204,17 +202,6 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                     <GoogleDriveIcon className="w-5 h-5" />
                 </button>
-            )}
-            {currentUser.role === 'admin' && (
-                <>
-                    <button 
-                        onClick={onOpenAdminPanel}
-                        title="Admin Panel"
-                        className="p-2 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
-                    >
-                        <AdminIcon className="w-5 h-5" />
-                    </button>
-                </>
             )}
             <button 
                 onClick={onLogout}

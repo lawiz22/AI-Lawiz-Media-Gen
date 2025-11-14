@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LAWIZ'S Media Generator</title>
     <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Permanent+Marker&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://esm.sh/react-image-crop@11.0.5/dist/ReactCrop.css">
     <style>
       :root {
@@ -19,18 +22,22 @@
     <script type="importmap">
 {
   "imports": {
-    "react-redux": "https://esm.sh/react-redux@9.2.0",
-    "@reduxjs/toolkit": "https://esm.sh/@reduxjs/toolkit@2.2.6",
-    "@google/genai": "https://esm.sh/@google/genai@0.14.0",
-    "@mediapipe/tasks-vision": "https://esm.sh/@mediapipe/tasks-vision@0.10.14",
-    "jszip": "https://esm.sh/jszip@3.10.1",
-    "idb": "https://esm.sh/idb@8.0.0",
-    "url": "https://esm.sh/url@0.11.3",
-    "react-image-crop": "https://esm.sh/react-image-crop@11.0.5",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.0/",
-    "react-dom/client": "https://esm.sh/react-dom@19/client",
+    "react": "https://esm.sh/react@19?dev",
+    "react-dom/client": "https://esm.sh/react-dom@19/client?dev",
+    "react-dom": "https://esm.sh/react-dom@19?dev",
     "react/": "https://esm.sh/react@19/",
-    "react": "https://esm.sh/react@19"
+    "react-dom/": "https://esm.sh/react-dom@19/",
+    "react-redux": "https://esm.sh/react-redux@9.2.0?deps=react@19&dev",
+    "@reduxjs/toolkit": "https://esm.sh/@reduxjs/toolkit@2.2.6?dev",
+    "@google/genai": "https://esm.sh/@google/genai@0.14.0?dev",
+    "@mediapipe/tasks-vision": "https://esm.sh/@mediapipe/tasks-vision@0.10.14?dev",
+    "jszip": "https://esm.sh/jszip@3.10.1?dev",
+    "idb": "https://esm.sh/idb@8.0.0?dev",
+    "url": "https://esm.sh/url@0.11.3?dev",
+    "react-image-crop": "https://esm.sh/react-image-crop@11.0.5?deps=react@19&dev",
+    "framer-motion": "https://esm.sh/framer-motion@11.3.8?deps=react@19&dev",
+    "clsx": "https://esm.sh/clsx@2.1.1?dev",
+    "tailwind-merge": "https://esm.sh/tailwind-merge@2.4.0?dev"
   }
 }
 </script>
@@ -131,6 +138,11 @@
   .animate-fade-in {
     animation: fadeIn 0.2s ease-out forwards;
   }
+  .bg-grid-white\\[\/0\\.05\\] {
+    background-image: linear-gradient(white 1px, transparent 1px), linear-gradient(to right, white 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
 </style>
 <script>
     tailwind.config = {
@@ -154,6 +166,10 @@
             'danger-bg': 'var(--color-danger-bg)',
             'highlight-green': 'var(--color-highlight-green)',
             'highlight-yellow': 'var(--color-highlight-yellow)',
+          },
+          fontFamily: {
+            'caveat': ['Caveat', 'cursive'],
+            'permanent-marker': ['"Permanent Marker"', 'cursive'],
           },
         },
       },

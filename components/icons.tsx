@@ -183,6 +183,14 @@ export const GroupPhotoFusionIcon: React.FC<React.SVGProps<SVGSVGElement>> = (pr
     </svg>
 );
 
+export const PastForwardIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8 6.002V8.25l-2.612.373a.75.75 0 00-.388 1.293l1.875 1.875" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4.75 11.25A.75.75 0 014 10.5v-2.25c0-.414.336-.75.75-.75h2.25a.75.75 0 01.75.75v.002" />
+  </svg>
+);
+
 export const SaveIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />

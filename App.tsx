@@ -6,7 +6,7 @@ import { RootState, AppDispatch } from './store/store';
 import {
     setCurrentUser, setTheme, setProjectName, setActiveTab, setIsComfyUIConnected, setComfyUIObjectInfo, setVersionInfo,
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
-    openSettingsModal, closeSettingsModal, openAdminPanel, closeAdminPanel,
+    openSettingsModal, closeSettingsModal, closeAdminPanel,
     openOAuthHelper, closeOAuthHelper,
     setModalOpen, addSessionTokenUsage, resetSessionTokenUsage
 } from './store/appSlice';
@@ -34,15 +34,14 @@ import {
     setActiveLogoThemeSubTab, resetLogoThemeState, updateLogoThemeState
 } from './store/logoThemeSlice';
 import { fetchLibrary } from './store/librarySlice';
+import { setUploadedFiles } from './store/groupPhotoFusionSlice';
 
-import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState } from './types';
-import { authenticateUser } from './services/cloudUserService';
+import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile } from './types';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
 import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage } from './services/geminiService';
 import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution } from './services/comfyUIService';
 import { Login } from './components/Login';
-import { AdminPanel } from './components/AdminPanel';
 import { Header } from './components/Header';
 import { ImageUploader } from './components/ImageUploader';
 import { OptionsPanel } from './components/OptionsPanel';
@@ -60,10 +59,12 @@ import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
 // FIX: Imported all missing icon components to resolve multiple "has no exported member" errors.
-import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon } from './components/icons';
+import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon } from './components/icons';
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
 import GroupPhotoFusionPanel from './components/groupPhotoFusion/GroupPhotoFusionPanel';
+import PastForwardPanel from './components/pastForward/PastForwardPanel';
+import { PERSONAS } from './groupPhotoFusion/constants';
 
 const App: React.FC = () => {
     // --- Redux Dispatch ---
@@ -72,7 +73,7 @@ const App: React.FC = () => {
     // --- App State (from appSlice) ---
     const {
         currentUser, theme, projectName, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
-        isSettingsModalOpen, isAdminPanelOpen, isOAuthHelperOpen,
+        isSettingsModalOpen, isOAuthHelperOpen,
         isClothingPickerOpen, isBackgroundPickerOpen, isPosePickerOpen, isColorImagePickerOpen, isVideoUtilsPickerOpen,
         isStartFramePickerOpen, isEndFramePickerOpen, isLogoRefPickerOpen, isLogoPalettePickerOpen, isLogoFontPickerOpen,
         isPromptGenImagePickerOpen, isPromptGenBgImagePickerOpen, isPromptGenSubjectImagePickerOpen,
@@ -83,6 +84,7 @@ const App: React.FC = () => {
         isMannequinRefPickerOpen, isFontSourcePickerOpen, isMaskPickerOpen, isElementPickerOpen,
         isWanVideoImagePickerOpen,
         isResizeCropPickerOpen,
+        isGroupFusionPickerOpen,
         driveFolder, isSyncing, syncMessage, isDriveConfigured, sessionTokenUsage
     } = useSelector((state: RootState) => state.app);
 
@@ -110,6 +112,9 @@ const App: React.FC = () => {
     // --- Logo & Theme State (from logoThemeSlice) ---
     const logoThemeState = useSelector((state: RootState) => state.logoTheme.logoThemeState);
     const activeLogoThemeSubTab = useSelector((state: RootState) => state.logoTheme.activeLogoThemeSubTab);
+
+    // --- Group Photo Fusion State ---
+    const { uploadedFiles } = useSelector((state: RootState) => state.groupPhotoFusion);
     
     // --- Computed State ---
     const isReadyToGenerate = useSelector(selectIsReadyToGenerate);
@@ -196,13 +201,10 @@ const App: React.FC = () => {
     }, [theme]);
 
     
-    const handleLogin = async (username: string, password: string): Promise<string | true> => {
-        const user = await authenticateUser(username, password);
-        if (user) {
-            dispatch(setCurrentUser(user));
-            return true;
-        }
-        return "Invalid username or password.";
+    const handleLogin = async (username: string, projectName: string): Promise<string | true> => {
+        dispatch(setCurrentUser({ username, role: 'user' }));
+        dispatch(setProjectName(projectName));
+        return true;
     };
 
     const handleLogout = () => {
@@ -536,6 +538,26 @@ const App: React.FC = () => {
         }
         dispatch(setActiveTab(tabId));
     };
+
+    const handleSelectForGroupFusion = async (item: LibraryItem) => {
+        if (uploadedFiles.length >= 4) {
+            dispatch(setGlobalError({ title: "Limit Reached", message: "You can only add up to 4 subjects for Group Photo Fusion." }));
+            return;
+        }
+        try {
+            const file = await dataUrlToFile(item.media, item.name || 'library-subject.jpeg');
+            const newUploadedFile: UploadedFile = {
+                id: crypto.randomUUID(),
+                file,
+                previewUrl: URL.createObjectURL(file), // Important to create a fresh URL
+                personaId: PERSONAS[0].id,
+            };
+            dispatch(setUploadedFiles([...uploadedFiles, newUploadedFile]));
+        } catch (error) {
+            console.error("Error adding library item to group fusion:", error);
+            dispatch(setGlobalError({ title: "File Error", message: "Could not use the selected library item." }));
+        }
+    };
     
     // Fix: Narrowed the `modal` parameter type to only include valid boolean modal flag keys from the state.
     // This ensures type safety when calling the `setModalOpen` reducer, resolving downstream type errors.
@@ -550,10 +572,11 @@ const App: React.FC = () => {
         { id: 'image-generator', label: 'Image Generator', icon: <ImageGeneratorIcon className="w-5 h-5"/> },
         { id: 'character-generator', label: 'Character/Poses Generator', icon: <CharacterIcon className="w-5 h-5"/> },
         { id: 'group-photo-fusion', label: 'Group Photo Fusion', icon: <GroupPhotoFusionIcon className="w-5 h-5"/> },
+        { id: 'past-forward-photo', label: 'Past Forward Photo', icon: <PastForwardIcon className="w-5 h-5"/> },
         { id: 'video-generator', label: 'Video Generator', icon: <VideoIcon className="w-5 h-5"/> },
         { id: 'logo-theme-generator', label: 'Logo/Theme Generator', icon: <SwatchIcon className="w-5 h-5"/> },
         { id: 'library', label: 'Library', icon: <LibraryIcon className="w-5 h-5"/> },
-        { id: 'prompt-generator', label: 'Prompt Tools', icon: <PromptIcon className="w-5 h-5"/>, adminOnly: true },
+        { id: 'prompt-generator', label: 'Prompt Tools', icon: <PromptIcon className="w-5 h-5"/> },
         { id: 'extractor-tools', label: 'Extractor Tools', icon: <ExtractorIcon className="w-5 h-5"/> },
         { id: 'video-utils', label: 'Media Tools', icon: <VideoUtilsIcon className="w-5 h-5"/> },
     ];
@@ -574,7 +597,6 @@ const App: React.FC = () => {
                 projectName={projectName}
                 onProjectNameChange={handleProjectNameChange}
                 onOpenSettingsModal={() => dispatch(openSettingsModal())}
-                onOpenAdminPanel={() => dispatch(openAdminPanel())}
 // FIX: Cast `isComfyUIConnected` to a boolean using `!!` to prevent type errors.
                 isComfyUIConnected={!!isComfyUIConnected}
                 versionInfo={versionInfo}
@@ -587,10 +609,10 @@ const App: React.FC = () => {
                 activeTab={activeTab}
                 provider={options.provider}
             />
-            <main className="container mx-auto p-4 md:p-8">
+            <main className="container mx-auto p-4 md:p-8 transform-gpu">
                 <div className="flex flex-wrap items-center justify-center border-b-2 border-border-primary mb-8">
                     {TABS.map(tab => {
-                        if (tab.adminOnly && currentUser.role !== 'admin') {
+                        if ((tab as any).adminOnly && currentUser.role !== 'admin') {
                             return null;
                         }
                         return (
@@ -828,6 +850,10 @@ const App: React.FC = () => {
                     <GroupPhotoFusionPanel />
                 </div>
                 
+                <div className={activeTab === 'past-forward-photo' ? 'block' : 'hidden'}>
+                    <PastForwardPanel />
+                </div>
+
                 <div className={activeTab === 'video-generator' ? 'block' : 'hidden'}>
                      <VideoGeneratorPanel
                         options={options}
@@ -883,20 +909,18 @@ const App: React.FC = () => {
                     />
                 </div>
                 
-                {currentUser.role === 'admin' && (
-                    <div className={activeTab === 'prompt-generator' ? 'block' : 'hidden'}>
-                        <PromptGeneratorPanel 
-                            activeSubTab={activePromptToolsSubTab}
-                            setActiveSubTab={(tab) => dispatch(setActivePromptToolsSubTab(tab))}
-                            onUsePrompt={handleUsePrompt}
-                            onOpenLibraryForImage={() => openModal('isPromptGenImagePickerOpen')}
-                            onOpenLibraryForBg={() => openModal('isPromptGenBgImagePickerOpen')}
-                            onOpenLibraryForSubject={() => openModal('isPromptGenSubjectImagePickerOpen')}
-                            onOpenLibraryForWanVideoImage={() => openModal('isWanVideoImagePickerOpen')}
-                            onReset={handlePromptGenReset}
-                        />
-                    </div>
-                )}
+                <div className={activeTab === 'prompt-generator' ? 'block' : 'hidden'}>
+                    <PromptGeneratorPanel 
+                        activeSubTab={activePromptToolsSubTab}
+                        setActiveSubTab={(tab) => dispatch(setActivePromptToolsSubTab(tab))}
+                        onUsePrompt={handleUsePrompt}
+                        onOpenLibraryForImage={() => openModal('isPromptGenImagePickerOpen')}
+                        onOpenLibraryForBg={() => openModal('isPromptGenBgImagePickerOpen')}
+                        onOpenLibraryForSubject={() => openModal('isPromptGenSubjectImagePickerOpen')}
+                        onOpenLibraryForWanVideoImage={() => openModal('isWanVideoImagePickerOpen')}
+                        onReset={handlePromptGenReset}
+                    />
+                </div>
                 
                 <div className={activeTab === 'extractor-tools' ? 'block' : 'hidden'}>
                     {/* Fix: Added all required props to the ExtractorToolsPanel component. */}
@@ -952,14 +976,6 @@ const App: React.FC = () => {
                     initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
                     onSave={handleSaveSettings}
                 />
-            )}
-{/* FIX: Explicitly cast `isAdminPanelOpen` to a boolean for conditional rendering to prevent 'unknown' type errors. */}
-            {!!isAdminPanelOpen && (
-                <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-4" onClick={() => dispatch(closeAdminPanel())}>
-                    <div className="w-full max-w-4xl" onClick={e => e.stopPropagation()}>
-                        <AdminPanel />
-                    </div>
-                </div>
             )}
 {/* FIX: Explicitly cast `isOAuthHelperOpen` to a boolean for conditional rendering to prevent 'unknown' type errors. */}
             {!!isOAuthHelperOpen && (
@@ -1034,6 +1050,14 @@ const App: React.FC = () => {
                     }));
                 }} 
                 filter={imageLikeFilter} 
+            />
+
+            {/* Group Photo Fusion Picker */}
+            <LibraryPickerModal
+                isOpen={!!isGroupFusionPickerOpen}
+                onClose={() => closeModal('isGroupFusionPickerOpen')}
+                onSelectItem={handleSelectForGroupFusion}
+                filter={['image', 'character']}
             />
         </div>
     );

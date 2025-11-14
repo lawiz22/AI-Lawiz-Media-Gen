@@ -50,6 +50,7 @@ const initialState: AppSliceState = {
   isElementPickerOpen: false,
   isWanVideoImagePickerOpen: false,
   isResizeCropPickerOpen: false,
+  isGroupFusionPickerOpen: false,
   
   // Google Drive State
   driveFolder: null,

@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "react": "19",
+    "react-dom": "19",
     "react-redux": "9.2.0",
     "@reduxjs/toolkit": "2.2.6",
     "@google/genai": "0.14.0",
@@ -17,8 +19,9 @@
     "idb": "8.0.0",
     "url": "0.11.3",
     "react-image-crop": "11.0.5",
-    "react-dom": "^19.2.0",
-    "react": "19"
+    "framer-motion": "11.3.8",
+    "clsx": "2.1.1",
+    "tailwind-merge": "2.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

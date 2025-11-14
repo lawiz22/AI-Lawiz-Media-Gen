@@ -10,7 +10,7 @@ import {
     setNumImages
 } from '../../store/groupPhotoFusionSlice';
 import { addToLibrary } from '../../store/librarySlice';
-import { addSessionTokenUsage } from '../../store/appSlice';
+import { addSessionTokenUsage, setModalOpen } from '../../store/appSlice';
 import { Pose, UploadedFile, Quality, DebugInfo, GeneratedImage } from '../../groupPhotoFusion/types';
 import { POSES, PERSONAS } from '../../groupPhotoFusion/constants';
 import { generateGroupPhoto } from '../../services/groupPhotoFusionService';
@@ -56,6 +56,14 @@ const GroupPhotoFusionPanel: React.FC = () => {
   const handleRemoveAll = () => {
     dispatch(removeAllFiles());
   };
+
+  const handleOpenLibrary = useCallback(() => {
+    if (uploadedFiles.length >= 4) {
+        dispatch(setError("You can only add up to 4 subjects."));
+        return;
+    }
+    dispatch(setModalOpen({ modal: 'isGroupFusionPickerOpen', isOpen: true }));
+  }, [uploadedFiles.length, dispatch]);
   
   const handleGenerate = useCallback(async () => {
     if (!selectedPose || uploadedFiles.length < 2) {
@@ -236,6 +244,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
     if (generatedImages) {
         const successfulGenerations = generatedImages.filter(img => img.status === 'success').length;
         const totalGenerations = generatedImages.length;
+        
         return (
         <>
           {zoomedImage && (
@@ -250,9 +259,9 @@ const GroupPhotoFusionPanel: React.FC = () => {
             <h2 className="text-2xl font-bold text-text-primary mb-4">Your Fused Photos are Ready!</h2>
             <div className={`grid grid-cols-1 ${totalGenerations > 1 ? 'sm:grid-cols-2' : ''} gap-6 mb-8`}>
               {generatedImages.map((image, index) => (
-                <div key={image.id} className="relative group aspect-square bg-bg-tertiary rounded-lg flex items-center justify-center overflow-hidden">
+                <div key={image.id} className={`relative group bg-bg-tertiary rounded-lg flex items-center justify-center overflow-hidden ${totalGenerations > 1 ? 'aspect-square' : ''}`}>
                   {image.status === 'success' && image.base64 && (
-                    <img src={image.base64} alt="Generated group photo" className="w-full h-full object-cover" />
+                    <img src={image.base64} alt="Generated group photo" className={`w-full ${totalGenerations > 1 ? 'h-full object-cover' : 'h-auto object-contain max-w-3xl mx-auto'}`} />
                   )}
                   {image.status === 'generating' && (
                      <div className="flex flex-col items-center justify-center text-center">
@@ -334,7 +343,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
       const isBackgroundDisabled = selectedPose?.id === 'cinematic-portrait' || selectedPose?.id === 'professional-bw';
       return (
         <div className="w-full">
-          <ImagePreview files={uploadedFiles} onRemove={handleRemoveImage} onPersonaChange={handlePersonaChange} onRemoveAll={handleRemoveAll} />
+          <ImagePreview files={uploadedFiles} onRemove={handleRemoveImage} onPersonaChange={handlePersonaChange} onRemoveAll={handleRemoveAll} onOpenLibrary={handleOpenLibrary} />
           <div className="space-y-8 mt-8">
             <BackgroundUpload
               backgroundFile={backgroundFile}
@@ -385,7 +394,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
       );
     }
     
-    return <FileUpload onFilesChange={handleFilesChange} />;
+    return <FileUpload onFilesChange={handleFilesChange} onOpenLibrary={handleOpenLibrary} />;
   };
 
   return (

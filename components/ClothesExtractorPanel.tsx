@@ -224,7 +224,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     
     // --- Poses ---
     const handleGeneratePoses = async () => {
-        if (!poseSourceFile) return;
+        if (!poseSourceFile || !mannequinReferenceFile) return;
         dispatch(updateExtractorState({ isGeneratingPoses: true, generatedPoses: [], poseError: null }));
         try {
             const { poseLandmarks, handLandmarks, handedness, faceLandmarks, width, height } = await detectPosesInImage(poseSourceFile);
@@ -416,13 +416,9 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                     <div className="lg:col-span-1 space-y-6">
                         <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image" id="pose-source" onImageUpload={file => dispatch(updateExtractorState({ poseSourceFile: file, generatedPoses: [] }))} sourceFile={poseSourceFile} /></div><button onClick={onOpenLibraryForPoses} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
                         <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-2">Mannequin Style</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                {(['wooden-artist', 'neutral-gray', 'wireframe', 'comic-outline', 'custom-reference'] as MannequinStyle[]).map(style => <button key={style} onClick={() => dispatch(updateExtractorState({ mannequinStyle: style }))} className={`p-2 text-xs rounded-md ${mannequinStyle === style ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>{style.replace(/-/g, ' ')}</button>)}
-                            </div>
+                           <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Mannequin Reference Image" id="mannequin-ref" onImageUpload={file => dispatch(updateExtractorState({ mannequinReferenceFile: file }))} sourceFile={mannequinReferenceFile} /></div><button onClick={onOpenLibraryForMannequinRef} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
                         </div>
-                        {mannequinStyle === 'custom-reference' && <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Mannequin Reference Image" id="mannequin-ref" onImageUpload={file => dispatch(updateExtractorState({ mannequinReferenceFile: file }))} sourceFile={mannequinReferenceFile} /></div><button onClick={onOpenLibraryForMannequinRef} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>}
-                        <button onClick={handleGeneratePoses} disabled={!poseSourceFile || isGeneratingPoses} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingPoses ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : 'Generate Poses'}</button>
+                        <button onClick={handleGeneratePoses} disabled={!poseSourceFile || isGeneratingPoses || !mannequinReferenceFile} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingPoses ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : 'Generate Poses'}</button>
                     </div>
                     <div className="lg:col-span-2">
                         {isGeneratingPoses && <LoadingState message="Detecting poses and generating mannequins..." />}

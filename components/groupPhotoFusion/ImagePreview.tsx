@@ -1,16 +1,17 @@
 import React from 'react';
 import { UploadedFile } from '../../groupPhotoFusion/types';
 import { PERSONAS } from '../../groupPhotoFusion/constants';
-import { CloseIcon } from '../icons';
+import { CloseIcon, LibraryIcon } from '../icons';
 
 interface ImagePreviewProps {
   files: UploadedFile[];
   onRemove: (id: string) => void;
   onPersonaChange: (id: string, personaId: string) => void;
   onRemoveAll: () => void;
+  onOpenLibrary: () => void;
 }
 
-const ImagePreview: React.FC<ImagePreviewProps> = ({ files, onRemove, onPersonaChange, onRemoveAll }) => {
+const ImagePreview: React.FC<ImagePreviewProps> = ({ files, onRemove, onPersonaChange, onRemoveAll, onOpenLibrary }) => {
   const defaultPersona = PERSONAS.find(p => p.id === 'default');
   const femalePersonas = PERSONAS.filter(p => p.type === 'female');
   const malePersonas = PERSONAS.filter(p => p.type === 'male');
@@ -20,13 +21,23 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ files, onRemove, onPersonaC
         <div className="flex justify-center items-center mb-4 text-center">
             <h2 className="text-xl font-semibold text-text-primary">Your Subjects ({files.length}/4)</h2>
             {files.length > 0 && (
-                <button
-                    onClick={onRemoveAll}
-                    className="ml-4 text-sm text-text-secondary hover:text-accent underline transition-colors"
-                    aria-label="Remove all uploaded subjects"
-                >
-                    Remove All
-                </button>
+                <div className="ml-4 flex items-center gap-4">
+                    <button
+                        onClick={onOpenLibrary}
+                        className="text-sm text-accent hover:underline transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+                        aria-label="Import subject from library"
+                        disabled={files.length >= 4}
+                    >
+                        <LibraryIcon className="w-4 h-4" /> + Import
+                    </button>
+                    <button
+                        onClick={onRemoveAll}
+                        className="text-sm text-text-secondary hover:text-accent underline transition-colors"
+                        aria-label="Remove all uploaded subjects"
+                    >
+                        Remove All
+                    </button>
+                </div>
             )}
         </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-6">

@@ -1,11 +1,10 @@
-import { GoogleGenAI, Part, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Part, Type, Modality, GenerateContentResponse } from "@google/genai";
 // Fix: Corrected typo in type name from 'ManquinnequinStyle' to 'MannequinStyle'.
 import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState, PaletteColor } from '../types';
 // Fix: Added dataUrlToFile and fileToDataUrl to imports for use in banner and album cover generation.
 import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart, createBlankImageFile, letterboxImage, dataUrlToFile, fileToDataUrl } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
 import { buildPromptSegments, decodePose, getRandomPose } from "../utils/promptBuilder";
-import { MANNEQUIN_STYLE_REFERENCES } from '../assets/styleReferences';
 import { POSES } from "../constants";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
@@ -560,7 +559,6 @@ export const generatePoseMannequin = async (
     referenceFile: File | null // This is the custom STYLE file
 ): Promise<{ image: string; prompt: string }> => {
     const posePart = await fileToGenerativePart(sourceFile);
-    let stylePart: Part;
     
     const prompt = `You are a "Pose Transfer AI". Your task is to apply the exact pose from the second image (the POSE SOURCE) to the mannequin model from the first image (the STYLE REFERENCE).
 
@@ -571,17 +569,13 @@ CRITICAL INSTRUCTIONS:
 - The background of the final image must be solid white.
 - Output only the final image.`;
 
-    if (style === 'custom-reference' && referenceFile) {
-        // Crop the user-provided reference to 1:1 to ensure consistency for the AI
-        const croppedRefFile = await cropImageToAspectRatio(referenceFile, '1:1');
-        stylePart = await fileToGenerativePart(croppedRefFile);
-    } else {
-        // Fix: Corrected typo in type name from 'ManquinnequinStyle' to 'MannequinStyle'.
-        const styleRefKey = style as Exclude<MannequinStyle, 'custom-reference'>;
-        const styleReferenceDataUrl = MANNEQUIN_STYLE_REFERENCES[styleRefKey];
-        // Convert the static data URL reference to the format the API needs
-        stylePart = dataUrlToGenerativePart(styleReferenceDataUrl);
+    if (!referenceFile) {
+        throw new Error("A custom reference image is required for mannequin generation.");
     }
+
+    // Crop the user-provided reference to 1:1 to ensure consistency for the AI
+    const croppedRefFile = await cropImageToAspectRatio(referenceFile, '1:1');
+    const stylePart = await fileToGenerativePart(croppedRefFile);
 
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -1005,3 +999,100 @@ export const generateAlbumCovers = async (state: LogoThemeState): Promise<string
         return result.generatedImages.map(img => `data:image/png;base64,${img.image.imageBytes}`);
     }
 };
+
+// --- Start: Past Forward Photo Feature ---
+function getFallbackPrompt(decade: string): string {
+    return `Create a photograph of the person in this image as if they were living in the ${decade}. The photograph should capture the distinct fashion, hairstyles, and overall atmosphere of that time period. Ensure the final image is a clear photograph that looks authentic to the era.`;
+}
+
+function extractDecade(prompt: string): string | null {
+    const match = prompt.match(/(\d{4}s)/);
+    return match ? match[1] : null;
+}
+
+function processGeminiResponse(response: GenerateContentResponse): string {
+    const imagePartFromResponse = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
+
+    if (imagePartFromResponse?.inlineData) {
+        const { mimeType, data } = imagePartFromResponse.inlineData;
+        return `data:${mimeType};base64,${data}`;
+    }
+
+    const textResponse = response.text;
+    console.error("API did not return an image. Response:", textResponse);
+    throw new Error(`The AI model responded with text instead of an image: "${textResponse || 'No text response received.'}"`);
+}
+
+async function callGeminiWithRetry(imagePart: object, textPart: object): Promise<GenerateContentResponse> {
+    const maxRetries = 3;
+    const initialDelay = 1000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            return await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: { parts: [imagePart, textPart] },
+            });
+        } catch (error) {
+            console.error(`Error calling Gemini API (Attempt ${attempt}/${maxRetries}):`, error);
+            const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+            const isInternalError = errorMessage.includes('"code":500') || errorMessage.includes('INTERNAL');
+
+            if (isInternalError && attempt < maxRetries) {
+                const delay = initialDelay * Math.pow(2, attempt - 1);
+                console.log(`Internal error detected. Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+            throw error;
+        }
+    }
+    throw new Error("Gemini API call failed after all retries.");
+}
+
+export async function generateDecadeImage(imageDataUrl: string, prompt: string): Promise<string> {
+  const match = imageDataUrl.match(/^data:(image\/\w+);base64,(.*)$/);
+  if (!match) {
+    throw new Error("Invalid image data URL format. Expected 'data:image/...;base64,...'");
+  }
+  const [, mimeType, base64Data] = match;
+
+    const imagePart = {
+        inlineData: { mimeType, data: base64Data },
+    };
+
+    try {
+        console.log("Attempting generation with original prompt...");
+        const textPart = { text: prompt };
+        const response = await callGeminiWithRetry(imagePart, textPart);
+        return processGeminiResponse(response);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+        const isNoImageError = errorMessage.includes("The AI model responded with text instead of an image");
+
+        if (isNoImageError) {
+            console.warn("Original prompt was likely blocked. Trying a fallback prompt.");
+            const decade = extractDecade(prompt);
+            if (!decade) {
+                console.error("Could not extract decade from prompt, cannot use fallback.");
+                throw error;
+            }
+
+            try {
+                const fallbackPrompt = getFallbackPrompt(decade);
+                console.log(`Attempting generation with fallback prompt for ${decade}...`);
+                const fallbackTextPart = { text: fallbackPrompt };
+                const fallbackResponse = await callGeminiWithRetry(imagePart, fallbackTextPart);
+                return processGeminiResponse(fallbackResponse);
+            } catch (fallbackError) {
+                console.error("Fallback prompt also failed.", fallbackError);
+                const finalErrorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+                throw new Error(`The AI model failed with both original and fallback prompts. Last error: ${finalErrorMessage}`);
+            }
+        } else {
+            console.error("An unrecoverable error occurred during image generation.", error);
+            throw new Error(`The AI model failed to generate an image. Details: ${errorMessage}`);
+        }
+    }
+}
+// --- End: Past Forward Photo Feature ---

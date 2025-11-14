@@ -1,13 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import { UploadedFile } from '../../groupPhotoFusion/types';
-import { UploadCloudIcon } from '../icons';
-import { PERSONAS } from '../../groupPhotoFusion/constants';
+import { UploadCloudIcon, LibraryIcon } from '../icons';
 
 interface FileUploadProps {
   onFilesChange: (files: UploadedFile[]) => void;
+  onOpenLibrary: () => void;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange }) => {
+const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, onOpenLibrary }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,7 +24,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange }) => {
       id: crypto.randomUUID(),
       file,
       previewUrl: URL.createObjectURL(file),
-      personaId: PERSONAS[0].id,
+      personaId: 'default',
     }));
     onFilesChange(uploadedFiles);
   }, [onFilesChange]);
@@ -78,7 +78,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange }) => {
         <label htmlFor="gpf-file-upload" className="cursor-pointer">
           <UploadCloudIcon className="mx-auto h-12 w-12 text-text-muted" />
           <span className="mt-2 block text-sm font-medium text-text-secondary">
-            Drag & drop subject photos here, or click to select
+            Drag & drop subject photos here, or <span className="text-accent">click to select</span>
           </span>
           <p className="mt-1 text-xs text-text-muted">
             Upload 2 to 4 subject photos (PNG, JPG, WEBP)
@@ -86,6 +86,20 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange }) => {
         </label>
       </div>
       {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+
+      <div className="mt-4 flex items-center justify-center">
+        <span className="h-px flex-grow bg-border-primary"></span>
+        <span className="mx-4 text-sm font-semibold text-text-muted">OR</span>
+        <span className="h-px flex-grow bg-border-primary"></span>
+      </div>
+
+      <button
+        onClick={onOpenLibrary}
+        className="mt-4 inline-flex items-center gap-2 px-6 py-3 bg-bg-tertiary text-text-secondary font-semibold rounded-lg hover:bg-bg-tertiary-hover transition-colors"
+      >
+        <LibraryIcon className="w-5 h-5" />
+        Import from Library
+      </button>
     </div>
   );
 };

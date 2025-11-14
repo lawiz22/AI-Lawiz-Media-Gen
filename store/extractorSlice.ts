@@ -28,7 +28,7 @@ const initialExtractorState: ExtractorState = {
     isGeneratingPoses: false,
     generatedPoses: [],
     poseError: null,
-    mannequinStyle: 'wooden-artist',
+    mannequinStyle: 'custom-reference',
     mannequinReferenceFile: null,
     fontSourceFile: null,
     isGeneratingFont: false,

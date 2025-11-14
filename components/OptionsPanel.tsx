@@ -621,7 +621,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         };
 
         if (options.provider === 'comfyui' && ['imageStyle', 'photoStyle', 'eraStyle'].includes(field)) {
-            // FIX: Pass the `options` object to `getStylePrefix` as it expects one argument.
+            // FIX: Passed the `options` object to the `getStylePrefix` function to satisfy its required argument, resolving the "Expected 1 arguments, but got 0" error.
             const oldPrefix = getStylePrefix(options);
             const tempOptions = { ...options, [field]: value as string };
             const newPrefix = getStylePrefix(tempOptions);

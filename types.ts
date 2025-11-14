@@ -272,7 +272,7 @@ export interface IdentifiedPose {
     description: string;
 }
 
-export type MannequinStyle = 'wooden-artist' | 'neutral-gray' | 'wireframe' | 'comic-outline' | 'custom-reference';
+export type MannequinStyle = 'custom-reference';
 
 export interface GeneratedPose {
     description: string;
@@ -319,7 +319,7 @@ export interface ExtractorState {
     fontError: string | null;
 }
 
-export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font' | 'group-fusion';
+export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font' | 'group-fusion' | 'past-forward-photo';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
 
 export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';
@@ -562,6 +562,7 @@ export interface AppSliceState {
   isElementPickerOpen: boolean;
   isWanVideoImagePickerOpen: boolean;
   isResizeCropPickerOpen: boolean;
+  isGroupFusionPickerOpen: boolean;
 
   // Google Drive State
   driveFolder: DriveFolder | null;
@@ -624,4 +625,11 @@ export interface LibrarySliceState {
     items: LibraryItem[];
     status: 'idle' | 'loading' | 'succeeded' | 'failed';
     error: string | null;
+}
+
+export interface UploadedFile {
+  id: string;
+  file: File;
+  previewUrl: string;
+  personaId: string;
 }
