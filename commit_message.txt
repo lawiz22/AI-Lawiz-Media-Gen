@@ -1,0 +1,18 @@
+feat(ui): Enhance Extractor Tools UX and Standardize Header Model Display (v1.55)
+
+This release significantly improves the user experience within the Extractor Tools and ensures consistent feedback regarding the active AI model across the entire application.
+
+**Key Changes:**
+
+*   **Extractor Tools Grid Improvements:**
+    *   **Hover Actions:** Added "Download" (supporting Image, Skeleton, and JSON formats) and "Save to Library" buttons directly to the thumbnail hover overlay. Users can now manage assets without opening the details modal.
+    *   **Responsive Layout:** Fixed grid column sizing to prevent overlapping with the left-hand control column on smaller screens.
+    *   **Modal UX:** Overhauled the details modal layout. The image and description columns now scroll independently, and action buttons are sticky at the bottom, ensuring they are always accessible regardless of text length.
+
+*   **Header & Navigation:**
+    *   **Unified Provider Display:** Updated the Header logic to correctly detect and display the active provider ('GEMINI' or 'COMFYUI') and the specific model name for *all* tabs, including "Extractor Tools" and "Group Photo Fusion".
+    *   **Dynamic Badge:** The model badge in the header now dynamically updates based on the specific sub-tool or pose mode selected within the Extractor and Group Fusion panels.
+
+*   **Under-the-Hood:**
+    *   **MediaPipe Stability:** Added timeout and error handling to the MediaPipe initialization in `detectPosesInImage` to prevent the UI from hanging indefinitely if the model fails to load.
+    *   **Version Bump:** Updated application version to 1.55.

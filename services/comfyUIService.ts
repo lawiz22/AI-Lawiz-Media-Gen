@@ -18,11 +18,18 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 // --- Helper Functions ---
 const getComfyUIUrl = (): string => {
-    const url = localStorage.getItem('comfyui_url');
-    if (url && url.endsWith('/')) {
-        return url.slice(0, -1);
+    let url = localStorage.getItem('comfyui_url') || '';
+    if (!url) return '';
+
+    // Force HTTP protocol
+    if (url.startsWith('https://')) {
+        url = 'http://' + url.substring(8);
+    } else if (!url.startsWith('http://')) {
+        url = 'http://' + url;
     }
-    return url || '';
+    
+    // Remove any trailing slashes
+    return url.replace(/\/+$/, '');
 };
 
 const getClientId = (): string => `lawiz-app-${Math.random().toString(36).substring(2, 15)}`;
@@ -205,14 +212,36 @@ export const generateMagicalPromptSoup = async (
 
 export const checkConnection = async (url: string): Promise<{ success: boolean; error?: string }> => {
   if (!url) return { success: false, error: 'URL is not provided.' };
+  
+  let processedUrl = url.trim();
+  // Force HTTP protocol, as ComfyUI servers typically do not use HTTPS locally.
+  if (processedUrl.startsWith('https://')) {
+      processedUrl = 'http://' + processedUrl.substring(8);
+  } else if (!processedUrl.startsWith('http://')) {
+      processedUrl = 'http://' + processedUrl;
+  }
+  
+  // Remove any trailing slashes to prevent double slashes in the final URL.
+  processedUrl = processedUrl.replace(/\/+$/, '');
+
   try {
-    const response = await fetch(new URL('/system_stats', url));
+    const response = await fetch(`${processedUrl}/system_stats`, {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-cache',
+    });
     if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
     await response.json(); // Check if it's a valid JSON response
     return { success: true };
   } catch (error: any) {
     console.error('ComfyUI connection check failed:', error);
-    return { success: false, error: error.message || 'Failed to connect. Check CORS settings and server URL.' };
+    const errorMessage = 'Failed to connect. Please check:\n' +
+        '1. Is the ComfyUI server running on HTTP (not HTTPS)?\n' +
+        '2. Is the URL in Settings correct?\n' +
+        '3. Did you start ComfyUI with the `--enable-cors` flag?\n' +
+        '4. Check the browser console (F12) for "mixed content" errors.\n' +
+        '5. Is a firewall, VPN, or ad-blocker interfering?';
+    return { success: false, error: errorMessage };
   }
 };
 

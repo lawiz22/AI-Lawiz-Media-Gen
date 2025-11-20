@@ -1,3 +1,4 @@
+
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { ExtractorState } from '../types';
 
@@ -30,6 +31,8 @@ const initialExtractorState: ExtractorState = {
     poseError: null,
     mannequinStyle: 'custom-reference',
     mannequinReferenceFile: null,
+    poseOutputMode: 'controlnet-json',
+    mannequinPromptHint: '',
     fontSourceFile: null,
     isGeneratingFont: false,
     generatedFontChart: null,

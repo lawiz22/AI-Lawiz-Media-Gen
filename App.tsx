@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
@@ -7,7 +6,7 @@ import {
     setCurrentUser, setTheme, setProjectName, setActiveTab, setIsComfyUIConnected, setComfyUIObjectInfo, setVersionInfo,
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
     openSettingsModal, closeSettingsModal, closeAdminPanel,
-    openOAuthHelper, closeOAuthHelper,
+    openOAuthHelper, closeOAuthHelper, openComfyUIHelper, closeComfyUIHelper,
     setModalOpen, addSessionTokenUsage, resetSessionTokenUsage
 } from './store/appSlice';
 // Fix: Imported the `selectIsReadyToGenerate` selector to resolve the "Cannot find name" error.
@@ -36,7 +35,7 @@ import {
 import { fetchLibrary } from './store/librarySlice';
 import { setUploadedFiles } from './store/groupPhotoFusionSlice';
 
-import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile } from './types';
+import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile, Provider } from './types';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
 import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage } from './services/geminiService';
@@ -58,6 +57,7 @@ import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
+import { ComfyUIConnectionHelperModal } from './components/ComfyUIConnectionHelperModal';
 // FIX: Imported all missing icon components to resolve multiple "has no exported member" errors.
 import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon } from './components/icons';
 import * as driveService from './services/googleDriveService';
@@ -69,11 +69,14 @@ import { PERSONAS } from './groupPhotoFusion/constants';
 const App: React.FC = () => {
     // --- Redux Dispatch ---
     const dispatch: AppDispatch = useDispatch();
+
+    // --- Local State ---
+    const [comfyUrlForHelper, setComfyUrlForHelper] = useState('');
     
     // --- App State (from appSlice) ---
     const {
         currentUser, theme, projectName, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
-        isSettingsModalOpen, isOAuthHelperOpen,
+        isSettingsModalOpen, isOAuthHelperOpen, isComfyUIHelperOpen,
         isClothingPickerOpen, isBackgroundPickerOpen, isPosePickerOpen, isColorImagePickerOpen, isVideoUtilsPickerOpen,
         isStartFramePickerOpen, isEndFramePickerOpen, isLogoRefPickerOpen, isLogoPalettePickerOpen, isLogoFontPickerOpen,
         isPromptGenImagePickerOpen, isPromptGenBgImagePickerOpen, isPromptGenSubjectImagePickerOpen,
@@ -150,6 +153,8 @@ const App: React.FC = () => {
                 console.error("Failed to get ComfyUI object info:", err);
                 dispatch(setGlobalError({ title: "ComfyUI Error", message: "Connected to ComfyUI, but failed to retrieve model information. Check the server console for errors." }));
             }
+        } else {
+            setComfyUrlForHelper(url);
         }
     }, [dispatch]);
 
@@ -564,6 +569,10 @@ const App: React.FC = () => {
     const openModal = (modal: Extract<keyof AppSliceState, `is${string}Open`>) => { dispatch(setModalOpen({ modal, isOpen: true })); };
     const closeModal = (modal: Extract<keyof AppSliceState, `is${string}Open`>) => { dispatch(setModalOpen({ modal, isOpen: false })); };
 
+    const handleOpenComfyUIHelper = useCallback(() => {
+        dispatch(openComfyUIHelper());
+    }, [dispatch]);
+
     if (!currentUser) {
         return <Login onLogin={handleLogin} />;
     }
@@ -587,6 +596,52 @@ const App: React.FC = () => {
     const imageGenContent = generatedContent['image-generator'] || { images: [], lastUsedPrompt: null };
     const charGenContent = generatedContent['character-generator'] || { images: [], lastUsedPrompt: null };
 
+    // Helper logic for determining active model name
+    const getActiveModelName = () => {
+        if (activeTab === 'image-generator') {
+            if (options.provider === 'gemini') {
+                 if (generationMode === 't2i') {
+                     return options.geminiT2IModel || 'imagen-4.0-generate-001';
+                 } else {
+                     // For Gemini I2I, only Flash is widely supported in this context
+                     return 'gemini-2.5-flash-image';
+                 }
+            } else {
+                return options.comfyModelType || 'sdxl';
+            }
+        } else if (activeTab === 'character-generator') {
+             return 'gemini-2.5-flash-image';
+        } else if (activeTab === 'video-generator') {
+             if (options.videoProvider === 'gemini') {
+                 return options.geminiVidModel || 'veo-2.0-generate-001';
+             } else {
+                 return options.comfyVidModelType || 'wan-i2v';
+             }
+        } else if (activeTab === 'extractor-tools') {
+             return 'gemini-2.5-flash-image';
+        } else if (activeTab === 'group-photo-fusion') {
+             return 'gemini-2.5-flash-image';
+        } else if (activeTab === 'logo-theme-generator') {
+             return 'gemini-2.5-flash-image';
+        } else if (activeTab === 'prompt-generator') {
+             return 'gemini-2.5-flash';
+        }
+        return '';
+    };
+
+    const getActiveProvider = (): Provider => {
+        if (activeTab === 'video-generator') {
+            return (options.videoProvider || 'comfyui') as Provider;
+        }
+        if (activeTab === 'extractor-tools' || activeTab === 'group-photo-fusion' || activeTab === 'logo-theme-generator' || activeTab === 'prompt-generator') {
+            return 'gemini';
+        }
+        return options.provider;
+    };
+
+    const activeModelName = getActiveModelName();
+    const activeProvider = getActiveProvider();
+
     return (
         <div className="min-h-screen bg-bg-primary text-text-primary font-sans">
             <Header 
@@ -597,6 +652,7 @@ const App: React.FC = () => {
                 projectName={projectName}
                 onProjectNameChange={handleProjectNameChange}
                 onOpenSettingsModal={() => dispatch(openSettingsModal())}
+                onOpenComfyUIHelper={handleOpenComfyUIHelper}
 // FIX: Cast `isComfyUIConnected` to a boolean using `!!` to prevent type errors.
                 isComfyUIConnected={!!isComfyUIConnected}
                 versionInfo={versionInfo}
@@ -607,7 +663,8 @@ const App: React.FC = () => {
                 sessionTokenUsage={sessionTokenUsage}
                 onResetTokenUsage={() => dispatch(resetSessionTokenUsage())}
                 activeTab={activeTab}
-                provider={options.provider}
+                provider={activeProvider}
+                activeModel={activeModelName}
             />
             <main className="container mx-auto p-4 md:p-8 transform-gpu">
                 <div className="flex flex-wrap items-center justify-center border-b-2 border-border-primary mb-8">
@@ -975,6 +1032,11 @@ const App: React.FC = () => {
                     initialComfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                     initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
                     onSave={handleSaveSettings}
+                    onConnectionFail={(url) => {
+                        // When the test fails inside the modal, we no longer automatically open another modal.
+                        // We just need to make sure the helper has the URL if the user opens it manually later.
+                        setComfyUrlForHelper(url);
+                    }}
                 />
             )}
 {/* FIX: Explicitly cast `isOAuthHelperOpen` to a boolean for conditional rendering to prevent 'unknown' type errors. */}
@@ -988,6 +1050,13 @@ const App: React.FC = () => {
                     }}
                     clientId={localStorage.getItem('google_client_id') || ''}
                     origin={window.location.origin}
+                />
+            )}
+            {!!isComfyUIHelperOpen && (
+                <ComfyUIConnectionHelperModal
+                    isOpen={!!isComfyUIHelperOpen}
+                    onClose={() => dispatch(closeComfyUIHelper())}
+                    testedUrl={comfyUrlForHelper}
                 />
             )}
 {/* FIX: Explicitly cast all `is...Open` props to boolean using `!!` to resolve potential 'unknown' type errors during conditional rendering. */}

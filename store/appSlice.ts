@@ -14,6 +14,7 @@ const initialState: AppSliceState = {
   // Modals & Panels
   isSettingsModalOpen: false,
   isAdminPanelOpen: false,
+  isComfyUIHelperOpen: false,
   isClothingPickerOpen: false,
   isBackgroundPickerOpen: false,
   isPosePickerOpen: false,
@@ -137,6 +138,8 @@ const appSlice = createSlice({
     closeAdminPanel: state => { state.isAdminPanelOpen = false; },
     openOAuthHelper: state => { state.isOAuthHelperOpen = true; },
     closeOAuthHelper: state => { state.isOAuthHelperOpen = false; },
+    openComfyUIHelper: state => { state.isComfyUIHelperOpen = true; },
+    closeComfyUIHelper: state => { state.isComfyUIHelperOpen = false; },
     
     // Dynamic Modal Toggler
     // Fix: Narrowed the 'modal' payload type to only accept keys matching the 'is...Open' pattern.
@@ -171,6 +174,8 @@ export const {
   closeAdminPanel,
   openOAuthHelper,
   closeOAuthHelper,
+  openComfyUIHelper,
+  closeComfyUIHelper,
   setModalOpen,
 } = appSlice.actions;
 

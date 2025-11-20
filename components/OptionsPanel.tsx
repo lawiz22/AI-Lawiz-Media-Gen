@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, ChangeEvent, useRef } from 'react';
 // Fix: Import `NunchakuAttention` type to be used for casting.
 import type { GenerationOptions, NunchakuAttention, ImageStyle } from '../types';
@@ -603,10 +602,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         }
         
         if (field === 'geminiT2IModel') {
-            const newModel = value as 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image';
+            const newModel = value as 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image' | 'gemini-3-pro-preview';
             updateOptions({
                 geminiT2IModel: newModel,
-                aspectRatio: newModel === 'gemini-2.5-flash-image' ? '1:1' : '3:4', // 3:4 is default
+                // Gemini models typically default to 1:1 square in this app's logic when using generateContent
+                aspectRatio: (newModel === 'gemini-2.5-flash-image' || newModel === 'gemini-3-pro-preview') ? '1:1' : '3:4',
             });
             return;
         }
@@ -778,7 +778,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     onChange={handleOptionChange('geminiT2IModel')}
                     options={[
                         { value: 'imagen-4.0-generate-001', label: 'Imagen 4.0 (High Quality)' },
-                        { value: 'gemini-2.5-flash-image', label: 'Gemini Flash (Fast/Cheap)' },
+                        { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro (Reasoning/Complex)' },
+                        { value: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash (Fast/Cheap)' },
                     ]}
                     disabled={isDisabled}
                 />
@@ -1173,6 +1174,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         );
     };
 
+    const activeModelName = options.provider === 'gemini' 
+        ? (generationMode === 't2i' ? (options.geminiT2IModel || 'imagen-4.0-generate-001') : 'gemini-2.5-flash-image')
+        : (options.comfyModelType || 'sdxl');
+
   return (
     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -1190,17 +1195,24 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 {!hideProviderSwitch && <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1"><button onClick={() => updateOptions({ provider: 'comfyui'})} disabled={isDisabled} className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>ComfyUI</button><button onClick={() => updateOptions({ provider: 'gemini'})} disabled={isDisabled} className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'gemini' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>Gemini</button></div>}
                 <NumberSlider label={`Number of Images: ${options.numImages}`} value={options.numImages} onChange={(e) => updateOptions({ numImages: parseInt(e.target.value, 10), poseSelection: options.poseSelection.slice(0, parseInt(e.target.value, 10)) })} min={1} max={MAX_IMAGES} step={1} disabled={isDisabled} />
                 {!(options.provider === 'comfyui' && options.comfyModelType === 'qwen-t2i-gguf') && (
-                    <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={options.geminiT2IModel === 'gemini-2.5-flash-image' ? [{ value: '1:1', label: '1:1 (Square)' }] : ASPECT_RATIO_OPTIONS} disabled={isDisabled || options.geminiT2IModel === 'gemini-2.5-flash-image'} />
+                    <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={(options.geminiT2IModel === 'gemini-2.5-flash-image' || options.geminiT2IModel === 'gemini-3-pro-preview') ? [{ value: '1:1', label: '1:1 (Square)' }] : ASPECT_RATIO_OPTIONS} disabled={isDisabled || options.geminiT2IModel === 'gemini-2.5-flash-image' || options.geminiT2IModel === 'gemini-3-pro-preview'} />
                 )}
             </OptionSection>
 
             {options.provider === 'gemini' ? renderGeminiOptions() : renderComfyUIOptions()}
         </div>
 
-        <div className="pt-6 border-t border-border-primary/50 grid grid-cols-2 gap-4">
-            <button onClick={onReset} disabled={isDisabled} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"><ResetIcon className="w-5 h-5"/> Reset</button>
-            <button onClick={onGenerate} disabled={!isReady} style={isReady ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"><GenerateIcon className="w-5 h-5"/> Generate</button>
-            {options.provider === 'comfyui' && <button onClick={onExportWorkflow} disabled={isDisabled} className="col-span-2 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"><WorkflowIcon className="w-5 h-5"/> Export Workflow</button>}
+        <div className="pt-6 border-t border-border-primary/50">
+             <div className="flex justify-between items-center mb-2 px-1">
+                 <span className="text-xs font-medium text-text-secondary uppercase tracking-wide">
+                    Active Model: <span className="text-accent font-bold">{activeModelName}</span>
+                 </span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <button onClick={onReset} disabled={isDisabled} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"><ResetIcon className="w-5 h-5"/> Reset</button>
+                <button onClick={onGenerate} disabled={!isReady} style={isReady ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"><GenerateIcon className="w-5 h-5"/> Generate</button>
+                {options.provider === 'comfyui' && <button onClick={onExportWorkflow} disabled={isDisabled} className="col-span-2 flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50"><WorkflowIcon className="w-5 h-5"/> Export Workflow</button>}
+            </div>
         </div>
     </div>
   );

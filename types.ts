@@ -1,3 +1,4 @@
+
 import type { fileURLToPath } from "url";
 
 export interface User {
@@ -15,7 +16,7 @@ export type ImageStyle = 'photorealistic' | 'cartoon' | 'comic book style' | 'an
 export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | 'a 1970s film look' | 'a high-contrast film noir style photograph' | 'a classical Dutch Master painting' | 'a high-fashion Vogue magazine shot';
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
-export type GeminiT2IModel = 'imagen-4.0-generate-001' | 'gemini-2.5-flash-image';
+export type GeminiT2IModel = 'imagen-4.0-generate-001' | 'gemini-3-pro-preview' | 'gemini-2.5-flash-image';
 export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf';
 export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui';
@@ -273,15 +274,17 @@ export interface IdentifiedPose {
 }
 
 export type MannequinStyle = 'custom-reference';
+export type PoseOutputMode = 'controlnet-json' | 'mannequin-image';
 
 export interface GeneratedPose {
     description: string;
-    image: string; // data URL for mannequin
-    skeletonImage: string; // data URL for skeleton render
-    poseJson: object; // The ControlNet JSON object
+    image?: string; // data URL for mannequin (optional)
+    skeletonImage?: string; // data URL for skeleton render (optional)
+    poseJson?: object; // The ControlNet JSON object (optional)
     mannequinStyle: MannequinStyle; // The style used for generation
     saved?: 'idle' | 'saving' | 'saved'; // UI state
     generationPrompt?: string;
+    mode: PoseOutputMode;
 }
 
 
@@ -312,6 +315,8 @@ export interface ExtractorState {
     poseError: string | null;
     mannequinStyle: MannequinStyle;
     mannequinReferenceFile: File | null;
+    poseOutputMode: PoseOutputMode;
+    mannequinPromptHint: string;
     // Font
     fontSourceFile: File | null;
     isGeneratingFont: boolean;
@@ -525,6 +530,7 @@ export interface AppSliceState {
   // Modals & Panels
   isSettingsModalOpen: boolean;
   isAdminPanelOpen: boolean;
+  isComfyUIHelperOpen: boolean;
   isClothingPickerOpen: boolean;
   isBackgroundPickerOpen: boolean;
   isPosePickerOpen: boolean;

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
@@ -9,35 +10,46 @@ import { ExtractorResultsGrid } from './ExtractorResultsGrid';
 import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage, generatePoseMannequin, generatePoseDescription, generateFontChart } from '../services/geminiService';
 import { detectPosesInImage } from '../services/mediaPipeService';
 import { mediaPipeToOpenPose, renderPoseSkeleton } from '../utils/poseRenderer';
-import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose, MannequinStyle, LibraryItem } from '../types';
-// Fix: Imported the missing icon components (DownloadIcon, SaveIcon, CheckIcon) to resolve "Cannot find name" errors.
+import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose, MannequinStyle, LibraryItem, PoseOutputMode } from '../types';
 import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon, FontIcon, DownloadIcon, SaveIcon, CheckIcon } from './icons';
 import { dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 
-// --- Helper Components ---
+interface ExtractorToolsPanelProps {
+    onOpenLibraryForClothes: () => void;
+    onOpenLibraryForObjects: () => void;
+    onOpenLibraryForPoses: () => void;
+    onOpenLibraryForMannequinRef: () => void;
+    onOpenLibraryForFont: () => void;
+    activeSubTab: string;
+    setActiveSubTab: (tabId: string) => void;
+}
 
-const ToolHeader: React.FC<{ icon: React.ReactNode, title: string, description: string }> = ({ icon, title, description }) => (
-    <div className="border-b-2 border-accent/30 pb-4 mb-6">
-        <div className="flex items-center gap-3 mb-2">
-            <div className="bg-accent p-2 rounded-lg text-accent-text">{icon}</div>
-            <h2 className="text-2xl font-bold text-accent">{title}</h2>
+const ToolHeader: React.FC<{ icon: React.ReactNode; title: string; description: string }> = ({ icon, title, description }) => (
+    <div className="flex items-center gap-4 mb-6">
+        <div className="p-3 bg-bg-primary rounded-full text-accent">
+            {icon}
         </div>
-        <p className="text-sm text-text-secondary">{description}</p>
+        <div>
+            <h2 className="text-2xl font-bold text-accent">{title}</h2>
+            <p className="text-sm text-text-secondary">{description}</p>
+        </div>
     </div>
 );
 
 interface SubTab {
-  id: string;
-  label: string;
+    id: string;
+    label: string;
+    icon?: React.ReactNode;
 }
 
-interface SubTabsProps {
-  tabs: SubTab[];
-  activeTab: string;
-  onTabClick: (id: string) => void;
-}
+const subTabs: SubTab[] = [
+    { id: 'clothes', label: 'Clothes' },
+    { id: 'objects', label: 'Objects' },
+    { id: 'poses', label: 'Poses' },
+    { id: 'font', label: 'Font' },
+];
 
-const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
+const SubTabs: React.FC<{ tabs: SubTab[]; activeTab: string; onTabClick: (id: string) => void }> = ({ tabs, activeTab, onTabClick }) => (
     <div className="flex items-center border-b-2 border-border-primary mb-8 -mt-2">
         {tabs.map(tab => (
             <button
@@ -55,19 +67,6 @@ const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
     </div>
 );
 
-
-interface ExtractorToolsPanelProps {
-    onOpenLibraryForClothes: () => void;
-    onOpenLibraryForObjects: () => void;
-    onOpenLibraryForPoses: () => void;
-    onOpenLibraryForMannequinRef: () => void;
-    onOpenLibraryForFont: () => void;
-    activeSubTab: string;
-    setActiveSubTab: (tabId: string) => void;
-}
-
-
-// --- Main Component ---
 export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     onOpenLibraryForClothes,
     onOpenLibraryForObjects,
@@ -83,113 +82,92 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     const {
         clothesSourceFile, clothesDetails, isIdentifying, identifiedItems, isGenerating, generatedClothes, clothesError, generateFolded, excludeAccessories,
         objectSourceFile, objectHints, maxObjects, isIdentifyingObjects, identifiedObjects, isGeneratingObjects, generatedObjects, objectError,
-        poseSourceFile, isGeneratingPoses, generatedPoses, poseError, mannequinStyle, mannequinReferenceFile,
+        poseSourceFile, isGeneratingPoses, generatedPoses, poseError, mannequinStyle, mannequinReferenceFile, poseOutputMode, mannequinPromptHint,
         fontSourceFile, isGeneratingFont, generatedFontChart, fontError
     } = state;
 
-    // --- Clothes ---
-    const handleIdentify = async () => {
+    const handleIdentifyClothing = async () => {
         if (!clothesSourceFile) return;
-        dispatch(updateExtractorState({ isIdentifying: true, identifiedItems: [], clothesError: null, generatedClothes: [] }));
+        dispatch(updateExtractorState({ isIdentifying: true, clothesError: null }));
         try {
-            const items = await identifyClothing(clothesSourceFile, clothesDetails, excludeAccessories);
-            dispatch(updateExtractorState({ identifiedItems: items.map(item => ({ ...item, selected: true })) }));
+            const items = await identifyClothing(clothesSourceFile);
+            dispatch(updateExtractorState({ 
+                identifiedItems: items.map(item => ({ ...item, selected: true })),
+                isIdentifying: false 
+            }));
         } catch (err: any) {
-            dispatch(updateExtractorState({ clothesError: err.message || "Failed to identify clothing." }));
-        } finally {
-            dispatch(updateExtractorState({ isIdentifying: false }));
+            dispatch(updateExtractorState({ clothesError: err.message, isIdentifying: false }));
         }
     };
 
-    const handleGenerateClothes = async () => {
-        const selected = identifiedItems.filter(item => item.selected);
-        if (!clothesSourceFile || selected.length === 0) return;
+    const handleGenerateClothing = async () => {
+        const selectedItems = identifiedItems.filter(item => item.selected);
+        if (selectedItems.length === 0) return;
 
-        dispatch(updateExtractorState({ isGenerating: true, generatedClothes: [], clothesError: null }));
-        const results: GeneratedClothing[] = [];
+        dispatch(updateExtractorState({ isGenerating: true, clothesError: null, generatedClothes: [] }));
         try {
-            for (const item of selected) {
-                const laidOutImage = await generateClothingImage(clothesSourceFile, item.itemName, 'laid out');
-                let foldedImage: string | undefined = undefined;
+            const results: GeneratedClothing[] = [];
+            for (const item of selectedItems) {
+                const laidOutImage = await generateClothingImage(item.description, false);
+                let foldedImage: string | undefined;
                 if (generateFolded) {
-                    try {
-                        foldedImage = await generateClothingImage(clothesSourceFile, item.itemName, 'folded');
-                    } catch (e) {
-                        console.warn(`Could not generate folded image for ${item.itemName}:`, e);
-                    }
+                    foldedImage = await generateClothingImage(item.description, true);
                 }
                 results.push({ itemName: item.itemName, laidOutImage, foldedImage, saved: 'idle' });
             }
-            dispatch(updateExtractorState({ generatedClothes: results }));
+            dispatch(updateExtractorState({ generatedClothes: results, isGenerating: false }));
         } catch (err: any) {
-            dispatch(updateExtractorState({ clothesError: err.message || "Failed to generate clothing images." }));
-        } finally {
-            dispatch(updateExtractorState({ isGenerating: false }));
+            dispatch(updateExtractorState({ clothesError: err.message, isGenerating: false }));
         }
     };
-    
+
     const handleSaveClothing = async (item: GeneratedClothing, index: number) => {
         if (!clothesSourceFile) return;
         dispatch(setExtractorItemSaveStatus({ itemType: 'clothes', index, status: 'saving' }));
         try {
             const libraryItem: Omit<LibraryItem, 'id'> = {
-                mediaType: 'clothes',
-                name: item.itemName,
-                media: item.laidOutImage,
+                mediaType: 'clothes', 
+                name: item.itemName, 
+                media: item.laidOutImage, // Save laid out version as main
                 thumbnail: await dataUrlToThumbnail(item.laidOutImage, 256),
                 sourceImage: await fileToResizedDataUrl(clothesSourceFile, 512),
             };
             await dispatch(addToLibrary(libraryItem)).unwrap();
             dispatch(setExtractorItemSaveStatus({ itemType: 'clothes', index, status: 'saved' }));
         } catch (err) {
-            console.error("Failed to save clothing to library:", err);
+            console.error("Failed to save clothing:", err);
             dispatch(setExtractorItemSaveStatus({ itemType: 'clothes', index, status: 'idle' }));
         }
     };
-    
-    const handleToggleClothingItem = (index: number) => {
-        const newItems = identifiedItems.map((item, i) => 
-            i === index ? { ...item, selected: !item.selected } : item
-        );
-        dispatch(updateExtractorState({ identifiedItems: newItems }));
-    };
 
-    const handleSelectAllClothes = (select: boolean) => {
-        const newItems = identifiedItems.map(item => ({ ...item, selected: select }));
-        dispatch(updateExtractorState({ identifiedItems: newItems }));
-    };
-
-
-    // --- Objects ---
     const handleIdentifyObjects = async () => {
         if (!objectSourceFile) return;
-        dispatch(updateExtractorState({ isIdentifyingObjects: true, identifiedObjects: [], objectError: null, generatedObjects: [] }));
+        dispatch(updateExtractorState({ isIdentifyingObjects: true, objectError: null }));
         try {
-            const items = await identifyObjects(objectSourceFile, maxObjects, objectHints);
-            dispatch(updateExtractorState({ identifiedObjects: items.map(item => ({ ...item, selected: true })) }));
+            const objects = await identifyObjects(objectSourceFile, maxObjects, objectHints);
+            dispatch(updateExtractorState({ 
+                identifiedObjects: objects.map(obj => ({ ...obj, selected: true })),
+                isIdentifyingObjects: false 
+            }));
         } catch (err: any) {
-            dispatch(updateExtractorState({ objectError: err.message || "Failed to identify objects." }));
-        } finally {
-            dispatch(updateExtractorState({ isIdentifyingObjects: false }));
+            dispatch(updateExtractorState({ objectError: err.message, isIdentifyingObjects: false }));
         }
     };
-    
-    const handleGenerateObjects = async () => {
-        const selected = identifiedObjects.filter(item => item.selected);
-        if (!objectSourceFile || selected.length === 0) return;
 
-        dispatch(updateExtractorState({ isGeneratingObjects: true, generatedObjects: [], objectError: null }));
-        const results: GeneratedObject[] = [];
+    const handleGenerateObjects = async () => {
+        const selectedObjects = identifiedObjects.filter(obj => obj.selected);
+        if (selectedObjects.length === 0) return;
+
+        dispatch(updateExtractorState({ isGeneratingObjects: true, objectError: null, generatedObjects: [] }));
         try {
-            for (const item of selected) {
-                const image = await generateObjectImage(objectSourceFile, item.name);
-                results.push({ name: item.name, image, saved: 'idle' });
+            const results: GeneratedObject[] = [];
+            for (const obj of selectedObjects) {
+                const image = await generateObjectImage(obj.description);
+                results.push({ name: obj.name, image, saved: 'idle' });
             }
-            dispatch(updateExtractorState({ generatedObjects: results }));
+            dispatch(updateExtractorState({ generatedObjects: results, isGeneratingObjects: false }));
         } catch (err: any) {
-            dispatch(updateExtractorState({ objectError: err.message || "Failed to generate object images." }));
-        } finally {
-            dispatch(updateExtractorState({ isGeneratingObjects: false }));
+            dispatch(updateExtractorState({ objectError: err.message, isGeneratingObjects: false }));
         }
     };
 
@@ -198,7 +176,9 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         dispatch(setExtractorItemSaveStatus({ itemType: 'objects', index, status: 'saving' }));
         try {
             const libraryItem: Omit<LibraryItem, 'id'> = {
-                mediaType: 'object', name: item.name, media: item.image,
+                mediaType: 'object', 
+                name: item.name, 
+                media: item.image,
                 thumbnail: await dataUrlToThumbnail(item.image, 256),
                 sourceImage: await fileToResizedDataUrl(objectSourceFile, 512),
             };
@@ -210,42 +190,56 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         }
     };
 
-    const handleToggleObjectItem = (index: number) => {
-        const newItems = identifiedObjects.map((item, i) => 
-            i === index ? { ...item, selected: !item.selected } : item
-        );
-        dispatch(updateExtractorState({ identifiedObjects: newItems }));
-    };
-
-    const handleSelectAllObjects = (select: boolean) => {
-        const newItems = identifiedObjects.map(item => ({ ...item, selected: select }));
-        dispatch(updateExtractorState({ identifiedObjects: newItems }));
-    };
-    
-    // --- Poses ---
     const handleGeneratePoses = async () => {
-        if (!poseSourceFile || !mannequinReferenceFile) return;
+        if (!poseSourceFile) return;
+        
+        if (poseOutputMode === 'mannequin-image' && !mannequinReferenceFile && !mannequinPromptHint) {
+             dispatch(updateExtractorState({ poseError: "Please provide either a reference image or a style prompt." }));
+             return;
+        }
+
         dispatch(updateExtractorState({ isGeneratingPoses: true, generatedPoses: [], poseError: null }));
         try {
             const { poseLandmarks, handLandmarks, handedness, faceLandmarks, width, height } = await detectPosesInImage(poseSourceFile);
+            
             if (poseLandmarks.length === 0) {
-                throw new Error("No poses could be detected in the image.");
+                 if (poseOutputMode === 'controlnet-json') {
+                     throw new Error("No poses could be detected in the image for extraction.");
+                 }
             }
-            const allGeneratedPoses: GeneratedPose[] = [];
-            for (let i = 0; i < poseLandmarks.length; i++) {
-                const poseData = mediaPipeToOpenPose(poseLandmarks[i], handLandmarks, handedness, faceLandmarks[i], width, height);
-                const { image, prompt: generationPrompt } = await generatePoseMannequin(poseSourceFile, mannequinStyle, mannequinReferenceFile);
-                const skeletonImage = renderPoseSkeleton(poseData);
-                const description = await generatePoseDescription(poseSourceFile, poseData);
 
+            const allGeneratedPoses: GeneratedPose[] = [];
+
+            if (poseOutputMode === 'controlnet-json') {
+                 for (let i = 0; i < poseLandmarks.length; i++) {
+                    const poseData = mediaPipeToOpenPose(poseLandmarks[i], handLandmarks, handedness, faceLandmarks[i], width, height);
+                    const skeletonImage = renderPoseSkeleton(poseData);
+                    const description = await generatePoseDescription(poseSourceFile, poseData);
+    
+                    allGeneratedPoses.push({
+                        description, 
+                        skeletonImage, 
+                        poseJson: poseData,
+                        mannequinStyle: 'custom-reference',
+                        mode: 'controlnet-json',
+                        saved: 'idle',
+                    });
+                }
+            } else {
+                const { image, prompt } = await generatePoseMannequin(poseSourceFile, 'custom-reference', mannequinReferenceFile, mannequinPromptHint);
                 allGeneratedPoses.push({
-                    description, image, skeletonImage, poseJson: poseData,
-                    mannequinStyle, generationPrompt, saved: 'idle',
+                    description: "Mannequin Transfer",
+                    image: image,
+                    mannequinStyle: 'custom-reference',
+                    generationPrompt: prompt,
+                    mode: 'mannequin-image',
+                    saved: 'idle'
                 });
             }
+
             dispatch(updateExtractorState({ generatedPoses: allGeneratedPoses }));
         } catch (err: any) {
-            dispatch(updateExtractorState({ poseError: err.message || "An unknown error occurred during pose generation." }));
+            dispatch(updateExtractorState({ poseError: err.message || "An unknown error occurred." }));
         } finally {
             dispatch(updateExtractorState({ isGeneratingPoses: false }));
         }
@@ -255,11 +249,15 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         if (!poseSourceFile) return;
         dispatch(setExtractorItemSaveStatus({ itemType: 'poses', index, status: 'saving' }));
         try {
+            const mainMedia = item.mode === 'mannequin-image' ? item.image! : item.skeletonImage!;
+
             const libraryItem: Omit<LibraryItem, 'id'> = {
-                mediaType: 'pose', name: item.description, media: item.image,
-                thumbnail: await dataUrlToThumbnail(item.image, 256),
+                mediaType: 'pose', 
+                name: item.description || 'Extracted Pose', 
+                media: mainMedia,
+                thumbnail: await dataUrlToThumbnail(mainMedia, 256),
                 sourceImage: await fileToResizedDataUrl(poseSourceFile, 512),
-                poseJson: JSON.stringify(item.poseJson),
+                poseJson: item.poseJson ? JSON.stringify(item.poseJson) : undefined,
                 skeletonImage: item.skeletonImage,
             };
             await dispatch(addToLibrary(libraryItem)).unwrap();
@@ -269,28 +267,31 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
             dispatch(setExtractorItemSaveStatus({ itemType: 'poses', index, status: 'idle' }));
         }
     };
+    
+    const handleOutputModeChange = (mode: PoseOutputMode) => {
+        dispatch(updateExtractorState({ poseOutputMode: mode, generatedPoses: [], poseError: null }));
+    };
 
-    // --- Font ---
     const handleGenerateFont = async () => {
         if (!fontSourceFile) return;
-        dispatch(updateExtractorState({ isGeneratingFont: true, generatedFontChart: null, fontError: null }));
+        dispatch(updateExtractorState({ isGeneratingFont: true, fontError: null, generatedFontChart: null }));
         try {
-            const chartSrc = await generateFontChart(fontSourceFile);
-            dispatch(updateExtractorState({ generatedFontChart: { src: chartSrc, saved: 'idle' } }));
+            const chartImage = await generateFontChart(fontSourceFile);
+            dispatch(updateExtractorState({ generatedFontChart: { src: chartImage, saved: 'idle' } }));
         } catch (err: any) {
-            dispatch(updateExtractorState({ fontError: err.message || "An unknown error occurred." }));
+            dispatch(updateExtractorState({ fontError: err.message }));
         } finally {
             dispatch(updateExtractorState({ isGeneratingFont: false }));
         }
     };
 
     const handleSaveFont = async () => {
-        if (!generatedFontChart || !fontSourceFile) return;
+        if (!fontSourceFile || !generatedFontChart) return;
         dispatch(setExtractorItemSaveStatus({ itemType: 'font', status: 'saving' }));
         try {
             const libraryItem: Omit<LibraryItem, 'id'> = {
                 mediaType: 'font',
-                name: `Font from ${fontSourceFile.name}`,
+                name: `Font Extracted from ${fontSourceFile.name}`,
                 media: generatedFontChart.src,
                 thumbnail: await dataUrlToThumbnail(generatedFontChart.src, 256),
                 sourceImage: await fileToResizedDataUrl(fontSourceFile, 512),
@@ -302,153 +303,142 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
             dispatch(setExtractorItemSaveStatus({ itemType: 'font', status: 'idle' }));
         }
     };
-
-    const handleReset = () => {
-        dispatch(resetExtractorState());
-    };
-
-    const subTabs = [
-        { id: 'clothes', label: 'Clothes' },
-        { id: 'objects', label: 'Objects' },
-        { id: 'poses', label: 'Poses' },
-        { id: 'font', label: 'Font' },
-    ];
     
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto">
-            <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
+             <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
 
-            <div className={activeSubTab === 'clothes' ? 'block' : 'hidden'}>
-                <ToolHeader icon={<TshirtIcon className="w-8 h-8"/>} title="Clothes Extractor" description="Identify clothing items from an image and generate new product-style photos of them." />
+             <div className={activeSubTab === 'clothes' ? 'block' : 'hidden'}>
+                <ToolHeader icon={<TshirtIcon className="w-8 h-8"/>} title="Clothing Extractor" description="Extract clothing items from an image and generate variations." />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                    {/* --- Controls Column --- */}
                     <div className="lg:col-span-1 space-y-6">
-                        <div className="flex items-center gap-2">
-                            <div className="flex-grow">
-                                <ImageUploader label="Upload Image" id="clothes-source" onImageUpload={file => dispatch(updateExtractorState({ clothesSourceFile: file, identifiedItems: [], generatedClothes: [] }))} sourceFile={clothesSourceFile} />
+                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Source Image" id="clothes-source" onImageUpload={file => dispatch(updateExtractorState({ clothesSourceFile: file, identifiedItems: [], generatedClothes: [] }))} sourceFile={clothesSourceFile} /></div><button onClick={onOpenLibraryForClothes} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                        <button onClick={handleIdentifyClothing} disabled={!clothesSourceFile || isIdentifying} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
+                            {isIdentifying ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Analyzing...</> : 'Identify Clothing'}
+                        </button>
+                        
+                        {identifiedItems.length > 0 && (
+                            <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary/50">
+                                <h4 className="text-sm font-bold text-text-primary">Select Items to Extract</h4>
+                                {identifiedItems.map((item, idx) => (
+                                    <label key={idx} className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer p-2 hover:bg-bg-primary rounded">
+                                        <input type="checkbox" checked={item.selected} onChange={() => {
+                                            const newItems = [...identifiedItems];
+                                            newItems[idx].selected = !newItems[idx].selected;
+                                            dispatch(updateExtractorState({ identifiedItems: newItems }));
+                                        }} className="rounded text-accent focus:ring-accent"/>
+                                        <div><span className="font-bold text-text-primary">{item.itemName}</span><p className="text-xs text-text-muted truncate max-w-[200px]">{item.description}</p></div>
+                                    </label>
+                                ))}
+                                <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer border-t border-border-primary pt-2"><input type="checkbox" checked={generateFolded} onChange={e => dispatch(updateExtractorState({ generateFolded: e.target.checked }))} className="rounded text-accent focus:ring-accent"/>Generate folded version</label>
+                                <button onClick={handleGenerateClothing} disabled={isGenerating} className="w-full flex items-center justify-center gap-2 bg-highlight-green text-white font-bold py-2 px-4 rounded-lg hover:opacity-90 transition-colors disabled:opacity-50">
+                                    {isGenerating ? <><SpinnerIcon className="w-4 h-4 animate-spin"/>Generating...</> : 'Generate Images'}
+                                </button>
                             </div>
-                            <button onClick={onOpenLibraryForClothes} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button>
-                        </div>
-                        <textarea value={clothesDetails} onChange={e => dispatch(updateExtractorState({ clothesDetails: e.target.value }))} placeholder="Optional: add details or hints, e.g., 'focus on the jacket'" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent" rows={2}/>
-                        <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={excludeAccessories} onChange={e => dispatch(updateExtractorState({ excludeAccessories: e.target.checked }))} className="rounded text-accent focus:ring-accent" />Exclude accessories (hats, glasses, etc.)</label>
-                        <button onClick={handleIdentify} disabled={!clothesSourceFile || isIdentifying} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isIdentifying ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Identifying...</> : '1. Identify Clothing'}</button>
+                        )}
                     </div>
-                    {/* --- Identification & Generation Column --- */}
                     <div className="lg:col-span-2">
                         {isIdentifying && <LoadingState message="Analyzing image for clothing items..." />}
+                        {isGenerating && <LoadingState message="Generating isolated clothing images..." />}
                         {clothesError && <p className="text-danger bg-danger-bg p-3 rounded-md">{clothesError}</p>}
-                        {identifiedItems.length > 0 && (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h3 className="text-xl font-bold text-accent">Identified Items</h3>
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={() => handleSelectAllClothes(true)} className="text-xs font-semibold text-text-secondary hover:text-accent transition-colors">Check All</button>
-                                        <span className="text-text-muted">|</span>
-                                        <button onClick={() => handleSelectAllClothes(false)} className="text-xs font-semibold text-text-secondary hover:text-accent transition-colors">Uncheck All</button>
-                                    </div>
-                                </div>
-                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">
-                                    {identifiedItems.map((item, index) => (
-                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer">
-                                            <input type="checkbox" checked={item.selected} onChange={() => handleToggleClothingItem(index)} className="mt-1 rounded text-accent focus:ring-accent" />
-                                            <div>
-                                                <p className="font-semibold text-text-primary">{item.itemName}</p>
-                                                <p className="text-sm text-text-secondary">{item.description}</p>
-                                            </div>
-                                        </label>
-                                    ))}
-                                </div>
-                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={generateFolded} onChange={e => dispatch(updateExtractorState({ generateFolded: e.target.checked }))} className="rounded text-accent focus:ring-accent" />Also generate folded version</label>
-                                <button onClick={handleGenerateClothes} disabled={isGenerating || identifiedItems.every(i => !i.selected)} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGenerating ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : '2. Generate Selected'}</button>
-                            </div>
-                        )}
-                        {isGenerating && <LoadingState message="Generating product images for selected items..." />}
-                        <ExtractorResultsGrid items={generatedClothes} onSave={handleSaveClothing} title="Generated Clothing" />
+                        <ExtractorResultsGrid items={generatedClothes} onSave={handleSaveClothing} title="Results" />
                     </div>
                 </div>
             </div>
-            
-            <div className={activeSubTab === 'objects' ? 'block' : 'hidden'}>
-                 <ToolHeader icon={<CubeIcon className="w-8 h-8"/>} title="Object Extractor" description="Identify individual objects in an image and generate new product-style photos of them." />
-                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+
+             <div className={activeSubTab === 'objects' ? 'block' : 'hidden'}>
+                <ToolHeader icon={<CubeIcon className="w-8 h-8"/>} title="Object Extractor" description="Identify and extract specific objects from a scene." />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     <div className="lg:col-span-1 space-y-6">
-                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image" id="object-source" onImageUpload={file => dispatch(updateExtractorState({ objectSourceFile: file, identifiedObjects: [], generatedObjects: [] }))} sourceFile={objectSourceFile} /></div><button onClick={onOpenLibraryForObjects} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
-                        <textarea value={objectHints} onChange={e => dispatch(updateExtractorState({ objectHints: e.target.value }))} placeholder="Optional: hints to guide identification, e.g., 'focus on the electronic devices'" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm" rows={2}/>
-                        <div><label className="block text-sm font-medium text-text-secondary">Max Objects: {maxObjects}</label><input type="range" min="1" max="10" value={maxObjects} onChange={e => dispatch(updateExtractorState({ maxObjects: parseInt(e.target.value) }))} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" /></div>
-                        <button onClick={handleIdentifyObjects} disabled={!objectSourceFile || isIdentifyingObjects} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isIdentifyingObjects ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Identifying...</> : '1. Identify Objects'}</button>
-                    </div>
-                     <div className="lg:col-span-2">
-                        {isIdentifyingObjects && <LoadingState message="Analyzing image for objects..." />}
-                        {objectError && <p className="text-danger bg-danger-bg p-3 rounded-md">{objectError}</p>}
+                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Source Image" id="object-source" onImageUpload={file => dispatch(updateExtractorState({ objectSourceFile: file, identifiedObjects: [], generatedObjects: [] }))} sourceFile={objectSourceFile} /></div><button onClick={onOpenLibraryForObjects} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                        <div><label className="block text-sm font-medium text-text-secondary mb-1">Focus/Hints (Optional)</label><input type="text" value={objectHints} onChange={e => dispatch(updateExtractorState({ objectHints: e.target.value }))} placeholder="e.g., furniture, electronics" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm"/></div>
+                        <div><label className="block text-sm font-medium text-text-secondary mb-1">Max Objects: {maxObjects}</label><input type="range" min="1" max="10" value={maxObjects} onChange={e => dispatch(updateExtractorState({ maxObjects: Number(e.target.value) }))} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"/></div>
+                        <button onClick={handleIdentifyObjects} disabled={!objectSourceFile || isIdentifyingObjects} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
+                            {isIdentifyingObjects ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Scanning...</> : 'Identify Objects'}
+                        </button>
+
                         {identifiedObjects.length > 0 && (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h3 className="text-xl font-bold text-accent">Identified Objects</h3>
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={() => handleSelectAllObjects(true)} className="text-xs font-semibold text-text-secondary hover:text-accent transition-colors">Check All</button>
-                                        <span className="text-text-muted">|</span>
-                                        <button onClick={() => handleSelectAllObjects(false)} className="text-xs font-semibold text-text-secondary hover:text-accent transition-colors">Uncheck All</button>
-                                    </div>
-                                </div>
-                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md">
-                                    {identifiedObjects.map((item, index) => (
-                                        <label key={index} className="flex items-start gap-3 p-3 bg-bg-tertiary rounded-md hover:bg-bg-tertiary-hover cursor-pointer">
-                                            <input type="checkbox" checked={item.selected} onChange={() => handleToggleObjectItem(index)} className="mt-1 rounded text-accent focus:ring-accent" />
-                                            <div>
-                                                <p className="font-semibold text-text-primary">{item.name}</p>
-                                                <p className="text-sm text-text-secondary">{item.description}</p>
-                                            </div>
-                                        </label>
-                                    ))}
-                                </div>
-                                <button onClick={handleGenerateObjects} disabled={isGeneratingObjects || identifiedObjects.every(i => !i.selected)} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingObjects ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : '2. Generate Selected'}</button>
+                            <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary/50">
+                                <h4 className="text-sm font-bold text-text-primary">Select Objects</h4>
+                                {identifiedObjects.map((obj, idx) => (
+                                    <label key={idx} className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer p-2 hover:bg-bg-primary rounded">
+                                        <input type="checkbox" checked={obj.selected} onChange={() => {
+                                            const newObjs = [...identifiedObjects];
+                                            newObjs[idx].selected = !newObjs[idx].selected;
+                                            dispatch(updateExtractorState({ identifiedObjects: newObjs }));
+                                        }} className="rounded text-accent focus:ring-accent"/>
+                                        <div><span className="font-bold text-text-primary">{obj.name}</span><p className="text-xs text-text-muted truncate max-w-[200px]">{obj.description}</p></div>
+                                    </label>
+                                ))}
+                                <button onClick={handleGenerateObjects} disabled={isGeneratingObjects} className="w-full flex items-center justify-center gap-2 bg-highlight-green text-white font-bold py-2 px-4 rounded-lg hover:opacity-90 transition-colors disabled:opacity-50">
+                                    {isGeneratingObjects ? <><SpinnerIcon className="w-4 h-4 animate-spin"/>Generating...</> : 'Extract Objects'}
+                                </button>
                             </div>
                         )}
-                        {isGeneratingObjects && <LoadingState message="Generating product images for selected objects..." />}
-                        <ExtractorResultsGrid items={generatedObjects} onSave={handleSaveObject} title="Generated Objects" />
+                    </div>
+                    <div className="lg:col-span-2">
+                        {isIdentifyingObjects && <LoadingState message="Analyzing image for objects..." />}
+                        {isGeneratingObjects && <LoadingState message="Generating isolated object images..." />}
+                        {objectError && <p className="text-danger bg-danger-bg p-3 rounded-md">{objectError}</p>}
+                        <ExtractorResultsGrid items={generatedObjects} onSave={handleSaveObject} title="Results" />
                     </div>
                 </div>
             </div>
-            
-            <div className={activeSubTab === 'poses' ? 'block' : 'hidden'}>
-                <ToolHeader icon={<PoseIcon className="w-8 h-8"/>} title="Pose Extractor" description="Extract human poses from an image and render them onto a stylized mannequin. Generates pose data compatible with ControlNet." />
+
+             <div className={activeSubTab === 'poses' ? 'block' : 'hidden'}>
+                <ToolHeader icon={<PoseIcon className="w-8 h-8"/>} title="Pose Extractor" description="Extract poses for ControlNet or apply poses to mannequins." />
+                
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     <div className="lg:col-span-1 space-y-6">
-                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image" id="pose-source" onImageUpload={file => dispatch(updateExtractorState({ poseSourceFile: file, generatedPoses: [] }))} sourceFile={poseSourceFile} /></div><button onClick={onOpenLibraryForPoses} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
-                        <div>
-                           <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Mannequin Reference Image" id="mannequin-ref" onImageUpload={file => dispatch(updateExtractorState({ mannequinReferenceFile: file }))} sourceFile={mannequinReferenceFile} /></div><button onClick={onOpenLibraryForMannequinRef} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                        <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1">
+                            <button onClick={() => handleOutputModeChange('controlnet-json')} className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${poseOutputMode === 'controlnet-json' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>ControlNet JSON</button>
+                            <button onClick={() => handleOutputModeChange('mannequin-image')} className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${poseOutputMode === 'mannequin-image' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>Mannequin Image</button>
                         </div>
-                        <button onClick={handleGeneratePoses} disabled={!poseSourceFile || isGeneratingPoses || !mannequinReferenceFile} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingPoses ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : 'Generate Poses'}</button>
+
+                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Source Pose Image" id="pose-source" onImageUpload={file => dispatch(updateExtractorState({ poseSourceFile: file, generatedPoses: [] }))} sourceFile={poseSourceFile} /></div><button onClick={onOpenLibraryForPoses} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                        
+                        {poseOutputMode === 'mannequin-image' && (
+                            <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary/50">
+                                <h4 className="text-sm font-bold text-text-primary">Target Style</h4>
+                                <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Style Reference (Optional)" id="mannequin-ref" onImageUpload={file => dispatch(updateExtractorState({ mannequinReferenceFile: file }))} sourceFile={mannequinReferenceFile} infoText="Upload an image to copy its style" /></div><button onClick={onOpenLibraryForMannequinRef} className="mt-8 self-center bg-bg-primary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                                <div>
+                                    <label className="block text-xs font-medium text-text-secondary mb-1">Or describe the style</label>
+                                    <input type="text" value={mannequinPromptHint} onChange={(e) => dispatch(updateExtractorState({ mannequinPromptHint: e.target.value }))} placeholder="e.g., wooden art mannequin, futuristic chrome robot" className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm" />
+                                </div>
+                            </div>
+                        )}
+
+                        <button onClick={handleGeneratePoses} disabled={!poseSourceFile || isGeneratingPoses} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
+                            {isGeneratingPoses ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : (poseOutputMode === 'controlnet-json' ? 'Extract JSON & Skeleton' : 'Generate Mannequin')}
+                        </button>
                     </div>
                     <div className="lg:col-span-2">
-                        {isGeneratingPoses && <LoadingState message="Detecting poses and generating mannequins..." />}
+                        {isGeneratingPoses && <LoadingState message={poseOutputMode === 'controlnet-json' ? "Detecting landmarks..." : "Applying pose to mannequin..."} />}
                         {poseError && <p className="text-danger bg-danger-bg p-3 rounded-md">{poseError}</p>}
-                        <ExtractorResultsGrid items={generatedPoses} onSave={handleSavePose} title="Generated Poses" />
+                        <ExtractorResultsGrid items={generatedPoses} onSave={handleSavePose} title="Results" />
                     </div>
                 </div>
             </div>
-            
+
              <div className={activeSubTab === 'font' ? 'block' : 'hidden'}>
-                <ToolHeader icon={<FontIcon className="w-8 h-8"/>} title="Font Extractor" description="Identify the font style from text in an image and generate a full A-Z, 0-9 character chart." />
+                <ToolHeader icon={<FontIcon className="w-8 h-8"/>} title="Font Extractor" description="Generate a complete character set from a sample text image." />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     <div className="lg:col-span-1 space-y-6">
-                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Upload Image with Text" id="font-source" onImageUpload={file => dispatch(updateExtractorState({ fontSourceFile: file, generatedFontChart: null }))} sourceFile={fontSourceFile} /></div><button onClick={onOpenLibraryForFont} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
-                        <button onClick={handleGenerateFont} disabled={!fontSourceFile || isGeneratingFont} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">{isGeneratingFont ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : 'Generate Font Chart'}</button>
+                        <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Sample Text Image" id="font-source" onImageUpload={file => dispatch(updateExtractorState({ fontSourceFile: file, generatedFontChart: null }))} sourceFile={fontSourceFile} infoText="Upload an image containing text in the desired style" /></div><button onClick={onOpenLibraryForFont} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+                        <button onClick={handleGenerateFont} disabled={!fontSourceFile || isGeneratingFont} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
+                            {isGeneratingFont ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : 'Generate Font Chart'}
+                        </button>
                     </div>
                     <div className="lg:col-span-2">
-                        {isGeneratingFont && <LoadingState message="Analyzing font and generating character chart..." />}
+                        {isGeneratingFont && <LoadingState message="Generating full character set from sample..." />}
                         {fontError && <p className="text-danger bg-danger-bg p-3 rounded-md">{fontError}</p>}
                         {generatedFontChart && (
-                            <div className="space-y-4">
-                                <h3 className="text-xl font-bold text-accent">Generated Font Chart</h3>
-                                <div className="bg-white p-2 rounded-lg">
-                                    <img src={generatedFontChart.src} alt="Generated Font Chart" className="w-full h-auto" />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <button onClick={() => { const link = document.createElement('a'); link.href = generatedFontChart.src; link.download = 'font_chart.png'; link.click(); }} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors">
-                                        <DownloadIcon className="w-5 h-5"/> Download
-                                    </button>
-                                    <button onClick={handleSaveFont} disabled={generatedFontChart.saved !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors ${generatedFontChart.saved === 'saved' ? 'bg-green-500 text-white' : 'bg-accent text-accent-text hover:bg-accent-hover'}`}>
+                            <div className="bg-bg-tertiary p-4 rounded-lg">
+                                <h3 className="text-lg font-bold text-text-primary mb-4">Generated Font Chart</h3>
+                                <img src={generatedFontChart.src} alt="Generated Font Chart" className="w-full rounded-lg shadow-lg mb-4 bg-white" />
+                                <div className="flex justify-end gap-4">
+                                    <button onClick={() => { const link = document.createElement('a'); link.href = generatedFontChart.src; link.download = 'font_chart.png'; link.click(); }} className="flex items-center gap-2 px-4 py-2 bg-bg-primary text-text-secondary font-semibold rounded-lg hover:bg-bg-secondary"><DownloadIcon className="w-5 h-5"/> Download</button>
+                                    <button onClick={handleSaveFont} disabled={generatedFontChart.saved !== 'idle'} className={`flex items-center gap-2 px-4 py-2 font-semibold rounded-lg transition-colors ${generatedFontChart.saved === 'saved' ? 'bg-green-500 text-white' : 'bg-accent text-accent-text hover:bg-accent-hover'}`}>
                                         {generatedFontChart.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : generatedFontChart.saved === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
                                         {generatedFontChart.saved === 'saving' ? 'Saving...' : generatedFontChart.saved === 'saved' ? 'Saved' : 'Save to Library'}
                                     </button>
@@ -458,14 +448,12 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                     </div>
                 </div>
             </div>
-            
-            {(activeSubTab === 'clothes' || activeSubTab === 'objects' || activeSubTab === 'poses' || activeSubTab === 'font') && (
-                <div className="mt-8 pt-4 border-t border-danger-bg">
-                    <button onClick={handleReset} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
-                        <ResetIcon className="w-5 h-5" /> Reset All Extractor Tools
-                    </button>
-                </div>
-            )}
+             
+             <div className="mt-8 pt-4 border-t border-danger-bg">
+                <button onClick={() => dispatch(resetExtractorState())} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
+                    <ResetIcon className="w-5 h-5" /> Reset Extractor Tools
+                </button>
+            </div>
         </div>
     );
 };

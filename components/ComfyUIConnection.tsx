@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { checkConnection } from '../services/comfyUIService';
 import { CloseIcon, SpinnerIcon } from './icons';
@@ -9,11 +10,12 @@ interface ConnectionSettingsModalProps {
   initialComfyUIUrl: string;
   initialGoogleClientId: string;
   onSave: (comfyUIUrl: string, googleClientId: string) => void;
+  onConnectionFail: (url: string) => void;
 }
 
 type ConnectionStatus = 'idle' | 'testing' | 'success' | 'failed';
 
-export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = ({ isOpen, onClose, initialComfyUIUrl, initialGoogleClientId, onSave }) => {
+export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = ({ isOpen, onClose, initialComfyUIUrl, initialGoogleClientId, onSave, onConnectionFail }) => {
   const [comfyUrl, setComfyUrl] = useState<string>('');
   const [googleClientId, setGoogleClientId] = useState<string>('');
   const [comfyStatus, setComfyStatus] = useState<ConnectionStatus>('idle');
@@ -37,6 +39,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     } else {
       setComfyStatus('failed');
       setComfyStatusMessage(result.error || 'Failed to connect.');
+      onConnectionFail(comfyUrl);
     }
   };
   

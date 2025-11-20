@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Banner } from './Banner';
 import { ThemeSwitcher } from './ThemeSwitcher';
 // FIX: Imported the missing PromptIcon component.
-import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, PencilIcon, ResetIcon, PromptIcon } from './icons';
+import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, PencilIcon, ResetIcon, PromptIcon, QuestionMarkCircleIcon } from './icons';
 import { Logo } from './Logo';
 import type { User, VersionInfo, DriveFolder, Provider } from '../types';
 
@@ -14,6 +15,7 @@ interface HeaderProps {
     onLogout: () => void;
     currentUser: User;
     onOpenSettingsModal: () => void;
+    onOpenComfyUIHelper: () => void;
     isComfyUIConnected: boolean | null;
     versionInfo: VersionInfo | null;
     driveFolder: DriveFolder | null;
@@ -28,19 +30,22 @@ interface HeaderProps {
     onResetTokenUsage: () => void;
     activeTab: string;
     provider: Provider;
+    activeModel?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
     theme, setTheme, onLogout, currentUser, 
     projectName, onProjectNameChange,
     onOpenSettingsModal,
+    onOpenComfyUIHelper,
     isComfyUIConnected, versionInfo,
     driveFolder, onDriveConnect, onDriveDisconnect,
     isDriveConfigured,
     sessionTokenUsage,
     onResetTokenUsage,
     activeTab,
-    provider
+    provider,
+    activeModel
 }) => {
 
   const [isEditingName, setIsEditingName] = useState(false);
@@ -102,9 +107,9 @@ export const Header: React.FC<HeaderProps> = ({
                 <Logo />
             </div>
             <Banner />
-            {(activeTab === 'image-generator' || activeTab === 'character-generator') && (
+            {(activeTab === 'image-generator' || activeTab === 'character-generator' || activeTab === 'video-generator' || activeTab === 'group-photo-fusion' || activeTab === 'extractor-tools' || activeTab === 'logo-theme-generator') && (
                 <div className={`hidden lg:flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-lg border-2 ${
-                    provider === 'gemini' 
+                    provider === 'gemini' || (activeTab === 'video-generator' && !isComfyUIConnected) // Fallback style if video provider isn't explicit in top level, usually managed by panel state
                     ? 'border-accent text-accent bg-accent/10' 
                     : 'border-highlight-green text-highlight-green bg-highlight-green/10'
                 }`}>
@@ -113,13 +118,10 @@ export const Header: React.FC<HeaderProps> = ({
                     ) : (
                         <WorkflowIcon className="w-5 h-5" />
                     )}
-                    <span className="tracking-wider">{provider.toUpperCase()}</span>
-                </div>
-            )}
-            {activeTab === 'group-photo-fusion' && (
-                <div className="hidden lg:flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-lg border-2 border-accent text-accent bg-accent/10">
-                    <PromptIcon className="w-5 h-5" />
-                    <span className="tracking-wider">GEMINI</span>
+                    <div className="flex flex-col leading-none">
+                        <span className="tracking-wider">{provider.toUpperCase()}</span>
+                        {activeModel && <span className="text-[10px] opacity-80 font-normal">{activeModel}</span>}
+                    </div>
                 </div>
             )}
         </div>
@@ -159,7 +161,7 @@ export const Header: React.FC<HeaderProps> = ({
                     )}
                     <p className="text-xs text-text-secondary">{currentUser.role === 'admin' ? 'Administrator' : 'User'}</p>
                 </div>
-                 <div className="mt-1">
+                 <div className="mt-1 flex items-center justify-end gap-1">
                     {isComfyUIConnected === null ? (
                         <div className="flex items-center justify-end gap-1 text-xs text-text-muted">
                         <SpinnerIcon className="h-3 w-3 animate-spin" />
@@ -170,6 +172,11 @@ export const Header: React.FC<HeaderProps> = ({
                         <span className={`h-2 w-2 rounded-full ${isComfyUIConnected ? 'bg-green-400' : 'bg-danger'}`}></span>
                         <span>COMFYUI {isComfyUIConnected ? 'Connected' : 'Not Connected'}</span>
                         </div>
+                    )}
+                    {isComfyUIConnected === false && (
+                        <button onClick={onOpenComfyUIHelper} title="Connection failed. Click for help." className="text-text-muted hover:text-accent transition-colors">
+                            <QuestionMarkCircleIcon className="w-4 h-4"/>
+                        </button>
                     )}
                 </div>
                  {sessionTokenUsage && sessionTokenUsage.totalTokenCount > 0 && (

@@ -1,5 +1,5 @@
 {
-  "version": "1.51",
-  "date": "2024-08-19T10:00:00Z",
-  "changes": "Added a major new 'Group Photo Fusion' feature to intelligently combine multiple individual photos into a single, cohesive group shot with various creative scenarios."
+  "version": "1.55",
+  "date": "2025-05-20T12:00:00Z",
+  "changes": "Enhanced Extractor Tools UI: Added quick-action buttons (Download/Save) to thumbnails and improved modal layout for better visibility. Updated Header logic to correctly display the active provider and model name for Extractor and Group Fusion tabs."
 }
