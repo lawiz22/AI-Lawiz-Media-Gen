@@ -1,3 +1,4 @@
+
 import { createSlice, createSelector, PayloadAction } from '@reduxjs/toolkit';
 import type { GenerationSliceState, GenerationOptions } from '../types';
 import type { RootState } from './store';
@@ -110,6 +111,13 @@ const initialOptions: GenerationOptions = {
     comfyVidWanT2VVideoFormat: 'video/nvenc_h264-mp4',
 };
 
+const initialCharacterOptions: GenerationOptions = {
+    ...initialOptions,
+    provider: 'gemini',
+    geminiMode: 'i2i',
+    geminiI2iMode: 'character',
+};
+
 const initialState: GenerationSliceState = {
     sourceImage: null,
     generationMode: 't2i',
@@ -122,6 +130,7 @@ const initialState: GenerationSliceState = {
     maskImage: null,
     elementImages: [],
     options: initialOptions,
+    characterOptions: initialCharacterOptions,
     isLoading: false,
     progressMessage: '',
     progressValue: 0,
@@ -171,6 +180,12 @@ const generationSlice = createSlice({
     updateOptions: (state, action: PayloadAction<Partial<GenerationOptions>>) => {
       state.options = { ...state.options, ...action.payload };
     },
+    setCharacterOptions: (state, action: PayloadAction<GenerationOptions>) => {
+        state.characterOptions = action.payload;
+    },
+    updateCharacterOptions: (state, action: PayloadAction<Partial<GenerationOptions>>) => {
+        state.characterOptions = { ...state.characterOptions, ...action.payload };
+    },
     setLoadingState: (state, action: PayloadAction<{ isLoading: boolean; message?: string; value?: number }>) => {
       state.isLoading = action.payload.isLoading;
       state.progressMessage = action.payload.message ?? (action.payload.isLoading ? 'Initializing...' : '');
@@ -214,8 +229,8 @@ const generationSlice = createSlice({
         state.shouldGenerateCharacterName = false;
         state.maskImage = null;
         state.elementImages = [];
-        state.options = {
-            ...state.options,
+        
+        const resetDefaults: Partial<GenerationOptions> = {
             geminiPrompt: '',
             comfyPrompt: '',
             customBackground: '',
@@ -228,6 +243,16 @@ const generationSlice = createSlice({
             geminiInpaintTargetPrompt: '',
             geminiComposePrompt: '',
         };
+
+        state.options = { ...state.options, ...resetDefaults };
+        
+        // Ensure character options are reset but KEEP the specific mode
+        state.characterOptions = { 
+            ...state.characterOptions, 
+            ...resetDefaults,
+            geminiI2iMode: 'character',
+            geminiMode: 'i2i'
+        };
     }
   },
 });
@@ -235,7 +260,7 @@ const generationSlice = createSlice({
 export const {
     setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
     setClothingImage, setBackgroundImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
-    setMaskImage, setElementImages, setOptions, updateOptions, setLoadingState,
+    setMaskImage, setElementImages, setOptions, updateOptions, setCharacterOptions, updateCharacterOptions, setLoadingState,
     updateProgress, setGeneratedImages, setImageSaveStatus, setLastUsedPrompt, resetGenerationState
 } = generationSlice.actions;
 
@@ -246,40 +271,44 @@ const selectApp = (state: RootState) => state.app;
 export const selectIsReadyToGenerate = createSelector(
   [selectGeneration, selectApp],
   (generation, app) => {
-    const { isLoading, options, sourceImage, maskImage, elementImages, generationMode } = generation;
+    const { isLoading, options, characterOptions, sourceImage, maskImage, elementImages, generationMode } = generation;
     const { isComfyUIConnected, activeTab } = app;
 
     if (isLoading) return false;
 
-    if (options.provider === 'gemini') {
-        if (options.geminiMode === 't2i') return !!options.geminiPrompt?.trim();
+    // Determine which options to check based on active tab
+    const activeOptions = activeTab === 'character-generator' ? characterOptions : options;
+
+    if (activeOptions.provider === 'gemini') {
+        if (activeOptions.geminiMode === 't2i') return !!activeOptions.geminiPrompt?.trim();
         
         // I2I modes
         if (activeTab === 'image-generator') {
-            if (options.geminiI2iMode === 'general') {
-                return !!sourceImage && !!options.geminiGeneralEditPrompt?.trim();
+            if (activeOptions.geminiI2iMode === 'general') {
+                return !!sourceImage && !!activeOptions.geminiGeneralEditPrompt?.trim();
             }
-            if (options.geminiI2iMode === 'inpaint') {
-                const task = options.geminiInpaintTask;
+            if (activeOptions.geminiI2iMode === 'inpaint') {
+                const task = activeOptions.geminiInpaintTask;
                 const taskReady = 
                     (task === 'remove') ||
-                    (task === 'replace' && !!options.geminiInpaintTargetPrompt?.trim()) ||
-                    (task === 'changeColor' && !!options.geminiInpaintTargetPrompt?.trim()) ||
-                    (task === 'custom' && !!options.geminiInpaintCustomPrompt?.trim());
+                    (task === 'replace' && !!activeOptions.geminiInpaintTargetPrompt?.trim()) ||
+                    (task === 'changeColor' && !!activeOptions.geminiInpaintTargetPrompt?.trim()) ||
+                    (task === 'custom' && !!activeOptions.geminiInpaintCustomPrompt?.trim());
                 return !!sourceImage && !!maskImage && taskReady;
             }
-            if (options.geminiI2iMode === 'compose') {
-                return !!sourceImage && elementImages.length > 0 && !!options.geminiComposePrompt?.trim();
+            if (activeOptions.geminiI2iMode === 'compose') {
+                return !!sourceImage && elementImages.length > 0 && !!activeOptions.geminiComposePrompt?.trim();
             }
         } else if (activeTab === 'character-generator') {
-            if (options.poseMode === 'library') {
-                 return !!sourceImage && !!options.poseLibraryItems && options.poseLibraryItems.length > 0;
+            if (activeOptions.poseMode === 'library') {
+                 return !!sourceImage && !!activeOptions.poseLibraryItems && activeOptions.poseLibraryItems.length > 0;
             }
             return !!sourceImage;
         }
-    } else if (options.provider === 'comfyui') {
+    } else if (activeOptions.provider === 'comfyui') {
+        // ComfyUI logic is mainly used in image-generator tab for now
         const isI2IMode = generationMode === 'i2i';
-        const baseReady = !!isComfyUIConnected && !!options.comfyPrompt?.trim();
+        const baseReady = !!isComfyUIConnected && !!activeOptions.comfyPrompt?.trim();
         if (isI2IMode) {
             return baseReady && !!sourceImage;
         }

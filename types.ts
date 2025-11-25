@@ -16,7 +16,7 @@ export type ImageStyle = 'photorealistic' | 'cartoon' | 'comic book style' | 'an
 export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | 'a 1970s film look' | 'a high-contrast film noir style photograph' | 'a classical Dutch Master painting' | 'a high-fashion Vogue magazine shot';
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
-export type GeminiT2IModel = 'imagen-4.0-generate-001' | 'gemini-3-pro-preview' | 'gemini-2.5-flash-image';
+export type GeminiT2IModel = string;
 export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf';
 export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui';
@@ -53,7 +53,7 @@ export interface GenerationOptions {
     textObjectPrompt?: string;
 
     // Gemini I2I Editing
-    geminiI2iMode?: 'general' | 'inpaint' | 'compose';
+    geminiI2iMode?: 'general' | 'inpaint' | 'compose' | 'character';
     geminiGeneralEditPrompt?: string;
     geminiInpaintTask?: 'remove' | 'replace' | 'changeColor' | 'custom';
     geminiInpaintCustomPrompt?: string;
@@ -179,7 +179,7 @@ export interface GenerationOptions {
     height?: number;
 
     // Gemini Video
-    geminiVidModel?: 'veo-2.0-generate-001';
+    geminiVidModel?: 'veo-2.0-generate-preview-01';
     geminiVidPrompt?: string;
     geminiVidUseEndFrame?: boolean;
 
@@ -596,6 +596,7 @@ export interface GenerationSliceState {
   maskImage: File | null;
   elementImages: File[];
   options: GenerationOptions;
+  characterOptions: GenerationOptions; // Added character options
   isLoading: boolean;
   progressMessage: string;
   progressValue: number;

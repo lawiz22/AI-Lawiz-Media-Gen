@@ -1,23 +1,19 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
-*/
-import React, { useState, ChangeEvent, useRef, useEffect } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
-import { motion } from 'framer-motion';
 import { AppDispatch } from '../../store/store';
 import { addToLibrary } from '../../store/librarySlice';
 import { generateDecadeImage } from '../../services/geminiService';
-import PolaroidCard from './PolaroidCard';
 import { createAlbumPage } from '../../utils/pastForwardAlbumUtils';
-import Footer from './Footer';
-import { cn } from '../../utils/cn';
-import { dataUrlToThumbnail } from '../../utils/imageUtils';
-import { SaveIcon, SpinnerIcon, CheckIcon } from '../icons';
+import { dataUrlToThumbnail, fileToDataUrl } from '../../utils/imageUtils';
+import { 
+    SaveIcon, SpinnerIcon, CheckIcon, DownloadIcon, RefreshIcon, 
+    GenerateIcon, PastForwardIcon 
+} from '../icons';
+import { ImageUploader } from '../ImageUploader';
 
 const DECADES = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s'];
 
-// Pre-defined themes and their corresponding prompts
 const THEMES: Record<string, { title: string, description: string, prompt: (decade: string) => string }> = {
     'decades': {
         title: 'Through the Decades',
@@ -31,7 +27,7 @@ const THEMES: Record<string, { title: string, description: string, prompt: (deca
     },
     'pet-cartoon': {
         title: 'Pet Cartoon-a-tron',
-        description: 'Turn your pet into a cartoon character from different eras. (Best with photos of pets!)',
+        description: 'Turn your pet into a cartoon character from different eras.',
         prompt: (decade: string) => `Turn the pet in this photo into a cartoon character in the animation style of the ${decade}. The output must be a colorful cartoon image.`,
     },
     'fantasy': {
@@ -51,72 +47,77 @@ const THEMES: Record<string, { title: string, description: string, prompt: (deca
     },
 };
 
-const GHOST_POLAROIDS_CONFIG = [
-  { initial: { x: "-150%", y: "-100%", rotate: -30 }, transition: { delay: 0.2 } },
-  { initial: { x: "150%", y: "-80%", rotate: 25 }, transition: { delay: 0.4 } },
-  { initial: { x: "-120%", y: "120%", rotate: 45 }, transition: { delay: 0.6 } },
-  { initial: { x: "180%", y: "90%", rotate: -20 }, transition: { delay: 0.8 } },
-  { initial: { x: "0%", y: "-200%", rotate: 0 }, transition: { delay: 0.5 } },
-  { initial: { x: "100%", y: "150%", rotate: 10 }, transition: { delay: 0.3 } },
-];
+type ImageStatus = 'idle' | 'pending' | 'done' | 'error';
 
-
-type ImageStatus = 'pending' | 'done' | 'error';
 interface GeneratedImage {
     status: ImageStatus;
     url?: string;
     error?: string;
 }
 
-const primaryButtonClasses = "font-permanent-marker text-xl text-center text-black bg-yellow-400 py-3 px-8 rounded-sm transform transition-transform duration-200 hover:scale-105 hover:-rotate-2 hover:bg-yellow-300 shadow-[2px_2px_0px_2px_rgba(0,0,0,0.2)]";
-const secondaryButtonClasses = "font-permanent-marker text-xl text-center text-white bg-white/10 backdrop-blur-sm border-2 border-white/80 py-3 px-8 rounded-sm transform transition-transform duration-200 hover:scale-105 hover:rotate-2 hover:bg-white hover:text-black";
-
-function PastForwardPanel() {
+const PastForwardPanel: React.FC = () => {
     const dispatch: AppDispatch = useDispatch();
-    const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+    
+    // State
+    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+    const [uploadedImageBase64, setUploadedImageBase64] = useState<string | null>(null);
     const [generatedImages, setGeneratedImages] = useState<Record<string, GeneratedImage>>({});
-    const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [isDownloading, setIsDownloading] = useState<boolean>(false);
-    const [appState, setAppState] = useState<'idle' | 'image-uploaded' | 'generating' | 'results-shown'>('idle');
+    const [isGenerating, setIsGenerating] = useState<boolean>(false);
+    const [isCreatingAlbum, setIsCreatingAlbum] = useState<boolean>(false);
     const [selectedTheme, setSelectedTheme] = useState<string>('decades');
     const [saveStatuses, setSaveStatuses] = useState<Record<string, 'idle' | 'saving' | 'saved'>>({});
     const [albumSaveStatus, setAlbumSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
+    // Initialize empty state for grid
+    useEffect(() => {
+        const initialImages: Record<string, GeneratedImage> = {};
+        DECADES.forEach(decade => {
+            initialImages[decade] = { status: 'idle' };
+        });
+        setGeneratedImages(initialImages);
+    }, []);
 
-    const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setUploadedImage(reader.result as string);
-                setAppState('image-uploaded');
-                setGeneratedImages({}); // Clear previous results
+    const handleImageUpload = async (file: File | null) => {
+        setUploadedFile(file);
+        if (file) {
+            try {
+                const base64 = await fileToDataUrl(file);
+                setUploadedImageBase64(base64);
+                // Reset results when new image is uploaded
+                const initialImages: Record<string, GeneratedImage> = {};
+                DECADES.forEach(decade => {
+                    initialImages[decade] = { status: 'idle' };
+                });
+                setGeneratedImages(initialImages);
                 setSaveStatuses({});
                 setAlbumSaveStatus('idle');
-            };
-            reader.readAsDataURL(file);
+            } catch (e) {
+                console.error("Error reading file:", e);
+            }
+        } else {
+            setUploadedImageBase64(null);
         }
     };
 
     const handleGenerateClick = async () => {
-        if (!uploadedImage) return;
+        if (!uploadedImageBase64) return;
 
-        setIsLoading(true);
-        setAppState('generating');
+        setIsGenerating(true);
         
-        const initialImages: Record<string, GeneratedImage> = {};
-        DECADES.forEach(decade => {
-            initialImages[decade] = { status: 'pending' };
+        // Set all to pending initially to show loading state in grid
+        setGeneratedImages(prev => {
+            const next = { ...prev };
+            DECADES.forEach(d => next[d] = { status: 'pending' });
+            return next;
         });
-        setGeneratedImages(initialImages);
 
-        const concurrencyLimit = 2; // Process two decades at a time
+        const concurrencyLimit = 2;
         const decadesQueue = [...DECADES];
 
         const processDecade = async (decade: string) => {
             try {
                 const prompt = THEMES[selectedTheme].prompt(decade);
-                const resultUrl = await generateDecadeImage(uploadedImage, prompt);
+                const resultUrl = await generateDecadeImage(uploadedImageBase64, prompt);
                 setGeneratedImages(prev => ({
                     ...prev,
                     [decade]: { status: 'done', url: resultUrl },
@@ -127,7 +128,6 @@ function PastForwardPanel() {
                     ...prev,
                     [decade]: { status: 'error', error: errorMessage },
                 }));
-                console.error(`Failed to generate image for ${decade}:`, err);
             }
         };
 
@@ -141,32 +141,23 @@ function PastForwardPanel() {
         });
 
         await Promise.all(workers);
-
-        setIsLoading(false);
-        setAppState('results-shown');
+        setIsGenerating(false);
     };
 
     const handleRegenerateDecade = async (decade: string) => {
-        if (!uploadedImage) return;
-
-        // Prevent re-triggering if a generation is already in progress
-        if (generatedImages[decade]?.status === 'pending') {
-            return;
-        }
+        if (!uploadedImageBase64) return;
+        if (generatedImages[decade]?.status === 'pending') return;
         
         setSaveStatuses(prev => ({ ...prev, [decade]: 'idle' }));
-        console.log(`Regenerating image for ${decade}...`);
-
-        // Set the specific decade to 'pending' to show the loading spinner
+        
         setGeneratedImages(prev => ({
             ...prev,
             [decade]: { status: 'pending' },
         }));
 
-        // Call the generation service for the specific decade
         try {
             const prompt = THEMES[selectedTheme].prompt(decade);
-            const resultUrl = await generateDecadeImage(uploadedImage, prompt);
+            const resultUrl = await generateDecadeImage(uploadedImageBase64, prompt);
             setGeneratedImages(prev => ({
                 ...prev,
                 [decade]: { status: 'done', url: resultUrl },
@@ -177,17 +168,28 @@ function PastForwardPanel() {
                 ...prev,
                 [decade]: { status: 'error', error: errorMessage },
             }));
-            console.error(`Failed to regenerate image for ${decade}:`, err);
         }
     };
-    
-    const handleReset = () => {
-        setUploadedImage(null);
-        setGeneratedImages({});
-        setSelectedTheme('decades');
-        setAppState('idle');
-        setSaveStatuses({});
-        setAlbumSaveStatus('idle');
+
+    const handleSaveIndividualImage = async (decade: string) => {
+        const image = generatedImages[decade];
+        if (image?.status !== 'done' || !image.url || !uploadedImageBase64) return;
+
+        setSaveStatuses(prev => ({ ...prev, [decade]: 'saving' }));
+        try {
+            const item = {
+                mediaType: 'past-forward-photo' as const,
+                name: `Past Forward - ${decade} (${THEMES[selectedTheme].title})`,
+                media: image.url,
+                thumbnail: await dataUrlToThumbnail(image.url, 256),
+                sourceImage: uploadedImageBase64
+            };
+            await dispatch(addToLibrary(item)).unwrap();
+            setSaveStatuses(prev => ({ ...prev, [decade]: 'saved' }));
+        } catch (err) {
+            console.error("Failed to save image:", err);
+            setSaveStatuses(prev => ({ ...prev, [decade]: 'idle' }));
+        }
     };
 
     const handleDownloadIndividualImage = (decade: string) => {
@@ -202,250 +204,238 @@ function PastForwardPanel() {
         }
     };
 
-    const handleSaveIndividualImage = async (decade: string) => {
-        const image = generatedImages[decade];
-        if (image?.status !== 'done' || !image.url || !uploadedImage) return;
-
-        setSaveStatuses(prev => ({ ...prev, [decade]: 'saving' }));
-        try {
-            const item = {
-                mediaType: 'past-forward-photo' as const,
-                name: `Past Forward - ${decade} (${THEMES[selectedTheme].title})`,
-                media: image.url,
-                thumbnail: await dataUrlToThumbnail(image.url, 256),
-                sourceImage: uploadedImage
-            };
-            await dispatch(addToLibrary(item)).unwrap();
-            setSaveStatuses(prev => ({ ...prev, [decade]: 'saved' }));
-        } catch (err) {
-            console.error("Failed to save image to library:", err);
-            alert("Failed to save image to library. See console for details.");
-            setSaveStatuses(prev => ({ ...prev, [decade]: 'idle' }));
-        }
+    const getCompletedImages = () => {
+        return (Object.entries(generatedImages) as [string, GeneratedImage][])
+            .filter(([, image]) => image.status === 'done' && image.url)
+            .reduce((acc, [decade, image]) => {
+                acc[decade] = image.url!;
+                return acc;
+            }, {} as Record<string, string>);
     };
 
     const handleDownloadAlbum = async () => {
-        setIsDownloading(true);
+        const imageData = getCompletedImages();
+        if (Object.keys(imageData).length < DECADES.length) {
+            alert("Please wait for all images to finish generating.");
+            return;
+        }
+
+        setIsCreatingAlbum(true);
         try {
-            const imageData = Object.entries(generatedImages)
-                .filter(([, image]) => (image as GeneratedImage).status === 'done' && (image as GeneratedImage).url)
-                .reduce((acc, [decade, image]) => {
-                    acc[decade] = (image as GeneratedImage).url!;
-                    return acc;
-                }, {} as Record<string, string>);
-
-            if (Object.keys(imageData).length < DECADES.length) {
-                alert("Please wait for all images to finish generating before downloading the album.");
-                return;
-            }
-
             const albumDataUrl = await createAlbumPage(imageData);
-
             const link = document.createElement('a');
             link.href = albumDataUrl;
             link.download = 'past-forward-album.jpg';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-
         } catch (error) {
-            console.error("Failed to create or download album:", error);
-            alert("Sorry, there was an error creating your album. Please try again.");
+            console.error("Album error:", error);
+            alert("Error creating album.");
         } finally {
-            setIsDownloading(false);
+            setIsCreatingAlbum(false);
         }
     };
 
     const handleSaveAlbum = async () => {
+        const imageData = getCompletedImages();
+        if (Object.keys(imageData).length < DECADES.length) {
+            alert("Please wait for all images to finish generating.");
+            return;
+        }
+
         setAlbumSaveStatus('saving');
         try {
-            const imageData = Object.entries(generatedImages)
-                .filter(([, image]) => (image as GeneratedImage).status === 'done' && (image as GeneratedImage).url)
-                .reduce((acc, [decade, image]) => {
-                    acc[decade] = (image as GeneratedImage).url!;
-                    return acc;
-                }, {} as Record<string, string>);
-
-            if (Object.keys(imageData).length < DECADES.length) {
-                alert("Please wait for all images to finish generating before saving the album.");
-                setAlbumSaveStatus('idle');
-                return;
-            }
-
             const albumDataUrl = await createAlbumPage(imageData);
-            
             const item = {
                 mediaType: 'past-forward-photo' as const,
                 name: `Past Forward Album (${THEMES[selectedTheme].title})`,
                 media: albumDataUrl,
                 thumbnail: await dataUrlToThumbnail(albumDataUrl, 256),
-                sourceImage: uploadedImage!
+                sourceImage: uploadedImageBase64!
             };
             await dispatch(addToLibrary(item)).unwrap();
             setAlbumSaveStatus('saved');
         } catch (error) {
-            console.error("Failed to create or save album:", error);
-            alert("Sorry, there was an error saving your album. Please try again.");
+            console.error("Album save error:", error);
             setAlbumSaveStatus('idle');
         }
     };
 
+    const isReadyToGenerate = !!uploadedImageBase64 && !isGenerating;
+    const hasResults = (Object.values(generatedImages) as GeneratedImage[]).some(img => img.status === 'done');
+
     return (
-        <main className="bg-black text-neutral-200 w-full flex flex-col items-center justify-center p-4 pb-24 overflow-hidden relative">
-            <div className="absolute top-0 left-0 w-full h-full bg-grid-white/[0.05]"></div>
-            
-            <div className="z-10 flex flex-col items-center justify-center w-full h-full flex-1 min-h-0">
-                <div className="text-center mb-10">
-                    <h1 className="text-6xl md:text-8xl font-caveat font-bold text-neutral-100">Past Forward</h1>
-                    <p className="font-permanent-marker text-neutral-300 mt-2 text-xl tracking-wide">Generate yourself through the decades.</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            {/* LEFT COLUMN: Controls */}
+            <div className="lg:col-span-1 space-y-8">
+                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                    <div className="flex items-center gap-3 mb-6">
+                        <PastForwardIcon className="w-8 h-8 text-accent" />
+                        <h2 className="text-xl font-bold text-accent">1. Source & Theme</h2>
+                    </div>
+
+                    <div className="space-y-6">
+                        <ImageUploader 
+                            label="Upload Source Photo" 
+                            id="past-forward-upload"
+                            onImageUpload={handleImageUpload}
+                            sourceFile={uploadedFile}
+                        />
+
+                        <div>
+                            <label className="block text-sm font-medium text-text-secondary mb-2">Select Journey Theme</label>
+                            <div className="grid grid-cols-1 gap-2">
+                                {Object.entries(THEMES).map(([key, theme]) => (
+                                    <button
+                                        key={key}
+                                        onClick={() => setSelectedTheme(key)}
+                                        className={`p-3 rounded-lg text-left transition-all duration-200 border ${
+                                            selectedTheme === key 
+                                                ? 'bg-accent/10 border-accent shadow-sm' 
+                                                : 'bg-bg-tertiary border-transparent hover:bg-bg-tertiary-hover'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className={`font-bold text-sm ${selectedTheme === key ? 'text-accent' : 'text-text-primary'}`}>
+                                                {theme.title}
+                                            </span>
+                                            {selectedTheme === key && <CheckIcon className="w-4 h-4 text-accent" />}
+                                        </div>
+                                        <p className="text-xs text-text-muted mt-1 line-clamp-2">
+                                            {theme.description}
+                                        </p>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                {appState === 'idle' && (
-                     <div className="relative flex flex-col items-center justify-center w-full">
-                        {/* Ghost polaroids for intro animation */}
-                        {GHOST_POLAROIDS_CONFIG.map((config, index) => (
-                             <motion.div
-                                key={index}
-                                className="absolute w-80 h-[26rem] rounded-md p-4 bg-neutral-100/10 blur-sm"
-                                initial={config.initial}
-                                animate={{
-                                    x: "0%", y: "0%", rotate: (Math.random() - 0.5) * 20,
-                                    scale: 0,
-                                    opacity: 0,
-                                }}
-                                transition={{
-                                    ...config.transition,
-                                    ease: "circOut",
-                                    duration: 2,
-                                }}
-                            />
-                        ))}
-                        <motion.div
-                             initial={{ opacity: 0, scale: 0.8 }}
-                             animate={{ opacity: 1, scale: 1 }}
-                             transition={{ delay: 2, duration: 0.8, type: 'spring' }}
-                             className="flex flex-col items-center"
-                        >
-                            <label htmlFor="file-upload" className="cursor-pointer group transform hover:scale-105 transition-transform duration-300">
-                                 <PolaroidCard 
-                                     caption="Click to begin"
-                                     status="done"
-                                 />
-                            </label>
-                            <input id="file-upload" type="file" className="hidden" accept="image/png, image/jpeg, image/webp" onChange={handleImageUpload} />
-                            <p className="mt-8 font-permanent-marker text-neutral-500 text-center max-w-xs text-lg">
-                                Click the polaroid to upload your photo and start your journey through time.
-                            </p>
-                        </motion.div>
-                    </div>
-                )}
-
-                {appState === 'image-uploaded' && uploadedImage && (
-                    <motion.div 
-                        className="flex flex-col items-center gap-8 w-full max-w-5xl px-4"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
+                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                    <button 
+                        onClick={handleGenerateClick}
+                        disabled={!isReadyToGenerate}
+                        style={isReadyToGenerate ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                        className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
                     >
-                        <div className="w-full flex justify-center">
-                            <PolaroidCard 
-                                imageUrl={uploadedImage} 
-                                caption="Your Photo" 
-                                status="done"
-                            />
-                        </div>
-
-                        <h2 className="font-permanent-marker text-3xl text-center text-yellow-400 mt-4">Choose Your Journey</h2>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
-                            {Object.entries(THEMES).map(([key, theme]) => (
-                                <button 
-                                    key={key} 
-                                    onClick={() => setSelectedTheme(key)}
-                                    className={cn(
-                                        "p-4 rounded-lg border-2 text-left transition-all duration-200 transform hover:scale-105",
-                                        selectedTheme === key 
-                                            ? 'border-yellow-400 bg-yellow-400/20 shadow-[0_0_15px_rgba(250,204,21,0.5)]' 
-                                            : 'border-neutral-700 bg-neutral-900/50 hover:border-neutral-500 hover:bg-neutral-800/50'
-                                    )}
-                                >
-                                    <h3 className="font-permanent-marker text-xl text-neutral-100">{theme.title}</h3>
-                                    <p className="text-neutral-400 text-sm mt-1">{theme.description}</p>
-                                </button>
-                            ))}
-                        </div>
-                        
-                        <div className="flex flex-col sm:flex-row items-center gap-4 mt-6">
-                            <button onClick={handleReset} className={secondaryButtonClasses}>
-                                Different Photo
-                            </button>
-                            <button onClick={handleGenerateClick} className={primaryButtonClasses}>
-                                Generate: {THEMES[selectedTheme].title}
-                            </button>
-                        </div>
-                    </motion.div>
-                )}
-
-
-                {(appState === 'generating' || appState === 'results-shown') && (
-                     <>
-                        <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12 mt-8">
-                             {DECADES.map((decade, index) => (
-                                 <motion.div
-                                     key={decade}
-                                     initial={{ opacity: 0, scale: 0.8, y: 50 }}
-                                     animate={{ opacity: 1, scale: 1, y: 0 }}
-                                     transition={{ type: 'spring', stiffness: 100, damping: 20, delay: index * 0.1 }}
-                                     className="flex justify-center"
-                                 >
-                                     <PolaroidCard
-                                         caption={decade}
-                                         status={generatedImages[decade]?.status || 'pending'}
-                                         imageUrl={generatedImages[decade]?.url}
-                                         error={generatedImages[decade]?.error}
-                                         onRegenerate={handleRegenerateDecade}
-                                         onDownload={handleDownloadIndividualImage}
-                                         onSave={handleSaveIndividualImage}
-                                         saveStatus={saveStatuses[decade] || 'idle'}
-                                     />
-                                 </motion.div>
-                             ))}
-                         </div>
-                         <div className="h-20 mt-8 flex items-center justify-center">
-                            {appState === 'results-shown' && (
-                                <div className="flex flex-col sm:flex-row items-center gap-4">
-                                    <button 
-                                        onClick={handleDownloadAlbum} 
-                                        disabled={isDownloading} 
-                                        className={`${primaryButtonClasses} disabled:opacity-50 disabled:cursor-not-allowed`}
-                                    >
-                                        {isDownloading ? 'Creating Album...' : 'Download Album'}
-                                    </button>
-                                    <button
-                                        onClick={handleSaveAlbum}
-                                        disabled={albumSaveStatus !== 'idle'}
-                                        className={cn(
-                                            primaryButtonClasses,
-                                            "flex items-center gap-2",
-                                            "disabled:opacity-50 disabled:cursor-not-allowed",
-                                            albumSaveStatus === 'saved' && "!bg-green-500 !text-white"
-                                        )}
-                                    >
-                                        {albumSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : albumSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                        {albumSaveStatus === 'saving' ? 'Saving...' : albumSaveStatus === 'saved' ? 'Saved!' : 'Save Album'}
-                                    </button>
-                                    <button onClick={handleReset} className={secondaryButtonClasses}>
-                                        Start Over
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </>
-                )}
+                        {isGenerating ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <GenerateIcon className="w-5 h-5"/>}
+                        {isGenerating ? 'Travelling Through Time...' : 'Start Journey'}
+                    </button>
+                </div>
             </div>
-            <Footer />
-        </main>
+
+            {/* RIGHT COLUMN: Results */}
+            <div className="lg:col-span-2 space-y-6">
+                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+                        <h2 className="text-xl font-bold text-accent">2. Time Travel Results</h2>
+                        {hasResults && (
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={handleDownloadAlbum}
+                                    disabled={isCreatingAlbum}
+                                    className="flex items-center gap-2 px-3 py-2 bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                                >
+                                    {isCreatingAlbum ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : <DownloadIcon className="w-4 h-4"/>}
+                                    Download Album
+                                </button>
+                                <button 
+                                    onClick={handleSaveAlbum}
+                                    disabled={albumSaveStatus !== 'idle'}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${
+                                        albumSaveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'
+                                    }`}
+                                >
+                                    {albumSaveStatus === 'saving' ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : albumSaveStatus === 'saved' ? <CheckIcon className="w-4 h-4"/> : <SaveIcon className="w-4 h-4"/>}
+                                    {albumSaveStatus === 'saved' ? 'Saved' : 'Save Album'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {DECADES.map(decade => {
+                            const image = generatedImages[decade];
+                            const status = image?.status || 'idle';
+                            const savedStatus = saveStatuses[decade] || 'idle';
+
+                            return (
+                                <div key={decade} className="group relative aspect-[3/4] bg-bg-tertiary rounded-lg overflow-hidden shadow-md border border-border-primary/30">
+                                    {/* Card Content */}
+                                    {status === 'idle' && (
+                                        <div className="flex flex-col items-center justify-center h-full text-text-muted p-4 text-center">
+                                            <PastForwardIcon className="w-12 h-12 opacity-20 mb-2" />
+                                            <span className="text-lg font-bold opacity-40">{decade}</span>
+                                        </div>
+                                    )}
+                                    
+                                    {status === 'pending' && (
+                                        <div className="flex flex-col items-center justify-center h-full bg-black/20">
+                                            <SpinnerIcon className="w-8 h-8 text-accent animate-spin mb-2" />
+                                            <span className="text-xs text-accent font-semibold animate-pulse">Generating {decade}...</span>
+                                        </div>
+                                    )}
+
+                                    {status === 'error' && (
+                                        <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+                                            <p className="text-danger font-bold text-sm">Generation Failed</p>
+                                            <p className="text-xs text-danger/70 mt-1">{image.error}</p>
+                                            <button 
+                                                onClick={() => handleRegenerateDecade(decade)}
+                                                className="mt-3 p-2 bg-bg-primary rounded-full hover:bg-accent hover:text-accent-text transition-colors"
+                                            >
+                                                <RefreshIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {status === 'done' && image.url && (
+                                        <>
+                                            <img src={image.url} alt={decade} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                            
+                                            {/* Label Badge */}
+                                            <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-white border border-white/10">
+                                                {decade}
+                                            </div>
+
+                                            {/* Hover Actions */}
+                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
+                                                <button
+                                                    onClick={() => handleDownloadIndividualImage(decade)}
+                                                    className="p-2 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors shadow-lg"
+                                                    title="Download"
+                                                >
+                                                    <DownloadIcon className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleSaveIndividualImage(decade)}
+                                                    disabled={savedStatus !== 'idle'}
+                                                    className={`p-2 rounded-full transition-colors shadow-lg ${
+                                                        savedStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text'
+                                                    }`}
+                                                    title="Save to Library"
+                                                >
+                                                    {savedStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : savedStatus === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRegenerateDecade(decade)}
+                                                    className="p-2 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors shadow-lg"
+                                                    title="Regenerate"
+                                                >
+                                                    <RefreshIcon className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        </div>
     );
-}
+};
 
 export default PastForwardPanel;

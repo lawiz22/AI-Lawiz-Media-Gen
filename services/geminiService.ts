@@ -1,4 +1,5 @@
-import { GoogleGenAI, Part, Type, Modality } from "@google/genai";
+
+import { GoogleGenAI, Part, Type, Modality, GenerateContentResponse } from "@google/genai";
 import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState, PaletteColor, ExtractorState } from '../types';
 import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart, createBlankImageFile, letterboxImage, dataUrlToFile, fileToDataUrl } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
@@ -6,6 +7,45 @@ import { buildPromptSegments, decodePose, getRandomPose } from "../utils/promptB
 import { POSES } from "../constants";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+export const getGeminiModels = async (): Promise<string[]> => {
+    // Safety check: if no API key, don't even try to fetch, just return empty to use defaults.
+    if (!process.env.API_KEY) return [];
+
+    try {
+        // Direct fetch to the Gemini API listing endpoint since SDK might not expose it directly or fully.
+        // We use a short timeout to prevent hanging if the network is slow/blocked.
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.API_KEY}`, {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            console.warn(`Failed to fetch models list: ${response.status} ${response.statusText}`);
+            return [];
+        }
+
+        const data = await response.json();
+        if (!data.models) return [];
+        
+        // Filter relevant models (gemini and imagen) and remove the 'models/' prefix
+        return data.models
+            .map((m: any) => m.name.replace('models/', ''))
+            .filter((name: string) => {
+                const lowerName = name.toLowerCase();
+                // Filter out deprecated 1.0 and 1.5 models as per guidelines, but keep newer ones
+                if (lowerName.includes('1.0') || lowerName.includes('1.5')) return false;
+                return lowerName.includes('gemini') || lowerName.includes('imagen') || lowerName.includes('veo');
+            });
+    } catch (e) {
+        console.error("Failed to fetch Gemini models list (using defaults):", e);
+        // Return a safe empty array so the UI can fallback to input/default
+        return [];
+    }
+};
 
 export const generatePortraits = async (
     sourceImage: File | null,
@@ -20,74 +60,265 @@ export const generatePortraits = async (
 ): Promise<{ images: { src: string; usageMetadata?: any }[], finalPrompt: string | null }> => {
     updateProgress("Preparing generation...", 0.1);
 
-    let model = options.geminiT2IModel || 'imagen-4.0-generate-001';
-    const parts: Part[] = [];
+    let model = options.geminiT2IModel || 'gemini-2.5-flash-image';
+    
+    // Common helper to execute single request
+    const executeGeneration = async (modelToUse: string, requestParts: Part[], imageCount: number, retry = true): Promise<GenerateContentResponse> => {
+        try {
+            const response = await ai.models.generateContent({
+                model: modelToUse,
+                contents: { parts: requestParts },
+                config: {
+                    responseModalities: [Modality.IMAGE],
+                    numberOfGeneratedImages: imageCount,
+                    aspectRatio: options.aspectRatio,
+                },
+            });
+            return response;
+        } catch (e: any) {
+            // Explicitly check for the "Failed to call the Gemini API" generic message and treat it as retryable.
+            const errorMessage = e.message || '';
+            const isRetryable = errorMessage.includes('429') || 
+                                errorMessage.includes('503') || 
+                                errorMessage.includes('404') || 
+                                errorMessage.includes('403') ||
+                                errorMessage.includes('Failed to call the Gemini API');
+            
+            if (retry && isRetryable) {
+                console.warn(`API call failed. Retrying... Error: ${errorMessage}`);
+                // Backoff slightly before retrying
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                if (modelToUse !== 'gemini-2.5-flash-image') {
+                    updateProgress("Primary model failed. Retrying with Gemini Flash...", 0.4);
+                    return executeGeneration('gemini-2.5-flash-image', requestParts, imageCount, false);
+                } else {
+                    return executeGeneration('gemini-2.5-flash-image', requestParts, imageCount, false);
+                }
+            }
+            if (errorMessage.includes('403') || (e.status === 403)) {
+                 throw new Error(`Permission denied for model '${modelToUse}'. Try selecting 'gemini-2.5-flash-image'.`);
+            }
+            throw e;
+        }
+    };
 
-    // T2I Mode
-    if (options.geminiMode === 't2i') {
-        if (!options.geminiPrompt) throw new Error("Prompt is required for Text-to-Image generation.");
-        parts.push({ text: options.geminiPrompt });
-    } 
-    // I2I / Edit Mode
-    else {
-        model = 'gemini-2.5-flash-image'; // Force Flash Image for I2I/editing
-        if (!sourceImage) throw new Error("Source image is required for Image-to-Image generation.");
-        
-        parts.push(await fileToGenerativePart(sourceImage));
-
-        if (options.geminiI2iMode === 'inpaint') {
-             if (maskImage) {
-                 parts.push(await fileToGenerativePart(maskImage));
+    // --- IMAGEN MODEL PATH ---
+    if (model.toLowerCase().includes('imagen')) {
+        if (options.geminiMode !== 't2i') {
+            throw new Error("Imagen models currently only support Text-to-Image (T2I) mode.");
+        }
+        updateProgress("Sending request to Imagen...", 0.3);
+        try {
+            const response = await ai.models.generateImages({
+                model: model,
+                prompt: options.geminiPrompt || "A generated image",
+                config: {
+                    numberOfImages: Math.min(Math.max(1, options.numImages), 4), 
+                    aspectRatio: options.aspectRatio as any, 
+                },
+            });
+            const images = [];
+            if (response.generatedImages) {
+                for (const genImg of response.generatedImages) {
+                    if (genImg.image?.imageBytes) {
+                        images.push({
+                            src: `data:image/png;base64,${genImg.image.imageBytes}`,
+                            usageMetadata: undefined 
+                        });
+                    }
+                }
+            }
+            if (images.length === 0) throw new Error("No images generated by Imagen.");
+            return { images, finalPrompt: options.geminiPrompt || "Generated Image" };
+        } catch (err: any) {
+             // Catch specific generic errors for Imagen too
+             if (err.message?.includes('Failed to call the Gemini API')) {
+                 throw new Error("The Imagen model is currently unavailable or overloaded. Please try again later or switch to a different model.");
              }
-             let instruction = "";
-             if (options.geminiInpaintTask === 'remove') instruction = "Remove the masked area.";
-             else if (options.geminiInpaintTask === 'replace') instruction = `Replace the masked area with: ${options.geminiInpaintTargetPrompt}`;
-             else if (options.geminiInpaintTask === 'changeColor') instruction = `Change the color of the masked object to: ${options.geminiInpaintTargetPrompt}`;
-             else instruction = options.geminiInpaintCustomPrompt || "Edit the image.";
-             parts.push({ text: instruction });
-
-        } else if (options.geminiI2iMode === 'compose') {
-             for (const elem of elementImages) {
-                 parts.push(await fileToGenerativePart(elem));
-             }
-             parts.push({ text: options.geminiComposePrompt || "Compose these images together." });
-        } else {
-             // General Edit
-             parts.push({ text: options.geminiGeneralEditPrompt || "Edit this image." });
+             throw err;
         }
     }
 
-    updateProgress("Sending request to Gemini...", 0.3);
+    // --- GEMINI MODEL PATH ---
+    // Ensure numImages is at least 1. For Character Gen, this should come from options.numImages (default 4).
+    const targetImageCount = Math.min(Math.max(1, options.numImages), 4);
+    let collectedCandidates: any[] = [];
+    let finalUsageMetadata: any = undefined;
+    let finalPrompt = "Generated Image";
 
-    const response = await ai.models.generateContent({
-        model: model,
-        contents: { parts },
-        config: {
-            responseModalities: [Modality.IMAGE],
-            numberOfGeneratedImages: options.numImages,
-            aspectRatio: options.aspectRatio,
-        },
-    });
+    // Detect if this is a specialized character generation or a standard I2I task
+    const isCharacterGeneration = options.geminiI2iMode === 'character';
+
+    try {
+        // Standard T2I or General I2I (Single Prompt/Instruction applied to all outputs)
+        if (!isCharacterGeneration && (options.geminiMode === 't2i' || (options.geminiI2iMode === 'general' || options.geminiI2iMode === 'inpaint' || options.geminiI2iMode === 'compose'))) {
+            const parts: Part[] = [];
+            if (options.geminiMode === 't2i') {
+                if (!options.geminiPrompt) throw new Error("Prompt is required for Text-to-Image generation.");
+                parts.push({ text: options.geminiPrompt });
+                finalPrompt = options.geminiPrompt;
+            } else {
+                if (!model.includes('gemini')) model = 'gemini-2.5-flash-image';
+                if (!sourceImage) throw new Error("Source image is required.");
+                parts.push(await fileToGenerativePart(sourceImage));
+
+                if (options.geminiI2iMode === 'inpaint') {
+                    if (maskImage) parts.push(await fileToGenerativePart(maskImage));
+                    let instruction = "";
+                    if (options.geminiInpaintTask === 'remove') instruction = "Remove the masked area.";
+                    else if (options.geminiInpaintTask === 'replace') instruction = `Replace the masked area with: ${options.geminiInpaintTargetPrompt}`;
+                    else if (options.geminiInpaintTask === 'changeColor') instruction = `Change the color of the masked object to: ${options.geminiInpaintTargetPrompt}`;
+                    else instruction = options.geminiInpaintCustomPrompt || "Edit the image.";
+                    parts.push({ text: instruction });
+                    finalPrompt = instruction;
+                } else if (options.geminiI2iMode === 'compose') {
+                    for (const elem of elementImages) parts.push(await fileToGenerativePart(elem));
+                    parts.push({ text: options.geminiComposePrompt || "Compose these images together." });
+                    finalPrompt = options.geminiComposePrompt || "Image Composition";
+                } else { // General
+                    parts.push({ text: options.geminiGeneralEditPrompt || "Edit image" });
+                    finalPrompt = options.geminiGeneralEditPrompt || "Edit image";
+                }
+            }
+
+            updateProgress(`Generating with ${model}...`, 0.3);
+            
+            // Parallel requests for T2I/General to handle image count if > 1
+            if (targetImageCount > 1) {
+                updateProgress(`Executing ${targetImageCount} requests...`, 0.4);
+                const promises = Array.from({ length: targetImageCount }).map(async (_, index) => {
+                    // Stagger requests to avoid 429 errors
+                    await new Promise(resolve => setTimeout(resolve, index * 1500)); 
+                    return executeGeneration(model, parts, 1).then(res => ({ status: 'fulfilled' as const, value: res })).catch(err => ({ status: 'rejected' as const, reason: err }));
+                });
+                const results = await Promise.all(promises);
+                for (const res of results) {
+                    if (res.status === 'fulfilled') {
+                        if (res.value.candidates) collectedCandidates.push(...res.value.candidates);
+                        if (res.value.usageMetadata) finalUsageMetadata = res.value.usageMetadata;
+                    }
+                }
+            } else {
+                const response = await executeGeneration(model, parts, targetImageCount);
+                if (response.candidates) collectedCandidates = response.candidates;
+                finalUsageMetadata = response.usageMetadata;
+            }
+
+        } else {
+            // --- CHARACTER GENERATOR LOGIC (Per-Image Variation) ---
+            
+            if (!model.includes('gemini')) model = 'gemini-2.5-flash-image';
+            if (!sourceImage) throw new Error("Source image is required for character generation.");
+            
+            const sourcePart = await fileToGenerativePart(sourceImage);
+            const clothingPart = clothingImage ? await fileToGenerativePart(clothingImage) : (previewedClothingImage ? dataUrlToGenerativePart(previewedClothingImage) : null);
+            const bgPart = backgroundImage ? await fileToGenerativePart(backgroundImage) : (previewedBackgroundImage ? dataUrlToGenerativePart(previewedBackgroundImage) : null);
+            const poseLibraryPart = (options.poseMode === 'library' && options.poseLibraryItems?.[0]?.media) ? dataUrlToGenerativePart(options.poseLibraryItems[0].media) : null;
+
+            updateProgress(`Generating ${targetImageCount} character variations...`, 0.3);
+            
+            // To get varied results in Character Generator, we MUST send separate requests
+            // each with a slightly different prompt (pose).
+            const promises = Array.from({ length: targetImageCount }).map(async (_, index) => {
+                // Significant stagger delay to prevent 429 Rate Limit errors on parallel complex requests
+                await new Promise(resolve => setTimeout(resolve, index * 2000));
+                
+                // Determine Pose for this iteration
+                let poseToUse = "Use the pose from the provided reference image.";
+                if (options.poseMode === 'random') {
+                    poseToUse = decodePose(getRandomPose());
+                } else if (options.poseMode === 'select') {
+                    if (options.poseSelection.length > 0) {
+                        const rawPose = options.poseSelection[index % options.poseSelection.length];
+                        poseToUse = decodePose(rawPose);
+                    } else {
+                        poseToUse = decodePose(getRandomPose()); // Fallback
+                    }
+                } else if (options.poseMode === 'prompt') {
+                     if (options.poseSelection.length > 0) {
+                        poseToUse = options.poseSelection[index % options.poseSelection.length];
+                    } else {
+                        poseToUse = "A standard portrait pose";
+                    }
+                }
+
+                const promptSegments = buildPromptSegments(options, poseToUse, !!previewedClothingImage);
+                const fullPrompt = promptSegments.join(" ");
+                if (index === 0) finalPrompt = fullPrompt; // Return the first prompt as reference
+
+                const currentParts: Part[] = [sourcePart, { text: fullPrompt }];
+                if (clothingPart) currentParts.push(clothingPart);
+                if (bgPart) currentParts.push(bgPart);
+                if (poseLibraryPart) currentParts.push(poseLibraryPart);
+
+                return executeGeneration(model, currentParts, 1)
+                    .then(res => ({ status: 'fulfilled' as const, value: res }))
+                    .catch(err => ({ status: 'rejected' as const, reason: err }));
+            });
+
+            const results = await Promise.all(promises);
+            for (const res of results) {
+                if (res.status === 'fulfilled') {
+                    if (res.value.candidates) collectedCandidates.push(...res.value.candidates);
+                    if (res.value.usageMetadata) finalUsageMetadata = res.value.usageMetadata;
+                } else {
+                    console.warn("One of the parallel variations failed:", res.reason);
+                }
+            }
+        }
+    } catch (err: any) {
+        // Catch top-level generation errors (like if single request failed)
+        // and re-throw with a cleaner message if it's the generic one.
+        if (err.message?.includes('Failed to call the Gemini API')) {
+            throw new Error("The AI service is temporarily unavailable due to high load. Please wait a moment and try again.");
+        }
+        throw err;
+    }
 
     const images = [];
-    if (response.candidates) {
-         for (const candidate of response.candidates) {
-             if (candidate.content?.parts) {
-                 for (const part of candidate.content.parts) {
-                     if (part.inlineData) {
-                         images.push({
-                             src: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`,
-                             usageMetadata: response.usageMetadata
-                         });
-                     }
-                 }
-             }
-         }
+    const errors = [];
+
+    for (const candidate of collectedCandidates) {
+        let candidateHasImage = false;
+        if (candidate.content?.parts) {
+            for (const part of candidate.content.parts) {
+                if (part.inlineData) {
+                    images.push({
+                        src: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`,
+                        usageMetadata: finalUsageMetadata
+                    });
+                    candidateHasImage = true;
+                }
+            }
+            if (!candidateHasImage) {
+                for (const part of candidate.content.parts) {
+                    if (part.text) errors.push(part.text);
+                }
+            }
+        }
+        if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+            if (candidate.finishReason === 'SAFETY') errors.push("Image blocked by safety filters.");
+            else if (candidate.finishReason === 'RECITATION') errors.push("Image blocked due to copyright check.");
+            else if (!candidateHasImage) errors.push(`Generation stopped: ${candidate.finishReason}`);
+        }
     }
     
-    if (images.length === 0) throw new Error("No images generated.");
+    if (images.length === 0) {
+        // If parallel requests failed partially, we might still want to show what succeeded or errors
+        // But if absolutely nothing came back:
+        if (errors.length > 0) {
+             const uniqueErrors = [...new Set(errors)];
+             throw new Error(`Generation failed: ${uniqueErrors.join(' ')}`);
+        }
+        // If collectedCandidates is empty because all promises rejected:
+        if (collectedCandidates.length === 0) {
+             throw new Error("All generation requests failed due to high server load. Please try again in a few moments.");
+        }
+        throw new Error("No images generated. The model may have refused the request.");
+    }
 
-    return { images, finalPrompt: options.geminiPrompt || options.geminiGeneralEditPrompt || "Generated Image" };
+    return { images, finalPrompt };
 };
 
 export const generateGeminiVideo = async (
@@ -326,8 +557,14 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
     
     if (state.referenceItems) {
         for (const item of state.referenceItems) {
-            parts.push(dataUrlToGenerativePart(item.media).inlineData as any);
+            parts.push(dataUrlToGenerativePart(item.media));
         }
+    }
+    
+    if (state.fontReferenceImage) {
+        const fontPart = await fileToGenerativePart(state.fontReferenceImage);
+        parts.push(fontPart);
+        parts.push({ text: "Use the font style from this image." });
     }
     
     const result = await ai.models.generateContent({
@@ -355,59 +592,117 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
 };
 
 export const generateBanners = async (state: LogoThemeState): Promise<string[]> => {
-    const prompt = `Generate a ${state.bannerStyle} banner. Title: "${state.bannerTitle}". ${state.bannerPrompt}. Aspect Ratio: ${state.bannerAspectRatio}.`;
+    const prompt = `Generate a ${state.bannerStyle} banner for "${state.bannerTitle}". Aspect Ratio: ${state.bannerAspectRatio}. Logo Placement: ${state.bannerLogoPlacement}. ${state.bannerPrompt}`;
     const parts: Part[] = [{ text: prompt }];
-     const result = await ai.models.generateContent({
+
+    if (state.bannerReferenceItems) {
+        for (const item of state.bannerReferenceItems) {
+            parts.push(dataUrlToGenerativePart(item.media));
+        }
+    }
+    
+    if (state.bannerSelectedLogo) {
+         parts.push(dataUrlToGenerativePart(state.bannerSelectedLogo.media));
+         parts.push({ text: "Include this logo in the banner." });
+    }
+
+    if (state.bannerFontReferenceImage) {
+        const fontPart = await fileToGenerativePart(state.bannerFontReferenceImage);
+        parts.push(fontPart);
+        parts.push({ text: "Use the font style from this image." });
+    }
+
+    const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts },
-        config: { responseModalities: [Modality.IMAGE], numberOfGeneratedImages: state.numBanners, aspectRatio: state.bannerAspectRatio === '16:9' ? '16:9' : undefined }
+        config: {
+            responseModalities: [Modality.IMAGE],
+            numberOfGeneratedImages: state.numBanners,
+            aspectRatio: state.bannerAspectRatio === '16:9' || state.bannerAspectRatio === '1:1' ? state.bannerAspectRatio : undefined
+        }
     });
-     const images: string[] = [];
-     if (result.candidates) {
-         for (const candidate of result.candidates) {
-             if (candidate.content?.parts) {
-                 for (const part of candidate.content.parts) {
-                     if (part.inlineData) {
-                         images.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
-                     }
-                 }
-             }
-         }
+
+    const images: string[] = [];
+    if (result.candidates) {
+        for (const candidate of result.candidates) {
+            if (candidate.content?.parts) {
+                for (const part of candidate.content.parts) {
+                    if (part.inlineData) {
+                        images.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
+                    }
+                }
+            }
+        }
     }
     return images;
 };
 
 export const generateAlbumCovers = async (state: LogoThemeState): Promise<string[]> => {
-    const prompt = `Generate a ${state.musicStyle} album cover. Artist: "${state.artistName}", Album: "${state.albumTitle}". Era: ${state.albumEra}. ${state.albumPrompt}`;
+    const prompt = `Generate an album cover for "${state.albumTitle}" by "${state.artistName}". Style: ${state.musicStyle === 'other' ? state.customMusicStyle : state.musicStyle}. Era: ${state.albumEra}. Format: ${state.albumMediaType}. ${state.addVinylWear ? 'Add vinyl wear/texture.' : ''} ${state.albumPrompt}`;
     const parts: Part[] = [{ text: prompt }];
+
+    if (state.albumReferenceItems) {
+        for (const item of state.albumReferenceItems) {
+            parts.push(dataUrlToGenerativePart(item.media));
+        }
+    }
+    
+    if (state.albumSelectedLogo) {
+         parts.push(dataUrlToGenerativePart(state.albumSelectedLogo.media));
+         parts.push({ text: "Include this logo/symbol on the cover." });
+    }
+
+    if (state.albumFontReferenceImage) {
+        const fontPart = await fileToGenerativePart(state.albumFontReferenceImage);
+        parts.push(fontPart);
+        parts.push({ text: "Use the font style from this image." });
+    }
+
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts },
-        config: { responseModalities: [Modality.IMAGE], numberOfGeneratedImages: state.numAlbumCovers, aspectRatio: '1:1' }
+        config: {
+            responseModalities: [Modality.IMAGE],
+            numberOfGeneratedImages: state.numAlbumCovers,
+            aspectRatio: '1:1'
+        }
     });
-     const images: string[] = [];
-     if (result.candidates) {
-         for (const candidate of result.candidates) {
-             if (candidate.content?.parts) {
-                 for (const part of candidate.content.parts) {
-                     if (part.inlineData) {
-                         images.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
-                     }
-                 }
-             }
-         }
+
+    const images: string[] = [];
+    if (result.candidates) {
+        for (const candidate of result.candidates) {
+            if (candidate.content?.parts) {
+                for (const part of candidate.content.parts) {
+                    if (part.inlineData) {
+                        images.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
+                    }
+                }
+            }
+        }
     }
     return images;
 };
 
-export const generateDecadeImage = async (image: string, prompt: string): Promise<string> => {
-    const part = dataUrlToGenerativePart(image);
+export const generateDecadeImage = async (uploadedImage: string, prompt: string): Promise<string> => {
+    const parts: Part[] = [
+        dataUrlToGenerativePart(uploadedImage),
+        { text: prompt }
+    ];
+
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: [part, { text: prompt }] },
-        config: { responseModalities: [Modality.IMAGE] }
+        contents: { parts },
+        config: {
+            responseModalities: [Modality.IMAGE],
+            numberOfGeneratedImages: 1
+        }
     });
-    const img = result.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-    if (!img) throw new Error("Generation failed");
-    return `data:${img.mimeType};base64,${img.data}`;
+
+    if (result.candidates && result.candidates[0]?.content?.parts) {
+        const part = result.candidates[0].content.parts.find(p => p.inlineData);
+        if (part && part.inlineData) {
+            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+    }
+    throw new Error("Failed to generate image.");
 };

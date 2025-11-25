@@ -1,3 +1,4 @@
+
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { LibraryItem, LibrarySliceState } from '../types';
 import * as idb from '../services/idbLibraryService';
@@ -5,10 +6,20 @@ import * as libraryService from '../services/libraryService';
 
 export const fetchLibrary = createAsyncThunk('library/fetchLibrary', async (_, thunkAPI) => {
     try {
-        const items = await idb.getLibraryItems();
+        // STRICT TIMEOUT: Enforce a 3-second limit on the database fetch.
+        const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error("Library database timed out. Please refresh.")), 3000)
+        );
+        
+        const items = await Promise.race([
+            idb.getLibraryItems(),
+            timeoutPromise
+        ]) as LibraryItem[];
+        
         return items;
     } catch (err: any) {
-        return thunkAPI.rejectWithValue(err.message);
+        // Ensure any error (timeout or DB error) is caught and returned as a rejection
+        return thunkAPI.rejectWithValue(err.message || "Unknown library error");
     }
 });
 

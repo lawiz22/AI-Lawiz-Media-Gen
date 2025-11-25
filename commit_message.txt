@@ -1,18 +1,17 @@
-feat(ui): Enhance Extractor Tools UX and Standardize Header Model Display (v1.55)
+feat(ui): Standardize Past Forward UX and Fix Character Gen Stability (v1.56)
 
-This release significantly improves the user experience within the Extractor Tools and ensures consistent feedback regarding the active AI model across the entire application.
+This release unifies the UI/UX of the "Past Forward" tab with the rest of the application and addresses stability issues in the Character Generator.
 
 **Key Changes:**
 
-*   **Extractor Tools Grid Improvements:**
-    *   **Hover Actions:** Added "Download" (supporting Image, Skeleton, and JSON formats) and "Save to Library" buttons directly to the thumbnail hover overlay. Users can now manage assets without opening the details modal.
-    *   **Responsive Layout:** Fixed grid column sizing to prevent overlapping with the left-hand control column on smaller screens.
-    *   **Modal UX:** Overhauled the details modal layout. The image and description columns now scroll independently, and action buttons are sticky at the bottom, ensuring they are always accessible regardless of text length.
+*   **Past Forward Overhaul:**
+    *   Removed custom "Polaroid" styling, animations, and non-standard fonts.
+    *   Implemented the standard 2-column layout (Controls left, Results right).
+    *   Replaced custom uploaders and buttons with the shared `ImageUploader` and standard Tailwind components.
+    *   Results are now displayed in a standard grid with hover actions (Download, Save to Library, Regenerate).
 
-*   **Header & Navigation:**
-    *   **Unified Provider Display:** Updated the Header logic to correctly detect and display the active provider ('GEMINI' or 'COMFYUI') and the specific model name for *all* tabs, including "Extractor Tools" and "Group Photo Fusion".
-    *   **Dynamic Badge:** The model badge in the header now dynamically updates based on the specific sub-tool or pose mode selected within the Extractor and Group Fusion panels.
+*   **Character Generator Stability:**
+    *   **Fix:** Resolved a state management bug where resetting options or switching tabs would revert the internal `geminiI2iMode` to 'general', causing the Character Generator to malfunction.
+    *   **Fix:** Added exponential backoff retry logic to the Gemini service to handle 429 (Rate Limit) errors more gracefully during parallel character generation.
 
-*   **Under-the-Hood:**
-    *   **MediaPipe Stability:** Added timeout and error handling to the MediaPipe initialization in `detectPosesInImage` to prevent the UI from hanging indefinitely if the model fails to load.
-    *   **Version Bump:** Updated application version to 1.55.
+*   **Version Bump:** Updated to v1.56.

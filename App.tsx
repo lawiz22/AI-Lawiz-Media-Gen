@@ -9,17 +9,15 @@ import {
     openOAuthHelper, closeOAuthHelper, openComfyUIHelper, closeComfyUIHelper,
     setModalOpen, addSessionTokenUsage, resetSessionTokenUsage
 } from './store/appSlice';
-// Fix: Imported the `selectIsReadyToGenerate` selector to resolve the "Cannot find name" error.
 import {
     setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
     setClothingImage, setBackgroundImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
-    setMaskImage, setElementImages, setOptions, updateOptions, setLoadingState,
+    setMaskImage, setElementImages, setOptions, updateOptions, setCharacterOptions, updateCharacterOptions, setLoadingState,
     updateProgress, setGeneratedImages, setLastUsedPrompt, resetGenerationState,
     selectIsReadyToGenerate
 } from './store/generationSlice';
 import {
     setVideoStartFrame, setVideoEndFrame, setGeneratedVideoUrl, setGenerationOptionsForSave,
-    // Fix: Replaced non-existent 'setVideoUtilsState' with the correct action 'updateVideoUtilsState'.
     updateVideoUtilsState, setActiveVideoUtilsSubTab, resetVideoGenerationState,
     resetVideoUtilsState, selectIsVideoReady
 } from './store/videoSlice';
@@ -48,7 +46,6 @@ import { ImageGrid } from './components/ImageGrid';
 import { Loader } from './components/Loader';
 import { ConnectionSettingsModal } from './components/ComfyUIConnection';
 import { LibraryPanel } from './components/LibraryPanel';
-// Fix: The imported component name `ClothesExtractorPanel` did not match the exported component `ExtractorToolsPanel`. Corrected the import to use the correct component name.
 import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
 import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
@@ -58,7 +55,6 @@ import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
 import { ComfyUIConnectionHelperModal } from './components/ComfyUIConnectionHelperModal';
-// FIX: Imported all missing icon components to resolve multiple "has no exported member" errors.
 import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon } from './components/icons';
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
@@ -95,7 +91,7 @@ const App: React.FC = () => {
     const {
         sourceImage, generationMode, characterName, shouldGenerateCharacterName, clothingImage,
         backgroundImage, previewedBackgroundImage, previewedClothingImage, maskImage, elementImages,
-        options, isLoading, progressMessage, progressValue, generatedContent
+        options, characterOptions, isLoading, progressMessage, progressValue, generatedContent
     } = useSelector((state: RootState) => state.generation);
 
     // --- Video State (from videoSlice) ---
@@ -123,14 +119,25 @@ const App: React.FC = () => {
     const isReadyToGenerate = useSelector(selectIsReadyToGenerate);
     const isVideoReady = useSelector(selectIsVideoReady);
     
+    // Determine which options object to use based on the active tab
+    const currentOptions = activeTab === 'character-generator' ? characterOptions : options;
+
     // --- Memoized Handlers for Redux ---
     const handleSetOptions = useCallback((newOptions: GenerationOptions) => {
-        dispatch(setOptions(newOptions));
-    }, [dispatch]);
+        if (activeTab === 'character-generator') {
+            dispatch(setCharacterOptions(newOptions));
+        } else {
+            dispatch(setOptions(newOptions));
+        }
+    }, [dispatch, activeTab]);
 
     const handleUpdateOptions = useCallback((opts: Partial<GenerationOptions>) => {
-        dispatch(updateOptions(opts));
-    }, [dispatch]);
+        if (activeTab === 'character-generator') {
+            dispatch(updateCharacterOptions(opts));
+        } else {
+            dispatch(updateOptions(opts));
+        }
+    }, [dispatch, activeTab]);
 
     const handleSetVideoStartFrame = useCallback((file: File | null) => {
         dispatch(setVideoStartFrame(file));
@@ -205,6 +212,24 @@ const App: React.FC = () => {
         localStorage.setItem('theme', theme);
     }, [theme]);
 
+    const handleTabChange = (tabId: string) => {
+        dispatch(setActiveTab(tabId));
+        
+        // Auto-set provider for Gemini-only tabs to prevent UI breakage
+        if (['group-photo-fusion', 'extractor-tools', 'logo-theme-generator', 'past-forward'].includes(tabId)) {
+            dispatch(updateOptions({ provider: 'gemini' }));
+        }
+        
+        // Ensure Character Generator starts in I2I mode with clean prompt state and character logic
+        if (tabId === 'character-generator') {
+            dispatch(setGenerationMode('i2i'));
+            dispatch(updateCharacterOptions({
+                geminiMode: 'i2i',
+                geminiI2iMode: 'character',
+                provider: 'gemini'
+            }));
+        }
+    };
     
     const handleLogin = async (username: string, projectName: string): Promise<string | true> => {
         dispatch(setCurrentUser({ username, role: 'user' }));
@@ -257,12 +282,19 @@ const App: React.FC = () => {
         try {
             let result: { images: { src: string; usageMetadata?: any }[], finalPrompt: string | null };
             
-            if (options.provider === 'gemini') {
+            if (currentOptions.provider === 'gemini') {
+                // We now pass the tab-specific options directly
+                // FORCE character mode for character tab to ensure robustness against state drift
+                const optionsToUse = activeTab === 'character-generator' 
+                    ? { ...characterOptions, geminiGeneralEditPrompt: '', geminiI2iMode: 'character' as const, geminiMode: 'i2i' as const } 
+                    : options;
+
                 result = await generatePortraits(
-                    sourceImage, options, localUpdateProgress, clothingImage, backgroundImage,
+                    sourceImage, optionsToUse, localUpdateProgress, clothingImage, backgroundImage,
                     previewedBackgroundImage, previewedClothingImage, maskImage, elementImages
                 );
-            } else if (options.provider === 'comfyui') {
+            } else if (currentOptions.provider === 'comfyui') {
+                // ComfyUI currently uses the main options object, Character Gen uses Gemini
                 const comfyResult = await generateComfyUIPortraits(sourceImage, options, localUpdateProgress);
                 result = {
                     images: comfyResult.images.map(src => ({ src, usageMetadata: undefined })),
@@ -384,115 +416,36 @@ const App: React.FC = () => {
         try {
             const response = await fetch(imageDataUrl);
             const blob = await response.blob();
-            const file = new File([blob], "character_source_image.jpeg", { type: "image/jpeg" });
+            const file = new File([blob], "character_source.jpeg", { type: "image/jpeg" });
             dispatch(setSourceImage(file));
-            dispatch(setCharacterName(''));
+            dispatch(setGenerationMode('i2i'));
+            dispatch(updateCharacterOptions({ 
+                geminiMode: 'i2i', 
+                geminiI2iMode: 'character',
+                geminiGeneralEditPrompt: '',
+                provider: 'gemini'
+            }));
             dispatch(setActiveTab('character-generator'));
+            dispatch(setCharacterName(''));
         } catch (error) {
-            console.error("Error setting new source image for character:", error);
-            dispatch(setGlobalError({ title: "File Error", message: "Could not use the selected image as a new character source." }));
+            console.error("Error setting image for Character:", error);
+            dispatch(setGlobalError({ title: "File Error", message: "Could not use the selected image as a source for Character Generator." }));
         }
     };
-    
-    const handleLoadLibraryItem = async (item: LibraryItem) => {
-        if (item.options) {
-            dispatch(setOptions(item.options));
-        }
-        
-        let sourceToSet: File | null = null;
-        if (item.mediaType === 'image' || item.mediaType === 'video' || item.mediaType === 'character') {
-            if (item.sourceImage || item.startFrame) {
-                try {
-                    const sourceDataUrl = item.sourceImage || item.startFrame;
-                    const response = await fetch(sourceDataUrl!);
-                    const blob = await response.blob();
-                    sourceToSet = new File([blob], "library-source.jpeg", { type: "image/jpeg" });
-                } catch(e) { console.error("Could not load library source image:", e); }
-            }
-        }
 
-        switch (item.mediaType) {
-            case 'character':
-                dispatch(setSourceImage(sourceToSet));
-                dispatch(setGeneratedImages({ tabId: 'character-generator', images: [{ src: item.media }] }));
-                dispatch(setGeneratedImages({ tabId: 'image-generator', images: [] }));
-                dispatch(setLastUsedPrompt({ tabId: 'image-generator', prompt: null }));
-                // When loading a character, parse the name to separate it from the description
-                const [namePart] = (item.name || '').split(':');
-                dispatch(setCharacterName(namePart.trim()));
-                dispatch(setActiveTab('character-generator'));
-                break;
-            case 'image':
-                dispatch(setSourceImage(sourceToSet));
-                dispatch(setGeneratedImages({ tabId: 'image-generator', images: [{ src: item.media }] }));
-                dispatch(setGeneratedImages({ tabId: 'character-generator', images: [] }));
-                dispatch(setLastUsedPrompt({ tabId: 'character-generator', prompt: null }));
-                dispatch(setCharacterName(''));
-                const isI2I = !!sourceToSet || item.options?.geminiMode === 'i2i';
-                dispatch(setGenerationMode(isI2I ? 'i2i' : 't2i'));
-                dispatch(setActiveTab('image-generator'));
-                break;
-            case 'video':
-                dispatch(setVideoStartFrame(sourceToSet));
-                if (item.endFrame) {
-                    try {
-                         const response = await fetch(item.endFrame);
-                         const blob = await response.blob();
-                         dispatch(setVideoEndFrame(new File([blob], "library-end-frame.jpeg", { type: "image/jpeg" })));
-                    } catch(e) { console.error("Could not load library end frame image:", e); }
-                } else {
-                    dispatch(setVideoEndFrame(null));
-                }
-                dispatch(setGeneratedVideoUrl(item.media));
-                dispatch(setActiveTab('video-generator'));
-                break;
-            case 'clothes':
-            case 'prompt':
-            default:
-                break;
-        }
-    };
-    
-    const handleUsePrompt = (prompt: string) => {
-        dispatch(updateOptions({ comfyPrompt: prompt, provider: 'comfyui' }));
-        dispatch(setActiveTab('image-generator'));
-    };
-    
     const handleDriveConnect = async () => {
+        dispatch(setIsSyncing(true));
+        dispatch(setSyncMessage('Connecting to Google Drive...'));
         try {
             const folder = await driveService.connectAndPickFolder();
             if (folder) {
                 dispatch(setDriveFolder(folder));
-                await handleSyncWithDrive(folder);
+                await initializeDriveSync((msg) => dispatch(setSyncMessage(msg)));
+                dispatch(fetchLibrary());
             }
-        } catch (error: any) {
-            if (error.message?.includes("popup_closed_by_user")) {
-              return; // User cancelled, do nothing.
-            }
-            if (error.message?.includes("invalid client") || error.message?.includes("Check your OAuth Client ID")) {
-                dispatch(openOAuthHelper());
-            } else if (error.message?.includes("Check API Key")) {
-                dispatch(openOAuthHelper());
-            }
-            else {
-                dispatch(setGlobalError({ title: "Google Drive Connection Error", message: error.message || "An unknown error occurred." }));
-            }
-        }
-    };
-    
-    const handleSyncWithDrive = async (newFolder?: DriveFolder) => {
-        const folderToSync = newFolder || driveFolder;
-        if (!folderToSync) {
-            dispatch(setGlobalError({ title: "Sync Error", message: "You must connect to a Drive folder first." }));
-            return;
-        }
-        dispatch(setIsSyncing(true));
-        try {
-            await initializeDriveSync((msg) => dispatch(setSyncMessage(msg)));
-            // After sync, re-fetch the library to update the UI with any changes.
-            dispatch(fetchLibrary());
-        } catch (error: any) {
-            dispatch(setGlobalError({ title: "Google Drive Sync Error", message: error.message || "An unknown sync error occurred." }));
+        } catch (err: any) {
+            console.error("Drive connection failed:", err);
+            dispatch(setGlobalError({ title: "Google Drive Error", message: err.message }));
         } finally {
             dispatch(setIsSyncing(false));
             dispatch(setSyncMessage(''));
@@ -504,146 +457,65 @@ const App: React.FC = () => {
         dispatch(setDriveFolder(null));
     };
 
-    const handleExport = async () => {
-        if (!options) return;
+    const handleSyncWithDrive = async () => {
+        if (!driveFolder) return;
+        dispatch(setIsSyncing(true));
         try {
-            await exportComfyUIWorkflow(options, sourceImage);
-        } catch (error: any) {
-            dispatch(setGlobalError({ title: "Workflow Export Error", message: error.message || 'Failed to export workflow.' }));
+            await initializeDriveSync((msg) => dispatch(setSyncMessage(msg)));
+            dispatch(fetchLibrary()); // Refresh UI
+        } catch (err: any) {
+            console.error("Sync failed:", err);
+            dispatch(setGlobalError({ title: "Sync Error", message: err.message }));
+        } finally {
+            dispatch(setIsSyncing(false));
+            dispatch(setSyncMessage(''));
         }
     };
 
-    const handleCancelGeneration = async () => {
-        console.log("User requested to cancel generation.");
-        if (options.provider === 'comfyui' || options.videoProvider === 'comfyui') {
-            try {
-                await cancelComfyUIExecution();
-                dispatch(setGlobalError({ title: "Operation Cancelled", message: "The generation was successfully cancelled." }));
-            } catch (e: any) {
-                dispatch(setGlobalError({ title: "Cancellation Error", message: e.message || "Could not cancel the operation." }));
-            }
-        } else {
-            console.warn("Cancellation is not supported for the current provider.");
-        }
-
-        dispatch(setLoadingState({ isLoading: false }));
-    };
-
-    const handleTabClick = (tabId: string) => {
-        if (tabId === 'character-generator') {
-            // This tab is Gemini I2I only
-            dispatch(setGenerationMode('i2i'));
-            dispatch(updateOptions({ provider: 'gemini', geminiMode: 'i2i', geminiI2iMode: 'general' }));
-        } else if (tabId === 'image-generator') {
-            // Reset to T2I when coming back to this tab
-            dispatch(setGenerationMode('t2i'));
-            if (options.provider === 'gemini') {
-                dispatch(updateOptions({ geminiMode: 't2i' }));
-            }
-        }
-        dispatch(setActiveTab(tabId));
-    };
-
-    const handleSelectForGroupFusion = async (item: LibraryItem) => {
-        if (uploadedFiles.length >= 4) {
-            dispatch(setGlobalError({ title: "Limit Reached", message: "You can only add up to 4 subjects for Group Photo Fusion." }));
-            return;
-        }
-        try {
-            const file = await dataUrlToFile(item.media, item.name || 'library-subject.jpeg');
-            const newUploadedFile: UploadedFile = {
-                id: crypto.randomUUID(),
-                file,
-                previewUrl: URL.createObjectURL(file), // Important to create a fresh URL
-                personaId: PERSONAS[0].id,
-            };
-            dispatch(setUploadedFiles([...uploadedFiles, newUploadedFile]));
-        } catch (error) {
-            console.error("Error adding library item to group fusion:", error);
-            dispatch(setGlobalError({ title: "File Error", message: "Could not use the selected library item." }));
+    const handleResetTokenUsage = () => {
+        if(window.confirm("Are you sure you want to reset the session token usage counter?")) {
+            dispatch(resetSessionTokenUsage());
         }
     };
-    
-    // Fix: Narrowed the `modal` parameter type to only include valid boolean modal flag keys from the state.
-    // This ensures type safety when calling the `setModalOpen` reducer, resolving downstream type errors.
-    const openModal = (modal: Extract<keyof AppSliceState, `is${string}Open`>) => { dispatch(setModalOpen({ modal, isOpen: true })); };
-    const closeModal = (modal: Extract<keyof AppSliceState, `is${string}Open`>) => { dispatch(setModalOpen({ modal, isOpen: false })); };
 
-    const handleOpenComfyUIHelper = useCallback(() => {
-        dispatch(openComfyUIHelper());
-    }, [dispatch]);
+    // Determine active model for display in header
+    let activeModel = '';
+    if (activeTab === 'image-generator') {
+        activeModel = options.provider === 'gemini' 
+            ? (options.geminiMode === 't2i' ? (options.geminiT2IModel || 'gemini-2.5-flash-image') : 'gemini-2.5-flash-image')
+            : (options.comfyModelType || 'sdxl');
+    } else if (activeTab === 'character-generator') {
+        activeModel = 'gemini-2.5-flash-image';
+    } else if (activeTab === 'video-generator') {
+        activeModel = options.videoProvider === 'gemini' 
+            ? (options.geminiVidModel || 'veo-2.0-generate-001')
+            : (options.comfyVidModelType === 'wan-t2v' ? 'Wan 2.2 T2I' : 'Wan 2.2 I2V');
+    } else if (activeTab === 'group-photo-fusion') {
+        activeModel = 'gemini-2.5-flash-image';
+    } else if (activeTab === 'extractor-tools') {
+        if (activeExtractorSubTab === 'clothes') activeModel = 'gemini-2.5-flash-image';
+        else if (activeExtractorSubTab === 'objects') activeModel = 'gemini-2.5-flash';
+        else if (activeExtractorSubTab === 'poses') activeModel = 'MediaPipe + Gemini 2.5';
+        else if (activeExtractorSubTab === 'font') activeModel = 'gemini-2.5-flash-image';
+        else activeModel = 'gemini-2.5-flash';
+    } else if (activeTab === 'logo-theme-generator') {
+        activeModel = 'gemini-2.5-flash-image';
+    } else if (activeTab === 'past-forward') {
+        activeModel = 'gemini-2.5-flash-image';
+    }
+
+    const activeProvider: Provider = (activeTab === 'video-generator') 
+        ? options.videoProvider 
+        : (activeTab === 'group-photo-fusion' || activeTab === 'extractor-tools' || activeTab === 'logo-theme-generator' || activeTab === 'past-forward' || activeTab === 'character-generator') 
+            ? 'gemini' // These tools are Gemini-only
+            : options.provider;
 
     if (!currentUser) {
         return <Login onLogin={handleLogin} />;
     }
 
-    const TABS = [
-        { id: 'image-generator', label: 'Image Generator', icon: <ImageGeneratorIcon className="w-5 h-5"/> },
-        { id: 'character-generator', label: 'Character/Poses Generator', icon: <CharacterIcon className="w-5 h-5"/> },
-        { id: 'group-photo-fusion', label: 'Group Photo Fusion', icon: <GroupPhotoFusionIcon className="w-5 h-5"/> },
-        { id: 'past-forward-photo', label: 'Past Forward Photo', icon: <PastForwardIcon className="w-5 h-5"/> },
-        { id: 'video-generator', label: 'Video Generator', icon: <VideoIcon className="w-5 h-5"/> },
-        { id: 'logo-theme-generator', label: 'Logo/Theme Generator', icon: <SwatchIcon className="w-5 h-5"/> },
-        { id: 'library', label: 'Library', icon: <LibraryIcon className="w-5 h-5"/> },
-        { id: 'prompt-generator', label: 'Prompt Tools', icon: <PromptIcon className="w-5 h-5"/> },
-        { id: 'extractor-tools', label: 'Extractor Tools', icon: <ExtractorIcon className="w-5 h-5"/> },
-        { id: 'video-utils', label: 'Media Tools', icon: <VideoUtilsIcon className="w-5 h-5"/> },
-    ];
-
-    const imageLikeFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'object', 'extracted-frame', 'pose', 'font', 'group-fusion'];
-    const broadImagePickerFilter: LibraryItemType[] = ['image', 'character', 'logo', 'album-cover', 'clothes', 'extracted-frame', 'object', 'pose', 'font', 'group-fusion'];
-    
-    const imageGenContent = generatedContent['image-generator'] || { images: [], lastUsedPrompt: null };
-    const charGenContent = generatedContent['character-generator'] || { images: [], lastUsedPrompt: null };
-
-    // Helper logic for determining active model name
-    const getActiveModelName = () => {
-        if (activeTab === 'image-generator') {
-            if (options.provider === 'gemini') {
-                 if (generationMode === 't2i') {
-                     return options.geminiT2IModel || 'imagen-4.0-generate-001';
-                 } else {
-                     // For Gemini I2I, only Flash is widely supported in this context
-                     return 'gemini-2.5-flash-image';
-                 }
-            } else {
-                return options.comfyModelType || 'sdxl';
-            }
-        } else if (activeTab === 'character-generator') {
-             return 'gemini-2.5-flash-image';
-        } else if (activeTab === 'video-generator') {
-             if (options.videoProvider === 'gemini') {
-                 return options.geminiVidModel || 'veo-2.0-generate-001';
-             } else {
-                 return options.comfyVidModelType || 'wan-i2v';
-             }
-        } else if (activeTab === 'extractor-tools') {
-             return 'gemini-2.5-flash-image';
-        } else if (activeTab === 'group-photo-fusion') {
-             return 'gemini-2.5-flash-image';
-        } else if (activeTab === 'logo-theme-generator') {
-             return 'gemini-2.5-flash-image';
-        } else if (activeTab === 'prompt-generator') {
-             return 'gemini-2.5-flash';
-        }
-        return '';
-    };
-
-    const getActiveProvider = (): Provider => {
-        if (activeTab === 'video-generator') {
-            return (options.videoProvider || 'comfyui') as Provider;
-        }
-        if (activeTab === 'extractor-tools' || activeTab === 'group-photo-fusion' || activeTab === 'logo-theme-generator' || activeTab === 'prompt-generator') {
-            return 'gemini';
-        }
-        return options.provider;
-    };
-
-    const activeModelName = getActiveModelName();
-    const activeProvider = getActiveProvider();
-
     return (
-        <div className="min-h-screen bg-bg-primary text-text-primary font-sans">
+        <div className="min-h-screen bg-bg-primary text-text-primary font-sans transition-colors duration-300 flex flex-col">
             <Header 
                 theme={theme} 
                 setTheme={handleThemeChange} 
@@ -652,485 +524,436 @@ const App: React.FC = () => {
                 projectName={projectName}
                 onProjectNameChange={handleProjectNameChange}
                 onOpenSettingsModal={() => dispatch(openSettingsModal())}
-                onOpenComfyUIHelper={handleOpenComfyUIHelper}
-// FIX: Cast `isComfyUIConnected` to a boolean using `!!` to prevent type errors.
-                isComfyUIConnected={!!isComfyUIConnected}
+                onOpenComfyUIHelper={() => dispatch(openComfyUIHelper())}
+                isComfyUIConnected={isComfyUIConnected}
                 versionInfo={versionInfo}
                 driveFolder={driveFolder}
                 onDriveConnect={handleDriveConnect}
                 onDriveDisconnect={handleDriveDisconnect}
                 isDriveConfigured={isDriveConfigured}
                 sessionTokenUsage={sessionTokenUsage}
-                onResetTokenUsage={() => dispatch(resetSessionTokenUsage())}
+                onResetTokenUsage={handleResetTokenUsage}
                 activeTab={activeTab}
                 provider={activeProvider}
-                activeModel={activeModelName}
+                activeModel={activeModel}
             />
-            <main className="container mx-auto p-4 md:p-8 transform-gpu">
-                <div className="flex flex-wrap items-center justify-center border-b-2 border-border-primary mb-8">
-                    {TABS.map(tab => {
-                        if ((tab as any).adminOnly && currentUser.role !== 'admin') {
-                            return null;
-                        }
-                        return (
-                             <button
-                                key={tab.id}
-                                onClick={() => handleTabClick(tab.id)}
-                                className={`flex items-center gap-2 px-4 py-3 text-sm font-bold transition-colors duration-200 border-b-4 ${
-                                    activeTab === tab.id
-                                    ? 'border-accent text-accent'
-                                    : 'border-transparent text-text-secondary hover:border-accent/50 hover:text-text-primary'
-                                }`}
-                            >
-                                {tab.icon}
-                                <span>{tab.label}</span>
-                            </button>
-                        )
-                    })}
-                </div>
 
-                <div className={activeTab === 'image-generator' ? 'block' : 'hidden'}>
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                        {/* --- Controls Column (Left) --- */}
-                        <div className="lg:col-span-1 space-y-8 sticky top-24">
-                            {generationMode === 'i2i' && (
-                                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                                    <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Source Image</h2>
-                                     <div className="flex items-center gap-2">
-                                        <div className="flex-grow">
-                                            <ImageUploader 
-                                                label="Source Image" 
-                                                id="i2i-source-image" 
-                                                onImageUpload={(file) => dispatch(setSourceImage(file))} 
-                                                sourceFile={sourceImage}
-                                            />
-                                        </div>
-                                        <button 
-                                            onClick={() => openModal('isNunchakuSourcePickerOpen')} 
-                                            className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                            title="Select from Library"
-                                        >
-                                            <LibraryIcon className="w-6 h-6"/>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                            <OptionsPanel 
-                                title={generationMode === 'i2i' ? "2. Configure Options" : "1. Configure Options"}
-                                options={options} 
-                                setOptions={handleSetOptions}
-                                updateOptions={handleUpdateOptions}
-                                generationMode={generationMode}
-                                setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
-                                onGenerate={handleGenerate}
-                                onReset={handleReset}
-                                onGeneratePrompt={() => {}}
-                                onExportWorkflow={handleExport}
-                                isDisabled={isLoading}
-// FIX: Cast `isReadyToGenerate` from a selector to a boolean to fix type error.
-                                isReady={!!isReadyToGenerate}
-                                isGeneratingPrompt={false}
-                                previewedBackgroundImage={previewedBackgroundImage}
-                                setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
-                                previewedClothingImage={previewedClothingImage}
-                                setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
-                                comfyUIObjectInfo={comfyUIObjectInfo}
-                                comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
-                                sourceImage={sourceImage}
-                                hideGeminiModeSwitch={true}
-                                activeTab={activeTab}
-                                maskImage={maskImage}
-                                setMaskImage={(file) => dispatch(setMaskImage(file))}
-                                elementImages={elementImages}
-                                setElementImages={(files) => dispatch(setElementImages(files))}
-                                onOpenMaskPicker={() => openModal('isMaskPickerOpen')}
-                                onOpenElementPicker={() => openModal('isElementPickerOpen')}
-                            />
-                        </div>
-
-                        {/* --- Results Column (Right) --- */}
-                        <div className="lg:col-span-2">
-                           <ImageGrid 
-                                images={imageGenContent.images} 
-                                onSendToI2I={handleSendToI2I}
-                                onSendToCharacter={handleSendToCharacter}
-                                lastUsedPrompt={imageGenContent.lastUsedPrompt}
-                                options={options}
-                                sourceImage={sourceImage}
-                                characterName={characterName}
-                                activeTab={activeTab}
-                            />
-                             {imageGenContent.images.length === 0 && !isLoading && (
-                                <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
-                                    <ImageGeneratorIcon className="w-16 h-16 text-border-primary mb-4" />
-                                    <h3 className="text-lg font-bold text-text-primary">Your generated images will appear here</h3>
-                                    <p className="text-text-secondary max-w-xs">Configure your options and click "Generate".</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                <div className={activeTab === 'character-generator' ? 'block' : 'hidden'}>
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                        {/* --- Controls Column (Left) --- */}
-                        <div className="lg:col-span-1 space-y-8 sticky top-24">
-                            <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                                <h2 className="text-xl font-bold mb-4 text-accent">1. Upload Source Image</h2>
-                                <div className="flex items-center gap-2">
-                                    <div className="flex-grow">
-                                        <ImageUploader 
-                                            label="Source Face / Pose" 
-                                            id="source-image" 
-                                            onImageUpload={(file) => dispatch(setSourceImage(file))} 
-                                            sourceFile={sourceImage}
-                                        />
-                                    </div>
-                                    <button 
-                                        onClick={() => openModal('isCharacterSourcePickerOpen')} 
-                                        className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                        title="Select from Library"
-                                    >
-                                        <LibraryIcon className="w-6 h-6"/>
-                                    </button>
-                                </div>
-                                 <div className="mt-4">
-                                    <label htmlFor="character-name" className="block text-sm font-medium text-text-secondary">Character Name</label>
-                                    <input
-                                        type="text"
-                                        id="character-name"
-                                        value={characterName}
-                                        onChange={(e) => dispatch(setCharacterName(e.target.value))}
-                                        placeholder={shouldGenerateCharacterName ? "AI will suggest a name after generation..." : "Enter a name for your character"}
-                                        className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                                        disabled={isLoading}
-                                    />
-                                    <div className="mt-2">
-                                        <label className="flex items-center gap-2 text-xs font-medium text-text-secondary cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={shouldGenerateCharacterName}
-                                                onChange={(e) => dispatch(setShouldGenerateCharacterName(e.target.checked))}
-                                                disabled={isLoading}
-                                                className="rounded text-accent focus:ring-accent"
-                                            />
-                                            Use AI to generate a name
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            {(options.clothing === 'image' || options.background === 'image') && (
-                                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                                    <h2 className="text-xl font-bold mb-4 text-accent">Optional Reference Images</h2>
-                                    <div className="space-y-4">
-                                        {options.clothing === 'image' && (
-                                            <div className="flex items-center gap-2">
-                                                <ImageUploader label="Clothing" id="clothing-image" onImageUpload={(file) => dispatch(setClothingImage(file))} sourceFile={clothingImage} />
-                                                <button onClick={() => openModal('isClothingPickerOpen')} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
-                                                    <LibraryIcon className="w-6 h-6"/>
-                                                </button>
-                                            </div>
-                                        )}
-                                        {options.background === 'image' && (
-                                            <div className="flex items-center gap-2">
-                                                <ImageUploader label="Background" id="background-image" onImageUpload={(file) => dispatch(setBackgroundImage(file))} sourceFile={backgroundImage}/>
-                                                <button onClick={() => openModal('isBackgroundPickerOpen')} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary">
-                                                    <LibraryIcon className="w-6 h-6"/>
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            <OptionsPanel 
-                                title="2. Configure Options"
-                                options={options} 
-                                setOptions={handleSetOptions}
-                                updateOptions={handleUpdateOptions}
-                                generationMode={generationMode}
-                                setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
-                                onGenerate={handleGenerate}
-                                onReset={handleReset}
-                                onGeneratePrompt={() => {}}
-                                onOpenPosePicker={() => openModal('isPosePickerOpen')}
-                                onExportWorkflow={handleExport}
-                                isDisabled={isLoading}
-// FIX: Cast `isReadyToGenerate` from a selector to a boolean to fix type error.
-                                isReady={!!isReadyToGenerate}
-                                isGeneratingPrompt={false}
-                                previewedBackgroundImage={previewedBackgroundImage}
-                                setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
-                                previewedClothingImage={previewedClothingImage}
-                                setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
-                                comfyUIObjectInfo={comfyUIObjectInfo}
-                                comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
-                                sourceImage={sourceImage}
-                                hideProviderSwitch={true}
-                                hideGeminiModeSwitch={true}
-                                hideGenerationModeSwitch={true}
-                                activeTab={activeTab}
-                                maskImage={maskImage}
-                                setMaskImage={(file) => dispatch(setMaskImage(file))}
-                                elementImages={elementImages}
-                                setElementImages={(files) => dispatch(setElementImages(files))}
-                                onOpenMaskPicker={() => {}}
-                                onOpenElementPicker={() => {}}
-                            />
-                        </div>
-
-                        {/* --- Results Column (Right) --- */}
-                        <div className="lg:col-span-2">
-                           <ImageGrid 
-                                images={charGenContent.images} 
-                                onSendToI2I={handleSendToI2I}
-                                onSendToCharacter={handleSendToCharacter}
-                                lastUsedPrompt={charGenContent.lastUsedPrompt}
-                                options={options}
-                                sourceImage={sourceImage}
-                                characterName={characterName}
-                                activeTab={activeTab}
-                            />
-                             {charGenContent.images.length === 0 && !isLoading && (
-                                <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-secondary rounded-2xl shadow-lg h-full min-h-[500px]">
-                                    <CharacterIcon className="w-16 h-16 text-border-primary mb-4" />
-                                    <h3 className="text-lg font-bold text-text-primary">Your generated characters will appear here</h3>
-                                    <p className="text-text-secondary max-w-xs">Upload a source image, configure options, and click "Generate".</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                <div className={activeTab === 'group-photo-fusion' ? 'block' : 'hidden'}>
-                    <GroupPhotoFusionPanel />
-                </div>
-                
-                <div className={activeTab === 'past-forward-photo' ? 'block' : 'hidden'}>
-                    <PastForwardPanel />
-                </div>
-
-                <div className={activeTab === 'video-generator' ? 'block' : 'hidden'}>
-                     <VideoGeneratorPanel
-                        options={options}
-                        setOptions={handleUpdateOptions}
-                        comfyUIObjectInfo={comfyUIObjectInfo}
-                        startFrame={videoStartFrame}
-                        setStartFrame={handleSetVideoStartFrame}
-                        endFrame={videoEndFrame}
-                        setEndFrame={handleSetVideoEndFrame}
-                        onGenerate={handleGenerateVideo}
-// FIX: Cast `isVideoReady` from a selector to a boolean to fix type error.
-                        isReady={!!isVideoReady}
-                        isLoading={isLoading}
-                        error={globalError ? globalError.message : null}
-                        generatedVideo={generatedVideoUrl}
-                        lastUsedPrompt={generatedContent[activeTab]?.lastUsedPrompt || null}
-                        progressMessage={progressMessage}
-                        progressValue={progressValue}
-                        onReset={handleVideoReset}
-                        generationOptionsForSave={generationOptionsForSave}
-                        onOpenLibraryForStartFrame={() => openModal('isVideoStartFramePickerOpen')}
-                        onOpenLibraryForEndFrame={() => openModal('isVideoEndFramePickerOpen')}
-                        onOpenLibraryForGeminiSource={() => openModal('isGeminiVideoSourcePickerOpen')}
+            {/* Main Content Area */}
+            <main className="flex-grow container mx-auto p-4 pt-6 flex flex-col relative">
+                {/* Global Error Display */}
+                {globalError && (
+                    <ErrorModal 
+                        title={globalError.title} 
+                        message={globalError.message} 
+                        onClose={() => dispatch(setGlobalError(null))} 
                     />
-                </div>
+                )}
 
-                <div className={activeTab === 'logo-theme-generator' ? 'block' : 'hidden'}>
-                    <LogoThemeGeneratorPanel
-                        activeSubTab={activeLogoThemeSubTab}
-                        setActiveSubTab={(tab) => dispatch(setActiveLogoThemeSubTab(tab))}
-                        onOpenLibraryForReferences={() => openModal('isLogoRefPickerOpen')}
-                        onOpenLibraryForPalette={() => openModal('isLogoPalettePickerOpen')}
-                        onOpenLibraryForFont={() => openModal('isLogoFontPickerOpen')}
-                        onOpenLibraryForBannerReferences={() => openModal('isBannerRefPickerOpen')}
-                        onOpenLibraryForBannerPalette={() => openModal('isBannerPalettePickerOpen')}
-                        onOpenLibraryForBannerLogo={() => openModal('isBannerLogoPickerOpen')}
-                        onOpenLibraryForBannerFont={() => openModal('isBannerFontPickerOpen')}
-                        onOpenLibraryForAlbumCoverReferences={() => openModal('isAlbumCoverRefPickerOpen')}
-                        onOpenLibraryForAlbumCoverPalette={() => openModal('isAlbumCoverPalettePickerOpen')}
-                        onOpenLibraryForAlbumCoverLogo={() => openModal('isAlbumCoverLogoPickerOpen')}
-                        onOpenLibraryForAlbumCoverFont={() => openModal('isAlbumCoverFontPickerOpen')}
-                    />
-                </div>
-
-                <div className={activeTab === 'library' ? 'block' : 'hidden'}>
-                    <LibraryPanel 
-                        onLoadItem={handleLoadLibraryItem} 
-                        isDriveConnected={!!driveFolder}
-                        onSyncWithDrive={handleSyncWithDrive}
-                        isSyncing={isSyncing}
-                        syncMessage={syncMessage}
-                        isDriveConfigured={isDriveConfigured}
-                    />
-                </div>
-                
-                <div className={activeTab === 'prompt-generator' ? 'block' : 'hidden'}>
-                    <PromptGeneratorPanel 
-                        activeSubTab={activePromptToolsSubTab}
-                        setActiveSubTab={(tab) => dispatch(setActivePromptToolsSubTab(tab))}
-                        onUsePrompt={handleUsePrompt}
-                        onOpenLibraryForImage={() => openModal('isPromptGenImagePickerOpen')}
-                        onOpenLibraryForBg={() => openModal('isPromptGenBgImagePickerOpen')}
-                        onOpenLibraryForSubject={() => openModal('isPromptGenSubjectImagePickerOpen')}
-                        onOpenLibraryForWanVideoImage={() => openModal('isWanVideoImagePickerOpen')}
-                        onReset={handlePromptGenReset}
-                    />
-                </div>
-                
-                <div className={activeTab === 'extractor-tools' ? 'block' : 'hidden'}>
-                    {/* Fix: Added all required props to the ExtractorToolsPanel component. */}
-                    <ExtractorToolsPanel 
-                        onOpenLibraryForClothes={() => openModal('isClothesSourcePickerOpen')}
-                        onOpenLibraryForObjects={() => openModal('isObjectSourcePickerOpen')}
-                        onOpenLibraryForPoses={() => openModal('isPoseSourcePickerOpen')}
-                        onOpenLibraryForMannequinRef={() => openModal('isMannequinRefPickerOpen')}
-                        onOpenLibraryForFont={() => openModal('isFontSourcePickerOpen')}
-                        activeSubTab={activeExtractorSubTab}
-                        setActiveSubTab={(tab) => dispatch(setActiveExtractorSubTab(tab))}
-                    />
-                </div>
-                
-                <div className={activeTab === 'video-utils' ? 'block' : 'hidden'}>
-                    <VideoUtilsPanel
-                        setStartFrame={handleSetVideoStartFrame}
-                        setEndFrame={handleSetVideoEndFrame}
-                        onOpenLibrary={(() => openModal('isColorImagePickerOpen'))}
-                        onOpenVideoLibrary={(() => openModal('isVideoUtilsPickerOpen'))}
-                        activeSubTab={activeVideoUtilsSubTab}
-                        // Fix: Cast the 'tab' parameter to the expected literal type to resolve the type error.
-                        setActiveSubTab={(tab) => dispatch(setActiveVideoUtilsSubTab(tab as 'frames' | 'colors' | 'resize-crop'))}
-                        onReset={handleVideoUtilsReset}
-                        onOpenLibraryForResizeCrop={() => openModal('isResizeCropPickerOpen')}
-                    />
-                </div>
-                
-            </main>
-            {isLoading && (
-                <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-4">
-                    <Loader 
-                        message={progressMessage} 
-                        progress={progressValue} 
-                        onCancel={handleCancelGeneration}
-                    />
-                </div>
-            )}
-{/* FIX: Explicitly cast `globalError` to a boolean for conditional rendering to prevent 'unknown' type errors. */}
-             {!!globalError && (
-                <ErrorModal 
-                    title={globalError.title} 
-                    message={globalError.message} 
-                    onClose={() => dispatch(setGlobalError(null))} 
-                />
-            )}
-{/* FIX: Explicitly cast `isSettingsModalOpen` to a boolean to ensure type safety in conditional rendering. */}
-            {!!isSettingsModalOpen && (
-                <ConnectionSettingsModal 
-                    isOpen={!!isSettingsModalOpen} 
-                    onClose={() => dispatch(closeSettingsModal())} 
+                {/* Helper Modals */}
+                <ConnectionSettingsModal
+                    isOpen={isSettingsModalOpen}
+                    onClose={() => dispatch(closeSettingsModal())}
                     initialComfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                     initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
                     onSave={handleSaveSettings}
-                    onConnectionFail={(url) => {
-                        // When the test fails inside the modal, we no longer automatically open another modal.
-                        // We just need to make sure the helper has the URL if the user opens it manually later.
-                        setComfyUrlForHelper(url);
-                    }}
+                    onConnectionFail={(url) => setComfyUrlForHelper(url)}
                 />
-            )}
-{/* FIX: Explicitly cast `isOAuthHelperOpen` to a boolean for conditional rendering to prevent 'unknown' type errors. */}
-            {!!isOAuthHelperOpen && (
+                
                 <OAuthHelperModal
-                    isOpen={!!isOAuthHelperOpen}
+                    isOpen={isOAuthHelperOpen}
                     onClose={() => dispatch(closeOAuthHelper())}
-                    onProceed={() => {
-                        dispatch(closeOAuthHelper());
-                        handleDriveConnect();
-                    }}
+                    onProceed={handleDriveConnect}
                     clientId={localStorage.getItem('google_client_id') || ''}
                     origin={window.location.origin}
                 />
-            )}
-            {!!isComfyUIHelperOpen && (
+
                 <ComfyUIConnectionHelperModal
-                    isOpen={!!isComfyUIHelperOpen}
+                    isOpen={isComfyUIHelperOpen}
                     onClose={() => dispatch(closeComfyUIHelper())}
-                    testedUrl={comfyUrlForHelper}
+                    testedUrl={comfyUrlForHelper || localStorage.getItem('comfyui_url') || 'http://127.0.0.1:8188'}
                 />
-            )}
-{/* FIX: Explicitly cast all `is...Open` props to boolean using `!!` to resolve potential 'unknown' type errors during conditional rendering. */}
-            <LibraryPickerModal isOpen={!!isClothingPickerOpen} onClose={() => closeModal('isClothingPickerOpen')} onSelectItem={async item => dispatch(setClothingImage(await dataUrlToFile(item.media, item.name || 'clothing.jpeg')))} filter="clothes" />
-            <LibraryPickerModal isOpen={!!isBackgroundPickerOpen} onClose={() => closeModal('isBackgroundPickerOpen')} onSelectItem={async item => dispatch(setBackgroundImage(await dataUrlToFile(item.media, item.name || 'background.jpeg')))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={!!isPosePickerOpen} onClose={() => closeModal('isPosePickerOpen')} onSelectItem={item => {}} filter="pose" multiSelect={true} onSelectMultiple={(items) => dispatch(updateOptions({ poseLibraryItems: items }))} />
-            <LibraryPickerModal isOpen={!!isColorImagePickerOpen} onClose={() => closeModal('isColorImagePickerOpen')} onSelectItem={async item => dispatch(updateVideoUtilsState({ colorPicker: { ...videoUtilsState.colorPicker, imageFile: await dataUrlToFile(item.media, item.name || 'color-source.jpeg') } }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={!!isVideoUtilsPickerOpen} onClose={() => closeModal('isVideoUtilsPickerOpen')} onSelectItem={async item => dispatch(updateVideoUtilsState({ videoFile: await dataUrlToFile(item.media, item.name || 'video.mp4') }))} filter="video" />
-            <LibraryPickerModal isOpen={!!isVideoStartFramePickerOpen} onClose={() => closeModal('isVideoStartFramePickerOpen')} onSelectItem={async item => dispatch(setVideoStartFrame(await dataUrlToFile(item.media, item.name || 'start-frame.jpeg')))} filter={['image', 'character', 'extracted-frame']} />
-            <LibraryPickerModal isOpen={!!isVideoEndFramePickerOpen} onClose={() => closeModal('isVideoEndFramePickerOpen')} onSelectItem={async item => dispatch(setVideoEndFrame(await dataUrlToFile(item.media, item.name || 'end-frame.jpeg')))} filter={['image', 'character', 'extracted-frame']} />
-            <LibraryPickerModal isOpen={!!isGeminiVideoSourcePickerOpen} onClose={() => closeModal('isGeminiVideoSourcePickerOpen')} onSelectItem={async item => dispatch(setVideoStartFrame(await dataUrlToFile(item.media, item.name || 'gemini-source.jpeg')))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={!!isNunchakuSourcePickerOpen} onClose={() => closeModal('isNunchakuSourcePickerOpen')} onSelectItem={async item => dispatch(setSourceImage(await dataUrlToFile(item.media, item.name || 'nunchaku-source.jpeg')))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={!!isCharacterSourcePickerOpen} onClose={() => closeModal('isCharacterSourcePickerOpen')} onSelectItem={async item => dispatch(setSourceImage(await dataUrlToFile(item.media, item.name || 'character-source.jpeg')))} filter={['image', 'character']} />
-            
-            {/* Prompt Gen Pickers */}
-            <LibraryPickerModal isOpen={!!isPromptGenImagePickerOpen} onClose={() => closeModal('isPromptGenImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ image: await dataUrlToFile(item.media, 'prompt-source.jpeg') }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={!!isPromptGenBgImagePickerOpen} onClose={() => closeModal('isPromptGenBgImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ bgImage: await dataUrlToFile(item.media, 'bg-source.jpeg') }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={!!isPromptGenSubjectImagePickerOpen} onClose={() => closeModal('isPromptGenSubjectImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ subjectImage: await dataUrlToFile(item.media, 'subject-source.jpeg') }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={!!isWanVideoImagePickerOpen} onClose={() => closeModal('isWanVideoImagePickerOpen')} onSelectItem={async item => dispatch(updatePromptGenState({ wanVideoImage: await dataUrlToFile(item.media, 'wan-video-source.jpeg') }))} filter={imageLikeFilter} />
-            
-            {/* Extractor Pickers */}
-            <LibraryPickerModal isOpen={!!isClothesSourcePickerOpen} onClose={() => closeModal('isClothesSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ clothesSourceFile: await dataUrlToFile(item.media, item.name || 'clothes-source.jpeg') }))} filter={['image', 'character']} />
-            <LibraryPickerModal isOpen={!!isObjectSourcePickerOpen} onClose={() => closeModal('isObjectSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ objectSourceFile: await dataUrlToFile(item.media, item.name || 'object-source.jpeg') }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={!!isPoseSourcePickerOpen} onClose={() => closeModal('isPoseSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ poseSourceFile: await dataUrlToFile(item.media, item.name || 'pose-source.jpeg') }))} filter={['image', 'character']} />
-            <LibraryPickerModal isOpen={!!isMannequinRefPickerOpen} onClose={() => closeModal('isMannequinRefPickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ mannequinReferenceFile: await dataUrlToFile(item.media, item.name || 'mannequin-ref.jpeg') }))} filter={['image', 'character']} />
-            <LibraryPickerModal isOpen={!!isFontSourcePickerOpen} onClose={() => closeModal('isFontSourcePickerOpen')} onSelectItem={async item => dispatch(updateExtractorState({ fontSourceFile: await dataUrlToFile(item.media, item.name || 'font-source.jpeg') }))} filter={imageLikeFilter} />
-            
-            {/* Logo/Theme Pickers */}
-            <LibraryPickerModal isOpen={!!isLogoRefPickerOpen} onClose={() => closeModal('isLogoRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ referenceItems: [...(logoThemeState.referenceItems || []), item] }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={!!isLogoPalettePickerOpen} onClose={() => closeModal('isLogoPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ selectedPalette: item }))} filter={'color-palette'} />
-            <LibraryPickerModal isOpen={!!isLogoFontPickerOpen} onClose={() => closeModal('isLogoFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ selectedFont: item, fontReferenceImage: null }))} filter={'font'} />
-            
-            <LibraryPickerModal isOpen={!!isBannerRefPickerOpen} onClose={() => closeModal('isBannerRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerReferenceItems: [...(logoThemeState.bannerReferenceItems || []), item] }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={!!isBannerPalettePickerOpen} onClose={() => closeModal('isBannerPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedPalette: item }))} filter={'color-palette'} />
-            <LibraryPickerModal isOpen={!!isBannerLogoPickerOpen} onClose={() => closeModal('isBannerLogoPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedLogo: item }))} filter={'logo'} />
-            <LibraryPickerModal isOpen={!!isBannerFontPickerOpen} onClose={() => closeModal('isBannerFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedFont: item, bannerFontReferenceImage: null }))} filter={'font'} />
-            
-            <LibraryPickerModal isOpen={!!isAlbumCoverRefPickerOpen} onClose={() => closeModal('isAlbumCoverRefPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumReferenceItems: [...(logoThemeState.albumReferenceItems || []), item] }))} filter={imageLikeFilter} />
-            <LibraryPickerModal isOpen={!!isAlbumCoverPalettePickerOpen} onClose={() => closeModal('isAlbumCoverPalettePickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedPalette: item }))} filter={'color-palette'} />
-            <LibraryPickerModal isOpen={!!isAlbumCoverLogoPickerOpen} onClose={() => closeModal('isAlbumCoverLogoPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedLogo: item }))} filter={'logo'} />
-            <LibraryPickerModal isOpen={!!isAlbumCoverFontPickerOpen} onClose={() => closeModal('isAlbumCoverFontPickerOpen')} onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedFont: item, albumFontReferenceImage: null }))} filter={'font'} />
 
-             {/* Mask/Element Pickers */}
-             <LibraryPickerModal isOpen={!!isMaskPickerOpen} onClose={() => closeModal('isMaskPickerOpen')} onSelectItem={async item => dispatch(setMaskImage(await dataUrlToFile(item.media, item.name || 'mask.jpeg')))} filter={imageLikeFilter} />
-             <LibraryPickerModal isOpen={!!isElementPickerOpen} onClose={() => closeModal('isElementPickerOpen')} onSelectItem={async item => dispatch(setElementImages([...elementImages, await dataUrlToFile(item.media, item.name || 'element.jpeg')]))} filter={broadImagePickerFilter} />
-             
-             {/* Resize/Crop Picker */}
-             <LibraryPickerModal 
-                isOpen={!!isResizeCropPickerOpen} 
-                onClose={() => closeModal('isResizeCropPickerOpen')} 
-                onSelectItem={async item => {
-                    const file = await dataUrlToFile(item.media, item.name || 'resize-source.jpeg');
-                    dispatch(updateVideoUtilsState({ 
-                        resizeCrop: { 
-                            ...videoUtilsState.resizeCrop, 
-                            sourceFile: file,
-                            resultUrl: null, // Reset result when a new image is loaded
-                            saveStatus: 'idle',
-                        } 
-                    }));
-                }} 
-                filter={imageLikeFilter} 
-            />
+                {/* Navigation Tabs */}
+                <div className="flex flex-wrap justify-center gap-2 mb-8 sticky top-[80px] z-[9] bg-bg-primary/90 backdrop-blur-sm p-2 rounded-xl border border-border-primary shadow-sm">
+                    {[
+                        { id: 'image-generator', label: 'Image Generator', icon: <ImageGeneratorIcon className="w-5 h-5" /> },
+                        { id: 'character-generator', label: 'Character Generator', icon: <CharacterIcon className="w-5 h-5" /> },
+                        { id: 'past-forward', label: 'Past Forward', icon: <PastForwardIcon className="w-5 h-5" /> },
+                        { id: 'group-photo-fusion', label: 'Group Photo Fusion', icon: <GroupPhotoFusionIcon className="w-5 h-5" /> },
+                        { id: 'video-generator', label: 'Video Generator', icon: <VideoIcon className="w-5 h-5" /> },
+                        { id: 'prompt-generator', label: 'Prompt Tools', icon: <PromptIcon className="w-5 h-5" /> },
+                        { id: 'extractor-tools', label: 'Extractor Tools', icon: <ExtractorIcon className="w-5 h-5" /> },
+                        { id: 'logo-theme-generator', label: 'Logo & Theme', icon: <SwatchIcon className="w-5 h-5" /> },
+                        { id: 'video-utils', label: 'Media Tools', icon: <VideoUtilsIcon className="w-5 h-5" /> },
+                        { id: 'library', label: 'Library', icon: <LibraryIcon className="w-5 h-5" /> },
+                        ...(currentUser.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: <AdminIcon className="w-5 h-5" /> }] : [])
+                    ].map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => handleTabChange(tab.id)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
+                                activeTab === tab.id
+                                    ? 'bg-accent text-accent-text shadow-md transform scale-105'
+                                    : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary'
+                            }`}
+                        >
+                            {tab.icon}
+                            <span className="hidden sm:inline">{tab.label}</span>
+                        </button>
+                    ))}
+                </div>
 
-            {/* Group Photo Fusion Picker */}
+                {/* Content Views - Centered Wrapper */}
+                <div className="w-full max-w-7xl mx-auto">
+                    {activeTab === 'image-generator' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                            <div className="lg:col-span-1 space-y-8">
+                                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h2 className="text-xl font-bold text-accent">1. Source & Context</h2>
+                                    </div>
+                                    <ImageUploader 
+                                        label="Upload Source Image (Optional for T2I)" 
+                                        id="main-source-upload"
+                                        onImageUpload={(file) => dispatch(setSourceImage(file))} 
+                                        sourceFile={sourceImage} 
+                                    />
+                                </div>
+                                <OptionsPanel
+                                    options={currentOptions}
+                                    setOptions={handleSetOptions}
+                                    updateOptions={handleUpdateOptions}
+                                    generationMode={generationMode}
+                                    setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
+                                    previewedBackgroundImage={previewedBackgroundImage}
+                                    setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
+                                    previewedClothingImage={previewedClothingImage}
+                                    setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
+                                    onGenerate={handleGenerate}
+                                    onReset={handleReset}
+                                    onGeneratePrompt={() => {/* Implementation in PromptGeneratorPanel usually */}}
+                                    onExportWorkflow={() => exportComfyUIWorkflow(options, sourceImage)}
+                                    isDisabled={isLoading}
+                                    isReady={isReadyToGenerate}
+                                    isGeneratingPrompt={false} // State handled in prompt gen panel mainly
+                                    comfyUIObjectInfo={comfyUIObjectInfo}
+                                    comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
+                                    sourceImage={sourceImage}
+                                    activeTab={activeTab}
+                                    maskImage={maskImage}
+                                    setMaskImage={(file) => dispatch(setMaskImage(file))}
+                                    elementImages={elementImages}
+                                    setElementImages={(files) => dispatch(setElementImages(files))}
+                                    onOpenMaskPicker={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: true }))}
+                                    onOpenElementPicker={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: true }))}
+                                />
+                            </div>
+                            <div className="lg:col-span-2 space-y-8">
+                                {isLoading ? (
+                                    <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />
+                                ) : (
+                                    <ImageGrid 
+                                        images={generatedContent['image-generator']?.images || []} 
+                                        onSendToI2I={handleSendToI2I} 
+                                        onSendToCharacter={handleSendToCharacter}
+                                        lastUsedPrompt={generatedContent['image-generator']?.lastUsedPrompt}
+                                        options={currentOptions}
+                                        sourceImage={sourceImage}
+                                        activeTab={activeTab}
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'character-generator' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                            <div className="lg:col-span-1 space-y-8">
+                                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h2 className="text-xl font-bold text-accent">1. Character Source</h2>
+                                        <button onClick={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: true }))} className="p-2 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover" title="Load from Library"><LibraryIcon className="w-5 h-5"/></button>
+                                    </div>
+                                    <ImageUploader label="Upload Face/Character Reference" id="char-source-upload" onImageUpload={(file) => dispatch(setSourceImage(file))} sourceFile={sourceImage} />
+                                    <div className="mt-4">
+                                        <label className="block text-sm font-medium text-text-secondary mb-1">Character Name</label>
+                                        <div className="flex gap-2">
+                                            <input type="text" value={characterName} onChange={(e) => dispatch(setCharacterName(e.target.value))} placeholder="Enter or Auto-Generate" className="flex-grow bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm" />
+                                            <button onClick={() => dispatch(setShouldGenerateCharacterName(!shouldGenerateCharacterName))} className={`p-2 rounded-md border ${shouldGenerateCharacterName ? 'bg-accent text-accent-text border-accent' : 'bg-bg-tertiary text-text-secondary border-border-primary'}`} title="Auto-generate name"><CharacterIcon className="w-5 h-5" /></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <OptionsPanel
+                                    options={currentOptions}
+                                    setOptions={handleSetOptions}
+                                    updateOptions={handleUpdateOptions}
+                                    generationMode="i2i" // Always I2I for character gen
+                                    setGenerationMode={() => {}} // No-op, locked to I2I
+                                    previewedBackgroundImage={previewedBackgroundImage}
+                                    setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
+                                    previewedClothingImage={previewedClothingImage}
+                                    setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
+                                    onGenerate={handleGenerate}
+                                    onReset={handleReset}
+                                    onGeneratePrompt={() => {}}
+                                    onExportWorkflow={() => {}}
+                                    onOpenPosePicker={() => dispatch(setModalOpen({ modal: 'isPosePickerOpen', isOpen: true }))}
+                                    isDisabled={isLoading}
+                                    isReady={isReadyToGenerate}
+                                    isGeneratingPrompt={false}
+                                    comfyUIObjectInfo={comfyUIObjectInfo}
+                                    comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
+                                    sourceImage={sourceImage}
+                                    hideProviderSwitch={true}
+                                    hideGenerationModeSwitch={true} // Hide mode switch, locked to I2I
+                                    title="2. Character Options"
+                                    activeTab={activeTab}
+                                    maskImage={null} // Not used in this simple view
+                                    setMaskImage={() => {}}
+                                    elementImages={[]}
+                                    setElementImages={() => {}}
+                                    onOpenMaskPicker={() => {}}
+                                    onOpenElementPicker={() => {}}
+                                    // New props passed for Character Generator Image Uploads
+                                    clothingImage={clothingImage}
+                                    setClothingImage={(file) => dispatch(setClothingImage(file))}
+                                    backgroundImage={backgroundImage}
+                                    setBackgroundImage={(file) => dispatch(setBackgroundImage(file))}
+                                    onOpenClothingLibrary={() => dispatch(setModalOpen({ modal: 'isClothingPickerOpen', isOpen: true }))}
+                                    onOpenBackgroundLibrary={() => dispatch(setModalOpen({ modal: 'isBackgroundPickerOpen', isOpen: true }))}
+                                />
+                            </div>
+                            <div className="lg:col-span-2 space-y-8">
+                                {isLoading ? (
+                                    <Loader message={progressMessage} progress={progressValue} />
+                                ) : (
+                                    <ImageGrid 
+                                        images={generatedContent['character-generator']?.images || []} 
+                                        onSendToI2I={handleSendToI2I}
+                                        onSendToCharacter={handleSendToCharacter}
+                                        lastUsedPrompt={generatedContent['character-generator']?.lastUsedPrompt}
+                                        options={currentOptions}
+                                        sourceImage={sourceImage}
+                                        characterName={characterName}
+                                        activeTab={activeTab}
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'past-forward' && <PastForwardPanel />}
+
+                    {activeTab === 'group-photo-fusion' && <GroupPhotoFusionPanel />}
+
+                    {activeTab === 'video-generator' && (
+                        <VideoGeneratorPanel
+                            options={options}
+                            setOptions={handleUpdateOptions}
+                            comfyUIObjectInfo={comfyUIObjectInfo}
+                            startFrame={videoStartFrame}
+                            setStartFrame={handleSetVideoStartFrame}
+                            endFrame={videoEndFrame}
+                            setEndFrame={handleSetVideoEndFrame}
+                            onGenerate={handleGenerateVideo}
+                            isReady={isVideoReady}
+                            isLoading={isLoading}
+                            error={globalError ? globalError.message : null}
+                            generatedVideo={generatedVideoUrl}
+                            lastUsedPrompt={generatedContent[activeTab]?.lastUsedPrompt || null}
+                            progressMessage={progressMessage}
+                            progressValue={progressValue}
+                            onReset={handleVideoReset}
+                            generationOptionsForSave={generationOptionsForSave}
+                            onOpenLibraryForStartFrame={() => dispatch(setModalOpen({ modal: 'isVideoStartFramePickerOpen', isOpen: true }))}
+                            onOpenLibraryForEndFrame={() => dispatch(setModalOpen({ modal: 'isVideoEndFramePickerOpen', isOpen: true }))}
+                            onOpenLibraryForGeminiSource={() => dispatch(setModalOpen({ modal: 'isGeminiVideoSourcePickerOpen', isOpen: true }))}
+                        />
+                    )}
+
+                    {activeTab === 'prompt-generator' && (
+                        <PromptGeneratorPanel 
+                            activeSubTab={activePromptToolsSubTab}
+                            setActiveSubTab={(id) => dispatch(setActivePromptToolsSubTab(id))}
+                            onUsePrompt={(prompt) => {
+                                // Logic to copy prompt to relevant fields
+                                if (options.provider === 'gemini') dispatch(updateOptions({ geminiPrompt: prompt }));
+                                else dispatch(updateOptions({ comfyPrompt: prompt, comfyVidWanI2VPositivePrompt: prompt, comfyVidWanT2VPositivePrompt: prompt }));
+                                // Optionally switch tab? For now, let user decide via modal or just stay.
+                            }}
+                            onOpenLibraryForImage={() => dispatch(setModalOpen({ modal: 'isPromptGenImagePickerOpen', isOpen: true }))}
+                            onOpenLibraryForBg={() => dispatch(setModalOpen({ modal: 'isPromptGenBgImagePickerOpen', isOpen: true }))}
+                            onOpenLibraryForSubject={() => dispatch(setModalOpen({ modal: 'isPromptGenSubjectImagePickerOpen', isOpen: true }))}
+                            onOpenLibraryForWanVideoImage={() => dispatch(setModalOpen({ modal: 'isWanVideoImagePickerOpen', isOpen: true }))}
+                            onReset={handlePromptGenReset}
+                        />
+                    )}
+
+                    {activeTab === 'extractor-tools' && (
+                        <ExtractorToolsPanel
+                            onOpenLibraryForClothes={() => dispatch(setModalOpen({ modal: 'isClothesSourcePickerOpen', isOpen: true }))}
+                            onOpenLibraryForObjects={() => dispatch(setModalOpen({ modal: 'isObjectSourcePickerOpen', isOpen: true }))}
+                            onOpenLibraryForPoses={() => dispatch(setModalOpen({ modal: 'isPoseSourcePickerOpen', isOpen: true }))}
+                            onOpenLibraryForMannequinRef={() => dispatch(setModalOpen({ modal: 'isMannequinRefPickerOpen', isOpen: true }))}
+                            onOpenLibraryForFont={() => dispatch(setModalOpen({ modal: 'isFontSourcePickerOpen', isOpen: true }))}
+                            activeSubTab={activeExtractorSubTab}
+                            setActiveSubTab={(id) => dispatch(setActiveExtractorSubTab(id))}
+                        />
+                    )}
+
+                    {activeTab === 'logo-theme-generator' && (
+                        <LogoThemeGeneratorPanel 
+                            activeSubTab={activeLogoThemeSubTab}
+                            setActiveSubTab={(id) => dispatch(setActiveLogoThemeSubTab(id))}
+                            onOpenLibraryForReferences={() => dispatch(setModalOpen({ modal: 'isLogoRefPickerOpen', isOpen: true }))}
+                            onOpenLibraryForPalette={() => dispatch(setModalOpen({ modal: 'isLogoPalettePickerOpen', isOpen: true }))}
+                            onOpenLibraryForFont={() => dispatch(setModalOpen({ modal: 'isLogoFontPickerOpen', isOpen: true }))}
+                            onOpenLibraryForBannerReferences={() => dispatch(setModalOpen({ modal: 'isBannerRefPickerOpen', isOpen: true }))}
+                            onOpenLibraryForBannerPalette={() => dispatch(setModalOpen({ modal: 'isBannerPalettePickerOpen', isOpen: true }))}
+                            onOpenLibraryForBannerLogo={() => dispatch(setModalOpen({ modal: 'isBannerLogoPickerOpen', isOpen: true }))}
+                            onOpenLibraryForBannerFont={() => dispatch(setModalOpen({ modal: 'isBannerFontPickerOpen', isOpen: true }))}
+                            onOpenLibraryForAlbumCoverReferences={() => dispatch(setModalOpen({ modal: 'isAlbumCoverRefPickerOpen', isOpen: true }))}
+                            onOpenLibraryForAlbumCoverPalette={() => dispatch(setModalOpen({ modal: 'isAlbumCoverPalettePickerOpen', isOpen: true }))}
+                            onOpenLibraryForAlbumCoverLogo={() => dispatch(setModalOpen({ modal: 'isAlbumCoverLogoPickerOpen', isOpen: true }))}
+                            onOpenLibraryForAlbumCoverFont={() => dispatch(setModalOpen({ modal: 'isAlbumCoverFontPickerOpen', isOpen: true }))}
+                        />
+                    )}
+
+                    {activeTab === 'video-utils' && (
+                        <VideoUtilsPanel 
+                            setStartFrame={handleSetVideoStartFrame} 
+                            setEndFrame={handleSetVideoEndFrame}
+                            onOpenLibrary={() => dispatch(setModalOpen({ modal: 'isColorImagePickerOpen', isOpen: true }))}
+                            onOpenVideoLibrary={() => dispatch(setModalOpen({ modal: 'isVideoUtilsPickerOpen', isOpen: true }))}
+                            activeSubTab={activeVideoUtilsSubTab}
+                            setActiveSubTab={(id) => dispatch(setActiveVideoUtilsSubTab(id as any))}
+                            onReset={handleVideoUtilsReset}
+                            onOpenLibraryForResizeCrop={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: true }))}
+                        />
+                    )}
+
+                    {activeTab === 'library' && (
+                        <LibraryPanel 
+                            onLoadItem={(item) => {
+                                // Logic to load item back into generator state
+                                if (item.mediaType === 'image' || item.mediaType === 'character') {
+                                    if (item.sourceImage) {
+                                        fetch(item.sourceImage).then(r => r.blob()).then(b => dispatch(setSourceImage(new File([b], "source.jpg", { type: "image/jpeg" }))));
+                                    }
+                                    if (item.options) {
+                                        // Determine where to load options based on item type
+                                        if (item.mediaType === 'character') {
+                                            dispatch(setCharacterOptions(item.options));
+                                        } else {
+                                            dispatch(setOptions(item.options));
+                                        }
+                                    }
+                                    if (item.mediaType === 'character' && item.name) {
+                                        const namePart = item.name.split(':')[0];
+                                        dispatch(setCharacterName(namePart));
+                                        handleTabChange('character-generator');
+                                    } else {
+                                        dispatch(setActiveTab('image-generator'));
+                                    }
+                                } else if (item.mediaType === 'video') {
+                                    if (item.startFrame) {
+                                        fetch(item.startFrame).then(r => r.blob()).then(b => dispatch(setVideoStartFrame(new File([b], "start_frame.jpg", { type: "image/jpeg" }))));
+                                    }
+                                    if (item.endFrame) {
+                                        fetch(item.endFrame).then(r => r.blob()).then(b => dispatch(setVideoEndFrame(new File([b], "end_frame.jpg", { type: "image/jpeg" }))));
+                                    }
+                                    if (item.options) dispatch(setOptions(item.options));
+                                    dispatch(setActiveTab('video-generator'));
+                                }
+                                // Add handling for other types if needed
+                            }}
+                            isDriveConnected={!!driveFolder}
+                            onSyncWithDrive={handleSyncWithDrive}
+                            isSyncing={isSyncing}
+                            syncMessage={syncMessage}
+                            isDriveConfigured={isDriveConfigured}
+                        />
+                    )}
+
+                    {activeTab === 'admin' && currentUser.role === 'admin' && <div className="max-w-4xl mx-auto"><AdminIcon className="w-12 h-12 text-accent mx-auto mb-6"/><h2 className="text-2xl font-bold text-center mb-8">Admin Dashboard</h2></div>}
+                </div>
+            </main>
+
+            {/* Modals */}
             <LibraryPickerModal
-                isOpen={!!isGroupFusionPickerOpen}
-                onClose={() => closeModal('isGroupFusionPickerOpen')}
-                onSelectItem={handleSelectForGroupFusion}
-                filter={['image', 'character']}
+                isOpen={isClothingPickerOpen}
+                onClose={() => dispatch(setModalOpen({ modal: 'isClothingPickerOpen', isOpen: false }))}
+                onSelectItem={async (item) => {
+                    const response = await fetch(item.media);
+                    const blob = await response.blob();
+                    dispatch(setClothingImage(new File([blob], "clothing_ref.jpg", { type: blob.type })));
+                }}
+                filter="clothes"
             />
+            <LibraryPickerModal
+                isOpen={isBackgroundPickerOpen}
+                onClose={() => dispatch(setModalOpen({ modal: 'isBackgroundPickerOpen', isOpen: false }))}
+                onSelectItem={async (item) => {
+                    const response = await fetch(item.media);
+                    const blob = await response.blob();
+                    dispatch(setBackgroundImage(new File([blob], "background_ref.jpg", { type: blob.type })));
+                }}
+                filter={['image', 'extracted-frame', 'background' as any]}
+            />
+            <LibraryPickerModal
+                isOpen={isPosePickerOpen}
+                onClose={() => dispatch(setModalOpen({ modal: 'isPosePickerOpen', isOpen: false }))}
+                onSelectItem={(item) => {
+                    dispatch(updateCharacterOptions({
+                        poseLibraryItems: [...(characterOptions.poseLibraryItems || []), item],
+                        poseMode: 'library' 
+                    }));
+                }}
+                filter="pose"
+                multiSelect
+                onSelectMultiple={(items) => {
+                     dispatch(updateCharacterOptions({
+                        poseLibraryItems: items,
+                        poseMode: 'library'
+                    }));
+                }}
+            />
+            {/* ... Other pickers ... */}
+             <LibraryPickerModal isOpen={isCharacterSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "char_source.jpg", { type: b.type }))); }} filter="character" />
+             <LibraryPickerModal isOpen={isMaskPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setMaskImage(new File([b], "mask.png", { type: b.type }))); }} filter="image" />
+             <LibraryPickerModal isOpen={isElementPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setElementImages([...elementImages, new File([b], `element_${Date.now()}.jpg`, { type: b.type })])); }} filter={['image', 'object', 'clothes']} />
+             <LibraryPickerModal isOpen={isPromptGenImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ image: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
+             <LibraryPickerModal isOpen={isPromptGenBgImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenBgImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ bgImage: new File([b], "bg_source.jpg", { type: b.type }) })); }} filter="image" />
+             <LibraryPickerModal isOpen={isPromptGenSubjectImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenSubjectImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ subjectImage: new File([b], "subj_source.jpg", { type: b.type }) })); }} filter="image" />
+             <LibraryPickerModal isOpen={isWanVideoImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isWanVideoImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ wanVideoImage: new File([b], "wan_source.jpg", { type: b.type }) })); }} filter="image" />
+             <LibraryPickerModal isOpen={isClothesSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isClothesSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ clothesSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
+             <LibraryPickerModal isOpen={isObjectSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isObjectSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ objectSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
+             <LibraryPickerModal isOpen={isPoseSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPoseSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ poseSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
+             <LibraryPickerModal isOpen={isMannequinRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMannequinRefPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ mannequinReferenceFile: new File([b], "ref.jpg", { type: b.type }) })); }} filter="image" />
+             <LibraryPickerModal isOpen={isFontSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isFontSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ fontSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
+             <LibraryPickerModal isOpen={isColorImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isColorImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ colorPicker: { ...videoUtilsState.colorPicker, imageFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
+             <LibraryPickerModal isOpen={isVideoUtilsPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoUtilsPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ videoFile: new File([b], "video.mp4", { type: b.type }) })); }} filter="video" />
+             <LibraryPickerModal isOpen={isVideoStartFramePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoStartFramePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoStartFrame(new File([b], "start.jpg", { type: b.type }))); }} filter={['image', 'extracted-frame']} />
+             <LibraryPickerModal isOpen={isVideoEndFramePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoEndFramePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoEndFrame(new File([b], "end.jpg", { type: b.type }))); }} filter={['image', 'extracted-frame']} />
+             <LibraryPickerModal isOpen={isGeminiVideoSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGeminiVideoSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoStartFrame(new File([b], "input.jpg", { type: b.type }))); }} filter="image" />
+             <LibraryPickerModal isOpen={isResizeCropPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ resizeCrop: { ...videoUtilsState.resizeCrop, sourceFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
+             <LibraryPickerModal isOpen={isGroupFusionPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGroupFusionPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); const file = new File([b], "imported.jpg", { type: b.type }); const newFile: UploadedFile = { id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), personaId: 'default' }; dispatch(setUploadedFiles([...uploadedFiles, newFile])); }} filter="image" />
+             
+             {/* Logo Theme Pickers */}
+             <LibraryPickerModal isOpen={isLogoRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ referenceItems: [...(logoThemeState.referenceItems || []), item] }))} filter="image" />
+             <LibraryPickerModal isOpen={isLogoPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ selectedPalette: item }))} filter="color-palette" />
+             <LibraryPickerModal isOpen={isLogoFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ selectedFont: item, fontReferenceImage: null }))} filter="font" />
+             <LibraryPickerModal isOpen={isBannerRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerReferenceItems: [...(logoThemeState.bannerReferenceItems || []), item] }))} filter="image" />
+             <LibraryPickerModal isOpen={isBannerPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedPalette: item }))} filter="color-palette" />
+             <LibraryPickerModal isOpen={isBannerLogoPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerLogoPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedLogo: item }))} filter="logo" />
+             <LibraryPickerModal isOpen={isBannerFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedFont: item, bannerFontReferenceImage: null }))} filter="font" />
+             <LibraryPickerModal isOpen={isAlbumCoverRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumReferenceItems: [...(logoThemeState.albumReferenceItems || []), item] }))} filter="image" />
+             <LibraryPickerModal isOpen={isAlbumCoverPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedPalette: item }))} filter="color-palette" />
+             <LibraryPickerModal isOpen={isAlbumCoverLogoPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverLogoPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedLogo: item }))} filter="logo" />
+             <LibraryPickerModal isOpen={isAlbumCoverFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedFont: item, albumFontReferenceImage: null }))} filter="font" />
+
         </div>
     );
 };
 
-// Fix: Added default export for the App component.
 export default App;

@@ -1,4 +1,4 @@
-# LAWIZ'S Media Generator v1.55
+# LAWIZ'S Media Generator v1.56
 
 Welcome to LAWIZ'S Media Generator, a powerful and versatile web application designed for creating stunning images and videos using state-of-the-art AI models. This tool provides a unified interface to interact with both Google's Gemini API and a self-hosted ComfyUI backend, offering a wide range of creative possibilities for both novice and advanced users.
 
@@ -25,6 +25,7 @@ Welcome to LAWIZ'S Media Generator, a powerful and versatile web application des
 
 ### 4. Creative Suite
 - **Character/Poses Generator:** A dedicated tab for creating and iterating on characters using Gemini's powerful Image-to-Image capabilities, with advanced pose control and AI name suggestions.
+- **Past Forward:** A time-travel experience reimagining photos in different decades (1950s-2000s). Now featuring a fully integrated UI consistent with the main application.
 - **Group Photo Fusion:** A groundbreaking feature that merges multiple individual photos into a single, cohesive group shot. Upload 2-4 photos, select a scenario (e.g., "Casual Hangout", "Cinematic Portrait"), and let the AI intelligently combine them.
 - **Logo & Theme Generator:** A full suite for brand identity design.
   - **AI Logo Creation:** Generate unique logos from text, brand names, and slogans.

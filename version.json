@@ -1,5 +1,5 @@
 {
-  "version": "1.55",
-  "date": "2025-05-20T12:00:00Z",
-  "changes": "Enhanced Extractor Tools UI: Added quick-action buttons (Download/Save) to thumbnails and improved modal layout for better visibility. Updated Header logic to correctly display the active provider and model name for Extractor and Group Fusion tabs."
+  "version": "1.56",
+  "date": "2025-05-22T14:00:00Z",
+  "changes": "UI Standardization: Completely overhauled the 'Past Forward' tab to match the application's design system (removed custom fonts/animations, standardized layout). Bug Fixes: Fixed state reset issues in Character Generator and improved Gemini API error handling with retry logic."
 }
