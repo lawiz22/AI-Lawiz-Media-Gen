@@ -2,19 +2,22 @@ import { GoogleGenAI } from "@google/genai";
 import { fileToGenerativePart } from "../utils/imageUtils";
 import type { GenerationOptions } from "../types";
 import {
-  COMFYUI_SD15_WORKFLOW_TEMPLATE,
-  COMFYUI_WORKFLOW_TEMPLATE,
-  COMFYUI_WAN22_WORKFLOW_TEMPLATE,
-  COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE,
-  COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE,
-  COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE,
-  COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE,
-  COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE,
-  COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE,
-  COMFYUI_QWEN_T2I_GGUF_WORKFLOW_TEMPLATE,
+    COMFYUI_SD15_WORKFLOW_TEMPLATE,
+    COMFYUI_WORKFLOW_TEMPLATE,
+    COMFYUI_WAN22_WORKFLOW_TEMPLATE,
+    COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE,
+    COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE,
+    COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE,
+    COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE,
+    COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE,
+    COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE,
+    COMFYUI_QWEN_T2I_GGUF_WORKFLOW_TEMPLATE,
 } from "../constants";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+import { getGenAIInstance } from "./geminiService";
+
+// Remove local initialization
+// const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 // --- Helper Functions ---
 const getComfyUIUrl = (): string => {
@@ -27,7 +30,7 @@ const getComfyUIUrl = (): string => {
     } else if (!url.startsWith('http://')) {
         url = 'http://' + url;
     }
-    
+
     // Remove any trailing slashes
     return url.replace(/\/+$/, '');
 };
@@ -35,21 +38,21 @@ const getComfyUIUrl = (): string => {
 const getClientId = (): string => `lawiz-app-${Math.random().toString(36).substring(2, 15)}`;
 
 const sanitizeFilename = (filename: string): string => {
-  if (!filename) return "image.png";
+    if (!filename) return "image.png";
 
-  const extensionMatch = filename.match(/\.[0-9a-z]+$/i);
-  const extension = extensionMatch ? extensionMatch[0] : '.png';
-  let baseName = extension ? filename.substring(0, filename.length - extension.length) : filename;
+    const extensionMatch = filename.match(/\.[0-9a-z]+$/i);
+    const extension = extensionMatch ? extensionMatch[0] : '.png';
+    let baseName = extension ? filename.substring(0, filename.length - extension.length) : filename;
 
-  // Replace invalid characters and multiple spaces/underscores
-  baseName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_{2,}/g, '_');
+    // Replace invalid characters and multiple spaces/underscores
+    baseName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_{2,}/g, '_');
 
-  const maxLength = 100 - extension.length;
-  if (baseName.length > maxLength) {
-    baseName = baseName.substring(0, maxLength);
-  }
-  
-  return baseName + extension;
+    const maxLength = 100 - extension.length;
+    if (baseName.length > maxLength) {
+        baseName = baseName.substring(0, maxLength);
+    }
+
+    return baseName + extension;
 }
 
 // --- Module state for cancellation ---
@@ -67,9 +70,9 @@ export const cancelComfyUIExecution = async (): Promise<void> => {
         // ComfyUI's interrupt endpoint does not require a body.
         await fetch(`${url}/interrupt`, { method: 'POST' });
         console.log("ComfyUI execution interrupt requested.");
-        
+
         if (currentExecution.ws.readyState === WebSocket.OPEN) {
-             currentExecution.ws.close();
+            currentExecution.ws.close();
         }
     } catch (e) {
         console.error("Failed to send interrupt request to ComfyUI:", e);
@@ -82,7 +85,7 @@ export const cancelComfyUIExecution = async (): Promise<void> => {
 type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf';
 
 const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
-    switch(modelType) {
+    switch (modelType) {
         case 'sd1.5':
         case 'face-detailer-sd1.5':
             return 'Your response MUST be a very simple, comma-separated list of keywords. Do not use sentences.';
@@ -105,12 +108,12 @@ export const generateComfyUIPromptFromSource = async (sourceImage: File, modelTy
     const imagePart = await fileToGenerativePart(sourceImage);
     const instruction = getPromptStyleInstruction(modelType) + ' Start the prompt directly without any preamble.';
 
-    const result = await ai.models.generateContent({
+    const result = await getGenAIInstance().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [imagePart, { text: instruction }] },
         config: { temperature: 0.3 }
     });
-    
+
     const text = result.text?.trim().replace(/['"`]/g, '');
     if (!text) throw new Error('AI failed to generate a prompt.');
     return text;
@@ -120,7 +123,7 @@ export const generateWanVideoPromptFromImage = async (sourceImage: File): Promis
     const imagePart = await fileToGenerativePart(sourceImage);
     const instruction = `Analyze this image. Describe the main subject and its environment in a concise, cinematic phrase suitable for a text-to-video prompt. For example: "A lion running across the savannah" or "A cyberpunk woman with neon hair in a rainy neon-lit alley". Respond with only the descriptive phrase.`;
 
-    const result = await ai.models.generateContent({
+    const result = await getGenAIInstance().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [imagePart, { text: instruction }] },
         config: { temperature: 0.3 }
@@ -137,12 +140,12 @@ export const extractBackgroundPromptFromImage = async (sourceImage: File, modelT
     const styleInstruction = getPromptStyleInstruction(modelType);
     const instruction = `Analyze ONLY the background of this image, ignoring any people or foreground subjects. Describe the environment in detail. ${styleInstruction}`;
 
-    const result = await ai.models.generateContent({
+    const result = await getGenAIInstance().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [imagePart, { text: instruction }] },
         config: { temperature: 0.4 }
     });
-    
+
     const text = result.text?.trim().replace(/['"`]/g, '');
     if (!text) throw new Error('AI failed to generate a background prompt.');
     return text;
@@ -153,12 +156,12 @@ export const extractSubjectPromptFromImage = async (sourceImage: File, modelType
     const styleInstruction = getPromptStyleInstruction(modelType);
     const instruction = `Analyze ONLY the main subject (person or object) of this image, ignoring the background. Describe the subject in detail, including appearance, clothing, and any defining features. ${styleInstruction}`;
 
-    const result = await ai.models.generateContent({
+    const result = await getGenAIInstance().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [imagePart, { text: instruction }] },
         config: { temperature: 0.4 }
     });
-    
+
     const text = result.text?.trim().replace(/['"`]/g, '');
     if (!text) throw new Error('AI failed to generate a subject prompt.');
     return text;
@@ -185,11 +188,11 @@ export const generateMagicalPromptSoup = async (
     Example response format:
     { "prompt_parts": [ {"text": "A beautiful portrait of", "source": 1}, {"text": "an astronaut", "source": 3}, {"text": "on a neon-lit alien world", "source": 2}, {"text": "in a impressionistic style", "source": 0} ] }
     `;
-    
-    const result = await ai.models.generateContent({
+
+    const result = await getGenAIInstance().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [{ text: instruction }] },
-        config: { 
+        config: {
             temperature: creativity,
             responseMimeType: 'application/json'
         },
@@ -211,38 +214,38 @@ export const generateMagicalPromptSoup = async (
 // --- ComfyUI Connection & API ---
 
 export const checkConnection = async (url: string): Promise<{ success: boolean; error?: string }> => {
-  if (!url) return { success: false, error: 'URL is not provided.' };
-  
-  let processedUrl = url.trim();
-  // Force HTTP protocol, as ComfyUI servers typically do not use HTTPS locally.
-  if (processedUrl.startsWith('https://')) {
-      processedUrl = 'http://' + processedUrl.substring(8);
-  } else if (!processedUrl.startsWith('http://')) {
-      processedUrl = 'http://' + processedUrl;
-  }
-  
-  // Remove any trailing slashes to prevent double slashes in the final URL.
-  processedUrl = processedUrl.replace(/\/+$/, '');
+    if (!url) return { success: false, error: 'URL is not provided.' };
 
-  try {
-    const response = await fetch(`${processedUrl}/system_stats`, {
-        method: 'GET',
-        mode: 'cors',
-        cache: 'no-cache',
-    });
-    if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
-    await response.json(); // Check if it's a valid JSON response
-    return { success: true };
-  } catch (error: any) {
-    console.error('ComfyUI connection check failed:', error);
-    const errorMessage = 'Failed to connect. Please check:\n' +
-        '1. Is the ComfyUI server running on HTTP (not HTTPS)?\n' +
-        '2. Is the URL in Settings correct?\n' +
-        '3. Did you start ComfyUI with the `--enable-cors` flag?\n' +
-        '4. Check the browser console (F12) for "mixed content" errors.\n' +
-        '5. Is a firewall, VPN, or ad-blocker interfering?';
-    return { success: false, error: errorMessage };
-  }
+    let processedUrl = url.trim();
+    // Force HTTP protocol, as ComfyUI servers typically do not use HTTPS locally.
+    if (processedUrl.startsWith('https://')) {
+        processedUrl = 'http://' + processedUrl.substring(8);
+    } else if (!processedUrl.startsWith('http://')) {
+        processedUrl = 'http://' + processedUrl;
+    }
+
+    // Remove any trailing slashes to prevent double slashes in the final URL.
+    processedUrl = processedUrl.replace(/\/+$/, '');
+
+    try {
+        const response = await fetch(`${processedUrl}/system_stats`, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache',
+        });
+        if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
+        await response.json(); // Check if it's a valid JSON response
+        return { success: true };
+    } catch (error: any) {
+        console.error('ComfyUI connection check failed:', error);
+        const errorMessage = 'Failed to connect. Please check:\n' +
+            '1. Is the ComfyUI server running on HTTP (not HTTPS)?\n' +
+            '2. Is the URL in Settings correct?\n' +
+            '3. Did you start ComfyUI with the `--enable-cors` flag?\n' +
+            '4. Check the browser console (F12) for "mixed content" errors.\n' +
+            '5. Is a firewall, VPN, or ad-blocker interfering?';
+        return { success: false, error: errorMessage };
+    }
 };
 
 export const getComfyUIObjectInfo = async (): Promise<any> => {
@@ -261,22 +264,22 @@ const uploadImage = async (file: File): Promise<{ name: string; subfolder: strin
     const originalFilename = file.name || "image.png";
     const sanitizedFilename = sanitizeFilename(originalFilename);
     const normalizedFile = new File([fileBuffer], sanitizedFilename, { type: file.type });
-    
+
     const formData = new FormData();
-    formData.append('image', normalizedFile); 
+    formData.append('image', normalizedFile);
     formData.append('overwrite', 'true');
 
     const response = await fetch(`${url}/upload/image`, {
         method: 'POST',
         body: formData,
     });
-    
+
     if (!response.ok) {
         const errorText = await response.text();
         console.error("ComfyUI image upload failed. Server response:", errorText);
         throw new Error(`Failed to upload image to ComfyUI: ${response.statusText}`);
     }
-    
+
     return response.json();
 };
 
@@ -335,7 +338,7 @@ const executeWorkflow = async (
         ws.onmessage = async (event) => {
             if (typeof event.data !== 'string') return;
             const data = JSON.parse(event.data);
-            
+
             switch (data.type) {
                 case 'status':
                     const queueRemaining = data.data.status.exec_info.queue_remaining;
@@ -396,7 +399,7 @@ const executeWorkflow = async (
                                 for (const image of outputs[nodeId].images) {
                                     const isVideoFile = image.format?.startsWith('video/') || image.filename?.endsWith('.mp4');
                                     if (isVideoFile && !videoUrl) {
-                                         videoUrl = `${url}/view?filename=${encodeURIComponent(image.filename)}&subfolder=${encodeURIComponent(image.subfolder || '')}&type=${image.type}`;
+                                        videoUrl = `${url}/view?filename=${encodeURIComponent(image.filename)}&subfolder=${encodeURIComponent(image.subfolder || '')}&type=${image.type}`;
                                     } else if (!isVideoFile) {
                                         const fileUrl = `${url}/view?filename=${encodeURIComponent(image.filename)}&subfolder=${encodeURIComponent(image.subfolder || '')}&type=${image.type}`;
                                         const imageRes = await fetch(fileUrl);
@@ -411,7 +414,7 @@ const executeWorkflow = async (
                                 }
                             }
                         }
-                        
+
                         resolve({ images: imageOutputs, videoUrl });
                     } catch (err) {
                         reject(err);
@@ -423,7 +426,7 @@ const executeWorkflow = async (
                     reject(new Error('Operation was cancelled by the user.'));
                     cleanup();
                     break;
-                 case 'execution_error':
+                case 'execution_error':
                     reject(new Error(`ComfyUI execution error: ${JSON.stringify(data.data)}`));
                     cleanup();
                     break;
@@ -451,7 +454,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             if (by === 'title') {
                 const title = node._meta?.title?.toLowerCase();
                 if (!title) return false;
-                
+
                 // Make prompt matching more robust to handle different naming conventions
                 if (identifier === 'Positive Prompt') {
                     return title.includes('positive prompt') || title.includes('(positive)') || title === 'positive';
@@ -459,7 +462,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
                 if (identifier === 'Negative Prompt') {
                     return title.includes('negative prompt') || title.includes('(negative)') || title === 'negative';
                 }
-                
+
                 return title.includes(identifier.toLowerCase());
             }
             if (by === 'class_type') return node.class_type.toLowerCase().startsWith(identifier.toLowerCase());
@@ -468,7 +471,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         });
     };
 
-    switch(options.comfyModelType) {
+    switch (options.comfyModelType) {
         case 'sd1.5': workflow = JSON.parse(JSON.stringify(COMFYUI_SD15_WORKFLOW_TEMPLATE)); break;
         case 'wan2.2': workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_WORKFLOW_TEMPLATE)); break;
         case 'nunchaku-kontext-flux': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE)); break;
@@ -484,23 +487,23 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
                 const fluxGuidanceNode = {
                     "inputs": {
                         "guidance": options.comfyFluxGuidance || 3.5,
-                        "conditioning": [ posPromptKey, 0 ]
+                        "conditioning": [posPromptKey, 0]
                     },
                     "class_type": "FluxGuidance",
                     "_meta": { "title": "FluxGuidance" }
                 };
                 workflow["flux_guidance_node"] = fluxGuidanceNode;
-                workflow[ksamplerKey].inputs.positive = [ "flux_guidance_node", 0 ];
+                workflow[ksamplerKey].inputs.positive = ["flux_guidance_node", 0];
             }
             break;
         }
         case 'sdxl':
         default: workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE)); break;
     }
-    
+
     const posPromptKey = findNodeKey(workflow, "Positive Prompt", 'title');
     if (posPromptKey) workflow[posPromptKey].inputs.text = options.comfyPrompt || '';
-    
+
     const negPromptKey = findNodeKey(workflow, "Negative Prompt", 'title');
     if (negPromptKey) workflow[negPromptKey].inputs.text = options.comfyNegativePrompt || '';
 
@@ -570,7 +573,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         workflow["8"].inputs.vae_name = options.comfyWanVaeModel;
 
         const [w, h] = options.aspectRatio.split(':').map(Number);
-        const aspect = w/h;
+        const aspect = w / h;
         const baseSize = 1024;
         let width, height;
         if (aspect >= 1) { width = baseSize; height = Math.round(baseSize / aspect / 8) * 8; }
@@ -587,9 +590,9 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         sampler2.inputs.start_at_step = options.comfyWanRefinerStartStep;
         sampler1.inputs.end_at_step = options.comfyWanRefinerStartStep;
 
-        if(!options.comfyWanUseFusionXLora) { delete workflow["30"]; delete workflow["43"]; workflow["29"].inputs.model = ["38", 0]; workflow["29"].inputs.clip = ["22", 0]; workflow["44"].inputs.model = ["39", 0]; }
-        if(!options.comfyWanUseLightningLora) { delete workflow["29"]; delete workflow["44"]; workflow["14"].inputs.model = options.comfyWanUseFusionXLora ? ["30", 0] : ["38", 0]; workflow["14"].inputs.clip = options.comfyWanUseFusionXLora ? ["30", 1] : ["22", 0]; workflow["45"].inputs.model = options.comfyWanUseFusionXLora ? ["43", 0] : ["39", 0]; }
-        if(!options.comfyWanUseStockPhotoLora) { delete workflow["14"]; delete workflow["45"]; sampler1.inputs.model = options.comfyWanUseLightningLora ? ["29", 0] : (options.comfyWanUseFusionXLora ? ["30", 0] : ["38", 0]); sampler2.inputs.model = options.comfyWanUseLightningLora ? ["44", 0] : (options.comfyWanUseFusionXLora ? ["43", 0] : ["39", 0]); }
+        if (!options.comfyWanUseFusionXLora) { delete workflow["30"]; delete workflow["43"]; workflow["29"].inputs.model = ["38", 0]; workflow["29"].inputs.clip = ["22", 0]; workflow["44"].inputs.model = ["39", 0]; }
+        if (!options.comfyWanUseLightningLora) { delete workflow["29"]; delete workflow["44"]; workflow["14"].inputs.model = options.comfyWanUseFusionXLora ? ["30", 0] : ["38", 0]; workflow["14"].inputs.clip = options.comfyWanUseFusionXLora ? ["30", 1] : ["22", 0]; workflow["45"].inputs.model = options.comfyWanUseFusionXLora ? ["43", 0] : ["39", 0]; }
+        if (!options.comfyWanUseStockPhotoLora) { delete workflow["14"]; delete workflow["45"]; sampler1.inputs.model = options.comfyWanUseLightningLora ? ["29", 0] : (options.comfyWanUseFusionXLora ? ["30", 0] : ["38", 0]); sampler2.inputs.model = options.comfyWanUseLightningLora ? ["44", 0] : (options.comfyWanUseFusionXLora ? ["43", 0] : ["39", 0]); }
     }
     else if (options.comfyModelType === 'nunchaku-kontext-flux') {
         if (sourceFile) { workflow["99"].inputs.image = (await uploadImage(sourceFile)).name; }
@@ -603,11 +606,11 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         workflow["22"].inputs.cache_threshold = options.comfyNunchakuCacheThreshold ?? 0.12;
         workflow["22"].inputs.cpu_offload = options.comfyNunchakuCpuOffload;
         workflow["22"].inputs.attention = options.comfyNunchakuAttention;
-        
+
         let lastLoraNode = "22";
-        if(options.comfyNunchakuUseTurboLora) { workflow["26"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "26"; } else { delete workflow["26"]; }
-        if(options.comfyNunchakuUseNudifyLora) { workflow["27"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "27"; } else { delete workflow["27"]; }
-        if(options.comfyNunchakuUseDetailLora) { workflow["28"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "28"; } else { delete workflow["28"]; }
+        if (options.comfyNunchakuUseTurboLora) { workflow["26"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "26"; } else { delete workflow["26"]; }
+        if (options.comfyNunchakuUseNudifyLora) { workflow["27"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "27"; } else { delete workflow["27"]; }
+        if (options.comfyNunchakuUseDetailLora) { workflow["28"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "28"; } else { delete workflow["28"]; }
         ksampler.inputs.model = [lastLoraNode, 0];
     }
     else if (options.comfyModelType === 'nunchaku-flux-image') {
@@ -628,16 +631,16 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         const latentKey = findNodeKey(workflow, "EmptySD3LatentImage", 'class_type');
         if (latentKey) {
             const [w, h] = options.aspectRatio.split(':').map(Number);
-            const aspect = w/h;
-            const baseSize = 768; 
+            const aspect = w / h;
+            const baseSize = 768;
             let width, height;
             if (aspect >= 1) { width = baseSize; height = Math.round(baseSize / aspect / 8) * 8; }
             else { height = baseSize; width = Math.round(baseSize * aspect / 8) * 8; }
             workflow[latentKey].inputs.width = width; workflow[latentKey].inputs.height = height;
             const modelSamplingKey = findNodeKey(workflow, "ModelSamplingFlux", "class_type");
-            if(modelSamplingKey) { workflow[modelSamplingKey].inputs.width = width; workflow[modelSamplingKey].inputs.height = height; }
+            if (modelSamplingKey) { workflow[modelSamplingKey].inputs.width = width; workflow[modelSamplingKey].inputs.height = height; }
         }
-        
+
         let lastLoraNode = "45";
         if (options.comfyNunchakuUseTurboLora) { workflow["46"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "46"; } else { delete workflow["46"]; }
         if (options.comfyNunchakuUseNudifyLora) { workflow["48"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "48"; } else { delete workflow["48"]; }
@@ -668,9 +671,9 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         loraLoader.widgets_values[2].on = options.useP1x4r0maWomanLora;
         loraLoader.widgets_values[3].on = options.useNippleDiffusionLora;
         loraLoader.widgets_values[4].on = options.usePussyDiffusionLora;
-        
+
         if (!options.comfyFluxKreaUseUpscaler) {
-             workflow["51"].mode = workflow["100"].mode = workflow["102"].mode = workflow["110"].mode = workflow["111"].mode = workflow["170"].mode = 4;
+            workflow["51"].mode = workflow["100"].mode = workflow["102"].mode = workflow["110"].mode = workflow["111"].mode = workflow["170"].mode = 4;
         }
     } else if (options.comfyModelType === 'face-detailer-sd1.5') {
         workflow = JSON.parse(JSON.stringify(COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE));
@@ -683,7 +686,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         workflow["16"].inputs.model_name = options.comfyDetailerSamModel;
         workflow["5"].inputs.text = options.comfyPrompt;
         workflow["6"].inputs.text = options.comfyNegativePrompt;
-        
+
         const detailerNodeInputs = workflow["51"].inputs;
         detailerNodeInputs.steps = options.comfyDetailerSteps;
         detailerNodeInputs.cfg = options.comfyDetailerCfg;
@@ -706,7 +709,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         ksampler.inputs.scheduler = options.comfyScheduler;
 
         workflow['66'].inputs.shift = options.comfyQwenAuraFlowShift;
-        
+
         const resNode = workflow['86'];
         resNode.inputs.megapixel = options.comfyQwenMegaPixel || '1.0';
         resNode.inputs.aspect_ratio = options.comfyQwenAspectRatio;
@@ -733,7 +736,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
                 delete workflow[lora.key];
             }
         }
-        
+
         const allLoraKeys = ['74', '75', '82', 'lora_4_node'];
         allLoraKeys.forEach(key => {
             const isUsed = loraChain.some(l => l.key === key && l.use && l.name);
@@ -741,7 +744,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
                 delete workflow[key];
             }
         });
-        
+
         workflow['66'].inputs.model = [lastActiveNodeKey, 0];
     }
 
@@ -764,11 +767,11 @@ export const generateComfyUIPortraits = async (
 
     for (let i = 0; i < numImages; i++) {
         const currentWorkflow = JSON.parse(JSON.stringify(baseWorkflow));
-        
+
         const samplerKey = Object.keys(currentWorkflow).find(k => currentWorkflow[k].class_type.toLowerCase().startsWith('ksampler'));
         if (samplerKey) {
             currentWorkflow[samplerKey].inputs.seed = currentSeed;
-            
+
             const seedControl = options.comfyModelType === 'sd1.5' ? (options.comfySeedControl || 'randomize') : 'randomize';
             const seedIncrement = options.comfySeedIncrement || 1;
 
@@ -793,7 +796,7 @@ export const generateComfyUIPortraits = async (
             const overallProgress = (i + value) / numImages;
             updateProgress(`Image ${i + 1}/${numImages}: ${message}`, overallProgress);
         };
-        
+
         try {
             const result = await executeWorkflow(currentWorkflow, progressWrapper, isLongJob);
             allImages.push(...result.images);
@@ -802,7 +805,7 @@ export const generateComfyUIPortraits = async (
             throw error;
         }
     }
-    
+
     return { images: allImages, finalPrompt: options.comfyPrompt || '' };
 };
 
@@ -818,16 +821,16 @@ export const generateComfyUIVideo = async (
     if (options.comfyVidModelType === 'wan-t2v') {
         workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE));
         finalPrompt = options.comfyVidWanT2VPositivePrompt || '';
-        
+
         workflow["6"].inputs.text = options.comfyVidWanT2VPositivePrompt;
         workflow["7"].inputs.text = options.comfyVidWanT2VNegativePrompt;
-        
+
         // Models
         workflow["105"].inputs.unet_name = options.comfyVidWanT2VHighNoiseModel;
         workflow["106"].inputs.unet_name = options.comfyVidWanT2VLowNoiseModel;
         workflow["107"].inputs.clip_name = options.comfyVidWanT2VClipModel;
         workflow["39"].inputs.vae_name = options.comfyVidWanT2VVaeModel;
-        
+
         // Latent
         const latentNode = workflow["117"];
         latentNode.inputs.width = options.comfyVidWanT2VWidth;
@@ -845,7 +848,7 @@ export const generateComfyUIVideo = async (
         sampler2.inputs.start_at_step = options.comfyVidWanT2VRefinerStartStep;
         sampler1.inputs.noise_seed = options.comfyVidWanT2VNoiseSeed ?? Math.floor(Math.random() * 1e15);
         sampler1.inputs.control_after_generate = options.comfyVidWanT2VSeedControl || 'randomize';
-        
+
         // LoRA Chaining
         let highNoiseModelInput: [string, number] = ["105", 0];
         let lowNoiseModelInput: [string, number] = ["106", 0];
@@ -888,7 +891,7 @@ export const generateComfyUIVideo = async (
 
         updateProgress("Uploading start frame...", 0.05);
         const startFrameInfo = await uploadImage(startFrame);
-        
+
         workflow["52"].inputs.image = startFrameInfo.name;
         workflow["105"].inputs.unet_name = options.comfyVidWanI2VHighNoiseModel;
         workflow["106"].inputs.unet_name = options.comfyVidWanI2VLowNoiseModel;
@@ -897,12 +900,12 @@ export const generateComfyUIVideo = async (
         workflow["49"].inputs.clip_name = options.comfyVidWanI2VClipVisionModel;
         workflow["112"].inputs.string = options.comfyVidWanI2VPositivePrompt;
         workflow["7"].inputs.text = options.comfyVidWanI2VNegativePrompt;
-        
+
         const mainNode = workflow["83"];
         mainNode.inputs.length = options.comfyVidWanI2VFrameCount;
         mainNode.inputs.width = options.comfyVidWanI2VWidth;
         mainNode.inputs.height = options.comfyVidWanI2VHeight;
-        
+
         const useEndFrame = endFrame && options.comfyVidWanI2VUseEndFrame;
         if (useEndFrame) {
             updateProgress("Uploading end frame...", 0.1);
@@ -937,23 +940,23 @@ export const generateComfyUIVideo = async (
             workflow["79"].inputs.model = ["105", 0];
             workflow["93"].inputs.model = ["106", 0];
         }
-        
+
         workflow["111"].inputs.frame_rate = options.comfyVidWanI2VFrameRate;
         workflow["111"].inputs.format = options.comfyVidWanI2VVideoFormat;
-        
+
         if (options.comfyVidWanI2VUseFilmGrain) {
             workflow["114"].inputs.grain_intensity = options.comfyVidWanI2VFilmGrainIntensity;
-            workflow["114"].inputs.saturation_mix = options.comfyVidWanI2VFilmGrainSize; 
+            workflow["114"].inputs.saturation_mix = options.comfyVidWanI2VFilmGrainSize;
         } else {
             delete workflow["114"];
-            workflow["111"].inputs.images = ["8", 0]; 
+            workflow["111"].inputs.images = ["8", 0];
         }
     }
 
     // --- Execution ---
     const { videoUrl } = await executeWorkflow(workflow, updateProgress, true);
     if (!videoUrl) throw new Error("Generation finished, but no video file was found.");
-    
+
     return { videoUrl, finalPrompt };
 };
 

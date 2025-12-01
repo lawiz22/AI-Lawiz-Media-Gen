@@ -6,11 +6,28 @@ import { cropImageToAspectRatio } from '../utils/imageProcessing';
 import { buildPromptSegments, decodePose, getRandomPose } from "../utils/promptBuilder";
 import { POSES } from "../constants";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let currentApiKey = process.env.API_KEY || '';
+let ai = new GoogleGenAI({ apiKey: currentApiKey });
+
+export const updateGeminiApiKey = (key: string) => {
+    const trimmedKey = key.trim();
+    console.log("Updating Gemini API Key to:", trimmedKey ? `${trimmedKey.substring(0, 5)}...` : "Empty");
+    currentApiKey = trimmedKey;
+    ai = new GoogleGenAI({ apiKey: trimmedKey });
+};
+
+export const getApiKey = () => currentApiKey;
+
+export const getGenAIInstance = () => {
+    if (!ai) {
+        ai = new GoogleGenAI({ apiKey: currentApiKey });
+    }
+    return ai;
+};
 
 export const getGeminiModels = async (): Promise<string[]> => {
     // Safety check: if no API key, don't even try to fetch, just return empty to use defaults.
-    if (!process.env.API_KEY) return [];
+    if (!currentApiKey) return [];
 
     try {
         // Direct fetch to the Gemini API listing endpoint since SDK might not expose it directly or fully.
@@ -18,7 +35,7 @@ export const getGeminiModels = async (): Promise<string[]> => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.API_KEY}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${currentApiKey}`, {
             signal: controller.signal
         });
         clearTimeout(timeoutId);
@@ -30,7 +47,7 @@ export const getGeminiModels = async (): Promise<string[]> => {
 
         const data = await response.json();
         if (!data.models) return [];
-        
+
         // Filter relevant models (gemini and imagen) and remove the 'models/' prefix
         return data.models
             .map((m: any) => m.name.replace('models/', ''))
@@ -61,7 +78,7 @@ export const generatePortraits = async (
     updateProgress("Preparing generation...", 0.1);
 
     let model = options.geminiT2IModel || 'gemini-2.5-flash-image';
-    
+
     // Common helper to execute single request
     const executeGeneration = async (modelToUse: string, requestParts: Part[], imageCount: number, retry = true): Promise<GenerateContentResponse> => {
         try {
@@ -78,17 +95,17 @@ export const generatePortraits = async (
         } catch (e: any) {
             // Explicitly check for the "Failed to call the Gemini API" generic message and treat it as retryable.
             const errorMessage = e.message || '';
-            const isRetryable = errorMessage.includes('429') || 
-                                errorMessage.includes('503') || 
-                                errorMessage.includes('404') || 
-                                errorMessage.includes('403') ||
-                                errorMessage.includes('Failed to call the Gemini API');
-            
+            const isRetryable = errorMessage.includes('429') ||
+                errorMessage.includes('503') ||
+                errorMessage.includes('404') ||
+                errorMessage.includes('403') ||
+                errorMessage.includes('Failed to call the Gemini API');
+
             if (retry && isRetryable) {
                 console.warn(`API call failed. Retrying... Error: ${errorMessage}`);
                 // Backoff slightly before retrying
                 await new Promise(resolve => setTimeout(resolve, 2000));
-                
+
                 if (modelToUse !== 'gemini-2.5-flash-image') {
                     updateProgress("Primary model failed. Retrying with Gemini Flash...", 0.4);
                     return executeGeneration('gemini-2.5-flash-image', requestParts, imageCount, false);
@@ -97,7 +114,7 @@ export const generatePortraits = async (
                 }
             }
             if (errorMessage.includes('403') || (e.status === 403)) {
-                 throw new Error(`Permission denied for model '${modelToUse}'. Try selecting 'gemini-2.5-flash-image'.`);
+                throw new Error(`Permission denied for model '${modelToUse}'. Try selecting 'gemini-2.5-flash-image'.`);
             }
             throw e;
         }
@@ -114,8 +131,8 @@ export const generatePortraits = async (
                 model: model,
                 prompt: options.geminiPrompt || "A generated image",
                 config: {
-                    numberOfImages: Math.min(Math.max(1, options.numImages), 4), 
-                    aspectRatio: options.aspectRatio as any, 
+                    numberOfImages: Math.min(Math.max(1, options.numImages), 4),
+                    aspectRatio: options.aspectRatio as any,
                 },
             });
             const images = [];
@@ -124,7 +141,7 @@ export const generatePortraits = async (
                     if (genImg.image?.imageBytes) {
                         images.push({
                             src: `data:image/png;base64,${genImg.image.imageBytes}`,
-                            usageMetadata: undefined 
+                            usageMetadata: undefined
                         });
                     }
                 }
@@ -132,11 +149,11 @@ export const generatePortraits = async (
             if (images.length === 0) throw new Error("No images generated by Imagen.");
             return { images, finalPrompt: options.geminiPrompt || "Generated Image" };
         } catch (err: any) {
-             // Catch specific generic errors for Imagen too
-             if (err.message?.includes('Failed to call the Gemini API')) {
-                 throw new Error("The Imagen model is currently unavailable or overloaded. Please try again later or switch to a different model.");
-             }
-             throw err;
+            // Catch specific generic errors for Imagen too
+            if (err.message?.includes('Failed to call the Gemini API')) {
+                throw new Error("The Imagen model is currently unavailable or overloaded. Please try again later or switch to a different model.");
+            }
+            throw err;
         }
     }
 
@@ -183,13 +200,13 @@ export const generatePortraits = async (
             }
 
             updateProgress(`Generating with ${model}...`, 0.3);
-            
+
             // Parallel requests for T2I/General to handle image count if > 1
             if (targetImageCount > 1) {
                 updateProgress(`Executing ${targetImageCount} requests...`, 0.4);
                 const promises = Array.from({ length: targetImageCount }).map(async (_, index) => {
                     // Stagger requests to avoid 429 errors
-                    await new Promise(resolve => setTimeout(resolve, index * 1500)); 
+                    await new Promise(resolve => setTimeout(resolve, index * 1500));
                     return executeGeneration(model, parts, 1).then(res => ({ status: 'fulfilled' as const, value: res })).catch(err => ({ status: 'rejected' as const, reason: err }));
                 });
                 const results = await Promise.all(promises);
@@ -207,23 +224,23 @@ export const generatePortraits = async (
 
         } else {
             // --- CHARACTER GENERATOR LOGIC (Per-Image Variation) ---
-            
+
             if (!model.includes('gemini')) model = 'gemini-2.5-flash-image';
             if (!sourceImage) throw new Error("Source image is required for character generation.");
-            
+
             const sourcePart = await fileToGenerativePart(sourceImage);
             const clothingPart = clothingImage ? await fileToGenerativePart(clothingImage) : (previewedClothingImage ? dataUrlToGenerativePart(previewedClothingImage) : null);
             const bgPart = backgroundImage ? await fileToGenerativePart(backgroundImage) : (previewedBackgroundImage ? dataUrlToGenerativePart(previewedBackgroundImage) : null);
             const poseLibraryPart = (options.poseMode === 'library' && options.poseLibraryItems?.[0]?.media) ? dataUrlToGenerativePart(options.poseLibraryItems[0].media) : null;
 
             updateProgress(`Generating ${targetImageCount} character variations...`, 0.3);
-            
+
             // To get varied results in Character Generator, we MUST send separate requests
             // each with a slightly different prompt (pose).
             const promises = Array.from({ length: targetImageCount }).map(async (_, index) => {
                 // Significant stagger delay to prevent 429 Rate Limit errors on parallel complex requests
                 await new Promise(resolve => setTimeout(resolve, index * 2000));
-                
+
                 // Determine Pose for this iteration
                 let poseToUse = "Use the pose from the provided reference image.";
                 if (options.poseMode === 'random') {
@@ -236,7 +253,7 @@ export const generatePortraits = async (
                         poseToUse = decodePose(getRandomPose()); // Fallback
                     }
                 } else if (options.poseMode === 'prompt') {
-                     if (options.poseSelection.length > 0) {
+                    if (options.poseSelection.length > 0) {
                         poseToUse = options.poseSelection[index % options.poseSelection.length];
                     } else {
                         poseToUse = "A standard portrait pose";
@@ -303,17 +320,17 @@ export const generatePortraits = async (
             else if (!candidateHasImage) errors.push(`Generation stopped: ${candidate.finishReason}`);
         }
     }
-    
+
     if (images.length === 0) {
         // If parallel requests failed partially, we might still want to show what succeeded or errors
         // But if absolutely nothing came back:
         if (errors.length > 0) {
-             const uniqueErrors = [...new Set(errors)];
-             throw new Error(`Generation failed: ${uniqueErrors.join(' ')}`);
+            const uniqueErrors = [...new Set(errors)];
+            throw new Error(`Generation failed: ${uniqueErrors.join(' ')}`);
         }
         // If collectedCandidates is empty because all promises rejected:
         if (collectedCandidates.length === 0) {
-             throw new Error("All generation requests failed due to high server load. Please try again in a few moments.");
+            throw new Error("All generation requests failed due to high server load. Please try again in a few moments.");
         }
         throw new Error("No images generated. The model may have refused the request.");
     }
@@ -327,9 +344,9 @@ export const generateGeminiVideo = async (
     updateProgress: (message: string, value: number) => void
 ): Promise<{ videoUrl: string, finalPrompt: string }> => {
     updateProgress("Initializing video generation...", 0.1);
-    
+
     let operation;
-    
+
     if (startFrame) {
         const imageBase64 = await fileToBase64(startFrame);
         operation = await ai.models.generateVideos({
@@ -345,9 +362,9 @@ export const generateGeminiVideo = async (
         });
     } else {
         operation = await ai.models.generateVideos({
-             model: 'veo-2.0-generate-preview-01',
-             prompt: options.geminiVidPrompt || "A video.",
-             config: { numberOfVideos: 1 }
+            model: 'veo-2.0-generate-preview-01',
+            prompt: options.geminiVidPrompt || "A video.",
+            config: { numberOfVideos: 1 }
         });
     }
 
@@ -358,14 +375,14 @@ export const generateGeminiVideo = async (
         operation = await ai.operations.getVideosOperation({ operation });
         updateProgress("Still processing...", 0.5);
     }
-    
+
     const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (!videoUri) throw new Error("Video generation failed.");
-    
-    const videoRes = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+
+    const videoRes = await fetch(`${videoUri}&key=${currentApiKey}`);
     const videoBlob = await videoRes.blob();
     const videoUrl = URL.createObjectURL(videoBlob);
-    
+
     return { videoUrl, finalPrompt: options.geminiVidPrompt || '' };
 };
 
@@ -382,7 +399,7 @@ export const generateBackgroundImagePreview = async (prompt: string, aspectRatio
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [{ text: `Generate a high-quality background image: ${prompt}` }] },
-        config: { 
+        config: {
             responseModalities: [Modality.IMAGE],
             aspectRatio: aspectRatio
         }
@@ -396,9 +413,9 @@ export const generateClothingPreview = async (prompt: string, aspectRatio: strin
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [{ text: `Generate a high-quality image of this clothing item laid out flat: ${prompt}` }] },
-        config: { 
-             responseModalities: [Modality.IMAGE],
-             aspectRatio: aspectRatio
+        config: {
+            responseModalities: [Modality.IMAGE],
+            aspectRatio: aspectRatio
         }
     });
     const img = result.candidates?.[0]?.content?.parts?.[0]?.inlineData;
@@ -419,8 +436,8 @@ export const generateMaskForImage = async (image: File, subject: 'person' | 'clo
 };
 
 export const enhanceImageResolution = async (dataUrl: string): Promise<{ enhancedSrc: string, usageMetadata?: any }> => {
-     const part = dataUrlToGenerativePart(dataUrl);
-     const result = await ai.models.generateContent({
+    const part = dataUrlToGenerativePart(dataUrl);
+    const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [part, { text: "Enhance this image. Improve resolution, clarity, and lighting while maintaining the original content." }] },
         config: { responseModalities: [Modality.IMAGE] }
@@ -431,20 +448,20 @@ export const enhanceImageResolution = async (dataUrl: string): Promise<{ enhance
 };
 
 export const identifyClothing = async (imageFile: File): Promise<IdentifiedClothing[]> => {
-     const part = await fileToGenerativePart(imageFile);
-     const result = await ai.models.generateContent({
+    const part = await fileToGenerativePart(imageFile);
+    const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [part, { text: "Identify the clothing items in this image. Return a JSON array where each item has 'itemName' and 'description'." }] },
         config: { responseMimeType: 'application/json' }
-     });
-     return JSON.parse(result.text || "[]");
+    });
+    return JSON.parse(result.text || "[]");
 };
 
 export const generateClothingImage = async (description: string, folded: boolean): Promise<string> => {
-    const prompt = folded 
+    const prompt = folded
         ? `Generate a neatly folded image of: ${description}. Plain background.`
         : `Generate a flat lay image of: ${description}. Plain white background.`;
-        
+
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [{ text: prompt }] },
@@ -456,14 +473,14 @@ export const generateClothingImage = async (description: string, folded: boolean
 };
 
 export const identifyObjects = async (imageFile: File, max: number, hints: string): Promise<IdentifiedObject[]> => {
-     const part = await fileToGenerativePart(imageFile);
-     const prompt = `Identify up to ${max} main objects in this image. ${hints ? `Focus on: ${hints}.` : ''} Return a JSON array with 'name' and 'description' for each.`;
-     const result = await ai.models.generateContent({
+    const part = await fileToGenerativePart(imageFile);
+    const prompt = `Identify up to ${max} main objects in this image. ${hints ? `Focus on: ${hints}.` : ''} Return a JSON array with 'name' and 'description' for each.`;
+    const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [part, { text: prompt }] },
         config: { responseMimeType: 'application/json' }
-     });
-     return JSON.parse(result.text || "[]");
+    });
+    return JSON.parse(result.text || "[]");
 };
 
 export const generateObjectImage = async (description: string): Promise<string> => {
@@ -505,9 +522,9 @@ export const generatePoseMannequin = async (
         parts.push(posePart);
         prompt = `Create a full-body image of a mannequin performing the EXACT pose from the image. Style: ${promptHint || 'White modern mannequin'}. Plain background.`;
     }
-    
+
     parts.push({ text: prompt });
-    
+
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts },
@@ -554,39 +571,39 @@ export const summarizePrompt = async (prompt: string): Promise<string> => {
 export const generateLogos = async (state: LogoThemeState): Promise<string[]> => {
     const prompt = `Generate a ${state.logoStyle} logo for brand "${state.brandName}". ${state.slogan ? `Slogan: "${state.slogan}".` : ''} ${state.logoPrompt} Background: ${state.backgroundColor}.`;
     const parts: Part[] = [{ text: prompt }];
-    
+
     if (state.referenceItems) {
         for (const item of state.referenceItems) {
             parts.push(dataUrlToGenerativePart(item.media));
         }
     }
-    
+
     if (state.fontReferenceImage) {
         const fontPart = await fileToGenerativePart(state.fontReferenceImage);
         parts.push(fontPart);
         parts.push({ text: "Use the font style from this image." });
     }
-    
+
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts },
-        config: { 
+        config: {
             responseModalities: [Modality.IMAGE],
             numberOfGeneratedImages: state.numLogos
         }
     });
-    
+
     const images: string[] = [];
-     if (result.candidates) {
-         for (const candidate of result.candidates) {
-             if (candidate.content?.parts) {
-                 for (const part of candidate.content.parts) {
-                     if (part.inlineData) {
-                         images.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
-                     }
-                 }
-             }
-         }
+    if (result.candidates) {
+        for (const candidate of result.candidates) {
+            if (candidate.content?.parts) {
+                for (const part of candidate.content.parts) {
+                    if (part.inlineData) {
+                        images.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
+                    }
+                }
+            }
+        }
     }
     return images;
 };
@@ -600,10 +617,10 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
             parts.push(dataUrlToGenerativePart(item.media));
         }
     }
-    
+
     if (state.bannerSelectedLogo) {
-         parts.push(dataUrlToGenerativePart(state.bannerSelectedLogo.media));
-         parts.push({ text: "Include this logo in the banner." });
+        parts.push(dataUrlToGenerativePart(state.bannerSelectedLogo.media));
+        parts.push({ text: "Include this logo in the banner." });
     }
 
     if (state.bannerFontReferenceImage) {
@@ -646,10 +663,10 @@ export const generateAlbumCovers = async (state: LogoThemeState): Promise<string
             parts.push(dataUrlToGenerativePart(item.media));
         }
     }
-    
+
     if (state.albumSelectedLogo) {
-         parts.push(dataUrlToGenerativePart(state.albumSelectedLogo.media));
-         parts.push({ text: "Include this logo/symbol on the cover." });
+        parts.push(dataUrlToGenerativePart(state.albumSelectedLogo.media));
+        parts.push({ text: "Include this logo/symbol on the cover." });
     }
 
     if (state.albumFontReferenceImage) {

@@ -36,7 +36,7 @@ import { setUploadedFiles } from './store/groupPhotoFusionSlice';
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile, Provider } from './types';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
-import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage } from './services/geminiService';
+import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage, updateGeminiApiKey, getApiKey } from './services/geminiService';
 import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution } from './services/comfyUIService';
 import { Login } from './components/Login';
 import { Header } from './components/Header';
@@ -68,7 +68,8 @@ const App: React.FC = () => {
 
     // --- Local State ---
     const [comfyUrlForHelper, setComfyUrlForHelper] = useState('');
-    
+    const [localGeminiKey, setLocalGeminiKey] = useState('');
+
     // --- App State (from appSlice) ---
     const {
         currentUser, theme, projectName, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
@@ -104,21 +105,21 @@ const App: React.FC = () => {
 
     // --- Prompt Gen State (from promptGenSlice) ---
     const activePromptToolsSubTab = useSelector((state: RootState) => state.promptGen.activePromptToolsSubTab);
-    
+
     // --- Extractor State (from extractorSlice) ---
     const activeExtractorSubTab = useSelector((state: RootState) => state.extractor.activeExtractorSubTab);
-    
+
     // --- Logo & Theme State (from logoThemeSlice) ---
     const logoThemeState = useSelector((state: RootState) => state.logoTheme.logoThemeState);
     const activeLogoThemeSubTab = useSelector((state: RootState) => state.logoTheme.activeLogoThemeSubTab);
 
     // --- Group Photo Fusion State ---
     const { uploadedFiles } = useSelector((state: RootState) => state.groupPhotoFusion);
-    
+
     // --- Computed State ---
     const isReadyToGenerate = useSelector(selectIsReadyToGenerate);
     const isVideoReady = useSelector(selectIsVideoReady);
-    
+
     // Determine which options object to use based on the active tab
     const currentOptions = activeTab === 'character-generator' ? characterOptions : options;
 
@@ -177,17 +178,17 @@ const App: React.FC = () => {
 
         const savedUser = sessionStorage.getItem('currentUser');
         if (savedUser) dispatch(setCurrentUser(JSON.parse(savedUser)));
-        
+
         const savedComfyUrl = localStorage.getItem('comfyui_url') || '';
         if (savedComfyUrl) {
             checkComfyUIConnection(savedComfyUrl);
         } else {
             dispatch(setIsComfyUIConnected(false));
         }
-        
+
         const savedClientId = localStorage.getItem('google_client_id') || '';
         dispatch(setIsDriveConfigured(!!savedClientId));
-        
+
         if (savedClientId) {
             setDriveService(driveService);
             driveService.restoreConnection().then(connected => {
@@ -201,12 +202,26 @@ const App: React.FC = () => {
                 }
             });
         }
-        
+
         // Fetch library items on initial load
         dispatch(fetchLibrary());
 
-    }, [dispatch, checkComfyUIConnection]);
-    
+        // Check for Electron API key
+        if (window.electron) {
+            window.electron.getApiKey().then(key => {
+                if (key) {
+                    updateGeminiApiKey(key);
+                    setLocalGeminiKey(key);
+                }
+            });
+        } else {
+            // Fallback to env or local storage if we decide to implement it for web
+            const envKey = getApiKey();
+            if (envKey) setLocalGeminiKey(envKey);
+        }
+
+    }, [dispatch, checkConnection]);
+
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('theme', theme);
@@ -214,12 +229,12 @@ const App: React.FC = () => {
 
     const handleTabChange = (tabId: string) => {
         dispatch(setActiveTab(tabId));
-        
+
         // Auto-set provider for Gemini-only tabs to prevent UI breakage
         if (['group-photo-fusion', 'extractor-tools', 'logo-theme-generator', 'past-forward'].includes(tabId)) {
             dispatch(updateOptions({ provider: 'gemini' }));
         }
-        
+
         // Ensure Character Generator starts in I2I mode with clean prompt state and character logic
         if (tabId === 'character-generator') {
             dispatch(setGenerationMode('i2i'));
@@ -230,7 +245,7 @@ const App: React.FC = () => {
             }));
         }
     };
-    
+
     const handleLogin = async (username: string, projectName: string): Promise<string | true> => {
         dispatch(setCurrentUser({ username, role: 'user' }));
         dispatch(setProjectName(projectName));
@@ -249,15 +264,15 @@ const App: React.FC = () => {
     const handleProjectNameChange = (newName: string) => {
         dispatch(setProjectName(newName));
     };
-    
+
     const handleReset = () => {
         dispatch(resetGenerationState());
     };
-    
+
     const handleVideoReset = () => {
         dispatch(resetVideoGenerationState());
     };
-    
+
     const handlePromptGenReset = useCallback(() => {
         dispatch(resetPromptGenState());
     }, [dispatch]);
@@ -272,21 +287,21 @@ const App: React.FC = () => {
         dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: null }));
         dispatch(setGlobalError(null));
         if (!shouldGenerateCharacterName) {
-             dispatch(setCharacterName(''));
+            dispatch(setCharacterName(''));
         }
-        
+
         const localUpdateProgress = (message: string, value: number) => {
             dispatch(updateProgress({ message, value }));
         };
-        
+
         try {
             let result: { images: { src: string; usageMetadata?: any }[], finalPrompt: string | null };
-            
+
             if (currentOptions.provider === 'gemini') {
                 // We now pass the tab-specific options directly
                 // FORCE character mode for character tab to ensure robustness against state drift
-                const optionsToUse = activeTab === 'character-generator' 
-                    ? { ...characterOptions, geminiGeneralEditPrompt: '', geminiI2iMode: 'character' as const, geminiMode: 'i2i' as const } 
+                const optionsToUse = activeTab === 'character-generator'
+                    ? { ...characterOptions, geminiGeneralEditPrompt: '', geminiI2iMode: 'character' as const, geminiMode: 'i2i' as const }
                     : options;
 
                 result = await generatePortraits(
@@ -303,7 +318,7 @@ const App: React.FC = () => {
             } else {
                 result = { images: [], finalPrompt: null };
             }
-            
+
             dispatch(setGeneratedImages({ tabId: activeTab, images: result.images }));
             dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: result.finalPrompt }));
 
@@ -314,8 +329,8 @@ const App: React.FC = () => {
                     }
                 }
             }
-            
-            if(result.images.length > 0) {
+
+            if (result.images.length > 0) {
                 if (activeTab === 'character-generator' && shouldGenerateCharacterName) {
                     localUpdateProgress("Generating character name...", 0.96);
                     try {
@@ -342,7 +357,7 @@ const App: React.FC = () => {
             dispatch(setLoadingState({ isLoading: false }));
         }
     };
-    
+
     const handleGenerateVideo = async () => {
         dispatch(setLoadingState({ isLoading: true }));
         dispatch(setGeneratedVideoUrl(null));
@@ -370,7 +385,7 @@ const App: React.FC = () => {
                 dispatch(setGeneratedVideoUrl(videoUrl));
                 dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: finalPrompt }));
             } else {
-                 throw new Error("Selected video provider is not implemented.");
+                throw new Error("Selected video provider is not implemented.");
             }
         } catch (err: any) {
             console.error("Video generation failed:", err);
@@ -384,7 +399,7 @@ const App: React.FC = () => {
         }
     };
 
-    const handleSaveSettings = (comfyUIUrl: string, googleClientId: string) => {
+    const handleSaveSettings = (comfyUIUrl: string, googleClientId: string, geminiApiKey?: string) => {
         localStorage.setItem('comfyui_url', comfyUIUrl);
         localStorage.setItem('google_client_id', googleClientId);
         checkComfyUIConnection(comfyUIUrl);
@@ -394,6 +409,14 @@ const App: React.FC = () => {
         } else {
             setDriveService(null);
             handleDriveDisconnect(); // Disconnect if ID is removed
+        }
+
+        if (geminiApiKey) {
+            if (window.electron) {
+                window.electron.setApiKey(geminiApiKey);
+            }
+            updateGeminiApiKey(geminiApiKey);
+            setLocalGeminiKey(geminiApiKey);
         }
     };
 
@@ -419,8 +442,8 @@ const App: React.FC = () => {
             const file = new File([blob], "character_source.jpeg", { type: "image/jpeg" });
             dispatch(setSourceImage(file));
             dispatch(setGenerationMode('i2i'));
-            dispatch(updateCharacterOptions({ 
-                geminiMode: 'i2i', 
+            dispatch(updateCharacterOptions({
+                geminiMode: 'i2i',
                 geminiI2iMode: 'character',
                 geminiGeneralEditPrompt: '',
                 provider: 'gemini'
@@ -473,7 +496,7 @@ const App: React.FC = () => {
     };
 
     const handleResetTokenUsage = () => {
-        if(window.confirm("Are you sure you want to reset the session token usage counter?")) {
+        if (window.confirm("Are you sure you want to reset the session token usage counter?")) {
             dispatch(resetSessionTokenUsage());
         }
     };
@@ -481,13 +504,13 @@ const App: React.FC = () => {
     // Determine active model for display in header
     let activeModel = '';
     if (activeTab === 'image-generator') {
-        activeModel = options.provider === 'gemini' 
+        activeModel = options.provider === 'gemini'
             ? (options.geminiMode === 't2i' ? (options.geminiT2IModel || 'gemini-2.5-flash-image') : 'gemini-2.5-flash-image')
             : (options.comfyModelType || 'sdxl');
     } else if (activeTab === 'character-generator') {
         activeModel = 'gemini-2.5-flash-image';
     } else if (activeTab === 'video-generator') {
-        activeModel = options.videoProvider === 'gemini' 
+        activeModel = options.videoProvider === 'gemini'
             ? (options.geminiVidModel || 'veo-2.0-generate-001')
             : (options.comfyVidModelType === 'wan-t2v' ? 'Wan 2.2 T2I' : 'Wan 2.2 I2V');
     } else if (activeTab === 'group-photo-fusion') {
@@ -504,9 +527,9 @@ const App: React.FC = () => {
         activeModel = 'gemini-2.5-flash-image';
     }
 
-    const activeProvider: Provider = (activeTab === 'video-generator') 
-        ? options.videoProvider 
-        : (activeTab === 'group-photo-fusion' || activeTab === 'extractor-tools' || activeTab === 'logo-theme-generator' || activeTab === 'past-forward' || activeTab === 'character-generator') 
+    const activeProvider: Provider = (activeTab === 'video-generator')
+        ? options.videoProvider
+        : (activeTab === 'group-photo-fusion' || activeTab === 'extractor-tools' || activeTab === 'logo-theme-generator' || activeTab === 'past-forward' || activeTab === 'character-generator')
             ? 'gemini' // These tools are Gemini-only
             : options.provider;
 
@@ -516,10 +539,10 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-bg-primary text-text-primary font-sans transition-colors duration-300 flex flex-col">
-            <Header 
-                theme={theme} 
-                setTheme={handleThemeChange} 
-                onLogout={handleLogout} 
+            <Header
+                theme={theme}
+                setTheme={handleThemeChange}
+                onLogout={handleLogout}
                 currentUser={currentUser}
                 projectName={projectName}
                 onProjectNameChange={handleProjectNameChange}
@@ -542,10 +565,10 @@ const App: React.FC = () => {
             <main className="flex-grow container mx-auto p-4 pt-6 flex flex-col relative">
                 {/* Global Error Display */}
                 {globalError && (
-                    <ErrorModal 
-                        title={globalError.title} 
-                        message={globalError.message} 
-                        onClose={() => dispatch(setGlobalError(null))} 
+                    <ErrorModal
+                        title={globalError.title}
+                        message={globalError.message}
+                        onClose={() => dispatch(setGlobalError(null))}
                     />
                 )}
 
@@ -555,10 +578,11 @@ const App: React.FC = () => {
                     onClose={() => dispatch(closeSettingsModal())}
                     initialComfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                     initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
+                    initialGeminiApiKey={localGeminiKey}
                     onSave={handleSaveSettings}
                     onConnectionFail={(url) => setComfyUrlForHelper(url)}
                 />
-                
+
                 <OAuthHelperModal
                     isOpen={isOAuthHelperOpen}
                     onClose={() => dispatch(closeOAuthHelper())}
@@ -591,11 +615,10 @@ const App: React.FC = () => {
                         <button
                             key={tab.id}
                             onClick={() => handleTabChange(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
-                                activeTab === tab.id
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${activeTab === tab.id
                                     ? 'bg-accent text-accent-text shadow-md transform scale-105'
                                     : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary'
-                            }`}
+                                }`}
                         >
                             {tab.icon}
                             <span className="hidden sm:inline">{tab.label}</span>
@@ -612,11 +635,11 @@ const App: React.FC = () => {
                                     <div className="flex items-center justify-between mb-4">
                                         <h2 className="text-xl font-bold text-accent">1. Source & Context</h2>
                                     </div>
-                                    <ImageUploader 
-                                        label="Upload Source Image (Optional for T2I)" 
+                                    <ImageUploader
+                                        label="Upload Source Image (Optional for T2I)"
                                         id="main-source-upload"
-                                        onImageUpload={(file) => dispatch(setSourceImage(file))} 
-                                        sourceFile={sourceImage} 
+                                        onImageUpload={(file) => dispatch(setSourceImage(file))}
+                                        sourceFile={sourceImage}
                                     />
                                 </div>
                                 <OptionsPanel
@@ -631,7 +654,7 @@ const App: React.FC = () => {
                                     setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
                                     onGenerate={handleGenerate}
                                     onReset={handleReset}
-                                    onGeneratePrompt={() => {/* Implementation in PromptGeneratorPanel usually */}}
+                                    onGeneratePrompt={() => {/* Implementation in PromptGeneratorPanel usually */ }}
                                     onExportWorkflow={() => exportComfyUIWorkflow(options, sourceImage)}
                                     isDisabled={isLoading}
                                     isReady={isReadyToGenerate}
@@ -652,9 +675,9 @@ const App: React.FC = () => {
                                 {isLoading ? (
                                     <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />
                                 ) : (
-                                    <ImageGrid 
-                                        images={generatedContent['image-generator']?.images || []} 
-                                        onSendToI2I={handleSendToI2I} 
+                                    <ImageGrid
+                                        images={generatedContent['image-generator']?.images || []}
+                                        onSendToI2I={handleSendToI2I}
                                         onSendToCharacter={handleSendToCharacter}
                                         lastUsedPrompt={generatedContent['image-generator']?.lastUsedPrompt}
                                         options={currentOptions}
@@ -672,7 +695,7 @@ const App: React.FC = () => {
                                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                     <div className="flex items-center justify-between mb-4">
                                         <h2 className="text-xl font-bold text-accent">1. Character Source</h2>
-                                        <button onClick={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: true }))} className="p-2 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover" title="Load from Library"><LibraryIcon className="w-5 h-5"/></button>
+                                        <button onClick={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: true }))} className="p-2 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover" title="Load from Library"><LibraryIcon className="w-5 h-5" /></button>
                                     </div>
                                     <ImageUploader label="Upload Face/Character Reference" id="char-source-upload" onImageUpload={(file) => dispatch(setSourceImage(file))} sourceFile={sourceImage} />
                                     <div className="mt-4">
@@ -688,15 +711,15 @@ const App: React.FC = () => {
                                     setOptions={handleSetOptions}
                                     updateOptions={handleUpdateOptions}
                                     generationMode="i2i" // Always I2I for character gen
-                                    setGenerationMode={() => {}} // No-op, locked to I2I
+                                    setGenerationMode={() => { }} // No-op, locked to I2I
                                     previewedBackgroundImage={previewedBackgroundImage}
                                     setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
                                     previewedClothingImage={previewedClothingImage}
                                     setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
                                     onGenerate={handleGenerate}
                                     onReset={handleReset}
-                                    onGeneratePrompt={() => {}}
-                                    onExportWorkflow={() => {}}
+                                    onGeneratePrompt={() => { }}
+                                    onExportWorkflow={() => { }}
                                     onOpenPosePicker={() => dispatch(setModalOpen({ modal: 'isPosePickerOpen', isOpen: true }))}
                                     isDisabled={isLoading}
                                     isReady={isReadyToGenerate}
@@ -709,11 +732,11 @@ const App: React.FC = () => {
                                     title="2. Character Options"
                                     activeTab={activeTab}
                                     maskImage={null} // Not used in this simple view
-                                    setMaskImage={() => {}}
+                                    setMaskImage={() => { }}
                                     elementImages={[]}
-                                    setElementImages={() => {}}
-                                    onOpenMaskPicker={() => {}}
-                                    onOpenElementPicker={() => {}}
+                                    setElementImages={() => { }}
+                                    onOpenMaskPicker={() => { }}
+                                    onOpenElementPicker={() => { }}
                                     // New props passed for Character Generator Image Uploads
                                     clothingImage={clothingImage}
                                     setClothingImage={(file) => dispatch(setClothingImage(file))}
@@ -727,8 +750,8 @@ const App: React.FC = () => {
                                 {isLoading ? (
                                     <Loader message={progressMessage} progress={progressValue} />
                                 ) : (
-                                    <ImageGrid 
-                                        images={generatedContent['character-generator']?.images || []} 
+                                    <ImageGrid
+                                        images={generatedContent['character-generator']?.images || []}
                                         onSendToI2I={handleSendToI2I}
                                         onSendToCharacter={handleSendToCharacter}
                                         lastUsedPrompt={generatedContent['character-generator']?.lastUsedPrompt}
@@ -772,7 +795,7 @@ const App: React.FC = () => {
                     )}
 
                     {activeTab === 'prompt-generator' && (
-                        <PromptGeneratorPanel 
+                        <PromptGeneratorPanel
                             activeSubTab={activePromptToolsSubTab}
                             setActiveSubTab={(id) => dispatch(setActivePromptToolsSubTab(id))}
                             onUsePrompt={(prompt) => {
@@ -802,7 +825,7 @@ const App: React.FC = () => {
                     )}
 
                     {activeTab === 'logo-theme-generator' && (
-                        <LogoThemeGeneratorPanel 
+                        <LogoThemeGeneratorPanel
                             activeSubTab={activeLogoThemeSubTab}
                             setActiveSubTab={(id) => dispatch(setActiveLogoThemeSubTab(id))}
                             onOpenLibraryForReferences={() => dispatch(setModalOpen({ modal: 'isLogoRefPickerOpen', isOpen: true }))}
@@ -820,8 +843,8 @@ const App: React.FC = () => {
                     )}
 
                     {activeTab === 'video-utils' && (
-                        <VideoUtilsPanel 
-                            setStartFrame={handleSetVideoStartFrame} 
+                        <VideoUtilsPanel
+                            setStartFrame={handleSetVideoStartFrame}
                             setEndFrame={handleSetVideoEndFrame}
                             onOpenLibrary={() => dispatch(setModalOpen({ modal: 'isColorImagePickerOpen', isOpen: true }))}
                             onOpenVideoLibrary={() => dispatch(setModalOpen({ modal: 'isVideoUtilsPickerOpen', isOpen: true }))}
@@ -833,7 +856,7 @@ const App: React.FC = () => {
                     )}
 
                     {activeTab === 'library' && (
-                        <LibraryPanel 
+                        <LibraryPanel
                             onLoadItem={(item) => {
                                 // Logic to load item back into generator state
                                 if (item.mediaType === 'image' || item.mediaType === 'character') {
@@ -875,7 +898,7 @@ const App: React.FC = () => {
                         />
                     )}
 
-                    {activeTab === 'admin' && currentUser.role === 'admin' && <div className="max-w-4xl mx-auto"><AdminIcon className="w-12 h-12 text-accent mx-auto mb-6"/><h2 className="text-2xl font-bold text-center mb-8">Admin Dashboard</h2></div>}
+                    {activeTab === 'admin' && currentUser.role === 'admin' && <div className="max-w-4xl mx-auto"><AdminIcon className="w-12 h-12 text-accent mx-auto mb-6" /><h2 className="text-2xl font-bold text-center mb-8">Admin Dashboard</h2></div>}
                 </div>
             </main>
 
@@ -906,51 +929,51 @@ const App: React.FC = () => {
                 onSelectItem={(item) => {
                     dispatch(updateCharacterOptions({
                         poseLibraryItems: [...(characterOptions.poseLibraryItems || []), item],
-                        poseMode: 'library' 
+                        poseMode: 'library'
                     }));
                 }}
                 filter="pose"
                 multiSelect
                 onSelectMultiple={(items) => {
-                     dispatch(updateCharacterOptions({
+                    dispatch(updateCharacterOptions({
                         poseLibraryItems: items,
                         poseMode: 'library'
                     }));
                 }}
             />
             {/* ... Other pickers ... */}
-             <LibraryPickerModal isOpen={isCharacterSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "char_source.jpg", { type: b.type }))); }} filter="character" />
-             <LibraryPickerModal isOpen={isMaskPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setMaskImage(new File([b], "mask.png", { type: b.type }))); }} filter="image" />
-             <LibraryPickerModal isOpen={isElementPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setElementImages([...elementImages, new File([b], `element_${Date.now()}.jpg`, { type: b.type })])); }} filter={['image', 'object', 'clothes']} />
-             <LibraryPickerModal isOpen={isPromptGenImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ image: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
-             <LibraryPickerModal isOpen={isPromptGenBgImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenBgImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ bgImage: new File([b], "bg_source.jpg", { type: b.type }) })); }} filter="image" />
-             <LibraryPickerModal isOpen={isPromptGenSubjectImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenSubjectImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ subjectImage: new File([b], "subj_source.jpg", { type: b.type }) })); }} filter="image" />
-             <LibraryPickerModal isOpen={isWanVideoImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isWanVideoImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ wanVideoImage: new File([b], "wan_source.jpg", { type: b.type }) })); }} filter="image" />
-             <LibraryPickerModal isOpen={isClothesSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isClothesSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ clothesSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
-             <LibraryPickerModal isOpen={isObjectSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isObjectSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ objectSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
-             <LibraryPickerModal isOpen={isPoseSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPoseSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ poseSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
-             <LibraryPickerModal isOpen={isMannequinRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMannequinRefPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ mannequinReferenceFile: new File([b], "ref.jpg", { type: b.type }) })); }} filter="image" />
-             <LibraryPickerModal isOpen={isFontSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isFontSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ fontSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
-             <LibraryPickerModal isOpen={isColorImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isColorImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ colorPicker: { ...videoUtilsState.colorPicker, imageFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
-             <LibraryPickerModal isOpen={isVideoUtilsPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoUtilsPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ videoFile: new File([b], "video.mp4", { type: b.type }) })); }} filter="video" />
-             <LibraryPickerModal isOpen={isVideoStartFramePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoStartFramePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoStartFrame(new File([b], "start.jpg", { type: b.type }))); }} filter={['image', 'extracted-frame']} />
-             <LibraryPickerModal isOpen={isVideoEndFramePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoEndFramePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoEndFrame(new File([b], "end.jpg", { type: b.type }))); }} filter={['image', 'extracted-frame']} />
-             <LibraryPickerModal isOpen={isGeminiVideoSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGeminiVideoSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoStartFrame(new File([b], "input.jpg", { type: b.type }))); }} filter="image" />
-             <LibraryPickerModal isOpen={isResizeCropPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ resizeCrop: { ...videoUtilsState.resizeCrop, sourceFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
-             <LibraryPickerModal isOpen={isGroupFusionPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGroupFusionPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); const file = new File([b], "imported.jpg", { type: b.type }); const newFile: UploadedFile = { id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), personaId: 'default' }; dispatch(setUploadedFiles([...uploadedFiles, newFile])); }} filter="image" />
-             
-             {/* Logo Theme Pickers */}
-             <LibraryPickerModal isOpen={isLogoRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ referenceItems: [...(logoThemeState.referenceItems || []), item] }))} filter="image" />
-             <LibraryPickerModal isOpen={isLogoPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ selectedPalette: item }))} filter="color-palette" />
-             <LibraryPickerModal isOpen={isLogoFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ selectedFont: item, fontReferenceImage: null }))} filter="font" />
-             <LibraryPickerModal isOpen={isBannerRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerReferenceItems: [...(logoThemeState.bannerReferenceItems || []), item] }))} filter="image" />
-             <LibraryPickerModal isOpen={isBannerPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedPalette: item }))} filter="color-palette" />
-             <LibraryPickerModal isOpen={isBannerLogoPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerLogoPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedLogo: item }))} filter="logo" />
-             <LibraryPickerModal isOpen={isBannerFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedFont: item, bannerFontReferenceImage: null }))} filter="font" />
-             <LibraryPickerModal isOpen={isAlbumCoverRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumReferenceItems: [...(logoThemeState.albumReferenceItems || []), item] }))} filter="image" />
-             <LibraryPickerModal isOpen={isAlbumCoverPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedPalette: item }))} filter="color-palette" />
-             <LibraryPickerModal isOpen={isAlbumCoverLogoPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverLogoPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedLogo: item }))} filter="logo" />
-             <LibraryPickerModal isOpen={isAlbumCoverFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedFont: item, albumFontReferenceImage: null }))} filter="font" />
+            <LibraryPickerModal isOpen={isCharacterSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "char_source.jpg", { type: b.type }))); }} filter="character" />
+            <LibraryPickerModal isOpen={isMaskPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setMaskImage(new File([b], "mask.png", { type: b.type }))); }} filter="image" />
+            <LibraryPickerModal isOpen={isElementPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setElementImages([...elementImages, new File([b], `element_${Date.now()}.jpg`, { type: b.type })])); }} filter={['image', 'object', 'clothes']} />
+            <LibraryPickerModal isOpen={isPromptGenImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ image: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
+            <LibraryPickerModal isOpen={isPromptGenBgImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenBgImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ bgImage: new File([b], "bg_source.jpg", { type: b.type }) })); }} filter="image" />
+            <LibraryPickerModal isOpen={isPromptGenSubjectImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenSubjectImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ subjectImage: new File([b], "subj_source.jpg", { type: b.type }) })); }} filter="image" />
+            <LibraryPickerModal isOpen={isWanVideoImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isWanVideoImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ wanVideoImage: new File([b], "wan_source.jpg", { type: b.type }) })); }} filter="image" />
+            <LibraryPickerModal isOpen={isClothesSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isClothesSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ clothesSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
+            <LibraryPickerModal isOpen={isObjectSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isObjectSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ objectSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
+            <LibraryPickerModal isOpen={isPoseSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPoseSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ poseSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
+            <LibraryPickerModal isOpen={isMannequinRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMannequinRefPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ mannequinReferenceFile: new File([b], "ref.jpg", { type: b.type }) })); }} filter="image" />
+            <LibraryPickerModal isOpen={isFontSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isFontSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ fontSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
+            <LibraryPickerModal isOpen={isColorImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isColorImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ colorPicker: { ...videoUtilsState.colorPicker, imageFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
+            <LibraryPickerModal isOpen={isVideoUtilsPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoUtilsPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ videoFile: new File([b], "video.mp4", { type: b.type }) })); }} filter="video" />
+            <LibraryPickerModal isOpen={isVideoStartFramePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoStartFramePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoStartFrame(new File([b], "start.jpg", { type: b.type }))); }} filter={['image', 'extracted-frame']} />
+            <LibraryPickerModal isOpen={isVideoEndFramePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoEndFramePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoEndFrame(new File([b], "end.jpg", { type: b.type }))); }} filter={['image', 'extracted-frame']} />
+            <LibraryPickerModal isOpen={isGeminiVideoSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGeminiVideoSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoStartFrame(new File([b], "input.jpg", { type: b.type }))); }} filter="image" />
+            <LibraryPickerModal isOpen={isResizeCropPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ resizeCrop: { ...videoUtilsState.resizeCrop, sourceFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
+            <LibraryPickerModal isOpen={isGroupFusionPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGroupFusionPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); const file = new File([b], "imported.jpg", { type: b.type }); const newFile: UploadedFile = { id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), personaId: 'default' }; dispatch(setUploadedFiles([...uploadedFiles, newFile])); }} filter="image" />
+
+            {/* Logo Theme Pickers */}
+            <LibraryPickerModal isOpen={isLogoRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ referenceItems: [...(logoThemeState.referenceItems || []), item] }))} filter="image" />
+            <LibraryPickerModal isOpen={isLogoPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ selectedPalette: item }))} filter="color-palette" />
+            <LibraryPickerModal isOpen={isLogoFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ selectedFont: item, fontReferenceImage: null }))} filter="font" />
+            <LibraryPickerModal isOpen={isBannerRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerReferenceItems: [...(logoThemeState.bannerReferenceItems || []), item] }))} filter="image" />
+            <LibraryPickerModal isOpen={isBannerPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedPalette: item }))} filter="color-palette" />
+            <LibraryPickerModal isOpen={isBannerLogoPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerLogoPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedLogo: item }))} filter="logo" />
+            <LibraryPickerModal isOpen={isBannerFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedFont: item, bannerFontReferenceImage: null }))} filter="font" />
+            <LibraryPickerModal isOpen={isAlbumCoverRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumReferenceItems: [...(logoThemeState.albumReferenceItems || []), item] }))} filter="image" />
+            <LibraryPickerModal isOpen={isAlbumCoverPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedPalette: item }))} filter="color-palette" />
+            <LibraryPickerModal isOpen={isAlbumCoverLogoPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverLogoPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedLogo: item }))} filter="logo" />
+            <LibraryPickerModal isOpen={isAlbumCoverFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedFont: item, albumFontReferenceImage: null }))} filter="font" />
 
         </div>
     );

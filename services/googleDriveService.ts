@@ -1,16 +1,18 @@
 // Fix: Add global declarations for Google API scripts to resolve TypeScript errors.
 declare global {
-  interface Window {
-    gapi: any;
-    google: any;
-  }
+    interface Window {
+        gapi: any;
+        google: any;
+    }
 }
 
 import type { LibraryItem, DriveFolder } from '../types';
 
+import { getApiKey } from './geminiService';
+
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
 const SCOPES = 'https://www.googleapis.com/auth/drive';
-const PICKER_API_KEY = process.env.API_KEY!;
+// const PICKER_API_KEY = process.env.API_KEY!; // Removed static key
 const LIBRARY_FILENAME = 'library.json';
 
 let tokenClient: any = null;
@@ -31,7 +33,7 @@ const initializeGapiClient = (): Promise<void> => {
                 if (window.gapi) {
                     window.gapi.load('client:picker', () => {
                         window.gapi.client.init({
-                            apiKey: PICKER_API_KEY,
+                            apiKey: getApiKey(),
                             discoveryDocs: [DISCOVERY_DOC],
                         }).then(resolve).catch((err: any) => {
                             console.error("Error initializing GAPI client modules.", err);
@@ -57,7 +59,7 @@ const initializeGisClient = (): Promise<void> => {
                     const clientId = getClientId();
                     if (!clientId) {
                         console.warn("Cannot initialize GIS client: Google Client ID is not configured.");
-                        resolve(); 
+                        resolve();
                         return;
                     }
                     tokenClient = window.google.accounts.oauth2.initTokenClient({
@@ -109,7 +111,7 @@ export const restoreConnection = async (): Promise<boolean> => {
 export const disconnect = () => {
     const token = window.gapi?.client?.getToken();
     if (token) {
-        window.google?.accounts.oauth2.revoke(token.access_token, () => {});
+        window.google?.accounts.oauth2.revoke(token.access_token, () => { });
     }
     if (window.gapi?.client) {
         window.gapi.client.setToken(null);
@@ -120,8 +122,8 @@ export const disconnect = () => {
 
 export const connectAndPickFolder = async (): Promise<DriveFolder | null> => {
     if (!isDriveConfigured()) throw new Error('Google Drive Client ID is not configured.');
-    if (!PICKER_API_KEY) throw new Error('Google API Key is not configured in the environment.');
-    
+    if (!getApiKey()) throw new Error('Google API Key is not configured. Please set it in Settings.');
+
     await ensureClientsReady();
     if (!tokenClient) throw new Error("Google Identity Service client not initialized. Check Client ID setting.");
 
@@ -136,13 +138,13 @@ export const connectAndPickFolder = async (): Promise<DriveFolder | null> => {
                 const view = new window.google.picker.DocsView();
                 view.setIncludeFolders(true);
                 view.setSelectFolderEnabled(true);
-                
+
                 const picker = new window.google.picker.PickerBuilder()
                     .enableFeature(window.google.picker.Feature.NAV_HIDDEN)
                     .enableFeature(window.google.picker.Feature.SUPPORT_DRIVES)
                     .setAppId(getClientId().split('.')[0])
                     .setOAuthToken(tokenResponse.access_token)
-                    .setDeveloperKey(PICKER_API_KEY)
+                    .setDeveloperKey(getApiKey())
                     .setOrigin(window.location.origin)
                     .addView(view)
                     .setCallback((data: any) => {
@@ -162,11 +164,11 @@ export const connectAndPickFolder = async (): Promise<DriveFolder | null> => {
                     .build();
                 picker.setVisible(true);
             } catch (err: any) {
-                 console.error("Error creating Google Picker:", err);
-                 reject(new Error(`Failed to create file picker. Check API Key restrictions and ensure Picker API is enabled. Error: ${err.message}`));
+                console.error("Error creating Google Picker:", err);
+                reject(new Error(`Failed to create file picker. Check API Key restrictions and ensure Picker API is enabled. Error: ${err.message}`));
             }
         };
-        
+
         tokenClient.callback = tokenCallback;
         if (window.gapi.client.getToken() === null) {
             tokenClient.requestAccessToken({ prompt: 'consent' });
@@ -216,7 +218,7 @@ export async function getLibraryIndex(): Promise<{ index: LibraryIndex; fileId: 
 
     const query = `'${driveFolder!.id}' in parents and name = '${LIBRARY_FILENAME}' and trashed = false`;
     const listResponse = await window.gapi.client.drive.files.list({ q: query, fields: 'files(id)' });
-    
+
     const file = listResponse.result.files?.[0];
 
     if (file?.id) {
@@ -224,7 +226,7 @@ export async function getLibraryIndex(): Promise<{ index: LibraryIndex; fileId: 
             headers: { 'Authorization': `Bearer ${window.gapi.client.getToken().access_token}` }
         });
         if (!fileResponse.ok) throw new Error("Could not download library index from Google Drive.");
-        
+
         const textContent = await fileResponse.text();
         if (!textContent.trim()) {
             return { index: { version: 1, items: {} }, fileId: file.id };
@@ -236,8 +238,8 @@ export async function getLibraryIndex(): Promise<{ index: LibraryIndex; fileId: 
             }
             return { index, fileId: file.id };
         } catch (e) {
-             console.error("Failed to parse library.json from Drive. It is likely corrupted.", e);
-             throw new Error("Failed to parse library.json from Google Drive. The file may be corrupted. Please resolve the issue on Google Drive or disconnect and reconnect to create a new one.");
+            console.error("Failed to parse library.json from Drive. It is likely corrupted.", e);
+            throw new Error("Failed to parse library.json from Google Drive. The file may be corrupted. Please resolve the issue on Google Drive or disconnect and reconnect to create a new one.");
         }
     }
 
@@ -247,7 +249,7 @@ export async function getLibraryIndex(): Promise<{ index: LibraryIndex; fileId: 
 export async function updateLibraryIndex(index: LibraryIndex, fileId: string | null): Promise<string> {
     if (!isConnected()) throw new Error("Not connected to Google Drive.");
     await ensureClientsReady();
-    
+
     const blob = new Blob([JSON.stringify(index, null, 2)], { type: 'application/json' });
     let idToUpdate = fileId;
 
@@ -279,7 +281,7 @@ export async function updateLibraryIndex(index: LibraryIndex, fileId: string | n
         const errorBody = await updateResponse.text();
         throw new Error(`Google Drive: Failed to upload content to library index (ID: ${idToUpdate}). Body: ${errorBody}`);
     }
-    
+
     const result = await updateResponse.json();
     return result.id;
 }
@@ -333,7 +335,7 @@ export const downloadMediaFile = async (fileId: string): Promise<Blob> => {
         headers: { 'Authorization': `Bearer ${window.gapi.client.getToken().access_token}` }
     });
     if (!fileResponse.ok) throw new Error(`Failed to download file content for ID: ${fileId}. Status: ${fileResponse.statusText}`);
-    
+
     return fileResponse.blob();
 };
 

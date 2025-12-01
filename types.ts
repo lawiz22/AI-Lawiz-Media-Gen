@@ -1,6 +1,16 @@
 
 import type { fileURLToPath } from "url";
 
+
+declare global {
+  interface Window {
+    electron?: {
+      getApiKey: () => Promise<string>;
+      setApiKey: (key: string) => Promise<boolean>;
+    };
+  }
+}
+
 export interface User {
   username: string;
   role: 'admin' | 'user';
@@ -26,224 +36,224 @@ export type NunchakuPrecision = 'nunchaku-fp16' | 'bfloat16' | 'float32';
 export type NunchakuAttention = 'nunchaku-fp16' | 'flash-attention2';
 
 export interface GenerationOptions {
-    provider: Provider;
-    numImages: number;
-    aspectRatio: AspectRatio;
-    imageStyle: ImageStyle;
-    photoStyle: PhotoStyle;
-    eraStyle: EraStyle;
-    creativity?: number; // 0-1, for non-photorealistic styles
-    
-    // Gemini-specific
-    geminiMode: GeminiMode;
-    geminiPrompt?: string; // For t2i
-    geminiT2IModel?: GeminiT2IModel;
-    poseMode: PoseMode;
-    poseSelection: string[];
-    poseLibraryItems?: LibraryItem[];
-    geminiPoseSource?: GeminiPoseSource;
-    background: BackgroundMode;
-    customBackground?: string;
-    consistentBackground?: boolean;
-    clothing: ClothingMode;
-    customClothingPrompt?: string;
-    clothingStyleConsistency?: ClothingStyleConsistency;
-    addTextToImage?: boolean;
-    textOnImagePrompt?: string;
-    textObjectPrompt?: string;
+  provider: Provider;
+  numImages: number;
+  aspectRatio: AspectRatio;
+  imageStyle: ImageStyle;
+  photoStyle: PhotoStyle;
+  eraStyle: EraStyle;
+  creativity?: number; // 0-1, for non-photorealistic styles
 
-    // Gemini I2I Editing
-    geminiI2iMode?: 'general' | 'inpaint' | 'compose' | 'character';
-    geminiGeneralEditPrompt?: string;
-    geminiInpaintTask?: 'remove' | 'replace' | 'changeColor' | 'custom';
-    geminiInpaintCustomPrompt?: string;
-    geminiInpaintTargetPrompt?: string; // For color name or replacement object
-    geminiComposePrompt?: string;
-    
-    // ComfyUI-specific
-    comfyPrompt?: string;
-    comfyNegativePrompt?: string;
-    comfyModelType?: ComfyModelType;
-    comfyModel?: string; // Checkpoint name
-    comfySteps?: number;
-    comfyCfg?: number;
-    comfySampler?: string;
-    comfyScheduler?: string;
-    comfySeed?: number;
-    comfySeedControl?: 'fixed' | 'increment' | 'decrement' | 'randomize';
-    comfySeedIncrement?: number;
-    comfySdxlUseLora?: boolean;
-    comfySdxlLoraName?: string;
-    comfySdxlLoraStrength?: number;
-    
-    comfyFluxGuidance?: number;
-    
-    // WAN 2.2 specific
-    comfyWanHighNoiseModel?: string;
-    comfyWanLowNoiseModel?: string;
-    comfyWanClipModel?: string;
-    comfyWanVaeModel?: string;
-    comfyWanRefinerStartStep?: number;
-    comfyWanUseFusionXLora?: boolean;
-    comfyWanFusionXLoraStrength?: number;
-    comfyWanFusionXLoraName?: string;
-    comfyWanUseLightningLora?: boolean;
-    comfyWanLightningLoraStrength?: number;
-    comfyWanLightningLoraNameHigh?: string;
-    comfyWanLightningLoraNameLow?: string;
-    comfyWanUseStockPhotoLora?: boolean;
-    comfyWanStockPhotoLoraStrength?: number;
-    comfyWanStockPhotoLoraNameHigh?: string;
-    comfyWanStockPhotoLoraNameLow?: string;
+  // Gemini-specific
+  geminiMode: GeminiMode;
+  geminiPrompt?: string; // For t2i
+  geminiT2IModel?: GeminiT2IModel;
+  poseMode: PoseMode;
+  poseSelection: string[];
+  poseLibraryItems?: LibraryItem[];
+  geminiPoseSource?: GeminiPoseSource;
+  background: BackgroundMode;
+  customBackground?: string;
+  consistentBackground?: boolean;
+  clothing: ClothingMode;
+  customClothingPrompt?: string;
+  clothingStyleConsistency?: ClothingStyleConsistency;
+  addTextToImage?: boolean;
+  textOnImagePrompt?: string;
+  textObjectPrompt?: string;
 
-    // Nunchaku specific
-    comfyNunchakuModel?: string;
-    comfyNunchakuVae?: string;
-    comfyNunchakuClipL?: string;
-    comfyNunchakuT5XXL?: string;
-    comfyFluxGuidanceKontext?: number; // Used by both nunchaku workflows
-    comfyNunchakuCacheThreshold?: number;
-    comfyNunchakuCpuOffload?: 'auto' | 'enable' | 'disable';
-    comfyNunchakuAttention?: NunchakuAttention;
-    comfyNunchakuUseTurboLora?: boolean;
-    comfyNunchakuTurboLoraName?: string;
-    comfyNunchakuTurboLoraStrength?: number;
-    comfyNunchakuUseNudifyLora?: boolean;
-    comfyNunchakuNudifyLoraName?: string;
-    comfyNunchakuNudifyLoraStrength?: number;
-    comfyNunchakuUseDetailLora?: boolean;
-    comfyNunchakuDetailLoraName?: string;
-    comfyNunchakuDetailLoraStrength?: number;
-    comfyNunchakuBaseShift?: number; // Only for image workflow
-    comfyNunchakuMaxShift?: number; // Only for image workflow
+  // Gemini I2I Editing
+  geminiI2iMode?: 'general' | 'inpaint' | 'compose' | 'character';
+  geminiGeneralEditPrompt?: string;
+  geminiInpaintTask?: 'remove' | 'replace' | 'changeColor' | 'custom';
+  geminiInpaintCustomPrompt?: string;
+  geminiInpaintTargetPrompt?: string; // For color name or replacement object
+  geminiComposePrompt?: string;
 
-    // FLUX Krea specific
-    comfyFluxKreaModel?: string;
-    comfyFluxKreaClipT5?: string;
-    comfyFluxKreaClipL?: string;
-    comfyFluxKreaVae?: string;
-    useP1x4r0maWomanLora?: boolean;
-    p1x4r0maWomanLoraStrength?: number;
-    p1x4r0maWomanLoraName?: string;
-    useNippleDiffusionLora?: boolean;
-    nippleDiffusionLoraStrength?: number;
-    nippleDiffusionLoraName?: string;
-    usePussyDiffusionLora?: boolean;
-    pussyDiffusionLoraStrength?: number;
-    pussyDiffusionLoraName?: string;
-    comfyFluxKreaUseUpscaler?: boolean;
-    comfyFluxKreaUpscaleModel?: string;
-    comfyFluxKreaDenoise?: number;
-    comfyFluxKreaUpscalerSteps?: number;
-    
-    // Face Detailer specific
-    comfyDetailerBboxModel?: string;
-    comfyDetailerSamModel?: string;
-    comfyDetailerSteps?: number;
-    comfyDetailerCfg?: number;
-    comfyDetailerSampler?: string;
-    comfyDetailerScheduler?: string;
-    comfyDetailerDenoise?: number;
-    comfyDetailerFeather?: number;
-    comfyDetailerBboxThreshold?: number;
-    comfyDetailerBboxDilation?: number;
-    comfyDetailerBboxCropFactor?: number;
-    
-    // Qwen t2i GGUF specific
-    comfyQwenUnet?: string;
-    comfyQwenClip?: string;
-    comfyQwenVae?: string;
-    comfyQwenAuraFlowShift?: number;
-    comfyQwenMegaPixel?: string;
-    comfyQwenAspectRatio?: string;
-    comfyQwenCustomRatio?: boolean;
-    comfyQwenCustomAspectRatio?: string;
-    comfyQwenDivisibleBy?: number;
-    comfyQwenUseLora1?: boolean;
-    comfyQwenLora1Name?: string;
-    comfyQwenLora1Strength?: number;
-    comfyQwenUseLora2?: boolean;
-    comfyQwenLora2Name?: string;
-    comfyQwenLora2Strength?: number;
-    comfyQwenUseLora3?: boolean;
-    comfyQwenLora3Name?: string;
-    comfyQwenLora3Strength?: number;
-    comfyQwenUseLora4?: boolean;
-    comfyQwenLora4Name?: string;
-    comfyQwenLora4Strength?: number;
+  // ComfyUI-specific
+  comfyPrompt?: string;
+  comfyNegativePrompt?: string;
+  comfyModelType?: ComfyModelType;
+  comfyModel?: string; // Checkpoint name
+  comfySteps?: number;
+  comfyCfg?: number;
+  comfySampler?: string;
+  comfyScheduler?: string;
+  comfySeed?: number;
+  comfySeedControl?: 'fixed' | 'increment' | 'decrement' | 'randomize';
+  comfySeedIncrement?: number;
+  comfySdxlUseLora?: boolean;
+  comfySdxlLoraName?: string;
+  comfySdxlLoraStrength?: number;
+
+  comfyFluxGuidance?: number;
+
+  // WAN 2.2 specific
+  comfyWanHighNoiseModel?: string;
+  comfyWanLowNoiseModel?: string;
+  comfyWanClipModel?: string;
+  comfyWanVaeModel?: string;
+  comfyWanRefinerStartStep?: number;
+  comfyWanUseFusionXLora?: boolean;
+  comfyWanFusionXLoraStrength?: number;
+  comfyWanFusionXLoraName?: string;
+  comfyWanUseLightningLora?: boolean;
+  comfyWanLightningLoraStrength?: number;
+  comfyWanLightningLoraNameHigh?: string;
+  comfyWanLightningLoraNameLow?: string;
+  comfyWanUseStockPhotoLora?: boolean;
+  comfyWanStockPhotoLoraStrength?: number;
+  comfyWanStockPhotoLoraNameHigh?: string;
+  comfyWanStockPhotoLoraNameLow?: string;
+
+  // Nunchaku specific
+  comfyNunchakuModel?: string;
+  comfyNunchakuVae?: string;
+  comfyNunchakuClipL?: string;
+  comfyNunchakuT5XXL?: string;
+  comfyFluxGuidanceKontext?: number; // Used by both nunchaku workflows
+  comfyNunchakuCacheThreshold?: number;
+  comfyNunchakuCpuOffload?: 'auto' | 'enable' | 'disable';
+  comfyNunchakuAttention?: NunchakuAttention;
+  comfyNunchakuUseTurboLora?: boolean;
+  comfyNunchakuTurboLoraName?: string;
+  comfyNunchakuTurboLoraStrength?: number;
+  comfyNunchakuUseNudifyLora?: boolean;
+  comfyNunchakuNudifyLoraName?: string;
+  comfyNunchakuNudifyLoraStrength?: number;
+  comfyNunchakuUseDetailLora?: boolean;
+  comfyNunchakuDetailLoraName?: string;
+  comfyNunchakuDetailLoraStrength?: number;
+  comfyNunchakuBaseShift?: number; // Only for image workflow
+  comfyNunchakuMaxShift?: number; // Only for image workflow
+
+  // FLUX Krea specific
+  comfyFluxKreaModel?: string;
+  comfyFluxKreaClipT5?: string;
+  comfyFluxKreaClipL?: string;
+  comfyFluxKreaVae?: string;
+  useP1x4r0maWomanLora?: boolean;
+  p1x4r0maWomanLoraStrength?: number;
+  p1x4r0maWomanLoraName?: string;
+  useNippleDiffusionLora?: boolean;
+  nippleDiffusionLoraStrength?: number;
+  nippleDiffusionLoraName?: string;
+  usePussyDiffusionLora?: boolean;
+  pussyDiffusionLoraStrength?: number;
+  pussyDiffusionLoraName?: string;
+  comfyFluxKreaUseUpscaler?: boolean;
+  comfyFluxKreaUpscaleModel?: string;
+  comfyFluxKreaDenoise?: number;
+  comfyFluxKreaUpscalerSteps?: number;
+
+  // Face Detailer specific
+  comfyDetailerBboxModel?: string;
+  comfyDetailerSamModel?: string;
+  comfyDetailerSteps?: number;
+  comfyDetailerCfg?: number;
+  comfyDetailerSampler?: string;
+  comfyDetailerScheduler?: string;
+  comfyDetailerDenoise?: number;
+  comfyDetailerFeather?: number;
+  comfyDetailerBboxThreshold?: number;
+  comfyDetailerBboxDilation?: number;
+  comfyDetailerBboxCropFactor?: number;
+
+  // Qwen t2i GGUF specific
+  comfyQwenUnet?: string;
+  comfyQwenClip?: string;
+  comfyQwenVae?: string;
+  comfyQwenAuraFlowShift?: number;
+  comfyQwenMegaPixel?: string;
+  comfyQwenAspectRatio?: string;
+  comfyQwenCustomRatio?: boolean;
+  comfyQwenCustomAspectRatio?: string;
+  comfyQwenDivisibleBy?: number;
+  comfyQwenUseLora1?: boolean;
+  comfyQwenLora1Name?: string;
+  comfyQwenLora1Strength?: number;
+  comfyQwenUseLora2?: boolean;
+  comfyQwenLora2Name?: string;
+  comfyQwenLora2Strength?: number;
+  comfyQwenUseLora3?: boolean;
+  comfyQwenLora3Name?: string;
+  comfyQwenLora3Strength?: number;
+  comfyQwenUseLora4?: boolean;
+  comfyQwenLora4Name?: string;
+  comfyQwenLora4Strength?: number;
 
 
-    // Video Generation
-    videoProvider?: VideoProvider;
-    width?: number;
-    height?: number;
+  // Video Generation
+  videoProvider?: VideoProvider;
+  width?: number;
+  height?: number;
 
-    // Gemini Video
-    geminiVidModel?: 'veo-2.0-generate-preview-01';
-    geminiVidPrompt?: string;
-    geminiVidUseEndFrame?: boolean;
+  // Gemini Video
+  geminiVidModel?: 'veo-2.0-generate-preview-01';
+  geminiVidPrompt?: string;
+  geminiVidUseEndFrame?: boolean;
 
-    // ComfyUI Video
-    comfyVidModelType?: ComfyVideoModelType;
-    comfyVidWanI2VHighNoiseModel?: string;
-    comfyVidWanI2VLowNoiseModel?: string;
-    comfyVidWanI2VClipModel?: string;
-    comfyVidWanI2VVaeModel?: string;
-    comfyVidWanI2VClipVisionModel?: string;
-    comfyVidWanI2VPositivePrompt?: string;
-    comfyVidWanI2VNegativePrompt?: string;
-    comfyVidWanI2VSteps?: number;
-    comfyVidWanI2VCfg?: number;
-    comfyVidWanI2VSampler?: string;
-    comfyVidWanI2VScheduler?: string;
-    comfyVidWanI2VFrameCount?: number;
-    comfyVidWanI2VRefinerStartStep?: number;
-    comfyVidWanI2VUseLightningLora?: boolean;
-    comfyVidWanI2VHighNoiseLora?: string;
-    comfyVidWanI2VHighNoiseLoraStrength?: number;
-    comfyVidWanI2VLowNoiseLora?: string;
-    comfyVidWanI2VLowNoiseLoraStrength?: number;
-    comfyVidWanI2VUseFilmGrain?: boolean;
-    comfyVidWanI2VFilmGrainIntensity?: number;
-    comfyVidWanI2VFilmGrainSize?: number; // It's actually saturation mix
-    comfyVidWanI2VFrameRate?: number;
-    comfyVidWanI2VVideoFormat?: string;
-    comfyVidWanI2VWidth?: number;
-    comfyVidWanI2VHeight?: number;
-    comfyVidWanI2VUseEndFrame?: boolean;
-    comfyVidWanI2VNoiseSeed?: number;
-    comfyVidWanI2VSeedControl?: 'fixed' | 'randomize';
+  // ComfyUI Video
+  comfyVidModelType?: ComfyVideoModelType;
+  comfyVidWanI2VHighNoiseModel?: string;
+  comfyVidWanI2VLowNoiseModel?: string;
+  comfyVidWanI2VClipModel?: string;
+  comfyVidWanI2VVaeModel?: string;
+  comfyVidWanI2VClipVisionModel?: string;
+  comfyVidWanI2VPositivePrompt?: string;
+  comfyVidWanI2VNegativePrompt?: string;
+  comfyVidWanI2VSteps?: number;
+  comfyVidWanI2VCfg?: number;
+  comfyVidWanI2VSampler?: string;
+  comfyVidWanI2VScheduler?: string;
+  comfyVidWanI2VFrameCount?: number;
+  comfyVidWanI2VRefinerStartStep?: number;
+  comfyVidWanI2VUseLightningLora?: boolean;
+  comfyVidWanI2VHighNoiseLora?: string;
+  comfyVidWanI2VHighNoiseLoraStrength?: number;
+  comfyVidWanI2VLowNoiseLora?: string;
+  comfyVidWanI2VLowNoiseLoraStrength?: number;
+  comfyVidWanI2VUseFilmGrain?: boolean;
+  comfyVidWanI2VFilmGrainIntensity?: number;
+  comfyVidWanI2VFilmGrainSize?: number; // It's actually saturation mix
+  comfyVidWanI2VFrameRate?: number;
+  comfyVidWanI2VVideoFormat?: string;
+  comfyVidWanI2VWidth?: number;
+  comfyVidWanI2VHeight?: number;
+  comfyVidWanI2VUseEndFrame?: boolean;
+  comfyVidWanI2VNoiseSeed?: number;
+  comfyVidWanI2VSeedControl?: 'fixed' | 'randomize';
 
-    // WAN 2.2 T2I specific (new)
-    comfyVidWanT2VPositivePrompt?: string;
-    comfyVidWanT2VNegativePrompt?: string;
-    comfyVidWanT2VWidth?: number;
-    comfyVidWanT2VHeight?: number;
-    comfyVidWanT2VFrameCount?: number;
-    comfyVidWanT2VSteps?: number;
-    comfyVidWanT2VCfg?: number;
-    comfyVidWanT2VSampler?: string;
-    comfyVidWanT2VScheduler?: string;
-    comfyVidWanT2VRefinerStartStep?: number;
-    comfyVidWanT2VNoiseSeed?: number;
-    comfyVidWanT2VSeedControl?: 'fixed' | 'randomize';
-    comfyVidWanT2VUseLightningLora?: boolean;
-    comfyVidWanT2VLightningLoraHigh?: string;
-    comfyVidWanT2VLightningLoraStrengthHigh?: number;
-    comfyVidWanT2VLightningLoraLow?: string;
-    comfyVidWanT2VLightningLoraStrengthLow?: number;
-    comfyVidWanT2VUseOptionalLora?: boolean;
-    comfyVidWanT2VOptionalLoraName?: string;
-    comfyVidWanT2VOptionalLoraStrength?: number;
-    comfyVidWanT2VUseFilmGrain?: boolean;
-    comfyVidWanT2VFilmGrainIntensity?: number;
-    comfyVidWanT2VFilmGrainSaturation?: number;
-    comfyVidWanT2VFrameRate?: number;
-    comfyVidWanT2VVideoFormat?: string;
-    comfyVidWanT2VHighNoiseModel?: string;
-    comfyVidWanT2VLowNoiseModel?: string;
-    comfyVidWanT2VClipModel?: string;
-    comfyVidWanT2VVaeModel?: string;
+  // WAN 2.2 T2I specific (new)
+  comfyVidWanT2VPositivePrompt?: string;
+  comfyVidWanT2VNegativePrompt?: string;
+  comfyVidWanT2VWidth?: number;
+  comfyVidWanT2VHeight?: number;
+  comfyVidWanT2VFrameCount?: number;
+  comfyVidWanT2VSteps?: number;
+  comfyVidWanT2VCfg?: number;
+  comfyVidWanT2VSampler?: string;
+  comfyVidWanT2VScheduler?: string;
+  comfyVidWanT2VRefinerStartStep?: number;
+  comfyVidWanT2VNoiseSeed?: number;
+  comfyVidWanT2VSeedControl?: 'fixed' | 'randomize';
+  comfyVidWanT2VUseLightningLora?: boolean;
+  comfyVidWanT2VLightningLoraHigh?: string;
+  comfyVidWanT2VLightningLoraStrengthHigh?: number;
+  comfyVidWanT2VLightningLoraLow?: string;
+  comfyVidWanT2VLightningLoraStrengthLow?: number;
+  comfyVidWanT2VUseOptionalLora?: boolean;
+  comfyVidWanT2VOptionalLoraName?: string;
+  comfyVidWanT2VOptionalLoraStrength?: number;
+  comfyVidWanT2VUseFilmGrain?: boolean;
+  comfyVidWanT2VFilmGrainIntensity?: number;
+  comfyVidWanT2VFilmGrainSaturation?: number;
+  comfyVidWanT2VFrameRate?: number;
+  comfyVidWanT2VVideoFormat?: string;
+  comfyVidWanT2VHighNoiseModel?: string;
+  comfyVidWanT2VLowNoiseModel?: string;
+  comfyVidWanT2VClipModel?: string;
+  comfyVidWanT2VVaeModel?: string;
 }
 
 export interface IdentifiedClothing {
@@ -259,69 +269,69 @@ export interface GeneratedClothing {
 }
 
 export interface IdentifiedObject {
-    name: string;
-    description: string;
+  name: string;
+  description: string;
 }
 
 export interface GeneratedObject {
-    name: string;
-    image: string; // data URL
-    saved?: 'idle' | 'saving' | 'saved'; // UI state
+  name: string;
+  image: string; // data URL
+  saved?: 'idle' | 'saving' | 'saved'; // UI state
 }
 
 export interface IdentifiedPose {
-    description: string;
+  description: string;
 }
 
 export type MannequinStyle = 'custom-reference';
 export type PoseOutputMode = 'controlnet-json' | 'mannequin-image';
 
 export interface GeneratedPose {
-    description: string;
-    image?: string; // data URL for mannequin (optional)
-    skeletonImage?: string; // data URL for skeleton render (optional)
-    poseJson?: object; // The ControlNet JSON object (optional)
-    mannequinStyle: MannequinStyle; // The style used for generation
-    saved?: 'idle' | 'saving' | 'saved'; // UI state
-    generationPrompt?: string;
-    mode: PoseOutputMode;
+  description: string;
+  image?: string; // data URL for mannequin (optional)
+  skeletonImage?: string; // data URL for skeleton render (optional)
+  poseJson?: object; // The ControlNet JSON object (optional)
+  mannequinStyle: MannequinStyle; // The style used for generation
+  saved?: 'idle' | 'saving' | 'saved'; // UI state
+  generationPrompt?: string;
+  mode: PoseOutputMode;
 }
 
 
 export interface ExtractorState {
-    // Clothes
-    clothesSourceFile: File | null;
-    clothesDetails: string;
-    isIdentifying: boolean;
-    identifiedItems: (IdentifiedClothing & { selected: boolean })[];
-    isGenerating: boolean;
-    generatedClothes: GeneratedClothing[];
-    clothesError: string | null;
-    generateFolded: boolean;
-    excludeAccessories: boolean;
-    // Objects
-    objectSourceFile: File | null;
-    objectHints: string;
-    maxObjects: number;
-    isIdentifyingObjects: boolean;
-    identifiedObjects: (IdentifiedObject & { selected: boolean })[];
-    isGeneratingObjects: boolean;
-    generatedObjects: GeneratedObject[];
-    objectError: string | null;
-    // Poses
-    poseSourceFile: File | null;
-    isGeneratingPoses: boolean;
-    generatedPoses: GeneratedPose[];
-    poseError: string | null;
-    mannequinStyle: MannequinStyle;
-    mannequinReferenceFile: File | null;
-    poseOutputMode: PoseOutputMode;
-    mannequinPromptHint: string;
-    // Font
-    fontSourceFile: File | null;
-    isGeneratingFont: boolean;
-    generatedFontChart: { src: string; saved: 'idle' | 'saving' | 'saved' } | null;
-    fontError: string | null;
+  // Clothes
+  clothesSourceFile: File | null;
+  clothesDetails: string;
+  isIdentifying: boolean;
+  identifiedItems: (IdentifiedClothing & { selected: boolean })[];
+  isGenerating: boolean;
+  generatedClothes: GeneratedClothing[];
+  clothesError: string | null;
+  generateFolded: boolean;
+  excludeAccessories: boolean;
+  // Objects
+  objectSourceFile: File | null;
+  objectHints: string;
+  maxObjects: number;
+  isIdentifyingObjects: boolean;
+  identifiedObjects: (IdentifiedObject & { selected: boolean })[];
+  isGeneratingObjects: boolean;
+  generatedObjects: GeneratedObject[];
+  objectError: string | null;
+  // Poses
+  poseSourceFile: File | null;
+  isGeneratingPoses: boolean;
+  generatedPoses: GeneratedPose[];
+  poseError: string | null;
+  mannequinStyle: MannequinStyle;
+  mannequinReferenceFile: File | null;
+  poseOutputMode: PoseOutputMode;
+  mannequinPromptHint: string;
+  // Font
+  fontSourceFile: File | null;
+  isGeneratingFont: boolean;
+  generatedFontChart: { src: string; saved: 'idle' | 'saving' | 'saved' } | null;
+  fontError: string | null;
 }
 
 export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font' | 'group-fusion' | 'past-forward-photo';
@@ -338,183 +348,183 @@ export type AlbumEra = '50s' | '60s' | '70s' | '80s' | '90s' | '2000s' | 'modern
 export type AlbumMediaType = 'vinyl' | 'cd' | 'digital';
 
 export interface ThemeGenerationInfo {
-    prompt?: string;
-    // Common
-    style?: string; // LogoStyle, BannerStyle, MusicStyle, etc.
-    referenceItems?: { name: string; thumbnail: string }[];
-    selectedPalette?: { name: string; media: string }; // name and palette JSON
-    selectedFont?: { name: string; thumbnail: string };
-    fontReferenceImage?: string; // thumbnail dataURL
-    // Logo specific
-    brandName?: string;
-    slogan?: string;
-    backgroundColor?: LogoBackground;
-    // Banner specific
-    bannerTitle?: string;
-    bannerAspectRatio?: BannerAspectRatio;
-    bannerLogoPlacement?: BannerLogoPlacement;
-    bannerSelectedLogo?: { name: string; thumbnail: string };
-    // Album specific
-    albumTitle?: string;
-    artistName?: string;
-    albumEra?: AlbumEra;
-    albumMediaType?: AlbumMediaType;
-    addVinylWear?: boolean;
-    albumSelectedLogo?: { name: string; thumbnail: string };
+  prompt?: string;
+  // Common
+  style?: string; // LogoStyle, BannerStyle, MusicStyle, etc.
+  referenceItems?: { name: string; thumbnail: string }[];
+  selectedPalette?: { name: string; media: string }; // name and palette JSON
+  selectedFont?: { name: string; thumbnail: string };
+  fontReferenceImage?: string; // thumbnail dataURL
+  // Logo specific
+  brandName?: string;
+  slogan?: string;
+  backgroundColor?: LogoBackground;
+  // Banner specific
+  bannerTitle?: string;
+  bannerAspectRatio?: BannerAspectRatio;
+  bannerLogoPlacement?: BannerLogoPlacement;
+  bannerSelectedLogo?: { name: string; thumbnail: string };
+  // Album specific
+  albumTitle?: string;
+  artistName?: string;
+  albumEra?: AlbumEra;
+  albumMediaType?: AlbumMediaType;
+  addVinylWear?: boolean;
+  albumSelectedLogo?: { name: string; thumbnail: string };
 }
 
 export interface LibraryItem {
-    id: number; // Unique ID, typically a timestamp
-    name?: string;
-    mediaType: LibraryItemType;
-    media: string; // data URL for image/video/clothes, prompt text, or JSON string for palette
-    thumbnail: string; // data URL for a small thumbnail
-    options?: GenerationOptions;
-    themeOptions?: ThemeGenerationInfo;
-    sourceImage?: string; // data URL for image/video generations
-    startFrame?: string; // data URL for video generations
-    endFrame?: string; // data URL for video generations
-    promptType?: PromptCategory;
-    promptModelType?: ComfyModelType | 'gemini';
-    driveFileId?: string; // Google Drive file ID for the media
-    previewThumbnail?: string; // AI-generated visual thumbnail for prompts
-    poseJson?: string; // For pose items, the ControlNet JSON as a string
-    skeletonImage?: string; // For pose items, the data URL for the skeleton visualization
+  id: number; // Unique ID, typically a timestamp
+  name?: string;
+  mediaType: LibraryItemType;
+  media: string; // data URL for image/video/clothes, prompt text, or JSON string for palette
+  thumbnail: string; // data URL for a small thumbnail
+  options?: GenerationOptions;
+  themeOptions?: ThemeGenerationInfo;
+  sourceImage?: string; // data URL for image/video generations
+  startFrame?: string; // data URL for video generations
+  endFrame?: string; // data URL for video generations
+  promptType?: PromptCategory;
+  promptModelType?: ComfyModelType | 'gemini';
+  driveFileId?: string; // Google Drive file ID for the media
+  previewThumbnail?: string; // AI-generated visual thumbnail for prompts
+  poseJson?: string; // For pose items, the ControlNet JSON as a string
+  skeletonImage?: string; // For pose items, the data URL for the skeleton visualization
 }
 
 export interface VersionInfo {
-    version: string;
-    date: string;
-    changes: string;
+  version: string;
+  date: string;
+  changes: string;
 }
 
 export interface DriveFolder {
-    id: string;
-    name: string;
+  id: string;
+  name: string;
 }
 
 export interface PaletteColor {
-    hex: string;
-    name: string;
+  hex: string;
+  name: string;
 }
 
 export interface ColorPickerState {
-    imageFile: File | null;
-    palette: PaletteColor[];
-    paletteName: string;
-    colorCount: number;
-    isExtracting: boolean;
-    error: string | null;
-    dominantColorPool: string[]; // Store a large pool of hex codes for reshuffling
-    paletteSaveStatus: 'idle' | 'saving' | 'saved';
-    pickingColorIndex: number | null; // The index of the color swatch being replaced by the eyedropper
+  imageFile: File | null;
+  palette: PaletteColor[];
+  paletteName: string;
+  colorCount: number;
+  isExtracting: boolean;
+  error: string | null;
+  dominantColorPool: string[]; // Store a large pool of hex codes for reshuffling
+  paletteSaveStatus: 'idle' | 'saving' | 'saved';
+  pickingColorIndex: number | null; // The index of the color swatch being replaced by the eyedropper
 }
 
 export interface ResizeCropState {
-    sourceFile: File | null;
-    previewUrl: string | null;
-    scale: number; // Percentage
-    crop: { x: number, y: number, width: number, height: number } | null; // In percentage
-    aspectRatio: string; // 'free', '1:1', '16:9', etc.
-    resultUrl: string | null;
-    isLoading: boolean;
-    error: string | null;
-    saveStatus: 'idle' | 'saving' | 'saved';
+  sourceFile: File | null;
+  previewUrl: string | null;
+  scale: number; // Percentage
+  crop: { x: number, y: number, width: number, height: number } | null; // In percentage
+  aspectRatio: string; // 'free', '1:1', '16:9', etc.
+  resultUrl: string | null;
+  isLoading: boolean;
+  error: string | null;
+  saveStatus: 'idle' | 'saving' | 'saved';
 }
 
 export interface VideoUtilsState {
-    videoFile: File | null;
-    extractedFrame: string | null;
-    extractedFrameSaveStatus: 'idle' | 'saving' | 'saved';
-    colorPicker: ColorPickerState;
-    resizeCrop: ResizeCropState;
+  videoFile: File | null;
+  extractedFrame: string | null;
+  extractedFrameSaveStatus: 'idle' | 'saving' | 'saved';
+  colorPicker: ColorPickerState;
+  resizeCrop: ResizeCropState;
 }
 
 export interface PromptGenState {
-    image: File | null;
-    prompt: string;
-    promptSaveStatus: 'idle' | 'saving' | 'saved';
-    bgImage: File | null;
-    bgPrompt: string;
-    bgPromptSaveStatus: 'idle' | 'saving' | 'saved';
-    subjectImage: File | null;
-    subjectPrompt: string;
-    subjectPromptSaveStatus: 'idle' | 'saving' | 'saved';
-    soupPrompt: string;
-    soupPromptSaveStatus: 'idle' | 'saving' | 'saved';
-    soupHistory: string[];
-    // WAN 2.2 Video Prompt Builder
-    wanVideoImage: File | null;
-    wanVideoBasePrompt: string;
-    wanVideoCategory: 'fantasy' | 'sci-fi' | 'nature' | 'artistic';
-    wanVideoSubject: string;
-    wanVideoAction: string;
-    wanVideoEnvironment: string;
-    wanVideoCameraMove: string;
-    wanVideoStyle: string;
-    wanVideoFinalPrompt: string;
-    wanVideoPromptSaveStatus: 'idle' | 'saving' | 'saved';
-    // Qwen Image Prompt Builder
-    qwenTitle: string;
-    qwenUseTextInImage: boolean;
-    qwenTextPosition: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
-    qwenTextContent: string;
-    qwenTextStyle: string;
-    qwenStyleModifiers: string;
-    qwenFinalPrompt: string;
-    qwenPromptSaveStatus: 'idle' | 'saving' | 'saved';
+  image: File | null;
+  prompt: string;
+  promptSaveStatus: 'idle' | 'saving' | 'saved';
+  bgImage: File | null;
+  bgPrompt: string;
+  bgPromptSaveStatus: 'idle' | 'saving' | 'saved';
+  subjectImage: File | null;
+  subjectPrompt: string;
+  subjectPromptSaveStatus: 'idle' | 'saving' | 'saved';
+  soupPrompt: string;
+  soupPromptSaveStatus: 'idle' | 'saving' | 'saved';
+  soupHistory: string[];
+  // WAN 2.2 Video Prompt Builder
+  wanVideoImage: File | null;
+  wanVideoBasePrompt: string;
+  wanVideoCategory: 'fantasy' | 'sci-fi' | 'nature' | 'artistic';
+  wanVideoSubject: string;
+  wanVideoAction: string;
+  wanVideoEnvironment: string;
+  wanVideoCameraMove: string;
+  wanVideoStyle: string;
+  wanVideoFinalPrompt: string;
+  wanVideoPromptSaveStatus: 'idle' | 'saving' | 'saved';
+  // Qwen Image Prompt Builder
+  qwenTitle: string;
+  qwenUseTextInImage: boolean;
+  qwenTextPosition: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+  qwenTextContent: string;
+  qwenTextStyle: string;
+  qwenStyleModifiers: string;
+  qwenFinalPrompt: string;
+  qwenPromptSaveStatus: 'idle' | 'saving' | 'saved';
 }
 
 export interface LogoThemeState {
-    // Logo Generator State
-    logoPrompt?: string;
-    brandName?: string;
-    slogan?: string;
-    logoStyle?: LogoStyle;
-    fontReferenceImage?: File | null;
-    selectedFont?: LibraryItem | null;
-    referenceItems?: LibraryItem[];
-    selectedPalette?: LibraryItem | null;
-    numLogos?: number;
-    backgroundColor?: LogoBackground;
-    isGeneratingLogos?: boolean;
-    generatedLogos?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
-    logoError?: string | null;
-    
-    // Banner Generator State
-    bannerPrompt?: string;
-    bannerTitle?: string;
-    bannerAspectRatio?: BannerAspectRatio;
-    bannerStyle?: BannerStyle;
-    bannerFontReferenceImage?: File | null;
-    bannerSelectedFont?: LibraryItem | null;
-    bannerReferenceItems?: LibraryItem[];
-    bannerSelectedPalette?: LibraryItem | null;
-    bannerSelectedLogo?: LibraryItem | null;
-    bannerLogoPlacement?: BannerLogoPlacement;
-    numBanners?: number;
-    isGeneratingBanners?: boolean;
-    generatedBanners?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
-    bannerError?: string | null;
+  // Logo Generator State
+  logoPrompt?: string;
+  brandName?: string;
+  slogan?: string;
+  logoStyle?: LogoStyle;
+  fontReferenceImage?: File | null;
+  selectedFont?: LibraryItem | null;
+  referenceItems?: LibraryItem[];
+  selectedPalette?: LibraryItem | null;
+  numLogos?: number;
+  backgroundColor?: LogoBackground;
+  isGeneratingLogos?: boolean;
+  generatedLogos?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
+  logoError?: string | null;
 
-    // Album Cover Generator State
-    albumPrompt?: string;
-    albumTitle?: string;
-    artistName?: string;
-    musicStyle?: MusicStyle;
-    customMusicStyle?: string;
-    albumEra?: AlbumEra;
-    albumMediaType?: AlbumMediaType;
-    addVinylWear?: boolean;
-    albumFontReferenceImage?: File | null;
-    albumSelectedFont?: LibraryItem | null;
-    albumReferenceItems?: LibraryItem[];
-    albumSelectedPalette?: LibraryItem | null;
-    albumSelectedLogo?: LibraryItem | null;
-    numAlbumCovers?: number;
-    isGeneratingAlbumCovers?: boolean;
-    generatedAlbumCovers?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
-    albumCoverError?: string | null;
+  // Banner Generator State
+  bannerPrompt?: string;
+  bannerTitle?: string;
+  bannerAspectRatio?: BannerAspectRatio;
+  bannerStyle?: BannerStyle;
+  bannerFontReferenceImage?: File | null;
+  bannerSelectedFont?: LibraryItem | null;
+  bannerReferenceItems?: LibraryItem[];
+  bannerSelectedPalette?: LibraryItem | null;
+  bannerSelectedLogo?: LibraryItem | null;
+  bannerLogoPlacement?: BannerLogoPlacement;
+  numBanners?: number;
+  isGeneratingBanners?: boolean;
+  generatedBanners?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
+  bannerError?: string | null;
+
+  // Album Cover Generator State
+  albumPrompt?: string;
+  albumTitle?: string;
+  artistName?: string;
+  musicStyle?: MusicStyle;
+  customMusicStyle?: string;
+  albumEra?: AlbumEra;
+  albumMediaType?: AlbumMediaType;
+  addVinylWear?: boolean;
+  albumFontReferenceImage?: File | null;
+  albumSelectedFont?: LibraryItem | null;
+  albumReferenceItems?: LibraryItem[];
+  albumSelectedPalette?: LibraryItem | null;
+  albumSelectedLogo?: LibraryItem | null;
+  numAlbumCovers?: number;
+  isGeneratingAlbumCovers?: boolean;
+  generatedAlbumCovers?: { src: string; saved: 'idle' | 'saving' | 'saved' }[];
+  albumCoverError?: string | null;
 }
 
 export interface AppSliceState {
@@ -526,7 +536,7 @@ export interface AppSliceState {
   comfyUIObjectInfo: any | null;
   versionInfo: VersionInfo | null;
   globalError: { title: string; message: string } | null;
-  
+
   // Modals & Panels
   isSettingsModalOpen: boolean;
   isAdminPanelOpen: boolean;
@@ -622,16 +632,16 @@ export interface VideoSliceState {
   videoEndFrame: File | null;
   generatedVideoUrl: { url: string; saved: 'idle' | 'saving' | 'saved' } | null;
   generationOptionsForSave: GenerationOptions | null;
-  
+
   // Video Utilities
   videoUtilsState: VideoUtilsState;
   activeVideoUtilsSubTab: 'frames' | 'colors' | 'resize-crop';
 }
 
 export interface LibrarySliceState {
-    items: LibraryItem[];
-    status: 'idle' | 'loading' | 'succeeded' | 'failed';
-    error: string | null;
+  items: LibraryItem[];
+  status: 'idle' | 'loading' | 'succeeded' | 'failed';
+  error: string | null;
 }
 
 export interface UploadedFile {

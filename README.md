@@ -1,4 +1,4 @@
-# LAWIZ'S Media Generator v1.56
+# LAWIZ'S Media Generator v1.57
 
 Welcome to LAWIZ'S Media Generator, a powerful and versatile web application designed for creating stunning images and videos using state-of-the-art AI models. This tool provides a unified interface to interact with both Google's Gemini API and a self-hosted ComfyUI backend, offering a wide range of creative possibilities for both novice and advanced users.
 
@@ -63,8 +63,29 @@ Welcome to LAWIZ'S Media Generator, a powerful and versatile web application des
 4.  **Generate:** Click "Generate" to begin processing.
 5.  **View & Save Results:** Results appear in the main content area. Use the overlay buttons to quickly Download or Save, or click an item for a detailed view.
 
+## Installation & Running (Desktop App)
+
+This application is now a standalone Electron desktop app, offering better performance and local integration.
+
+1.  **Install Dependencies:**
+    ```bash
+    npm install
+    ```
+
+2.  **Run in Development Mode:**
+    ```bash
+    npm run electron:dev
+    ```
+
+3.  **Build Executable:**
+    ```bash
+    npm run electron:build
+    ```
+
 ## Setup Requirements
 
--   **Google Gemini API Key:** Required. Configure as an environment variable `API_KEY`. Ensure "HTTP referrer" restrictions are set correctly in Google Cloud Console.
+-   **Google Gemini API Key:** Required.
+    -   **Desktop App:** Enter your key directly in the app's **Settings** menu. It is stored securely on your local machine.
+    -   **Web Mode:** Configure as an environment variable `API_KEY`.
 -   **Google Cloud OAuth Client ID (Optional):** Required for Google Drive sync. Follow the in-app guide to configure this.
--   **ComfyUI Instance (Optional):** Required for ComfyUI features. Configure the URL in the app settings.
+-   **ComfyUI Instance (Optional):** Required for ComfyUI features. The desktop app connects directly to `http://127.0.0.1:8188` (or your custom URL) without CORS configuration.

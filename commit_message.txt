@@ -1,17 +1,19 @@
-feat(ui): Standardize Past Forward UX and Fix Character Gen Stability (v1.56)
+feat(core): Migrate to Electron Desktop App (v1.57)
 
-This release unifies the UI/UX of the "Past Forward" tab with the rest of the application and addresses stability issues in the Character Generator.
+This major release converts the web application into a standalone Electron desktop application, enhancing local integration and security.
 
 **Key Changes:**
 
-*   **Past Forward Overhaul:**
-    *   Removed custom "Polaroid" styling, animations, and non-standard fonts.
-    *   Implemented the standard 2-column layout (Controls left, Results right).
-    *   Replaced custom uploaders and buttons with the shared `ImageUploader` and standard Tailwind components.
-    *   Results are now displayed in a standard grid with hover actions (Download, Save to Library, Regenerate).
+*   **Electron Integration:**
+    *   Wrapped the React application in an Electron container.
+    *   Configured `main` and `preload` scripts for secure IPC communication.
+    *   Added `electron:dev` and `electron:build` scripts for easy development and deployment.
 
-*   **Character Generator Stability:**
-    *   **Fix:** Resolved a state management bug where resetting options or switching tabs would revert the internal `geminiI2iMode` to 'general', causing the Character Generator to malfunction.
-    *   **Fix:** Added exponential backoff retry logic to the Gemini service to handle 429 (Rate Limit) errors more gracefully during parallel character generation.
+*   **Local API Key Management:**
+    *   Implemented secure local storage for the Gemini API Key using `electron-store`.
+    *   Added a UI input in the **Settings** modal to manage the API key directly within the app, removing the dependency on environment variables.
 
-*   **Version Bump:** Updated to v1.56.
+*   **ComfyUI Optimization:**
+    *   Disabled `webSecurity` (CORS) in the Electron main process to allow direct, unrestricted communication with local ComfyUI instances.
+
+*   **Version Bump:** Updated to v1.57.
