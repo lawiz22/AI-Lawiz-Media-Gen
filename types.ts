@@ -82,11 +82,28 @@ export interface GenerationOptions {
   comfySeed?: number;
   comfySeedControl?: 'fixed' | 'increment' | 'decrement' | 'randomize';
   comfySeedIncrement?: number;
+
+  // Refine Feature (T2I SD 1.5)
+  useRefine?: boolean;
+  refineDenoise?: number;
+  refineMegapixels?: number;
+
   comfySdxlUseLora?: boolean;
   comfySdxlLoraName?: string;
   comfySdxlLoraStrength?: number;
 
   comfyFluxGuidance?: number;
+
+  // SD 1.5 LoRA Settings
+  comfySd15UseLora?: boolean;
+  comfySd15Lora1Name?: string;
+  comfySd15Lora1Strength?: number;
+  comfySd15Lora2Name?: string;
+  comfySd15Lora2Strength?: number;
+  comfySd15Lora3Name?: string;
+  comfySd15Lora3Strength?: number;
+  comfySd15Lora4Name?: string;
+  comfySd15Lora4Strength?: number;
 
   // WAN 2.2 specific
   comfyWanHighNoiseModel?: string;
@@ -531,6 +548,7 @@ export interface AppSliceState {
   currentUser: User | null;
   theme: string;
   projectName: string;
+  fontSize: number;
   activeTab: string;
   isComfyUIConnected: boolean | null;
   comfyUIObjectInfo: any | null;
@@ -539,6 +557,7 @@ export interface AppSliceState {
 
   // Modals & Panels
   isSettingsModalOpen: boolean;
+  isVisualSettingsModalOpen: boolean;
   isAdminPanelOpen: boolean;
   isComfyUIHelperOpen: boolean;
   isClothingPickerOpen: boolean;
@@ -573,6 +592,7 @@ export interface AppSliceState {
   isAlbumCoverLogoPickerOpen: boolean;
   isAlbumCoverFontPickerOpen: boolean;
   isMannequinRefPickerOpen: boolean;
+  isRefineSourcePickerOpen: boolean;
   isFontSourcePickerOpen: boolean;
   isMaskPickerOpen: boolean;
   isElementPickerOpen: boolean;

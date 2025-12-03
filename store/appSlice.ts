@@ -5,6 +5,7 @@ const initialState: AppSliceState = {
   currentUser: null,
   theme: 'cyberpunk',
   projectName: 'Project Lawiz 1',
+  fontSize: 14,
   activeTab: 'image-generator',
   isComfyUIConnected: null,
   comfyUIObjectInfo: null,
@@ -13,6 +14,7 @@ const initialState: AppSliceState = {
 
   // Modals & Panels
   isSettingsModalOpen: false,
+  isVisualSettingsModalOpen: false,
   isAdminPanelOpen: false,
   isComfyUIHelperOpen: false,
   isClothingPickerOpen: false,
@@ -46,19 +48,20 @@ const initialState: AppSliceState = {
   isAlbumCoverLogoPickerOpen: false,
   isAlbumCoverFontPickerOpen: false,
   isMannequinRefPickerOpen: false,
+  isRefineSourcePickerOpen: false,
   isFontSourcePickerOpen: false,
   isMaskPickerOpen: false,
   isElementPickerOpen: false,
   isWanVideoImagePickerOpen: false,
   isResizeCropPickerOpen: false,
   isGroupFusionPickerOpen: false,
-  
+
   // Google Drive State
   driveFolder: null,
   isSyncing: false,
   syncMessage: '',
   isDriveConfigured: false,
-  
+
   // Session Token Usage
   sessionTokenUsage: {
     promptTokenCount: 0,
@@ -86,6 +89,10 @@ const appSlice = createSlice({
       state.projectName = action.payload;
       localStorage.setItem('projectName', action.payload);
     },
+    setFontSize: (state, action: PayloadAction<number>) => {
+      state.fontSize = action.payload;
+      localStorage.setItem('fontSize', action.payload.toString());
+    },
     setActiveTab: (state, action: PayloadAction<string>) => {
       state.activeTab = action.payload;
     },
@@ -102,23 +109,23 @@ const appSlice = createSlice({
       state.globalError = action.payload;
     },
     setDriveFolder: (state, action: PayloadAction<DriveFolder | null>) => {
-        state.driveFolder = action.payload;
-        if (action.payload) {
-            localStorage.setItem('drive_folder', JSON.stringify(action.payload));
-        } else {
-            localStorage.removeItem('drive_folder');
-        }
+      state.driveFolder = action.payload;
+      if (action.payload) {
+        localStorage.setItem('drive_folder', JSON.stringify(action.payload));
+      } else {
+        localStorage.removeItem('drive_folder');
+      }
     },
     setIsSyncing: (state, action: PayloadAction<boolean>) => {
-        state.isSyncing = action.payload;
+      state.isSyncing = action.payload;
     },
     setSyncMessage: (state, action: PayloadAction<string>) => {
-        state.syncMessage = action.payload;
+      state.syncMessage = action.payload;
     },
     setIsDriveConfigured: (state, action: PayloadAction<boolean>) => {
-        state.isDriveConfigured = action.payload;
+      state.isDriveConfigured = action.payload;
     },
-    
+
     // Token Usage
     addSessionTokenUsage: (state, action: PayloadAction<{ promptTokenCount: number; candidatesTokenCount: number; totalTokenCount: number }>) => {
       if (action.payload) {
@@ -134,21 +141,23 @@ const appSlice = createSlice({
     // Modal Toggles
     openSettingsModal: state => { state.isSettingsModalOpen = true; },
     closeSettingsModal: state => { state.isSettingsModalOpen = false; },
+    openVisualSettingsModal: state => { state.isVisualSettingsModalOpen = true; },
+    closeVisualSettingsModal: state => { state.isVisualSettingsModalOpen = false; },
     openAdminPanel: state => { state.isAdminPanelOpen = true; },
     closeAdminPanel: state => { state.isAdminPanelOpen = false; },
     openOAuthHelper: state => { state.isOAuthHelperOpen = true; },
     closeOAuthHelper: state => { state.isOAuthHelperOpen = false; },
     openComfyUIHelper: state => { state.isComfyUIHelperOpen = true; },
     closeComfyUIHelper: state => { state.isComfyUIHelperOpen = false; },
-    
+
     // Dynamic Modal Toggler
     // Fix: Narrowed the 'modal' payload type to only accept keys matching the 'is...Open' pattern.
     // This makes the reducer type-safe and resolves downstream type inference errors.
     setModalOpen: (state, action: PayloadAction<{ modal: Extract<keyof AppSliceState, `is${string}Open`>; isOpen: boolean }>) => {
-        const { modal, isOpen } = action.payload;
-        if (modal.startsWith('is') && modal.endsWith('Open')) {
-            (state as any)[modal] = isOpen;
-        }
+      const { modal, isOpen } = action.payload;
+      if (modal.startsWith('is') && modal.endsWith('Open')) {
+        (state as any)[modal] = isOpen;
+      }
     }
   },
 });
@@ -156,6 +165,7 @@ const appSlice = createSlice({
 export const {
   setCurrentUser,
   setTheme,
+  setFontSize,
   setProjectName,
   setActiveTab,
   setIsComfyUIConnected,
@@ -170,6 +180,8 @@ export const {
   resetSessionTokenUsage,
   openSettingsModal,
   closeSettingsModal,
+  openVisualSettingsModal,
+  closeVisualSettingsModal,
   openAdminPanel,
   closeAdminPanel,
   openOAuthHelper,

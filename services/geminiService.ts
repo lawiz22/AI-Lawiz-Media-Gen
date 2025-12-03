@@ -723,3 +723,28 @@ export const generateDecadeImage = async (uploadedImage: string, prompt: string)
     }
     throw new Error("Failed to generate image.");
 };
+
+export const generatePromptFromImage = async (imageFile: File): Promise<string> => {
+    const ai = getGenAIInstance();
+    const imagePart = await fileToGenerativePart(imageFile);
+    const instruction = "Your response MUST be a very simple, comma-separated list of keywords. Do not use sentences. Start the prompt directly without any preamble. Describe this image in detail focusing on the subject, clothing, background, lighting, and style.";
+
+    const result = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: {
+            parts: [
+                imagePart,
+                { text: instruction }
+            ]
+        },
+        config: { temperature: 0.3 }
+    });
+
+    if (result.candidates && result.candidates[0]?.content?.parts) {
+        const textPart = result.candidates[0].content.parts.find(p => p.text);
+        if (textPart && textPart.text) {
+            return textPart.text.trim().replace(/['"`]/g, '');
+        }
+    }
+    throw new Error("Failed to generate prompt from image.");
+};

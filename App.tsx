@@ -1,11 +1,10 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
 import {
-    setCurrentUser, setTheme, setProjectName, setActiveTab, setIsComfyUIConnected, setComfyUIObjectInfo, setVersionInfo,
+    setCurrentUser, setTheme, setFontSize, setProjectName, setActiveTab, setIsComfyUIConnected, setComfyUIObjectInfo, setVersionInfo,
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
-    openSettingsModal, closeSettingsModal, closeAdminPanel,
+    openSettingsModal, closeSettingsModal, openVisualSettingsModal, closeVisualSettingsModal, closeAdminPanel,
     openOAuthHelper, closeOAuthHelper, openComfyUIHelper, closeComfyUIHelper,
     setModalOpen, addSessionTokenUsage, resetSessionTokenUsage
 } from './store/appSlice';
@@ -36,7 +35,7 @@ import { setUploadedFiles } from './store/groupPhotoFusionSlice';
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile, Provider } from './types';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
-import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage, updateGeminiApiKey, getApiKey } from './services/geminiService';
+import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage, updateGeminiApiKey, getApiKey, generatePromptFromImage } from './services/geminiService';
 import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution } from './services/comfyUIService';
 import { Login } from './components/Login';
 import { Header } from './components/Header';
@@ -55,7 +54,12 @@ import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
 import { ComfyUIConnectionHelperModal } from './components/ComfyUIConnectionHelperModal';
+import { VisualSettingsModal } from './components/VisualSettingsModal';
 import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon } from './components/icons';
+import { ImageGeneratorHeader } from './components/ImageGeneratorHeader';
+import { ActionControlPanel } from './components/ActionControlPanel';
+import { SamplerSettingsPanel } from './components/SamplerSettingsPanel';
+import { LoraSettingsPanel } from './components/LoraSettingsPanel';
 import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
 import GroupPhotoFusionPanel from './components/groupPhotoFusion/GroupPhotoFusionPanel';
@@ -69,11 +73,13 @@ const App: React.FC = () => {
     // --- Local State ---
     const [comfyUrlForHelper, setComfyUrlForHelper] = useState('');
     const [localGeminiKey, setLocalGeminiKey] = useState('');
+    const [isGeneratingRefinePrompt, setIsGeneratingRefinePrompt] = useState(false);
+    const [generationTimes, setGenerationTimes] = useState<Record<string, number | null>>({});
 
     // --- App State (from appSlice) ---
     const {
-        currentUser, theme, projectName, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
-        isSettingsModalOpen, isOAuthHelperOpen, isComfyUIHelperOpen,
+        currentUser, theme, projectName, fontSize, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
+        isSettingsModalOpen, isVisualSettingsModalOpen, isOAuthHelperOpen, isComfyUIHelperOpen,
         isClothingPickerOpen, isBackgroundPickerOpen, isPosePickerOpen, isColorImagePickerOpen, isVideoUtilsPickerOpen,
         isStartFramePickerOpen, isEndFramePickerOpen, isLogoRefPickerOpen, isLogoPalettePickerOpen, isLogoFontPickerOpen,
         isPromptGenImagePickerOpen, isPromptGenBgImagePickerOpen, isPromptGenSubjectImagePickerOpen,
@@ -81,7 +87,7 @@ const App: React.FC = () => {
         isGeminiVideoSourcePickerOpen, isClothesSourcePickerOpen, isObjectSourcePickerOpen, isPoseSourcePickerOpen,
         isBannerRefPickerOpen, isBannerPalettePickerOpen, isBannerLogoPickerOpen, isBannerFontPickerOpen,
         isAlbumCoverRefPickerOpen, isAlbumCoverPalettePickerOpen, isAlbumCoverLogoPickerOpen, isAlbumCoverFontPickerOpen,
-        isMannequinRefPickerOpen, isFontSourcePickerOpen, isMaskPickerOpen, isElementPickerOpen,
+        isMannequinRefPickerOpen, isRefineSourcePickerOpen, isFontSourcePickerOpen, isMaskPickerOpen, isElementPickerOpen,
         isWanVideoImagePickerOpen,
         isResizeCropPickerOpen,
         isGroupFusionPickerOpen,
@@ -179,6 +185,9 @@ const App: React.FC = () => {
         const savedUser = sessionStorage.getItem('currentUser');
         if (savedUser) dispatch(setCurrentUser(JSON.parse(savedUser)));
 
+        const savedFontSize = localStorage.getItem('fontSize');
+        if (savedFontSize) dispatch(setFontSize(parseInt(savedFontSize)));
+
         const savedComfyUrl = localStorage.getItem('comfyui_url') || '';
         if (savedComfyUrl) {
             checkComfyUIConnection(savedComfyUrl);
@@ -226,6 +235,10 @@ const App: React.FC = () => {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('theme', theme);
     }, [theme]);
+
+    useEffect(() => {
+        document.documentElement.style.fontSize = `${fontSize}px`;
+    }, [fontSize]);
 
     const handleTabChange = (tabId: string) => {
         dispatch(setActiveTab(tabId));
@@ -282,6 +295,9 @@ const App: React.FC = () => {
     }, [dispatch]);
 
     const handleGenerate = async () => {
+        const startTime = performance.now();
+        setGenerationTimes(prev => ({ ...prev, [activeTab]: null }));
+
         dispatch(setLoadingState({ isLoading: true }));
         dispatch(setGeneratedImages({ tabId: activeTab, images: [] }));
         dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: null }));
@@ -312,7 +328,7 @@ const App: React.FC = () => {
                 // ComfyUI currently uses the main options object, Character Gen uses Gemini
                 const comfyResult = await generateComfyUIPortraits(sourceImage, options, localUpdateProgress);
                 result = {
-                    images: comfyResult.images.map(src => ({ src, usageMetadata: undefined })),
+                    images: comfyResult.images.map(img => ({ src: img.src, seed: img.seed, usageMetadata: undefined })),
                     finalPrompt: comfyResult.finalPrompt
                 };
             } else {
@@ -321,6 +337,9 @@ const App: React.FC = () => {
 
             dispatch(setGeneratedImages({ tabId: activeTab, images: result.images }));
             dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: result.finalPrompt }));
+
+            const endTime = performance.now();
+            setGenerationTimes(prev => ({ ...prev, [activeTab]: (endTime - startTime) / 1000 }));
 
             if (result.images) {
                 for (const image of result.images) {
@@ -533,6 +552,27 @@ const App: React.FC = () => {
             ? 'gemini' // These tools are Gemini-only
             : options.provider;
 
+    const availableLoras = useMemo(() => {
+        const getModelListFromInfo = (widgetInfo: any): string[] => {
+            if (Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0])) {
+                return widgetInfo[0] || [];
+            }
+            return [];
+        };
+        const sources = [
+            comfyUIObjectInfo?.LoraLoader?.input?.required?.lora_name,
+            comfyUIObjectInfo?.LoraLoaderModelOnly?.input?.required?.lora_name,
+        ];
+        const modelSet = new Set<string>();
+        for (const source of sources) {
+            const list = getModelListFromInfo(source);
+            if (list.length > 0) {
+                list.forEach(model => modelSet.add(model));
+            }
+        }
+        return Array.from(modelSet);
+    }, [comfyUIObjectInfo]);
+
     if (!currentUser) {
         return <Login onLogin={handleLogin} />;
     }
@@ -547,6 +587,7 @@ const App: React.FC = () => {
                 projectName={projectName}
                 onProjectNameChange={handleProjectNameChange}
                 onOpenSettingsModal={() => dispatch(openSettingsModal())}
+                onOpenVisualSettings={() => dispatch(openVisualSettingsModal())}
                 onOpenComfyUIHelper={() => dispatch(openComfyUIHelper())}
                 isComfyUIConnected={isComfyUIConnected}
                 versionInfo={versionInfo}
@@ -597,27 +638,36 @@ const App: React.FC = () => {
                     testedUrl={comfyUrlForHelper || localStorage.getItem('comfyui_url') || 'http://127.0.0.1:8188'}
                 />
 
+                <VisualSettingsModal
+                    isOpen={isVisualSettingsModalOpen}
+                    onClose={() => dispatch(closeVisualSettingsModal())}
+                    currentTheme={theme}
+                    setTheme={handleThemeChange}
+                    fontSize={fontSize}
+                    setFontSize={(size) => dispatch(setFontSize(size))}
+                />
+
                 {/* Navigation Tabs */}
-                <div className="flex flex-wrap justify-center gap-2 mb-8 sticky top-[80px] z-[9] bg-bg-primary/90 backdrop-blur-sm p-2 rounded-xl border border-border-primary shadow-sm">
+                <div className="flex flex-nowrap justify-center gap-0.5 mb-4 sticky top-[60px] z-[9] bg-bg-primary/95 backdrop-blur-md p-1 rounded-lg border border-border-primary shadow-sm mx-auto w-fit max-w-full">
                     {[
-                        { id: 'image-generator', label: 'Image Generator', icon: <ImageGeneratorIcon className="w-5 h-5" /> },
-                        { id: 'character-generator', label: 'Character Generator', icon: <CharacterIcon className="w-5 h-5" /> },
-                        { id: 'past-forward', label: 'Past Forward', icon: <PastForwardIcon className="w-5 h-5" /> },
-                        { id: 'group-photo-fusion', label: 'Group Photo Fusion', icon: <GroupPhotoFusionIcon className="w-5 h-5" /> },
-                        { id: 'video-generator', label: 'Video Generator', icon: <VideoIcon className="w-5 h-5" /> },
-                        { id: 'prompt-generator', label: 'Prompt Tools', icon: <PromptIcon className="w-5 h-5" /> },
-                        { id: 'extractor-tools', label: 'Extractor Tools', icon: <ExtractorIcon className="w-5 h-5" /> },
-                        { id: 'logo-theme-generator', label: 'Logo & Theme', icon: <SwatchIcon className="w-5 h-5" /> },
-                        { id: 'video-utils', label: 'Media Tools', icon: <VideoUtilsIcon className="w-5 h-5" /> },
-                        { id: 'library', label: 'Library', icon: <LibraryIcon className="w-5 h-5" /> },
-                        ...(currentUser.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: <AdminIcon className="w-5 h-5" /> }] : [])
+                        { id: 'image-generator', label: 'Image Gen', icon: <ImageGeneratorIcon className="w-4 h-4" /> },
+                        { id: 'character-generator', label: 'Character', icon: <CharacterIcon className="w-4 h-4" /> },
+                        { id: 'video-generator', label: 'Video', icon: <VideoIcon className="w-4 h-4" /> },
+                        { id: 'prompt-generator', label: 'Prompt', icon: <PromptIcon className="w-4 h-4" /> },
+                        { id: 'extractor-tools', label: 'Extractor', icon: <ExtractorIcon className="w-4 h-4" /> },
+                        { id: 'group-photo-fusion', label: 'Fusion', icon: <GroupPhotoFusionIcon className="w-4 h-4" /> },
+                        { id: 'past-forward', label: 'PastForward', icon: <PastForwardIcon className="w-4 h-4" /> },
+                        { id: 'logo-theme-generator', label: 'Logo', icon: <SwatchIcon className="w-4 h-4" /> },
+                        { id: 'video-utils', label: 'Tools', icon: <VideoUtilsIcon className="w-4 h-4" /> },
+                        { id: 'library', label: 'Library', icon: <LibraryIcon className="w-4 h-4" /> },
+                        ...(currentUser.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: <AdminIcon className="w-4 h-4" /> }] : [])
                     ].map((tab) => (
                         <button
                             key={tab.id}
                             onClick={() => handleTabChange(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${activeTab === tab.id
-                                    ? 'bg-accent text-accent-text shadow-md transform scale-105'
-                                    : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary'
+                            className={`flex items-center gap-1 px-2 py-1 rounded-md font-medium transition-all duration-200 text-[10px] md:text-xs whitespace-nowrap ${activeTab === tab.id
+                                ? 'bg-accent text-accent-text shadow-sm'
+                                : 'bg-transparent text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
                                 }`}
                         >
                             {tab.icon}
@@ -629,64 +679,195 @@ const App: React.FC = () => {
                 {/* Content Views - Centered Wrapper */}
                 <div className="w-full max-w-7xl mx-auto">
                     {activeTab === 'image-generator' && (
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                            <div className="lg:col-span-1 space-y-8">
-                                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h2 className="text-xl font-bold text-accent">1. Source & Context</h2>
+                        <>
+                            <ImageGeneratorHeader
+                                options={currentOptions}
+                                updateOptions={handleUpdateOptions}
+                                generationMode={generationMode}
+                                setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
+                                isDisabled={isLoading}
+                                comfyModels={
+                                    comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || []
+                                }
+                            />
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                                <div className="lg:col-span-1 space-y-8">
+                                    <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h2 className="text-xl font-bold text-accent">
+                                                {generationMode === 't2i' && currentOptions.comfyModelType === 'sd1.5'
+                                                    ? '1. Refine (Optional)'
+                                                    : '1. Source & Context'}
+                                            </h2>
+                                        </div>
+
+                                        {generationMode === 't2i' && currentOptions.comfyModelType === 'sd1.5' ? (
+                                            <div className="space-y-4">
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        id="useRefine"
+                                                        checked={currentOptions.useRefine || false}
+                                                        onChange={(e) => dispatch(updateOptions({ useRefine: e.target.checked }))}
+                                                        className="w-5 h-5 rounded border-border-primary text-accent focus:ring-accent"
+                                                    />
+                                                    <label htmlFor="useRefine" className="text-sm font-medium text-text-primary cursor-pointer">
+                                                        Enable Refine (Image-to-Image)
+                                                    </label>
+                                                </div>
+
+                                                {currentOptions.useRefine && (
+                                                    <div className="animate-fade-in space-y-4">
+                                                        <div className="flex items-center justify-between">
+                                                            <label className="text-sm font-medium text-text-secondary">Source Image</label>
+                                                            <button
+                                                                onClick={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: true }))}
+                                                                className="p-2 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
+                                                                title="Load from Library"
+                                                            >
+                                                                <LibraryIcon className="w-5 h-5" />
+                                                            </button>
+                                                        </div>
+                                                        <ImageUploader
+                                                            label="Upload Source Image to Refine"
+                                                            id="refine-source-upload"
+                                                            onImageUpload={(file) => dispatch(setSourceImage(file))}
+                                                            sourceFile={sourceImage}
+                                                        />
+
+                                                        <div>
+                                                            <div className="flex justify-between mb-1">
+                                                                <label className="text-sm font-medium text-text-secondary">Denoise Strength</label>
+                                                                <span className="text-sm font-bold text-accent">{currentOptions.refineDenoise || 0.5}</span>
+                                                            </div>
+                                                            <input
+                                                                type="range"
+                                                                min="0.01"
+                                                                max="1.0"
+                                                                step="0.01"
+                                                                value={currentOptions.refineDenoise || 0.5}
+                                                                onChange={(e) => dispatch(updateOptions({ refineDenoise: parseFloat(e.target.value) }))}
+                                                                className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer accent-accent"
+                                                            />
+                                                            <p className="text-xs text-text-muted mt-1">Lower values keep more of the original image structure.</p>
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex justify-between mb-1">
+                                                                <label className="text-sm font-medium text-text-secondary">Megapixels (Resize)</label>
+                                                                <span className="text-sm font-bold text-accent">{currentOptions.refineMegapixels || 0.5} MP</span>
+                                                            </div>
+                                                            <input
+                                                                type="range"
+                                                                min="0.1"
+                                                                max="2.0"
+                                                                step="0.1"
+                                                                value={currentOptions.refineMegapixels || 0.5}
+                                                                onChange={(e) => dispatch(updateOptions({ refineMegapixels: parseFloat(e.target.value) }))}
+                                                                className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer accent-accent"
+                                                            />
+                                                            <p className="text-xs text-text-muted mt-1">Target resolution in megapixels (0.5 is approx 700x700).</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <ImageUploader
+                                                label="Upload Source Image (Optional for T2I)"
+                                                id="main-source-upload"
+                                                onImageUpload={(file) => dispatch(setSourceImage(file))}
+                                                sourceFile={sourceImage}
+                                            />
+                                        )}
                                     </div>
-                                    <ImageUploader
-                                        label="Upload Source Image (Optional for T2I)"
-                                        id="main-source-upload"
-                                        onImageUpload={(file) => dispatch(setSourceImage(file))}
-                                        sourceFile={sourceImage}
-                                    />
-                                </div>
-                                <OptionsPanel
-                                    options={currentOptions}
-                                    setOptions={handleSetOptions}
-                                    updateOptions={handleUpdateOptions}
-                                    generationMode={generationMode}
-                                    setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
-                                    previewedBackgroundImage={previewedBackgroundImage}
-                                    setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
-                                    previewedClothingImage={previewedClothingImage}
-                                    setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
-                                    onGenerate={handleGenerate}
-                                    onReset={handleReset}
-                                    onGeneratePrompt={() => {/* Implementation in PromptGeneratorPanel usually */ }}
-                                    onExportWorkflow={() => exportComfyUIWorkflow(options, sourceImage)}
-                                    isDisabled={isLoading}
-                                    isReady={isReadyToGenerate}
-                                    isGeneratingPrompt={false} // State handled in prompt gen panel mainly
-                                    comfyUIObjectInfo={comfyUIObjectInfo}
-                                    comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
-                                    sourceImage={sourceImage}
-                                    activeTab={activeTab}
-                                    maskImage={maskImage}
-                                    setMaskImage={(file) => dispatch(setMaskImage(file))}
-                                    elementImages={elementImages}
-                                    setElementImages={(files) => dispatch(setElementImages(files))}
-                                    onOpenMaskPicker={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: true }))}
-                                    onOpenElementPicker={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: true }))}
-                                />
-                            </div>
-                            <div className="lg:col-span-2 space-y-8">
-                                {isLoading ? (
-                                    <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />
-                                ) : (
-                                    <ImageGrid
-                                        images={generatedContent['image-generator']?.images || []}
-                                        onSendToI2I={handleSendToI2I}
-                                        onSendToCharacter={handleSendToCharacter}
-                                        lastUsedPrompt={generatedContent['image-generator']?.lastUsedPrompt}
+                                    <OptionsPanel
                                         options={currentOptions}
+                                        setOptions={handleSetOptions}
+                                        updateOptions={handleUpdateOptions}
+                                        generationMode={generationMode}
+                                        setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
+                                        previewedBackgroundImage={previewedBackgroundImage}
+                                        setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
+                                        previewedClothingImage={previewedClothingImage}
+                                        setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
+                                        onGenerate={handleGenerate}
+                                        onReset={handleReset}
+                                        onGeneratePrompt={async () => {
+                                            if (!sourceImage) return;
+
+                                            setIsGeneratingRefinePrompt(true);
+                                            try {
+                                                const prompt = await generatePromptFromImage(sourceImage);
+                                                dispatch(updateOptions({ comfyPrompt: prompt }));
+                                            } catch (error) {
+                                                console.error("Failed to generate prompt:", error);
+                                                dispatch(setGlobalError({ title: "Prompt Generation Failed", message: "Could not generate prompt from image." }));
+                                            } finally {
+                                                setIsGeneratingRefinePrompt(false);
+                                            }
+                                        }}
+                                        onExportWorkflow={() => exportComfyUIWorkflow(options, sourceImage)}
+                                        isDisabled={isLoading}
+                                        isReady={isReadyToGenerate}
+                                        isGeneratingPrompt={isGeneratingRefinePrompt}
+                                        comfyUIObjectInfo={comfyUIObjectInfo}
+                                        comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                                         sourceImage={sourceImage}
                                         activeTab={activeTab}
+                                        maskImage={maskImage}
+                                        setMaskImage={(file) => dispatch(setMaskImage(file))}
+                                        elementImages={elementImages}
+                                        setElementImages={(files) => dispatch(setElementImages(files))}
+                                        onOpenMaskPicker={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: true }))}
+                                        onOpenElementPicker={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: true }))}
+                                        hideGeneralSettings={true}
                                     />
-                                )}
+                                </div>
+                                <div className="lg:col-span-2 space-y-8">
+                                    <ActionControlPanel
+                                        options={currentOptions}
+                                        generationMode={generationMode}
+                                        onGenerate={handleGenerate}
+                                        onReset={handleReset}
+                                        onExportWorkflow={() => {
+                                            const generatedImages = generatedContent['image-generator']?.images || [];
+                                            const lastImage = generatedImages.length > 0 ? generatedImages[generatedImages.length - 1] as any : null;
+                                            const optionsToExport = lastImage && lastImage.seed !== undefined
+                                                ? { ...currentOptions, comfySeed: lastImage.seed }
+                                                : currentOptions;
+                                            exportComfyUIWorkflow(optionsToExport, sourceImage);
+                                        }}
+                                        isReady={isReadyToGenerate}
+                                        isDisabled={isLoading}
+                                    />
+                                    {isLoading ? (
+                                        <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />
+                                    ) : (
+                                        <ImageGrid
+                                            images={generatedContent['image-generator']?.images || []}
+                                            onSendToI2I={handleSendToI2I}
+                                            onSendToCharacter={handleSendToCharacter}
+                                            lastUsedPrompt={generatedContent['image-generator']?.lastUsedPrompt}
+                                            options={currentOptions}
+                                            sourceImage={sourceImage}
+                                            activeTab={activeTab}
+                                            generationTime={generationTimes[activeTab]}
+                                        />
+                                    )}
+                                    <LoraSettingsPanel
+                                        options={currentOptions}
+                                        updateOptions={(opts) => dispatch(updateOptions(opts))}
+                                        isDisabled={isLoading}
+                                        availableLoras={availableLoras}
+                                    />
+                                    <SamplerSettingsPanel
+                                        options={currentOptions}
+                                        updateOptions={(opts) => dispatch(updateOptions(opts))}
+                                        isDisabled={isLoading}
+                                        comfyUIObjectInfo={comfyUIObjectInfo}
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        </>
                     )}
 
                     {activeTab === 'character-generator' && (
@@ -702,7 +883,7 @@ const App: React.FC = () => {
                                         <label className="block text-sm font-medium text-text-secondary mb-1">Character Name</label>
                                         <div className="flex gap-2">
                                             <input type="text" value={characterName} onChange={(e) => dispatch(setCharacterName(e.target.value))} placeholder="Enter or Auto-Generate" className="flex-grow bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm" />
-                                            <button onClick={() => dispatch(setShouldGenerateCharacterName(!shouldGenerateCharacterName))} className={`p-2 rounded-md border ${shouldGenerateCharacterName ? 'bg-accent text-accent-text border-accent' : 'bg-bg-tertiary text-text-secondary border-border-primary'}`} title="Auto-generate name"><CharacterIcon className="w-5 h-5" /></button>
+                                            <button onClick={() => dispatch(setShouldGenerateCharacterName(!shouldGenerateCharacterName))} className={`p - 2 rounded - md border ${shouldGenerateCharacterName ? 'bg-accent text-accent-text border-accent' : 'bg-bg-tertiary text-text-secondary border-border-primary'} `} title="Auto-generate name"><CharacterIcon className="w-5 h-5" /></button>
                                         </div>
                                     </div>
                                 </div>
@@ -759,6 +940,7 @@ const App: React.FC = () => {
                                         sourceImage={sourceImage}
                                         characterName={characterName}
                                         activeTab={activeTab}
+                                        generationTime={generationTimes[activeTab]}
                                     />
                                 )}
                             </div>
@@ -943,6 +1125,7 @@ const App: React.FC = () => {
             />
             {/* ... Other pickers ... */}
             <LibraryPickerModal isOpen={isCharacterSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "char_source.jpg", { type: b.type }))); }} filter="character" />
+            <LibraryPickerModal isOpen={isRefineSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "refine_source.jpg", { type: b.type }))); }} filter="image" />
             <LibraryPickerModal isOpen={isMaskPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setMaskImage(new File([b], "mask.png", { type: b.type }))); }} filter="image" />
             <LibraryPickerModal isOpen={isElementPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setElementImages([...elementImages, new File([b], `element_${Date.now()}.jpg`, { type: b.type })])); }} filter={['image', 'object', 'clothes']} />
             <LibraryPickerModal isOpen={isPromptGenImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ image: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />

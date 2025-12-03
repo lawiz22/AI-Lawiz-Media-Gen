@@ -445,6 +445,26 @@ const executeWorkflow = async (
     });
 };
 
+// Helper to upload image to ComfyUI
+const uploadImageToComfyUI = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('overwrite', 'true');
+
+    const comfyUrl = localStorage.getItem('comfyui_url') || 'http://127.0.0.1:8188';
+    const response = await fetch(`${comfyUrl}/upload/image`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to upload image to ComfyUI: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.name;
+};
+
 const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null): Promise<any> => {
     let workflow;
 
@@ -462,12 +482,12 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
                 if (identifier === 'Negative Prompt') {
                     return title.includes('negative prompt') || title.includes('(negative)') || title === 'negative';
                 }
-
-                return title.includes(identifier.toLowerCase());
+                return title === identifier.toLowerCase();
+            } else if (by === 'class_type') {
+                return node.class_type === identifier;
+            } else {
+                return k === identifier;
             }
-            if (by === 'class_type') return node.class_type.toLowerCase().startsWith(identifier.toLowerCase());
-            if (by === 'key') return k === identifier;
-            return false;
         });
     };
 
@@ -509,19 +529,111 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
 
     if (['sd1.5', 'sdxl', 'flux'].includes(options.comfyModelType!)) {
         const ckptLoaderKey = findNodeKey(workflow, "CheckpointLoaderSimple", 'class_type');
-        if (ckptLoaderKey) workflow[ckptLoaderKey].inputs.ckpt_name = options.comfyModel;
+        if (ckptLoaderKey && options.comfyModel) workflow[ckptLoaderKey].inputs.ckpt_name = options.comfyModel;
+
+        // SD 1.5 LoRA Injection
+        let currentModelNodeId = ckptLoaderKey;
+        let currentClipNodeId = ckptLoaderKey;
+
+        if (options.comfyModelType === 'sd1.5' && options.comfySd15UseLora) {
+            for (let i = 1; i <= 4; i++) {
+                const loraName = options[`comfySd15Lora${i}Name` as keyof GenerationOptions] as string;
+                const loraStrength = options[`comfySd15Lora${i}Strength` as keyof GenerationOptions] as number;
+
+                if (loraName) {
+                    const loraNodeId = `lora_${i}`;
+                    const loraNode = {
+                        "inputs": {
+                            "lora_name": loraName,
+                            "strength_model": loraStrength,
+                            "strength_clip": loraStrength,
+                            "model": [currentModelNodeId, 0],
+                            "clip": [currentClipNodeId, 1]
+                        },
+                        "class_type": "LoraLoader",
+                        "_meta": { "title": `LoRA ${i}` }
+                    };
+                    workflow[loraNodeId] = loraNode;
+                    currentModelNodeId = loraNodeId;
+                    currentClipNodeId = loraNodeId;
+                }
+            }
+        }
 
         const ksamplerKey = findNodeKey(workflow, "KSampler", 'class_type');
         if (ksamplerKey) {
             const ksampler = workflow[ksamplerKey];
+            ksampler.inputs.model = [currentModelNodeId, 0]; // Connect model from last LoRA or Checkpoint
+
+            // Connect CLIP to Positive/Negative prompts
+            if (posPromptKey) workflow[posPromptKey].inputs.clip = [currentClipNodeId, 1];
+            if (negPromptKey) workflow[negPromptKey].inputs.clip = [currentClipNodeId, 1];
+
             ksampler.inputs.steps = options.comfySteps;
             ksampler.inputs.cfg = options.comfyCfg;
             ksampler.inputs.sampler_name = options.comfySampler;
             ksampler.inputs.scheduler = options.comfyScheduler;
+
+            // Ensure seed is set and fixed for export/reproducibility
+            if (options.comfySeed !== undefined) {
+                ksampler.inputs.seed = options.comfySeed;
+                ksampler.inputs.control_after_generate = "fixed";
+            } else {
+                // If no seed provided, ensure we have a random one but set to fixed so it doesn't change on load
+                ksampler.inputs.seed = Math.floor(Math.random() * 1e15);
+                ksampler.inputs.control_after_generate = "fixed";
+            }
         }
 
         const latentKey = findNodeKey(workflow, "EmptyLatentImage", 'class_type');
-        if (latentKey) {
+
+        // Refine Feature Logic (SD 1.5 only for now)
+        if (options.comfyModelType === 'sd1.5' && options.useRefine && sourceFile) {
+            // Upload the source image
+            const filename = await uploadImageToComfyUI(sourceFile);
+
+            // Add LoadImage node
+            const loadImageNode = {
+                "inputs": { "image": filename },
+                "class_type": "LoadImage",
+                "_meta": { "title": "Load Image (Refine)" }
+            };
+            workflow["100"] = loadImageNode; // Using ID 100 to avoid conflicts
+
+            // Add ImageScaleToTotalPixels node
+            const scaleNode = {
+                "inputs": {
+                    "upscale_method": "lanczos",
+                    "megapixels": options.refineMegapixels || 0.5,
+                    "image": ["100", 0]
+                },
+                "class_type": "ImageScaleToTotalPixels",
+                "_meta": { "title": "Scale Image" }
+            };
+            workflow["101"] = scaleNode;
+
+            // Add VAEEncode node
+            const vaeEncodeNode = {
+                "inputs": {
+                    "pixels": ["101", 0],
+                    "vae": [ckptLoaderKey, 2]
+                },
+                "class_type": "VAEEncode",
+                "_meta": { "title": "VAE Encode" }
+            };
+            workflow["102"] = vaeEncodeNode;
+
+            // Connect VAEEncode to KSampler
+            if (ksamplerKey) {
+                workflow[ksamplerKey].inputs.latent_image = ["102", 0];
+                workflow[ksamplerKey].inputs.denoise = options.refineDenoise || 0.5;
+            }
+
+            // Remove EmptyLatentImage if it exists, as we are using VAEEncode
+            if (latentKey) delete workflow[latentKey];
+
+        } else if (latentKey) {
+            // Standard T2I Logic
             const [w, h] = options.aspectRatio.split(':').map(Number);
             const isSD15 = options.comfyModelType === 'sd1.5';
             const baseSize = isSD15 ? 512 : 1024;
@@ -756,8 +868,8 @@ export const generateComfyUIPortraits = async (
     sourceImage: File | null,
     options: GenerationOptions,
     updateProgress: (message: string, value: number) => void
-): Promise<{ images: string[]; finalPrompt: string }> => {
-    const allImages: string[] = [];
+): Promise<{ images: { src: string, seed: number }[]; finalPrompt: string }> => {
+    const allImages: { src: string, seed: number }[] = [];
     const baseWorkflow = await buildWorkflow(options, sourceImage);
 
     const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf'].includes(options.comfyModelType!);
@@ -768,9 +880,12 @@ export const generateComfyUIPortraits = async (
     for (let i = 0; i < numImages; i++) {
         const currentWorkflow = JSON.parse(JSON.stringify(baseWorkflow));
 
+        // Capture the seed used for this iteration before it gets updated for the next one
+        const seedForThisImage = currentSeed;
+
         const samplerKey = Object.keys(currentWorkflow).find(k => currentWorkflow[k].class_type.toLowerCase().startsWith('ksampler'));
         if (samplerKey) {
-            currentWorkflow[samplerKey].inputs.seed = currentSeed;
+            currentWorkflow[samplerKey].inputs.seed = seedForThisImage;
 
             const seedControl = options.comfyModelType === 'sd1.5' ? (options.comfySeedControl || 'randomize') : 'randomize';
             const seedIncrement = options.comfySeedIncrement || 1;
@@ -799,12 +914,15 @@ export const generateComfyUIPortraits = async (
 
         try {
             const result = await executeWorkflow(currentWorkflow, progressWrapper, isLongJob);
-            allImages.push(...result.images);
+            result.images.forEach(img => allImages.push({ src: img, seed: seedForThisImage }));
         } catch (error) {
             console.error(`Error generating image ${i + 1}:`, error);
             throw error;
         }
     }
+
+    // RE-WRITING THE FUNCTION CONTENT FOR REPLACEMENT
+    // I will capture the seed used before modifying it for the next iteration.
 
     return { images: allImages, finalPrompt: options.comfyPrompt || '' };
 };
@@ -962,7 +1080,7 @@ export const generateComfyUIVideo = async (
 
 export const exportComfyUIWorkflow = async (options: GenerationOptions, sourceFile: File | null): Promise<void> => {
     const workflow = await buildWorkflow(options, sourceFile);
-    const jsonString = JSON.stringify({ prompt: workflow }, null, 2);
+    const jsonString = JSON.stringify(workflow, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

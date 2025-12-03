@@ -45,136 +45,136 @@ export const POSES = [
 ];
 
 export const PRESET_POSES = [
-    { label: "Professional Headshot", value: POSES[0] },
-    { label: "Thoughtful 3/4 Profile", value: POSES[1] },
-    { label: "Candid Laughter", value: POSES[2] },
-    { label: "Serene Profile View", value: POSES[3] },
-    { label: "Creative Arms Overhead", value: POSES[4] },
-    { label: "Leaning In (Focused)", value: POSES[5] },
-    { label: "Over the Shoulder", value: POSES[6] },
-    { label: "Aspirational Low-Angle", value: POSES[7] },
-    { label: "Relaxed Side-Lying", value: POSES[8] },
-    { label: "Dynamic Mid-Motion", value: POSES[9] },
-    { label: "Comfortably Seated", value: POSES[10] },
-    { label: "Gentle Close-Up", value: POSES[11] },
-    { label: "Confident Power Pose", value: POSES[12] },
+  { label: "Professional Headshot", value: POSES[0] },
+  { label: "Thoughtful 3/4 Profile", value: POSES[1] },
+  { label: "Candid Laughter", value: POSES[2] },
+  { label: "Serene Profile View", value: POSES[3] },
+  { label: "Creative Arms Overhead", value: POSES[4] },
+  { label: "Leaning In (Focused)", value: POSES[5] },
+  { label: "Over the Shoulder", value: POSES[6] },
+  { label: "Aspirational Low-Angle", value: POSES[7] },
+  { label: "Relaxed Side-Lying", value: POSES[8] },
+  { label: "Dynamic Mid-Motion", value: POSES[9] },
+  { label: "Comfortably Seated", value: POSES[10] },
+  { label: "Gentle Close-Up", value: POSES[11] },
+  { label: "Confident Power Pose", value: POSES[12] },
 ];
 
 export const BACKGROUND_OPTIONS = [
-    { value: 'black', label: 'Black' },
-    { value: 'white', label: 'White' },
-    { value: 'gray', label: 'Gray' },
-    { value: 'green screen', label: 'Green Screen' },
-    { value: 'natural studio', label: 'Natural Studio' },
-    { value: 'original', label: 'Original' },
-    { value: 'random', label: 'Random Prompt' },
-    { value: 'prompt', label: 'Custom Prompt' },
-    { value: 'image', label: 'Upload Image' },
+  { value: 'black', label: 'Black' },
+  { value: 'white', label: 'White' },
+  { value: 'gray', label: 'Gray' },
+  { value: 'green screen', label: 'Green Screen' },
+  { value: 'natural studio', label: 'Natural Studio' },
+  { value: 'original', label: 'Original' },
+  { value: 'random', label: 'Random Prompt' },
+  { value: 'prompt', label: 'Custom Prompt' },
+  { value: 'image', label: 'Upload Image' },
 ];
 
 export const ASPECT_RATIO_OPTIONS = [
-    { value: '1:1', label: '1:1 (Square)' },
-    { value: '3:4', label: '3:4 (Portrait)' },
-    { value: '4:3', label: '4:3 (Landscape)' },
-    { value: '9:16', label: '9:16 (Tall)' },
-    { value: '16:9', label: '16:9 (Widescreen)' },
+  { value: '1:1', label: '1:1 (Square)' },
+  { value: '3:4', label: '3:4 (Portrait)' },
+  { value: '4:3', label: '4:3 (Landscape)' },
+  { value: '9:16', label: '9:16 (Tall)' },
+  { value: '16:9', label: '16:9 (Widescreen)' },
 ];
 
 export const BANNER_ASPECT_RATIO_OPTIONS: { value: BannerAspectRatio; label: string }[] = [
-    { value: '4:1', label: '4:1 (Ultra-Wide Horizontal)' },
-    { value: '2:1', label: '2:1 (Wide Horizontal)' },
-    { value: '16:9', label: '16:9 (Standard Widescreen)' },
-    { value: '1.91:1', label: '1.91:1 (Social Feed)' },
-    { value: '1:1', label: '1:1 (Square)' },
-    { value: '9:16', label: '9:16 (Tall Vertical)' },
-    { value: '1:2', label: '1:2 (Narrow Vertical)' },
-    { value: '1:4', label: '1:4 (Skyscraper Vertical)' },
+  { value: '4:1', label: '4:1 (Ultra-Wide Horizontal)' },
+  { value: '2:1', label: '2:1 (Wide Horizontal)' },
+  { value: '16:9', label: '16:9 (Standard Widescreen)' },
+  { value: '1.91:1', label: '1.91:1 (Social Feed)' },
+  { value: '1:1', label: '1:1 (Square)' },
+  { value: '9:16', label: '9:16 (Tall Vertical)' },
+  { value: '1:2', label: '1:2 (Narrow Vertical)' },
+  { value: '1:4', label: '1:4 (Skyscraper Vertical)' },
 ];
 
 export const BANNER_STYLE_OPTIONS: { id: BannerStyle; label: string; description: string }[] = [
-    { id: 'none', label: 'None (Prompt Only)', description: 'Relies purely on your prompt for styling.' },
-    { id: 'corporate-clean', label: 'Corporate Clean', description: 'Professional, sharp lines, simple typography.' },
-    { id: 'gaming-energetic', label: 'Gaming / Energetic', description: 'Dynamic, bold colors, action-oriented.' },
-    { id: 'artistic-brush', label: 'Artistic / Brush', description: 'Painterly, abstract, expressive feel.' },
-    { id: 'minimalist-type', label: 'Minimalist', description: 'Lots of negative space, focus on typography.' },
-    { id: 'vintage-retro', label: 'Vintage / Retro', description: 'Old-school textures, fonts, and color schemes.' },
-    { id: 'tech-glow', label: 'Tech / Glow', description: 'Dark background, neon lights, futuristic.' },
-    { id: 'cinematic-photo', label: 'Cinematic', description: 'Photorealistic with dramatic lighting.' },
-    { id: 'promotional-sale', label: 'Promotional / Sale', description: 'Bright, attention-grabbing, clear call-to-action.' },
-    { id: 'watercolor-wash', label: 'Watercolor Wash', description: 'Soft, blended colors with a gentle, artistic feel.' },
-    { id: 'collage', label: 'Photo Collage', description: 'A mix of different images, textures, and typography.' },
+  { id: 'none', label: 'None (Prompt Only)', description: 'Relies purely on your prompt for styling.' },
+  { id: 'corporate-clean', label: 'Corporate Clean', description: 'Professional, sharp lines, simple typography.' },
+  { id: 'gaming-energetic', label: 'Gaming / Energetic', description: 'Dynamic, bold colors, action-oriented.' },
+  { id: 'artistic-brush', label: 'Artistic / Brush', description: 'Painterly, abstract, expressive feel.' },
+  { id: 'minimalist-type', label: 'Minimalist', description: 'Lots of negative space, focus on typography.' },
+  { id: 'vintage-retro', label: 'Vintage / Retro', description: 'Old-school textures, fonts, and color schemes.' },
+  { id: 'tech-glow', label: 'Tech / Glow', description: 'Dark background, neon lights, futuristic.' },
+  { id: 'cinematic-photo', label: 'Cinematic', description: 'Photorealistic with dramatic lighting.' },
+  { id: 'promotional-sale', label: 'Promotional / Sale', description: 'Bright, attention-grabbing, clear call-to-action.' },
+  { id: 'watercolor-wash', label: 'Watercolor Wash', description: 'Soft, blended colors with a gentle, artistic feel.' },
+  { id: 'collage', label: 'Photo Collage', description: 'A mix of different images, textures, and typography.' },
 ];
 
 export const BANNER_LOGO_PLACEMENT_OPTIONS: { id: BannerLogoPlacement; label: string }[] = [
-    { id: 'top-left', label: 'Top Left' },
-    { id: 'top-center', label: 'Top Center' },
-    { id: 'top-right', label: 'Top Right' },
-    { id: 'middle-left', label: 'Middle Left' },
-    { id: 'middle-center', label: 'Middle Center' },
-    { id: 'middle-right', label: 'Middle Right' },
-    { id: 'bottom-left', label: 'Bottom Left' },
-    { id: 'bottom-center', label: 'Bottom Center' },
-    { id: 'bottom-right', label: 'Bottom Right' },
-    { id: 'no-logo', label: 'No Logo' },
+  { id: 'top-left', label: 'Top Left' },
+  { id: 'top-center', label: 'Top Center' },
+  { id: 'top-right', label: 'Top Right' },
+  { id: 'middle-left', label: 'Middle Left' },
+  { id: 'middle-center', label: 'Middle Center' },
+  { id: 'middle-right', label: 'Middle Right' },
+  { id: 'bottom-left', label: 'Bottom Left' },
+  { id: 'bottom-center', label: 'Bottom Center' },
+  { id: 'bottom-right', label: 'Bottom Right' },
+  { id: 'no-logo', label: 'No Logo' },
 ];
 
 export const PHOTO_STYLE_OPTIONS = [
-    { value: 'professional photoshoot', label: 'Professional Photoshoot' },
-    { value: '35mm analog', label: '35mm Analog Film' },
-    { value: 'polaroid', label: 'Old Polaroid' },
-    { value: 'candid', label: 'Candid Photo' },
-    { value: 'smartphone', label: 'Smartphone Photo' },
+  { value: 'professional photoshoot', label: 'Professional Photoshoot' },
+  { value: '35mm analog', label: '35mm Analog Film' },
+  { value: 'polaroid', label: 'Old Polaroid' },
+  { value: 'candid', label: 'Candid Photo' },
+  { value: 'smartphone', label: 'Smartphone Photo' },
 ];
 
 export const IMAGE_STYLE_OPTIONS = [
-    { value: 'photorealistic', label: 'Photorealistic' },
-    { value: 'cartoon', label: 'Cartoon' },
-    { value: 'comic book style', label: 'Comic Book' },
-    { value: 'anime', label: 'Anime / Manga' },
-    { value: 'oil painting', label: 'Oil Painting' },
-    { value: 'watercolor painting', label: 'Watercolor' },
-    { value: 'impressionism', label: 'Impressionism' },
-    { value: 'charcoal sketch', label: 'Charcoal Sketch' },
-    { value: 'cubism', label: 'Cubism' },
-    { value: 'surrealism', label: 'Surrealism' },
-    { value: 'pixel art', label: 'Pixel Art' },
+  { value: 'photorealistic', label: 'Photorealistic' },
+  { value: 'cartoon', label: 'Cartoon' },
+  { value: 'comic book style', label: 'Comic Book' },
+  { value: 'anime', label: 'Anime / Manga' },
+  { value: 'oil painting', label: 'Oil Painting' },
+  { value: 'watercolor painting', label: 'Watercolor' },
+  { value: 'impressionism', label: 'Impressionism' },
+  { value: 'charcoal sketch', label: 'Charcoal Sketch' },
+  { value: 'cubism', label: 'Cubism' },
+  { value: 'surrealism', label: 'Surrealism' },
+  { value: 'pixel art', label: 'Pixel Art' },
 ];
 
 export const ERA_STYLE_OPTIONS = [
-    { value: 'a modern digital photograph', label: 'Modern Digital' },
-    { value: 'a 1990s magazine ad', label: '1990s Magazine Ad' },
-    { value: 'a 1970s film look', label: '1970s Film Look' },
-    { value: 'a high-contrast film noir style photograph', label: 'Film Noir (B&W)' },
-    { value: 'a classical Dutch Master painting', label: 'Dutch Master Painting' },
-    { value: 'a high-fashion Vogue magazine shot', label: 'Vogue Fashion Shot' },
+  { value: 'a modern digital photograph', label: 'Modern Digital' },
+  { value: 'a 1990s magazine ad', label: '1990s Magazine Ad' },
+  { value: 'a 1970s film look', label: '1970s Film Look' },
+  { value: 'a high-contrast film noir style photograph', label: 'Film Noir (B&W)' },
+  { value: 'a classical Dutch Master painting', label: 'Dutch Master Painting' },
+  { value: 'a high-fashion Vogue magazine shot', label: 'Vogue Fashion Shot' },
 ];
 
 export const CAMERA_MOVES = [
-    { value: '', label: 'None' },
-    { value: 'a smooth horizontal pan from left to right, revealing the scene', label: 'Pan (Reveal)' },
-    { value: 'a slow vertical tilt upwards, starting from the ground and ending on the subject\'s face', label: 'Tilt (Upwards)' },
-    { value: 'a steady tracking shot, the camera moves alongside the subject', label: 'Tracking / Dolly' },
-    { value: 'a slow, dramatic push-in, moving closer to the subject to heighten emotion', label: 'Push-in (Dramatic)' },
-    { value: 'a gradual pull-out, starting on a detail and revealing the wider environment', label: 'Pull-out (Reveal)' },
-    { value: 'an epic crane shot, starting at eye-level and rising high above the scene', label: 'Crane Shot (Epic)' },
-    { value: 'The camera orbits the subject in a smooth 180-degree arc, showcasing them from multiple angles', label: 'Orbit (Arc)' },
-    { value: 'From the subject\'s point of view (POV), showing the world through their eyes', label: 'POV (First Person)' },
-    { value: 'an over-the-shoulder shot, looking past one subject to focus on another', label: 'Over-the-Shoulder' },
-    { value: 'a smooth steadicam shot, following the subject with a fluid, handheld feel', label: 'Steadicam (Following)' },
-    { value: 'The action unfolds in cinematic slow motion, emphasizing every detail', label: 'Slow Motion' },
-    { value: 'a dramatic time-lapse, showing the passage of time in the environment', label: 'Time-lapse' },
-    { value: 'a rack focus shot, where the focus shifts from a foreground object to the subject in the background', label: 'Rack Focus (Shift)' },
-    { value: 'a dramatic dolly zoom, the camera moves in while zooming out, creating a vertigo effect on the background', label: 'Dolly Zoom (Vertigo)' },
-    { value: 'a sweeping jib shot, moving the camera in a fluid arc both horizontally and vertically', label: 'Jib Shot (Arc)' },
-    { value: 'a Dutch angle shot, with the camera tilted to create a sense of unease or dynamism', label: 'Dutch Angle (Tilted)' },
-    { value: 'a close-up on the face, with dramatic focus', label: 'Close-up (Face)'},
-    { value: 'a wide shot showing the full environment and subject', label: 'Wide Shot (Full Scene)'},
-    { value: 'Tracking shot across the disco dance floor', label: 'Tracking (Disco Floor)' },
-    { value: 'Slow dolly-in on the singer under a spotlight', label: 'Dolly-in (Spotlight)' },
-    { value: 'Wide shot of dancers moving in sync under the mirror ball', label: 'Wide Shot (Mirror Ball)' },
-    { value: 'Orbit shot around a funky guitarist on stage', label: 'Orbit (Stage)' },
-    { value: 'Crane shot lifting above the dance crowd', label: 'Crane Shot (Crowd)' },
-    { value: 'POV shot gliding through the roller disco', label: 'POV (Roller Disco)' },
+  { value: '', label: 'None' },
+  { value: 'a smooth horizontal pan from left to right, revealing the scene', label: 'Pan (Reveal)' },
+  { value: 'a slow vertical tilt upwards, starting from the ground and ending on the subject\'s face', label: 'Tilt (Upwards)' },
+  { value: 'a steady tracking shot, the camera moves alongside the subject', label: 'Tracking / Dolly' },
+  { value: 'a slow, dramatic push-in, moving closer to the subject to heighten emotion', label: 'Push-in (Dramatic)' },
+  { value: 'a gradual pull-out, starting on a detail and revealing the wider environment', label: 'Pull-out (Reveal)' },
+  { value: 'an epic crane shot, starting at eye-level and rising high above the scene', label: 'Crane Shot (Epic)' },
+  { value: 'The camera orbits the subject in a smooth 180-degree arc, showcasing them from multiple angles', label: 'Orbit (Arc)' },
+  { value: 'From the subject\'s point of view (POV), showing the world through their eyes', label: 'POV (First Person)' },
+  { value: 'an over-the-shoulder shot, looking past one subject to focus on another', label: 'Over-the-Shoulder' },
+  { value: 'a smooth steadicam shot, following the subject with a fluid, handheld feel', label: 'Steadicam (Following)' },
+  { value: 'The action unfolds in cinematic slow motion, emphasizing every detail', label: 'Slow Motion' },
+  { value: 'a dramatic time-lapse, showing the passage of time in the environment', label: 'Time-lapse' },
+  { value: 'a rack focus shot, where the focus shifts from a foreground object to the subject in the background', label: 'Rack Focus (Shift)' },
+  { value: 'a dramatic dolly zoom, the camera moves in while zooming out, creating a vertigo effect on the background', label: 'Dolly Zoom (Vertigo)' },
+  { value: 'a sweeping jib shot, moving the camera in a fluid arc both horizontally and vertically', label: 'Jib Shot (Arc)' },
+  { value: 'a Dutch angle shot, with the camera tilted to create a sense of unease or dynamism', label: 'Dutch Angle (Tilted)' },
+  { value: 'a close-up on the face, with dramatic focus', label: 'Close-up (Face)' },
+  { value: 'a wide shot showing the full environment and subject', label: 'Wide Shot (Full Scene)' },
+  { value: 'Tracking shot across the disco dance floor', label: 'Tracking (Disco Floor)' },
+  { value: 'Slow dolly-in on the singer under a spotlight', label: 'Dolly-in (Spotlight)' },
+  { value: 'Wide shot of dancers moving in sync under the mirror ball', label: 'Wide Shot (Mirror Ball)' },
+  { value: 'Orbit shot around a funky guitarist on stage', label: 'Orbit (Stage)' },
+  { value: 'Crane shot lifting above the dance crowd', label: 'Crane Shot (Crowd)' },
+  { value: 'POV shot gliding through the roller disco', label: 'POV (Roller Disco)' },
 ];
 
 export const WAN_VIDEO_PROMPT_BLOCKS = {
@@ -227,12 +227,12 @@ export const WAN_VIDEO_PROMPT_BLOCKS = {
 };
 
 export const WAN_T2V_ASPECT_RATIO_OPTIONS = [
-    { value: '1280x720', label: 'Landscape (HD 16:9 - 1280x720)' },
-    { value: '856x480', label: 'Landscape (SD 16:9 - 856x480)' },
-    { value: '640x360', label: 'Landscape (Low SD 16:9 - 640x360)' },
-    { value: '720x1280', label: 'Portrait (HD 9:16 - 720x1280)' },
-    { value: '480x856', label: 'Portrait (SD 9:16 - 480x856)' },
-    { value: '360x640', label: 'Portrait (Low SD 9:16 - 360x640)' },
+  { value: '1280x720', label: 'Landscape (HD 16:9 - 1280x720)' },
+  { value: '856x480', label: 'Landscape (SD 16:9 - 856x480)' },
+  { value: '640x360', label: 'Landscape (Low SD 16:9 - 640x360)' },
+  { value: '720x1280', label: 'Portrait (HD 9:16 - 720x1280)' },
+  { value: '480x856', label: 'Portrait (SD 9:16 - 480x856)' },
+  { value: '360x640', label: 'Portrait (Low SD 9:16 - 360x640)' },
 ];
 
 // --- For Clothing Randomization ---
@@ -256,14 +256,14 @@ export const POSE_DETAILS = ['with arms crossed', 'with hands on hips', 'with on
 
 // --- For Text on Image Randomization ---
 export const TEXT_OBJECT_PROMPTS = [
-    "a sign in the background that reads '%s'",
-    "a t-shirt with the text '%s' printed on the front",
-    "a coffee mug held by the person with '%s' written on it",
-    "a neon sign glowing in the background that says '%s'",
-    "a book with the title '%s' on the cover",
-    "graffiti on a wall behind the person that says '%s'",
-    "a handheld banner that reads '%s'",
-    "a newspaper with the headline '%s'",
+  "a sign in the background that reads '%s'",
+  "a t-shirt with the text '%s' printed on the front",
+  "a coffee mug held by the person with '%s' written on it",
+  "a neon sign glowing in the background that says '%s'",
+  "a book with the title '%s' on the cover",
+  "graffiti on a wall behind the person that says '%s'",
+  "a handheld banner that reads '%s'",
+  "a newspaper with the headline '%s'",
 ];
 
 // --- ComfyUI Workflow Template (SD 1.5) ---
@@ -276,10 +276,10 @@ export const COMFYUI_SD15_WORKFLOW_TEMPLATE = {
       "sampler_name": "euler",
       "scheduler": "normal",
       "denoise": 1,
-      "model": [ "4", 0 ],
-      "positive": [ "6", 0 ],
-      "negative": [ "7", 0 ],
-      "latent_image": [ "5", 0 ]
+      "model": ["4", 0],
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "latent_image": ["5", 0]
     },
     "class_type": "KSampler",
     "_meta": { "title": "KSampler" }
@@ -297,7 +297,7 @@ export const COMFYUI_SD15_WORKFLOW_TEMPLATE = {
   "6": {
     "inputs": {
       "text": "A photorealistic image of a person",
-      "clip": [ "4", 1 ]
+      "clip": ["4", 1]
     },
     "class_type": "CLIPTextEncode",
     "_meta": { "title": "Positive Prompt" }
@@ -305,18 +305,18 @@ export const COMFYUI_SD15_WORKFLOW_TEMPLATE = {
   "7": {
     "inputs": {
       "text": "blurry, bad quality, low-res, ugly, deformed, disfigured",
-      "clip": [ "4", 1 ]
+      "clip": ["4", 1]
     },
     "class_type": "CLIPTextEncode",
     "_meta": { "title": "Negative Prompt" }
   },
   "8": {
-    "inputs": { "samples": [ "3", 0 ], "vae": [ "4", 2 ] },
+    "inputs": { "samples": ["3", 0], "vae": ["4", 2] },
     "class_type": "VAEDecode",
     "_meta": { "title": "VAE Decode" }
   },
   "9": {
-    "inputs": { "images": [ "8", 0 ] },
+    "inputs": { "images": ["8", 0] },
     "class_type": "PreviewImage",
     "_meta": { "title": "Preview Image" }
   }
@@ -333,10 +333,10 @@ export const COMFYUI_WORKFLOW_TEMPLATE = {
       "sampler_name": "euler",
       "scheduler": "normal",
       "denoise": 1,
-      "model": [ "4", 0 ],
-      "positive": [ "6", 0 ],
-      "negative": [ "7", 0 ],
-      "latent_image": [ "5", 0 ]
+      "model": ["4", 0],
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "latent_image": ["5", 0]
     },
     "class_type": "KSampler",
     "_meta": { "title": "KSampler" }
@@ -354,7 +354,7 @@ export const COMFYUI_WORKFLOW_TEMPLATE = {
   "6": {
     "inputs": {
       "text": "A photorealistic image of a person",
-      "clip": [ "4", 1 ]
+      "clip": ["4", 1]
     },
     "class_type": "CLIPTextEncode",
     "_meta": { "title": "Positive Prompt" }
@@ -362,18 +362,18 @@ export const COMFYUI_WORKFLOW_TEMPLATE = {
   "7": {
     "inputs": {
       "text": "blurry, bad quality, low-res, ugly, deformed, disfigured",
-      "clip": [ "4", 1 ]
+      "clip": ["4", 1]
     },
     "class_type": "CLIPTextEncode",
     "_meta": { "title": "Negative Prompt" }
   },
   "8": {
-    "inputs": { "samples": [ "3", 0 ], "vae": [ "4", 2 ] },
+    "inputs": { "samples": ["3", 0], "vae": ["4", 2] },
     "class_type": "VAEDecode",
     "_meta": { "title": "VAE Decode" }
   },
   "9": {
-    "inputs": { "images": [ "8", 0 ] },
+    "inputs": { "images": ["8", 0] },
     "class_type": "PreviewImage",
     "_meta": { "title": "Preview Image" }
   }
@@ -470,130 +470,130 @@ export const COMFYUI_WAN22_WORKFLOW_TEMPLATE = {
 
 // --- ComfyUI Nunchaku Kontext Flux Workflow ---
 export const COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE = {
-    "1": {
-        "inputs": { "vae_name": "ae.safetensors" },
-        "class_type": "VAELoader",
-        "_meta": { "title": "VAELoader" }
+  "1": {
+    "inputs": { "vae_name": "ae.safetensors" },
+    "class_type": "VAELoader",
+    "_meta": { "title": "VAELoader" }
+  },
+  "2": {
+    "inputs": {
+      "clip_name1": "ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors",
+      "clip_name2": "t5xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "flux",
+      "behavior": "default"
     },
-    "2": {
-        "inputs": {
-            "clip_name1": "ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors",
-            "clip_name2": "t5xxl_fp8_e4m3fn_scaled.safetensors",
-            "type": "flux",
-            "behavior": "default"
-        },
-        "class_type": "DualCLIPLoader",
-        "_meta": { "title": "DualCLIPLoader" }
+    "class_type": "DualCLIPLoader",
+    "_meta": { "title": "DualCLIPLoader" }
+  },
+  "3": {
+    "inputs": {
+      "text": "",
+      "clip": ["2", 0]
     },
-    "3": {
-        "inputs": {
-            "text": "",
-            "clip": ["2", 0]
-        },
-        "class_type": "CLIPTextEncode",
-        "_meta": { "title": "Negative Prompt" }
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Negative Prompt" }
+  },
+  "5": {
+    "inputs": { "filename_prefix": "ComfyUI_Nunchaku", "images": ["7", 0] },
+    "class_type": "SaveImage",
+    "_meta": { "title": "Save Image" }
+  },
+  "7": {
+    "inputs": { "samples": ["20", 0], "vae": ["1", 0] },
+    "class_type": "VAEDecode",
+    "_meta": { "title": "VAEDecode" }
+  },
+  "8": {
+    "inputs": { "pixels": ["9", 0], "vae": ["1", 0] },
+    "class_type": "VAEEncode",
+    "_meta": { "title": "VAEEncode" }
+  },
+  "9": {
+    "inputs": { "image": ["99", 0] },
+    "class_type": "FluxKontextImageScale",
+    "_meta": { "title": "FluxKontextImageScale" }
+  },
+  "12": {
+    "inputs": { "guidance": 2.5, "conditioning": ["17", 0] },
+    "class_type": "FluxGuidance",
+    "_meta": { "title": "FluxGuidance" }
+  },
+  "17": {
+    "inputs": { "conditioning": ["25", 0], "latent": ["8", 0] },
+    "class_type": "ReferenceLatent",
+    "_meta": { "title": "ReferenceLatent" }
+  },
+  "20": {
+    "inputs": {
+      "seed": 123,
+      "control_after_generate": "randomize",
+      "steps": 10,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": ["28", 0],
+      "positive": ["12", 0],
+      "negative": ["3", 0],
+      "latent_image": ["8", 0]
     },
-    "5": {
-        "inputs": { "filename_prefix": "ComfyUI_Nunchaku", "images": ["7", 0] },
-        "class_type": "SaveImage",
-        "_meta": { "title": "Save Image" }
+    "class_type": "KSampler",
+    "_meta": { "title": "KSampler" }
+  },
+  "22": {
+    "inputs": {
+      "model_path": "svdq-int4_r32-flux.1-kontext-dev.safetensors",
+      "turbo": 0,
+      "precision": "nunchaku-fp16",
+      "cache_threshold": 0.12,
+      "device_id": 0,
+      "data_type": "bfloat16",
+      "cpu_offload": "enable",
+      "attention": "nunchaku-fp16"
     },
-    "7": {
-        "inputs": { "samples": ["20", 0], "vae": ["1", 0] },
-        "class_type": "VAEDecode",
-        "_meta": { "title": "VAEDecode" }
+    "class_type": "NunchakuFluxDiTLoader",
+    "_meta": { "title": "NunchakuFluxDiTLoader" }
+  },
+  "25": {
+    "inputs": {
+      "text": "change the shirt to be red",
+      "clip": ["2", 0]
     },
-    "8": {
-        "inputs": { "pixels": ["9", 0], "vae": ["1", 0] },
-        "class_type": "VAEEncode",
-        "_meta": { "title": "VAEEncode" }
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Positive Prompt" }
+  },
+  "26": {
+    "inputs": {
+      "lora_name": "flux-turbo.safetensors",
+      "lora_strength": 1,
+      "model": ["22", 0]
     },
-    "9": {
-        "inputs": { "image": ["99", 0] },
-        "class_type": "FluxKontextImageScale",
-        "_meta": { "title": "FluxKontextImageScale" }
+    "class_type": "NunchakuFluxLoraLoader",
+    "_meta": { "title": "Turbo LoRA" }
+  },
+  "27": {
+    "inputs": {
+      "lora_name": "JD3s_Nudify_Kontext.safetensors",
+      "lora_strength": 1,
+      "model": ["26", 0]
     },
-    "12": {
-        "inputs": { "guidance": 2.5, "conditioning": ["17", 0] },
-        "class_type": "FluxGuidance",
-        "_meta": { "title": "FluxGuidance" }
+    "class_type": "NunchakuFluxLoraLoader",
+    "_meta": { "title": "Nudify LoRA" }
+  },
+  "28": {
+    "inputs": {
+      "lora_name": "flux_nipples_saggy_breasts.safetensors",
+      "lora_strength": 1,
+      "model": ["27", 0]
     },
-    "17": {
-        "inputs": { "conditioning": ["25", 0], "latent": ["8", 0] },
-        "class_type": "ReferenceLatent",
-        "_meta": { "title": "ReferenceLatent" }
-    },
-    "20": {
-        "inputs": {
-            "seed": 123,
-            "control_after_generate": "randomize",
-            "steps": 10,
-            "cfg": 1,
-            "sampler_name": "euler",
-            "scheduler": "simple",
-            "denoise": 1,
-            "model": ["28", 0],
-            "positive": ["12", 0],
-            "negative": ["3", 0],
-            "latent_image": ["8", 0]
-        },
-        "class_type": "KSampler",
-        "_meta": { "title": "KSampler" }
-    },
-    "22": {
-        "inputs": {
-            "model_path": "svdq-int4_r32-flux.1-kontext-dev.safetensors",
-            "turbo": 0,
-            "precision": "nunchaku-fp16",
-            "cache_threshold": 0.12,
-            "device_id": 0,
-            "data_type": "bfloat16",
-            "cpu_offload": "enable",
-            "attention": "nunchaku-fp16"
-        },
-        "class_type": "NunchakuFluxDiTLoader",
-        "_meta": { "title": "NunchakuFluxDiTLoader" }
-    },
-    "25": {
-        "inputs": {
-            "text": "change the shirt to be red",
-            "clip": ["2", 0]
-        },
-        "class_type": "CLIPTextEncode",
-        "_meta": { "title": "Positive Prompt" }
-    },
-    "26": {
-        "inputs": {
-            "lora_name": "flux-turbo.safetensors",
-            "lora_strength": 1,
-            "model": ["22", 0]
-        },
-        "class_type": "NunchakuFluxLoraLoader",
-        "_meta": { "title": "Turbo LoRA" }
-    },
-    "27": {
-        "inputs": {
-            "lora_name": "JD3s_Nudify_Kontext.safetensors",
-            "lora_strength": 1,
-            "model": ["26", 0]
-        },
-        "class_type": "NunchakuFluxLoraLoader",
-        "_meta": { "title": "Nudify LoRA" }
-    },
-    "28": {
-        "inputs": {
-            "lora_name": "flux_nipples_saggy_breasts.safetensors",
-            "lora_strength": 1,
-            "model": ["27", 0]
-        },
-        "class_type": "NunchakuFluxLoraLoader",
-        "_meta": { "title": "Detail LoRA" }
-    },
-    "99": {
-        "inputs": { "image": "source_image.png", "upload": "image" },
-        "class_type": "LoadImage",
-        "_meta": { "title": "Load Source Image" }
-    }
+    "class_type": "NunchakuFluxLoraLoader",
+    "_meta": { "title": "Detail LoRA" }
+  },
+  "99": {
+    "inputs": { "image": "source_image.png", "upload": "image" },
+    "class_type": "LoadImage",
+    "_meta": { "title": "Load Source Image" }
+  }
 };
 
 // --- ComfyUI Nunchaku Flux Image Workflow ---
@@ -959,67 +959,67 @@ export const COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE = {
 
 // --- ComfyUI WAN 2.2 Image-to-Video (First/Last Frame) Workflow ---
 export const COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE = {
-  "6": { "inputs": { "text": ["112", 0], "clip": [ "107", 0 ] }, "class_type": "CLIPTextEncode", "_meta": { "title": "CLIP Text Encode (Positive Prompt)" } },
-  "7": { "inputs": { "text": "negative prompt", "clip": [ "107", 0 ] }, "class_type": "CLIPTextEncode", "_meta": { "title": "CLIP Text Encode (Negative Prompt)" } },
-  "8": { "inputs": { "samples": [ "102", 0 ], "vae": [ "39", 0 ] }, "class_type": "VAEDecode", "_meta": { "title": "VAEDecode" } },
+  "6": { "inputs": { "text": ["112", 0], "clip": ["107", 0] }, "class_type": "CLIPTextEncode", "_meta": { "title": "CLIP Text Encode (Positive Prompt)" } },
+  "7": { "inputs": { "text": "negative prompt", "clip": ["107", 0] }, "class_type": "CLIPTextEncode", "_meta": { "title": "CLIP Text Encode (Negative Prompt)" } },
+  "8": { "inputs": { "samples": ["102", 0], "vae": ["39", 0] }, "class_type": "VAEDecode", "_meta": { "title": "VAEDecode" } },
   "39": { "inputs": { "vae_name": "wan_2.1_vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "VAELoader" } },
   "49": { "inputs": { "clip_name": "clip_vision_h.safetensors" }, "class_type": "CLIPVisionLoader", "_meta": { "title": "CLIPVisionLoader" } },
-  "51": { "inputs": { "crop": "none", "clip_vision": [ "49", 0 ], "image": [ "52", 0 ] }, "class_type": "CLIPVisionEncode", "_meta": { "title": "CLIPVisionEncode" } },
+  "51": { "inputs": { "crop": "none", "clip_vision": ["49", 0], "image": ["52", 0] }, "class_type": "CLIPVisionEncode", "_meta": { "title": "CLIPVisionEncode" } },
   "52": { "inputs": { "image": "start_image.png", "upload": "image" }, "class_type": "LoadImage", "_meta": { "title": "Load Start Image" } },
   "72": { "inputs": { "image": "end_image.png", "upload": "image" }, "class_type": "LoadImage", "_meta": { "title": "Load End Image" } },
-  "79": { "inputs": { "shift": 8, "model": [ "94", 0 ] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModelSamplingSD3" } },
-  "83": { "inputs": { "width": 848, "height": 560, "length": 65, "batch_size": 1, "positive": [ "6", 0 ], "negative": [ "7", 0 ], "vae": [ "39", 0 ], "clip_vision_start_image": [ "51", 0 ], "clip_vision_end_image": [ "87", 0 ], "start_image": [ "52", 0 ], "end_image": [ "72", 0 ] }, "class_type": "WanFirstLastFrameToVideo", "_meta": { "title": "WanFirstLastFrameToVideo" } },
-  "87": { "inputs": { "crop": "none", "clip_vision": [ "49", 0 ], "image": [ "72", 0 ] }, "class_type": "CLIPVisionEncode", "_meta": { "title": "CLIPVisionEncode" } },
-  "93": { "inputs": { "shift": 8, "model": [ "95", 0 ] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModelSamplingSD3" } },
-  "94": { "inputs": { "lora_name": "Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors", "strength_model": 2, "model": [ "105", 0 ] }, "class_type": "LoraLoaderModelOnly", "_meta": { "title": "LoraLoaderModelOnly" } },
-  "95": { "inputs": { "lora_name": "Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors", "strength_model": 1, "model": [ "106", 0 ] }, "class_type": "LoraLoaderModelOnly", "_meta": { "title": "LoraLoaderModelOnly" } },
-  "96": { "inputs": { "sage_attention": "auto", "model": [ "79", 0 ] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "PathchSageAttentionKJ" } },
-  "98": { "inputs": { "sage_attention": "auto", "model": [ "93", 0 ] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "PathchSageAttentionKJ" } },
-  "101": { "inputs": { "add_noise": "enable", "noise_seed": 395665879778624, "control_after_generate": "randomize", "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 0, "end_at_step": 3, "return_with_leftover_noise": "enable", "model": [ "96", 0 ], "positive": [ "83", 0 ], "negative": [ "83", 1 ], "latent_image": [ "83", 2 ] }, "class_type": "KSamplerAdvanced", "_meta": { "title": "High Noise - KSampler (Advanced)" } },
-  "102": { "inputs": { "add_noise": "disable", "noise_seed": 0, "control_after_generate": "fixed", "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 3, "end_at_step": 10000, "return_with_leftover_noise": "disable", "model": [ "98", 0 ], "positive": [ "83", 0 ], "negative": [ "83", 1 ], "latent_image": [ "101", 0 ] }, "class_type": "KSamplerAdvanced", "_meta": { "title": "Low Noise - KSampler (Advanced)" } },
+  "79": { "inputs": { "shift": 8, "model": ["94", 0] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModelSamplingSD3" } },
+  "83": { "inputs": { "width": 848, "height": 560, "length": 65, "batch_size": 1, "positive": ["6", 0], "negative": ["7", 0], "vae": ["39", 0], "clip_vision_start_image": ["51", 0], "clip_vision_end_image": ["87", 0], "start_image": ["52", 0], "end_image": ["72", 0] }, "class_type": "WanFirstLastFrameToVideo", "_meta": { "title": "WanFirstLastFrameToVideo" } },
+  "87": { "inputs": { "crop": "none", "clip_vision": ["49", 0], "image": ["72", 0] }, "class_type": "CLIPVisionEncode", "_meta": { "title": "CLIPVisionEncode" } },
+  "93": { "inputs": { "shift": 8, "model": ["95", 0] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModelSamplingSD3" } },
+  "94": { "inputs": { "lora_name": "Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors", "strength_model": 2, "model": ["105", 0] }, "class_type": "LoraLoaderModelOnly", "_meta": { "title": "LoraLoaderModelOnly" } },
+  "95": { "inputs": { "lora_name": "Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors", "strength_model": 1, "model": ["106", 0] }, "class_type": "LoraLoaderModelOnly", "_meta": { "title": "LoraLoaderModelOnly" } },
+  "96": { "inputs": { "sage_attention": "auto", "model": ["79", 0] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "PathchSageAttentionKJ" } },
+  "98": { "inputs": { "sage_attention": "auto", "model": ["93", 0] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "PathchSageAttentionKJ" } },
+  "101": { "inputs": { "add_noise": "enable", "noise_seed": 395665879778624, "control_after_generate": "randomize", "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 0, "end_at_step": 3, "return_with_leftover_noise": "enable", "model": ["96", 0], "positive": ["83", 0], "negative": ["83", 1], "latent_image": ["83", 2] }, "class_type": "KSamplerAdvanced", "_meta": { "title": "High Noise - KSampler (Advanced)" } },
+  "102": { "inputs": { "add_noise": "disable", "noise_seed": 0, "control_after_generate": "fixed", "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 3, "end_at_step": 10000, "return_with_leftover_noise": "disable", "model": ["98", 0], "positive": ["83", 0], "negative": ["83", 1], "latent_image": ["101", 0] }, "class_type": "KSamplerAdvanced", "_meta": { "title": "Low Noise - KSampler (Advanced)" } },
   "105": { "inputs": { "unet_name": "Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf" }, "class_type": "UnetLoaderGGUF", "_meta": { "title": "UnetLoaderGGUF" } },
   "106": { "inputs": { "unet_name": "Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf" }, "class_type": "UnetLoaderGGUF", "_meta": { "title": "UnetLoaderGGUF" } },
   "107": { "inputs": { "clip_name": "umt5-xxl-encoder-Q5_K_M.gguf", "type": "wan" }, "class_type": "CLIPLoaderGGUF", "_meta": { "title": "CLIPLoaderGGUF" } },
-  "111": { "inputs": { "frame_rate": 24, "loop_count": 0, "filename_prefix": "GeneratedVideo_", "format": "video/nvenc_h264-mp4", "pix_fmt": "yuv420p", "bitrate": 10, "megabit": true, "save_metadata": true, "pingpong": false, "save_output": true, "images": [ "114", 0 ] }, "class_type": "VHS_VideoCombine", "_meta": { "title": "Video Final" } },
-  "112": { "inputs": { "string": "positive prompt", "strip_newlines": true }, "class_type": "StringConstantMultiline", "_meta": { "title": "Prompt Action" }},
-  "114": { "inputs": { "grain_intensity": 0.02, "saturation_mix": 0.3, "images": [ "8", 0 ] }, "class_type": "FastFilmGrain", "_meta": { "title": "FastFilmGrain" } }
+  "111": { "inputs": { "frame_rate": 24, "loop_count": 0, "filename_prefix": "GeneratedVideo_", "format": "video/nvenc_h264-mp4", "pix_fmt": "yuv420p", "bitrate": 10, "megabit": true, "save_metadata": true, "pingpong": false, "save_output": true, "images": ["114", 0] }, "class_type": "VHS_VideoCombine", "_meta": { "title": "Video Final" } },
+  "112": { "inputs": { "string": "positive prompt", "strip_newlines": true }, "class_type": "StringConstantMultiline", "_meta": { "title": "Prompt Action" } },
+  "114": { "inputs": { "grain_intensity": 0.02, "saturation_mix": 0.3, "images": ["8", 0] }, "class_type": "FastFilmGrain", "_meta": { "title": "FastFilmGrain" } }
 };
 
 // --- ComfyUI WAN 2.2 Text-to-Video Workflow ---
 export const COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE = {
   "6": {
-    "inputs": { "text": "A confident woman with red hair in a vibrant patterned dress against a plain green background., at sunrise with golden light, a steady tracking shot, the camera moves alongside the subject", "clip": [ "107", 0 ] },
+    "inputs": { "text": "A confident woman with red hair in a vibrant patterned dress against a plain green background., at sunrise with golden light, a steady tracking shot, the camera moves alongside the subject", "clip": ["107", 0] },
     "class_type": "CLIPTextEncode",
     "_meta": { "title": "CLIP Text Encode (Positive Prompt)" }
   },
   "7": {
-    "inputs": { "text": "blurry, low quality, pixelated, distorted, out of frame, cropped, watermark, text, bad anatomy, disfigured, mutated, extra limbs, extra arms, extra legs, extra fingers, fused fingers, deformed hands, disconnected limbs, broken body, twisted posture, bad face, deformed face, asymmetrical face, mutated eyes, long neck, short limbs, unnatural body, flickering, jitter, duplicated body, ghosting, static pose, unnatural movement, stiff animation, camera shake, distorted perspective, ugly, poorly drawn, cartoon, 3d render, cgi", "clip": [ "107", 0 ] },
+    "inputs": { "text": "blurry, low quality, pixelated, distorted, out of frame, cropped, watermark, text, bad anatomy, disfigured, mutated, extra limbs, extra arms, extra legs, extra fingers, fused fingers, deformed hands, disconnected limbs, broken body, twisted posture, bad face, deformed face, asymmetrical face, mutated eyes, long neck, short limbs, unnatural body, flickering, jitter, duplicated body, ghosting, static pose, unnatural movement, stiff animation, camera shake, distorted perspective, ugly, poorly drawn, cartoon, 3d render, cgi", "clip": ["107", 0] },
     "class_type": "CLIPTextEncode",
     "_meta": { "title": "CLIP Text Encode (Negative Prompt)" }
   },
-  "8": { "inputs": { "samples": [ "102", 0 ], "vae": [ "39", 0 ] }, "class_type": "VAEDecode", "_meta": { "title": "VAE Decode" } },
+  "8": { "inputs": { "samples": ["102", 0], "vae": ["39", 0] }, "class_type": "VAEDecode", "_meta": { "title": "VAE Decode" } },
   "39": { "inputs": { "vae_name": "wan_2.1_vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Charger VAE" } },
-  "79": { "inputs": { "shift": 8, "model": [ "94", 0 ] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModèleÉchantillonnageSD3" } },
-  "93": { "inputs": { "shift": 8, "model": [ "95", 0 ] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModèleÉchantillonnageSD3" } },
+  "79": { "inputs": { "shift": 8, "model": ["94", 0] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModèleÉchantillonnageSD3" } },
+  "93": { "inputs": { "shift": 8, "model": ["95", 0] }, "class_type": "ModelSamplingSD3", "_meta": { "title": "ModèleÉchantillonnageSD3" } },
   "94": {
-    "inputs": { "lora_name": "Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors", "strength_model": 2.0, "model": [ "105", 0 ] },
+    "inputs": { "lora_name": "Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors", "strength_model": 2.0, "model": ["105", 0] },
     "class_type": "LoraLoaderModelOnly",
     "_meta": { "title": "LoraLoaderModelOnly" }
   },
   "95": {
-    "inputs": { "lora_name": "Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors", "strength_model": 1, "model": [ "106", 0 ] },
+    "inputs": { "lora_name": "Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors", "strength_model": 1, "model": ["106", 0] },
     "class_type": "LoraLoaderModelOnly",
     "_meta": { "title": "LoraLoaderModelOnly" }
   },
-  "96": { "inputs": { "sage_attention": "auto", "model": [ "79", 0 ] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "Patch Sage Attention KJ" } },
-  "98": { "inputs": { "sage_attention": "auto", "model": [ "93", 0 ] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "Patch Sage Attention KJ" } },
+  "96": { "inputs": { "sage_attention": "auto", "model": ["79", 0] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "Patch Sage Attention KJ" } },
+  "98": { "inputs": { "sage_attention": "auto", "model": ["93", 0] }, "class_type": "PathchSageAttentionKJ", "_meta": { "title": "Patch Sage Attention KJ" } },
   "101": {
-    "inputs": { "add_noise": "enable", "noise_seed": 1115662785009348, "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 0, "end_at_step": 3, "return_with_leftover_noise": "enable", "model": [ "96", 0 ], "positive": [ "117", 0 ], "negative": [ "117", 1 ], "latent_image": [ "117", 2 ] },
+    "inputs": { "add_noise": "enable", "noise_seed": 1115662785009348, "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 0, "end_at_step": 3, "return_with_leftover_noise": "enable", "model": ["96", 0], "positive": ["117", 0], "negative": ["117", 1], "latent_image": ["117", 2] },
     "class_type": "KSamplerAdvanced",
     "_meta": { "title": "High Noise - KSampler (Advanced)" }
   },
   "102": {
-    "inputs": { "add_noise": "disable", "noise_seed": 0, "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 3, "end_at_step": 10000, "return_with_leftover_noise": "disable", "model": [ "98", 0 ], "positive": [ "117", 0 ], "negative": [ "117", 1 ], "latent_image": [ "101", 0 ] },
+    "inputs": { "add_noise": "disable", "noise_seed": 0, "steps": 6, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 3, "end_at_step": 10000, "return_with_leftover_noise": "disable", "model": ["98", 0], "positive": ["117", 0], "negative": ["117", 1], "latent_image": ["101", 0] },
     "class_type": "KSamplerAdvanced",
     "_meta": { "title": "Low Noise - KSampler (Advanced)" }
   },
@@ -1027,17 +1027,17 @@ export const COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE = {
   "106": { "inputs": { "unet_name": "Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf" }, "class_type": "UnetLoaderGGUF", "_meta": { "title": "Unet Loader (GGUF)" } },
   "107": { "inputs": { "clip_name": "umt5-xxl-encoder-Q5_K_M.gguf", "type": "wan" }, "class_type": "CLIPLoaderGGUF", "_meta": { "title": "CLIPLoader (GGUF)" } },
   "111": {
-    "inputs": { "frame_rate": 17.599853515625, "loop_count": 0, "filename_prefix": "WAN/2025-09-30/131656_", "format": "video/nvenc_h264-mp4", "pix_fmt": "yuv420p", "bitrate": 10, "megabit": true, "save_metadata": true, "pingpong": false, "save_output": true, "images": [ "114", 0 ] },
+    "inputs": { "frame_rate": 17.599853515625, "loop_count": 0, "filename_prefix": "WAN/2025-09-30/131656_", "format": "video/nvenc_h264-mp4", "pix_fmt": "yuv420p", "bitrate": 10, "megabit": true, "save_metadata": true, "pingpong": false, "save_output": true, "images": ["114", 0] },
     "class_type": "VHS_VideoCombine",
     "_meta": { "title": "Video Final" }
   },
   "114": {
-    "inputs": { "grain_intensity": 0.02, "saturation_mix": 0.3, "images": [ "8", 0 ] },
+    "inputs": { "grain_intensity": 0.02, "saturation_mix": 0.3, "images": ["8", 0] },
     "class_type": "FastFilmGrain",
     "_meta": { "title": "🎞️ Fast Film Grain" }
   },
   "117": {
-    "inputs": { "width": 736, "height": 416, "length": 57, "batch_size": 1, "positive": [ "6", 0 ], "negative": [ "7", 0 ], "vae": [ "39", 0 ] },
+    "inputs": { "width": 736, "height": 416, "length": 57, "batch_size": 1, "positive": ["6", 0], "negative": ["7", 0], "vae": ["39", 0] },
     "class_type": "WanImageToVideo",
     "_meta": { "title": "WanImageVersVidéo" }
   }
@@ -1047,23 +1047,25 @@ export const COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE = {
 // --- ComfyUI Face Detailer Workflow (SD 1.5) ---
 export const COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE = {
   "4": { "inputs": { "ckpt_name": "epicphotogasm_ultimateFidelity.safetensors" }, "class_type": "CheckpointLoaderSimple", "_meta": { "title": "Load Checkpoint" } },
-  "5": { "inputs": { "text": "Positive prompt here", "clip": [ "4", 1 ] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Positive" } },
-  "6": { "inputs": { "text": "Negative prompt here", "clip": [ "4", 1 ] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Negative" } },
+  "5": { "inputs": { "text": "Positive prompt here", "clip": ["4", 1] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Positive" } },
+  "6": { "inputs": { "text": "Negative prompt here", "clip": ["4", 1] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Negative" } },
   "16": { "inputs": { "model_name": "sam_vit_b_01ec64.pth", "device_mode": "AUTO" }, "class_type": "SAMLoader", "_meta": { "title": "SAMLoader" } },
-  "17": { "inputs": { "mask": [ "51", 3 ] }, "class_type": "MaskToImage", "_meta": { "title": "MaskToImage" } },
-  "51": { "inputs": {
+  "17": { "inputs": { "mask": ["51", 3] }, "class_type": "MaskToImage", "_meta": { "title": "MaskToImage" } },
+  "51": {
+    "inputs": {
       "guide_size": 360, "guide_size_for": "BBOX", "max_size": 512, "seed": 0, "steps": 20, "cfg": 8, "sampler_name": "euler", "scheduler": "normal",
       "denoise": 0.5, "feather": 5, "noise_mask": true, "force_inpaint": false, "wildcard": "", "cycle": 1,
       "bbox_threshold": 0.93, "bbox_dilation": 0, "bbox_crop_factor": 3.0, "sam_detection_hint": "center-1", "sam_threshold": 0.93,
       "sam_bbox_expansion": 0, "sam_mask_hint_threshold": 0.7, "sam_mask_hint_use_negative": "False", "sam_mask_hint_oversize": 10, "sam_dilation": 0, "drop_size": 10,
-      "image": [ "72", 0 ], "model": [ "4", 0 ], "clip": [ "4", 1 ], "vae": [ "4", 2 ], "positive": [ "5", 0 ], "negative": [ "6", 0 ],
-      "bbox_detector": [ "53", 0 ], "sam_model_opt": [ "16", 0 ]
-    }, "class_type": "FaceDetailer", "_meta": { "title": "FaceDetailer" } },
+      "image": ["72", 0], "model": ["4", 0], "clip": ["4", 1], "vae": ["4", 2], "positive": ["5", 0], "negative": ["6", 0],
+      "bbox_detector": ["53", 0], "sam_model_opt": ["16", 0]
+    }, "class_type": "FaceDetailer", "_meta": { "title": "FaceDetailer" }
+  },
   "53": { "inputs": { "model_name": "bbox/face_yolov8m.pt" }, "class_type": "UltralyticsDetectorProvider", "_meta": { "title": "UltralyticsDetectorProvider" } },
-  "63": { "inputs": { "filename_prefix": "Mask", "images": [ "17", 0 ] }, "class_type": "SaveImage", "_meta": { "title": "Save Mask" } },
-  "64": { "inputs": { "filename_prefix": "CroppedEnhanced", "images": [ "51", 2 ] }, "class_type": "SaveImage", "_meta": { "title": "Save Cropped Enhanced" } },
-  "65": { "inputs": { "filename_prefix": "CroppedRefined", "images": [ "51", 1 ] }, "class_type": "SaveImage", "_meta": { "title": "Save Cropped Refined" } },
-  "66": { "inputs": { "filename_prefix": "FinalImage", "images": [ "51", 0 ] }, "class_type": "SaveImage", "_meta": { "title": "Save Final Image" } },
+  "63": { "inputs": { "filename_prefix": "Mask", "images": ["17", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Mask" } },
+  "64": { "inputs": { "filename_prefix": "CroppedEnhanced", "images": ["51", 2] }, "class_type": "SaveImage", "_meta": { "title": "Save Cropped Enhanced" } },
+  "65": { "inputs": { "filename_prefix": "CroppedRefined", "images": ["51", 1] }, "class_type": "SaveImage", "_meta": { "title": "Save Cropped Refined" } },
+  "66": { "inputs": { "filename_prefix": "FinalImage", "images": ["51", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Final Image" } },
   "72": { "inputs": { "image": "source_image.png", "upload": "image" }, "class_type": "LoadImage", "_meta": { "title": "Load Image" } }
 };
 
@@ -1097,3 +1099,16 @@ export const COMFYUI_QWEN_T2I_GGUF_WORKFLOW_TEMPLATE = {
   "lora_4_node": { "inputs": { "lora_name": "", "strength_model": 1.0, "model": ["82", 0] }, "class_type": "LoraLoaderModelOnly", "_meta": { "title": "LoRA Loader 4" } },
   "99": { "inputs": { "images": ["8", 0] }, "class_type": "PreviewImage", "_meta": { "title": "Preview Image" } }
 };
+
+export const COMFYUI_T2I_WORKFLOWS = [
+  { value: 'sd1.5', label: 'SD 1.5' },
+  { value: 'sdxl', label: 'SDXL' },
+  { value: 'flux', label: 'FLUX' },
+  { value: 'wan2.2', label: 'WAN 2.2' },
+  { value: 'qwen-t2i-gguf', label: 'Qwen T2I GGUF' },
+];
+
+export const COMFYUI_I2I_WORKFLOWS = [
+  { value: 'nunchaku-kontext-flux', label: 'Nunchaku Kontext FLUX (i2i)' },
+  { value: 'face-detailer-sd1.5', label: 'Face Detailer SD 1.5 (i2i)' },
+];

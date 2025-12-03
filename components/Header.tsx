@@ -1,51 +1,53 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Banner } from './Banner';
-import { ThemeSwitcher } from './ThemeSwitcher';
+// import { ThemeSwitcher } from './ThemeSwitcher'; // Removed in favor of VisualSettingsModal
 // FIX: Imported the missing PromptIcon component.
-import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, PencilIcon, ResetIcon, PromptIcon, QuestionMarkCircleIcon } from './icons';
+import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, PencilIcon, ResetIcon, PromptIcon, QuestionMarkCircleIcon, SwatchIcon } from './icons';
 import { Logo } from './Logo';
 import type { User, VersionInfo, DriveFolder, Provider } from '../types';
 
 interface HeaderProps {
-    theme: string;
-    setTheme: (theme: string) => void;
-    projectName: string;
-    onProjectNameChange: (newName: string) => void;
-    onLogout: () => void;
-    currentUser: User;
-    onOpenSettingsModal: () => void;
-    onOpenComfyUIHelper: () => void;
-    isComfyUIConnected: boolean | null;
-    versionInfo: VersionInfo | null;
-    driveFolder: DriveFolder | null;
-    onDriveConnect: () => void;
-    onDriveDisconnect: () => void;
-    isDriveConfigured: boolean;
-    sessionTokenUsage: {
-        promptTokenCount: number;
-        candidatesTokenCount: number;
-        totalTokenCount: number;
-    };
-    onResetTokenUsage: () => void;
-    activeTab: string;
-    provider: Provider;
-    activeModel?: string;
+  theme: string;
+  setTheme: (theme: string) => void;
+  projectName: string;
+  onProjectNameChange: (newName: string) => void;
+  onLogout: () => void;
+  currentUser: User;
+  onOpenSettingsModal: () => void;
+  onOpenVisualSettings: () => void;
+  onOpenComfyUIHelper: () => void;
+  isComfyUIConnected: boolean | null;
+  versionInfo: VersionInfo | null;
+  driveFolder: DriveFolder | null;
+  onDriveConnect: () => void;
+  onDriveDisconnect: () => void;
+  isDriveConfigured: boolean;
+  sessionTokenUsage: {
+    promptTokenCount: number;
+    candidatesTokenCount: number;
+    totalTokenCount: number;
+  };
+  onResetTokenUsage: () => void;
+  activeTab: string;
+  provider: Provider;
+  activeModel?: string;
 }
 
-export const Header: React.FC<HeaderProps> = ({ 
-    theme, setTheme, onLogout, currentUser, 
-    projectName, onProjectNameChange,
-    onOpenSettingsModal,
-    onOpenComfyUIHelper,
-    isComfyUIConnected, versionInfo,
-    driveFolder, onDriveConnect, onDriveDisconnect,
-    isDriveConfigured,
-    sessionTokenUsage,
-    onResetTokenUsage,
-    activeTab,
-    provider,
-    activeModel
+export const Header: React.FC<HeaderProps> = ({
+  theme, setTheme, onLogout, currentUser,
+  projectName, onProjectNameChange,
+  onOpenSettingsModal,
+  onOpenVisualSettings,
+  onOpenComfyUIHelper,
+  isComfyUIConnected, versionInfo,
+  driveFolder, onDriveConnect, onDriveDisconnect,
+  isDriveConfigured,
+  sessionTokenUsage,
+  onResetTokenUsage,
+  activeTab,
+  provider,
+  activeModel
 }) => {
 
   const [isEditingName, setIsEditingName] = useState(false);
@@ -65,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
   }, [projectName, isEditingName]);
 
-  const driveButtonTitle = driveFolder 
+  const driveButtonTitle = driveFolder
     ? `Connected to Drive folder: "${driveFolder.name}". Click to disconnect.`
     : "Connect to Google Drive to sync your library.";
 
@@ -78,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
       onDriveConnect();
     }
   };
-  
+
   const handleBeginEditing = () => {
     setEditingName(projectName);
     setIsEditingName(true);
@@ -100,123 +102,129 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="bg-bg-secondary/50 backdrop-blur-sm p-4 shadow-lg sticky top-0 z-10 border-b border-border-primary">
+    <header className="bg-bg-secondary/50 backdrop-blur-sm p-3 shadow-lg sticky top-0 z-10 border-b border-border-primary">
       <div className="container mx-auto flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-            <div className="w-12 h-12 flex-shrink-0">
-                <Logo />
+          <div className="w-12 h-12 flex-shrink-0">
+            <Logo />
+          </div>
+          <Banner />
+          {(activeTab === 'image-generator' || activeTab === 'character-generator' || activeTab === 'video-generator' || activeTab === 'group-photo-fusion' || activeTab === 'extractor-tools' || activeTab === 'logo-theme-generator') && (
+            <div className={`hidden lg:flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-lg border-2 ${provider === 'gemini' || (activeTab === 'video-generator' && !isComfyUIConnected) // Fallback style if video provider isn't explicit in top level, usually managed by panel state
+              ? 'border-accent text-accent bg-accent/10'
+              : 'border-highlight-green text-highlight-green bg-highlight-green/10'
+              }`}>
+              {provider === 'gemini' ? (
+                <PromptIcon className="w-5 h-5" />
+              ) : (
+                <WorkflowIcon className="w-5 h-5" />
+              )}
+              <div className="flex flex-col leading-none">
+                <span className="tracking-wider">{provider.toUpperCase()}</span>
+                {activeModel && <span className="text-[10px] opacity-80 font-normal">{activeModel}</span>}
+              </div>
             </div>
-            <Banner />
-            {(activeTab === 'image-generator' || activeTab === 'character-generator' || activeTab === 'video-generator' || activeTab === 'group-photo-fusion' || activeTab === 'extractor-tools' || activeTab === 'logo-theme-generator') && (
-                <div className={`hidden lg:flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-lg border-2 ${
-                    provider === 'gemini' || (activeTab === 'video-generator' && !isComfyUIConnected) // Fallback style if video provider isn't explicit in top level, usually managed by panel state
-                    ? 'border-accent text-accent bg-accent/10' 
-                    : 'border-highlight-green text-highlight-green bg-highlight-green/10'
-                }`}>
-                    {provider === 'gemini' ? (
-                        <PromptIcon className="w-5 h-5" />
-                    ) : (
-                        <WorkflowIcon className="w-5 h-5" />
-                    )}
-                    <div className="flex flex-col leading-none">
-                        <span className="tracking-wider">{provider.toUpperCase()}</span>
-                        {activeModel && <span className="text-[10px] opacity-80 font-normal">{activeModel}</span>}
-                    </div>
-                </div>
-            )}
+          )}
         </div>
         <div className="flex items-center gap-2 md:gap-4">
-            <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-text-primary">Welcome, {currentUser.username}</p>
-                 {isEditingName ? (
-                    <div className="flex items-center justify-end gap-1.5 mt-1">
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            value={editingName}
-                            onChange={(e) => setEditingName(e.target.value)}
-                            onBlur={handleNameChangeCommit}
-                            onKeyDown={handleKeyDown}
-                            className="text-lg font-bold bg-bg-tertiary border border-accent rounded-md px-2 py-0 text-accent focus:outline-none w-[220px]"
-                        />
-                    </div>
-                ) : (
-                    <div
-                        className="flex items-center justify-end gap-1.5 cursor-pointer group mt-1"
-                        onClick={handleBeginEditing}
-                        title="Click to edit project name"
-                    >
-                        <p className="text-lg font-bold text-accent truncate max-w-[200px] group-hover:underline">{projectName}</p>
-                        <PencilIcon className="w-4 h-4 text-text-muted group-hover:text-accent transition-colors" />
-                    </div>
-                )}
-                <div className="flex items-center justify-end gap-2 mt-1">
-                    {versionInfo && (
-                        <div
-                            className="text-xs text-text-muted cursor-help"
-                            title={`Updated: ${new Date(versionInfo.date).toLocaleString()}\n\nChanges: ${versionInfo.changes}`}
-                        >
-                            v{versionInfo.version}
-                        </div>
-                    )}
-                    <p className="text-xs text-text-secondary">{currentUser.role === 'admin' ? 'Administrator' : 'User'}</p>
-                </div>
-                 <div className="mt-1 flex items-center justify-end gap-1">
-                    {isComfyUIConnected === null ? (
-                        <div className="flex items-center justify-end gap-1 text-xs text-text-muted">
-                        <SpinnerIcon className="h-3 w-3 animate-spin" />
-                        <span>Checking...</span>
-                        </div>
-                    ) : (
-                        <div className={`flex items-center justify-end gap-1.5 text-xs font-semibold ${isComfyUIConnected ? 'text-green-400' : 'text-danger'}`}>
-                        <span className={`h-2 w-2 rounded-full ${isComfyUIConnected ? 'bg-green-400' : 'bg-danger'}`}></span>
-                        <span>COMFYUI {isComfyUIConnected ? 'Connected' : 'Not Connected'}</span>
-                        </div>
-                    )}
-                    {isComfyUIConnected === false && (
-                        <button onClick={onOpenComfyUIHelper} title="Connection failed. Click for help." className="text-text-muted hover:text-accent transition-colors">
-                            <QuestionMarkCircleIcon className="w-4 h-4"/>
-                        </button>
-                    )}
-                </div>
-                 {sessionTokenUsage && sessionTokenUsage.totalTokenCount > 0 && (
-                    <div 
-                        className="mt-1 flex items-center justify-end gap-2 text-xs text-text-muted" 
-                        title={`Prompt: ${sessionTokenUsage.promptTokenCount.toLocaleString()} | Response: ${sessionTokenUsage.candidatesTokenCount.toLocaleString()}`}
-                    >
-                        <span>
-                            Session Tokens Used: <span className="font-semibold text-accent">{sessionTokenUsage.totalTokenCount.toLocaleString()}</span>
-                        </span>
-                        <button onClick={onResetTokenUsage} title="Reset Session Token Counter" className="text-text-muted hover:text-accent">
-                            <ResetIcon className="w-3 h-3"/>
-                        </button>
-                    </div>
-                )}
-            </div>
-            <ThemeSwitcher currentTheme={theme} setTheme={setTheme} />
-             <button 
-                onClick={onOpenSettingsModal}
-                title="Connection Settings"
-                className="p-2 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
-            >
-                <WorkflowIcon className="w-5 h-5" />
-            </button>
-            {isDriveConfigured && (
-                 <button 
-                    onClick={handleDriveClick}
-                    title={driveButtonTitle}
-                    className={`p-2 rounded-full transition-colors ${!!driveFolder ? 'bg-accent text-accent-text hover:bg-accent-hover' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary'}`}
-                >
-                    <GoogleDriveIcon className="w-5 h-5" />
-                </button>
+          <div className="text-right hidden sm:block">
+            <p className="text-sm font-medium text-text-primary">Welcome, {currentUser.username}</p>
+            {isEditingName ? (
+              <div className="flex items-center justify-end gap-1.5 mt-1">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  onBlur={handleNameChangeCommit}
+                  onKeyDown={handleKeyDown}
+                  className="text-lg font-bold bg-bg-tertiary border border-accent rounded-md px-2 py-0 text-accent focus:outline-none w-[220px]"
+                />
+              </div>
+            ) : (
+              <div
+                className="flex items-center justify-end gap-1.5 cursor-pointer group mt-1"
+                onClick={handleBeginEditing}
+                title="Click to edit project name"
+              >
+                <p className="text-lg font-bold text-accent truncate max-w-[200px] group-hover:underline">{projectName}</p>
+                <PencilIcon className="w-4 h-4 text-text-muted group-hover:text-accent transition-colors" />
+              </div>
             )}
-            <button 
-                onClick={onLogout}
-                title="Logout"
-                className="p-2 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
+            <div className="flex items-center justify-end gap-2 mt-1">
+              {versionInfo && (
+                <div
+                  className="text-xs text-text-muted cursor-help"
+                  title={`Updated: ${new Date(versionInfo.date).toLocaleString()}\n\nChanges: ${versionInfo.changes}`}
+                >
+                  v{versionInfo.version}
+                </div>
+              )}
+              <p className="text-xs text-text-secondary">{currentUser.role === 'admin' ? 'Administrator' : 'User'}</p>
+            </div>
+            <div className="mt-1 flex items-center justify-end gap-1">
+              {isComfyUIConnected === null ? (
+                <div className="flex items-center justify-end gap-1 text-xs text-text-muted">
+                  <SpinnerIcon className="h-3 w-3 animate-spin" />
+                  <span>Checking...</span>
+                </div>
+              ) : (
+                <div className={`flex items-center justify-end gap-1.5 text-xs font-semibold ${isComfyUIConnected ? 'text-green-400' : 'text-danger'}`}>
+                  <span className={`h-2 w-2 rounded-full ${isComfyUIConnected ? 'bg-green-400' : 'bg-danger'}`}></span>
+                  <span>COMFYUI {isComfyUIConnected ? 'Connected' : 'Not Connected'}</span>
+                </div>
+              )}
+              {isComfyUIConnected === false && (
+                <button onClick={onOpenComfyUIHelper} title="Connection failed. Click for help." className="text-text-muted hover:text-accent transition-colors">
+                  <QuestionMarkCircleIcon className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            {sessionTokenUsage && sessionTokenUsage.totalTokenCount > 0 && (
+              <div
+                className="mt-1 flex items-center justify-end gap-2 text-xs text-text-muted"
+                title={`Prompt: ${sessionTokenUsage.promptTokenCount.toLocaleString()} | Response: ${sessionTokenUsage.candidatesTokenCount.toLocaleString()}`}
+              >
+                <span>
+                  Session Tokens Used: <span className="font-semibold text-accent">{sessionTokenUsage.totalTokenCount.toLocaleString()}</span>
+                </span>
+                <button onClick={onResetTokenUsage} title="Reset Session Token Counter" className="text-text-muted hover:text-accent">
+                  <ResetIcon className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+          </div>
+          {/* <ThemeSwitcher currentTheme={theme} setTheme={setTheme} /> */}
+          <button
+            onClick={onOpenVisualSettings}
+            title="Visual Settings"
+            className="p-1.5 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
+          >
+            <SwatchIcon className="w-5 h-5" />
+          </button>
+          <button
+            onClick={onOpenSettingsModal}
+            title="Connection Settings"
+            className="p-1.5 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
+          >
+            <WorkflowIcon className="w-5 h-5" />
+          </button>
+          {isDriveConfigured && (
+            <button
+              onClick={handleDriveClick}
+              title={driveButtonTitle}
+              className={`p-1.5 rounded-full transition-colors ${!!driveFolder ? 'bg-accent text-accent-text hover:bg-accent-hover' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary'}`}
             >
-                <LogoutIcon className="w-5 h-5" />
+              <GoogleDriveIcon className="w-5 h-5" />
             </button>
+          )}
+          <button
+            onClick={onLogout}
+            title="Logout"
+            className="p-1.5 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
+          >
+            <LogoutIcon className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </header>
