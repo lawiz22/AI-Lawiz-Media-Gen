@@ -73,11 +73,29 @@ export const BACKGROUND_OPTIONS = [
 ];
 
 export const ASPECT_RATIO_OPTIONS = [
-  { value: '1:1', label: '1:1 (Square)' },
-  { value: '3:4', label: '3:4 (Portrait)' },
-  { value: '4:3', label: '4:3 (Landscape)' },
-  { value: '9:16', label: '9:16 (Tall)' },
-  { value: '16:9', label: '16:9 (Widescreen)' },
+  { value: '1:1', label: '1:1 (Perfect Square)' },
+  { value: '2:3', label: '2:3 (Classic Portrait)' },
+  { value: '3:4', label: '3:4 (Golden Ratio)' },
+  { value: '3:5', label: '3:5 (Elegant Vertical)' },
+  { value: '4:5', label: '4:5 (Artistic Frame)' },
+  { value: '5:7', label: '5:7 (Balanced Portrait)' },
+  { value: '5:8', label: '5:8 (Tall Portrait)' },
+  { value: '7:9', label: '7:9 (Modern Portrait)' },
+  { value: '9:16', label: '9:16 (Slim Vertical)' },
+  { value: '9:19', label: '9:19 (Tall Slim)' },
+  { value: '9:21', label: '9:21 (Ultra Tall)' },
+  { value: '9:32', label: '9:32 (Skyline)' },
+  { value: '3:2', label: '3:2 (Golden Landscape)' },
+  { value: '4:3', label: '4:3 (Classic Landscape)' },
+  { value: '5:3', label: '5:3 (Wide Horizon)' },
+  { value: '5:4', label: '5:4 (Balanced Frame)' },
+  { value: '7:5', label: '7:5 (Elegant Landscape)' },
+  { value: '8:5', label: '8:5 (Cinematic View)' },
+  { value: '9:7', label: '9:7 (Artful Horizon)' },
+  { value: '16:9', label: '16:9 (Panorama)' },
+  { value: '19:9', label: '19:9 (Cinematic Ultrawide)' },
+  { value: '21:9', label: '21:9 (Epic Ultrawide)' },
+  { value: '32:9', label: '32:9 (Extreme Ultrawide)' },
 ];
 
 export const BANNER_ASPECT_RATIO_OPTIONS: { value: BannerAspectRatio; label: string }[] = [
@@ -1106,6 +1124,7 @@ export const COMFYUI_T2I_WORKFLOWS = [
   { value: 'flux', label: 'FLUX' },
   { value: 'wan2.2', label: 'WAN 2.2' },
   { value: 'qwen-t2i-gguf', label: 'Qwen T2I GGUF' },
+  { value: 'z-image', label: 'Z-Image' },
 ];
 
 export const COMFYUI_I2I_WORKFLOWS = [
@@ -1304,6 +1323,397 @@ export const COMFYUI_FLUX_WORKFLOW_TEMPLATE = {
     "class_type": "VAEEncode",
     "_meta": {
       "title": "VAE Encode"
+    }
+  }
+};
+
+export const COMFYUI_QWEN_WORKFLOW_TEMPLATE = {
+  "3": {
+    "inputs": {
+      "seed": 1079817570796892,
+      "steps": 4,
+      "cfg": 1,
+      "sampler_name": "er_sde",
+      "scheduler": "beta57",
+      "denoise": 1,
+      "model": [
+        "66",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "58",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "positive prompt",
+      "clip": [
+        "80",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "80",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "39",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "39": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Charger VAE"
+    }
+  },
+  "58": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "EmptySD3LatentImage"
+    }
+  },
+  "66": {
+    "inputs": {
+      "shift": 2.5,
+      "model": [
+        "197",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "ModelSamplingAuraFlow"
+    }
+  },
+  "75": {
+    "inputs": {
+      "lora_name": "qwen_kathlv2.safetensors",
+      "strength_model": 1,
+      "model": [
+        "196",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    }
+  },
+  "80": {
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "cuda:0"
+    },
+    "class_type": "CLIPLoaderMultiGPU",
+    "_meta": {
+      "title": "CLIPLoaderMultiGPU"
+    }
+  },
+  "195": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Enregistrer Image"
+    }
+  },
+  "196": {
+    "inputs": {
+      "lora_name": "Qwen-Image-Lightning-4steps-V2.0.safetensors",
+      "strength_model": 0.9,
+      "model": [
+        "201",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    }
+  },
+  "197": {
+    "inputs": {
+      "lora_name": "analogcore2000s_qwen.safetensors",
+      "strength_model": 0.8,
+      "model": [
+        "202",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    }
+  },
+  "201": {
+    "inputs": {
+      "unet_name": "qwen-image-Q6_K.gguf"
+    },
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Unet Loader (GGUF)"
+    }
+  },
+  "202": {
+    "inputs": {
+      "lora_name": "qwen_karenne.safetensors",
+      "strength_model": 0.59,
+      "model": [
+        "75",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    }
+  }
+};
+
+export const COMFYUI_Z_IMAGE_WORKFLOW_TEMPLATE = {
+  "3": {
+    "inputs": {
+      "seed": 241352804545044,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "11",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "Positive Prompt",
+      "clip": [
+        "32",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "Negative Prompt",
+      "clip": [
+        "32",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "9": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Enregistrer Image"
+    }
+  },
+  "11": {
+    "inputs": {
+      "shift": 3,
+      "model": [
+        "48",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "ModelSamplingAuraFlow"
+    }
+  },
+  "13": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "EmptySD3LatentImage"
+    }
+  },
+  "16": {
+    "inputs": {
+      "unet_name": "z_image_turbo_bf16.safetensors",
+      "weight_dtype": "fp8_e4m3fn"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Charger Modèle Diffusion"
+    }
+  },
+  "17": {
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Charger VAE"
+    }
+  },
+  "28": {
+    "inputs": {
+      "sage_attention": "auto",
+      "allow_compile": false,
+      "model": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "PathchSageAttentionKJ",
+    "_meta": {
+      "title": "Patch Sage Attention KJ"
+    }
+  },
+  "32": {
+    "inputs": {
+      "clip_name": "Qwen3-4B-UD-Q8_K_XL.gguf",
+      "type": "lumina2"
+    },
+    "class_type": "CLIPLoaderGGUF",
+    "_meta": {
+      "title": "CLIPLoader (GGUF)"
+    }
+  },
+  "46": {
+    "inputs": {
+      "image": "example.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Charger Image"
+    }
+  },
+  "47": {
+    "inputs": {
+      "pixels": [
+        "46",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "48": {
+    "inputs": {
+      "lora_name": "Z-TURBO_Photography_35mmPhoto_1536.safetensors",
+      "strength_model": 1,
+      "model": [
+        "28",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
     }
   }
 };

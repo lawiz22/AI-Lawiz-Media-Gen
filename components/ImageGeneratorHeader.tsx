@@ -124,22 +124,38 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
 
             {/* Right Side: Global Settings */}
             <div className="flex items-center gap-4">
-                {/* Aspect Ratio (Only show if not Qwen T2I which has its own) */}
-                {!(options.provider === 'comfyui' && options.comfyModelType === 'qwen-t2i-gguf') && (
+                {/* Megapixel Slider (Z-Image Only) */}
+                {options.comfyModelType === 'z-image' && (
                     <div className="flex items-center gap-2">
-                        <label className="text-xs font-medium text-text-secondary">Ratio:</label>
-                        <select
-                            value={options.aspectRatio}
-                            onChange={(e) => updateOptions({ aspectRatio: e.target.value })}
+                        <label className="text-xs font-medium text-text-secondary">MP:</label>
+                        <input
+                            type="range"
+                            min="0.1"
+                            max="2.0"
+                            step="0.1"
+                            value={options.megapixel || 1.0}
+                            onChange={(e) => updateOptions({ megapixel: parseFloat(e.target.value) })}
                             disabled={isDisabled}
-                            className="bg-bg-tertiary border border-border-primary rounded-md px-2 py-1 text-xs focus:ring-accent focus:border-accent"
-                        >
-                            {ASPECT_RATIO_OPTIONS.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                        </select>
+                            className="w-20 accent-accent"
+                        />
+                        <span className="text-xs text-text-secondary w-8 text-right">{(options.megapixel || 1.0).toFixed(1)}</span>
                     </div>
                 )}
+
+                {/* Aspect Ratio */}
+                <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-text-secondary">Ratio:</label>
+                    <select
+                        value={options.aspectRatio}
+                        onChange={(e) => updateOptions({ aspectRatio: e.target.value })}
+                        disabled={isDisabled}
+                        className="bg-bg-tertiary border border-border-primary rounded-md px-2 py-1 text-xs focus:ring-accent focus:border-accent"
+                    >
+                        {ASPECT_RATIO_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                    </select>
+                </div>
 
                 {/* Number of Images */}
                 <div className="flex items-center gap-2">

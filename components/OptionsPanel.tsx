@@ -296,7 +296,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             }
         }
         return Array.from(modelSet);
+        return Array.from(modelSet);
     }, [comfyUIObjectInfo]);
+
+    const comfyUnets = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.UNETLoader?.input?.required?.unet_name), [comfyUIObjectInfo]);
 
     const nunchakuModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.NunchakuFluxDiTLoader?.input?.required?.model_path), [comfyUIObjectInfo]);
 
@@ -775,7 +778,85 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                 />
                             </div>
                         )}
+
+                        {modelType === 'qwen-t2i-gguf' && (
+                            <div className="pt-2 border-t border-border-primary/50 space-y-2">
+                                <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Qwen Models</h4>
+                                <SelectInput
+                                    label="Unet (GGUF)"
+                                    value={options.comfyQwenUnet || ''}
+                                    onChange={handleOptionChange('comfyQwenUnet')}
+                                    options={comfyGgufModels.map(m => ({ value: m, label: m }))}
+                                    disabled={isDisabled}
+                                />
+                                <SelectInput
+                                    label="CLIP"
+                                    value={options.comfyQwenClip || ''}
+                                    onChange={handleOptionChange('comfyQwenClip')}
+                                    options={comfyClips.map(m => ({ value: m, label: m }))}
+                                    disabled={isDisabled}
+                                />
+                                <SelectInput
+                                    label="VAE"
+                                    value={options.comfyQwenVae || ''}
+                                    onChange={handleOptionChange('comfyQwenVae')}
+                                    options={comfyVaes.map(m => ({ value: m, label: m }))}
+                                    disabled={isDisabled}
+                                />
+                                <NumberSlider
+                                    label={`Model Sampling AuraFlow (Shift): ${options.comfyQwenShift || 2.5}`}
+                                    value={options.comfyQwenShift || 2.5}
+                                    onChange={handleSliderChange('comfyQwenShift')}
+                                    min={0.0}
+                                    max={10.0}
+                                    step={0.1}
+                                    disabled={isDisabled}
+                                />
+                            </div>
+                        )}
                     </div>
+
+                    {/* Z-Image Models */}
+                    {modelType === 'z-image' && (
+                        <div className="mt-4 p-4 bg-bg-tertiary rounded-lg border border-border-secondary">
+                            <h3 className="text-sm font-medium text-text-primary mb-3">Z-Image Models</h3>
+                            <div className="grid grid-cols-1 gap-4">
+                                <SelectInput
+                                    label="Unet Model (Safetensors)"
+                                    value={options.comfyZImageUnet || ''}
+                                    onChange={handleOptionChange('comfyZImageUnet')}
+                                    options={comfyUnets.map(m => ({ value: m, label: m }))}
+                                    disabled={isDisabled}
+                                />
+                                <SelectInput
+                                    label="CLIP Model (GGUF)"
+                                    value={options.comfyZImageClip || ''}
+                                    onChange={handleOptionChange('comfyZImageClip')}
+                                    options={t5GgufEncoderModels.map(m => ({ value: m, label: m }))}
+                                    disabled={isDisabled}
+                                />
+                                <SelectInput
+                                    label="VAE Model"
+                                    value={options.comfyZImageVae || ''}
+                                    onChange={handleOptionChange('comfyZImageVae')}
+                                    options={comfyVaes.map(m => ({ value: m, label: m }))}
+                                    disabled={isDisabled}
+                                />
+                                <CheckboxSlider
+                                    label="Enable Model Sampling AuraFlow (Shift)"
+                                    isChecked={options.comfyZImageUseShift ?? true}
+                                    onCheckboxChange={handleOptionChange('comfyZImageUseShift')}
+                                    sliderLabel="Shift Value"
+                                    sliderValue={options.comfyZImageShift || 3.0}
+                                    onSliderChange={handleSliderChange('comfyZImageShift')}
+                                    min={0.0}
+                                    max={10.0}
+                                    step={0.1}
+                                    disabled={isDisabled}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea />
                     {modelType !== 'nunchaku-kontext-flux' && modelType !== 'nunchaku-flux-image' && modelType !== 'flux-krea' && (
@@ -908,59 +989,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     </>
                 )}
 
-                {modelType === 'qwen-t2i-gguf' && (
-                    <>
-                        <OptionSection title="Sampler Settings">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <NumberSlider label={`Steps: ${options.comfySteps || 4}`} value={options.comfySteps || 4} onChange={handleSliderChange('comfySteps')} min={1} max={20} step={1} disabled={isDisabled} />
-                                <NumberSlider label={`CFG: ${options.comfyCfg || 1.0}`} value={options.comfyCfg || 1.0} onChange={handleSliderChange('comfyCfg')} min={1} max={5} step={0.1} disabled={isDisabled} />
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <SelectInput label="Sampler" value={options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={comfySamplers.map(s => ({ value: s, label: s }))} disabled={isDisabled} />
-                                <SelectInput label="Scheduler" value={options.comfyScheduler || ''} onChange={handleOptionChange('comfyScheduler')} options={comfySchedulers.map(s => ({ value: s, label: s }))} disabled={isDisabled} />
-                            </div>
-                            <NumberSlider label={`AuraFlow Shift: ${options.comfyQwenAuraFlowShift || 2.5}`} value={options.comfyQwenAuraFlowShift || 2.5} onChange={handleSliderChange('comfyQwenAuraFlowShift')} min={0} max={10} step={0.1} disabled={isDisabled} />
-                        </OptionSection>
-                        <OptionSection title="Models">
-                            <SelectInput label="Unet Model (GGUF)" value={options.comfyQwenUnet || ''} onChange={handleOptionChange('comfyQwenUnet')} options={comfyGgufModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="CLIP Model (GGUF)" value={options.comfyQwenClip || ''} onChange={handleOptionChange('comfyQwenClip')} options={comfyGgufModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="VAE Model" value={options.comfyQwenVae || ''} onChange={handleOptionChange('comfyQwenVae')} options={comfyVaes.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                        </OptionSection>
-                        <OptionSection title="Resolution">
-                            <SelectInput
-                                label="Megapixels"
-                                value={options.comfyQwenMegaPixel || '1.0'}
-                                onChange={handleOptionChange('comfyQwenMegaPixel')}
-                                options={[
-                                    { value: '0.25', label: '0.25 MP (~512x512)' },
-                                    { value: '0.5', label: '0.5 MP (~768x640)' },
-                                    { value: '0.78', label: '0.78 MP (~896x896)' },
-                                    { value: '1.0', label: '1.0 MP (~1024x1024)' },
-                                    { value: '1.5', label: '1.5 MP (~1536x1024)' },
-                                    { value: '2.0', label: '2.0 MP (~1920x1080)' },
-                                    { value: '4.0', label: '4.0 MP (~2048x2048)' }
-                                ]}
-                                disabled={isDisabled}
-                            />
-                            <SelectInput label="Aspect Ratio" value={options.comfyQwenAspectRatio || '1:1 (Perfect Square)'} onChange={handleOptionChange('comfyQwenAspectRatio')} options={['1:1 (Perfect Square)', '4:3 (Landscape)', '3:4 (Portrait)', '16:9 (Widescreen)', '9:16 (Tall)'].map(r => ({ value: r, label: r }))} disabled={isDisabled || options.comfyQwenCustomRatio} />
-                            <SelectInput label="Divisible By" value={String(options.comfyQwenDivisibleBy || 64)} onChange={(e) => updateOptions({ comfyQwenDivisibleBy: Number(e.target.value) })} options={[8, 16, 32, 64, 128].map(n => ({ value: String(n), label: String(n) }))} disabled={isDisabled} />
-                        </OptionSection>
-                        <OptionSection title="LoRAs">
-                            <CheckboxSlider label="Lora 1 (Lightning)" isChecked={!!options.comfyQwenUseLora1} onCheckboxChange={handleOptionChange('comfyQwenUseLora1')} sliderValue={options.comfyQwenLora1Strength || 1.0} onSliderChange={handleSliderChange('comfyQwenLora1Strength')} min={0} max={2} step={0.01} disabled={isDisabled} sliderLabel="Strength" />
-                            <CheckboxSlider label="Lora 2 (NSFW)" isChecked={!!options.comfyQwenUseLora2} onCheckboxChange={handleOptionChange('comfyQwenUseLora2')} sliderValue={options.comfyQwenLora2Strength || 0.86} onSliderChange={handleSliderChange('comfyQwenLora2Strength')} min={0} max={2} step={0.01} disabled={isDisabled} sliderLabel="Strength" />
-                            <CheckboxSlider label="Lora 3 (Style)" isChecked={!!options.comfyQwenUseLora3} onCheckboxChange={handleOptionChange('comfyQwenUseLora3')} sliderValue={options.comfyQwenLora3Strength || 1.0} onSliderChange={handleSliderChange('comfyQwenLora3Strength')} min={0} max={2} step={0.01} disabled={isDisabled} sliderLabel="Strength" />
-                            <CheckboxSlider label="Lora 4 (Custom)" isChecked={!!options.comfyQwenUseLora4} onCheckboxChange={handleOptionChange('comfyQwenUseLora4')} sliderValue={options.comfyQwenLora4Strength || 1.0} onSliderChange={handleSliderChange('comfyQwenLora4Strength')} min={0} max={2} step={0.01} disabled={isDisabled} sliderLabel="Strength" />
-                            {(options.comfyQwenUseLora1 || options.comfyQwenUseLora2 || options.comfyQwenUseLora3 || options.comfyQwenUseLora4) && (
-                                <div className="space-y-2 p-2 mt-2 border-t border-border-primary/50">
-                                    {options.comfyQwenUseLora1 && <SelectInput label="Lora 1 Name" value={options.comfyQwenLora1Name || ''} onChange={handleOptionChange('comfyQwenLora1Name')} options={comfyLoras.map(l => ({ value: l, label: l }))} disabled={isDisabled} />}
-                                    {options.comfyQwenUseLora2 && <SelectInput label="Lora 2 Name" value={options.comfyQwenLora2Name || ''} onChange={handleOptionChange('comfyQwenLora2Name')} options={comfyLoras.map(l => ({ value: l, label: l }))} disabled={isDisabled} />}
-                                    {options.comfyQwenUseLora3 && <SelectInput label="Lora 3 Name" value={options.comfyQwenLora3Name || ''} onChange={handleOptionChange('comfyQwenLora3Name')} options={comfyLoras.map(l => ({ value: l, label: l }))} disabled={isDisabled} />}
-                                    {options.comfyQwenUseLora4 && <SelectInput label="Lora 4 Name" value={options.comfyQwenLora4Name || ''} onChange={handleOptionChange('comfyQwenLora4Name')} options={comfyLoras.map(l => ({ value: l, label: l }))} disabled={isDisabled} />}
-                                </div>
-                            )}
-                        </OptionSection>
-                    </>
-                )}
+
             </>
         );
     };

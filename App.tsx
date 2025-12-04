@@ -153,6 +153,49 @@ const App: React.FC = () => {
                 comfySampler: "euler",
                 comfyScheduler: "simple",
             });
+        } else if (newOpts.comfyModelType === 'qwen-t2i-gguf') {
+            Object.assign(newOpts, {
+                comfyQwenUseLora: true,
+                comfyQwenLora1Name: "Qwen-Image-Lightning-4steps-V2.0.safetensors",
+                comfyQwenLora1Strength: 1.0,
+                comfyQwenLora2Name: "",
+                comfyQwenLora2Strength: 1.0,
+                comfyQwenLora3Name: "",
+                comfyQwenLora3Strength: 1.0,
+                comfyQwenLora4Name: "",
+                comfyQwenLora4Strength: 1.0,
+                comfyQwenUnet: "qwen-image-Q6_K.gguf",
+                comfyQwenVae: "qwen_image_vae.safetensors",
+                comfyQwenClip: "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+                comfyQwenShift: 2.5,
+                comfySteps: 4,
+                comfyCfg: 1.0,
+                comfySampler: "er_sde",
+                comfyScheduler: "beta57",
+            });
+        } else if (newOpts.comfyModelType === 'z-image') {
+            Object.assign(newOpts, {
+                comfyZImageUseLora: true,
+                comfyZImageLora1Name: "Z-TURBO_Photography_35mmPhoto_1536.safetensors",
+                comfyZImageLora1Strength: 1.0,
+                comfyZImageLora2Name: "",
+                comfyZImageLora2Strength: 1.0,
+                comfyZImageLora3Name: "",
+                comfyZImageLora3Strength: 1.0,
+                comfyZImageLora4Name: "",
+                comfyZImageLora4Strength: 1.0,
+                comfyZImageUnet: "z_image_turbo_bf16.safetensors",
+                comfyZImageVae: "ae.safetensors",
+                comfyZImageClip: "Qwen3-4B-UD-Q8_K_XL.gguf",
+                comfyZImageShift: 3.0,
+                comfyZImageUseShift: true,
+                comfySteps: 8,
+                comfyCfg: 1.0,
+                comfySampler: "euler",
+                comfyScheduler: "simple",
+                megapixel: 1.0,
+                aspectRatio: "1:1"
+            });
         }
 
         if (activeTab === 'character-generator') {
@@ -711,13 +754,13 @@ const App: React.FC = () => {
                                     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                         <div className="flex items-center justify-between mb-4">
                                             <h2 className="text-xl font-bold text-accent">
-                                                {generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux')
+                                                {generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image')
                                                     ? '1. Refine (Optional)'
                                                     : '1. Source & Context'}
                                             </h2>
                                         </div>
 
-                                        {generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux') ? (
+                                        {generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image') ? (
                                             <div className="space-y-4">
                                                 <div className="flex items-center gap-2">
                                                     <input

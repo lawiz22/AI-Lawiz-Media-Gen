@@ -11,8 +11,9 @@ import {
     COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE,
     COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE,
     COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE,
-    COMFYUI_QWEN_T2I_GGUF_WORKFLOW_TEMPLATE,
+    COMFYUI_QWEN_WORKFLOW_TEMPLATE,
     COMFYUI_FLUX_WORKFLOW_TEMPLATE,
+    COMFYUI_Z_IMAGE_WORKFLOW_TEMPLATE,
 } from "../constants";
 
 import { getGenAIInstance } from "./geminiService";
@@ -83,7 +84,7 @@ export const cancelComfyUIExecution = async (): Promise<void> => {
 };
 
 // --- Gemini-based Prompt Generation ---
-type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf';
+type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image';
 
 const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
     switch (modelType) {
@@ -94,6 +95,7 @@ const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
         case 'nunchaku-flux-image':
         case 'flux-krea':
         case 'qwen-t2i-gguf':
+        case 'z-image':
             return 'Your response MUST be a single, detailed, artistic, and descriptive paragraph. Use rich vocabulary.';
         case 'gemini':
             return 'Your response MUST be a detailed, narrative paragraph written in a natural language. Describe the scene as if you were writing a story or giving instructions to a human artist. Use full, descriptive sentences.';
@@ -499,7 +501,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         case 'nunchaku-flux-image': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE)); break;
         case 'flux-krea': workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE)); break;
         case 'face-detailer-sd1.5': workflow = JSON.parse(JSON.stringify(COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE)); break;
-        case 'qwen-t2i-gguf': workflow = JSON.parse(JSON.stringify(COMFYUI_QWEN_T2I_GGUF_WORKFLOW_TEMPLATE)); break;
+
         case 'flux': {
             workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_WORKFLOW_TEMPLATE));
 
@@ -599,6 +601,281 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
                     }
                     workflow["27"].inputs.width = width;
                     workflow["27"].inputs.height = height;
+                }
+
+                // Set KSampler Parameters
+                if (workflow["31"]) {
+                    workflow["31"].inputs.steps = options.comfySteps;
+                    workflow["31"].inputs.cfg = options.comfyCfg;
+                    workflow["31"].inputs.sampler_name = options.comfySampler;
+                    workflow["31"].inputs.scheduler = options.comfyScheduler;
+
+                    if (options.comfySeed !== undefined) {
+                        workflow["31"].inputs.seed = options.comfySeed;
+                        workflow["31"].inputs.control_after_generate = "fixed";
+                    } else {
+                        workflow["31"].inputs.seed = Math.floor(Math.random() * 1e15);
+                        workflow["31"].inputs.control_after_generate = "fixed";
+                    }
+                }
+            }
+            break;
+        }
+        case 'qwen-t2i-gguf': {
+            workflow = JSON.parse(JSON.stringify(COMFYUI_QWEN_WORKFLOW_TEMPLATE));
+
+            // Set Prompts
+            if (workflow["6"]) workflow["6"].inputs.text = options.comfyPrompt || '';
+            if (workflow["7"]) workflow["7"].inputs.text = options.comfyNegativePrompt || '';
+
+            // Set Models
+            if (workflow["201"] && options.comfyQwenUnet) workflow["201"].inputs.unet_name = options.comfyQwenUnet;
+            if (workflow["80"] && options.comfyQwenClip) workflow["80"].inputs.clip_name = options.comfyQwenClip;
+            if (workflow["39"] && options.comfyQwenVae) workflow["39"].inputs.vae_name = options.comfyQwenVae;
+
+            // Set Shift
+            if (workflow["66"] && options.comfyQwenShift) workflow["66"].inputs.shift = options.comfyQwenShift;
+
+            // Dynamic LoRA Chaining
+            let lastModelNodeId = "201"; // Start with UnetLoaderGGUF
+
+            // Remove template LoRAs first to start clean
+            delete workflow["196"];
+            delete workflow["197"];
+            delete workflow["202"];
+            delete workflow["75"];
+
+            if (options.comfyQwenUseLora) {
+                let currentLoraIndex = 0;
+                for (let i = 1; i <= 4; i++) {
+                    const loraName = options[`comfyQwenLora${i}Name` as keyof GenerationOptions] as string;
+                    const loraStrength = options[`comfyQwenLora${i}Strength` as keyof GenerationOptions] as number;
+
+                    if (loraName && loraName !== 'None') {
+                        currentLoraIndex++;
+                        const loraNodeId = `lora_qwen_${currentLoraIndex}`;
+                        workflow[loraNodeId] = {
+                            "inputs": {
+                                "lora_name": loraName,
+                                "strength_model": loraStrength !== undefined ? Number(loraStrength) : 1.0,
+                                "model": [
+                                    lastModelNodeId,
+                                    0
+                                ]
+                            },
+                            "class_type": "LoraLoaderModelOnly",
+                            "_meta": {
+                                "title": `LoraLoaderModelOnly ${currentLoraIndex}`
+                            }
+                        };
+                        lastModelNodeId = loraNodeId;
+                    }
+                }
+            }
+
+            // Connect last model node to ModelSamplingAuraFlow (66)
+            if (workflow["66"]) workflow["66"].inputs.model = [lastModelNodeId, 0];
+
+            // Set KSampler Parameters
+            if (workflow["3"]) {
+                workflow["3"].inputs.steps = options.comfySteps;
+                workflow["3"].inputs.cfg = options.comfyCfg;
+                workflow["3"].inputs.sampler_name = options.comfySampler;
+                workflow["3"].inputs.scheduler = options.comfyScheduler;
+
+                if (options.comfySeed !== undefined) {
+                    workflow["3"].inputs.seed = options.comfySeed;
+                    workflow["3"].inputs.control_after_generate = "fixed";
+                } else {
+                    workflow["3"].inputs.seed = Math.floor(Math.random() * 1e15);
+                    workflow["3"].inputs.control_after_generate = "fixed";
+                }
+            }
+
+            // Handle T2I vs Refine (I2I)
+            if (options.useRefine && sourceFile) {
+                // I2I / Refine Path
+                const uploadedImageName = await uploadImageToComfyUI(sourceFile);
+
+                // Add LoadImage node
+                workflow["90"] = {
+                    "inputs": { "image": uploadedImageName },
+                    "class_type": "LoadImage",
+                    "_meta": { "title": "Load Image (Refine)" }
+                };
+
+                // Add VAEEncode node
+                workflow["91"] = {
+                    "inputs": {
+                        "pixels": ["90", 0],
+                        "vae": ["39", 0]
+                    },
+                    "class_type": "VAEEncode",
+                    "_meta": { "title": "VAE Encode" }
+                };
+
+                // Ensure KSampler uses VAEEncode (91)
+                if (workflow["3"]) workflow["3"].inputs.latent_image = ["91", 0];
+
+                // Set Denoise
+                if (workflow["3"]) workflow["3"].inputs.denoise = options.refineDenoise || 0.5;
+            } else {
+                // T2I Path
+                // Ensure KSampler uses EmptySD3LatentImage (58)
+                if (workflow["3"]) workflow["3"].inputs.latent_image = ["58", 0];
+
+                // Set Denoise to 1.0 for T2I
+                if (workflow["3"]) workflow["3"].inputs.denoise = 1.0;
+
+                // Handle Aspect Ratio
+                if (workflow["58"] && options.aspectRatio) {
+                    let width = 1024;
+                    let height = 1024;
+
+                    switch (options.aspectRatio) {
+                        case "1:1": width = 1328; height = 1328; break;
+                        case "16:9": width = 1664; height = 928; break;
+                        case "9:16": width = 928; height = 1664; break;
+                        case "4:3": width = 1472; height = 1140; break;
+                        case "3:4": width = 1140; height = 1472; break;
+                        case "3:2": width = 1584; height = 1056; break;
+                        case "2:3": width = 1056; height = 1584; break;
+                        default:
+                            // Fallback to generic calculation if ratio not in list
+                            const [w, h] = options.aspectRatio.split(':').map(Number);
+                            const baseSize = 1024;
+                            const aspect = w / h;
+                            if (aspect >= 1) {
+                                width = baseSize;
+                                height = Math.round(baseSize / aspect / 16) * 16;
+                            } else {
+                                height = baseSize;
+                                width = Math.round(baseSize * aspect / 16) * 16;
+                            }
+                            break;
+                    }
+                    workflow["58"].inputs.width = width;
+                    workflow["58"].inputs.height = height;
+                }
+            }
+            break;
+        }
+        case 'z-image': {
+            workflow = JSON.parse(JSON.stringify(COMFYUI_Z_IMAGE_WORKFLOW_TEMPLATE));
+
+            // 1. Set Prompts
+            if (workflow["6"]) workflow["6"].inputs.text = options.comfyPrompt;
+            if (workflow["7"]) workflow["7"].inputs.text = options.comfyNegativePrompt;
+
+            // 2. Set Models
+            if (workflow["16"] && options.comfyZImageUnet) workflow["16"].inputs.unet_name = options.comfyZImageUnet;
+            if (workflow["17"] && options.comfyZImageVae) workflow["17"].inputs.vae_name = options.comfyZImageVae;
+            if (workflow["32"] && options.comfyZImageClip) workflow["32"].inputs.clip_name = options.comfyZImageClip;
+
+
+            // 3. Handle LoRAs (Dynamic Chaining)
+            // Chain: Unet (16) -> SageAttention (28) -> LoRAs -> AuraFlow (11) -> KSampler (3)
+            // Initial input to LoRA chain is Node 28 (SageAttention)
+            let currentModelNode = ["28", 0];
+
+            // Helper to add LoRA node
+            const addLoraNode = (name: string, strength: number, previousModel: any[]) => {
+                const loraNodeId = (Math.floor(Math.random() * 100000) + 1000).toString();
+                workflow[loraNodeId] = {
+                    inputs: {
+                        lora_name: name,
+                        strength_model: strength,
+                        model: previousModel
+                    },
+                    class_type: "LoraLoaderModelOnly",
+                    _meta: { title: "LoraLoaderModelOnly (Dynamic)" }
+                };
+                return [loraNodeId, 0];
+            };
+
+            if (options.comfyZImageUseLora) {
+                if (options.comfyZImageLora1Name) currentModelNode = addLoraNode(options.comfyZImageLora1Name, options.comfyZImageLora1Strength || 1.0, currentModelNode);
+                if (options.comfyZImageLora2Name) currentModelNode = addLoraNode(options.comfyZImageLora2Name, options.comfyZImageLora2Strength || 1.0, currentModelNode);
+                if (options.comfyZImageLora3Name) currentModelNode = addLoraNode(options.comfyZImageLora3Name, options.comfyZImageLora3Strength || 1.0, currentModelNode);
+                if (options.comfyZImageLora4Name) currentModelNode = addLoraNode(options.comfyZImageLora4Name, options.comfyZImageLora4Strength || 1.0, currentModelNode);
+            }
+
+            // Connect final LoRA output to AuraFlow (Node 11) or KSampler (Node 3)
+            if (options.comfyZImageUseShift) {
+                if (workflow["11"]) {
+                    workflow["11"].inputs.model = currentModelNode;
+                    if (options.comfyZImageShift !== undefined) workflow["11"].inputs.shift = options.comfyZImageShift;
+                }
+                // Node 3 is connected to Node 11 in template, so no change needed for Node 3 input if using Shift
+            } else {
+                // Bypass Node 11 (Shift)
+                if (workflow["3"]) workflow["3"].inputs.model = currentModelNode;
+            }
+
+            // 4. Set KSampler Parameters
+            if (workflow["3"]) {
+                if (options.comfySteps) workflow["3"].inputs.steps = options.comfySteps;
+                if (options.comfyCfg) workflow["3"].inputs.cfg = options.comfyCfg;
+                if (options.comfySampler) workflow["3"].inputs.sampler_name = options.comfySampler;
+                if (options.comfyScheduler) workflow["3"].inputs.scheduler = options.comfyScheduler;
+                if (options.comfySeed) workflow["3"].inputs.seed = options.comfySeed;
+            }
+
+            // 5. Handle Resolution
+            if (workflow["13"]) {
+                const megapixel = options.megapixel || 1.0;
+                const totalPixels = megapixel * 1024 * 1024;
+                let ratio = 1.0;
+
+                if (options.aspectRatio) {
+                    const [w, h] = options.aspectRatio.split(':').map(Number);
+                    if (w && h) ratio = w / h;
+                }
+
+                const width = Math.round(Math.sqrt(totalPixels * ratio));
+                const height = Math.round(Math.sqrt(totalPixels / ratio));
+
+                // Ensure divisible by 16 (or 64 as per FluxResolutionNode?)
+                // User said "mimic exact ratio and size available in node FLUX RESOLUTION CALC".
+                // But also said "do the math" based on megapixel.
+                // I'll stick to the math + rounding to 16 or 64.
+                // Flux usually likes 16. The template had "divisible_by": "64" in Node 29.
+                // I'll round to 64 to be safe for Z-Image/Flux.
+                workflow["13"].inputs.width = Math.round(width / 64) * 64;
+                workflow["13"].inputs.height = Math.round(height / 64) * 64;
+            }
+
+            // 6. Handle Refine (I2I)
+            // 6. Handle Refine (I2I)
+            if (options.useRefine && sourceFile) {
+                const uploadedImageName = await uploadImageToComfyUI(sourceFile);
+                // Add LoadImage (Node 90)
+                workflow["90"] = {
+                    inputs: { image: uploadedImageName, upload: "image" },
+                    class_type: "LoadImage",
+                    _meta: { title: "Load Image (Refine)" }
+                };
+
+                // Add VAEEncode (Node 91)
+                workflow["91"] = {
+                    inputs: {
+                        pixels: ["90", 0],
+                        vae: ["17", 0] // Use same VAE as T2I
+                    },
+                    class_type: "VAEEncode",
+                    _meta: { title: "VAE Encode (Refine)" }
+                };
+
+                // Connect VAEEncode to KSampler (Node 3)
+                if (workflow["3"]) {
+                    workflow["3"].inputs.latent_image = ["91", 0];
+                    workflow["3"].inputs.denoise = options.refineDenoise || 0.5;
+                }
+            } else {
+                // T2I Path
+                if (workflow["3"]) {
+                    workflow["3"].inputs.latent_image = ["13", 0]; // EmptySD3LatentImage
+                    workflow["3"].inputs.denoise = 1.0;
                 }
             }
             break;
@@ -898,57 +1175,11 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         detailerNodeInputs.bbox_threshold = options.comfyDetailerBboxThreshold;
         detailerNodeInputs.bbox_dilation = options.comfyDetailerBboxDilation;
         detailerNodeInputs.bbox_crop_factor = options.comfyDetailerBboxCropFactor;
-    } else if (options.comfyModelType === 'qwen-t2i-gguf') {
-        workflow['80'].inputs.unet_name = options.comfyQwenUnet;
-        workflow['81'].inputs.clip_name = options.comfyQwenClip;
-        workflow['39'].inputs.vae_name = options.comfyQwenVae;
 
-        const ksampler = workflow['3'];
-        ksampler.inputs.steps = options.comfySteps;
-        ksampler.inputs.cfg = options.comfyCfg;
-        ksampler.inputs.sampler_name = options.comfySampler;
-        ksampler.inputs.scheduler = options.comfyScheduler;
 
-        workflow['66'].inputs.shift = options.comfyQwenAuraFlowShift;
 
-        const resNode = workflow['86'];
-        resNode.inputs.megapixel = options.comfyQwenMegaPixel || '1.0';
-        resNode.inputs.aspect_ratio = options.comfyQwenAspectRatio;
-        resNode.inputs.custom_ratio = options.comfyQwenCustomRatio;
-        resNode.inputs.custom_aspect_ratio = options.comfyQwenCustomAspectRatio;
-        resNode.inputs.divisible_by = String(options.comfyQwenDivisibleBy);
-
-        const loraChain = [
-            { key: '74', use: options.comfyQwenUseLora1, name: options.comfyQwenLora1Name, strength: options.comfyQwenLora1Strength },
-            { key: '75', use: options.comfyQwenUseLora2, name: options.comfyQwenLora2Name, strength: options.comfyQwenLora2Strength },
-            { key: '82', use: options.comfyQwenUseLora3, name: options.comfyQwenLora3Name, strength: options.comfyQwenLora3Strength },
-            { key: 'lora_4_node', use: options.comfyQwenUseLora4, name: options.comfyQwenLora4Name, strength: options.comfyQwenLora4Strength }
-        ];
-
-        let lastActiveNodeKey = '80'; // Start with UnetLoader
-
-        for (const lora of loraChain) {
-            if (lora.use && lora.name) {
-                workflow[lora.key].inputs.lora_name = lora.name;
-                workflow[lora.key].inputs.strength_model = lora.strength;
-                workflow[lora.key].inputs.model = [lastActiveNodeKey, 0];
-                lastActiveNodeKey = lora.key;
-            } else {
-                delete workflow[lora.key];
-            }
-        }
-
-        const allLoraKeys = ['74', '75', '82', 'lora_4_node'];
-        allLoraKeys.forEach(key => {
-            const isUsed = loraChain.some(l => l.key === key && l.use && l.name);
-            if (!isUsed) {
-                delete workflow[key];
-            }
-        });
-
-        workflow['66'].inputs.model = [lastActiveNodeKey, 0];
+        return workflow;
     }
-
 
     return workflow;
 };

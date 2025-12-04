@@ -43,8 +43,8 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
 
     const modelType = options.comfyModelType;
 
-    // Only show for SDXL, SD1.5, FLUX
-    if (modelType !== 'sdxl' && modelType !== 'sd1.5' && modelType !== 'flux') {
+    // Only show for SDXL, SD1.5, FLUX, Qwen, Z-Image
+    if (modelType !== 'sdxl' && modelType !== 'sd1.5' && modelType !== 'flux' && modelType !== 'qwen-t2i-gguf' && modelType !== 'z-image') {
         return null;
     }
 
@@ -57,7 +57,7 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
                     label={`Steps: ${options.comfySteps || 25}`}
                     value={options.comfySteps || 25}
                     onChange={handleSliderChange('comfySteps')}
-                    min={5} max={100} step={1}
+                    min={1} max={100} step={1}
                     disabled={isDisabled}
                 />
                 <NumberSlider
@@ -96,7 +96,7 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
                 />
             )}
 
-            {(modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux') && (
+            {(modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux' || modelType === 'qwen-t2i-gguf' || modelType === 'z-image') && (
                 <div className="pt-2 border-t border-border-primary/50">
                     <h4 className="text-md font-semibold text-text-secondary mb-2">Seed</h4>
                     <div className="grid grid-cols-2 gap-4">

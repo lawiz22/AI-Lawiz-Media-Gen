@@ -20,14 +20,14 @@ export interface User {
 export type PoseMode = 'random' | 'select' | 'prompt' | 'library';
 export type BackgroundMode = 'black' | 'white' | 'gray' | 'green screen' | 'natural studio' | 'original' | 'random' | 'prompt' | 'image';
 export type ClothingMode = 'original' | 'image' | 'prompt' | 'random';
-export type AspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
+export type AspectRatio = '1:1' | '2:3' | '3:4' | '3:5' | '4:5' | '5:7' | '5:8' | '7:9' | '9:16' | '9:19' | '9:21' | '9:32' | '3:2' | '4:3' | '5:3' | '5:4' | '7:5' | '8:5' | '9:7' | '16:9' | '19:9' | '21:9' | '32:9';
 export type PhotoStyle = 'professional photoshoot' | '35mm analog' | 'polaroid' | 'candid' | 'smartphone';
 export type ImageStyle = 'photorealistic' | 'cartoon' | 'comic book style' | 'anime' | 'oil painting' | 'watercolor painting' | 'impressionism' | 'charcoal sketch' | 'cubism' | 'surrealism' | 'pixel art';
 export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | 'a 1970s film look' | 'a high-contrast film noir style photograph' | 'a classical Dutch Master painting' | 'a high-fashion Vogue magazine shot';
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = string;
-export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf';
+export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image';
 export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui';
 export type VideoProvider = 'gemini' | 'comfyui';
@@ -39,6 +39,7 @@ export interface GenerationOptions {
   provider: Provider;
   numImages: number;
   aspectRatio: AspectRatio;
+  megapixel?: number; // For Z-Image
   imageStyle: ImageStyle;
   photoStyle: PhotoStyle;
   eraStyle: EraStyle;
@@ -113,6 +114,37 @@ export interface GenerationOptions {
   comfyFluxClip1?: string;
   comfyFluxClip2?: string;
   comfyFluxVae?: string;
+
+  // Qwen Specific
+  comfyQwenUseLora?: boolean;
+  comfyQwenLora1Name?: string;
+  comfyQwenLora1Strength?: number;
+  comfyQwenLora2Name?: string;
+  comfyQwenLora2Strength?: number;
+  comfyQwenLora3Name?: string;
+  comfyQwenLora3Strength?: number;
+  comfyQwenLora4Name?: string;
+  comfyQwenLora4Strength?: number;
+  comfyQwenUnet?: string;
+  comfyQwenVae?: string;
+  comfyQwenClip?: string;
+  comfyQwenShift?: number;
+
+  // Z-Image
+  comfyZImageUseLora?: boolean;
+  comfyZImageLora1Name?: string;
+  comfyZImageLora1Strength?: number;
+  comfyZImageLora2Name?: string;
+  comfyZImageLora2Strength?: number;
+  comfyZImageLora3Name?: string;
+  comfyZImageLora3Strength?: number;
+  comfyZImageLora4Name?: string;
+  comfyZImageLora4Strength?: number;
+  comfyZImageUnet?: string;
+  comfyZImageVae?: string;
+  comfyZImageClip?: string;
+  comfyZImageShift?: number;
+  comfyZImageUseShift?: boolean;
   // SD 1.5 LoRA Settings
   comfySd15UseLora?: boolean;
   comfySd15Lora1Name?: string;
@@ -195,28 +227,7 @@ export interface GenerationOptions {
   comfyDetailerBboxDilation?: number;
   comfyDetailerBboxCropFactor?: number;
 
-  // Qwen t2i GGUF specific
-  comfyQwenUnet?: string;
-  comfyQwenClip?: string;
-  comfyQwenVae?: string;
-  comfyQwenAuraFlowShift?: number;
-  comfyQwenMegaPixel?: string;
-  comfyQwenAspectRatio?: string;
-  comfyQwenCustomRatio?: boolean;
-  comfyQwenCustomAspectRatio?: string;
-  comfyQwenDivisibleBy?: number;
-  comfyQwenUseLora1?: boolean;
-  comfyQwenLora1Name?: string;
-  comfyQwenLora1Strength?: number;
-  comfyQwenUseLora2?: boolean;
-  comfyQwenLora2Name?: string;
-  comfyQwenLora2Strength?: number;
-  comfyQwenUseLora3?: boolean;
-  comfyQwenLora3Name?: string;
-  comfyQwenLora3Strength?: number;
-  comfyQwenUseLora4?: boolean;
-  comfyQwenLora4Name?: string;
-  comfyQwenLora4Strength?: number;
+
 
 
   // Video Generation

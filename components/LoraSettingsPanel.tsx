@@ -47,6 +47,18 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
                 const lowerName = lora.toLowerCase();
                 return lowerName.includes(lowerQuery);
             });
+        } else if (options.comfyModelType === 'qwen-t2i-gguf') {
+            const lowerQuery = "qwen";
+            return availableLoras.filter(lora => {
+                const lowerName = lora.toLowerCase();
+                return lowerName.includes(lowerQuery);
+            });
+        } else if (options.comfyModelType === 'z-image') {
+            const queries = ["z-image", "z_image", "zit"];
+            return availableLoras.filter(lora => {
+                const lowerName = lora.toLowerCase();
+                return queries.some(q => lowerName.includes(q));
+            });
         }
         return [];
     }, [availableLoras, options.comfyModelType]);
@@ -55,12 +67,14 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
         return [{ value: '', label: 'None' }, ...filteredLoras.map(l => ({ value: l, label: l }))];
     }, [filteredLoras]);
 
-    if (options.comfyModelType !== 'sd1.5' && options.comfyModelType !== 'sdxl' && options.comfyModelType !== 'flux') {
+    if (options.comfyModelType !== 'sd1.5' && options.comfyModelType !== 'sdxl' && options.comfyModelType !== 'flux' && options.comfyModelType !== 'qwen-t2i-gguf' && options.comfyModelType !== 'z-image') {
         return null;
     }
 
     const isSdxl = options.comfyModelType === 'sdxl';
     const isFlux = options.comfyModelType === 'flux';
+    const isQwen = options.comfyModelType === 'qwen-t2i-gguf';
+    const isZImage = options.comfyModelType === 'z-image';
 
     let prefix = 'comfySd15';
     let title = 'LoRA Settings (SD 1.5)';
@@ -71,6 +85,12 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
     } else if (isFlux) {
         prefix = 'comfyFlux';
         title = 'LoRA Settings (Flux)';
+    } else if (isQwen) {
+        prefix = 'comfyQwen';
+        title = 'LoRA Settings (Qwen)';
+    } else if (isZImage) {
+        prefix = 'comfyZImage';
+        title = 'LoRA Settings (Z-Image)';
     }
 
     return (

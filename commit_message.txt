@@ -1,19 +1,20 @@
-feat(core): Migrate to Electron Desktop App (v1.57)
+feat: Integrate Z-Image model and fix Library saving
 
-This major release converts the web application into a standalone Electron desktop application, enhancing local integration and security.
+- **Z-Image Integration**:
+  - Added 'z-image' to selectable workflows in `constants.ts`.
+  - Implemented Z-Image workflow template with support for Unet, VAE, CLIP, and Shift parameter.
+  - Added UI components in `OptionsPanel.tsx` for Z-Image model selection and Shift slider.
+  - Added "Use Shift" toggle (`comfyZImageUseShift`) to optionally bypass the AuraFlow node.
+  - Updated `LoraSettingsPanel.tsx` to filter LoRAs for Z-Image (matching "z-image", "z_image", "ZIT").
+  - Enabled Sampler, Scheduler, and Seed controls for Z-Image.
+  - Configured default parameters in `App.tsx` upon model selection.
+  - Updated `comfyUIService.ts` to handle Z-Image workflow generation and prompt styling.
 
-**Key Changes:**
+- **Library Saving Fix**:
+  - Updated `LibraryPanel.tsx` to correctly display saved parameters for `qwen-t2i-gguf` and `z-image` models.
+  - Added display fields for Unet, VAE, CLIP, Shift, and specific LoRAs in the library item details view.
+  - Fixed issue where users could not see saved settings for these models, ensuring full parameter persistence visibility.
 
-*   **Electron Integration:**
-    *   Wrapped the React application in an Electron container.
-    *   Configured `main` and `preload` scripts for secure IPC communication.
-    *   Added `electron:dev` and `electron:build` scripts for easy development and deployment.
-
-*   **Local API Key Management:**
-    *   Implemented secure local storage for the Gemini API Key using `electron-store`.
-    *   Added a UI input in the **Settings** modal to manage the API key directly within the app, removing the dependency on environment variables.
-
-*   **ComfyUI Optimization:**
-    *   Disabled `webSecurity` (CORS) in the Electron main process to allow direct, unrestricted communication with local ComfyUI instances.
-
-*   **Version Bump:** Updated to v1.57.
+- **Refactoring**:
+  - Cleaned up `comfyUIService.ts` logic for model connection and shift parameter handling.
+  - Updated `types.ts` with new Z-Image configuration fields.

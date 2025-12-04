@@ -180,39 +180,76 @@ const renderOptionsDetails = (options?: GenerationOptions, mediaType?: LibraryIt
             <DetailItem label="Workflow" value={options.comfyModelType} />
             <DetailItem label="Prompt" value={options.comfyPrompt} isCode />
             {options.comfyNegativePrompt && <DetailItem label="Negative Prompt" value={options.comfyNegativePrompt} isCode />}
-            {(options.comfyModelType === 'sdxl' || options.comfyModelType === 'sd1.5' || options.comfyModelType === 'flux') && (
+            {(options.comfyModelType === 'sdxl' || options.comfyModelType === 'sd1.5' || options.comfyModelType === 'flux' || options.comfyModelType === 'qwen-t2i-gguf' || options.comfyModelType === 'z-image') && (
               <div className="space-y-2 p-2 mt-2 border-t border-border-primary/50">
-                <DetailItem label="Model" value={options.comfyModel} />
-                {options.comfySeed !== undefined && <DetailItem label="Seed" value={options.comfySeed} isCode />}
+                {/* Common Fields */}
                 <DetailItem label="Steps" value={options.comfySteps} />
                 <DetailItem label="CFG" value={options.comfyCfg} />
                 <DetailItem label="Sampler" value={options.comfySampler} />
                 <DetailItem label="Scheduler" value={options.comfyScheduler} />
-                {options.comfyModelType === 'flux' && <DetailItem label="FLUX Guidance" value={options.comfyFluxGuidance} />}
-                {(options.comfyModelType === 'sdxl' || options.comfyModelType === 'sd1.5') && (
-                  <div>
-                    <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">LoRAs</h5>
-                    {[1, 2, 3, 4].map(i => {
-                      const prefix = options.comfyModelType === 'sdxl' ? 'comfySdxl' : 'comfySd15';
-                      const nameKey = `${prefix}Lora${i}Name` as keyof GenerationOptions;
-                      const strengthKey = `${prefix}Lora${i}Strength` as keyof GenerationOptions;
-                      const name = options[nameKey] as string;
-                      const strength = options[strengthKey] as number;
+                {options.comfySeed !== undefined && <DetailItem label="Seed" value={options.comfySeed} isCode />}
 
-                      if (!name) return null;
-
-                      return (
-                        <LoraDetail
-                          key={i}
-                          label={`LoRA ${i}`}
-                          name={name}
-                          strength={strength}
-                          enabled={true}
-                        />
-                      );
-                    })}
-                  </div>
+                {/* SDXL / SD1.5 / FLUX Specifics */}
+                {(options.comfyModelType === 'sdxl' || options.comfyModelType === 'sd1.5' || options.comfyModelType === 'flux') && (
+                  <>
+                    <DetailItem label="Model" value={options.comfyModel} />
+                    {options.comfyModelType === 'flux' && <DetailItem label="FLUX Guidance" value={options.comfyFluxGuidance} />}
+                  </>
                 )}
+
+                {/* Qwen Specifics */}
+                {options.comfyModelType === 'qwen-t2i-gguf' && (
+                  <>
+                    <DetailItem label="Unet" value={options.comfyQwenUnet} />
+                    <DetailItem label="VAE" value={options.comfyQwenVae} />
+                    <DetailItem label="CLIP" value={options.comfyQwenClip} />
+                    <DetailItem label="Shift" value={options.comfyQwenShift} />
+                  </>
+                )}
+
+                {/* Z-Image Specifics */}
+                {options.comfyModelType === 'z-image' && (
+                  <>
+                    <DetailItem label="Unet" value={options.comfyZImageUnet} />
+                    <DetailItem label="VAE" value={options.comfyZImageVae} />
+                    <DetailItem label="CLIP" value={options.comfyZImageClip} />
+                    <DetailItem label="Shift" value={options.comfyZImageShift} />
+                    <DetailItem label="Use Shift" value={options.comfyZImageUseShift} />
+                    <DetailItem label="Megapixel" value={options.megapixel} />
+                  </>
+                )}
+
+                {/* LoRAs */}
+                <div>
+                  <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">LoRAs</h5>
+                  {[1, 2, 3, 4].map(i => {
+                    let prefix = '';
+                    if (options.comfyModelType === 'sdxl') prefix = 'comfySdxl';
+                    else if (options.comfyModelType === 'sd1.5') prefix = 'comfySd15';
+                    else if (options.comfyModelType === 'flux') prefix = 'comfyFlux';
+                    else if (options.comfyModelType === 'qwen-t2i-gguf') prefix = 'comfyQwen';
+                    else if (options.comfyModelType === 'z-image') prefix = 'comfyZImage';
+
+                    if (!prefix) return null;
+
+                    const nameKey = `${prefix}Lora${i}Name` as keyof GenerationOptions;
+                    const strengthKey = `${prefix}Lora${i}Strength` as keyof GenerationOptions;
+                    const name = options[nameKey] as string;
+                    const strength = options[strengthKey] as number;
+
+                    if (!name) return null;
+
+                    return (
+                      <LoraDetail
+                        key={i}
+                        label={`LoRA ${i}`}
+                        name={name}
+                        strength={strength}
+                        enabled={true}
+                      />
+                    );
+                  })}
+                </div>
               </div>
             )}
             {/* ... Other ComfyUI details ... */}
