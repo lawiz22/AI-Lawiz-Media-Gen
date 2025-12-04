@@ -36,7 +36,7 @@ import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionIn
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
 import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage, updateGeminiApiKey, getApiKey, generatePromptFromImage } from './services/geminiService';
-import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution } from './services/comfyUIService';
+import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution, generateComfyUIPromptFromSource } from './services/comfyUIService';
 import { Login } from './components/Login';
 import { Header } from './components/Header';
 import { ImageUploader } from './components/ImageUploader';
@@ -139,10 +139,26 @@ const App: React.FC = () => {
     }, [dispatch, activeTab]);
 
     const handleUpdateOptions = useCallback((opts: Partial<GenerationOptions>) => {
+        const newOpts = { ...opts };
+        if (newOpts.comfyModelType === 'flux') {
+            Object.assign(newOpts, {
+                comfyFluxUseLora: true,
+                comfyFluxLora1Name: "flux-turbo.safetensors",
+                comfyFluxLora1Strength: 1.0,
+                comfyFluxClip1: "t5xxl_fp8_e4m3fn_scaled.safetensors",
+                comfyFluxClip2: "clip_l.safetensors",
+                comfyFluxVae: "ae.safetensors",
+                comfyCfg: 1.0,
+                comfySteps: 10,
+                comfySampler: "euler",
+                comfyScheduler: "simple",
+            });
+        }
+
         if (activeTab === 'character-generator') {
-            dispatch(updateCharacterOptions(opts));
+            dispatch(updateCharacterOptions(newOpts));
         } else {
-            dispatch(updateOptions(opts));
+            dispatch(updateOptions(newOpts));
         }
     }, [dispatch, activeTab]);
 
@@ -695,13 +711,13 @@ const App: React.FC = () => {
                                     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                         <div className="flex items-center justify-between mb-4">
                                             <h2 className="text-xl font-bold text-accent">
-                                                {generationMode === 't2i' && currentOptions.comfyModelType === 'sd1.5'
+                                                {generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux')
                                                     ? '1. Refine (Optional)'
                                                     : '1. Source & Context'}
                                             </h2>
                                         </div>
 
-                                        {generationMode === 't2i' && currentOptions.comfyModelType === 'sd1.5' ? (
+                                        {generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux') ? (
                                             <div className="space-y-4">
                                                 <div className="flex items-center gap-2">
                                                     <input
@@ -796,7 +812,12 @@ const App: React.FC = () => {
 
                                             setIsGeneratingRefinePrompt(true);
                                             try {
-                                                const prompt = await generatePromptFromImage(sourceImage);
+                                                let prompt = "";
+                                                if (currentOptions.provider === 'comfyui') {
+                                                    prompt = await generateComfyUIPromptFromSource(sourceImage, currentOptions.comfyModelType || 'sdxl');
+                                                } else {
+                                                    prompt = await generatePromptFromImage(sourceImage);
+                                                }
                                                 dispatch(updateOptions({ comfyPrompt: prompt }));
                                             } catch (error) {
                                                 console.error("Failed to generate prompt:", error);

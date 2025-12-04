@@ -97,9 +97,11 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
                             disabled={isDisabled}
                             className="bg-bg-tertiary border border-border-primary rounded-md px-2 py-1.5 text-xs font-medium focus:ring-accent focus:border-accent max-w-[150px]"
                         >
-                            {(generationMode === 'i2i' ? COMFYUI_I2I_WORKFLOWS : COMFYUI_T2I_WORKFLOWS).map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
+                            {(generationMode === 'i2i' ? COMFYUI_I2I_WORKFLOWS : COMFYUI_T2I_WORKFLOWS)
+                                .filter(opt => opt.value !== 'wan2.2')
+                                .map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
                         </select>
 
                         {/* Checkpoint Model (Show for specific workflows) */}

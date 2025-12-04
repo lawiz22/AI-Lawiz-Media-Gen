@@ -24,45 +24,75 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
         updateOptions({ [field]: value });
     };
 
-    // Filter LoRAs for SD 1.5 (case-insensitive "sd 15" check)
-    const sd15Loras = useMemo(() => {
-        const lowerQuery = "sd 15";
-        const altQuery = "sd15";
-        const altQuery2 = "sd_15";
-        return availableLoras.filter(lora => {
-            const lowerName = lora.toLowerCase();
-            return lowerName.includes(lowerQuery) || lowerName.includes(altQuery) || lowerName.includes(altQuery2);
-        });
-    }, [availableLoras]);
+    // Filter LoRAs based on model type
+    const filteredLoras = useMemo(() => {
+        if (options.comfyModelType === 'sd1.5') {
+            const lowerQuery = "sd 15";
+            const altQuery = "sd15";
+            const altQuery2 = "sd_15";
+            return availableLoras.filter(lora => {
+                const lowerName = lora.toLowerCase();
+                return lowerName.includes(lowerQuery) || lowerName.includes(altQuery) || lowerName.includes(altQuery2);
+            });
+        } else if (options.comfyModelType === 'sdxl') {
+            const lowerQuery = "sdxl";
+            const altQuery = "xl";
+            return availableLoras.filter(lora => {
+                const lowerName = lora.toLowerCase();
+                return lowerName.includes(lowerQuery) || lowerName.includes(altQuery);
+            });
+        } else if (options.comfyModelType === 'flux') {
+            const lowerQuery = "flux";
+            return availableLoras.filter(lora => {
+                const lowerName = lora.toLowerCase();
+                return lowerName.includes(lowerQuery);
+            });
+        }
+        return [];
+    }, [availableLoras, options.comfyModelType]);
 
     const loraOptions = useMemo(() => {
-        return [{ value: '', label: 'None' }, ...sd15Loras.map(l => ({ value: l, label: l }))];
-    }, [sd15Loras]);
+        return [{ value: '', label: 'None' }, ...filteredLoras.map(l => ({ value: l, label: l }))];
+    }, [filteredLoras]);
 
-    if (options.comfyModelType !== 'sd1.5') {
+    if (options.comfyModelType !== 'sd1.5' && options.comfyModelType !== 'sdxl' && options.comfyModelType !== 'flux') {
         return null;
+    }
+
+    const isSdxl = options.comfyModelType === 'sdxl';
+    const isFlux = options.comfyModelType === 'flux';
+
+    let prefix = 'comfySd15';
+    let title = 'LoRA Settings (SD 1.5)';
+
+    if (isSdxl) {
+        prefix = 'comfySdxl';
+        title = 'LoRA Settings (SDXL)';
+    } else if (isFlux) {
+        prefix = 'comfyFlux';
+        title = 'LoRA Settings (Flux)';
     }
 
     return (
         <div className="bg-bg-secondary p-3 rounded-lg shadow-md border border-border-primary space-y-2">
-            <h3 className="text-xs font-bold text-accent tracking-wider uppercase border-b border-accent/30 pb-1">LoRA Settings (SD 1.5)</h3>
+            <h3 className="text-xs font-bold text-accent tracking-wider uppercase border-b border-accent/30 pb-1">{title}</h3>
 
             <div className="flex items-center gap-2">
                 <input
                     type="checkbox"
-                    checked={!!options.comfySd15UseLora}
-                    onChange={handleOptionChange('comfySd15UseLora')}
+                    checked={!!options[`${prefix}UseLora` as keyof GenerationOptions]}
+                    onChange={handleOptionChange(`${prefix}UseLora` as keyof GenerationOptions)}
                     disabled={isDisabled}
                     className="rounded text-accent focus:ring-accent w-4 h-4"
                 />
                 <label className="text-xs font-medium text-text-secondary">Enable LoRAs</label>
             </div>
 
-            {options.comfySd15UseLora && (
+            {options[`${prefix}UseLora` as keyof GenerationOptions] && (
                 <div className="grid grid-cols-2 gap-1.5 pt-1">
                     {[1, 2, 3, 4].map(index => {
-                        const nameField = `comfySd15Lora${index}Name` as keyof GenerationOptions;
-                        const strengthField = `comfySd15Lora${index}Strength` as keyof GenerationOptions;
+                        const nameField = `${prefix}Lora${index}Name` as keyof GenerationOptions;
+                        const strengthField = `${prefix}Lora${index}Strength` as keyof GenerationOptions;
 
                         const currentName = options[nameField] as string || '';
                         const currentStrength = options[strengthField] as number || 1.0;

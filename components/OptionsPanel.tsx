@@ -740,8 +740,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 <OptionSection title="Model & Prompt">
 
 
-
-
                     <div className="space-y-2">
                         <SelectInput label="Image Style" value={options.imageStyle} onChange={handleOptionChange('imageStyle')} options={IMAGE_STYLE_OPTIONS} disabled={isDisabled} />
                         {options.imageStyle === 'photorealistic' && (
@@ -749,6 +747,33 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                 <SelectInput label="Photo Style" value={options.photoStyle} onChange={handleOptionChange('photoStyle')} options={PHOTO_STYLE_OPTIONS} disabled={isDisabled} />
                                 <SelectInput label="Era / Medium" value={options.eraStyle} onChange={handleOptionChange('eraStyle')} options={ERA_STYLE_OPTIONS} disabled={isDisabled} />
                             </>
+                        )}
+
+                        {modelType === 'flux' && (
+                            <div className="pt-2 border-t border-border-primary/50 space-y-2">
+                                <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Flux Models</h4>
+                                <SelectInput
+                                    label="CLIP 1 (T5)"
+                                    value={options.comfyFluxClip1 || ''}
+                                    onChange={handleOptionChange('comfyFluxClip1')}
+                                    options={comfyClips.map(m => ({ value: m, label: m }))}
+                                    disabled={isDisabled}
+                                />
+                                <SelectInput
+                                    label="CLIP 2 (CLIP L)"
+                                    value={options.comfyFluxClip2 || ''}
+                                    onChange={handleOptionChange('comfyFluxClip2')}
+                                    options={comfyClips.map(m => ({ value: m, label: m }))}
+                                    disabled={isDisabled}
+                                />
+                                <SelectInput
+                                    label="VAE"
+                                    value={options.comfyFluxVae || ''}
+                                    onChange={handleOptionChange('comfyFluxVae')}
+                                    options={comfyVaes.map(m => ({ value: m, label: m }))}
+                                    disabled={isDisabled}
+                                />
+                            </div>
                         )}
                     </div>
 
@@ -758,17 +783,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     )}
                 </OptionSection>
 
-                {(modelType === 'sdxl' || modelType === 'sd1.5' || modelType === 'flux') && (
-                    <>
 
-                        {modelType === 'sdxl' && (
-                            <OptionSection title="LoRA Settings">
-                                <CheckboxSlider label="Use LoRA" isChecked={!!options.comfySdxlUseLora} onCheckboxChange={handleOptionChange('comfySdxlUseLora')} sliderValue={options.comfySdxlLoraStrength || 0} onSliderChange={handleSliderChange('comfySdxlLoraStrength')} min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
-                                {options.comfySdxlUseLora && (<SelectInput label="LoRA Name" value={options.comfySdxlLoraName || ''} onChange={handleOptionChange('comfySdxlLoraName')} options={comfyLoras.map(l => ({ value: l, label: l }))} disabled={isDisabled} />)}
-                            </OptionSection>
-                        )}
-                    </>
-                )}
 
                 {modelType === 'wan2.2' && (
                     <>

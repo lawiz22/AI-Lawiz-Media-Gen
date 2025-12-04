@@ -12,6 +12,7 @@ import {
     COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE,
     COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE,
     COMFYUI_QWEN_T2I_GGUF_WORKFLOW_TEMPLATE,
+    COMFYUI_FLUX_WORKFLOW_TEMPLATE,
 } from "../constants";
 
 import { getGenAIInstance } from "./geminiService";
@@ -500,20 +501,105 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         case 'face-detailer-sd1.5': workflow = JSON.parse(JSON.stringify(COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE)); break;
         case 'qwen-t2i-gguf': workflow = JSON.parse(JSON.stringify(COMFYUI_QWEN_T2I_GGUF_WORKFLOW_TEMPLATE)); break;
         case 'flux': {
-            workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE));
-            const ksamplerKey = findNodeKey(workflow, "KSampler", 'class_type');
-            const posPromptKey = findNodeKey(workflow, "Positive Prompt", 'title');
-            if (ksamplerKey && posPromptKey) {
-                const fluxGuidanceNode = {
-                    "inputs": {
-                        "guidance": options.comfyFluxGuidance || 3.5,
-                        "conditioning": [posPromptKey, 0]
-                    },
-                    "class_type": "FluxGuidance",
-                    "_meta": { "title": "FluxGuidance" }
-                };
-                workflow["flux_guidance_node"] = fluxGuidanceNode;
-                workflow[ksamplerKey].inputs.positive = ["flux_guidance_node", 0];
+            workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_WORKFLOW_TEMPLATE));
+
+            // Set Prompts
+            if (workflow["6"]) workflow["6"].inputs.text = options.comfyPrompt || '';
+            if (workflow["33"]) {
+                workflow["33"].inputs.text = options.comfyNegativePrompt || '';
+            }
+
+            // Set Flux Guidance
+            if (workflow["35"]) workflow["35"].inputs.guidance = options.comfyFluxGuidance || 3.5;
+
+            // Set Checkpoint
+            if (workflow["43"] && options.comfyModel) workflow["43"].inputs.ckpt_name = options.comfyModel;
+
+            // Set CLIPs
+            if (workflow["44"]) {
+                if (options.comfyFluxClip1) workflow["44"].inputs.clip_name1 = options.comfyFluxClip1;
+                if (options.comfyFluxClip2) workflow["44"].inputs.clip_name2 = options.comfyFluxClip2;
+            }
+
+            // Set VAE
+            if (workflow["45"] && options.comfyFluxVae) {
+                workflow["45"].inputs.vae_name = options.comfyFluxVae;
+            }
+
+            // Dynamic LoRA Chaining
+            let lastModelNodeId = "43"; // Start with CheckpointLoaderSimple
+
+            // Remove template LoRAs first to start clean
+            delete workflow["41"];
+            delete workflow["42"];
+
+            if (options.comfyFluxUseLora) {
+                let currentLoraIndex = 0;
+                for (let i = 1; i <= 4; i++) {
+                    const loraName = options[`comfyFluxLora${i}Name` as keyof GenerationOptions] as string;
+                    const loraStrength = options[`comfyFluxLora${i}Strength` as keyof GenerationOptions] as number;
+
+                    if (loraName && loraName !== 'None') {
+                        currentLoraIndex++;
+                        const loraNodeId = `lora_${currentLoraIndex}`;
+                        workflow[loraNodeId] = {
+                            "inputs": {
+                                "lora_name": loraName,
+                                "strength_model": loraStrength !== undefined ? Number(loraStrength) : 1.0,
+                                "model": [
+                                    lastModelNodeId,
+                                    0
+                                ]
+                            },
+                            "class_type": "LoraLoaderModelOnly",
+                            "_meta": {
+                                "title": `LoraLoaderModelOnly ${currentLoraIndex}`
+                            }
+                        };
+                        lastModelNodeId = loraNodeId;
+                    }
+                }
+            }
+
+            // Connect last model node to KSampler
+            if (workflow["31"]) workflow["31"].inputs.model = [lastModelNodeId, 0];
+
+            // Handle T2I vs Refine (I2I)
+            if (options.useRefine && sourceFile) {
+                // I2I / Refine Path
+                const uploadedImageName = await uploadImageToComfyUI(sourceFile);
+                if (workflow["90"]) workflow["90"].inputs.image = uploadedImageName;
+
+                // Ensure KSampler uses VAEEncode (91)
+                if (workflow["31"]) workflow["31"].inputs.latent_image = ["91", 0];
+
+                // Set Denoise
+                if (workflow["31"]) workflow["31"].inputs.denoise = options.refineDenoise || 0.5;
+            } else {
+                // T2I Path
+                // Ensure KSampler uses EmptySD3LatentImage (27)
+                if (workflow["31"]) workflow["31"].inputs.latent_image = ["27", 0];
+
+                // Set Denoise to 1.0 for T2I
+                if (workflow["31"]) workflow["31"].inputs.denoise = 1.0;
+
+                // Handle Aspect Ratio
+                if (workflow["27"] && options.aspectRatio) {
+                    const [w, h] = options.aspectRatio.split(':').map(Number);
+                    const baseSize = 1024;
+                    const aspect = w / h;
+
+                    let width, height;
+                    if (aspect >= 1) {
+                        width = baseSize;
+                        height = Math.round(baseSize / aspect / 16) * 16;
+                    } else {
+                        height = baseSize;
+                        width = Math.round(baseSize * aspect / 16) * 16;
+                    }
+                    workflow["27"].inputs.width = width;
+                    workflow["27"].inputs.height = height;
+                }
             }
             break;
         }
@@ -527,7 +613,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
     const negPromptKey = findNodeKey(workflow, "Negative Prompt", 'title');
     if (negPromptKey) workflow[negPromptKey].inputs.text = options.comfyNegativePrompt || '';
 
-    if (['sd1.5', 'sdxl', 'flux'].includes(options.comfyModelType!)) {
+    if (['sd1.5', 'sdxl'].includes(options.comfyModelType!)) {
         const ckptLoaderKey = findNodeKey(workflow, "CheckpointLoaderSimple", 'class_type');
         if (ckptLoaderKey && options.comfyModel) workflow[ckptLoaderKey].inputs.ckpt_name = options.comfyModel;
 
@@ -541,7 +627,30 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
                 const loraStrength = options[`comfySd15Lora${i}Strength` as keyof GenerationOptions] as number;
 
                 if (loraName) {
-                    const loraNodeId = `lora_${i}`;
+                    const loraNodeId = `lora_sd15_${i}`;
+                    const loraNode = {
+                        "inputs": {
+                            "lora_name": loraName,
+                            "strength_model": loraStrength,
+                            "strength_clip": loraStrength,
+                            "model": [currentModelNodeId, 0],
+                            "clip": [currentClipNodeId, 1]
+                        },
+                        "class_type": "LoraLoader",
+                        "_meta": { "title": `LoRA ${i}` }
+                    };
+                    workflow[loraNodeId] = loraNode;
+                    currentModelNodeId = loraNodeId;
+                    currentClipNodeId = loraNodeId;
+                }
+            }
+        } else if (options.comfyModelType === 'sdxl' && options.comfySdxlUseLora) {
+            for (let i = 1; i <= 4; i++) {
+                const loraName = options[`comfySdxlLora${i}Name` as keyof GenerationOptions] as string;
+                const loraStrength = options[`comfySdxlLora${i}Strength` as keyof GenerationOptions] as number;
+
+                if (loraName) {
+                    const loraNodeId = `lora_sdxl_${i}`;
                     const loraNode = {
                         "inputs": {
                             "lora_name": loraName,
@@ -587,8 +696,8 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
 
         const latentKey = findNodeKey(workflow, "EmptyLatentImage", 'class_type');
 
-        // Refine Feature Logic (SD 1.5 only for now)
-        if (options.comfyModelType === 'sd1.5' && options.useRefine && sourceFile) {
+        // Refine Feature Logic (SD 1.5 and SDXL)
+        if ((options.comfyModelType === 'sd1.5' || options.comfyModelType === 'sdxl') && options.useRefine && sourceFile) {
             // Upload the source image
             const filename = await uploadImageToComfyUI(sourceFile);
 
@@ -649,26 +758,6 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             }
             workflow[latentKey].inputs.width = width;
             workflow[latentKey].inputs.height = height;
-        }
-
-        if (options.comfyModelType === 'sdxl' && options.comfySdxlUseLora && options.comfySdxlLoraName && ckptLoaderKey) {
-            const loraLoaderNode = {
-                "inputs": {
-                    "lora_name": options.comfySdxlLoraName,
-                    "strength_model": options.comfySdxlLoraStrength,
-                    "strength_clip": options.comfySdxlLoraStrength,
-                    "model": [ckptLoaderKey, 0],
-                    "clip": [ckptLoaderKey, 1]
-                },
-                "class_type": "LoraLoader",
-            };
-            const loraKey = "lora_loader";
-            workflow[loraKey] = loraLoaderNode;
-
-            const ksamplerKey = findNodeKey(workflow, "KSampler", 'class_type');
-            if (ksamplerKey) workflow[ksamplerKey].inputs.model = [loraKey, 0];
-            if (posPromptKey) workflow[posPromptKey].inputs.clip = [loraKey, 1];
-            if (negPromptKey) workflow[negPromptKey].inputs.clip = [loraKey, 1];
         }
     }
     else if (options.comfyModelType === 'wan2.2') {

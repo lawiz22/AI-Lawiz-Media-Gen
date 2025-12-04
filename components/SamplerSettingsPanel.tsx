@@ -88,15 +88,15 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
 
             {modelType === 'flux' && (
                 <NumberSlider
-                    label={`FLUX Guidance: ${options.comfyFluxGuidance || 3.5}`}
-                    value={options.comfyFluxGuidance || 3.5}
+                    label={`FLUX Guidance: ${options.comfyFluxGuidance || 2.0}`}
+                    value={options.comfyFluxGuidance || 2.0}
                     onChange={handleSliderChange('comfyFluxGuidance')}
                     min={0} max={10} step={0.1}
                     disabled={isDisabled}
                 />
             )}
 
-            {modelType === 'sd1.5' && (
+            {(modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux') && (
                 <div className="pt-2 border-t border-border-primary/50">
                     <h4 className="text-md font-semibold text-text-secondary mb-2">Seed</h4>
                     <div className="grid grid-cols-2 gap-4">

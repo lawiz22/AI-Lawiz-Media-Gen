@@ -89,11 +89,30 @@ export interface GenerationOptions {
   refineMegapixels?: number;
 
   comfySdxlUseLora?: boolean;
-  comfySdxlLoraName?: string;
-  comfySdxlLoraStrength?: number;
+  comfySdxlLora1Name?: string;
+  comfySdxlLora1Strength?: number;
+  comfySdxlLora2Name?: string;
+  comfySdxlLora2Strength?: number;
+  comfySdxlLora3Name?: string;
+  comfySdxlLora3Strength?: number;
+  comfySdxlLora4Name?: string;
+  comfySdxlLora4Strength?: number;
 
+  // Flux Specific
   comfyFluxGuidance?: number;
+  comfyFluxUseLora?: boolean;
+  comfyFluxLora1Name?: string;
+  comfyFluxLora1Strength?: number;
+  comfyFluxLora2Name?: string;
+  comfyFluxLora2Strength?: number;
+  comfyFluxLora3Name?: string;
+  comfyFluxLora3Strength?: number;
+  comfyFluxLora4Name?: string;
+  comfyFluxLora4Strength?: number;
 
+  comfyFluxClip1?: string;
+  comfyFluxClip2?: string;
+  comfyFluxVae?: string;
   // SD 1.5 LoRA Settings
   comfySd15UseLora?: boolean;
   comfySd15Lora1Name?: string;

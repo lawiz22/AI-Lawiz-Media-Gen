@@ -189,10 +189,28 @@ const renderOptionsDetails = (options?: GenerationOptions, mediaType?: LibraryIt
                 <DetailItem label="Sampler" value={options.comfySampler} />
                 <DetailItem label="Scheduler" value={options.comfyScheduler} />
                 {options.comfyModelType === 'flux' && <DetailItem label="FLUX Guidance" value={options.comfyFluxGuidance} />}
-                {options.comfyModelType === 'sdxl' && options.comfySdxlUseLora && (
+                {(options.comfyModelType === 'sdxl' || options.comfyModelType === 'sd1.5') && (
                   <div>
-                    <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">LoRA</h5>
-                    <LoraDetail label="SDXL LoRA" name={options.comfySdxlLoraName} strength={options.comfySdxlLoraStrength} enabled={options.comfySdxlUseLora} />
+                    <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mt-2">LoRAs</h5>
+                    {[1, 2, 3, 4].map(i => {
+                      const prefix = options.comfyModelType === 'sdxl' ? 'comfySdxl' : 'comfySd15';
+                      const nameKey = `${prefix}Lora${i}Name` as keyof GenerationOptions;
+                      const strengthKey = `${prefix}Lora${i}Strength` as keyof GenerationOptions;
+                      const name = options[nameKey] as string;
+                      const strength = options[strengthKey] as number;
+
+                      if (!name) return null;
+
+                      return (
+                        <LoraDetail
+                          key={i}
+                          label={`LoRA ${i}`}
+                          name={name}
+                          strength={strength}
+                          enabled={true}
+                        />
+                      );
+                    })}
                   </div>
                 )}
               </div>
