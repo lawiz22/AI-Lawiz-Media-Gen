@@ -1,6 +1,10 @@
-import React from 'react';
-import { GenerationOptions } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { GenerationOptions, LibraryItem } from '../types';
 import { ASPECT_RATIO_OPTIONS, MAX_IMAGES, COMFYUI_T2I_WORKFLOWS, COMFYUI_I2I_WORKFLOWS } from '../constants';
+import { SaveIcon, LoadIcon, TrashIcon } from './icons';
+import { PresetSaveModal } from './PresetSaveModal';
+import { ConfirmationModal } from './ConfirmationModal';
+import { saveToLibrary, fetchLibrary, deleteLibraryItem } from '../services/libraryService';
 
 interface ImageGeneratorHeaderProps {
     options: GenerationOptions;
@@ -19,6 +23,26 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
     isDisabled,
     comfyModels
 }) => {
+    const [presets, setPresets] = useState<LibraryItem[]>([]);
+    const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [selectedPresetId, setSelectedPresetId] = useState<string>('');
+
+    // Fetch presets on mount
+    const loadPresets = async () => {
+        try {
+            const allItems = await fetchLibrary();
+            const presetItems = allItems.filter(item => item.mediaType === 'preset');
+            setPresets(presetItems);
+        } catch (error) {
+            console.error("Failed to load presets:", error);
+        }
+    };
+
+    useEffect(() => {
+        loadPresets();
+    }, []);
+
     // Filter models based on the selected workflow type
     const filteredModels = comfyModels.filter(model => {
         const lowerModel = model.toLowerCase();
@@ -33,6 +57,79 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
         }
         return true; // Show all for other types or if no specific filter matches
     });
+
+    // Filter presets based on current model
+    const currentModelPrefix = options.provider === 'gemini'
+        ? (options.geminiT2IModel || 'Gemini')
+        : (options.comfyModelType || 'ComfyUI');
+
+    // Helper to determine if a preset belongs to the current model context
+    // We'll check if the preset name starts with the model type (case-insensitive)
+    // or if the saved options inside the preset match the current model type.
+    const filteredPresets = useMemo(() => {
+        return presets.filter(preset => {
+            // Check if options are stored in the preset (they should be for 'preset' type)
+            // If we saved the whole options object as 'options' property or spread it.
+            // Based on saveToLibrary, we usually save specific fields. 
+            // For presets, we should probably save the whole options object.
+            // Let's assume we save it in the 'options' field of LibraryItem if possible, 
+            // or we just rely on naming convention as requested by user.
+            // User said: "pre fix with the model name exemple FLUX_Param_ blabla"
+
+            // We can strictly filter by name prefix
+            const prefix = currentModelPrefix.toUpperCase();
+            return preset.name.toUpperCase().startsWith(prefix);
+        });
+    }, [presets, currentModelPrefix]);
+
+    const handleSavePreset = async (name: string) => {
+        const prefix = currentModelPrefix.toUpperCase();
+        const finalName = `${prefix}_Param_${name}`;
+
+        try {
+            await saveToLibrary({
+                mediaType: 'preset',
+                name: finalName,
+                media: '', // No media for preset
+                thumbnail: '', // No thumbnail
+                options: options // Save current options
+            });
+            await loadPresets(); // Reload presets
+        } catch (error) {
+            console.error("Failed to save preset:", error);
+        }
+    };
+
+    const handleLoadPreset = (presetId: string) => {
+        const id = parseInt(presetId, 10);
+        const preset = presets.find(p => p.id === id);
+        if (preset && preset.options) {
+            updateOptions(preset.options);
+            setSelectedPresetId(presetId);
+        } else {
+            setSelectedPresetId('');
+        }
+    };
+
+    const handleDeletePreset = async () => {
+        if (!selectedPresetId) return;
+
+        try {
+            const id = parseInt(selectedPresetId, 10);
+            await deleteLibraryItem(id);
+            await loadPresets();
+            setSelectedPresetId('');
+        } catch (error) {
+            console.error("Failed to delete preset:", error);
+        }
+    };
+
+    const selectedPresetName = useMemo(() => {
+        if (!selectedPresetId) return '';
+        const id = parseInt(selectedPresetId, 10);
+        const preset = presets.find(p => p.id === id);
+        return preset ? preset.name.replace(`${currentModelPrefix.toUpperCase()}_Param_`, '') : '';
+    }, [selectedPresetId, presets, currentModelPrefix]);
 
     return (
         <div className="bg-bg-secondary p-2 rounded-xl shadow-sm border border-border-primary mb-4 flex flex-wrap items-center justify-between gap-4">
@@ -120,6 +217,39 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
                         )}
                     </div>
                 )}
+
+                {/* Preset Manager */}
+                <div className="flex items-center gap-1 bg-bg-tertiary p-1 rounded-md border border-border-primary/50">
+                    <select
+                        value={selectedPresetId}
+                        onChange={(e) => handleLoadPreset(e.target.value)}
+                        disabled={isDisabled}
+                        className="bg-transparent text-xs font-medium focus:outline-none text-text-secondary max-w-[120px]"
+                    >
+                        <option value="">Load Preset...</option>
+                        {filteredPresets.map(preset => (
+                            <option key={preset.id} value={preset.id}>{preset.name.replace(`${currentModelPrefix.toUpperCase()}_Param_`, '')}</option>
+                        ))}
+                    </select>
+                    <button
+                        onClick={() => setIsSaveModalOpen(true)}
+                        disabled={isDisabled}
+                        className="p-1 hover:bg-bg-secondary rounded text-text-secondary hover:text-accent transition-colors"
+                        title="Save Current Parameters as Preset"
+                    >
+                        <SaveIcon className="w-4 h-4" />
+                    </button>
+                    {selectedPresetId && (
+                        <button
+                            onClick={() => setIsDeleteModalOpen(true)}
+                            disabled={isDisabled}
+                            className="p-1 hover:bg-bg-secondary rounded text-text-secondary hover:text-danger transition-colors"
+                            title="Delete Selected Preset"
+                        >
+                            <TrashIcon className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Right Side: Global Settings */}
@@ -174,6 +304,22 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
                     />
                 </div>
             </div>
+
+            <PresetSaveModal
+                isOpen={isSaveModalOpen}
+                onClose={() => setIsSaveModalOpen(false)}
+                onSave={handleSavePreset}
+            />
+
+            <ConfirmationModal
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                onConfirm={handleDeletePreset}
+                title="Delete Preset"
+                message={`Are you sure you want to delete the preset "${selectedPresetName}"? This action cannot be undone.`}
+                confirmLabel="Delete"
+                isDanger
+            />
         </div>
     );
 };

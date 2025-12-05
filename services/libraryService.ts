@@ -1,8 +1,8 @@
 // Fix: Add a global declaration for window.showSaveFilePicker to resolve TypeScript errors.
 declare global {
-  interface Window {
-    showSaveFilePicker: (options?: any) => Promise<any>;
-  }
+    interface Window {
+        showSaveFilePicker: (options?: any) => Promise<any>;
+    }
 }
 
 import type { LibraryItem } from '../types';
@@ -25,7 +25,7 @@ export async function initializeDriveSync(onProgress: (message: string) => void)
     if (!driveService || !driveService.isConnected()) {
         throw new Error("Cannot initialize sync: not connected to Google Drive.");
     }
-    
+
     onProgress("Checking for existing library on Google Drive...");
     // Fix: Cast the return type to ensure `remoteIndex` is properly typed.
     const { index: remoteIndex, fileId } = await driveService.getLibraryIndex() as { index: LibraryIndex; fileId: string | null };
@@ -39,91 +39,91 @@ export async function initializeDriveSync(onProgress: (message: string) => void)
         await syncLibraryFromDrive(onProgress, { index: remoteIndex, fileId });
         await syncLibraryToDrive(onProgress);
     }
-    
+
     onProgress("Initial sync process complete.");
 }
 
 export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<LibraryItem> => {
-  const itemToSave = { ...item };
+    const itemToSave = { ...item };
 
-  // If a name is missing for an image, video, or character, try to generate one.
-  if (!itemToSave.name && (item.mediaType === 'image' || item.mediaType === 'video' || item.mediaType === 'character')) {
-    try {
-        const options = item.options;
-        const prompt = options?.geminiPrompt || options?.comfyPrompt || options?.geminiVidPrompt || options?.comfyVidWanI2VPositivePrompt;
-        
-        let generatedName = '';
-        if (item.mediaType === 'image' || item.mediaType === 'character') {
-            // For ComfyUI or Gemini I2I, it's best to analyze the final image.
-            if (options?.provider === 'comfyui' || (options?.provider === 'gemini' && options?.geminiMode === 'i2i')) {
-                generatedName = await generateTitleForImage(item.media);
-            } 
-            // For Gemini T2I, a prompt must exist, so summarize it.
-            else if (prompt) {
-                generatedName = await summarizePrompt(prompt);
+    // If a name is missing for an image, video, or character, try to generate one.
+    if (!itemToSave.name && (item.mediaType === 'image' || item.mediaType === 'video' || item.mediaType === 'character')) {
+        try {
+            const options = item.options;
+            const prompt = options?.geminiPrompt || options?.comfyPrompt || options?.geminiVidPrompt || options?.comfyVidWanI2VPositivePrompt;
+
+            let generatedName = '';
+            if (item.mediaType === 'image' || item.mediaType === 'character') {
+                // For ComfyUI or Gemini I2I, it's best to analyze the final image.
+                if (options?.provider === 'comfyui' || (options?.provider === 'gemini' && options?.geminiMode === 'i2i')) {
+                    generatedName = await generateTitleForImage(item.media);
+                }
+                // For Gemini T2I, a prompt must exist, so summarize it.
+                else if (prompt) {
+                    generatedName = await summarizePrompt(prompt);
+                }
+            } else if (item.mediaType === 'video') {
+                // If a video prompt exists, it's the source of truth.
+                if (prompt) {
+                    generatedName = await summarizePrompt(prompt);
+                }
+                // If no prompt (e.g., Gemini Image-to-Video), but there's a start frame, analyze the image.
+                else if (item.startFrame) {
+                    generatedName = await generateTitleForImage(item.startFrame);
+                }
             }
-        } else if (item.mediaType === 'video') {
-            // If a video prompt exists, it's the source of truth.
-            if (prompt) {
-                generatedName = await summarizePrompt(prompt);
-            } 
-            // If no prompt (e.g., Gemini Image-to-Video), but there's a start frame, analyze the image.
-            else if (item.startFrame) {
-                generatedName = await generateTitleForImage(item.startFrame);
-            }
+            // Use the generated name if successful, otherwise a fallback will be used.
+            itemToSave.name = generatedName || `${item.mediaType.charAt(0).toUpperCase() + item.mediaType.slice(1)} Item ${Date.now()}`;
+        } catch (e) {
+            console.error("Failed to auto-generate title for library item, using default.", e);
+            // Assign a default name on any failure to ensure the save operation can proceed.
+            itemToSave.name = `${item.mediaType.charAt(0).toUpperCase() + item.mediaType.slice(1)} Item ${Date.now()}`;
         }
-        // Use the generated name if successful, otherwise a fallback will be used.
-        itemToSave.name = generatedName || `${item.mediaType.charAt(0).toUpperCase() + item.mediaType.slice(1)} Item ${Date.now()}`;
-    } catch (e) {
-        console.error("Failed to auto-generate title for library item, using default.", e);
-        // Assign a default name on any failure to ensure the save operation can proceed.
-        itemToSave.name = `${item.mediaType.charAt(0).toUpperCase() + item.mediaType.slice(1)} Item ${Date.now()}`;
     }
-  }
-  
-  const newItem = await idbService.saveToLibrary(itemToSave);
 
-  if (driveService?.isConnected()) {
-    try {
-      const { index, fileId: indexFileId } = await driveService.getLibraryIndex();
+    const newItem = await idbService.saveToLibrary(itemToSave);
 
-      if (newItem.mediaType === 'prompt' || newItem.mediaType === 'color-palette') {
-          index.items[newItem.id] = newItem;
-          await driveService.updateLibraryIndex(index, indexFileId);
-          return newItem;
-      }
+    if (driveService?.isConnected()) {
+        try {
+            const { index, fileId: indexFileId } = await driveService.getLibraryIndex();
 
-      const blob = await dataUrlToBlob(newItem.media);
-      let subfolderName: string;
-      switch (newItem.mediaType) {
-        case 'image': subfolderName = 'images'; break;
-        case 'video': subfolderName = 'videos'; break;
-        case 'clothes': subfolderName = 'clothes'; break;
-        case 'extracted-frame': subfolderName = 'extracted-frames'; break;
-        case 'object': subfolderName = 'objects'; break;
-        case 'pose': subfolderName = 'poses'; break;
-        case 'font': subfolderName = 'fonts'; break;
-        default: subfolderName = 'misc';
-      }
-      const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
-      const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
-      const filename = `${newItem.mediaType}_${newItem.id}.${extension}`;
+            if (newItem.mediaType === 'prompt' || newItem.mediaType === 'color-palette' || newItem.mediaType === 'preset') {
+                index.items[newItem.id] = newItem;
+                await driveService.updateLibraryIndex(index, indexFileId);
+                return newItem;
+            }
 
-      const driveFileId = await driveService.uploadMediaFile(blob, filename, parentFolderId);
-      
-      await idbService.updateLibraryItem(newItem.id, { driveFileId });
+            const blob = await dataUrlToBlob(newItem.media);
+            let subfolderName: string;
+            switch (newItem.mediaType) {
+                case 'image': subfolderName = 'images'; break;
+                case 'video': subfolderName = 'videos'; break;
+                case 'clothes': subfolderName = 'clothes'; break;
+                case 'extracted-frame': subfolderName = 'extracted-frames'; break;
+                case 'object': subfolderName = 'objects'; break;
+                case 'pose': subfolderName = 'poses'; break;
+                case 'font': subfolderName = 'fonts'; break;
+                default: subfolderName = 'misc';
+            }
+            const parentFolderId = await driveService.getOrCreateSubfolder(subfolderName);
+            const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
+            const filename = `${newItem.mediaType}_${newItem.id}.${extension}`;
 
-      const { media, ...metadata } = newItem;
-      index.items[newItem.id] = { ...metadata, driveFileId };
-      
-      await driveService.updateLibraryIndex(index, indexFileId);
+            const driveFileId = await driveService.uploadMediaFile(blob, filename, parentFolderId);
 
-    } catch (e: any) {
-      console.error("Failed to sync to Google Drive, but item is saved locally.", e);
-      throw new Error(`Item saved locally, but failed to sync to Google Drive: ${e.message}`);
+            await idbService.updateLibraryItem(newItem.id, { driveFileId });
+
+            const { media, ...metadata } = newItem;
+            index.items[newItem.id] = { ...metadata, driveFileId };
+
+            await driveService.updateLibraryIndex(index, indexFileId);
+
+        } catch (e: any) {
+            console.error("Failed to sync to Google Drive, but item is saved locally.", e);
+            throw new Error(`Item saved locally, but failed to sync to Google Drive: ${e.message}`);
+        }
     }
-  }
-  return newItem;
+    return newItem;
 };
 
 export const bulkSaveToLibrary = async (items: LibraryItem[]): Promise<void> => {
@@ -133,6 +133,8 @@ export const bulkSaveToLibrary = async (items: LibraryItem[]): Promise<void> => 
     // Drive sync will be handled separately by the component calling syncLibraryToDrive
     // This keeps the service functions focused.
 };
+
+export const fetchLibrary = idbService.getLibraryItems;
 
 export const syncLibraryFromDrive = async (onProgress: (message: string) => void, remoteIndexData?: { index: LibraryIndex, fileId: string | null }): Promise<void> => {
     if (!driveService || !driveService.isConnected()) {
@@ -148,7 +150,7 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
     }
     // Fix: Cast the items from the remote index to the correct type to resolve property access errors.
     const remoteItems = Object.values(remoteIndex.items) as LibraryItemMetadata[];
-    
+
     onProgress(`Found ${remoteItems.length} items in Drive index. Checking against local library...`);
     const localItems = await idbService.getLibraryItems();
     const localIds = new Set(localItems.map(item => item.id));
@@ -165,12 +167,12 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
         const itemMetadata = missingItems[i];
         onProgress(`Processing "${itemMetadata.name || itemMetadata.mediaType}" (${i + 1}/${missingItems.length})...`);
         try {
-            if (itemMetadata.mediaType === 'prompt' || itemMetadata.mediaType === 'color-palette') {
+            if (itemMetadata.mediaType === 'prompt' || itemMetadata.mediaType === 'color-palette' || itemMetadata.mediaType === 'preset') {
                 await idbService.saveToLibrary(itemMetadata as LibraryItem, true);
             } else if (itemMetadata.driveFileId) {
                 const blob = await driveService.downloadMediaFile(itemMetadata.driveFileId);
                 const media = await fileToDataUrl(new File([blob], "file", { type: blob.type }));
-                
+
                 let thumbnail: string;
                 if (itemMetadata.mediaType === 'video' && itemMetadata.startFrame) {
                     thumbnail = await dataUrlToThumbnail(itemMetadata.startFrame, 256);
@@ -207,7 +209,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
     // An item needs to be synced to remote if it exists locally but not in the remote index.
     // This covers brand new items and items from a previously failed sync.
     const itemsToSyncToRemote = localItems.filter(item => !remoteIndex.items[item.id]);
-    
+
     if (itemsToSyncToRemote.length === 0) {
         onProgress("All local items are already in the Drive index.");
         return;
@@ -227,7 +229,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
         try {
             const isTextBased = ['prompt', 'color-palette'].includes(item.mediaType);
             let currentDriveFileId = item.driveFileId;
-            
+
             // If it's not text-based and doesn't have a driveFileId, it needs uploading.
             if (!isTextBased && !currentDriveFileId) {
                 const blob = await dataUrlToBlob(item.media);
@@ -249,7 +251,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
                 currentDriveFileId = await driveService.uploadMediaFile(blob, filename, parentFolderId);
                 await idbService.updateLibraryItem(item.id, { driveFileId: currentDriveFileId });
             }
-            
+
             // Add/update the item in the in-memory index.
             const { media, ...metadata } = item;
             updatedIndex.items[item.id] = { ...metadata, driveFileId: currentDriveFileId };
@@ -264,11 +266,11 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
         onProgress("Finalizing by updating library index file...");
         try {
             await driveService.updateLibraryIndex(updatedIndex, initialFileId);
-        } catch(e: any) {
+        } catch (e: any) {
             uploadErrors.push(`- CRITICAL: Failed to update library.json. Error: ${e.message}`);
         }
     }
-    
+
     if (uploadErrors.length > 0) {
         onProgress("Upload sync complete with some errors.");
         throw new Error(`The following items failed to sync:\n${uploadErrors.join('\n')}`);
@@ -326,31 +328,31 @@ export const clearLibrary = async (): Promise<void> => {
 };
 
 export const saveLibraryItemToDisk = async (item: LibraryItem): Promise<void> => {
-  if (!window.showSaveFilePicker) {
-    throw new Error('Your browser does not support the File System Access API.');
-  }
-  let blob: Blob;
-  let extension: string;
-  switch (item.mediaType) {
-    case 'video': blob = await dataUrlToBlob(item.media); extension = 'mp4'; break;
-    case 'clothes':
-      let clothesDataUrl = item.media.startsWith('{') ? JSON.parse(item.media).laidOutImage : item.media;
-      blob = await dataUrlToBlob(clothesDataUrl);
-      extension = 'png';
-      break;
-    case 'prompt': blob = new Blob([item.media], { type: 'text/plain' }); extension = 'txt'; break;
-    case 'image': default: blob = await dataUrlToBlob(item.media); extension = 'jpeg'; break;
-  }
-  const suggestedName = `lawiz_ai_${item.name || item.mediaType}_${item.id}.${extension}`;
-  try {
-    const handle = await window.showSaveFilePicker({ suggestedName });
-    const writable = await handle.createWritable();
-    await writable.write(blob);
-    await writable.close();
-  } catch (error: any) {
-    if (error.name !== 'AbortError') {
-      console.error('Error saving file:', error);
-      throw error;
+    if (!window.showSaveFilePicker) {
+        throw new Error('Your browser does not support the File System Access API.');
     }
-  }
+    let blob: Blob;
+    let extension: string;
+    switch (item.mediaType) {
+        case 'video': blob = await dataUrlToBlob(item.media); extension = 'mp4'; break;
+        case 'clothes':
+            let clothesDataUrl = item.media.startsWith('{') ? JSON.parse(item.media).laidOutImage : item.media;
+            blob = await dataUrlToBlob(clothesDataUrl);
+            extension = 'png';
+            break;
+        case 'prompt': blob = new Blob([item.media], { type: 'text/plain' }); extension = 'txt'; break;
+        case 'image': default: blob = await dataUrlToBlob(item.media); extension = 'jpeg'; break;
+    }
+    const suggestedName = `lawiz_ai_${item.name || item.mediaType}_${item.id}.${extension}`;
+    try {
+        const handle = await window.showSaveFilePicker({ suggestedName });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+    } catch (error: any) {
+        if (error.name !== 'AbortError') {
+            console.error('Error saving file:', error);
+            throw error;
+        }
+    }
 };

@@ -5,7 +5,7 @@ import type { RootState } from './store';
 
 const initialOptions: GenerationOptions = {
   provider: 'comfyui',
-  numImages: 4,
+  numImages: 1,
   poseMode: 'random',
   poseSelection: [],
   poseLibraryItems: [],

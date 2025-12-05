@@ -140,8 +140,19 @@ const App: React.FC = () => {
 
     const handleUpdateOptions = useCallback((opts: Partial<GenerationOptions>) => {
         const newOpts = { ...opts };
+
+        // Helper to apply defaults only if keys are missing in newOpts
+        const applyDefaultsIfMissing = (defaults: Partial<GenerationOptions>) => {
+            (Object.keys(defaults) as Array<keyof GenerationOptions>).forEach(key => {
+                if (newOpts[key] === undefined) {
+                    // @ts-ignore
+                    newOpts[key] = defaults[key];
+                }
+            });
+        };
+
         if (newOpts.comfyModelType === 'flux') {
-            Object.assign(newOpts, {
+            applyDefaultsIfMissing({
                 comfyFluxUseLora: true,
                 comfyFluxLora1Name: "flux-turbo.safetensors",
                 comfyFluxLora1Strength: 1.0,
@@ -154,7 +165,7 @@ const App: React.FC = () => {
                 comfyScheduler: "simple",
             });
         } else if (newOpts.comfyModelType === 'qwen-t2i-gguf') {
-            Object.assign(newOpts, {
+            applyDefaultsIfMissing({
                 comfyQwenUseLora: true,
                 comfyQwenLora1Name: "Qwen-Image-Lightning-4steps-V2.0.safetensors",
                 comfyQwenLora1Strength: 1.0,
@@ -174,7 +185,7 @@ const App: React.FC = () => {
                 comfyScheduler: "beta57",
             });
         } else if (newOpts.comfyModelType === 'z-image') {
-            Object.assign(newOpts, {
+            applyDefaultsIfMissing({
                 comfyZImageUseLora: true,
                 comfyZImageLora1Name: "Z-TURBO_Photography_35mmPhoto_1536.safetensors",
                 comfyZImageLora1Strength: 1.0,

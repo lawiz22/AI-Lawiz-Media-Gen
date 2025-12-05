@@ -381,7 +381,7 @@ export interface ExtractorState {
   fontError: string | null;
 }
 
-export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font' | 'group-fusion' | 'past-forward-photo';
+export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font' | 'group-fusion' | 'past-forward-photo' | 'preset';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
 
 export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';

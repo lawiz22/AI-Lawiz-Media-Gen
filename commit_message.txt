@@ -1,4 +1,4 @@
-feat: Integrate Z-Image model and fix Library saving
+feat: Integrate Z-Image model, fix Library saving, and add Preset Manager
 
 - **Z-Image Integration**:
   - Added 'z-image' to selectable workflows in `constants.ts`.
@@ -14,6 +14,14 @@ feat: Integrate Z-Image model and fix Library saving
   - Updated `LibraryPanel.tsx` to correctly display saved parameters for `qwen-t2i-gguf` and `z-image` models.
   - Added display fields for Unet, VAE, CLIP, Shift, and specific LoRAs in the library item details view.
   - Fixed issue where users could not see saved settings for these models, ensuring full parameter persistence visibility.
+
+- **Preset Manager**:
+  - Added Preset Manager to `ImageGeneratorHeader.tsx` allowing users to save and load generation parameters.
+  - Implemented `PresetSaveModal` for naming presets.
+  - Added `preset` type to `types.ts` and updated `libraryService.ts` to support preset storage.
+  - Implemented logic to filter presets by model type and load them instantly.
+  - Fixed bug in `App.tsx` where default parameters would overwrite loaded preset values.
+  - Added **Delete Preset** functionality with a confirmation modal (`ConfirmationModal.tsx`).
 
 - **Refactoring**:
   - Cleaned up `comfyUIService.ts` logic for model connection and shift parameter handling.
