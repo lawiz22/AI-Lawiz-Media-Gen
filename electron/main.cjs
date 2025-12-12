@@ -1,7 +1,9 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
-const isDev = require('electron-is-dev');
-// const Store = require('electron-store'); // electron-store is ESM only
+
+
+const isDev = !app.isPackaged;
 
 let store;
 async function initStore() {
@@ -17,7 +19,7 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.cjs'),
             nodeIntegration: false,
             contextIsolation: true,
-            webSecurity: false, // Disabled to allow local ComfyUI communication without CORS issues
+            webSecurity: false,
         },
     });
 
@@ -30,11 +32,32 @@ function createWindow() {
     if (isDev) {
         mainWindow.webContents.openDevTools();
     }
+
+    mainWindow.webContents.on('did-finish-load', () => {
+    });
+
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    });
 }
 
+// Global Error Handlers
+process.on('uncaughtException', (error) => {
+    dialog.showErrorBox('Critical Error', `A critical error occurred:\n${error.message}`);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    dialog.showErrorBox('Critical Error', `An unhandled rejection occurred:\n${reason}`);
+});
+
 app.whenReady().then(async () => {
-    await initStore();
-    createWindow();
+    try {
+        await initStore();
+        createWindow();
+    } catch (error) {
+        dialog.showErrorBox('Startup Error', `Failed to initialize application: ${error.message}`);
+        app.quit();
+    }
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -49,7 +72,7 @@ app.on('window-all-closed', () => {
     }
 });
 
-// IPC Handlers for API Key Management
+// IPC Handlers
 ipcMain.handle('get-api-key', () => {
     return store.get('gemini_api_key');
 });
@@ -58,3 +81,4 @@ ipcMain.handle('set-api-key', (event, key) => {
     store.set('gemini_api_key', key);
     return true;
 });
+
