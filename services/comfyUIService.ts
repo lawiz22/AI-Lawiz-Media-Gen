@@ -1,5 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
-import { fileToGenerativePart } from "../utils/imageUtils";
 import type { GenerationOptions } from "../types";
 import {
     COMFYUI_SD15_WORKFLOW_TEMPLATE,
@@ -16,7 +14,8 @@ import {
     COMFYUI_Z_IMAGE_WORKFLOW_TEMPLATE,
 } from "../constants";
 
-import { getGenAIInstance } from "./geminiService";
+import { generateMammouthText } from './mammouthService';
+import { LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './ltxDirectorWorkflow';
 
 // Remove local initialization
 // const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
@@ -83,7 +82,7 @@ export const cancelComfyUIExecution = async (): Promise<void> => {
     }
 };
 
-// --- Gemini-based Prompt Generation ---
+// --- Mammouth-based Prompt Generation ---
 type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image';
 
 const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
@@ -108,64 +107,36 @@ const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
 };
 
 export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: ComfyPromptModelType): Promise<string> => {
-    const imagePart = await fileToGenerativePart(sourceImage);
     const instruction = getPromptStyleInstruction(modelType) + ' Start the prompt directly without any preamble.';
-
-    const result = await getGenAIInstance().models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, { text: instruction }] },
-        config: { temperature: 0.3 }
-    });
-
-    const text = result.text?.trim().replace(/['"`]/g, '');
+    const result = await generateMammouthText(instruction, [sourceImage]);
+    const text = result.text.trim().replace(/['"`]/g, '');
     if (!text) throw new Error('AI failed to generate a prompt.');
     return text;
 };
 
 export const generateWanVideoPromptFromImage = async (sourceImage: File): Promise<string> => {
-    const imagePart = await fileToGenerativePart(sourceImage);
     const instruction = `Analyze this image. Describe the main subject and its environment in a concise, cinematic phrase suitable for a text-to-video prompt. For example: "A lion running across the savannah" or "A cyberpunk woman with neon hair in a rainy neon-lit alley". Respond with only the descriptive phrase.`;
-
-    const result = await getGenAIInstance().models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, { text: instruction }] },
-        config: { temperature: 0.3 }
-    });
-
-    const text = result.text?.trim().replace(/['"`]/g, '');
+    const result = await generateMammouthText(instruction, [sourceImage]);
+    const text = result.text.trim().replace(/['"`]/g, '');
     if (!text) throw new Error('AI failed to generate a video prompt from the image.');
     return text;
 };
 
 
 export const extractBackgroundPromptFromImage = async (sourceImage: File, modelType: ComfyPromptModelType): Promise<string> => {
-    const imagePart = await fileToGenerativePart(sourceImage);
     const styleInstruction = getPromptStyleInstruction(modelType);
     const instruction = `Analyze ONLY the background of this image, ignoring any people or foreground subjects. Describe the environment in detail. ${styleInstruction}`;
-
-    const result = await getGenAIInstance().models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, { text: instruction }] },
-        config: { temperature: 0.4 }
-    });
-
-    const text = result.text?.trim().replace(/['"`]/g, '');
+    const result = await generateMammouthText(instruction, [sourceImage]);
+    const text = result.text.trim().replace(/['"`]/g, '');
     if (!text) throw new Error('AI failed to generate a background prompt.');
     return text;
 };
 
 export const extractSubjectPromptFromImage = async (sourceImage: File, modelType: ComfyPromptModelType): Promise<string> => {
-    const imagePart = await fileToGenerativePart(sourceImage);
     const styleInstruction = getPromptStyleInstruction(modelType);
     const instruction = `Analyze ONLY the main subject (person or object) of this image, ignoring the background. Describe the subject in detail, including appearance, clothing, and any defining features. ${styleInstruction}`;
-
-    const result = await getGenAIInstance().models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, { text: instruction }] },
-        config: { temperature: 0.4 }
-    });
-
-    const text = result.text?.trim().replace(/['"`]/g, '');
+    const result = await generateMammouthText(instruction, [sourceImage]);
+    const text = result.text.trim().replace(/['"`]/g, '');
     if (!text) throw new Error('AI failed to generate a subject prompt.');
     return text;
 };
@@ -192,17 +163,10 @@ export const generateMagicalPromptSoup = async (
     { "prompt_parts": [ {"text": "A beautiful portrait of", "source": 1}, {"text": "an astronaut", "source": 3}, {"text": "on a neon-lit alien world", "source": 2}, {"text": "in a impressionistic style", "source": 0} ] }
     `;
 
-    const result = await getGenAIInstance().models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [{ text: instruction }] },
-        config: {
-            temperature: creativity,
-            responseMimeType: 'application/json'
-        },
-    });
+    const result = await generateMammouthText(instruction);
 
     try {
-        const jsonText = result.text.trim();
+        const jsonText = result.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
         const parsed = JSON.parse(jsonText);
         if (parsed.prompt_parts && Array.isArray(parsed.prompt_parts)) {
             return parsed.prompt_parts;
@@ -286,6 +250,21 @@ const uploadImage = async (file: File): Promise<{ name: string; subfolder: strin
     return response.json();
 };
 
+const uploadLtxMedia = async (file: File): Promise<{ name: string; subfolder?: string; type?: string }> => {
+    const url = getComfyUIUrl();
+    if (!url) throw new Error('ComfyUI URL not set');
+
+    const formData = new FormData();
+    formData.append('image', file, sanitizeFilename(file.name));
+    formData.append('type', 'input');
+    formData.append('overwrite', 'true');
+    const response = await fetch(`${url}/upload/image`, { method: 'POST', body: formData });
+    if (!response.ok) {
+        throw new Error(`Failed to upload ${file.type.startsWith('audio/') ? 'audio' : 'image'} to ComfyUI: ${await response.text()}`);
+    }
+    return response.json();
+};
+
 const queuePrompt = async (prompt: any, clientId: string): Promise<string> => {
     const url = getComfyUIUrl();
     if (!url) throw new Error('ComfyUI URL not set');
@@ -352,6 +331,15 @@ const executeWorkflow = async (
                     onProgress(`Sampling...`, 0.3 + (value / max) * 0.6);
                     break;
                 case 'executed':
+                    const eventOutput = data.data.output;
+                    const hasMediaOutput = eventOutput && (
+                        Array.isArray(eventOutput.images) ||
+                        Array.isArray(eventOutput.videos) ||
+                        Array.isArray(eventOutput.gifs) ||
+                        Array.isArray(eventOutput.files) ||
+                        Array.isArray(eventOutput.ui?.videos)
+                    );
+                    if (!hasMediaOutput) break;
                     onProgress("Fetching results...", 0.95);
                     const promptId = data.data.prompt_id;
 
@@ -390,8 +378,8 @@ const executeWorkflow = async (
                             else if (Array.isArray(nodeOutput.files)) videoList = nodeOutput.files;
                             if (videoList.length > 0) {
                                 const videoFile = videoList[0];
-                                if (videoFile.filename && videoFile.type) {
-                                    videoUrl = `${url}/view?filename=${encodeURIComponent(videoFile.filename)}&subfolder=${encodeURIComponent(videoFile.subfolder || '')}&type=${videoFile.type}`;
+                                if (videoFile.filename) {
+                                    videoUrl = `${url}/view?filename=${encodeURIComponent(videoFile.filename)}&subfolder=${encodeURIComponent(videoFile.subfolder || '')}&type=${encodeURIComponent(videoFile.type || 'output')}`;
                                     break;
                                 }
                             }
@@ -1396,6 +1384,98 @@ export const generateComfyUIVideo = async (
     if (!videoUrl) throw new Error("Generation finished, but no video file was found.");
 
     return { videoUrl, finalPrompt };
+};
+
+export interface LtxDirectorOptions {
+    frameRate: number;
+    guideStrength: number;
+    seed?: number;
+    checkpoint: string;
+    loras: Array<{ enabled: boolean; name: string; strength: number }>;
+}
+
+export interface LtxDirectorSegment {
+    image: File;
+    prompt: string;
+    durationSeconds: number;
+}
+
+export const generateLtxDirectorVideo = async (
+    segments: LtxDirectorSegment[],
+    audio: File | null,
+    options: LtxDirectorOptions,
+    updateProgress: (message: string, value: number) => void,
+): Promise<string> => {
+    const workflow = JSON.parse(JSON.stringify(LTX_DIRECTOR_WORKFLOW_TEMPLATE));
+    const timelineSegments = [];
+    let startFrame = 0;
+    for (let index = 0; index < segments.length; index += 1) {
+        const segment = segments[index];
+        updateProgress(`Uploading image ${index + 1} of ${segments.length}...`, 0.03 + (index / segments.length) * 0.07);
+        const imageInfo = await uploadLtxMedia(segment.image);
+        const length = Math.max(19, Math.round((segment.durationSeconds * 23 - 3) / 8) * 8 + 3);
+        timelineSegments.push({
+            id: crypto.randomUUID(),
+            start: startFrame,
+            length,
+            prompt: segment.prompt,
+            type: 'image',
+            imageFile: imageInfo.name,
+            imageB64: `/api/view?filename=${encodeURIComponent(imageInfo.name)}&type=${encodeURIComponent(imageInfo.type || 'input')}&subfolder=${encodeURIComponent(imageInfo.subfolder || '')}`,
+        });
+        startFrame += length;
+    }
+
+    let audioSegments: unknown[] = [];
+    if (audio) {
+        updateProgress('Uploading soundtrack...', 0.1);
+        const audioInfo = await uploadLtxMedia(audio);
+        audioSegments = [{
+            id: crypto.randomUUID(), start: 0, length: segments.reduce((total, segment) => total + segment.durationSeconds, 0),
+            audioFile: audioInfo.name,
+            audioB64: `/api/view?filename=${encodeURIComponent(audioInfo.name)}&type=${encodeURIComponent(audioInfo.type || 'input')}&subfolder=${encodeURIComponent(audioInfo.subfolder || '')}`,
+        }];
+    }
+
+    const durationSeconds = segments.reduce((total, segment) => total + segment.durationSeconds, 0);
+    const prompts = segments.map((segment) => segment.prompt);
+    const timeline = {
+        segments: timelineSegments,
+        audioSegments,
+    };
+    Object.assign(workflow['46'].inputs, {
+        global_prompt: prompts.join('\n'),
+        duration_frames: startFrame,
+        duration_seconds: durationSeconds,
+        timeline_data: JSON.stringify(timeline),
+        local_prompts: prompts.join('|'),
+        segment_lengths: timelineSegments.map((segment) => segment.length).join(','),
+        guide_strength: options.guideStrength.toFixed(2),
+        use_custom_audio: Boolean(audio),
+        frame_rate: options.frameRate,
+    });
+    workflow['28'].inputs.noise_seed = options.seed ?? Math.floor(Math.random() * 1e15);
+    workflow['79'].inputs.preview_rate = options.frameRate;
+    workflow['77'].inputs.ckpt_name = options.checkpoint;
+
+    let modelInput: [string, number] = ['79', 0];
+    const loraNodeIds = ['80', '93', '96'];
+    loraNodeIds.forEach((nodeId, index) => {
+        const lora = options.loras[index];
+        if (!lora?.enabled || !lora.name) {
+            delete workflow[nodeId];
+            return;
+        }
+        workflow[nodeId].inputs.lora_name = lora.name;
+        workflow[nodeId].inputs.strength_model = lora.strength;
+        workflow[nodeId].inputs.model = modelInput;
+        modelInput = [nodeId, 0];
+    });
+    workflow['46'].inputs.model = modelInput;
+
+    const { videoUrl } = await executeWorkflow(workflow, updateProgress, true);
+    if (!videoUrl) throw new Error('LTX Director finished without a video output. Verify its custom nodes and models in ComfyUI.');
+    return videoUrl;
 };
 
 export const exportComfyUIWorkflow = async (options: GenerationOptions, sourceFile: File | null): Promise<void> => {

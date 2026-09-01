@@ -11,7 +11,8 @@ import {
     PRESET_POSES,
     MAX_IMAGES,
 } from '../constants';
-import { generateBackgroundImagePreview, generateClothingPreview, generateMaskForImage, getGeminiModels } from '../services/geminiService';
+import { DEFAULT_GEMINI_IMAGE_MODEL, GEMINI_IMAGE_MODELS, generateBackgroundImagePreview, generateClothingPreview, generateMaskForImage, getGeminiModels } from '../services/geminiService';
+import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, getMammouthImageModels } from '../services/mammouthService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
 import { saveToLibrary } from '../services/libraryService';
 import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon, LibraryIcon, SaveIcon, CheckIcon } from './icons';
@@ -169,18 +170,13 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const [maskSavingState, setMaskSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
     // Models that we want to ensure are always present
-    const DEFAULT_MODELS = useMemo(() => [
-        'gemini-2.5-flash-image',
-        'gemini-3-pro-image-preview',
-        'gemini-3.0-pro-preview',
-        'imagen-4.0-generate-001',
-        'imagen-3.0-generate-001',
-        'veo-2.0-generate-preview-01'
-    ], []);
+    const DEFAULT_MODELS = useMemo(() => GEMINI_IMAGE_MODELS, []);
 
     // Initialize with default models to prevent empty dropdowns
     const [geminiModels, setGeminiModels] = useState<string[]>(DEFAULT_MODELS);
     const [loadingModels, setLoadingModels] = useState(false);
+    const [mammouthModels, setMammouthModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
+    const [loadingMammouthModels, setLoadingMammouthModels] = useState(false);
 
     useEffect(() => {
         const fetchModels = async () => {
@@ -202,6 +198,14 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         };
         fetchModels();
     }, [options.provider, DEFAULT_MODELS]);
+
+    useEffect(() => {
+        if (options.provider !== 'mammouth') return;
+        setLoadingMammouthModels(true);
+        getMammouthImageModels()
+            .then(models => setMammouthModels(models.length > 0 ? models : [...MAMMOUTH_IMAGE_MODELS].sort()))
+            .finally(() => setLoadingMammouthModels(false));
+    }, [options.provider]);
 
     useEffect(() => {
         setMaskSavingState('idle');
@@ -374,6 +378,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             return;
         }
 
+        if (field === 'mammouthImageModel') {
+            updateOptions({ mammouthImageModel: value as string });
+            return;
+        }
+
         const getStylePrefix = (opts: GenerationOptions) => {
             if (opts.imageStyle === 'photorealistic') {
                 return `${opts.photoStyle}, ${opts.eraStyle}, `;
@@ -520,31 +529,51 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
     // --- Render Methods for different providers ---
 
-    const renderGeminiOptions = () => (
+    const renderGeminiOptions = () => {
+        const isMammouth = options.provider === 'mammouth';
+        const selectedModel = isMammouth
+            ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
+            : (options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL);
+        const availableModels = isMammouth ? mammouthModels : geminiModels;
+        const modelsLoading = isMammouth ? loadingMammouthModels : loadingModels;
+
+        return (
         <>
+            {isMammouth && (
+                <OptionSection title="Mammouth Model">
+                    <SelectInput
+                        label="Generation Model"
+                        value={selectedModel}
+                        onChange={handleOptionChange('mammouthImageModel')}
+                        options={availableModels.map(model => ({ value: model, label: model }))}
+                        disabled={isDisabled || modelsLoading}
+                    />
+                    {modelsLoading && <p className="text-xs text-text-muted">Refreshing Mammouth models...</p>}
+                </OptionSection>
+            )}
             {generationMode === 't2i' ? (
                 <OptionSection title="Prompt Options">
                     {/* ... T2I Options ... */}
-                    <div>
+                    {!isMammouth && <div>
                         <label className="block text-sm font-medium text-text-secondary">Generation Model</label>
                         {/* We show the input always now, but with a spinner if loading */}
                         <div className="relative">
                             <input
-                                list="gemini-models-list"
+                                list={isMammouth ? 'mammouth-models-list' : 'gemini-models-list'}
                                 type="text"
-                                value={options.geminiT2IModel || 'gemini-2.5-flash-image'}
-                                onChange={handleOptionChange('geminiT2IModel')}
+                                value={selectedModel}
+                                onChange={handleOptionChange(isMammouth ? 'mammouthImageModel' : 'geminiT2IModel')}
                                 placeholder="Select or type model name"
                                 disabled={isDisabled}
                                 className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent pr-8"
                             />
-                            {loadingModels && <div className="absolute right-2 top-1/2 transform -translate-y-1/2"><SpinnerIcon className="w-4 h-4 animate-spin text-text-muted" /></div>}
+                            {modelsLoading && <div className="absolute right-2 top-1/2 transform -translate-y-1/2"><SpinnerIcon className="w-4 h-4 animate-spin text-text-muted" /></div>}
                         </div>
-                        <datalist id="gemini-models-list">
-                            {geminiModels.map(m => <option key={m} value={m} />)}
+                        <datalist id={isMammouth ? 'mammouth-models-list' : 'gemini-models-list'}>
+                            {availableModels.map(m => <option key={m} value={m} />)}
                         </datalist>
                         <p className="text-xs text-text-muted mt-1">Type a custom model name if not listed.</p>
-                    </div>
+                    </div>}
                     <TextInput
                         label="Prompt"
                         value={options.geminiPrompt || ''}
@@ -720,7 +749,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 </>
             )}
         </>
-    );
+        );
+    };
 
     const renderComfyUIOptions = () => {
         const modelType = options.comfyModelType || 'sdxl';
@@ -995,8 +1025,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     };
 
     const activeModelName = options.provider === 'gemini'
-        ? (generationMode === 't2i' ? (options.geminiT2IModel || 'gemini-2.5-flash-image') : 'gemini-2.5-flash-image')
-        : (options.comfyModelType || 'sdxl');
+        ? (generationMode === 't2i' ? (options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL)
+        : options.provider === 'mammouth'
+            ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
+            : (options.comfyModelType || 'sdxl');
 
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-8">
@@ -1013,7 +1045,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             <div className="space-y-6">
                 {!hideGeneralSettings && (
                     <OptionSection title="General Settings">
-                        {!hideProviderSwitch && <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1"><button onClick={() => updateOptions({ provider: 'comfyui' })} disabled={isDisabled} className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>ComfyUI</button><button onClick={() => updateOptions({ provider: 'gemini' })} disabled={isDisabled} className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'gemini' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>Gemini</button></div>}
+                        {!hideProviderSwitch && <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1"><button onClick={() => updateOptions({ provider: 'comfyui' })} disabled={isDisabled} className={`px-3 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>ComfyUI</button><button onClick={() => updateOptions({ provider: 'mammouth' })} disabled={isDisabled} className={`px-3 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'mammouth' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>Mammouth</button></div>}
                         <NumberSlider label={`Number of Images: ${options.numImages}`} value={options.numImages} onChange={(e) => updateOptions({ numImages: parseInt(e.target.value, 10), poseSelection: options.poseSelection.slice(0, parseInt(e.target.value, 10)) })} min={1} max={MAX_IMAGES} step={1} disabled={isDisabled} />
                         {!(options.provider === 'comfyui' && options.comfyModelType === 'qwen-t2i-gguf') && (
                             <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={ASPECT_RATIO_OPTIONS} disabled={isDisabled} />
@@ -1021,7 +1053,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     </OptionSection>
                 )}
 
-                {options.provider === 'gemini' ? renderGeminiOptions() : renderComfyUIOptions()}
+                {options.provider === 'comfyui' ? renderComfyUIOptions() : renderGeminiOptions()}
             </div>
 
         </div>

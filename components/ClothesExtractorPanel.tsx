@@ -4,10 +4,12 @@ import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
 import { setExtractorItemSaveStatus, updateExtractorState, resetExtractorState } from '../store/extractorSlice';
 import { addToLibrary } from '../store/librarySlice';
+import { addSessionTokenUsage } from '../store/appSlice';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
 import { ExtractorResultsGrid } from './ExtractorResultsGrid';
 import { generateClothingImage, identifyClothing, identifyObjects, generateObjectImage, generatePoseMannequin, generatePoseDescription, generateFontChart } from '../services/geminiService';
+import { generateMammouthImage, generateMammouthText } from '../services/mammouthService';
 import { detectPosesInImage } from '../services/mediaPipeService';
 import { mediaPipeToOpenPose, renderPoseSkeleton } from '../utils/poseRenderer';
 import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose, MannequinStyle, LibraryItem, PoseOutputMode } from '../types';
@@ -78,6 +80,13 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
 }) => {
     const dispatch: AppDispatch = useDispatch();
     const state = useSelector((state: RootState) => state.extractor.extractorState);
+    const generationOptions = useSelector((state: RootState) => state.generation.options);
+
+    const recordUsage = (usage?: { promptTokenCount: number; candidatesTokenCount: number; totalTokenCount: number }) => {
+        if (usage) dispatch(addSessionTokenUsage(usage));
+    };
+
+    const parseJsonResponse = <T,>(text: string): T => JSON.parse(text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
 
     const {
         clothesSourceFile, clothesDetails, isIdentifying, identifiedItems, isGenerating, generatedClothes, clothesError, generateFolded, excludeAccessories,
@@ -90,7 +99,11 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         if (!clothesSourceFile) return;
         dispatch(updateExtractorState({ isIdentifying: true, clothesError: null }));
         try {
-            const items = await identifyClothing(clothesSourceFile);
+            const mammouthResult = generationOptions.provider === 'mammouth'
+                ? await generateMammouthText("Identify the clothing items in this image. Return only a JSON array where each item has 'itemName' and 'description'.", [clothesSourceFile])
+                : null;
+            recordUsage(mammouthResult?.usageMetadata);
+            const items = mammouthResult ? parseJsonResponse<IdentifiedClothing[]>(mammouthResult.text) : await identifyClothing(clothesSourceFile);
             dispatch(updateExtractorState({ 
                 identifiedItems: items.map(item => ({ ...item, selected: true })),
                 isIdentifying: false 
@@ -108,10 +121,18 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         try {
             const results: GeneratedClothing[] = [];
             for (const item of selectedItems) {
-                const laidOutImage = await generateClothingImage(item.description, false);
+                const laidOutResult = generationOptions.provider === 'mammouth'
+                    ? await generateMammouthImage(`Generate a flat lay image of: ${item.description}. Plain white background.`, [], '1:1', generationOptions.mammouthImageModel)
+                    : null;
+                recordUsage(laidOutResult?.usageMetadata);
+                const laidOutImage = laidOutResult?.images[0] || await generateClothingImage(item.description, false);
                 let foldedImage: string | undefined;
                 if (generateFolded) {
-                    foldedImage = await generateClothingImage(item.description, true);
+                    const foldedResult = generationOptions.provider === 'mammouth'
+                        ? await generateMammouthImage(`Generate a neatly folded image of: ${item.description}. Plain background.`, [], '1:1', generationOptions.mammouthImageModel)
+                        : null;
+                    recordUsage(foldedResult?.usageMetadata);
+                    foldedImage = foldedResult?.images[0] || await generateClothingImage(item.description, true);
                 }
                 results.push({ itemName: item.itemName, laidOutImage, foldedImage, saved: 'idle' });
             }
@@ -144,7 +165,12 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         if (!objectSourceFile) return;
         dispatch(updateExtractorState({ isIdentifyingObjects: true, objectError: null }));
         try {
-            const objects = await identifyObjects(objectSourceFile, maxObjects, objectHints);
+            const prompt = `Identify up to ${maxObjects} main objects in this image. ${objectHints ? `Focus on: ${objectHints}.` : ''} Return only a JSON array with 'name' and 'description' for each.`;
+            const mammouthResult = generationOptions.provider === 'mammouth'
+                ? await generateMammouthText(prompt, [objectSourceFile])
+                : null;
+            recordUsage(mammouthResult?.usageMetadata);
+            const objects = mammouthResult ? parseJsonResponse<IdentifiedObject[]>(mammouthResult.text) : await identifyObjects(objectSourceFile, maxObjects, objectHints);
             dispatch(updateExtractorState({ 
                 identifiedObjects: objects.map(obj => ({ ...obj, selected: true })),
                 isIdentifyingObjects: false 
@@ -162,7 +188,11 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         try {
             const results: GeneratedObject[] = [];
             for (const obj of selectedObjects) {
-                const image = await generateObjectImage(obj.description);
+                const mammouthResult = generationOptions.provider === 'mammouth'
+                    ? await generateMammouthImage(`Generate a high quality image of: ${obj.description}. Isolated on white background.`, [], '1:1', generationOptions.mammouthImageModel)
+                    : null;
+                recordUsage(mammouthResult?.usageMetadata);
+                const image = mammouthResult?.images[0] || await generateObjectImage(obj.description);
                 results.push({ name: obj.name, image, saved: 'idle' });
             }
             dispatch(updateExtractorState({ generatedObjects: results, isGeneratingObjects: false }));
@@ -214,7 +244,11 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                  for (let i = 0; i < poseLandmarks.length; i++) {
                     const poseData = mediaPipeToOpenPose(poseLandmarks[i], handLandmarks, handedness, faceLandmarks[i], width, height);
                     const skeletonImage = renderPoseSkeleton(poseData);
-                    const description = await generatePoseDescription(poseSourceFile, poseData);
+                    const mammouthResult = generationOptions.provider === 'mammouth'
+                        ? await generateMammouthText('Describe the pose of the person in this image in detail for a text-to-image prompt.', [poseSourceFile])
+                        : null;
+                    recordUsage(mammouthResult?.usageMetadata);
+                    const description = mammouthResult?.text || await generatePoseDescription(poseSourceFile, poseData);
     
                     allGeneratedPoses.push({
                         description, 
@@ -226,7 +260,14 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                     });
                 }
             } else {
-                const { image, prompt } = await generatePoseMannequin(poseSourceFile, 'custom-reference', mannequinReferenceFile, mannequinPromptHint);
+                const prompt = mannequinReferenceFile
+                    ? `Create a full-body image of the character from the first image, performing the EXACT pose from the second image. Plain background. ${mannequinPromptHint}`
+                    : `Create a full-body image of a mannequin performing the EXACT pose from the image. Style: ${mannequinPromptHint || 'White modern mannequin'}. Plain background.`;
+                const mammouthResult = generationOptions.provider === 'mammouth'
+                    ? await generateMammouthImage(prompt, mannequinReferenceFile ? [mannequinReferenceFile, poseSourceFile] : [poseSourceFile], '3:4', generationOptions.mammouthImageModel)
+                    : null;
+                recordUsage(mammouthResult?.usageMetadata);
+                const image = mammouthResult?.images[0] || (await generatePoseMannequin(poseSourceFile, 'custom-reference', mannequinReferenceFile, mannequinPromptHint)).image;
                 allGeneratedPoses.push({
                     description: "Mannequin Transfer",
                     image: image,
@@ -276,7 +317,11 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         if (!fontSourceFile) return;
         dispatch(updateExtractorState({ isGeneratingFont: true, fontError: null, generatedFontChart: null }));
         try {
-            const chartImage = await generateFontChart(fontSourceFile);
+            const mammouthResult = generationOptions.provider === 'mammouth'
+                ? await generateMammouthImage('Generate a font chart (A-Z, 0-9) using the style of the text in this image. White background.', [fontSourceFile], '1:1', generationOptions.mammouthImageModel)
+                : null;
+            recordUsage(mammouthResult?.usageMetadata);
+            const chartImage = mammouthResult?.images[0] || await generateFontChart(fontSourceFile);
             dispatch(updateExtractorState({ generatedFontChart: { src: chartImage, saved: 'idle' } }));
         } catch (err: any) {
             dispatch(updateExtractorState({ fontError: err.message }));

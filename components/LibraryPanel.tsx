@@ -163,8 +163,9 @@ const renderOptionsDetails = (options?: GenerationOptions, mediaType?: LibraryIt
       <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Generation Options</h4>
       <div className="space-y-3 bg-bg-primary p-3 rounded-md max-h-96 overflow-y-auto">
         <DetailItem label="Provider" value={options.provider} />
-        {options.provider === 'gemini' && isImageType && (
+        {(options.provider === 'gemini' || options.provider === 'mammouth') && isImageType && (
           <>
+            {options.provider === 'mammouth' && <DetailItem label="Model" value={options.mammouthImageModel} />}
             <DetailItem label="Mode" value={options.geminiMode} />
             {options.geminiMode === 't2i' && <DetailItem label="Prompt" value={options.geminiPrompt} isCode />}
             <DetailItem label="Pose" value={options.poseMode} />
@@ -303,13 +304,13 @@ interface PromptDestinationPickerModalProps {
 const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> = ({ isOpen, onClose, prompt }) => {
   // ... (Implementation remains unchanged) ...
   const dispatch: AppDispatch = useDispatch();
-  const handleSelectDestination = (provider: 'gemini' | 'comfyui', comfyModelType?: GenerationOptions['comfyModelType']) => {
+  const handleSelectDestination = (provider: 'mammouth' | 'comfyui', comfyModelType?: GenerationOptions['comfyModelType']) => {
     let optionsUpdate: Partial<GenerationOptions> = {
       provider,
       comfyPrompt: prompt,
       geminiPrompt: prompt,
     };
-    if (provider === 'gemini') {
+    if (provider === 'mammouth') {
       optionsUpdate.geminiMode = 't2i';
     } else {
       optionsUpdate.comfyModelType = comfyModelType;
@@ -363,15 +364,15 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
         <p className="text-sm text-text-secondary mb-6">Where would you like to use this generated prompt?</p>
         <div className="space-y-6">
           <div>
-            <h3 className="text-lg font-semibold text-text-primary mb-3">Gemini</h3>
+            <h3 className="text-lg font-semibold text-text-primary mb-3">Mammouth AI</h3>
             <button
-              onClick={() => handleSelectDestination('gemini')}
+              onClick={() => handleSelectDestination('mammouth')}
               className="w-full text-left p-4 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors flex items-center gap-4"
             >
               <GenerateIcon className="w-8 h-8 text-accent flex-shrink-0" />
               <div>
-                <p className="font-bold">Gemini T2I</p>
-                <p className="text-xs text-text-secondary">Use Google's powerful text-to-image models.</p>
+                <p className="font-bold">Mammouth T2I</p>
+                <p className="text-xs text-text-secondary">Use the selected Mammouth image model.</p>
               </div>
             </button>
           </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
 import {
-    setCurrentUser, setTheme, setFontSize, setProjectName, setActiveTab, setIsComfyUIConnected, setComfyUIObjectInfo, setVersionInfo,
+    setCurrentUser, setTheme, setFontSize, setProjectName, setActiveTab, setIsComfyUIConnected, setIsMammouthConnected, setComfyUIObjectInfo, setVersionInfo,
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
     openSettingsModal, closeSettingsModal, openVisualSettingsModal, closeVisualSettingsModal, closeAdminPanel,
     openOAuthHelper, closeOAuthHelper, openComfyUIHelper, closeComfyUIHelper,
@@ -16,9 +16,8 @@ import {
     selectIsReadyToGenerate
 } from './store/generationSlice';
 import {
-    setVideoStartFrame, setVideoEndFrame, setGeneratedVideoUrl, setGenerationOptionsForSave,
-    updateVideoUtilsState, setActiveVideoUtilsSubTab, resetVideoGenerationState,
-    resetVideoUtilsState, selectIsVideoReady
+    setVideoStartFrame, setVideoEndFrame, updateVideoUtilsState, setActiveVideoUtilsSubTab,
+    resetVideoUtilsState
 } from './store/videoSlice';
 import {
     addSoupToHistory, setActivePromptToolsSubTab, resetPromptGenState, updatePromptGenState
@@ -35,8 +34,9 @@ import { setUploadedFiles } from './store/groupPhotoFusionSlice';
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile, Provider } from './types';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
-import { generatePortraits, generateGeminiVideo, generateCharacterNameForImage, updateGeminiApiKey, getApiKey, generatePromptFromImage } from './services/geminiService';
-import { generateComfyUIPortraits, generateComfyUIVideo, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution, generateComfyUIPromptFromSource } from './services/comfyUIService';
+import { DEFAULT_GEMINI_IMAGE_MODEL, generatePortraits, generateCharacterNameForImage, updateGeminiApiKey, getApiKey, generatePromptFromImage } from './services/geminiService';
+import { generateComfyUIPortraits, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution, generateComfyUIPromptFromSource } from './services/comfyUIService';
+import { DEFAULT_MAMMOUTH_IMAGE_MODEL, generateMammouthImages, getMammouthApiKey, testMammouthConnection, updateMammouthApiKey } from './services/mammouthService';
 import { Login } from './components/Login';
 import { Header } from './components/Header';
 import { ImageUploader } from './components/ImageUploader';
@@ -47,7 +47,8 @@ import { ConnectionSettingsModal } from './components/ComfyUIConnection';
 import { LibraryPanel } from './components/LibraryPanel';
 import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
-import { VideoGeneratorPanel } from './components/VideoGeneratorPanel';
+import { LTXDirectorPanel } from './components/LTXDirectorPanel';
+import versionData from './version.json';
 import { LibraryPickerModal } from './components/LibraryPickerModal';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
@@ -58,6 +59,7 @@ import { VisualSettingsModal } from './components/VisualSettingsModal';
 import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon } from './components/icons';
 import { ImageGeneratorHeader } from './components/ImageGeneratorHeader';
 import { ActionControlPanel } from './components/ActionControlPanel';
+import { CloudImageProviderBar } from './components/CloudImageProviderBar';
 import { SamplerSettingsPanel } from './components/SamplerSettingsPanel';
 import { LoraSettingsPanel } from './components/LoraSettingsPanel';
 import * as driveService from './services/googleDriveService';
@@ -73,18 +75,19 @@ const App: React.FC = () => {
     // --- Local State ---
     const [comfyUrlForHelper, setComfyUrlForHelper] = useState('');
     const [localGeminiKey, setLocalGeminiKey] = useState('');
+    const [localMammouthKey, setLocalMammouthKey] = useState('');
     const [isGeneratingRefinePrompt, setIsGeneratingRefinePrompt] = useState(false);
     const [generationTimes, setGenerationTimes] = useState<Record<string, number | null>>({});
 
     // --- App State (from appSlice) ---
     const {
         currentUser, theme, projectName, fontSize, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
-        isSettingsModalOpen, isVisualSettingsModalOpen, isOAuthHelperOpen, isComfyUIHelperOpen,
+        isSettingsModalOpen, isVisualSettingsModalOpen, isOAuthHelperOpen, isComfyUIHelperOpen, isMammouthConnected,
         isClothingPickerOpen, isBackgroundPickerOpen, isPosePickerOpen, isColorImagePickerOpen, isVideoUtilsPickerOpen,
         isStartFramePickerOpen, isEndFramePickerOpen, isLogoRefPickerOpen, isLogoPalettePickerOpen, isLogoFontPickerOpen,
         isPromptGenImagePickerOpen, isPromptGenBgImagePickerOpen, isPromptGenSubjectImagePickerOpen,
-        isNunchakuSourcePickerOpen, isCharacterSourcePickerOpen, isVideoStartFramePickerOpen, isVideoEndFramePickerOpen,
-        isGeminiVideoSourcePickerOpen, isClothesSourcePickerOpen, isObjectSourcePickerOpen, isPoseSourcePickerOpen,
+        isNunchakuSourcePickerOpen, isCharacterSourcePickerOpen,
+        isClothesSourcePickerOpen, isObjectSourcePickerOpen, isPoseSourcePickerOpen,
         isBannerRefPickerOpen, isBannerPalettePickerOpen, isBannerLogoPickerOpen, isBannerFontPickerOpen,
         isAlbumCoverRefPickerOpen, isAlbumCoverPalettePickerOpen, isAlbumCoverLogoPickerOpen, isAlbumCoverFontPickerOpen,
         isMannequinRefPickerOpen, isRefineSourcePickerOpen, isFontSourcePickerOpen, isMaskPickerOpen, isElementPickerOpen,
@@ -104,8 +107,6 @@ const App: React.FC = () => {
     // --- Video State (from videoSlice) ---
     const videoStartFrame = useSelector((state: RootState) => state.video.videoStartFrame);
     const videoEndFrame = useSelector((state: RootState) => state.video.videoEndFrame);
-    const generatedVideoUrl = useSelector((state: RootState) => state.video.generatedVideoUrl);
-    const generationOptionsForSave = useSelector((state: RootState) => state.video.generationOptionsForSave);
     const videoUtilsState = useSelector((state: RootState) => state.video.videoUtilsState);
     const activeVideoUtilsSubTab = useSelector((state: RootState) => state.video.activeVideoUtilsSubTab);
 
@@ -124,8 +125,6 @@ const App: React.FC = () => {
 
     // --- Computed State ---
     const isReadyToGenerate = useSelector(selectIsReadyToGenerate);
-    const isVideoReady = useSelector(selectIsVideoReady);
-
     // Determine which options object to use based on the active tab
     const currentOptions = activeTab === 'character-generator' ? characterOptions : options;
 
@@ -243,7 +242,7 @@ const App: React.FC = () => {
     }, [dispatch]);
 
     useEffect(() => {
-        fetch('/version.json').then(res => res.json()).then(data => dispatch(setVersionInfo(data))).catch(console.error);
+        dispatch(setVersionInfo(versionData));
         const savedTheme = localStorage.getItem('theme') || 'cyberpunk';
         dispatch(setTheme(savedTheme));
 
@@ -293,10 +292,24 @@ const App: React.FC = () => {
                     setLocalGeminiKey(key);
                 }
             });
+            window.electron.getMammouthApiKey().then(async key => {
+                if (!key) return;
+                updateMammouthApiKey(key);
+                setLocalMammouthKey(key);
+                dispatch(setIsMammouthConnected(null));
+                const result = await testMammouthConnection(key);
+                dispatch(setIsMammouthConnected(result.success));
+            });
         } else {
             // Fallback to env or local storage if we decide to implement it for web
             const envKey = getApiKey();
             if (envKey) setLocalGeminiKey(envKey);
+            const mammouthKey = localStorage.getItem('mammouth_api_key') || '';
+            if (mammouthKey) {
+                updateMammouthApiKey(mammouthKey);
+                setLocalMammouthKey(mammouthKey);
+                testMammouthConnection(mammouthKey).then(result => dispatch(setIsMammouthConnected(result.success)));
+            }
         }
 
     }, [dispatch, checkConnection]);
@@ -313,18 +326,12 @@ const App: React.FC = () => {
     const handleTabChange = (tabId: string) => {
         dispatch(setActiveTab(tabId));
 
-        // Auto-set provider for Gemini-only tabs to prevent UI breakage
-        if (['group-photo-fusion', 'extractor-tools', 'logo-theme-generator', 'past-forward'].includes(tabId)) {
-            dispatch(updateOptions({ provider: 'gemini' }));
-        }
-
         // Ensure Character Generator starts in I2I mode with clean prompt state and character logic
         if (tabId === 'character-generator') {
             dispatch(setGenerationMode('i2i'));
             dispatch(updateCharacterOptions({
                 geminiMode: 'i2i',
-                geminiI2iMode: 'character',
-                provider: 'gemini'
+                geminiI2iMode: 'character'
             }));
         }
     };
@@ -350,10 +357,6 @@ const App: React.FC = () => {
 
     const handleReset = () => {
         dispatch(resetGenerationState());
-    };
-
-    const handleVideoReset = () => {
-        dispatch(resetVideoGenerationState());
     };
 
     const handlePromptGenReset = useCallback(() => {
@@ -393,6 +396,13 @@ const App: React.FC = () => {
                 result = await generatePortraits(
                     sourceImage, optionsToUse, localUpdateProgress, clothingImage, backgroundImage,
                     previewedBackgroundImage, previewedClothingImage, maskImage, elementImages
+                );
+            } else if (currentOptions.provider === 'mammouth') {
+                const optionsToUse = activeTab === 'character-generator'
+                    ? { ...characterOptions, geminiGeneralEditPrompt: '', geminiI2iMode: 'character' as const, geminiMode: 'i2i' as const }
+                    : options;
+                result = await generateMammouthImages(
+                    sourceImage, optionsToUse, localUpdateProgress, clothingImage, backgroundImage, maskImage, elementImages
                 );
             } else if (currentOptions.provider === 'comfyui') {
                 // ComfyUI currently uses the main options object, Character Gen uses Gemini
@@ -447,48 +457,7 @@ const App: React.FC = () => {
         }
     };
 
-    const handleGenerateVideo = async () => {
-        dispatch(setLoadingState({ isLoading: true }));
-        dispatch(setGeneratedVideoUrl(null));
-        dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: null }));
-        dispatch(setGlobalError(null));
-        dispatch(setGenerationOptionsForSave(options));
-
-        const localUpdateProgress = (message: string, value: number) => {
-            dispatch(updateProgress({ message, value }));
-        };
-
-        try {
-            if (options.videoProvider === 'comfyui') {
-                const { videoUrl, finalPrompt } = await generateComfyUIVideo(
-                    videoStartFrame, videoEndFrame, options, localUpdateProgress
-                );
-                dispatch(setGeneratedVideoUrl(videoUrl));
-                dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: finalPrompt }));
-            } else if (options.videoProvider === 'gemini') {
-                const { videoUrl, finalPrompt } = await generateGeminiVideo(
-                    options,
-                    videoStartFrame, // This is optional for the service
-                    localUpdateProgress
-                );
-                dispatch(setGeneratedVideoUrl(videoUrl));
-                dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: finalPrompt }));
-            } else {
-                throw new Error("Selected video provider is not implemented.");
-            }
-        } catch (err: any) {
-            console.error("Video generation failed:", err);
-            if (err.message?.includes('cancelled by the user')) {
-                console.log("Video generation promise rejected due to cancellation.");
-            } else {
-                dispatch(setGlobalError({ title: "Video Generation Error", message: err.message || 'An unknown error occurred during video generation.' }));
-            }
-        } finally {
-            dispatch(setLoadingState({ isLoading: false }));
-        }
-    };
-
-    const handleSaveSettings = (comfyUIUrl: string, googleClientId: string, geminiApiKey?: string) => {
+    const handleSaveSettings = async (comfyUIUrl: string, googleClientId: string, geminiApiKey?: string, mammouthApiKey?: string) => {
         localStorage.setItem('comfyui_url', comfyUIUrl);
         localStorage.setItem('google_client_id', googleClientId);
         checkComfyUIConnection(comfyUIUrl);
@@ -506,6 +475,24 @@ const App: React.FC = () => {
             }
             updateGeminiApiKey(geminiApiKey);
             setLocalGeminiKey(geminiApiKey);
+        }
+
+        const mammouthKey = mammouthApiKey?.trim() || '';
+        if (window.electron) {
+            await window.electron.setMammouthApiKey(mammouthKey);
+        } else if (mammouthKey) {
+            localStorage.setItem('mammouth_api_key', mammouthKey);
+        } else {
+            localStorage.removeItem('mammouth_api_key');
+        }
+        updateMammouthApiKey(mammouthKey);
+        setLocalMammouthKey(mammouthKey);
+        if (mammouthKey) {
+            dispatch(setIsMammouthConnected(null));
+            const result = await testMammouthConnection(mammouthKey);
+            dispatch(setIsMammouthConnected(result.success));
+        } else {
+            dispatch(setIsMammouthConnected(false));
         }
     };
 
@@ -535,7 +522,7 @@ const App: React.FC = () => {
                 geminiMode: 'i2i',
                 geminiI2iMode: 'character',
                 geminiGeneralEditPrompt: '',
-                provider: 'gemini'
+                provider: 'mammouth'
             }));
             dispatch(setActiveTab('character-generator'));
             dispatch(setCharacterName(''));
@@ -594,33 +581,30 @@ const App: React.FC = () => {
     let activeModel = '';
     if (activeTab === 'image-generator') {
         activeModel = options.provider === 'gemini'
-            ? (options.geminiMode === 't2i' ? (options.geminiT2IModel || 'gemini-2.5-flash-image') : 'gemini-2.5-flash-image')
-            : (options.comfyModelType || 'sdxl');
+            ? (options.geminiMode === 't2i' ? (options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL)
+            : options.provider === 'mammouth'
+                ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
+                : (options.comfyModelType || 'sdxl');
     } else if (activeTab === 'character-generator') {
-        activeModel = 'gemini-2.5-flash-image';
-    } else if (activeTab === 'video-generator') {
-        activeModel = options.videoProvider === 'gemini'
-            ? (options.geminiVidModel || 'veo-2.0-generate-001')
-            : (options.comfyVidModelType === 'wan-t2v' ? 'Wan 2.2 T2I' : 'Wan 2.2 I2V');
+        activeModel = characterOptions.provider === 'mammouth'
+            ? (characterOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
+            : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'group-photo-fusion') {
-        activeModel = 'gemini-2.5-flash-image';
+        activeModel = options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'extractor-tools') {
-        if (activeExtractorSubTab === 'clothes') activeModel = 'gemini-2.5-flash-image';
+        if (options.provider === 'mammouth') activeModel = options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL;
+        else if (activeExtractorSubTab === 'clothes') activeModel = DEFAULT_GEMINI_IMAGE_MODEL;
         else if (activeExtractorSubTab === 'objects') activeModel = 'gemini-2.5-flash';
         else if (activeExtractorSubTab === 'poses') activeModel = 'MediaPipe + Gemini 2.5';
-        else if (activeExtractorSubTab === 'font') activeModel = 'gemini-2.5-flash-image';
+        else if (activeExtractorSubTab === 'font') activeModel = DEFAULT_GEMINI_IMAGE_MODEL;
         else activeModel = 'gemini-2.5-flash';
     } else if (activeTab === 'logo-theme-generator') {
-        activeModel = 'gemini-2.5-flash-image';
+        activeModel = options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'past-forward') {
-        activeModel = 'gemini-2.5-flash-image';
+        activeModel = options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     }
 
-    const activeProvider: Provider = (activeTab === 'video-generator')
-        ? options.videoProvider
-        : (activeTab === 'group-photo-fusion' || activeTab === 'extractor-tools' || activeTab === 'logo-theme-generator' || activeTab === 'past-forward' || activeTab === 'character-generator')
-            ? 'gemini' // These tools are Gemini-only
-            : options.provider;
+    const activeProvider: Provider = activeTab === 'character-generator' ? characterOptions.provider : options.provider;
 
     const availableLoras = useMemo(() => {
         const getModelListFromInfo = (widgetInfo: any): string[] => {
@@ -690,6 +674,7 @@ const App: React.FC = () => {
                     initialComfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                     initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
                     initialGeminiApiKey={localGeminiKey}
+                    initialMammouthApiKey={localMammouthKey}
                     onSave={handleSaveSettings}
                     onConnectionFail={(url) => setComfyUrlForHelper(url)}
                 />
@@ -718,11 +703,11 @@ const App: React.FC = () => {
                 />
 
                 {/* Navigation Tabs */}
-                <div className="flex flex-nowrap justify-center gap-0.5 mb-4 sticky top-[60px] z-[9] bg-bg-primary/95 backdrop-blur-md p-1 rounded-lg border border-border-primary shadow-sm mx-auto w-fit max-w-full">
+                <div className="flex flex-nowrap justify-start md:justify-center gap-0.5 mb-4 sticky top-[60px] z-[9] bg-bg-primary/95 backdrop-blur-md p-1 rounded-lg border border-border-primary shadow-sm mx-auto w-full max-w-7xl overflow-x-auto">
                     {[
                         { id: 'image-generator', label: 'Image Gen', icon: <ImageGeneratorIcon className="w-4 h-4" /> },
                         { id: 'character-generator', label: 'Character', icon: <CharacterIcon className="w-4 h-4" /> },
-                        { id: 'video-generator', label: 'Video', icon: <VideoIcon className="w-4 h-4" /> },
+                        { id: 'ltx-director', label: 'LTX Director', icon: <VideoIcon className="w-4 h-4" /> },
                         { id: 'prompt-generator', label: 'Prompt', icon: <PromptIcon className="w-4 h-4" /> },
                         { id: 'extractor-tools', label: 'Extractor', icon: <ExtractorIcon className="w-4 h-4" /> },
                         { id: 'group-photo-fusion', label: 'Fusion', icon: <GroupPhotoFusionIcon className="w-4 h-4" /> },
@@ -735,6 +720,8 @@ const App: React.FC = () => {
                         <button
                             key={tab.id}
                             onClick={() => handleTabChange(tab.id)}
+                            aria-label={tab.label}
+                            title={tab.label}
                             className={`flex items-center gap-1 px-2 py-1 rounded-md font-medium transition-all duration-200 text-[10px] md:text-xs whitespace-nowrap ${activeTab === tab.id
                                 ? 'bg-accent text-accent-text shadow-sm'
                                 : 'bg-transparent text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
@@ -748,6 +735,13 @@ const App: React.FC = () => {
 
                 {/* Content Views - Centered Wrapper */}
                 <div className="w-full max-w-7xl mx-auto">
+                    {['group-photo-fusion', 'extractor-tools', 'logo-theme-generator', 'past-forward'].includes(activeTab) && (
+                        <CloudImageProviderBar
+                            options={options}
+                            updateOptions={(updates) => dispatch(updateOptions(updates))}
+                            disabled={isLoading}
+                        />
+                    )}
                     {activeTab === 'image-generator' && (
                         <>
                             <ImageGeneratorHeader
@@ -983,7 +977,7 @@ const App: React.FC = () => {
                                     comfyUIObjectInfo={comfyUIObjectInfo}
                                     comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                                     sourceImage={sourceImage}
-                                    hideProviderSwitch={true}
+                                    hideProviderSwitch={false}
                                     hideGenerationModeSwitch={true} // Hide mode switch, locked to I2I
                                     title="2. Character Options"
                                     activeTab={activeTab}
@@ -1003,6 +997,15 @@ const App: React.FC = () => {
                                 />
                             </div>
                             <div className="lg:col-span-2 space-y-8">
+                                <ActionControlPanel
+                                    options={currentOptions}
+                                    generationMode="i2i"
+                                    onGenerate={handleGenerate}
+                                    onReset={handleReset}
+                                    onExportWorkflow={() => { }}
+                                    isReady={isReadyToGenerate}
+                                    isDisabled={isLoading}
+                                />
                                 {isLoading ? (
                                     <Loader message={progressMessage} progress={progressValue} />
                                 ) : (
@@ -1025,31 +1028,6 @@ const App: React.FC = () => {
                     {activeTab === 'past-forward' && <PastForwardPanel />}
 
                     {activeTab === 'group-photo-fusion' && <GroupPhotoFusionPanel />}
-
-                    {activeTab === 'video-generator' && (
-                        <VideoGeneratorPanel
-                            options={options}
-                            setOptions={handleUpdateOptions}
-                            comfyUIObjectInfo={comfyUIObjectInfo}
-                            startFrame={videoStartFrame}
-                            setStartFrame={handleSetVideoStartFrame}
-                            endFrame={videoEndFrame}
-                            setEndFrame={handleSetVideoEndFrame}
-                            onGenerate={handleGenerateVideo}
-                            isReady={isVideoReady}
-                            isLoading={isLoading}
-                            error={globalError ? globalError.message : null}
-                            generatedVideo={generatedVideoUrl}
-                            lastUsedPrompt={generatedContent[activeTab]?.lastUsedPrompt || null}
-                            progressMessage={progressMessage}
-                            progressValue={progressValue}
-                            onReset={handleVideoReset}
-                            generationOptionsForSave={generationOptionsForSave}
-                            onOpenLibraryForStartFrame={() => dispatch(setModalOpen({ modal: 'isVideoStartFramePickerOpen', isOpen: true }))}
-                            onOpenLibraryForEndFrame={() => dispatch(setModalOpen({ modal: 'isVideoEndFramePickerOpen', isOpen: true }))}
-                            onOpenLibraryForGeminiSource={() => dispatch(setModalOpen({ modal: 'isGeminiVideoSourcePickerOpen', isOpen: true }))}
-                        />
-                    )}
 
                     {activeTab === 'prompt-generator' && (
                         <PromptGeneratorPanel
@@ -1112,6 +1090,13 @@ const App: React.FC = () => {
                         />
                     )}
 
+                    {activeTab === 'ltx-director' && (
+                        <LTXDirectorPanel
+                            isComfyUIConnected={isComfyUIConnected}
+                            comfyUIObjectInfo={comfyUIObjectInfo}
+                        />
+                    )}
+
                     {activeTab === 'library' && (
                         <LibraryPanel
                             onLoadItem={(item) => {
@@ -1136,14 +1121,7 @@ const App: React.FC = () => {
                                         dispatch(setActiveTab('image-generator'));
                                     }
                                 } else if (item.mediaType === 'video') {
-                                    if (item.startFrame) {
-                                        fetch(item.startFrame).then(r => r.blob()).then(b => dispatch(setVideoStartFrame(new File([b], "start_frame.jpg", { type: "image/jpeg" }))));
-                                    }
-                                    if (item.endFrame) {
-                                        fetch(item.endFrame).then(r => r.blob()).then(b => dispatch(setVideoEndFrame(new File([b], "end_frame.jpg", { type: "image/jpeg" }))));
-                                    }
-                                    if (item.options) dispatch(setOptions(item.options));
-                                    dispatch(setActiveTab('video-generator'));
+                                    dispatch(setActiveTab('ltx-director'));
                                 }
                                 // Add handling for other types if needed
                             }}
@@ -1214,9 +1192,6 @@ const App: React.FC = () => {
             <LibraryPickerModal isOpen={isFontSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isFontSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ fontSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isColorImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isColorImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ colorPicker: { ...videoUtilsState.colorPicker, imageFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
             <LibraryPickerModal isOpen={isVideoUtilsPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoUtilsPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ videoFile: new File([b], "video.mp4", { type: b.type }) })); }} filter="video" />
-            <LibraryPickerModal isOpen={isVideoStartFramePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoStartFramePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoStartFrame(new File([b], "start.jpg", { type: b.type }))); }} filter={['image', 'extracted-frame']} />
-            <LibraryPickerModal isOpen={isVideoEndFramePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoEndFramePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoEndFrame(new File([b], "end.jpg", { type: b.type }))); }} filter={['image', 'extracted-frame']} />
-            <LibraryPickerModal isOpen={isGeminiVideoSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGeminiVideoSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setVideoStartFrame(new File([b], "input.jpg", { type: b.type }))); }} filter="image" />
             <LibraryPickerModal isOpen={isResizeCropPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ resizeCrop: { ...videoUtilsState.resizeCrop, sourceFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
             <LibraryPickerModal isOpen={isGroupFusionPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGroupFusionPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); const file = new File([b], "imported.jpg", { type: b.type }); const newFile: UploadedFile = { id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), personaId: 'default' }; dispatch(setUploadedFiles([...uploadedFiles, newFile])); }} filter="image" />
 

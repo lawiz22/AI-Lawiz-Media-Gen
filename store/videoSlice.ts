@@ -135,24 +135,20 @@ export const {
 // --- Selectors ---
 const selectGeneration = (state: RootState) => state.generation;
 const selectVideo = (state: RootState) => state.video;
+const selectApp = (state: RootState) => state.app;
 
 export const selectIsVideoReady = createSelector(
-  [selectGeneration, selectVideo],
-  (generation, video) => {
+  [selectGeneration, selectVideo, selectApp],
+  (generation, video, app) => {
     const { isLoading, options } = generation;
     const { videoStartFrame } = video;
 
-    if (isLoading) return false;
+    if (isLoading || !app.isComfyUIConnected) return false;
 
-    if (options.videoProvider === 'gemini') {
-        return !!options.geminiVidPrompt?.trim();
-    } else { // comfyui
-        if (options.comfyVidModelType === 'wan-t2v') {
-            return !!options.comfyVidWanT2VPositivePrompt?.trim();
-        }
-        // Existing logic for I2V
-        return !!videoStartFrame && !!options.comfyVidWanI2VPositivePrompt?.trim();
+    if (options.comfyVidModelType === 'wan-t2v') {
+      return !!options.comfyVidWanT2VPositivePrompt?.trim();
     }
+    return !!videoStartFrame && !!options.comfyVidWanI2VPositivePrompt?.trim();
   }
 );
 

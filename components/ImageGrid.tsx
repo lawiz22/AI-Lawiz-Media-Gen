@@ -6,7 +6,7 @@ import { addToLibrary } from '../store/librarySlice';
 import { addSessionTokenUsage } from '../store/appSlice';
 import { setImageSaveStatus } from '../store/generationSlice';
 import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon, CheckIcon, CharacterIcon, InfoIcon } from './icons';
-import { enhanceImageResolution } from '../services/geminiService';
+import { DEFAULT_MAMMOUTH_IMAGE_MODEL, generateMammouthImage } from '../services/mammouthService';
 import type { GenerationOptions, LibraryItem } from '../types';
 import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromDataUrl, dataUrlToFile } from '../utils/imageUtils';
 
@@ -107,7 +107,14 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
     setEnhancingIndex(index);
     setErrorIndex(prev => ({ ...prev, [index]: '' }));
     try {
-      const { enhancedSrc, usageMetadata } = await enhanceImageResolution(imageSrc);
+      const result = await generateMammouthImage(
+        'Enhance this image. Improve resolution, clarity, and lighting while maintaining the original content.',
+        [imageSrc],
+        options.aspectRatio,
+        options.mammouthImageModel,
+      );
+      const enhancedSrc = result.images[0];
+      const usageMetadata = result.usageMetadata;
       if (usageMetadata) {
         dispatch(addSessionTokenUsage(usageMetadata));
       }
@@ -133,16 +140,18 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
       let sourceImageToSave: File | null = sourceImage;
 
       const isGeminiT2I = options.provider === 'gemini' && options.geminiMode === 't2i';
+      const isMammouthT2I = options.provider === 'mammouth' && options.geminiMode === 't2i';
 
       const comfyI2IWorkflows: (GenerationOptions['comfyModelType'])[] = ['nunchaku-kontext-flux', 'face-detailer-sd1.5'];
       const isComfyT2I = options.provider === 'comfyui' && !comfyI2IWorkflows.includes(options.comfyModelType);
 
       if (isEnhanced) {
         optionsToSave = {
-          provider: 'gemini',
+          provider: 'mammouth',
           width,
           height,
-          comfyPrompt: 'This image was enhanced using the gemini-2.5-flash-image-preview model.',
+          mammouthImageModel: options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL,
+          comfyPrompt: `This image was enhanced using Mammouth AI.`,
         };
         const baseName = characterName || (isCharacter ? `Character #${index + 1}` : `Image #${index + 1}`);
         itemName = `${baseName} (Enhanced)`;
@@ -159,7 +168,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
           itemName = `${characterName || 'Character'}: ${description}`;
         }
 
-        if (isGeminiT2I || isComfyT2I) {
+        if (isGeminiT2I || isMammouthT2I || isComfyT2I) {
           sourceImageToSave = null;
         }
 

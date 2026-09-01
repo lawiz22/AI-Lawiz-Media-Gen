@@ -3,9 +3,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../store/store';
 import { setLogoSaveStatus, setBannerSaveStatus, setAlbumCoverSaveStatus, updateLogoThemeState } from '../store/logoThemeSlice';
 import { addToLibrary } from '../store/librarySlice';
+import { addSessionTokenUsage } from '../store/appSlice';
 import type { LogoThemeState, LibraryItem, LogoStyle, LogoBackground, PaletteColor, BannerStyle, BannerLogoPlacement, BannerAspectRatio, MusicStyle, AlbumEra, AlbumMediaType, ThemeGenerationInfo } from '../types';
 import { GenerateIcon, ResetIcon, SpinnerIcon, LibraryIcon, CloseIcon, SaveIcon, CheckIcon, DownloadIcon, UploadIconSimple, ChevronLeftIcon, ChevronRightIcon, ZoomIcon } from './icons';
 import { generateLogos, generateBanners, generateAlbumCovers } from '../services/geminiService';
+import { generateMammouthImage } from '../services/mammouthService';
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { BANNER_ASPECT_RATIO_OPTIONS, BANNER_STYLE_OPTIONS, BANNER_LOGO_PLACEMENT_OPTIONS } from '../constants';
 
@@ -160,6 +162,17 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
 }) => {
     const dispatch: AppDispatch = useDispatch();
     const state = useSelector((state: RootState) => state.logoTheme.logoThemeState);
+    const generationOptions = useSelector((state: RootState) => state.generation.options);
+
+    const generateWithMammouth = async (prompt: string, inputs: (File | string)[], count: number, aspectRatio: string) => {
+        const images: string[] = [];
+        for (let index = 0; index < count; index++) {
+            const result = await generateMammouthImage(prompt, inputs, aspectRatio, generationOptions.mammouthImageModel);
+            images.push(...result.images);
+            if (result.usageMetadata) dispatch(addSessionTokenUsage(result.usageMetadata));
+        }
+        return images.slice(0, count);
+    };
 
     const [zoomedLogoIndex, setZoomedLogoIndex] = useState<number | null>(null);
     const [zoomedBannerIndex, setZoomedBannerIndex] = useState<number | null>(null);
@@ -273,7 +286,12 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     const handleGenerateLogos = async () => {
         dispatch(updateLogoThemeState({ isGeneratingLogos: true, logoError: null, generatedLogos: [] }));
         try {
-            const logos = await generateLogos(state);
+            const prompt = `Generate a ${state.logoStyle} logo for brand "${state.brandName}". ${state.slogan ? `Slogan: "${state.slogan}".` : ''} ${state.logoPrompt} Background: ${state.backgroundColor}.`;
+            const inputs: (File | string)[] = [...(state.referenceItems || []).map(item => item.media)];
+            if (state.fontReferenceImage) inputs.push(state.fontReferenceImage);
+            const logos = generationOptions.provider === 'mammouth'
+                ? await generateWithMammouth(prompt, inputs, state.numLogos, '1:1')
+                : await generateLogos(state);
             dispatch(updateLogoThemeState({ isGeneratingLogos: false, generatedLogos: logos.map(src => ({ src, saved: 'idle' })) }));
         } catch (err: any) {
             dispatch(updateLogoThemeState({ isGeneratingLogos: false, logoError: err.message || "An unknown error occurred." }));
@@ -339,7 +357,13 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     const handleGenerateBanners = async () => {
         dispatch(updateLogoThemeState({ isGeneratingBanners: true, bannerError: null, generatedBanners: [] }));
         try {
-            const banners = await generateBanners(state);
+            const prompt = `Generate a ${state.bannerStyle} banner for "${state.bannerTitle}". Aspect Ratio: ${state.bannerAspectRatio}. Logo Placement: ${state.bannerLogoPlacement}. ${state.bannerPrompt}`;
+            const inputs: (File | string)[] = [...(state.bannerReferenceItems || []).map(item => item.media)];
+            if (state.bannerSelectedLogo) inputs.push(state.bannerSelectedLogo.media);
+            if (state.bannerFontReferenceImage) inputs.push(state.bannerFontReferenceImage);
+            const banners = generationOptions.provider === 'mammouth'
+                ? await generateWithMammouth(prompt, inputs, state.numBanners, state.bannerAspectRatio)
+                : await generateBanners(state);
             dispatch(updateLogoThemeState({ isGeneratingBanners: false, generatedBanners: banners.map(src => ({ src, saved: 'idle' })) }));
         } catch (err: any) {
             dispatch(updateLogoThemeState({ isGeneratingBanners: false, bannerError: err.message || "An unknown error occurred." }));
@@ -396,7 +420,13 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
     const handleGenerateAlbumCovers = async () => {
         dispatch(updateLogoThemeState({ isGeneratingAlbumCovers: true, albumCoverError: null, generatedAlbumCovers: [] }));
         try {
-            const covers = await generateAlbumCovers(state);
+            const prompt = `Generate an album cover for "${state.albumTitle}" by "${state.artistName}". Style: ${state.musicStyle === 'other' ? state.customMusicStyle : state.musicStyle}. Era: ${state.albumEra}. Format: ${state.albumMediaType}. ${state.addVinylWear ? 'Add vinyl wear/texture.' : ''} ${state.albumPrompt}`;
+            const inputs: (File | string)[] = [...(state.albumReferenceItems || []).map(item => item.media)];
+            if (state.albumSelectedLogo) inputs.push(state.albumSelectedLogo.media);
+            if (state.albumFontReferenceImage) inputs.push(state.albumFontReferenceImage);
+            const covers = generationOptions.provider === 'mammouth'
+                ? await generateWithMammouth(prompt, inputs, state.numAlbumCovers, '1:1')
+                : await generateAlbumCovers(state);
             dispatch(updateLogoThemeState({ isGeneratingAlbumCovers: false, generatedAlbumCovers: covers.map(src => ({ src, saved: 'idle' })) }));
         } catch (err: any) {
             dispatch(updateLogoThemeState({ isGeneratingAlbumCovers: false, albumCoverError: err.message || "An unknown error occurred." }));

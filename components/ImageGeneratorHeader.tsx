@@ -5,6 +5,7 @@ import { SaveIcon, LoadIcon, TrashIcon } from './icons';
 import { PresetSaveModal } from './PresetSaveModal';
 import { ConfirmationModal } from './ConfirmationModal';
 import { saveToLibrary, fetchLibrary, deleteLibraryItem } from '../services/libraryService';
+import { DEFAULT_MAMMOUTH_IMAGE_MODEL } from '../services/mammouthService';
 
 interface ImageGeneratorHeaderProps {
     options: GenerationOptions;
@@ -61,7 +62,9 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
     // Filter presets based on current model
     const currentModelPrefix = options.provider === 'gemini'
         ? (options.geminiT2IModel || 'Gemini')
-        : (options.comfyModelType || 'ComfyUI');
+        : options.provider === 'mammouth'
+            ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
+            : (options.comfyModelType || 'ComfyUI');
 
     // Helper to determine if a preset belongs to the current model context
     // We'll check if the preset name starts with the model type (case-insensitive)
@@ -148,14 +151,14 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
                         ComfyUI
                     </button>
                     <button
-                        onClick={() => updateOptions({ provider: 'gemini' })}
+                        onClick={() => updateOptions({ provider: 'mammouth' })}
                         disabled={isDisabled}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${options.provider === 'gemini'
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${options.provider === 'mammouth'
                             ? 'bg-accent text-accent-text shadow-sm'
                             : 'text-text-secondary hover:text-text-primary hover:bg-bg-secondary'
                             }`}
                     >
-                        Gemini
+                        Mammouth
                     </button>
                 </div>
 

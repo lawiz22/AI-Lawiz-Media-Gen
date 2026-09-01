@@ -1,6 +1,8 @@
 import React from 'react';
 import { GenerationOptions } from '../types';
 import { GenerateIcon, ResetIcon, WorkflowIcon } from './icons';
+import { DEFAULT_GEMINI_IMAGE_MODEL } from '../services/geminiService';
+import { DEFAULT_MAMMOUTH_IMAGE_MODEL } from '../services/mammouthService';
 
 interface ActionControlPanelProps {
     options: GenerationOptions;
@@ -22,8 +24,10 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
     isDisabled
 }) => {
     const activeModelName = options.provider === 'gemini'
-        ? (generationMode === 't2i' ? (options.geminiT2IModel || 'gemini-2.5-flash-image') : 'gemini-2.5-flash-image')
-        : (options.comfyModelType || 'sdxl');
+        ? (generationMode === 't2i' ? (options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL)
+        : options.provider === 'mammouth'
+            ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
+            : (options.comfyModelType || 'sdxl');
 
     return (
         <div className="bg-bg-secondary p-4 rounded-2xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">

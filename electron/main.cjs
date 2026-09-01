@@ -82,3 +82,12 @@ ipcMain.handle('set-api-key', (event, key) => {
     return true;
 });
 
+ipcMain.handle('get-mammouth-api-key', () => {
+    return store.get('mammouth_api_key');
+});
+
+ipcMain.handle('set-mammouth-api-key', (event, key) => {
+    store.set('mammouth_api_key', key);
+    return true;
+});
+

@@ -72,14 +72,14 @@ interface PromptDestinationPickerModalProps {
 const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> = ({ isOpen, onClose, prompt }) => {
   const dispatch: AppDispatch = useDispatch();
 
-  const handleSelectDestination = (provider: 'gemini' | 'comfyui', comfyModelType?: GenerationOptions['comfyModelType']) => {
+    const handleSelectDestination = (provider: 'comfyui' | 'mammouth', comfyModelType?: GenerationOptions['comfyModelType']) => {
     let optionsUpdate: Partial<GenerationOptions> = {
       provider,
       comfyPrompt: prompt, // Always set for comfy
       geminiPrompt: prompt, // Always set for Gemini
     };
 
-    if (provider === 'gemini') {
+    if (provider === 'mammouth') {
       optionsUpdate.geminiMode = 't2i';
     } else { // comfyui
       optionsUpdate.comfyModelType = comfyModelType;
@@ -139,19 +139,19 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
         <p className="text-sm text-text-secondary mb-6">Where would you like to use this generated prompt?</p>
 
         <div className="space-y-6">
-          <div>
-            <h3 className="text-lg font-semibold text-text-primary mb-3">Gemini</h3>
-            <button
-              onClick={() => handleSelectDestination('gemini')}
-              className="w-full text-left p-4 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors flex items-center gap-4"
-            >
-              <GenerateIcon className="w-8 h-8 text-accent flex-shrink-0" />
-              <div>
-                <p className="font-bold">Gemini T2I</p>
-                <p className="text-xs text-text-secondary">Use Google's powerful text-to-image models.</p>
-              </div>
-            </button>
-          </div>
+                                        <div>
+                        <h3 className="text-lg font-semibold text-text-primary mb-3">Mammouth AI</h3>
+                        <button
+                            onClick={() => handleSelectDestination('mammouth')}
+                            className="w-full text-left p-4 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors flex items-center gap-4"
+                        >
+                            <GenerateIcon className="w-8 h-8 text-accent flex-shrink-0" />
+                            <div>
+                                <p className="font-bold">Mammouth T2I</p>
+                                <p className="text-xs text-text-secondary">Use the selected Mammouth image model.</p>
+                            </div>
+                        </button>
+                    </div>
 
           <div>
             <h3 className="text-lg font-semibold text-text-primary mb-3">ComfyUI (T2I Workflows)</h3>
@@ -541,7 +541,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
 
     const renderPromptTypeButtons = (currentType: PromptModelType, setType: (type: PromptModelType) => void) => {
         const types: { id: PromptModelType; label: string }[] = [
-            { id: 'gemini', label: 'Narrative (Gemini)' },
+            { id: 'gemini', label: 'Narrative (Mammouth)' },
             { id: 'wan2.2', label: 'Photographic (WAN 2.2)' },
             { id: 'flux', label: 'Descriptive (FLUX)' },
             { id: 'sdxl', label: 'Sentence (SDXL)' },
@@ -573,6 +573,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
 
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto">
+            <div className="mb-4 border border-border-primary bg-bg-primary/50 p-3 text-sm text-text-secondary">
+                Prompt analysis powered by Mammouth AI
+            </div>
             <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
 
             {activeSubTab === 'from-image' && (

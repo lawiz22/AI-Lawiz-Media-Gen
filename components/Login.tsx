@@ -3,6 +3,7 @@ import { Banner } from './Banner';
 import { SpinnerIcon } from './icons';
 import { Logo } from './Logo';
 import type { VersionInfo } from '../types';
+import versionData from '../version.json';
 
 interface LoginProps {
   onLogin: (username: string, projectName: string) => Promise<string | true>;
@@ -17,10 +18,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
 
   useEffect(() => {
-    fetch('/version.json')
-      .then(res => res.json())
-      .then(data => setVersionInfo(data))
-      .catch(err => console.error("Failed to load version info:", err));
+    setVersionInfo(versionData);
   }, []);
 
   useEffect(() => {

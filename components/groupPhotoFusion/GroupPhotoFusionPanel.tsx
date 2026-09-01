@@ -30,6 +30,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
       uploadedFiles, backgroundFile, selectedPose, quality, numImages,
       isLoading, generatedImages, error, isDebugMode, debugInfos
   } = useSelector((state: RootState) => state.groupPhotoFusion);
+  const generationOptions = useSelector((state: RootState) => state.generation.options);
 
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
@@ -99,8 +100,14 @@ const GroupPhotoFusionPanel: React.FC = () => {
 
       const prompt = selectedPose.getPrompt(personaDescriptions, quality, !!backgroundToUse);
       
-      const generationPromises = Array(numImages).fill(0).map(() => generateGroupPhoto(allFiles, prompt));
-      const results = await Promise.allSettled(generationPromises);
+      const generationTasks = Array(numImages).fill(0).map(() => () => generateGroupPhoto(allFiles, prompt, generationOptions.provider, generationOptions.mammouthImageModel));
+      const results = generationOptions.provider === 'mammouth'
+        ? await generationTasks.reduce<Promise<PromiseSettledResult<Awaited<ReturnType<typeof generateGroupPhoto>>>[]>>(async (pending, task) => {
+            const settled = await pending;
+            settled.push(...await Promise.allSettled([task()]));
+            return settled;
+          }, Promise.resolve([]))
+        : await Promise.allSettled(generationTasks.map(task => task()));
       
       results.forEach((result, index) => {
         const id = placeholders[index].id;
@@ -140,7 +147,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
     } finally {
       dispatch(setLoading(false));
     }
-  }, [selectedPose, uploadedFiles, quality, backgroundFile, isDebugMode, dispatch, numImages]);
+  }, [selectedPose, uploadedFiles, quality, backgroundFile, isDebugMode, dispatch, numImages, generationOptions.provider, generationOptions.mammouthImageModel]);
 
   const handleRetry = useCallback(async (id: string) => {
     dispatch(updateGeneratedImage({ id, status: 'generating', error: undefined }));
@@ -160,7 +167,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
     const prompt = selectedPose.getPrompt(personaDescriptions, quality, !!backgroundToUse);
 
     try {
-        const result = await generateGroupPhoto(allFiles, prompt);
+        const result = await generateGroupPhoto(allFiles, prompt, generationOptions.provider, generationOptions.mammouthImageModel);
         dispatch(updateGeneratedImage({
             id,
             base64: `data:image/jpeg;base64,${result.imageBase64}`,
@@ -186,7 +193,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
             error: err instanceof Error ? err.message : "An unknown error occurred."
         }));
     }
-  }, [selectedPose, uploadedFiles, quality, backgroundFile, isDebugMode, dispatch]);
+  }, [selectedPose, uploadedFiles, quality, backgroundFile, isDebugMode, dispatch, generationOptions.provider, generationOptions.mammouthImageModel]);
   
   const handleDownloadAll = async () => {
     if (!generatedImages) return;

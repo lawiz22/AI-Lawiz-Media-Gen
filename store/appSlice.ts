@@ -8,6 +8,7 @@ const initialState: AppSliceState = {
   fontSize: 14,
   activeTab: 'image-generator',
   isComfyUIConnected: null,
+  isMammouthConnected: false,
   comfyUIObjectInfo: null,
   versionInfo: null,
   globalError: null,
@@ -99,6 +100,9 @@ const appSlice = createSlice({
     setIsComfyUIConnected: (state, action: PayloadAction<boolean | null>) => {
       state.isComfyUIConnected = action.payload;
     },
+    setIsMammouthConnected: (state, action: PayloadAction<boolean | null>) => {
+      state.isMammouthConnected = action.payload;
+    },
     setComfyUIObjectInfo: (state, action: PayloadAction<any | null>) => {
       state.comfyUIObjectInfo = action.payload;
     },
@@ -169,6 +173,7 @@ export const {
   setProjectName,
   setActiveTab,
   setIsComfyUIConnected,
+  setIsMammouthConnected,
   setComfyUIObjectInfo,
   setVersionInfo,
   setGlobalError,

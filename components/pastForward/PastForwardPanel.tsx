@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { useDispatch } from 'react-redux';
-import { AppDispatch } from '../../store/store';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../../store/store';
 import { addToLibrary } from '../../store/librarySlice';
+import { addSessionTokenUsage } from '../../store/appSlice';
 import { generateDecadeImage } from '../../services/geminiService';
+import { generateMammouthImage } from '../../services/mammouthService';
 import { createAlbumPage } from '../../utils/pastForwardAlbumUtils';
 import { dataUrlToThumbnail, fileToDataUrl } from '../../utils/imageUtils';
 import { 
@@ -57,6 +59,7 @@ interface GeneratedImage {
 
 const PastForwardPanel: React.FC = () => {
     const dispatch: AppDispatch = useDispatch();
+    const generationOptions = useSelector((state: RootState) => state.generation.options);
     
     // State
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -117,7 +120,11 @@ const PastForwardPanel: React.FC = () => {
         const processDecade = async (decade: string) => {
             try {
                 const prompt = THEMES[selectedTheme].prompt(decade);
-                const resultUrl = await generateDecadeImage(uploadedImageBase64, prompt);
+                const mammouthResult = generationOptions.provider === 'mammouth'
+                    ? await generateMammouthImage(prompt, [uploadedImageBase64], '3:4', generationOptions.mammouthImageModel)
+                    : null;
+                const resultUrl = mammouthResult?.images[0] || await generateDecadeImage(uploadedImageBase64, prompt);
+                if (mammouthResult?.usageMetadata) dispatch(addSessionTokenUsage(mammouthResult.usageMetadata));
                 setGeneratedImages(prev => ({
                     ...prev,
                     [decade]: { status: 'done', url: resultUrl },
@@ -157,7 +164,11 @@ const PastForwardPanel: React.FC = () => {
 
         try {
             const prompt = THEMES[selectedTheme].prompt(decade);
-            const resultUrl = await generateDecadeImage(uploadedImageBase64, prompt);
+            const mammouthResult = generationOptions.provider === 'mammouth'
+                ? await generateMammouthImage(prompt, [uploadedImageBase64], '3:4', generationOptions.mammouthImageModel)
+                : null;
+            const resultUrl = mammouthResult?.images[0] || await generateDecadeImage(uploadedImageBase64, prompt);
+            if (mammouthResult?.usageMetadata) dispatch(addSessionTokenUsage(mammouthResult.usageMetadata));
             setGeneratedImages(prev => ({
                 ...prev,
                 [decade]: { status: 'done', url: resultUrl },

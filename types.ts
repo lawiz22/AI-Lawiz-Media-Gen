@@ -7,6 +7,8 @@ declare global {
     electron?: {
       getApiKey: () => Promise<string>;
       setApiKey: (key: string) => Promise<boolean>;
+      getMammouthApiKey: () => Promise<string>;
+      setMammouthApiKey: (key: string) => Promise<boolean>;
     };
   }
 }
@@ -29,7 +31,7 @@ export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = string;
 export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image';
 export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
-export type Provider = 'gemini' | 'comfyui';
+export type Provider = 'gemini' | 'comfyui' | 'mammouth';
 export type VideoProvider = 'gemini' | 'comfyui';
 export type ClothingStyleConsistency = 'varied' | 'strict';
 export type NunchakuPrecision = 'nunchaku-fp16' | 'bfloat16' | 'float32';
@@ -49,6 +51,7 @@ export interface GenerationOptions {
   geminiMode: GeminiMode;
   geminiPrompt?: string; // For t2i
   geminiT2IModel?: GeminiT2IModel;
+  mammouthImageModel?: string;
   poseMode: PoseMode;
   poseSelection: string[];
   poseLibraryItems?: LibraryItem[];
@@ -581,6 +584,7 @@ export interface AppSliceState {
   fontSize: number;
   activeTab: string;
   isComfyUIConnected: boolean | null;
+  isMammouthConnected: boolean | null;
   comfyUIObjectInfo: any | null;
   versionInfo: VersionInfo | null;
   globalError: { title: string; message: string } | null;

@@ -4,7 +4,7 @@ import type { GenerationSliceState, GenerationOptions } from '../types';
 import type { RootState } from './store';
 
 const initialOptions: GenerationOptions = {
-  provider: 'comfyui',
+  provider: 'mammouth',
   numImages: 1,
   poseMode: 'random',
   poseSelection: [],
@@ -17,6 +17,7 @@ const initialOptions: GenerationOptions = {
   photoStyle: 'professional photoshoot',
   eraStyle: 'a modern digital photograph',
   geminiMode: 't2i',
+  mammouthImageModel: 'gemini-3.1-flash-image-preview',
   geminiI2iMode: 'general',
   geminiGeneralEditPrompt: '',
   geminiInpaintTask: 'remove',
@@ -118,7 +119,7 @@ const initialOptions: GenerationOptions = {
 
 const initialCharacterOptions: GenerationOptions = {
   ...initialOptions,
-  provider: 'gemini',
+  provider: 'mammouth',
   geminiMode: 'i2i',
   geminiI2iMode: 'character',
 };
@@ -284,7 +285,8 @@ export const selectIsReadyToGenerate = createSelector(
     // Determine which options to check based on active tab
     const activeOptions = activeTab === 'character-generator' ? characterOptions : options;
 
-    if (activeOptions.provider === 'gemini') {
+    if (activeOptions.provider === 'gemini' || activeOptions.provider === 'mammouth') {
+      if (activeOptions.provider === 'mammouth' && !app.isMammouthConnected) return false;
       if (activeOptions.geminiMode === 't2i') return !!activeOptions.geminiPrompt?.trim();
 
       // I2I modes
