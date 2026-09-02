@@ -16,7 +16,7 @@ LAWIZ'S Media Generator is a React and Electron creative workstation for cloud i
 
 LTX Director is the application's video generator and runs through ComfyUI using the included LTX 2.3 workflow.
 
-- Add multiple photos to a visual timeline.
+- Start from prompts only, use photos, or mix photo and prompt-only clips in the same timeline.
 - Assign an independent prompt to every photo.
 - Adjust each clip from 1 to 20 seconds with the slider or by dragging its right edge.
 - Add an optional soundtrack.

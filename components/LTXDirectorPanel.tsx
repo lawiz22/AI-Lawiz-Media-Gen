@@ -9,7 +9,7 @@ interface LTXDirectorPanelProps {
 
 interface DirectorSegment {
     id: string;
-    image: File;
+    image: File | null;
     imageUrl: string;
     prompt: string;
     durationSeconds: number;
@@ -68,6 +68,14 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
         if (imageInput.current) imageInput.current.value = '';
     };
 
+    const addPromptClip = () => {
+        const segment: DirectorSegment = {
+            id: crypto.randomUUID(), image: null, imageUrl: '', prompt: '', durationSeconds: 5,
+        };
+        setSegments((current) => [...current, segment]);
+        setSelectedId(segment.id);
+    };
+
     const updateSegment = (id: string, changes: Partial<DirectorSegment>) => {
         setSegments((current) => current.map((segment) => segment.id === id ? { ...segment, ...changes } : segment));
     };
@@ -92,7 +100,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
 
     const removeSegment = (id: string) => {
         const removed = segments.find((segment) => segment.id === id);
-        if (removed) URL.revokeObjectURL(removed.imageUrl);
+        if (removed?.imageUrl) URL.revokeObjectURL(removed.imageUrl);
         const remaining = segments.filter((segment) => segment.id !== id);
         setSegments(remaining);
         setSelectedId(remaining[0]?.id || '');
@@ -158,10 +166,13 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
             <div className="grid min-h-[620px] lg:grid-cols-[280px_1fr]">
                 <aside className="border-b border-zinc-700 bg-[#151619] p-4 lg:border-b-0 lg:border-r">
                     <button onClick={() => imageInput.current?.click()} className="flex aspect-video w-full items-center justify-center overflow-hidden rounded-md border border-dashed border-zinc-600 bg-black hover:border-amber-400">
-                        {selectedSegment ? <img src={selectedSegment.imageUrl} alt="Selected clip" className="h-full w-full object-contain" /> : <span className="flex flex-col items-center gap-2 text-xs text-zinc-400"><UploadCloudIcon className="h-7 w-7" />Add photos</span>}
+                        {selectedSegment?.imageUrl ? <img src={selectedSegment.imageUrl} alt="Selected clip" className="h-full w-full object-contain" /> : selectedSegment ? <span className="px-5 text-center text-xs text-zinc-400">Prompt-only clip<br /><span className="text-zinc-600">Click to add a new photo clip</span></span> : <span className="flex flex-col items-center gap-2 text-xs text-zinc-400"><UploadCloudIcon className="h-7 w-7" />Add photos or prompt</span>}
                     </button>
                     <input ref={imageInput} type="file" accept="image/*" multiple className="hidden" onChange={(event) => addImages(event.target.files)} />
-                    <button onClick={() => imageInput.current?.click()} className="mt-3 w-full rounded-md border border-zinc-600 py-2 text-sm font-semibold text-zinc-200 hover:border-amber-400">+ Add photos</button>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button onClick={() => imageInput.current?.click()} className="rounded-md border border-zinc-600 py-2 text-sm font-semibold text-zinc-200 hover:border-amber-400">+ Photos</button>
+                        <button onClick={addPromptClip} className="rounded-md border border-zinc-600 py-2 text-sm font-semibold text-zinc-200 hover:border-amber-400">+ Prompt clip</button>
+                    </div>
 
                     <div className="mt-5 space-y-4">
                         <label className="block text-xs font-semibold text-zinc-400">FRAME RATE
@@ -177,7 +188,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
 
                 <div className="min-w-0 bg-[#0d0e10]">
                     <div className="flex min-h-[280px] items-center justify-center border-b border-zinc-700 bg-black p-4">
-                        {videoUrl ? <video src={videoUrl} controls autoPlay className="max-h-[350px] max-w-full" /> : selectedSegment ? <img src={selectedSegment.imageUrl} alt="Timeline preview" className="max-h-[330px] max-w-full object-contain" /> : <div className="text-sm text-zinc-600">ADD PHOTOS TO START</div>}
+                        {videoUrl ? <video src={videoUrl} controls autoPlay className="max-h-[350px] max-w-full" /> : selectedSegment?.imageUrl ? <img src={selectedSegment.imageUrl} alt="Timeline preview" className="max-h-[330px] max-w-full object-contain" /> : selectedSegment ? <div className="max-w-md px-6 text-center"><div className="mb-3 text-xs font-bold tracking-wider text-amber-300">PROMPT-ONLY CLIP</div><p className="line-clamp-5 text-sm leading-6 text-zinc-400">{selectedSegment.prompt || 'Write the scene prompt below.'}</p></div> : <div className="text-sm text-zinc-600">ADD A PHOTO OR PROMPT CLIP TO START</div>}
                     </div>
 
                     <div className="overflow-x-auto p-4">
@@ -187,11 +198,12 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                                 <div className="flex items-center text-xs font-semibold text-zinc-400">VIDEO</div>
                                 <div className="flex h-24 gap-1 overflow-hidden rounded bg-zinc-900 p-1">
                                     {segments.map((segment, index) => <button key={segment.id} onClick={() => setSelectedId(segment.id)} style={{ flexGrow: segment.durationSeconds, flexBasis: 0, minWidth: 86 }} className={`group relative overflow-hidden rounded border-2 text-left ${selectedSegment?.id === segment.id ? 'border-amber-400' : 'border-zinc-700'}`}>
-                                        <img src={segment.imageUrl} alt={`Clip ${index + 1}`} className="h-full w-full object-cover" />
+                                        {segment.imageUrl ? <img src={segment.imageUrl} alt={`Clip ${index + 1}`} className="h-full w-full object-cover" /> : <span className="flex h-full items-center justify-center bg-zinc-800 px-3 text-center text-[11px] font-semibold text-zinc-300">PROMPT<br />ONLY</span>}
                                         <span className="absolute inset-x-0 bottom-0 flex justify-between bg-black/75 px-2 py-1 text-[10px]"><b>#{index + 1}</b><span>{segment.durationSeconds}s</span></span>
                                         <span onPointerDown={(event) => beginResize(event, segment)} title="Drag to resize clip" className="absolute inset-y-0 right-0 w-3 cursor-ew-resize border-l border-amber-200/80 bg-amber-400/30 opacity-70 hover:opacity-100" />
                                     </button>)}
                                     <button onClick={() => imageInput.current?.click()} className="min-w-20 rounded border border-dashed border-zinc-600 text-xs text-zinc-500">+ Photo</button>
+                                    <button onClick={addPromptClip} className="min-w-20 rounded border border-dashed border-zinc-600 text-xs text-zinc-500">+ Prompt</button>
                                 </div>
                                 <div className="flex items-center text-xs font-semibold text-zinc-400">AUDIO</div>
                                 <button onClick={() => audioInput.current?.click()} className={`h-10 rounded border ${audio ? 'border-cyan-400/70 bg-cyan-400/10' : 'border-dashed border-zinc-600 bg-zinc-900'}`}><span className="text-xs text-zinc-400">{audio?.name || 'Optional soundtrack'}</span></button>

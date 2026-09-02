@@ -1395,7 +1395,7 @@ export interface LtxDirectorOptions {
 }
 
 export interface LtxDirectorSegment {
-    image: File;
+    image: File | null;
     prompt: string;
     durationSeconds: number;
 }
@@ -1408,21 +1408,25 @@ export const generateLtxDirectorVideo = async (
 ): Promise<string> => {
     const workflow = JSON.parse(JSON.stringify(LTX_DIRECTOR_WORKFLOW_TEMPLATE));
     const timelineSegments = [];
+    const segmentLengths = [];
     let startFrame = 0;
     for (let index = 0; index < segments.length; index += 1) {
         const segment = segments[index];
-        updateProgress(`Uploading image ${index + 1} of ${segments.length}...`, 0.03 + (index / segments.length) * 0.07);
-        const imageInfo = await uploadLtxMedia(segment.image);
         const length = Math.max(19, Math.round((segment.durationSeconds * 23 - 3) / 8) * 8 + 3);
-        timelineSegments.push({
-            id: crypto.randomUUID(),
-            start: startFrame,
-            length,
-            prompt: segment.prompt,
-            type: 'image',
-            imageFile: imageInfo.name,
-            imageB64: `/api/view?filename=${encodeURIComponent(imageInfo.name)}&type=${encodeURIComponent(imageInfo.type || 'input')}&subfolder=${encodeURIComponent(imageInfo.subfolder || '')}`,
-        });
+        segmentLengths.push(length);
+        if (segment.image) {
+            updateProgress(`Uploading image ${index + 1} of ${segments.length}...`, 0.03 + (index / segments.length) * 0.07);
+            const imageInfo = await uploadLtxMedia(segment.image);
+            timelineSegments.push({
+                id: crypto.randomUUID(),
+                start: startFrame,
+                length,
+                prompt: segment.prompt,
+                type: 'image',
+                imageFile: imageInfo.name,
+                imageB64: `/api/view?filename=${encodeURIComponent(imageInfo.name)}&type=${encodeURIComponent(imageInfo.type || 'input')}&subfolder=${encodeURIComponent(imageInfo.subfolder || '')}`,
+            });
+        }
         startFrame += length;
     }
 
@@ -1449,7 +1453,7 @@ export const generateLtxDirectorVideo = async (
         duration_seconds: durationSeconds,
         timeline_data: JSON.stringify(timeline),
         local_prompts: prompts.join('|'),
-        segment_lengths: timelineSegments.map((segment) => segment.length).join(','),
+        segment_lengths: segmentLengths.join(','),
         guide_strength: options.guideStrength.toFixed(2),
         use_custom_audio: Boolean(audio),
         frame_rate: options.frameRate,
