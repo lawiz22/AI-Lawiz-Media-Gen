@@ -154,14 +154,19 @@ export const getDefaultDestination = (model: CivitaiModel, version: CivitaiModel
 };
 
 export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModelVersion, family: CivitaiFamily): CivitaiModelFolder => {
-    const selectedFamily = family === 'all' ? '' : family;
-    const modelIdentity = `${selectedFamily} ${version.baseModel || ''} ${version.name} ${model.name}`.toLowerCase();
-    if (/qwen/.test(modelIdentity)) return 'QWEN';
-    if (/z[- ]?image|\bzit\b/.test(modelIdentity)) return 'ZIT';
-    if (/\bltx/.test(modelIdentity) && /camera[ _-]*control|control[ _-]*camera/.test(modelIdentity)) return 'LTX2_camera_control';
-    if (/\bltx/.test(modelIdentity)) return 'LTX2';
-    if (/\bflux/.test(modelIdentity)) return 'Flux';
-    if (/sdxl|pony|illustrious|noobai/.test(modelIdentity)) return 'SDXL';
+    const versionIdentity = `${version.baseModel || ''} ${version.baseModelType || ''} ${version.name}`.toLowerCase();
+    if (/qwen/.test(versionIdentity)) return 'QWEN';
+    if (/z[- ]?image|\bzit\b/.test(versionIdentity)) return 'ZIT';
+    if (/\bltx/.test(versionIdentity) && /camera[ _-]*control|control[ _-]*camera/.test(versionIdentity)) return 'LTX2_camera_control';
+    if (/\bltx/.test(versionIdentity)) return 'LTX2';
+    if (/\bflux/.test(versionIdentity)) return 'Flux';
+    if (/sdxl|pony|illustrious|noobai/.test(versionIdentity)) return 'SDXL';
+    const fallbackIdentity = `${family === 'all' ? '' : family} ${model.name}`.toLowerCase();
+    if (/qwen/.test(fallbackIdentity)) return 'QWEN';
+    if (/z[- ]?image|\bzit\b/.test(fallbackIdentity)) return 'ZIT';
+    if (/\bltx/.test(fallbackIdentity)) return 'LTX2';
+    if (/\bflux/.test(fallbackIdentity)) return 'Flux';
+    if (/sdxl|pony|illustrious|noobai/.test(fallbackIdentity)) return 'SDXL';
     return 'sd15';
 };
 

@@ -299,14 +299,24 @@ export const CivitaiPanel: React.FC = React.memo(() => {
         }
     };
 
-    const startDownload = async (_model: CivitaiModel, _version: CivitaiModelVersion, file: CivitaiFile, destination: CivitaiDestination) => {
+    const startDownload = async (model: CivitaiModel, version: CivitaiModelVersion, file: CivitaiFile, destination: CivitaiDestination) => {
         const downloadId = crypto.randomUUID();
         setDownload({ id: downloadId, fileName: file.name, receivedBytes: 0, totalBytes: file.sizeKB * 1024, status: 'downloading' });
         try {
             if (window.electron) {
                 if (!comfyUIRoot) throw new Error('Select your ComfyUI folder first.');
-                const modelFolder = getCivitaiDestinationFolder(_model, _version, family, destination);
-                const result = await window.electron.downloadCivitaiModel({ downloadId, provider, url: file.downloadUrl, fileName: file.name, destination, modelFolder });
+                const modelFolder = getCivitaiDestinationFolder(model, version, family, destination);
+                const result = await window.electron.downloadCivitaiModel({
+                    downloadId,
+                    provider,
+                    url: file.downloadUrl,
+                    fileName: file.name,
+                    destination,
+                    modelFolder,
+                    modelId: model.id,
+                    modelVersionId: version.id,
+                    versionName: version.name,
+                });
                 setDownload(current => current?.id === downloadId ? { ...current, status: 'complete', receivedBytes: result.receivedBytes, message: `Saved to ${result.path}` } : current);
             } else {
                 const url = new URL(file.downloadUrl);

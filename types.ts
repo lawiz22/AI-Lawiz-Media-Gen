@@ -66,6 +66,9 @@ declare global {
         fileName: string;
         destination: 'checkpoint' | 'diffusion' | 'lora';
         modelFolder: 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
+        modelId: number;
+        modelVersionId: number;
+        versionName: string;
       }) => Promise<{ path: string; receivedBytes: number }>;
       updateCivitaiModel: (request: {
         downloadId: string;
@@ -550,6 +553,7 @@ export interface LtxDirectorGenerationInfo {
   }[];
   frameRate: number;
   guideStrength: number;
+  imageScalePercent?: number;
   checkpoint: string;
   loras: {
     name: string;

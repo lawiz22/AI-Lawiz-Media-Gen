@@ -106,10 +106,9 @@ const getRecommendedSettingUpdates = (modelType: ComfyModelType, usageMetadata: 
     const defaults = WORKFLOW_DEFAULT_SETTINGS[modelType] || {};
     const samplerOptions = getComfyOptions(objectInfo?.KSampler?.input?.required?.sampler_name);
     const schedulerOptions = getComfyOptions(objectInfo?.KSampler?.input?.required?.scheduler);
-    const sampler = resolveComfyOption(usageMetadata?.sampler, samplerOptions) || usageMetadata?.sampler || defaults.comfySampler;
+    const sampler = resolveComfyOption(usageMetadata?.sampler, samplerOptions) || defaults.comfySampler;
     const scheduler = resolveComfyOption(usageMetadata?.scheduler, schedulerOptions)
         || resolveComfyOption(usageMetadata?.sampler, schedulerOptions)
-        || usageMetadata?.scheduler
         || defaults.comfyScheduler;
     return {
         ...defaults,
@@ -122,11 +121,17 @@ const getRecommendedSettingUpdates = (modelType: ComfyModelType, usageMetadata: 
 };
 
 const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelType; loraPrefix: string; checkpointField: keyof GenerationOptions } => {
+    const pathSegments = item.relativePath.replace(/\\/g, '/').toLowerCase().split('/');
+    if (pathSegments.includes('qwen')) return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet' };
+    if (pathSegments.includes('zit')) return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet' };
+    if (pathSegments.some(segment => segment === 'flux' || segment === 'flux-dev')) return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel' };
+    if (pathSegments.includes('sdxl')) return { modelType: 'sdxl', loraPrefix: 'comfySdxl', checkpointField: 'comfyModel' };
+    if (pathSegments.some(segment => segment === 'sd15' || segment === 'sd1.5')) return { modelType: 'sd1.5', loraPrefix: 'comfySd15', checkpointField: 'comfyModel' };
+
     const identity = [
         item.archiveInfo?.baseModel,
         item.installedVersionName,
         item.modelName,
-        item.relativePath,
     ].filter(Boolean).join(' ').replace(/\\/g, '/').toLowerCase();
     if (/\bflux(?:[ ._-]?1)?\b/.test(identity)) return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel' };
     if (/\bqwen\b/.test(identity)) return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet' };
@@ -209,7 +214,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
     const classifyAsOwned = async () => {
         const category = kind === 'lora' ? 'loras' : kind === 'checkpoint' ? 'checkpoints' : 'diffusion_models';
         const destination = `models/${category}/${folder}`;
-        if (!window.confirm(`Classify ${item.fileName} as your model in ${destination}? A photo is optional.`)) return;
+        if (!window.confirm(`Move ${item.fileName} to ${destination}? Its preview and metadata will move with it.`)) return;
         setBusy(true);
         try {
             await onClassify(item, kind, folder);
@@ -320,6 +325,25 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
         };
         if (item.kind === 'lora') {
             const compatibleBaseModel = getCompatibleBaseModel(workflow.modelType, currentState.app.comfyUIObjectInfo);
+            const isQwenLightning = workflow.modelType === 'qwen-t2i-gguf' && /lightning.*(?:4|8)steps|(?:4|8)steps.*lightning/i.test(modelPath);
+            if (workflow.modelType === 'qwen-t2i-gguf') {
+                const lightningLora = isQwenLightning ? modelPath : 'QWEN\\Qwen-Image-Lightning-4steps-V2.0.safetensors';
+                Object.assign(updates, {
+                    comfyQwenUseLora: true,
+                    comfyQwenLora1Name: lightningLora,
+                    comfyQwenLora1Strength: 1,
+                    comfyQwenLora2Name: isQwenLightning ? '' : modelPath,
+                    comfyQwenLora2Strength: 1,
+                    comfyQwenLora3Name: '',
+                    comfyQwenLora3Strength: 1,
+                    comfyQwenLora4Name: '',
+                    comfyQwenLora4Strength: 1,
+                    comfySteps: isQwenLightning && /8steps/i.test(modelPath) ? 8 : 4,
+                    comfyCfg: 1,
+                    comfyPrompt: savedTriggers.join(', '),
+                    ...(compatibleBaseModel ? { [workflow.checkpointField]: compatibleBaseModel } : {}),
+                });
+            } else {
             Object.assign(updates, {
                 [`${workflow.loraPrefix}UseLora`]: true,
                 [`${workflow.loraPrefix}Lora1Name`]: modelPath,
@@ -327,6 +351,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                 ...(compatibleBaseModel ? { [workflow.checkpointField]: compatibleBaseModel } : {}),
                 ...(savedTriggers.length ? { comfyPrompt: appendTriggerWords(generationOptions.comfyPrompt || '', savedTriggers) } : {}),
             });
+            }
         } else {
             Object.assign(updates, {
                 [workflow.checkpointField]: modelPath,
@@ -388,11 +413,11 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                     <MenuSelect value={safety} onChange={setSafety} ariaLabel="Model safety" options={[{ value: 'auto', label: 'Safety: Auto' }, { value: 'sfw', label: 'Blue · SFW' }, { value: 'nsfw', label: 'Red · NSFW' }]} />
                     <button onClick={applySafety} disabled={busy} className={`px-3 rounded text-xs font-bold border disabled:opacity-50 ${safety === 'nsfw' ? 'border-red-500 text-red-400' : 'border-blue-500 text-blue-400'}`}>Apply</button>
                 </div>
-                {!isItemReviewed(item) && <div className="grid grid-cols-2 gap-1.5 pt-1">
+                <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border-primary/60">
                     <MenuSelect value={kind} onChange={next => { setKind(next); setFolder(FOLDERS[next][0]); }} ariaLabel="Model type" options={[{ value: 'lora', label: 'LoRA' }, { value: 'checkpoint', label: 'Checkpoint' }, { value: 'diffusion', label: 'Diffusion' }]} />
                     <MenuSelect value={folder} onChange={setFolder} ariaLabel="Model folder" options={FOLDERS[kind].map(value => ({ value, label: getFolderLabel(value) }))} />
-                    <button onClick={classifyAsOwned} disabled={busy} className="col-span-2 border border-amber-500/60 text-amber-400 rounded py-1.5 text-xs font-bold hover:bg-amber-500/10 disabled:opacity-50">Classify as my model</button>
-                </div>}
+                    <button onClick={classifyAsOwned} disabled={busy || (kind === item.kind && folder === getItemFolder(item))} className="col-span-2 border border-amber-500/60 text-amber-400 rounded py-1.5 text-xs font-bold hover:bg-amber-500/10 disabled:opacity-50">{isItemReviewed(item) ? 'Move model' : 'Classify as my model'}</button>
+                </div>
             </div>
             {updateDialogOpen && <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setUpdateDialogOpen(false)}><div className="w-full max-w-lg bg-bg-secondary border border-border-primary rounded-lg p-5 shadow-xl" onClick={event => event.stopPropagation()}><h3 className="text-lg font-bold text-text-primary">Update {item.modelName || item.fileName}</h3><p className="text-sm text-text-secondary mt-2">Install {item.latestVersionName || 'the latest version'}. Do you want to keep the old model as a separate file, or replace it?</p><div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-5"><button type="button" onClick={() => setUpdateDialogOpen(false)} className="px-3 py-2 rounded border border-border-primary text-text-secondary font-bold">Cancel</button><button type="button" onClick={() => updateModel('keep')} className="px-3 py-2 rounded border border-emerald-500 text-emerald-400 font-bold">Keep old</button><button type="button" onClick={() => updateModel('replace')} className="px-3 py-2 rounded bg-amber-400 text-black font-bold">Replace old</button></div></div></div>}
         </article>

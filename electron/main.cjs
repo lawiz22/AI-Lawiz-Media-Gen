@@ -1447,7 +1447,7 @@ ipcMain.handle('get-local-model-prompt-examples', async (event, request) => {
 });
 
 ipcMain.handle('download-civitai-model', async (event, request) => {
-    const { downloadId, provider, url, fileName, destination, modelFolder } = request || {};
+    const { downloadId, provider, url, fileName, destination, modelFolder, modelId, modelVersionId, versionName } = request || {};
     if (!downloadId || activeModelDownloads.has(downloadId)) {
         throw new Error('Invalid or duplicate download ID.');
     }
@@ -1476,7 +1476,18 @@ ipcMain.handle('download-civitai-model', async (event, request) => {
     }
 
     const destinationDirectory = path.join(comfyUIRoot, 'models', MODEL_DESTINATIONS[destination], modelFolder);
-    const finalPath = path.join(destinationDirectory, safeFileName);
+    let finalPath = path.join(destinationDirectory, safeFileName);
+    if (fs.existsSync(finalPath)) {
+        const extension = path.extname(safeFileName);
+        const stem = path.basename(safeFileName, extension);
+        const safeVersion = String(versionName || modelVersionId || 'version').replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+        finalPath = path.join(destinationDirectory, `${stem}-${safeVersion}${extension}`);
+        let suffix = 2;
+        while (fs.existsSync(finalPath)) {
+            finalPath = path.join(destinationDirectory, `${stem}-${safeVersion}-${suffix}${extension}`);
+            suffix += 1;
+        }
+    }
     const partialPath = `${finalPath}.part`;
     const controller = new AbortController();
     activeModelDownloads.set(downloadId, controller);
@@ -1510,8 +1521,10 @@ ipcMain.handle('download-civitai-model', async (event, request) => {
             throw error;
         }
 
-        await fs.promises.rm(finalPath, { force: true });
         await fs.promises.rename(partialPath, finalPath);
+        if (Number.isFinite(Number(modelId)) && Number.isFinite(Number(modelVersionId))) {
+            await fs.promises.writeFile(`${finalPath}.civitai.info`, JSON.stringify({ modelId: Number(modelId), modelVersionId: Number(modelVersionId) }, null, 2));
+        }
         return { path: finalPath, receivedBytes };
     } catch (error) {
         await fs.promises.rm(partialPath, { force: true }).catch(() => {});

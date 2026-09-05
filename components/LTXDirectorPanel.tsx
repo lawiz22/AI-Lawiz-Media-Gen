@@ -37,6 +37,7 @@ interface DirectorGenerationSnapshot {
     }[];
     frameRate: number;
     guideStrength: number;
+    imageScalePercent: number;
     checkpoint: string;
     loras: DirectorLora[];
     audioName?: string;
@@ -110,6 +111,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
     const [isAudioPlaying, setIsAudioPlaying] = useState(false);
     const [frameRate, setFrameRate] = useState(24);
     const [guideStrength, setGuideStrength] = useState(1);
+    const [imageScalePercent, setImageScalePercent] = useState(100);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [checkpoint, setCheckpoint] = useState(DEFAULT_CHECKPOINT);
     const [loras, setLoras] = useState<DirectorLora[]>(DEFAULT_LORAS);
@@ -231,6 +233,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                 setSelectedId(restoredSegments[0]?.id || '');
                 setFrameRate(options.frameRate);
                 setGuideStrength(options.guideStrength);
+                setImageScalePercent(options.imageScalePercent ?? 100);
                 setCheckpoint(options.checkpoint);
                 setLoras([
                     ...options.loras.slice(0, 5).map((lora) => ({ enabled: true, ...lora })),
@@ -523,6 +526,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
             segments: preparedSegments,
             frameRate,
             guideStrength,
+            imageScalePercent,
             checkpoint,
             loras: loras.filter((lora) => lora.enabled).map((lora) => ({ ...lora })),
             audioName: audio?.name,
@@ -531,7 +535,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
             const result = await generateLtxDirectorVideo(
                 snapshot.segments,
                 audio,
-                { frameRate, guideStrength, checkpoint, loras: snapshot.loras },
+                { frameRate, guideStrength, imageScalePercent, checkpoint, loras: snapshot.loras },
                 (message, value) => { setProgressMessage(message); setProgress(value); },
             );
             setVideoUrl(result);
@@ -569,6 +573,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                 segments: savedSegments,
                 frameRate: generationSnapshot.frameRate,
                 guideStrength: generationSnapshot.guideStrength,
+                imageScalePercent: generationSnapshot.imageScalePercent,
                 checkpoint: generationSnapshot.checkpoint,
                 loras: generationSnapshot.loras.map(({ name, strength }) => ({ name, strength })),
                 audioName: generationSnapshot.audioName,
@@ -642,6 +647,9 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                         </label>
                         <label className="block text-xs font-semibold text-zinc-400">GUIDE STRENGTH
                             <div className="mt-2 flex items-center gap-3"><input type="range" min="0" max="2" step="0.05" value={guideStrength} onChange={(event) => setGuideStrength(Number(event.target.value))} className="w-full accent-amber-400" /><span className="w-10 text-right text-sm">{guideStrength.toFixed(2)}</span></div>
+                        </label>
+                        <label className="block text-xs font-semibold text-zinc-400">IMAGE SCALE
+                            <div className="mt-2 flex items-center gap-3"><input type="range" min="25" max="100" step="5" value={imageScalePercent} onChange={(event) => setImageScalePercent(Number(event.target.value))} className="w-full accent-amber-400" /><span className="w-10 text-right text-sm">{imageScalePercent}%</span></div>
                         </label>
                         <button onClick={() => audioInput.current?.click()} className={`w-full rounded-md border px-3 py-2 text-left text-xs ${audio ? 'border-cyan-400 text-cyan-200' : 'border-dashed border-zinc-600 text-zinc-400'}`}>{audio ? audio.name : '+ Optional soundtrack'}</button>
                         <input ref={audioInput} type="file" accept="audio/*" className="hidden" onChange={(event) => void handleAudioFile(event.target.files?.[0] || null)} />

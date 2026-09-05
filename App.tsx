@@ -190,7 +190,7 @@ const App: React.FC = () => {
         } else if (newOpts.comfyModelType === 'qwen-t2i-gguf') {
             applyDefaultsIfMissing({
                 comfyQwenUseLora: true,
-                comfyQwenLora1Name: "Qwen-Image-Lightning-4steps-V2.0.safetensors",
+                comfyQwenLora1Name: "QWEN\\Qwen-Image-Lightning-4steps-V2.0.safetensors",
                 comfyQwenLora1Strength: 1.0,
                 comfyQwenLora2Name: "",
                 comfyQwenLora2Strength: 1.0,

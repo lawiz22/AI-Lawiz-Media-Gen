@@ -21,6 +21,17 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
 
     const handleOptionChange = (field: keyof GenerationOptions) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
+        if (options.comfyModelType === 'qwen-t2i-gguf' && field === 'comfyQwenUseLora') {
+            const loraName = options.comfyQwenLora1Name || '';
+            const steps = value ? (/4steps/i.test(loraName) ? 4 : /8steps/i.test(loraName) ? 8 : 20) : 20;
+            updateOptions({ comfyQwenUseLora: Boolean(value), comfySteps: steps, comfyCfg: 1 });
+            return;
+        }
+        if (options.comfyModelType === 'qwen-t2i-gguf' && field === 'comfyQwenLora1Name') {
+            const loraName = String(value);
+            updateOptions({ comfyQwenLora1Name: loraName, comfySteps: /4steps/i.test(loraName) ? 4 : /8steps/i.test(loraName) ? 8 : 20, comfyCfg: 1 });
+            return;
+        }
         updateOptions({ [field]: value });
     };
 

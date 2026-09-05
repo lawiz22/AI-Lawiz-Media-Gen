@@ -2057,6 +2057,7 @@ export const generateComfyUIVideo = async (
 export interface LtxDirectorOptions {
     frameRate: number;
     guideStrength: number;
+    imageScalePercent: number;
     seed?: number;
     checkpoint: string;
     loras: Array<{ enabled: boolean; name: string; strength: number }>;
@@ -2068,6 +2069,42 @@ export interface LtxDirectorSegment {
     durationSeconds: number;
 }
 
+const loadImageElement = (file: File): Promise<HTMLImageElement> => new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(image);
+    };
+    image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error(`Could not read image ${file.name}.`));
+    };
+    image.src = objectUrl;
+});
+
+const resizeLtxImage = async (file: File, width: number, height: number): Promise<File> => {
+    const image = await loadImageElement(file);
+    const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+    const sourceWidth = width / scale;
+    const sourceHeight = height / scale;
+    const sourceX = (image.naturalWidth - sourceWidth) / 2;
+    const sourceY = (image.naturalHeight - sourceHeight) / 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Could not prepare the LTX image canvas.');
+    context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(
+        result => result ? resolve(result) : reject(new Error(`Could not resize image ${file.name}.`)),
+        'image/jpeg',
+        0.92,
+    ));
+    const stem = file.name.replace(/\.[^/.]+$/, '') || 'image';
+    return new File([blob], `${stem}-${width}x${height}.jpg`, { type: 'image/jpeg', lastModified: file.lastModified });
+};
+
 export const generateLtxDirectorVideo = async (
     segments: LtxDirectorSegment[],
     audio: File | null,
@@ -2077,14 +2114,26 @@ export const generateLtxDirectorVideo = async (
     const workflow = JSON.parse(JSON.stringify(LTX_DIRECTOR_WORKFLOW_TEMPLATE));
     const timelineSegments = [];
     const segmentLengths = [];
+    const firstImage = segments.find(segment => segment.image)?.image;
+    let targetWidth = 0;
+    let targetHeight = 0;
+    if (firstImage) {
+        const image = await loadImageElement(firstImage);
+        const scale = Math.min(100, Math.max(25, options.imageScalePercent)) / 100;
+        targetWidth = Math.max(32, Math.floor(image.naturalWidth * scale / 32) * 32);
+        targetHeight = Math.max(32, Math.floor(image.naturalHeight * scale / 32) * 32);
+    }
     let startFrame = 0;
     for (let index = 0; index < segments.length; index += 1) {
         const segment = segments[index];
         const length = Math.max(19, Math.round((segment.durationSeconds * 23 - 3) / 8) * 8 + 3);
         segmentLengths.push(length);
         if (segment.image) {
-            updateProgress(`Uploading image ${index + 1} of ${segments.length}...`, 0.03 + (index / segments.length) * 0.07);
-            const imageInfo = await uploadLtxMedia(segment.image);
+            updateProgress(`Preparing image ${index + 1} at ${targetWidth}x${targetHeight}...`, 0.03 + (index / segments.length) * 0.07);
+            const preparedImage = targetWidth && targetHeight
+                ? await resizeLtxImage(segment.image, targetWidth, targetHeight)
+                : segment.image;
+            const imageInfo = await uploadLtxMedia(preparedImage);
             timelineSegments.push({
                 id: crypto.randomUUID(),
                 start: startFrame,
@@ -2125,6 +2174,8 @@ export const generateLtxDirectorVideo = async (
         guide_strength: options.guideStrength.toFixed(2),
         use_custom_audio: Boolean(audio),
         frame_rate: options.frameRate,
+        custom_width: targetWidth,
+        custom_height: targetHeight,
     });
     workflow['28'].inputs.noise_seed = options.seed ?? Math.floor(Math.random() * 1e15);
     workflow['79'].inputs.preview_rate = options.frameRate;

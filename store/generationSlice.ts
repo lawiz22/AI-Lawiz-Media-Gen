@@ -40,7 +40,7 @@ const initialOptions: GenerationOptions = {
 
   // Qwen t2i GGUF defaults
   comfyQwenUnet: 'qwen-image-Q6_K.gguf',
-  comfyQwenClip: 'Qwen2.5-VL-7B-Instruct-Q3_K_S.gguf',
+  comfyQwenClip: 'qwen_2.5_vl_7b_fp8_scaled.safetensors',
   comfyQwenVae: 'qwen_image_vae.safetensors',
   comfyQwenAuraFlowShift: 2.5,
   comfyQwenMegaPixel: '1.0',
@@ -48,17 +48,14 @@ const initialOptions: GenerationOptions = {
   comfyQwenCustomRatio: false,
   comfyQwenCustomAspectRatio: '1:1',
   comfyQwenDivisibleBy: 64,
-  comfyQwenUseLora1: true,
-  comfyQwenLora1Name: 'Qwen-Image-Lightning-4steps-V1.0.safetensors',
+  comfyQwenUseLora: true,
+  comfyQwenLora1Name: 'QWEN\\Qwen-Image-Lightning-4steps-V2.0.safetensors',
   comfyQwenLora1Strength: 1.0,
-  comfyQwenUseLora2: true,
-  comfyQwenLora2Name: 'Qwen-NSFW-Beta5.safetensors',
-  comfyQwenLora2Strength: 0.86,
-  comfyQwenUseLora3: true,
-  comfyQwenLora3Name: 'Qwen-Image_SmartphoneSnapshotPhotoReality_v4_by-AI_Characters_TRIGGER$amateur photo$.safetensors',
+  comfyQwenLora2Name: '',
+  comfyQwenLora2Strength: 1.0,
+  comfyQwenLora3Name: '',
   comfyQwenLora3Strength: 1.0,
-  comfyQwenUseLora4: false, // Inactive by default
-  comfyQwenLora4Name: '', // Empty by default
+  comfyQwenLora4Name: '',
   comfyQwenLora4Strength: 1.0,
 
   // Qwen Image Edit defaults
