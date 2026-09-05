@@ -12,7 +12,7 @@ interface ScanProgress { completed: number; total: number; fileName: string; sta
 type ScanKind = 'all' | 'lora' | 'checkpoint' | 'diffusion';
 type LocalKind = Exclude<ScanKind, 'all'>;
 type InventoryFilter = 'all' | 'updates' | 'review';
-type LibraryKind = 'all' | 'checkpoint' | 'lora';
+type LibraryKind = 'all' | 'checkpoint' | 'diffusion' | 'lora';
 type ToolResultFilter = 'all' | 'updates' | 'review' | 'found';
 
 interface Props {
@@ -362,7 +362,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
             <div className="p-3 min-w-0 space-y-2">
                 <div className="flex gap-2 justify-between">
                     <div className="min-w-0"><p className="font-bold text-sm text-text-primary truncate" title={item.fileName}>{item.modelName || item.fileName}</p><p className="text-[11px] text-text-muted truncate" title={item.relativePath}>{item.relativePath}</p></div>
-                    <div className="shrink-0 flex items-start gap-1">{item.kind !== 'diffusion' && <button type="button" onClick={useModel} disabled={usageBusy} className="px-2 py-1 rounded bg-accent text-accent-text text-[10px] font-bold disabled:opacity-50">{usageBusy ? 'LOADING...' : 'USE'}</button>}{item.hasUpdate && <button type="button" onClick={() => setUpdateDialogOpen(true)} disabled={busy} className="px-2 py-1 rounded bg-amber-400 text-black text-[10px] font-bold disabled:opacity-50">UPDATE</button>}<span className={`h-fit px-2 py-1 rounded text-[10px] font-bold ${item.hasUpdate ? 'bg-amber-400/20 text-amber-400' : isItemReviewed(item) ? 'bg-emerald-500 text-black' : 'bg-bg-tertiary text-text-secondary'}`}>{item.hasUpdate ? 'Update' : item.userOwned ? 'My model' : isItemReviewed(item) ? 'Verified' : 'Review'}</span></div>
+                    <div className="shrink-0 flex items-start gap-1"><button type="button" onClick={useModel} disabled={usageBusy} className="px-2 py-1 rounded bg-accent text-accent-text text-[10px] font-bold disabled:opacity-50">{usageBusy ? 'LOADING...' : 'USE'}</button>{item.hasUpdate && <button type="button" onClick={() => setUpdateDialogOpen(true)} disabled={busy} className="px-2 py-1 rounded bg-amber-400 text-black text-[10px] font-bold disabled:opacity-50">UPDATE</button>}<span className={`h-fit px-2 py-1 rounded text-[10px] font-bold ${item.hasUpdate ? 'bg-amber-400/20 text-amber-400' : isItemReviewed(item) ? 'bg-emerald-500 text-black' : 'bg-bg-tertiary text-text-secondary'}`}>{item.hasUpdate ? 'Update' : item.userOwned ? 'My model' : isItemReviewed(item) ? 'Verified' : 'Review'}</span></div>
                 </div>
                 <p className="text-[11px] text-text-muted">{formatModelSize(item.sizeBytes / 1024)} · {item.installedVersionName || 'Local/custom model'}</p>
                 <div className="flex flex-wrap gap-x-3 gap-y-1">
@@ -423,6 +423,7 @@ export const CivitaiInventoryPanel: React.FC<Props> = ({ view, inventory, provid
     const displayedItems = visibleItems.slice(0, displayLimit);
     const matchedCount = inventory.items.filter(isItemReviewed).length;
     const checkpointCount = inventory.items.filter(item => item.kind === 'checkpoint').length;
+    const diffusionCount = inventory.items.filter(item => item.kind === 'diffusion').length;
     const loraCount = inventory.items.filter(item => item.kind === 'lora').length;
     const updateCount = inventory.items.filter(item => item.hasUpdate).length;
     const progressPercent = progress?.total ? Math.round(progress.completed / progress.total * 100) : 0;
@@ -507,11 +508,11 @@ export const CivitaiInventoryPanel: React.FC<Props> = ({ view, inventory, provid
 
     return <div className="space-y-5">
         <section className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3"><div><strong className="block text-xl">{inventory.items.length}</strong><span className="text-xs text-text-muted">Models</span></div><div><strong className="block text-xl text-blue-400">{checkpointCount}</strong><span className="text-xs text-text-muted">Checkpoints</span></div><div><strong className="block text-xl text-emerald-400">{loraCount}</strong><span className="text-xs text-text-muted">LoRAs</span></div><div><strong className="block text-xl text-amber-400">{updateCount}</strong><span className="text-xs text-text-muted">Updates</span></div><div><strong className="block text-xl text-text-secondary">{inventory.items.length - matchedCount}</strong><span className="text-xs text-text-muted">To review</span></div></div>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3"><div><strong className="block text-xl">{inventory.items.length}</strong><span className="text-xs text-text-muted">Models</span></div><div><strong className="block text-xl text-blue-400">{checkpointCount}</strong><span className="text-xs text-text-muted">Checkpoints</span></div><div><strong className="block text-xl text-cyan-400">{diffusionCount}</strong><span className="text-xs text-text-muted">UNET / Diffusion</span></div><div><strong className="block text-xl text-emerald-400">{loraCount}</strong><span className="text-xs text-text-muted">LoRAs</span></div><div><strong className="block text-xl text-amber-400">{updateCount}</strong><span className="text-xs text-text-muted">Updates</span></div><div><strong className="block text-xl text-text-secondary">{inventory.items.length - matchedCount}</strong><span className="text-xs text-text-muted">To review</span></div></div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
                 <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Filter my models, files, or versions" className="md:col-span-2 xl:col-span-1 bg-bg-tertiary border border-border-primary rounded-md px-3 py-2.5 text-text-primary" />
                 <MenuSelect value={libraryFamily} onChange={setLibraryFamily} ariaLabel="Library family" options={CIVITAI_FAMILIES.map(item => ({ value: item.id, label: item.label }))} />
-                <MenuSelect value={libraryKind} onChange={setLibraryKind} ariaLabel="Library model type" options={[{ value: 'all', label: 'Checkpoints + LoRAs' }, { value: 'checkpoint', label: 'Checkpoints only' }, { value: 'lora', label: 'LoRAs only' }]} />
+                <MenuSelect value={libraryKind} onChange={setLibraryKind} ariaLabel="Library model type" options={[{ value: 'all', label: 'All model types' }, { value: 'checkpoint', label: 'Checkpoints only' }, { value: 'diffusion', label: 'UNET / Diffusion only' }, { value: 'lora', label: 'LoRAs only' }]} />
                 <MenuSelect value={filter} onChange={setFilter} ariaLabel="Library status filter" options={[{ value: 'all', label: 'All my library' }, { value: 'updates', label: 'Updates only' }, { value: 'review', label: 'To review' }]} />
                 <button type="button" onClick={refreshSafety} disabled={isCheckingSafety || !localAccessAvailable || inventory.items.length === 0} className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-md text-white font-bold disabled:opacity-50 ${provider === 'red' ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'}`}>{isCheckingSafety && <SpinnerIcon className="w-4 h-4 animate-spin" />}{isCheckingSafety ? 'Refreshing safety' : 'Refresh safety'}</button>
             </div>

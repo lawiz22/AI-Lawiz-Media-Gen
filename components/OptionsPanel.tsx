@@ -354,7 +354,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         const sources = [
             comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name,
             comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.gguf_name,
-            comfyUIObjectInfo?.CLIPLoaderGGUF?.input?.required?.clip_name,
         ];
         const modelSet = new Set<string>();
         for (const source of sources) {
@@ -363,7 +362,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 list.forEach(model => modelSet.add(model));
             }
         }
-        return Array.from(modelSet);
         return Array.from(modelSet);
     }, [comfyUIObjectInfo]);
 

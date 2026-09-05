@@ -23,6 +23,12 @@ const MODEL_DESTINATIONS = {
     diffusion: 'diffusion_models',
     lora: 'loras',
 };
+const MODEL_SCAN_DIRECTORIES = [
+    { kind: 'checkpoint', directory: 'checkpoints' },
+    { kind: 'diffusion', directory: 'diffusion_models' },
+    { kind: 'diffusion', directory: 'unet' },
+    { kind: 'lora', directory: 'loras' },
+];
 const MODEL_FOLDERS = new Set(['sd15', 'SD1.5', 'SDXL', 'Flux', 'FLUX', 'flux-dev', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control']);
 const LOCAL_MODEL_EXTENSIONS = new Set(['.safetensors', '.ckpt', '.pt', '.pth', '.bin', '.gguf']);
 const SCAN_FAMILY_FOLDERS = {
@@ -93,7 +99,7 @@ async function buildFastLocalInventory(event) {
     if (!comfyUIRoot) return { scannedAt: null, root: '', items: [] };
     const modelRoot = path.join(comfyUIRoot, 'models');
     const files = [];
-    await Promise.all(Object.entries(MODEL_DESTINATIONS).map(([kind, directory]) => collectModelFiles(path.join(modelRoot, directory), kind, files)));
+    await Promise.all(MODEL_SCAN_DIRECTORIES.map(({ kind, directory }) => collectModelFiles(path.join(modelRoot, directory), kind, files)));
     files.sort((left, right) => left.path.localeCompare(right.path));
     const previousInventory = store.get('civitai_inventory', { items: [] });
     const previousItems = new Map((previousInventory.items || []).map(item => [item.path, item]));
@@ -766,11 +772,7 @@ ipcMain.handle('scan-civitai-library', async (event, request) => {
 
     const modelRoot = path.join(comfyUIRoot, 'models');
     const files = [];
-    const categoryRoots = [
-        { kind: 'lora', directory: 'loras' },
-        { kind: 'checkpoint', directory: 'checkpoints' },
-        { kind: 'diffusion', directory: 'diffusion_models' },
-    ].filter(category => scanKind === 'all' || category.kind === scanKind);
+    const categoryRoots = MODEL_SCAN_DIRECTORIES.filter(category => scanKind === 'all' || category.kind === scanKind);
     const scanRoots = categoryRoots.flatMap(category => {
         const familyFolders = scanFamily === 'all' ? [null] : SCAN_FAMILY_FOLDERS[category.kind][scanFamily] || [];
         return familyFolders.map(folder => ({

@@ -39,7 +39,7 @@ const initialOptions: GenerationOptions = {
   refineMegapixels: 0.5,
 
   // Qwen t2i GGUF defaults
-  comfyQwenUnet: 'Qwen_Image-Q3_K_S.gguf',
+  comfyQwenUnet: 'qwen-image-Q6_K.gguf',
   comfyQwenClip: 'Qwen2.5-VL-7B-Instruct-Q3_K_S.gguf',
   comfyQwenVae: 'qwen_image_vae.safetensors',
   comfyQwenAuraFlowShift: 2.5,
