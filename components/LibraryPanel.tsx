@@ -9,12 +9,13 @@ import {
   DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon,
   BannerIcon, AlbumCoverIcon, TrashIcon, LoadIcon, FileExportIcon, UploadIconSimple, GoogleDriveIcon,
   PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, WarningIcon,
-  SendIcon, WorkflowIcon, GenerateIcon, PastForwardIcon, RefreshIcon
+  SendIcon, WorkflowIcon, GenerateIcon, PastForwardIcon, RefreshIcon, MicrophoneIcon
 } from './icons';
-import { createPaletteThumbnail } from '../utils/imageUtils';
+import { createPaletteThumbnail, createVideoPlaceholderThumbnail, normalizeAudioDataUrl } from '../utils/imageUtils';
 import { exportLibraryAsJson } from '../services/libraryService';
 import { updateOptions, setGenerationMode } from '../store/generationSlice';
 import { setActiveTab } from '../store/appSlice';
+import { AudioPlayer } from './AudioPlayer';
 
 // --- Confirmation Modal Component (defined in-file to avoid adding new files) ---
 interface ConfirmationModalProps {
@@ -44,7 +45,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 z-60 flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 animate-fade-in"
       role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title"
       onClick={onClose}
     >
@@ -82,6 +83,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
 
 interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem) => void;
+  onUpscaleItem: (item: LibraryItem) => void;
   isDriveConnected: boolean;
   onSyncWithDrive: () => void;
   isSyncing: boolean;
@@ -95,6 +97,8 @@ const getCategoryIcon = (mediaType: LibraryItemType, className: string = "w-4 h-
     case 'image': return <PhotographIcon {...props} />;
     case 'character': return <CharacterIcon {...props} />;
     case 'video': return <VideoIcon {...props} />;
+    case 'audio-tts': return <MicrophoneIcon {...props} />;
+    case 'tts-reference': return <MicrophoneIcon {...props} />;
     case 'logo': return <LogoIconSimple {...props} />;
     case 'banner': return <BannerIcon {...props} />;
     case 'album-cover': return <AlbumCoverIcon {...props} />;
@@ -115,6 +119,8 @@ const FILTER_BUTTONS: { id: LibraryItemType; label: string; icon: React.ReactEle
   { id: 'character', label: 'Characters', icon: <CharacterIcon className="w-5 h-5" /> },
   { id: 'past-forward-photo', label: 'Past Forward', icon: <PastForwardIcon className="w-5 h-5" /> },
   { id: 'video', label: 'Videos', icon: <VideoIcon className="w-5 h-5" /> },
+  { id: 'audio-tts', label: 'Audio TTS', icon: <MicrophoneIcon className="w-5 h-5" /> },
+  { id: 'tts-reference', label: 'TTS References', icon: <MicrophoneIcon className="w-5 h-5" /> },
   { id: 'logo', label: 'Logos', icon: <LogoIconSimple className="w-5 h-5" /> },
   { id: 'banner', label: 'Banners', icon: <BannerIcon className="w-5 h-5" /> },
   { id: 'album-cover', label: 'Album Covers', icon: <AlbumCoverIcon className="w-5 h-5" /> },
@@ -403,7 +409,7 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
 
 type ViewMode = 'grid' | 'smallGrid' | 'list';
 
-export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveConnected, onSyncWithDrive, isSyncing, syncMessage, isDriveConfigured }) => {
+export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscaleItem, isDriveConnected, onSyncWithDrive, isSyncing, syncMessage, isDriveConfigured }) => {
   const dispatch: AppDispatch = useDispatch();
   const { items, status: libraryStatus, error: libraryError } = useSelector((state: RootState) => state.library);
   const projectName = useSelector((state: RootState) => state.app.projectName);
@@ -485,7 +491,14 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
       }
     });
   };
-  const handleExport = async () => { try { await exportLibraryAsJson(projectName); } catch (e) { alert("Export failed."); } };
+  const handleExport = async () => {
+    try {
+      await exportLibraryAsJson(projectName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown export error.';
+      alert(message);
+    }
+  };
   const handleClearLibrary = () => {
     setConfirmModal({
       isOpen: true, title: 'Clear Entire Library', message: 'Permanently delete ALL items?', confirmText: 'Clear All',
@@ -515,6 +528,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
 
   const handleMouseEnterSource = (e: React.MouseEvent, sourceImage?: string) => { if (!sourceImage) return; setHoveredSource({ src: sourceImage, x: e.clientX, y: e.clientY }); };
   const handleMouseLeaveSource = () => { setHoveredSource(null); };
+  const getItemThumbnail = (item: LibraryItem) => item.thumbnail || (item.mediaType === 'video' ? createVideoPlaceholderThumbnail() : '');
 
   const renderItemViews = () => {
     if (libraryStatus === 'loading') {
@@ -551,7 +565,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
         <div className="flex flex-col gap-1.5">
           {paginatedItems.map(item => (
             <div key={item.id} className="group flex items-center gap-3 p-1.5 rounded-lg hover:bg-bg-tertiary transition-colors w-full cursor-pointer" onClick={() => setSelectedItemModal(item)} onMouseEnter={(e) => (item.mediaType === 'prompt' || item.mediaType === 'color-palette') && handleMouseEnterSource(e, item.sourceImage)} onMouseLeave={handleMouseLeaveSource}>
-              <img src={item.thumbnail} alt={item.name} className="w-10 h-10 object-cover rounded-md flex-shrink-0" />
+              <img src={getItemThumbnail(item)} alt={item.name} className="w-10 h-10 object-cover rounded-md flex-shrink-0" />
               <div className="flex-shrink-0 text-text-secondary">{getCategoryIcon(item.mediaType, "w-5 h-5")}</div>
               <div className="flex-grow truncate"><p className="font-medium text-text-primary truncate text-sm">{item.name}</p><p className="text-xs text-text-muted">Created: {new Date(item.id).toLocaleDateString()}</p></div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -569,7 +583,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
       <div className={`grid ${gridClasses} gap-4`}>
         {paginatedItems.map(item => (
           <div key={item.id} className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer" onClick={() => setSelectedItemModal(item)} onMouseEnter={(e) => (item.mediaType === 'prompt' || item.mediaType === 'color-palette') && handleMouseEnterSource(e, item.sourceImage)} onMouseLeave={handleMouseLeaveSource}>
-            <img src={item.thumbnail} alt={item.name || `Library item ${item.id}`} className="object-cover w-full h-full" />
+            <img src={getItemThumbnail(item)} alt={item.name || `Library item ${item.id}`} className="object-cover w-full h-full" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div className="absolute bottom-0 left-0 p-2 text-white transform translate-y-4 group-hover:translate-y-0 transition-transform"><p className="text-xs font-bold truncate max-w-full">{item.name}</p></div>
             <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full" title={item.mediaType}>{getCategoryIcon(item.mediaType, "w-4 h-4 text-white")}</div>
@@ -685,7 +699,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
                     </div>
                   ) : (selectedItemModal.mediaType !== 'prompt' && selectedItemModal.mediaType !== 'color-palette') && (
                     <div className="aspect-square bg-bg-primary rounded-lg flex items-center justify-center overflow-hidden">
-                      {selectedItemModal.mediaType === 'video' ? <video src={selectedItemModal.media} controls className="w-full h-full object-contain" /> : <img src={selectedItemModal.media} alt={selectedItemModal.name} className="w-full h-full object-contain" />}
+                      {selectedItemModal.mediaType === 'video' ? <video src={selectedItemModal.media} controls className="w-full h-full object-contain" /> : selectedItemModal.mediaType === 'audio-tts' || selectedItemModal.mediaType === 'tts-reference' ? <div className="w-full px-6"><AudioPlayer src={normalizeAudioDataUrl(selectedItemModal.media)} label={selectedItemModal.name || 'TTS audio'} detail={selectedItemModal.ttsOptions?.referenceAudioName ? `Voice: ${selectedItemModal.ttsOptions.referenceAudioName}` : selectedItemModal.mediaType === 'tts-reference' ? 'Reusable voice reference' : undefined} /></div> : <img src={selectedItemModal.media} alt={selectedItemModal.name} className="w-full h-full object-contain" />}
                     </div>
                   )}
                   {(selectedItemModal.sourceImage || selectedItemModal.startFrame) && (<div><h4 className="text-sm font-semibold text-text-secondary mb-2">Source Image</h4><div className="aspect-square bg-bg-primary rounded-lg flex items-center justify-center overflow-hidden"><img src={selectedItemModal.sourceImage || selectedItemModal.startFrame} alt="Source" className="w-full h-full object-contain" /></div></div>)}
@@ -695,13 +709,51 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, isDriveC
                   <DetailItem label="Item ID" value={selectedItemModal.id} />
                   <DetailItem label="Type" value={selectedItemModal.mediaType} />
                   {selectedItemModal.mediaType === 'prompt' && <DetailItem label="Prompt Text" value={selectedItemModal.media} isCode />}
+                  {selectedItemModal.ttsOptions && <div className="space-y-2 rounded-md bg-bg-primary p-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">ChatterBox TTS</h4>
+                    <DetailItem label="Text" value={selectedItemModal.ttsOptions.text} isCode />
+                    <DetailItem label="Reference Voice" value={selectedItemModal.ttsOptions.referenceAudioName} />
+                    <DetailItem label="Reference Source" value={selectedItemModal.ttsOptions.referenceSource === 'suite' ? 'TTS Audio Suite' : selectedItemModal.ttsOptions.referenceSource === 'library' ? 'TTS Reference Library' : 'Uploaded audio'} />
+                    <DetailItem label="Language" value={selectedItemModal.ttsOptions.language || 'English'} />
+                    <DetailItem label="Device" value={selectedItemModal.ttsOptions.device} />
+                    <DetailItem label="Exaggeration" value={selectedItemModal.ttsOptions.exaggeration} />
+                    <DetailItem label="Temperature" value={selectedItemModal.ttsOptions.temperature} />
+                    <DetailItem label="CFG Weight" value={selectedItemModal.ttsOptions.cfgWeight} />
+                    <DetailItem label="Seed" value={selectedItemModal.ttsOptions.seed} />
+                    <DetailItem label="Chunking" value={selectedItemModal.ttsOptions.enableChunking} />
+                    <DetailItem label="Max Characters / Chunk" value={selectedItemModal.ttsOptions.maxCharsPerChunk} />
+                    <DetailItem label="Chunk Combination" value={selectedItemModal.ttsOptions.chunkCombinationMethod} />
+                    <DetailItem label="Silence Between Chunks" value={`${selectedItemModal.ttsOptions.silenceBetweenChunksMs} ms`} />
+                  </div>}
                   {selectedItemModal.poseJson && <DetailItem label="Pose JSON (ControlNet)" value={selectedItemModal.poseJson} isCode />}
-                  {selectedItemModal.themeOptions ? renderThemeOptionsDetails(selectedItemModal.themeOptions) : renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType)}
+                  {selectedItemModal.ltxDirectorOptions && <div className="space-y-3 rounded-md bg-bg-primary p-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">LTX Director Generation</h4>
+                    {selectedItemModal.ltxDirectorOptions.segments.map((segment, index) => (
+                      <div key={index} className="rounded-md border border-border-primary bg-bg-tertiary p-2">
+                        <div className="mb-1 flex items-center justify-between text-xs font-semibold text-text-secondary">
+                          <span>Clip {index + 1}</span>
+                          <span>{segment.durationSeconds}s{segment.hasSourceImage ? ' · Image' : ' · Prompt only'}</span>
+                        </div>
+                        <pre className="whitespace-pre-wrap break-words text-xs text-text-primary">{segment.prompt}</pre>
+                      </div>
+                    ))}
+                    <DetailItem label="Frame Rate" value={`${selectedItemModal.ltxDirectorOptions.frameRate} fps`} />
+                    <DetailItem label="Guide Strength" value={selectedItemModal.ltxDirectorOptions.guideStrength} />
+                    <DetailItem label="Checkpoint" value={selectedItemModal.ltxDirectorOptions.checkpoint} isCode />
+                    {selectedItemModal.ltxDirectorOptions.loras.map((lora, index) => (
+                      <DetailItem key={index} label={`LoRA ${index + 1} (${lora.strength})`} value={lora.name} isCode />
+                    ))}
+                    <DetailItem label="Audio" value={selectedItemModal.ltxDirectorOptions.audioName || 'None'} />
+                  </div>}
+                  {!selectedItemModal.ttsOptions && (selectedItemModal.themeOptions ? renderThemeOptionsDetails(selectedItemModal.themeOptions) : renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType))}
                   <div className="pt-4 flex flex-wrap gap-2">
+                    {selectedItemModal.media.startsWith('data:image/') && (
+                      <button onClick={() => { onUpscaleItem(selectedItemModal); setSelectedItemModal(null); }} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-primary font-semibold py-2 px-4 rounded-lg hover:bg-accent hover:text-accent-text transition-colors"><GenerateIcon className="w-5 h-5" /> Upscale SeedVR2</button>
+                    )}
                     {selectedItemModal.mediaType === 'prompt' ? (
                       <button onClick={() => { setPromptToUse(selectedItemModal.media); setPickerOpen(true); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><SendIcon className="w-5 h-5" /> Use</button>
                     ) : (
-                      <button onClick={() => { onLoadItem(selectedItemModal); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> Load in Generator</button>
+                      <button onClick={() => { onLoadItem(selectedItemModal); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> {selectedItemModal.mediaType === 'audio-tts' ? 'Use in LTX Video' : 'Load in Generator'}</button>
                     )}
                     <button onClick={() => handleDelete(selectedItemModal.id, selectedItemModal.name || `Item #${selectedItemModal.id}`)} disabled={deletingId === selectedItemModal.id} className="flex items-center justify-center gap-2 bg-danger-bg text-danger font-semibold py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">{deletingId === selectedItemModal.id ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <TrashIcon className="w-5 h-5" />}</button>
                   </div>

@@ -3,22 +3,24 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { LibraryItem, LibrarySliceState } from '../types';
 import * as idb from '../services/idbLibraryService';
 import * as libraryService from '../services/libraryService';
+import { createVideoPlaceholderThumbnail, videoToThumbnail } from '../utils/imageUtils';
 
 export const fetchLibrary = createAsyncThunk('library/fetchLibrary', async (_, thunkAPI) => {
     try {
-        // STRICT TIMEOUT: Enforce a 3-second limit on the database fetch.
-        const timeoutPromise = new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error("Library database timed out. Please refresh.")), 3000)
-        );
-        
-        const items = await Promise.race([
-            idb.getLibraryItems(),
-            timeoutPromise
-        ]) as LibraryItem[];
-        
+        const items = await idb.getLibraryItems();
+        const placeholder = createVideoPlaceholderThumbnail();
+        for (const item of items) {
+            if (!item.ltxDirectorOptions || (item.thumbnail && item.thumbnail !== placeholder) || !item.media) continue;
+            try {
+                const thumbnail = await videoToThumbnail(item.media, 256);
+                item.thumbnail = thumbnail;
+                await idb.updateLibraryItem(item.id, { thumbnail });
+            } catch (error) {
+                console.warn(`Could not repair the thumbnail for LTX video ${item.id}.`, error);
+            }
+        }
         return items;
     } catch (err: any) {
-        // Ensure any error (timeout or DB error) is caught and returned as a rejection
         return thunkAPI.rejectWithValue(err.message || "Unknown library error");
     }
 });
@@ -67,18 +69,26 @@ const initialState: LibrarySliceState = {
 const librarySlice = createSlice({
     name: 'library',
     initialState,
-    reducers: {},
+    reducers: {
+        unloadLibrary: (state) => {
+            state.items = [];
+            state.status = 'idle';
+            state.error = null;
+        },
+    },
     extraReducers: (builder) => {
         builder
             .addCase(fetchLibrary.pending, (state) => {
                 state.status = 'loading';
             })
             .addCase(fetchLibrary.fulfilled, (state, action) => {
+                if (state.status !== 'loading') return;
                 state.status = 'succeeded';
                 state.items = action.payload;
                 state.error = null;
             })
             .addCase(fetchLibrary.rejected, (state, action) => {
+                if (state.status !== 'loading') return;
                 state.status = 'failed';
                 state.error = action.payload as string || 'Failed to fetch library';
             })
@@ -120,4 +130,5 @@ const librarySlice = createSlice({
     }
 });
 
+export const { unloadLibrary } = librarySlice.actions;
 export default librarySlice.reducer;

@@ -227,8 +227,8 @@ const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
 
 
 interface VideoUtilsPanelProps {
-    setStartFrame: (file: File | null) => void;
-    setEndFrame: (file: File | null) => void;
+    setStartFrame: (file: File | null) => Promise<void>;
+    setEndFrame: (file: File | null) => Promise<void>;
     onOpenLibrary: () => void;
     onOpenVideoLibrary: () => void;
     activeSubTab: string;
@@ -546,15 +546,15 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     const handleSetAsStartFrame = async () => {
         if (!extractedFrame) return;
         const file = await dataUrlToFile(extractedFrame, 'start_frame.jpeg');
-        setStartFrame(file);
-        alert('Frame set as Start Frame in the Video Generator tab.');
+        await setStartFrame(file);
+        alert('Frame sent to LTX Director.');
     };
 
     const handleSetAsEndFrame = async () => {
         if (!extractedFrame) return;
         const file = await dataUrlToFile(extractedFrame, 'end_frame.jpeg');
-        setEndFrame(file);
-        alert('Frame set as End Frame in the Video Generator tab.');
+        await setEndFrame(file);
+        alert('Frame sent to LTX Director.');
     };
 
     const handleSaveFrameToLibrary = async () => {

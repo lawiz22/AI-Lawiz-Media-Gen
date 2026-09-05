@@ -2,6 +2,7 @@
 import { createSlice, createSelector, PayloadAction } from '@reduxjs/toolkit';
 import type { GenerationSliceState, GenerationOptions } from '../types';
 import type { RootState } from './store';
+import { getEnabledCharacterAngles } from '../services/characterAnglesWorkflow';
 
 const initialOptions: GenerationOptions = {
   provider: 'mammouth',
@@ -59,6 +60,24 @@ const initialOptions: GenerationOptions = {
   comfyQwenUseLora4: false, // Inactive by default
   comfyQwenLora4Name: '', // Empty by default
   comfyQwenLora4Strength: 1.0,
+
+  // Qwen Image Edit defaults
+  comfyQwenEditUnet: 'qwen_image_edit_2509_fp8_e4m3fn.safetensors',
+  comfyQwenEditClip: 'Qwen2.5-VL-7B-Instruct-Q6_K.gguf',
+  comfyQwenEditVae: 'qwen_image_vae.safetensors',
+  comfyQwenEditShift: 2.5,
+  comfyQwenEditMegapixels: 1,
+  comfyQwenEditUseLora: true,
+  comfyQwenEditLora1Name: 'QWEN\\Qwen-Image-Lightning-8steps-V2.0.safetensors',
+  comfyQwenEditLora1Strength: 1,
+  comfyQwenEditLora2Name: '',
+  comfyQwenEditLora2Strength: 1,
+  comfyQwenEditLora3Name: '',
+  comfyQwenEditLora3Strength: 1,
+  comfyQwenEditLora4Name: '',
+  comfyQwenEditLora4Strength: 1,
+  comfyQwenEditLora5Name: '',
+  comfyQwenEditLora5Strength: 1,
 
   // Video Generation
   videoProvider: 'comfyui',
@@ -122,6 +141,22 @@ const initialCharacterOptions: GenerationOptions = {
   provider: 'mammouth',
   geminiMode: 'i2i',
   geminiI2iMode: 'character',
+  comfyCharacterUnet: 'qwen_image_edit_2509_fp8_e4m3fn.safetensors',
+  comfyCharacterClip: 'qwen_2.5_vl_7b_fp8_scaled.safetensors',
+  comfyCharacterVae: 'qwen_image_vae.safetensors',
+  comfyCharacterLightningLora: 'QWEN\\Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors',
+  comfyCharacterLightningStrength: 1,
+  comfyCharacterAnglesLora: 'QWEN\\Qwen-Edit-2509-Multiple-angles.safetensors',
+  comfyCharacterAnglesStrength: 1,
+  comfyCharacterUseAdditionalLora: false,
+  comfyCharacterAdditionalLora: '',
+  comfyCharacterAdditionalLoraStrength: 1,
+  comfyCharacterSteps: 4,
+  comfyCharacterCfg: 1,
+  comfyCharacterSampler: 'euler',
+  comfyCharacterScheduler: 'simple',
+  comfyCharacterShift: 3,
+  comfyCharacterMegapixels: 1,
 };
 
 const initialState: GenerationSliceState = {
@@ -239,6 +274,7 @@ const generationSlice = createSlice({
       const resetDefaults: Partial<GenerationOptions> = {
         geminiPrompt: '',
         comfyPrompt: '',
+        comfyPromptExampleSource: undefined,
         customBackground: '',
         customClothingPrompt: '',
         poseLibraryItems: [],
@@ -248,6 +284,10 @@ const generationSlice = createSlice({
         geminiInpaintCustomPrompt: '',
         geminiInpaintTargetPrompt: '',
         geminiComposePrompt: '',
+        comfyCharacterAngleSettings: undefined,
+        comfyCharacterUseAdditionalLora: false,
+        comfyCharacterAdditionalLora: '',
+        comfyCharacterAdditionalLoraStrength: 1,
       };
 
       state.options = { ...state.options, ...resetDefaults };
@@ -313,7 +353,9 @@ export const selectIsReadyToGenerate = createSelector(
         return !!sourceImage;
       }
     } else if (activeOptions.provider === 'comfyui') {
-      // ComfyUI logic is mainly used in image-generator tab for now
+      if (activeTab === 'character-generator') {
+        return !!isComfyUIConnected && !!sourceImage && getEnabledCharacterAngles(activeOptions).length > 0;
+      }
       const isI2IMode = generationMode === 'i2i';
       const baseReady = !!isComfyUIConnected && !!activeOptions.comfyPrompt?.trim();
       if (isI2IMode) {

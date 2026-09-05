@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, ChangeEvent, useRef } from 'react';
 // Fix: Import `NunchakuAttention` type to be used for casting.
 import type { GenerationOptions, NunchakuAttention, ImageStyle } from '../types';
@@ -15,10 +14,18 @@ import { DEFAULT_GEMINI_IMAGE_MODEL, GEMINI_IMAGE_MODELS, generateBackgroundImag
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, getMammouthImageModels } from '../services/mammouthService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
 import { saveToLibrary } from '../services/libraryService';
-import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon, LibraryIcon, SaveIcon, CheckIcon } from './icons';
+import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon, LibraryIcon, SaveIcon, CheckIcon, DiceIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { dataUrlToFile, fileToDataUrl, dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 import { SelectInput, TextInput, NumberSlider, CheckboxSlider } from './InputComponents';
+import {
+    CHARACTER_ANGLES,
+    CHARACTER_ANGLE_OPTIONS,
+    CHARACTER_POSE_OPTIONS,
+    CHARACTER_EXPRESSION_OPTIONS,
+    DEFAULT_CHARACTER_ANGLE_SETTINGS,
+    getEnabledCharacterAngles,
+} from '../services/characterAnglesWorkflow';
 
 // --- Prop Types ---
 interface OptionsPanelProps {
@@ -63,6 +70,12 @@ interface OptionsPanelProps {
     hideGeneralSettings?: boolean;
 }
 
+interface ModelPromptExample {
+    positive: string;
+    negative?: string;
+    source: 'civitai' | 'archive';
+}
+
 // Helper function to safely extract model lists from ComfyUI's object_info
 const getModelListFromInfo = (widgetInfo: any): string[] => {
     if (Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0])) {
@@ -86,10 +99,20 @@ const ElementImageManager: React.FC<{
     setElementImages: (files: File[]) => void;
     disabled: boolean;
     onOpenElementPicker: () => void;
-}> = ({ elementImages, setElementImages, disabled, onOpenElementPicker }) => {
+    maxImages?: number;
+    label?: string;
+}> = ({ elementImages, setElementImages, disabled, onOpenElementPicker, maxImages = 5, label = 'Add Element Image(s)' }) => {
+    const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+
+    useEffect(() => {
+        const urls = elementImages.map(file => URL.createObjectURL(file));
+        setPreviewUrls(urls);
+        return () => urls.forEach(url => URL.revokeObjectURL(url));
+    }, [elementImages]);
+
     const handleAddImages = (files: File[]) => {
         if (files.length > 0) {
-            setElementImages([...elementImages, ...files].slice(0, 5));
+            setElementImages([...elementImages, ...files].slice(0, maxImages));
         }
     };
 
@@ -103,7 +126,7 @@ const ElementImageManager: React.FC<{
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {elementImages.map((file, index) => (
                         <div key={index} className="relative group">
-                            <img src={URL.createObjectURL(file)} alt={`Element ${index + 1}`} className="w-full aspect-square object-cover rounded-lg" />
+                            {previewUrls[index] && <img src={previewUrls[index]} alt={`Element ${index + 1}`} className="w-full aspect-square object-cover rounded-lg" />}
                             <button
                                 onClick={() => handleRemoveImage(index)}
                                 className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -122,14 +145,14 @@ const ElementImageManager: React.FC<{
                         onImageUpload={() => { }}
                         onImagesUpload={handleAddImages}
                         multiple
-                        disabled={disabled || elementImages.length >= 5}
-                        label="Add Element Image(s)"
-                        infoText={elementImages.length >= 5 ? "Max 5 elements" : "PNG, JPG, WEBP"}
+                        disabled={disabled || elementImages.length >= maxImages}
+                        label={label}
+                        infoText={elementImages.length >= maxImages ? `Maximum ${maxImages} additional images` : "PNG, JPG, WEBP"}
                     />
                 </div>
                 <button
                     onClick={onOpenElementPicker}
-                    disabled={disabled || elementImages.length >= 5}
+                    disabled={disabled || elementImages.length >= maxImages}
                     className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
                     title="Select from Library"
                 >
@@ -168,6 +191,38 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const [isGeneratingMask, setIsGeneratingMask] = useState<boolean>(false);
     const [maskGenError, setMaskGenError] = useState<string | null>(null);
     const [maskSavingState, setMaskSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
+    const [promptExamples, setPromptExamples] = useState<ModelPromptExample[]>([]);
+    const [promptExamplesOpen, setPromptExamplesOpen] = useState(false);
+    const [promptExamplesLoading, setPromptExamplesLoading] = useState(false);
+    const [promptExamplesError, setPromptExamplesError] = useState('');
+
+    const openPromptExamples = async () => {
+        const source = options.comfyPromptExampleSource;
+        if (!source || !window.electron) return;
+        setPromptExamplesOpen(true);
+        setPromptExamplesLoading(true);
+        setPromptExamplesError('');
+        setPromptExamples([]);
+        try {
+            setPromptExamples(await window.electron.getLocalModelPromptExamples({
+                modelPath: source.modelPath,
+                provider: source.provider,
+                sources: source.sources,
+            }));
+        } catch (error) {
+            setPromptExamplesError(error instanceof Error ? error.message : 'Prompt examples could not be loaded.');
+        } finally {
+            setPromptExamplesLoading(false);
+        }
+    };
+
+    const applyPromptExample = (example: ModelPromptExample) => {
+        updateOptions({
+            comfyPrompt: example.positive,
+            ...(example.negative ? { comfyNegativePrompt: example.negative } : {}),
+        });
+        setPromptExamplesOpen(false);
+    };
 
     // Models that we want to ensure are always present
     const DEFAULT_MODELS = useMemo(() => GEMINI_IMAGE_MODELS, []);
@@ -177,6 +232,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const [loadingModels, setLoadingModels] = useState(false);
     const [mammouthModels, setMammouthModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
     const [loadingMammouthModels, setLoadingMammouthModels] = useState(false);
+    const [characterAdvancedOpen, setCharacterAdvancedOpen] = useState(false);
 
     useEffect(() => {
         const fetchModels = async () => {
@@ -330,11 +386,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         let newOptions = { ...options };
         let optionsChanged = false;
 
-        if (newOptions.provider === 'comfyui') {
-            const isI2IModel = ['nunchaku-kontext-flux', 'face-detailer-sd1.5'].includes(newOptions.comfyModelType!);
+        if (newOptions.provider === 'comfyui' && activeTab !== 'character-generator') {
+            const isI2IModel = ['qwen-edit', 'face-detailer-sd1.5'].includes(newOptions.comfyModelType!);
             if (generationMode === 'i2i' && !isI2IModel) {
                 optionsChanged = true;
-                newOptions.comfyModelType = 'nunchaku-kontext-flux';
+                newOptions.comfyModelType = 'qwen-edit';
             } else if (generationMode === 't2i' && isI2IModel) {
                 optionsChanged = true;
                 newOptions.comfyModelType = 'sdxl';
@@ -349,7 +405,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         if (optionsChanged) {
             updateOptions({ comfyModelType: newOptions.comfyModelType, geminiMode: newOptions.geminiMode });
         }
-    }, [options.provider, generationMode, updateOptions]);
+    }, [options.provider, generationMode, updateOptions, activeTab]);
 
 
     const handleGenerationModeChange = (mode: 't2i' | 'i2i') => {
@@ -358,6 +414,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
     const handleOptionChange = (field: keyof GenerationOptions) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
+        const changesActiveModel = field === 'comfyModelType'
+            || field === 'comfyModel'
+            || /^(?:comfyQwenUnet|comfyZImageUnet|comfy(?:Sd15|Sdxl|Flux|Qwen|ZImage)Lora\dName)$/.test(String(field));
 
         if (field === 'imageStyle') {
             if (options.provider === 'gemini') {
@@ -410,9 +469,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         }
 
         if (field === 'comfyModelType') {
-            updateOptions({ comfyModelType: value as GenerationOptions['comfyModelType'] });
+            updateOptions({ comfyModelType: value as GenerationOptions['comfyModelType'], comfyPromptExampleSource: undefined });
         } else {
-            updateOptions({ [field]: value });
+            updateOptions({ [field]: value, ...(changesActiveModel ? { comfyPromptExampleSource: undefined } : {}) });
         }
     };
 
@@ -752,7 +811,223 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         );
     };
 
+    const renderComfyCharacterOptions = () => {
+        const selectOptions = (current: string, values: string[]) => Array.from(new Set([current, ...values].filter(Boolean))).map(value => ({ value, label: value }));
+        const updateAngleSetting = (angleId: string, field: 'angle' | 'pose' | 'expression', value: string) => {
+            const currentSettings = options.comfyCharacterAngleSettings || {};
+            const currentAngle = { ...DEFAULT_CHARACTER_ANGLE_SETTINGS[angleId], ...currentSettings[angleId] };
+            updateOptions({
+                comfyCharacterAngleSettings: {
+                    ...currentSettings,
+                    [angleId]: { ...currentAngle, [field]: value },
+                },
+            });
+        };
+        const updateAngleEnabled = (angleId: string, enabled: boolean) => {
+            const currentSettings = options.comfyCharacterAngleSettings || {};
+            const currentAngle = { ...DEFAULT_CHARACTER_ANGLE_SETTINGS[angleId], ...currentSettings[angleId] };
+            updateOptions({
+                comfyCharacterAngleSettings: {
+                    ...currentSettings,
+                    [angleId]: { ...currentAngle, enabled },
+                },
+            });
+        };
+        const randomizeAngleSetting = (angleId: string) => {
+            const currentSettings = options.comfyCharacterAngleSettings || {};
+            const currentAngle = { ...DEFAULT_CHARACTER_ANGLE_SETTINGS[angleId], ...currentSettings[angleId] };
+            const randomValue = (values: string[]) => values[Math.floor(Math.random() * values.length)];
+            updateOptions({
+                comfyCharacterAngleSettings: {
+                    ...currentSettings,
+                    [angleId]: {
+                        ...currentAngle,
+                        angle: randomValue(CHARACTER_ANGLE_OPTIONS),
+                        pose: randomValue(CHARACTER_POSE_OPTIONS),
+                        expression: randomValue(CHARACTER_EXPRESSION_OPTIONS),
+                    },
+                },
+            });
+        };
+        const enabledOutputCount = getEnabledCharacterAngles(options).length;
+        const backgroundOptions = BACKGROUND_OPTIONS.filter(option => option.value !== 'image');
+        const clothingOptions = [
+            { value: 'original', label: 'Original from Image' },
+            { value: 'prompt', label: 'From Custom Prompt' },
+            { value: 'random', label: 'Random from Prompt' },
+        ];
+
+        return <>
+            <OptionSection title="Automatic Multi-Angle Set">
+                <div className="flex items-center justify-between gap-3 text-sm text-text-secondary">
+                    <p>Choose a suggestion or type your own value. Leave a field empty to use Default (nothing).</p>
+                    <span className="shrink-0 font-semibold text-accent">{enabledOutputCount}/8 enabled</span>
+                </div>
+                <div className="space-y-3">
+                    {CHARACTER_ANGLES.map((angle, index) => {
+                        const settings = { ...DEFAULT_CHARACTER_ANGLE_SETTINGS[angle.id], ...options.comfyCharacterAngleSettings?.[angle.id] };
+                        const isOutputEnabled = settings.enabled !== false;
+                        return <div key={angle.id} className={`min-h-64 rounded-md border bg-bg-primary p-5 transition-opacity ${isOutputEnabled ? 'border-border-primary' : 'border-border-primary/50 opacity-60'}`}>
+                            <div className="mb-5 flex items-center justify-between gap-3">
+                                <div>
+                                    <span className="text-base font-bold text-accent">Output {index + 1}</span>
+                                    <p className="mt-0.5 text-xs text-text-muted">JSON default</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => randomizeAngleSetting(angle.id)}
+                                        disabled={isDisabled || !isOutputEnabled}
+                                        title={`Randomize angle, pose and expression for Output ${index + 1}`}
+                                        aria-label={`Randomize Output ${index + 1}`}
+                                        className="flex h-9 w-9 items-center justify-center rounded-md border border-border-primary bg-bg-tertiary text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        <DiceIcon className="h-5 w-5" />
+                                    </button>
+                                    <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-text-secondary">
+                                    <input
+                                        type="checkbox"
+                                        checked={isOutputEnabled}
+                                        onChange={(event) => updateAngleEnabled(angle.id, event.target.checked)}
+                                        disabled={isDisabled}
+                                        className="rounded text-accent focus:ring-accent"
+                                    />
+                                    Enabled
+                                    </label>
+                                </div>
+                            </div>
+                            <div className="grid gap-4">
+                                <label className="text-xs font-semibold text-text-secondary">Camera Angle
+                                    <input
+                                        type="text"
+                                        list="character-angle-suggestions"
+                                        value={settings.angle}
+                                        onChange={(event) => updateAngleSetting(angle.id, 'angle', event.target.value)}
+                                        placeholder="Default (nothing)"
+                                        disabled={isDisabled || !isOutputEnabled}
+                                        className="mt-1.5 block w-full rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm font-normal text-text-primary focus:border-accent focus:ring-accent"
+                                    />
+                                </label>
+                                <label className="text-xs font-semibold text-text-secondary">Pose
+                                    <input
+                                        type="text"
+                                        list="character-pose-suggestions"
+                                        value={settings.pose}
+                                        onChange={(event) => updateAngleSetting(angle.id, 'pose', event.target.value)}
+                                        placeholder="Default (nothing)"
+                                        disabled={isDisabled || !isOutputEnabled}
+                                        className="mt-1.5 block w-full rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm font-normal text-text-primary focus:border-accent focus:ring-accent"
+                                    />
+                                </label>
+                                <label className="text-xs font-semibold text-text-secondary">Facial Expression
+                                    <input
+                                        type="text"
+                                        list="character-expression-suggestions"
+                                        value={settings.expression}
+                                        onChange={(event) => updateAngleSetting(angle.id, 'expression', event.target.value)}
+                                        placeholder="Default (nothing)"
+                                        disabled={isDisabled || !isOutputEnabled}
+                                        className="mt-1.5 block w-full rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm font-normal text-text-primary focus:border-accent focus:ring-accent"
+                                    />
+                                </label>
+                            </div>
+                        </div>;
+                    })}
+                </div>
+                <datalist id="character-angle-suggestions">
+                    {CHARACTER_ANGLE_OPTIONS.map(value => <option key={value} value={value} />)}
+                </datalist>
+                <datalist id="character-pose-suggestions">
+                    {CHARACTER_POSE_OPTIONS.map(value => <option key={value} value={value} />)}
+                </datalist>
+                <datalist id="character-expression-suggestions">
+                    {CHARACTER_EXPRESSION_OPTIONS.map(value => <option key={value} value={value} />)}
+                </datalist>
+            </OptionSection>
+
+            <OptionSection title="Background">
+                <SelectInput label="Background Source" value={options.background} onChange={handleOptionChange('background')} options={backgroundOptions} disabled={isDisabled} />
+                {(options.background === 'prompt' || options.background === 'random') && <div className="relative">
+                    <TextInput label="Background Prompt" value={options.customBackground || ''} onChange={handleOptionChange('customBackground')} placeholder="e.g., a neutral photography studio" disabled={isDisabled} />
+                    <button onClick={handleRandomizeBackground} disabled={isDisabled} className="absolute right-0 top-0 p-1 text-text-secondary hover:text-text-primary" title="Randomize background"><RefreshIcon className="h-4 w-4" /></button>
+                </div>}
+            </OptionSection>
+
+            <OptionSection title="Clothing">
+                <SelectInput label="Clothing Source" value={options.clothing === 'image' ? 'original' : options.clothing} onChange={handleOptionChange('clothing')} options={clothingOptions} disabled={isDisabled} />
+                {(options.clothing === 'prompt' || options.clothing === 'random') && <div className="relative">
+                    <TextInput label="Clothing Prompt" value={options.customClothingPrompt || ''} onChange={handleOptionChange('customClothingPrompt')} placeholder="e.g., a fitted black suit" disabled={isDisabled} />
+                    <button onClick={handleRandomizeClothing} disabled={isDisabled} className="absolute right-0 top-0 p-1 text-text-secondary hover:text-text-primary" title="Randomize clothing"><RefreshIcon className="h-4 w-4" /></button>
+                </div>}
+            </OptionSection>
+
+            <OptionSection title="Style">
+                <SelectInput label="Image Style" value={options.imageStyle} onChange={handleOptionChange('imageStyle')} options={IMAGE_STYLE_OPTIONS} disabled={isDisabled} />
+                {options.imageStyle === 'photorealistic' && <>
+                    <SelectInput label="Photo Style" value={options.photoStyle} onChange={handleOptionChange('photoStyle')} options={PHOTO_STYLE_OPTIONS} disabled={isDisabled} />
+                    <SelectInput label="Era / Medium" value={options.eraStyle} onChange={handleOptionChange('eraStyle')} options={ERA_STYLE_OPTIONS} disabled={isDisabled} />
+                </>}
+            </OptionSection>
+
+            <button onClick={() => setCharacterAdvancedOpen(open => !open)} className={`w-full rounded-md border px-4 py-2 text-sm font-bold transition-colors ${characterAdvancedOpen ? 'border-accent bg-accent/10 text-accent' : 'border-border-primary bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                Advanced {characterAdvancedOpen ? '−' : '+'}
+            </button>
+
+            {characterAdvancedOpen && <OptionSection title="Qwen Edit Models & LoRAs">
+                <SelectInput label="Diffusion Model (UNET)" value={options.comfyCharacterUnet || ''} onChange={handleOptionChange('comfyCharacterUnet')} options={selectOptions(options.comfyCharacterUnet || '', comfyUnets)} disabled={isDisabled} />
+                <SelectInput label="CLIP" value={options.comfyCharacterClip || ''} onChange={handleOptionChange('comfyCharacterClip')} options={selectOptions(options.comfyCharacterClip || '', comfyClips)} disabled={isDisabled} />
+                <SelectInput label="VAE" value={options.comfyCharacterVae || ''} onChange={handleOptionChange('comfyCharacterVae')} options={selectOptions(options.comfyCharacterVae || '', comfyVaes)} disabled={isDisabled} />
+                <SelectInput label="Lightning LoRA" value={options.comfyCharacterLightningLora || ''} onChange={handleOptionChange('comfyCharacterLightningLora')} options={selectOptions(options.comfyCharacterLightningLora || '', comfyLoras)} disabled={isDisabled} />
+                <NumberSlider label={`Lightning Strength: ${options.comfyCharacterLightningStrength ?? 1}`} value={options.comfyCharacterLightningStrength ?? 1} onChange={handleSliderChange('comfyCharacterLightningStrength')} min={0} max={2} step={0.05} disabled={isDisabled} />
+                <SelectInput label="Multiple Angles LoRA" value={options.comfyCharacterAnglesLora || ''} onChange={handleOptionChange('comfyCharacterAnglesLora')} options={selectOptions(options.comfyCharacterAnglesLora || '', comfyLoras)} disabled={isDisabled} />
+                <NumberSlider label={`Angles Strength: ${options.comfyCharacterAnglesStrength ?? 1}`} value={options.comfyCharacterAnglesStrength ?? 1} onChange={handleSliderChange('comfyCharacterAnglesStrength')} min={0} max={2} step={0.05} disabled={isDisabled} />
+                <div className="space-y-3 rounded-md border border-border-primary bg-bg-primary p-4">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-text-secondary">
+                        <input
+                            type="checkbox"
+                            checked={!!options.comfyCharacterUseAdditionalLora}
+                            onChange={handleOptionChange('comfyCharacterUseAdditionalLora')}
+                            disabled={isDisabled}
+                            className="h-4 w-4 rounded text-accent focus:ring-accent"
+                        />
+                        Enable Additional LoRA
+                    </label>
+                    {options.comfyCharacterUseAdditionalLora && <>
+                        <SelectInput
+                            label="Additional LoRA"
+                            value={options.comfyCharacterAdditionalLora || ''}
+                            onChange={handleOptionChange('comfyCharacterAdditionalLora')}
+                            options={[
+                                { value: '', label: 'Select a LoRA...' },
+                                ...selectOptions(options.comfyCharacterAdditionalLora || '', comfyLoras),
+                            ]}
+                            disabled={isDisabled}
+                        />
+                        <NumberSlider
+                            label={`Additional LoRA Strength: ${options.comfyCharacterAdditionalLoraStrength ?? 1}`}
+                            value={options.comfyCharacterAdditionalLoraStrength ?? 1}
+                            onChange={handleSliderChange('comfyCharacterAdditionalLoraStrength')}
+                            min={0}
+                            max={2}
+                            step={0.05}
+                            disabled={isDisabled}
+                        />
+                    </>}
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <SelectInput label="Sampler" value={options.comfyCharacterSampler || 'euler'} onChange={handleOptionChange('comfyCharacterSampler')} options={selectOptions(options.comfyCharacterSampler || 'euler', comfySamplers)} disabled={isDisabled} />
+                    <SelectInput label="Scheduler" value={options.comfyCharacterScheduler || 'simple'} onChange={handleOptionChange('comfyCharacterScheduler')} options={selectOptions(options.comfyCharacterScheduler || 'simple', comfySchedulers)} disabled={isDisabled} />
+                </div>
+                <NumberSlider label={`Steps: ${options.comfyCharacterSteps ?? 4}`} value={options.comfyCharacterSteps ?? 4} onChange={handleSliderChange('comfyCharacterSteps')} min={1} max={40} step={1} disabled={isDisabled} />
+                <NumberSlider label={`CFG: ${options.comfyCharacterCfg ?? 1}`} value={options.comfyCharacterCfg ?? 1} onChange={handleSliderChange('comfyCharacterCfg')} min={0.1} max={10} step={0.1} disabled={isDisabled} />
+                <NumberSlider label={`AuraFlow Shift: ${options.comfyCharacterShift ?? 3}`} value={options.comfyCharacterShift ?? 3} onChange={handleSliderChange('comfyCharacterShift')} min={0} max={10} step={0.1} disabled={isDisabled} />
+                <NumberSlider label={`Source Megapixels: ${options.comfyCharacterMegapixels ?? 1}`} value={options.comfyCharacterMegapixels ?? 1} onChange={handleSliderChange('comfyCharacterMegapixels')} min={0.25} max={4} step={0.25} disabled={isDisabled} />
+            </OptionSection>}
+        </>;
+    };
+
     const renderComfyUIOptions = () => {
+        if (activeTab === 'character-generator') return renderComfyCharacterOptions();
         const modelType = options.comfyModelType || 'sdxl';
 
 
@@ -844,6 +1119,26 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                 />
                             </div>
                         )}
+
+                        {modelType === 'qwen-edit' && (
+                            <div className="space-y-4 border-t border-border-primary/50 pt-3">
+                                <h4 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Qwen Image Edit</h4>
+                                <p className="text-xs text-text-muted">The main source is Image 1. Add up to two optional references for Image 2 and Image 3.</p>
+                                <ElementImageManager
+                                    elementImages={elementImages.slice(0, 2)}
+                                    setElementImages={(files) => setElementImages(files.slice(0, 2))}
+                                    disabled={isDisabled}
+                                    onOpenElementPicker={onOpenElementPicker}
+                                    maxImages={2}
+                                    label="Add Reference Image(s)"
+                                />
+                                <SelectInput label="Diffusion Model (UNET)" value={options.comfyQwenEditUnet || ''} onChange={handleOptionChange('comfyQwenEditUnet')} options={Array.from(new Set([options.comfyQwenEditUnet, ...comfyUnets].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                                <SelectInput label="CLIP (GGUF)" value={options.comfyQwenEditClip || ''} onChange={handleOptionChange('comfyQwenEditClip')} options={Array.from(new Set([options.comfyQwenEditClip, ...t5GgufEncoderModels].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                                <SelectInput label="VAE" value={options.comfyQwenEditVae || ''} onChange={handleOptionChange('comfyQwenEditVae')} options={Array.from(new Set([options.comfyQwenEditVae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                                <NumberSlider label={`AuraFlow Shift: ${options.comfyQwenEditShift ?? 2.5}`} value={options.comfyQwenEditShift ?? 2.5} onChange={handleSliderChange('comfyQwenEditShift')} min={0} max={10} step={0.1} disabled={isDisabled} />
+                                <NumberSlider label={`Source Megapixels: ${options.comfyQwenEditMegapixels ?? 1}`} value={options.comfyQwenEditMegapixels ?? 1} onChange={handleSliderChange('comfyQwenEditMegapixels')} min={0.25} max={4} step={0.25} disabled={isDisabled} />
+                            </div>
+                        )}
                     </div>
 
                     {/* Z-Image Models */}
@@ -888,6 +1183,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         </div>
                     )}
 
+                    {options.comfyPromptExampleSource && window.electron && <button type="button" onClick={openPromptExamples} disabled={isDisabled || promptExamplesLoading} className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">{promptExamplesLoading && <SpinnerIcon className="w-4 h-4 animate-spin" />}{promptExamplesLoading ? 'Loading examples...' : `Prompt examples · ${options.comfyPromptExampleSource.modelName}`}</button>}
                     <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea />
                     {modelType !== 'nunchaku-kontext-flux' && modelType !== 'nunchaku-flux-image' && modelType !== 'flux-krea' && (
                         <TextInput label="Negative Prompt" value={options.comfyNegativePrompt || ''} onChange={handleOptionChange('comfyNegativePrompt')} disabled={isDisabled} isTextArea />
@@ -1028,7 +1324,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         ? (generationMode === 't2i' ? (options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL)
         : options.provider === 'mammouth'
             ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
-            : (options.comfyModelType || 'sdxl');
+            : activeTab === 'character-generator'
+                ? `Qwen Edit Multi-Angle (${options.comfyCharacterUnet})`
+                : (options.comfyModelType || 'sdxl');
 
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg space-y-8">
@@ -1046,7 +1344,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 {!hideGeneralSettings && (
                     <OptionSection title="General Settings">
                         {!hideProviderSwitch && <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1"><button onClick={() => updateOptions({ provider: 'comfyui' })} disabled={isDisabled} className={`px-3 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>ComfyUI</button><button onClick={() => updateOptions({ provider: 'mammouth' })} disabled={isDisabled} className={`px-3 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'mammouth' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>Mammouth</button></div>}
-                        <NumberSlider label={`Number of Images: ${options.numImages}`} value={options.numImages} onChange={(e) => updateOptions({ numImages: parseInt(e.target.value, 10), poseSelection: options.poseSelection.slice(0, parseInt(e.target.value, 10)) })} min={1} max={MAX_IMAGES} step={1} disabled={isDisabled} />
+                        {!(activeTab === 'character-generator' && options.provider === 'comfyui') && <NumberSlider label={`Number of Images: ${options.numImages}`} value={options.numImages} onChange={(e) => updateOptions({ numImages: parseInt(e.target.value, 10), poseSelection: options.poseSelection.slice(0, parseInt(e.target.value, 10)) })} min={1} max={MAX_IMAGES} step={1} disabled={isDisabled} />}
                         {!(options.provider === 'comfyui' && options.comfyModelType === 'qwen-t2i-gguf') && (
                             <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={ASPECT_RATIO_OPTIONS} disabled={isDisabled} />
                         )}
@@ -1055,6 +1353,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
                 {options.provider === 'comfyui' ? renderComfyUIOptions() : renderGeminiOptions()}
             </div>
+
+            {promptExamplesOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPromptExamplesOpen(false)}><div role="dialog" aria-modal="true" aria-label="Model prompt examples" className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border-primary bg-bg-secondary shadow-xl" onClick={event => event.stopPropagation()}><div className="flex items-center justify-between gap-3 border-b border-border-primary p-4"><div className="min-w-0"><h3 className="font-bold text-text-primary">Prompt examples</h3><p className="truncate text-xs text-text-muted">{options.comfyPromptExampleSource?.modelName}</p></div><button type="button" onClick={() => setPromptExamplesOpen(false)} className="rounded p-2 text-text-secondary hover:bg-bg-tertiary" aria-label="Close prompt examples"><CloseIcon className="h-5 w-5" /></button></div><div className="min-h-32 overflow-y-auto divide-y divide-border-primary">{promptExamplesLoading && <div className="grid min-h-32 place-items-center"><SpinnerIcon className="h-6 w-6 animate-spin text-blue-400" /></div>}{promptExamplesError && <p className="p-4 text-sm text-red-400">{promptExamplesError}</p>}{!promptExamplesLoading && !promptExamplesError && promptExamples.map((example, index) => <div key={`${example.source}-${index}`} className="space-y-2 p-4"><div className="flex items-center justify-between gap-3"><span className={`text-[10px] font-bold uppercase ${example.source === 'archive' ? 'text-emerald-400' : 'text-blue-400'}`}>{example.source === 'archive' ? 'CivArchive' : 'Civitai'}</span><button type="button" onClick={() => applyPromptExample(example)} className="rounded bg-accent px-3 py-1.5 text-xs font-bold text-accent-text">Use prompt</button></div><div><p className="text-[10px] font-bold uppercase text-text-muted">Positive</p><p className="mt-1 whitespace-pre-wrap break-words text-sm text-text-primary">{example.positive}</p></div>{example.negative && <div><p className="text-[10px] font-bold uppercase text-text-muted">Negative</p><p className="mt-1 whitespace-pre-wrap break-words text-xs text-text-secondary">{example.negative}</p></div>}</div>)}</div></div></div>}
 
         </div>
     );

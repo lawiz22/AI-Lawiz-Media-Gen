@@ -80,6 +80,41 @@ export const fileToDataUrl = (file: File): Promise<string> => {
   });
 };
 
+export const getAudioMimeType = (filename: string, reportedType = ''): string => {
+    const extension = filename.split(/[?#]/)[0].split('.').pop()?.toLowerCase();
+    const mimeTypes: Record<string, string> = {
+        wav: 'audio/wav',
+        mp3: 'audio/mpeg',
+        flac: 'audio/flac',
+        m4a: 'audio/mp4',
+        mp4: 'audio/mp4',
+        ogg: 'audio/ogg',
+        opus: 'audio/ogg',
+        aac: 'audio/aac',
+    };
+    return mimeTypes[extension || ''] || (reportedType.startsWith('audio/') ? reportedType : 'audio/wav');
+};
+
+export const normalizeAudioDataUrl = (dataUrl: string): string => {
+    if (!dataUrl.startsWith('data:')) return dataUrl;
+    const separatorIndex = dataUrl.indexOf(',');
+    if (separatorIndex < 0) return dataUrl;
+    const payload = dataUrl.slice(separatorIndex + 1);
+    try {
+        const header = atob(payload.slice(0, 64));
+        let mimeType = '';
+        if (header.startsWith('RIFF') && header.includes('WAVE')) mimeType = 'audio/wav';
+        else if (header.startsWith('fLaC')) mimeType = 'audio/flac';
+        else if (header.startsWith('OggS')) mimeType = 'audio/ogg';
+        else if (header.startsWith('ID3') || header.charCodeAt(0) === 0xff) mimeType = 'audio/mpeg';
+        else if (header.includes('ftyp')) mimeType = 'audio/mp4';
+        if (mimeType) return `data:${mimeType};base64,${payload}`;
+        return dataUrl;
+    } catch {
+        return dataUrl;
+    }
+};
+
 /**
  * Takes a File, resizes it if its dimensions exceed the max size,
  * and returns a high-quality JPEG data URL for storage.
@@ -158,6 +193,59 @@ export const dataUrlToThumbnail = (dataUrl: string, maxSize: number): Promise<st
         };
         img.onerror = reject;
         img.src = dataUrl;
+    });
+};
+
+export const videoToThumbnail = (source: Blob | string, maxSize: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        const objectUrl = source instanceof Blob ? URL.createObjectURL(source) : null;
+        let settled = false;
+        const timeout = window.setTimeout(() => finish(), 30000);
+        const cleanup = () => {
+            window.clearTimeout(timeout);
+            video.onerror = null;
+            video.onloadeddata = null;
+            video.onseeked = null;
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+        };
+        const finish = (thumbnail?: string) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            if (thumbnail) resolve(thumbnail);
+            else reject(new Error('Could not extract a thumbnail from the video.'));
+        };
+        const capture = () => {
+            if (!video.videoWidth || !video.videoHeight) return finish();
+            const scale = Math.min(1, maxSize / Math.max(video.videoWidth, video.videoHeight));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+            canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+            const context = canvas.getContext('2d');
+            if (!context) return finish();
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            finish(canvas.toDataURL('image/jpeg', 0.75));
+        };
+
+        video.muted = true;
+        video.preload = 'auto';
+        video.playsInline = true;
+        video.onerror = () => finish();
+        video.onloadeddata = () => {
+            const captureTime = Number.isFinite(video.duration) ? Math.min(0.5, video.duration / 2) : 0;
+            if (captureTime > 0) {
+                video.onseeked = capture;
+                video.currentTime = captureTime;
+            } else {
+                capture();
+            }
+        };
+        video.src = objectUrl || source as string;
+        video.load();
     });
 };
 

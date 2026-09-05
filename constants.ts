@@ -197,24 +197,28 @@ export const CAMERA_MOVES = [
 
 export const WAN_VIDEO_PROMPT_BLOCKS = {
   fantasy: {
-    subjects: ['A knight in shining armor', 'A sorceress with glowing runes', 'A dragon with massive wings', 'A ghostly warrior with a flaming sword'],
-    environments: ['in a misty enchanted forest', 'on top of a crumbling castle tower', 'inside a glowing crystal cave', 'in a battlefield under a blood-red moon'],
-    styles: ['epic cinematic lighting', 'dark and gothic atmosphere', 'high fantasy illustration style', 'painterly oil-painting look'],
+    subjects: ['A knight in shining armor', 'A sorceress with glowing runes', 'A dragon with massive wings', 'A ghostly warrior with a flaming sword', 'An elven ranger carrying an ancient bow', 'A crowned queen commanding an army'],
+    actions: ['charges into battle', 'casts a spiraling energy spell', 'takes flight and breathes fire', 'draws a weapon in slow motion', 'opens an ancient magical portal', 'walks through the storm toward the camera'],
+    environments: ['in a misty enchanted forest', 'on top of a crumbling castle tower', 'inside a glowing crystal cave', 'in a battlefield under a blood-red moon', 'before a colossal ruined temple', 'across a frozen kingdom at twilight'],
+    styles: ['epic cinematic lighting', 'dark and gothic atmosphere', 'high fantasy illustration style', 'painterly oil-painting look', 'photorealistic medieval epic', 'ethereal fairy-tale atmosphere'],
   },
   'sci-fi': {
-    subjects: ['A cyberpunk woman with neon hair', 'A giant mech robot with glowing eyes', 'A hacker wearing a glowing VR visor', 'A spaceship shaped like a blade'],
-    environments: ['in a rainy neon-lit alley', 'on a futuristic rooftop at night', 'inside a high-tech control room', 'hovering above a desert planet with two suns'],
-    styles: ['cinematic 4K, lens flare', 'neon glow, vaporwave colors', 'ultra-realistic sci-fi look', 'animated anime cyberpunk style'],
+    subjects: ['A cyberpunk woman with neon hair', 'A giant mech robot with glowing eyes', 'A hacker wearing a glowing VR visor', 'A spaceship shaped like a blade', 'An android discovering human emotions', 'A space marine in weathered armor'],
+    actions: ['runs through laser fire', 'activates a holographic interface', 'emerges from a cloud of steam', 'launches into hyperspace', 'turns as machinery unfolds around them', 'floats through zero gravity'],
+    environments: ['in a rainy neon-lit alley', 'on a futuristic rooftop at night', 'inside a high-tech control room', 'hovering above a desert planet with two suns', 'inside an abandoned orbital station', 'in a crowded interstellar market'],
+    styles: ['cinematic 4K, lens flare', 'neon glow, vaporwave colors', 'ultra-realistic sci-fi look', 'animated anime cyberpunk style', 'gritty retro-futurism', 'clean optimistic science fiction'],
   },
   nature: {
-    subjects: ['A lion running across the savannah', 'A flock of birds flying in formation', 'A surfer riding a massive wave', 'A lone explorer climbing a snowy mountain'],
-    environments: ['at sunrise with golden light', 'in a storm with heavy rain', 'underwater with glowing coral', 'on a windy desert dune'],
-    styles: ['documentary realism', 'cinematic time-lapse', 'National Geographic style', 'dreamlike pastel color grading'],
+    subjects: ['A lion crossing the savannah', 'A flock of birds in formation', 'A surfer on a massive wave', 'A lone explorer on a snowy mountain', 'A whale beneath the ocean surface', 'A wild horse with a flowing mane'],
+    actions: ['runs at full speed', 'soars across the sky', 'dives beneath the surface', 'climbs against powerful wind', 'shakes off water in slow motion', 'pauses and looks directly at the camera'],
+    environments: ['at sunrise with golden light', 'in a storm with heavy rain', 'underwater with glowing coral', 'on a windy desert dune', 'beside a waterfall in dense rainforest', 'on an Arctic plain beneath the aurora'],
+    styles: ['documentary realism', 'cinematic time-lapse', 'National Geographic style', 'dreamlike pastel color grading', 'macro wildlife photography', 'majestic large-format cinema'],
   },
   artistic: {
-    subjects: ['A giant floating jellyfish', 'A ballerina made of glass', 'A fox painted in watercolor style', 'A shadow figure glowing with light'],
-    environments: ['in a dreamlike void of pastel clouds', 'on a rooftop above a glowing city', 'inside a swirling galaxy', 'in a landscape melting like paint'],
-    styles: ['surreal dreamlike visuals', 'watercolor painting', 'VHS retro glitch', 'trippy kaleidoscope effect'],
+    subjects: ['A giant floating jellyfish', 'A ballerina made of glass', 'A fox painted in watercolor', 'A shadow figure glowing with light', 'A portrait assembled from flowers', 'A living marble statue'],
+    actions: ['slowly transforms into another form', 'dances as fragments orbit around them', 'dissolves into colorful particles', 'paints the environment with each movement', 'floats weightlessly toward the viewer', 'splits into mirrored reflections'],
+    environments: ['in a dreamlike void of pastel clouds', 'on a rooftop above a glowing city', 'inside a swirling galaxy', 'in a landscape melting like paint', 'within an endless hall of mirrors', 'on a stage made of liquid light'],
+    styles: ['surreal dreamlike visuals', 'watercolor painting', 'VHS retro glitch', 'trippy kaleidoscope effect', 'experimental art-house cinema', 'stop-motion mixed-media collage'],
   },
   '70s-vibes': {
     subjects: [
@@ -224,6 +228,14 @@ export const WAN_VIDEO_PROMPT_BLOCKS = {
       'A vintage muscle car cruising at night',
       'A glamorous diva singing into a golden microphone',
       'A secret agent in bell-bottoms with sunglasses'
+    ],
+    actions: [
+      'dances beneath the mirror ball',
+      'struts toward the camera in rhythm',
+      'performs an energetic guitar solo',
+      'skates through the crowd with a spin',
+      'raises the microphone and begins to sing',
+      'drives past glowing city signs'
     ],
     environments: [
       'Inside a retro discotheque with a spinning mirror ball',
@@ -241,6 +253,54 @@ export const WAN_VIDEO_PROMPT_BLOCKS = {
       'Soul Train TV show style',
       'Giallo-inspired lighting (deep reds, yellows, neon)'
     ],
+  },
+  cinematic: {
+    subjects: ['A determined detective in a long coat', 'Two rivals facing each other', 'A lone traveler carrying a suitcase', 'A fearless rescue pilot', 'A mysterious stranger entering a room', 'A family reunited after many years'],
+    actions: ['walks through the doorway and surveys the room', 'turns slowly after hearing a distant sound', 'runs as the environment collapses behind them', 'reaches out and makes an emotional connection', 'stands still while the world moves around them', 'reveals a hidden object to the camera'],
+    environments: ['in a rain-soaked train station', 'inside a grand abandoned hotel', 'on a windswept coastal road', 'beneath city lights at midnight', 'in a quiet kitchen at dawn', 'on a crowded street frozen in time'],
+    styles: ['prestige drama cinematography', 'tense neo-noir thriller', 'warm emotional film look', 'large-scale action blockbuster', 'restrained independent cinema', 'moody anamorphic photography'],
+  },
+  people: {
+    subjects: ['A confident fashion model', 'An elderly artisan with expressive hands', 'A child discovering something wonderful', 'A chef preparing a signature dish', 'A musician holding an instrument', 'A dancer in flowing fabric'],
+    actions: ['walks naturally toward the camera', 'turns and smiles over their shoulder', 'works carefully with their hands', 'laughs spontaneously with friends', 'adjusts their clothing and strikes a pose', 'looks up as light crosses their face'],
+    environments: ['in a bright photography studio', 'on a lively neighborhood street', 'inside a warm artisan workshop', 'at a sunlit outdoor cafe', 'backstage before a performance', 'in a minimalist modern home'],
+    styles: ['natural lifestyle commercial', 'intimate documentary portrait', 'polished fashion editorial', 'soft cinematic realism', 'candid handheld photography', 'high-key beauty campaign'],
+  },
+  vehicles: {
+    subjects: ['A classic sports car', 'A futuristic electric motorcycle', 'A rally car covered in dust', 'A luxury yacht cutting through water', 'A vintage airplane preparing for takeoff', 'A heavy freight train'],
+    actions: ['accelerates rapidly past the camera', 'drifts around a sharp corner', 'emerges dramatically from smoke', 'travels smoothly across the landscape', 'brakes as dust rolls forward', 'powers up and launches into motion'],
+    environments: ['on a winding mountain road', 'through a neon city at night', 'across a vast salt flat', 'on rough ocean water at sunset', 'inside an industrial hangar', 'through a forest road in autumn'],
+    styles: ['premium automotive commercial', 'high-speed action cinematography', 'vintage road-movie film', 'sleek futuristic advertising', 'gritty motorsport documentary', 'epic travel cinema'],
+  },
+  sports: {
+    subjects: ['A championship boxer', 'A football player under stadium lights', 'A gymnast preparing a routine', 'A skateboarder above a concrete ramp', 'A basketball player at the free-throw line', 'A runner waiting at the starting blocks'],
+    actions: ['launches into an explosive sprint', 'executes a precise spinning jump', 'strikes with controlled power', 'celebrates a decisive victory', 'dodges an opponent and changes direction', 'takes a deep breath before competing'],
+    environments: ['in a packed stadium at night', 'inside a gritty training gym', 'on an urban court after rain', 'at an outdoor arena during sunset', 'on a mountain trail above the clouds', 'beneath bright championship spotlights'],
+    styles: ['dynamic sports commercial', 'gritty training documentary', 'heroic slow-motion cinema', 'energetic broadcast coverage', 'high-contrast athletic portrait', 'fast-paced handheld action'],
+  },
+  horror: {
+    subjects: ['A frightened traveler holding a flashlight', 'A silent figure at the end of a corridor', 'An antique doll turning its head', 'A creature hidden behind translucent curtains', 'A lone caretaker in an empty hotel', 'A pale apparition reflected in a mirror'],
+    actions: ['slowly approaches from the darkness', 'turns toward an unexpected sound', 'flickers in and out of view', 'reaches from behind the doorway', 'runs while lights fail one by one', 'stands motionless as the camera draws closer'],
+    environments: ['inside an abandoned hospital', 'in a fog-covered cemetery', 'beneath a flickering basement light', 'in an isolated cabin during a storm', 'along an endless hotel hallway', 'inside a decaying Victorian mansion'],
+    styles: ['psychological horror atmosphere', 'grainy analog found footage', 'elegant gothic terror', 'cold supernatural realism', 'expressionist shadows and contrast', 'slow-burn cinematic suspense'],
+  },
+  historical: {
+    subjects: ['A Roman general overlooking an army', 'A Victorian inventor in a crowded laboratory', 'A samurai beneath falling blossoms', 'An explorer aboard a wooden ship', 'A royal messenger on horseback', 'A 1920s journalist carrying a camera'],
+    actions: ['addresses the gathered crowd', 'unveils a remarkable invention', 'draws their sword with deliberate precision', 'studies a map as the ship pitches', 'rides urgently through the city gates', 'records a historic moment'],
+    environments: ['in an ancient city square', 'inside a candlelit palace chamber', 'on a stormy wooden sailing ship', 'across a medieval market street', 'beside a steam train at the platform', 'within a smoky 1920s newsroom'],
+    styles: ['authentic historical epic', 'rich period-drama cinematography', 'hand-tinted archival film', 'grand classical composition', 'gritty battlefield realism', 'romantic heritage-film look'],
+  },
+  product: {
+    subjects: ['A luxury perfume bottle', 'A precision wristwatch', 'A pair of designer sneakers', 'A premium smartphone', 'A crystal beverage bottle', 'A sculptural piece of jewelry'],
+    actions: ['rotates slowly as highlights travel across the surface', 'rises through a burst of particles', 'assembles from individual components', 'lands softly and settles into place', 'reveals intricate details in sequence', 'emerges through water and mist'],
+    environments: ['on a reflective studio pedestal', 'within a clean architectural set', 'surrounded by suspended droplets', 'against moving fabric and soft shadows', 'inside a futuristic light tunnel', 'on natural stone in warm sunlight'],
+    styles: ['luxury product commercial', 'minimal premium advertising', 'high-speed macro photography', 'bold colorful campaign', 'clean technology launch film', 'sensory beauty cinematography'],
+  },
+  'music-dance': {
+    subjects: ['A solo singer beneath a spotlight', 'A full band performing live', 'A contemporary dancer in flowing costume', 'A street dancer in an urban plaza', 'A concert pianist on an empty stage', 'A DJ commanding a festival crowd'],
+    actions: ['performs passionately to the audience', 'moves precisely with the rhythm', 'spins as fabric trails through the air', 'builds toward a powerful musical climax', 'jumps as the crowd raises their hands', 'begins quietly before exploding into motion'],
+    environments: ['on a vast concert stage', 'inside an intimate jazz club', 'in an empty theater filled with haze', 'on a city rooftop at sunset', 'within a warehouse dance space', 'at an outdoor festival after dark'],
+    styles: ['high-energy music video', 'intimate live-session film', 'expressive contemporary dance cinema', 'glossy pop performance', 'raw underground concert footage', 'dreamlike choreography film'],
   },
 };
 
@@ -1128,9 +1188,25 @@ export const COMFYUI_T2I_WORKFLOWS = [
 ];
 
 export const COMFYUI_I2I_WORKFLOWS = [
-  { value: 'nunchaku-kontext-flux', label: 'Nunchaku Kontext FLUX (i2i)' },
+  { value: 'qwen-edit', label: 'Qwen Image Edit (up to 3 images)' },
   { value: 'face-detailer-sd1.5', label: 'Face Detailer SD 1.5 (i2i)' },
 ];
+
+export const COMFYUI_QWEN_EDIT_WORKFLOW_TEMPLATE = {
+  "3": { "inputs": { "seed": 123, "steps": 8, "cfg": 1, "sampler_name": "euler_ancestral", "scheduler": "beta57", "denoise": 1, "model": ["75", 0], "positive": ["111", 0], "negative": ["110", 0], "latent_image": ["88", 0] }, "class_type": "KSampler", "_meta": { "title": "KSampler" } },
+  "8": { "inputs": { "samples": ["3", 0], "vae": ["39", 0] }, "class_type": "VAEDecode", "_meta": { "title": "VAE Decode" } },
+  "37": { "inputs": { "unet_name": "qwen_image_edit_2509_fp8_e4m3fn.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "Load Diffusion Model" } },
+  "39": { "inputs": { "vae_name": "qwen_image_vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Load VAE" } },
+  "66": { "inputs": { "shift": 2.5, "model": ["37", 0] }, "class_type": "ModelSamplingAuraFlow", "_meta": { "title": "ModelSamplingAuraFlow" } },
+  "75": { "inputs": { "strength": 1, "pre_cfg": false, "model": ["66", 0] }, "class_type": "CFGNorm", "_meta": { "title": "CFGNorm" } },
+  "78": { "inputs": { "image": "source_image.png" }, "class_type": "LoadImage", "_meta": { "title": "Source Image 1" } },
+  "88": { "inputs": { "pixels": ["93", 0], "vae": ["39", 0] }, "class_type": "VAEEncode", "_meta": { "title": "VAE Encode" } },
+  "93": { "inputs": { "upscale_method": "lanczos", "megapixels": 1, "resolution_steps": 1, "image": ["78", 0] }, "class_type": "ImageScaleToTotalPixels", "_meta": { "title": "Scale Source Image" } },
+  "110": { "inputs": { "prompt": "", "clip": ["116", 0], "vae": ["39", 0], "image1": ["93", 0] }, "class_type": "TextEncodeQwenImageEditPlus", "_meta": { "title": "Negative Prompt" } },
+  "111": { "inputs": { "prompt": "", "clip": ["116", 0], "vae": ["39", 0], "image1": ["93", 0] }, "class_type": "TextEncodeQwenImageEditPlus", "_meta": { "title": "Positive Prompt" } },
+  "116": { "inputs": { "clip_name": "Qwen2.5-VL-7B-Instruct-Q6_K.gguf", "type": "qwen_image" }, "class_type": "CLIPLoaderGGUF", "_meta": { "title": "CLIPLoader (GGUF)" } },
+  "128": { "inputs": { "filename_prefix": "Qwen_Edit", "images": ["8", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Image" } }
+};
 
 export const COMFYUI_FLUX_WORKFLOW_TEMPLATE = {
   "6": {

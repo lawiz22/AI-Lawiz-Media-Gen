@@ -98,6 +98,8 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<Libr
             switch (newItem.mediaType) {
                 case 'image': subfolderName = 'images'; break;
                 case 'video': subfolderName = 'videos'; break;
+                case 'audio-tts': subfolderName = 'audio-tts'; break;
+                case 'tts-reference': subfolderName = 'tts-references'; break;
                 case 'clothes': subfolderName = 'clothes'; break;
                 case 'extracted-frame': subfolderName = 'extracted-frames'; break;
                 case 'object': subfolderName = 'objects'; break;
@@ -180,6 +182,8 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
                     // SVG placeholder for a video thumbnail if startFrame is missing
                     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#6b7280"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>`;
                     thumbnail = `data:image/svg+xml;base64,${btoa(svg)}`;
+                } else if ((itemMetadata.mediaType === 'audio-tts' || itemMetadata.mediaType === 'tts-reference') && itemMetadata.thumbnail) {
+                    thumbnail = itemMetadata.thumbnail;
                 } else {
                     thumbnail = await dataUrlToThumbnail(media, 256);
                 }
@@ -237,6 +241,8 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
                 switch (item.mediaType) {
                     case 'image': subfolderName = 'images'; break;
                     case 'video': subfolderName = 'videos'; break;
+                    case 'audio-tts': subfolderName = 'audio-tts'; break;
+                    case 'tts-reference': subfolderName = 'tts-references'; break;
                     case 'clothes': subfolderName = 'clothes'; break;
                     case 'extracted-frame': subfolderName = 'extracted-frames'; break;
                     case 'object': subfolderName = 'objects'; break;
@@ -286,8 +292,21 @@ export const exportLibraryAsJson = async (projectName: string): Promise<void> =>
             alert("Your library is empty. There is nothing to export.");
             return;
         }
-        const jsonString = JSON.stringify(items, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
+        const jsonParts: BlobPart[] = ['[\n'];
+        items.forEach((item, index) => {
+            if (index > 0) jsonParts.push(',\n');
+            const { media, ...metadata } = item;
+            const metadataJson = JSON.stringify(metadata);
+            jsonParts.push(metadataJson.slice(0, -1), ',"media":');
+            if (/^data:[^,]*;base64,[A-Za-z0-9+/=\r\n]*$/.test(media)) {
+                jsonParts.push('"', media, '"');
+            } else {
+                jsonParts.push(JSON.stringify(media));
+            }
+            jsonParts.push('}');
+        });
+        jsonParts.push('\n]');
+        const blob = new Blob(jsonParts, { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -296,10 +315,11 @@ export const exportLibraryAsJson = async (projectName: string): Promise<void> =>
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (error) {
         console.error("Failed to export library:", error);
-        alert("An error occurred while exporting the library.");
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Could not export the library: ${message}`);
     }
 };
 

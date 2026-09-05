@@ -10,6 +10,7 @@ import { generateLogos, generateBanners, generateAlbumCovers } from '../services
 import { generateMammouthImage } from '../services/mammouthService';
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { BANNER_ASPECT_RATIO_OPTIONS, BANNER_STYLE_OPTIONS, BANNER_LOGO_PLACEMENT_OPTIONS } from '../constants';
+import { SendToLTXButton } from './SendToLTXButton';
 
 const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
     if (!text) return '';
@@ -655,6 +656,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                                 >
                                                     {logo.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : logo.saved === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                                 </button>
+                                                <SendToLTXButton imageDataUrl={logo.src} prompt={`Generate a ${state.logoStyle} logo for brand "${state.brandName}". ${state.slogan ? `Slogan: "${state.slogan}".` : ''} ${state.logoPrompt} Background: ${state.backgroundColor}.`} className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
                                             </div>
                                         </div>
                                     </div>
@@ -765,6 +767,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                                 >
                                                     {banner.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : banner.saved === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                                 </button>
+                                                <SendToLTXButton imageDataUrl={banner.src} prompt={`Generate a ${state.bannerStyle} banner for "${state.bannerTitle}". Aspect Ratio: ${state.bannerAspectRatio}. Logo Placement: ${state.bannerLogoPlacement}. ${state.bannerPrompt}`} className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
                                             </div>
                                         </div>
                                     </div>
@@ -870,6 +873,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                                 <button onClick={() => handleSaveAlbumCover(cover.src, index)} title={cover.saved === 'saved' ? 'Saved!' : 'Save to Library'} disabled={cover.saved !== 'idle'} className={`p-3 rounded-full transition-all ${cover.saved === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text'}`}>
                                                     {cover.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : cover.saved === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                                 </button>
+                                                <SendToLTXButton imageDataUrl={cover.src} prompt={`Generate an album cover for "${state.albumTitle}" by "${state.artistName}". Style: ${state.musicStyle === 'other' ? state.customMusicStyle : state.musicStyle}. Era: ${state.albumEra}. Format: ${state.albumMediaType}. ${state.addVinylWear ? 'Add vinyl wear/texture.' : ''} ${state.albumPrompt}`} className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
                                             </div>
                                         </div>
                                     </div>

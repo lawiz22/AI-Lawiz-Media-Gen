@@ -6,7 +6,7 @@ import {
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
     openSettingsModal, closeSettingsModal, openVisualSettingsModal, closeVisualSettingsModal, closeAdminPanel,
     openOAuthHelper, closeOAuthHelper, openComfyUIHelper, closeComfyUIHelper,
-    setModalOpen, addSessionTokenUsage, resetSessionTokenUsage
+    setModalOpen, addSessionTokenUsage, resetSessionTokenUsage, queueLtxTransfer
 } from './store/appSlice';
 import {
     setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
@@ -16,7 +16,7 @@ import {
     selectIsReadyToGenerate
 } from './store/generationSlice';
 import {
-    setVideoStartFrame, setVideoEndFrame, updateVideoUtilsState, setActiveVideoUtilsSubTab,
+    updateVideoUtilsState, setActiveVideoUtilsSubTab,
     resetVideoUtilsState
 } from './store/videoSlice';
 import {
@@ -28,14 +28,14 @@ import {
 import {
     setActiveLogoThemeSubTab, resetLogoThemeState, updateLogoThemeState
 } from './store/logoThemeSlice';
-import { fetchLibrary } from './store/librarySlice';
+import { fetchLibrary, unloadLibrary } from './store/librarySlice';
 import { setUploadedFiles } from './store/groupPhotoFusionSlice';
 
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile, Provider } from './types';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
 import { DEFAULT_GEMINI_IMAGE_MODEL, generatePortraits, generateCharacterNameForImage, updateGeminiApiKey, getApiKey, generatePromptFromImage } from './services/geminiService';
-import { generateComfyUIPortraits, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution, generateComfyUIPromptFromSource } from './services/comfyUIService';
+import { generateComfyUICharacterAngles, generateComfyUIPortraits, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution, generateComfyUIPromptFromSource } from './services/comfyUIService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, generateMammouthImages, getMammouthApiKey, testMammouthConnection, updateMammouthApiKey } from './services/mammouthService';
 import { Login } from './components/Login';
 import { Header } from './components/Header';
@@ -48,6 +48,9 @@ import { LibraryPanel } from './components/LibraryPanel';
 import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
 import { LTXDirectorPanel } from './components/LTXDirectorPanel';
+import { TtsPanel } from './components/TtsPanel';
+import { UpscalePanel } from './components/UpscalePanel';
+import { CivitaiPanel } from './components/CivitaiPanel';
 import versionData from './version.json';
 import { LibraryPickerModal } from './components/LibraryPickerModal';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
@@ -56,7 +59,7 @@ import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
 import { ComfyUIConnectionHelperModal } from './components/ComfyUIConnectionHelperModal';
 import { VisualSettingsModal } from './components/VisualSettingsModal';
-import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon } from './components/icons';
+import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon, MicrophoneIcon, EnhanceIcon, DownloadIcon } from './components/icons';
 import { ImageGeneratorHeader } from './components/ImageGeneratorHeader';
 import { ActionControlPanel } from './components/ActionControlPanel';
 import { CloudImageProviderBar } from './components/CloudImageProviderBar';
@@ -78,6 +81,8 @@ const App: React.FC = () => {
     const [localMammouthKey, setLocalMammouthKey] = useState('');
     const [isGeneratingRefinePrompt, setIsGeneratingRefinePrompt] = useState(false);
     const [generationTimes, setGenerationTimes] = useState<Record<string, number | null>>({});
+    const [upscaleSourceFile, setUpscaleSourceFile] = useState<File | null>(null);
+    const [isUpscalePickerOpen, setIsUpscalePickerOpen] = useState(false);
 
     // --- App State (from appSlice) ---
     const {
@@ -163,6 +168,25 @@ const App: React.FC = () => {
                 comfySampler: "euler",
                 comfyScheduler: "simple",
             });
+        } else if (newOpts.comfyModelType === 'qwen-edit') {
+            applyDefaultsIfMissing({
+                comfyQwenEditUnet: 'qwen_image_edit_2509_fp8_e4m3fn.safetensors',
+                comfyQwenEditClip: 'Qwen2.5-VL-7B-Instruct-Q6_K.gguf',
+                comfyQwenEditVae: 'qwen_image_vae.safetensors',
+                comfyQwenEditShift: 2.5,
+                comfyQwenEditMegapixels: 1,
+                comfyQwenEditUseLora: true,
+                comfyQwenEditLora1Name: 'QWEN\\Qwen-Image-Lightning-8steps-V2.0.safetensors',
+                comfyQwenEditLora1Strength: 1,
+                comfyQwenEditLora2Name: '', comfyQwenEditLora2Strength: 1,
+                comfyQwenEditLora3Name: '', comfyQwenEditLora3Strength: 1,
+                comfyQwenEditLora4Name: '', comfyQwenEditLora4Strength: 1,
+                comfyQwenEditLora5Name: '', comfyQwenEditLora5Strength: 1,
+                comfySteps: 8,
+                comfyCfg: 1,
+                comfySampler: 'euler_ancestral',
+                comfyScheduler: 'beta57',
+            });
         } else if (newOpts.comfyModelType === 'qwen-t2i-gguf') {
             applyDefaultsIfMissing({
                 comfyQwenUseLora: true,
@@ -215,12 +239,14 @@ const App: React.FC = () => {
         }
     }, [dispatch, activeTab]);
 
-    const handleSetVideoStartFrame = useCallback((file: File | null) => {
-        dispatch(setVideoStartFrame(file));
+    const handleSetVideoStartFrame = useCallback(async (file: File | null) => {
+        if (!file) return;
+        dispatch(queueLtxTransfer({ imageDataUrl: await fileToDataUrl(file) }));
     }, [dispatch]);
 
-    const handleSetVideoEndFrame = useCallback((file: File | null) => {
-        dispatch(setVideoEndFrame(file));
+    const handleSetVideoEndFrame = useCallback(async (file: File | null) => {
+        if (!file) return;
+        dispatch(queueLtxTransfer({ imageDataUrl: await fileToDataUrl(file) }));
     }, [dispatch]);
 
     // --- Effects ---
@@ -281,9 +307,6 @@ const App: React.FC = () => {
             });
         }
 
-        // Fetch library items on initial load
-        dispatch(fetchLibrary());
-
         // Check for Electron API key
         if (window.electron) {
             window.electron.getApiKey().then(key => {
@@ -313,6 +336,14 @@ const App: React.FC = () => {
         }
 
     }, [dispatch, checkConnection]);
+
+    useEffect(() => {
+        if (activeTab === 'library') {
+            dispatch(fetchLibrary());
+        } else {
+            dispatch(unloadLibrary());
+        }
+    }, [activeTab, dispatch]);
 
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
@@ -405,8 +436,9 @@ const App: React.FC = () => {
                     sourceImage, optionsToUse, localUpdateProgress, clothingImage, backgroundImage, maskImage, elementImages
                 );
             } else if (currentOptions.provider === 'comfyui') {
-                // ComfyUI currently uses the main options object, Character Gen uses Gemini
-                const comfyResult = await generateComfyUIPortraits(sourceImage, options, localUpdateProgress);
+                const comfyResult = activeTab === 'character-generator'
+                    ? await generateComfyUICharacterAngles(sourceImage!, characterOptions, localUpdateProgress)
+                    : await generateComfyUIPortraits(sourceImage, options, localUpdateProgress, elementImages.slice(0, 2));
                 result = {
                     images: comfyResult.images.map(img => ({ src: img.src, seed: img.seed, usageMetadata: undefined })),
                     finalPrompt: comfyResult.finalPrompt
@@ -508,6 +540,18 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error setting image for I2I:", error);
             dispatch(setGlobalError({ title: "File Error", message: "Could not use the selected image as a new source for I2I." }));
+        }
+    };
+
+    const handleSendToUpscale = async (imageDataUrl: string, name = 'upscale_source.png') => {
+        try {
+            const response = await fetch(imageDataUrl);
+            const blob = await response.blob();
+            setUpscaleSourceFile(new File([blob], name, { type: blob.type || 'image/png' }));
+            dispatch(setActiveTab('upscale'));
+        } catch (error) {
+            console.error('Error setting upscale source:', error);
+            dispatch(setGlobalError({ title: 'File Error', message: 'Could not use the selected image for SeedVR2.' }));
         }
     };
 
@@ -703,17 +747,20 @@ const App: React.FC = () => {
                 />
 
                 {/* Navigation Tabs */}
-                <div className="flex flex-nowrap justify-start md:justify-center gap-0.5 mb-4 sticky top-[60px] z-[9] bg-bg-primary/95 backdrop-blur-md p-1 rounded-lg border border-border-primary shadow-sm mx-auto w-full max-w-7xl overflow-x-auto">
+                <div className="flex flex-nowrap justify-start xl:justify-center gap-0.5 mb-4 sticky top-0 z-[11] bg-bg-primary/95 backdrop-blur-md p-1 rounded-lg border border-border-primary shadow-sm mx-auto w-full max-w-7xl overflow-x-auto">
                     {[
                         { id: 'image-generator', label: 'Image Gen', icon: <ImageGeneratorIcon className="w-4 h-4" /> },
                         { id: 'character-generator', label: 'Character', icon: <CharacterIcon className="w-4 h-4" /> },
                         { id: 'ltx-director', label: 'LTX Director', icon: <VideoIcon className="w-4 h-4" /> },
+                        { id: 'tts', label: 'TTS', icon: <MicrophoneIcon className="w-4 h-4" /> },
                         { id: 'prompt-generator', label: 'Prompt', icon: <PromptIcon className="w-4 h-4" /> },
                         { id: 'extractor-tools', label: 'Extractor', icon: <ExtractorIcon className="w-4 h-4" /> },
                         { id: 'group-photo-fusion', label: 'Fusion', icon: <GroupPhotoFusionIcon className="w-4 h-4" /> },
                         { id: 'past-forward', label: 'PastForward', icon: <PastForwardIcon className="w-4 h-4" /> },
                         { id: 'logo-theme-generator', label: 'Logo', icon: <SwatchIcon className="w-4 h-4" /> },
                         { id: 'video-utils', label: 'Tools', icon: <VideoUtilsIcon className="w-4 h-4" /> },
+                        { id: 'upscale', label: 'Upscale', icon: <EnhanceIcon className="w-4 h-4" /> },
+                        { id: 'civitai', label: 'Models/LoRAs', icon: <DownloadIcon className="w-4 h-4" /> },
                         { id: 'library', label: 'Library', icon: <LibraryIcon className="w-4 h-4" /> },
                         ...(currentUser.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: <AdminIcon className="w-4 h-4" /> }] : [])
                     ].map((tab) => (
@@ -742,7 +789,7 @@ const App: React.FC = () => {
                             disabled={isLoading}
                         />
                     )}
-                    {activeTab === 'image-generator' && (
+                    <React.Activity mode={activeTab === 'image-generator' ? 'visible' : 'hidden'}>
                         <>
                             <ImageGeneratorHeader
                                 options={currentOptions}
@@ -836,7 +883,7 @@ const App: React.FC = () => {
                                             </div>
                                         ) : (
                                             <ImageUploader
-                                                label="Upload Source Image (Optional for T2I)"
+                                                label={generationMode === 'i2i' ? 'Upload Source Image (Required)' : 'Upload Source Image (Optional for T2I)'}
                                                 id="main-source-upload"
                                                 onImageUpload={(file) => dispatch(setSourceImage(file))}
                                                 sourceFile={sourceImage}
@@ -874,7 +921,7 @@ const App: React.FC = () => {
                                                 setIsGeneratingRefinePrompt(false);
                                             }
                                         }}
-                                        onExportWorkflow={() => exportComfyUIWorkflow(options, sourceImage)}
+                                        onExportWorkflow={() => exportComfyUIWorkflow(options, sourceImage, elementImages.slice(0, 2))}
                                         isDisabled={isLoading}
                                         isReady={isReadyToGenerate}
                                         isGeneratingPrompt={isGeneratingRefinePrompt}
@@ -903,7 +950,7 @@ const App: React.FC = () => {
                                             const optionsToExport = lastImage && lastImage.seed !== undefined
                                                 ? { ...currentOptions, comfySeed: lastImage.seed }
                                                 : currentOptions;
-                                            exportComfyUIWorkflow(optionsToExport, sourceImage);
+                                            exportComfyUIWorkflow(optionsToExport, sourceImage, elementImages.slice(0, 2));
                                         }}
                                         isReady={isReadyToGenerate}
                                         isDisabled={isLoading}
@@ -915,6 +962,7 @@ const App: React.FC = () => {
                                             images={generatedContent['image-generator']?.images || []}
                                             onSendToI2I={handleSendToI2I}
                                             onSendToCharacter={handleSendToCharacter}
+                                            onSendToUpscale={handleSendToUpscale}
                                             lastUsedPrompt={generatedContent['image-generator']?.lastUsedPrompt}
                                             options={currentOptions}
                                             sourceImage={sourceImage}
@@ -937,9 +985,9 @@ const App: React.FC = () => {
                                 </div>
                             </div>
                         </>
-                    )}
+                    </React.Activity>
 
-                    {activeTab === 'character-generator' && (
+                    <React.Activity mode={activeTab === 'character-generator' ? 'visible' : 'hidden'}>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                             <div className="lg:col-span-1 space-y-8">
                                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
@@ -1013,6 +1061,7 @@ const App: React.FC = () => {
                                         images={generatedContent['character-generator']?.images || []}
                                         onSendToI2I={handleSendToI2I}
                                         onSendToCharacter={handleSendToCharacter}
+                                        onSendToUpscale={handleSendToUpscale}
                                         lastUsedPrompt={generatedContent['character-generator']?.lastUsedPrompt}
                                         options={currentOptions}
                                         sourceImage={sourceImage}
@@ -1023,13 +1072,13 @@ const App: React.FC = () => {
                                 )}
                             </div>
                         </div>
-                    )}
+                    </React.Activity>
 
-                    {activeTab === 'past-forward' && <PastForwardPanel />}
+                    <React.Activity mode={activeTab === 'past-forward' ? 'visible' : 'hidden'}><PastForwardPanel /></React.Activity>
 
-                    {activeTab === 'group-photo-fusion' && <GroupPhotoFusionPanel />}
+                    <React.Activity mode={activeTab === 'group-photo-fusion' ? 'visible' : 'hidden'}><GroupPhotoFusionPanel /></React.Activity>
 
-                    {activeTab === 'prompt-generator' && (
+                    <React.Activity mode={activeTab === 'prompt-generator' ? 'visible' : 'hidden'}>
                         <PromptGeneratorPanel
                             activeSubTab={activePromptToolsSubTab}
                             setActiveSubTab={(id) => dispatch(setActivePromptToolsSubTab(id))}
@@ -1045,9 +1094,9 @@ const App: React.FC = () => {
                             onOpenLibraryForWanVideoImage={() => dispatch(setModalOpen({ modal: 'isWanVideoImagePickerOpen', isOpen: true }))}
                             onReset={handlePromptGenReset}
                         />
-                    )}
+                    </React.Activity>
 
-                    {activeTab === 'extractor-tools' && (
+                    <React.Activity mode={activeTab === 'extractor-tools' ? 'visible' : 'hidden'}>
                         <ExtractorToolsPanel
                             onOpenLibraryForClothes={() => dispatch(setModalOpen({ modal: 'isClothesSourcePickerOpen', isOpen: true }))}
                             onOpenLibraryForObjects={() => dispatch(setModalOpen({ modal: 'isObjectSourcePickerOpen', isOpen: true }))}
@@ -1057,9 +1106,9 @@ const App: React.FC = () => {
                             activeSubTab={activeExtractorSubTab}
                             setActiveSubTab={(id) => dispatch(setActiveExtractorSubTab(id))}
                         />
-                    )}
+                    </React.Activity>
 
-                    {activeTab === 'logo-theme-generator' && (
+                    <React.Activity mode={activeTab === 'logo-theme-generator' ? 'visible' : 'hidden'}>
                         <LogoThemeGeneratorPanel
                             activeSubTab={activeLogoThemeSubTab}
                             setActiveSubTab={(id) => dispatch(setActiveLogoThemeSubTab(id))}
@@ -1075,9 +1124,9 @@ const App: React.FC = () => {
                             onOpenLibraryForAlbumCoverLogo={() => dispatch(setModalOpen({ modal: 'isAlbumCoverLogoPickerOpen', isOpen: true }))}
                             onOpenLibraryForAlbumCoverFont={() => dispatch(setModalOpen({ modal: 'isAlbumCoverFontPickerOpen', isOpen: true }))}
                         />
-                    )}
+                    </React.Activity>
 
-                    {activeTab === 'video-utils' && (
+                    <React.Activity mode={activeTab === 'video-utils' ? 'visible' : 'hidden'}>
                         <VideoUtilsPanel
                             setStartFrame={handleSetVideoStartFrame}
                             setEndFrame={handleSetVideoEndFrame}
@@ -1088,17 +1137,34 @@ const App: React.FC = () => {
                             onReset={handleVideoUtilsReset}
                             onOpenLibraryForResizeCrop={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: true }))}
                         />
-                    )}
+                    </React.Activity>
 
-                    {activeTab === 'ltx-director' && (
+                    <React.Activity mode={activeTab === 'ltx-director' ? 'visible' : 'hidden'}>
                         <LTXDirectorPanel
                             isComfyUIConnected={isComfyUIConnected}
                             comfyUIObjectInfo={comfyUIObjectInfo}
                         />
-                    )}
+                    </React.Activity>
 
-                    {activeTab === 'library' && (
+                    <React.Activity mode={activeTab === 'tts' ? 'visible' : 'hidden'}><TtsPanel isComfyUIConnected={isComfyUIConnected} /></React.Activity>
+
+                    <React.Activity mode={activeTab === 'upscale' ? 'visible' : 'hidden'}>
+                        <UpscalePanel
+                            sourceFile={upscaleSourceFile}
+                            setSourceFile={setUpscaleSourceFile}
+                            onOpenLibrary={() => setIsUpscalePickerOpen(true)}
+                            isComfyUIConnected={isComfyUIConnected}
+                            comfyUIObjectInfo={comfyUIObjectInfo}
+                        />
+                    </React.Activity>
+
+                    <React.Activity mode={activeTab === 'civitai' ? 'visible' : 'hidden'}>
+                        <CivitaiPanel />
+                    </React.Activity>
+
+                    <React.Activity mode={activeTab === 'library' ? 'visible' : 'hidden'}>
                         <LibraryPanel
+                            onUpscaleItem={(item) => handleSendToUpscale(item.media, item.name ? `${item.name}.png` : undefined)}
                             onLoadItem={(item) => {
                                 // Logic to load item back into generator state
                                 if (item.mediaType === 'image' || item.mediaType === 'character') {
@@ -1121,7 +1187,26 @@ const App: React.FC = () => {
                                         dispatch(setActiveTab('image-generator'));
                                     }
                                 } else if (item.mediaType === 'video') {
-                                    dispatch(setActiveTab('ltx-director'));
+                                    if (item.ltxDirectorOptions) {
+                                        dispatch(queueLtxTransfer({
+                                            imageDataUrl: item.sourceImage || item.startFrame,
+                                            videoDataUrl: item.media,
+                                            directorOptions: item.ltxDirectorOptions,
+                                        }));
+                                    } else {
+                                        dispatch(setActiveTab('ltx-director'));
+                                    }
+                                } else if (item.mediaType === 'audio-tts') {
+                                    const spokenText = item.ttsOptions?.text.trim() || '';
+                                    const dialogue = spokenText.replace(/"/g, "'");
+                                    const mimeType = item.media.match(/^data:([^;,]+)/)?.[1] || '';
+                                    const extension = mimeType.includes('flac') ? 'flac' : mimeType.includes('mpeg') ? 'mp3' : mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'm4a' : 'wav';
+                                    dispatch(queueLtxTransfer({
+                                        audioDataUrl: item.media,
+                                        audioName: `${item.name || 'tts-result'}.${extension}`,
+                                        ttsText: spokenText,
+                                        prompt: dialogue ? `The character speaks clearly and naturally, saying: "${dialogue}"` : 'The character speaks clearly and naturally.',
+                                    }));
                                 }
                                 // Add handling for other types if needed
                             }}
@@ -1131,7 +1216,7 @@ const App: React.FC = () => {
                             syncMessage={syncMessage}
                             isDriveConfigured={isDriveConfigured}
                         />
-                    )}
+                    </React.Activity>
 
                     {activeTab === 'admin' && currentUser.role === 'admin' && <div className="max-w-4xl mx-auto"><AdminIcon className="w-12 h-12 text-accent mx-auto mb-6" /><h2 className="text-2xl font-bold text-center mb-8">Admin Dashboard</h2></div>}
                 </div>
@@ -1194,6 +1279,7 @@ const App: React.FC = () => {
             <LibraryPickerModal isOpen={isVideoUtilsPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoUtilsPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ videoFile: new File([b], "video.mp4", { type: b.type }) })); }} filter="video" />
             <LibraryPickerModal isOpen={isResizeCropPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ resizeCrop: { ...videoUtilsState.resizeCrop, sourceFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
             <LibraryPickerModal isOpen={isGroupFusionPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGroupFusionPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); const file = new File([b], "imported.jpg", { type: b.type }); const newFile: UploadedFile = { id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), personaId: 'default' }; dispatch(setUploadedFiles([...uploadedFiles, newFile])); }} filter="image" />
+            <LibraryPickerModal isOpen={isUpscalePickerOpen} onClose={() => setIsUpscalePickerOpen(false)} onSelectItem={(item) => { setIsUpscalePickerOpen(false); handleSendToUpscale(item.media, item.name ? `${item.name}.png` : undefined); }} filter={['image', 'character', 'logo', 'banner', 'album-cover']} />
 
             {/* Logo Theme Pickers */}
             <LibraryPickerModal isOpen={isLogoRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ referenceItems: [...(logoThemeState.referenceItems || []), item] }))} filter="image" />

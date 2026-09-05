@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import type { User, VersionInfo, DriveFolder, AppSliceState } from '../types';
+import type { User, VersionInfo, DriveFolder, AppSliceState, LtxDirectorGenerationInfo } from '../types';
 
 const initialState: AppSliceState = {
   currentUser: null,
@@ -12,6 +12,7 @@ const initialState: AppSliceState = {
   comfyUIObjectInfo: null,
   versionInfo: null,
   globalError: null,
+  pendingLtxTransfer: null,
 
   // Modals & Panels
   isSettingsModalOpen: false,
@@ -112,6 +113,23 @@ const appSlice = createSlice({
     setGlobalError: (state, action: PayloadAction<{ title: string; message: string } | null>) => {
       state.globalError = action.payload;
     },
+    queueLtxTransfer: (state, action: PayloadAction<{
+      imageDataUrl?: string;
+      prompt?: string;
+      ttsText?: string;
+      audioDataUrl?: string;
+      audioName?: string;
+      videoDataUrl?: string;
+      directorOptions?: LtxDirectorGenerationInfo;
+      selectedCheckpoint?: string;
+      selectedLora?: string;
+    }>) => {
+      state.pendingLtxTransfer = { id: crypto.randomUUID(), ...action.payload };
+      state.activeTab = 'ltx-director';
+    },
+    clearLtxTransfer: (state) => {
+      state.pendingLtxTransfer = null;
+    },
     setDriveFolder: (state, action: PayloadAction<DriveFolder | null>) => {
       state.driveFolder = action.payload;
       if (action.payload) {
@@ -177,6 +195,8 @@ export const {
   setComfyUIObjectInfo,
   setVersionInfo,
   setGlobalError,
+  queueLtxTransfer,
+  clearLtxTransfer,
   setDriveFolder,
   setIsSyncing,
   setSyncMessage,

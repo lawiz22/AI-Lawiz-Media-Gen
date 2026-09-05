@@ -47,7 +47,7 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
                 const lowerName = lora.toLowerCase();
                 return lowerName.includes(lowerQuery);
             });
-        } else if (options.comfyModelType === 'qwen-t2i-gguf') {
+        } else if (options.comfyModelType === 'qwen-t2i-gguf' || options.comfyModelType === 'qwen-edit') {
             const lowerQuery = "qwen";
             return availableLoras.filter(lora => {
                 const lowerName = lora.toLowerCase();
@@ -64,16 +64,22 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
     }, [availableLoras, options.comfyModelType]);
 
     const loraOptions = useMemo(() => {
-        return [{ value: '', label: 'None' }, ...filteredLoras.map(l => ({ value: l, label: l }))];
-    }, [filteredLoras]);
+        const configured = Array.from({ length: options.comfyModelType === 'qwen-edit' ? 5 : 4 }, (_, index) => {
+            const prefix = options.comfyModelType === 'qwen-edit' ? 'comfyQwenEdit' : options.comfyModelType === 'qwen-t2i-gguf' ? 'comfyQwen' : '';
+            return prefix ? options[`${prefix}Lora${index + 1}Name` as keyof GenerationOptions] as string : '';
+        });
+        const values = Array.from(new Set([...configured, ...filteredLoras].filter(Boolean)));
+        return [{ value: '', label: 'None' }, ...values.map(lora => ({ value: lora, label: lora }))];
+    }, [filteredLoras, options]);
 
-    if (options.comfyModelType !== 'sd1.5' && options.comfyModelType !== 'sdxl' && options.comfyModelType !== 'flux' && options.comfyModelType !== 'qwen-t2i-gguf' && options.comfyModelType !== 'z-image') {
+    if (options.comfyModelType !== 'sd1.5' && options.comfyModelType !== 'sdxl' && options.comfyModelType !== 'flux' && options.comfyModelType !== 'qwen-t2i-gguf' && options.comfyModelType !== 'qwen-edit' && options.comfyModelType !== 'z-image') {
         return null;
     }
 
     const isSdxl = options.comfyModelType === 'sdxl';
     const isFlux = options.comfyModelType === 'flux';
     const isQwen = options.comfyModelType === 'qwen-t2i-gguf';
+    const isQwenEdit = options.comfyModelType === 'qwen-edit';
     const isZImage = options.comfyModelType === 'z-image';
 
     let prefix = 'comfySd15';
@@ -85,6 +91,9 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
     } else if (isFlux) {
         prefix = 'comfyFlux';
         title = 'LoRA Settings (Flux)';
+    } else if (isQwenEdit) {
+        prefix = 'comfyQwenEdit';
+        title = 'LoRA Settings (Qwen Edit)';
     } else if (isQwen) {
         prefix = 'comfyQwen';
         title = 'LoRA Settings (Qwen)';
@@ -110,7 +119,7 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
 
             {options[`${prefix}UseLora` as keyof GenerationOptions] && (
                 <div className="grid grid-cols-2 gap-1.5 pt-1">
-                    {[1, 2, 3, 4].map(index => {
+                    {Array.from({ length: isQwenEdit ? 5 : 4 }, (_, index) => index + 1).map(index => {
                         const nameField = `${prefix}Lora${index}Name` as keyof GenerationOptions;
                         const strengthField = `${prefix}Lora${index}Strength` as keyof GenerationOptions;
 

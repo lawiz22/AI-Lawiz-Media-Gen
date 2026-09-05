@@ -13,6 +13,7 @@ import {
     GenerateIcon, PastForwardIcon 
 } from '../icons';
 import { ImageUploader } from '../ImageUploader';
+import { SendToLTXButton } from '../SendToLTXButton';
 
 const DECADES = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s'];
 
@@ -436,6 +437,7 @@ const PastForwardPanel: React.FC = () => {
                                                 >
                                                     <RefreshIcon className="w-5 h-5" />
                                                 </button>
+                                                <SendToLTXButton imageDataUrl={image.url} prompt={THEMES[selectedTheme].prompt(decade)} />
                                             </div>
                                         </>
                                     )}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getLibraryItems } from '../services/libraryService';
 import type { LibraryItem, LibraryItemType } from '../types';
-import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon, DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon, BannerIcon, AlbumCoverIcon, PoseIcon, FontIcon } from './icons';
+import { normalizeAudioDataUrl } from '../utils/imageUtils';
+import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon, DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon, BannerIcon, AlbumCoverIcon, PoseIcon, FontIcon, MicrophoneIcon } from './icons';
 
 interface LibraryPickerModalProps {
   isOpen: boolean;
@@ -18,6 +19,8 @@ const getCategoryIcon = (mediaType: LibraryItemType) => {
         case 'image': return <PhotographIcon className="w-4 h-4 text-white" />;
         case 'character': return <CharacterIcon className="w-4 h-4 text-white" />;
         case 'video': return <VideoIcon className="w-4 h-4 text-white" />;
+        case 'audio-tts':
+        case 'tts-reference': return <MicrophoneIcon className="w-4 h-4 text-white" />;
         case 'logo': return <LogoIconSimple className="w-4 h-4 text-white" />;
         case 'banner': return <BannerIcon className="w-4 h-4 text-white" />;
         case 'album-cover': return <AlbumCoverIcon className="w-4 h-4 text-white" />;
@@ -100,6 +103,11 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
     return `${filters[0].replace('-', ' ')} items`;
   }, [filter]);
 
+  const isTtsPicker = useMemo(() => {
+    const filters = Array.isArray(filter) ? filter : filter ? [filter] : [];
+    return filters.length > 0 && filters.every(itemType => itemType === 'tts-reference' || itemType === 'audio-tts');
+  }, [filter]);
+
   if (!isOpen) return null;
 
   return (
@@ -136,6 +144,43 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
                 <LibraryIcon className="w-16 h-16 text-border-primary mb-4" />
                 <h3 className="text-lg font-bold text-text-primary">No Matching Items Found</h3>
                 <p>Your library doesn't contain any {filterText} yet.</p>
+            </div>
+          ) : isTtsPicker ? (
+            <div className="space-y-6">
+              {([
+                { type: 'tts-reference' as const, title: 'Voice references', description: 'Original voices saved for reuse' },
+                { type: 'audio-tts' as const, title: 'Generated results', description: 'Previous TTS outputs that can be reused' },
+              ]).map(group => {
+                const groupItems = filteredItems.filter(item => item.mediaType === group.type);
+                if (groupItems.length === 0) return null;
+                return <section key={group.type}>
+                  <div className="mb-3 flex items-end justify-between gap-3 border-b border-border-primary pb-2">
+                    <div><h3 className="text-sm font-bold text-text-primary">{group.title}</h3><p className="text-xs text-text-muted">{group.description}</p></div>
+                    <span className="text-xs font-semibold text-text-muted">{groupItems.length}</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {groupItems.map(item => {
+                      const isReference = item.mediaType === 'tts-reference';
+                      return <article key={item.id} className="overflow-hidden rounded-md border border-border-primary bg-bg-primary shadow-md">
+                        <div className="relative aspect-[4/3] overflow-hidden bg-bg-tertiary">
+                          <img src={item.thumbnail} alt={item.name || `TTS item ${item.id}`} className="h-full w-full object-cover" />
+                          <span className={`absolute left-2 top-2 rounded px-2 py-1 text-[10px] font-bold uppercase text-white shadow ${isReference ? 'bg-emerald-600' : 'bg-blue-600'}`}>
+                            {isReference ? 'Voice reference' : 'Generated result'}
+                          </span>
+                        </div>
+                        <div className="p-3">
+                          <h4 className="truncate text-sm font-bold text-text-primary" title={item.name || undefined}>{item.name || (isReference ? 'Unnamed reference' : 'Unnamed result')}</h4>
+                          {!isReference && item.ttsOptions?.referenceAudioName && <p className="mt-1 truncate text-xs text-text-muted">Voice: {item.ttsOptions.referenceAudioName}</p>}
+                          <audio controls preload="none" src={normalizeAudioDataUrl(item.media)} className="mt-3 h-9 w-full" onClick={event => event.stopPropagation()} />
+                          <button onClick={() => handleSelect(item)} className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-md bg-accent px-3 text-xs font-bold text-accent-text hover:bg-accent-hover">
+                            <MicrophoneIcon className="h-4 w-4" />Use this voice
+                          </button>
+                        </div>
+                      </article>;
+                    })}
+                  </div>
+                </section>;
+              })}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">

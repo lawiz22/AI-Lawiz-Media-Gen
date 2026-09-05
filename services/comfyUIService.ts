@@ -10,12 +10,149 @@ import {
     COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE,
     COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE,
     COMFYUI_QWEN_WORKFLOW_TEMPLATE,
+    COMFYUI_QWEN_EDIT_WORKFLOW_TEMPLATE,
     COMFYUI_FLUX_WORKFLOW_TEMPLATE,
     COMFYUI_Z_IMAGE_WORKFLOW_TEMPLATE,
 } from "../constants";
 
 import { generateMammouthText } from './mammouthService';
 import { LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './ltxDirectorWorkflow';
+import { buildCharacterAnglesWorkflow } from './characterAnglesWorkflow';
+
+export const LTX_PROMPT_THEMES = [
+    { value: 'surprise', label: 'Surprise Mix', direction: 'an unexpected hybrid of contrasting cinematic eras and visual techniques' },
+    { value: 'silent-20s', label: 'Silent Film 1920s', direction: '1920s silent cinema, monochrome orthochromatic film, iris transitions, expressive theatrical blocking, hand-cranked cadence' },
+    { value: 'noir-40s', label: 'Film Noir 1940s', direction: '1940s film noir, hard venetian-blind shadows, wet streets, cigarette haze, stark black-and-white photography' },
+    { value: 'technicolor-50s', label: 'Technicolor 1950s', direction: 'lush 1950s three-strip Technicolor, studio backdrops, saturated primaries, elegant dolly movement' },
+    { value: 'new-wave-60s', label: 'New Wave 1960s', direction: '1960s New Wave cinema, spontaneous location shooting, jump-cut energy, grainy handheld 16mm, bold zooms' },
+    { value: 'grindhouse-70s', label: 'Vintage Film 1970s', direction: 'gritty 1970s cinema, warm faded emulsion, practical lighting, smoky interiors, tactile 35mm grain and zoom lenses' },
+    { value: 'vhs-80s', label: 'VHS Film 1980s', direction: '1980s genre cinema, neon practicals, anamorphic flares, punchy synth-era color, VHS texture and energetic camera moves' },
+    { value: 'indie-90s', label: 'Indie Film 1990s', direction: '1990s independent film, muted color negative, intimate handheld framing, available light and candid performances' },
+    { value: 'digital-2000s', label: 'Digital Film 2000s', direction: 'early-2000s digital cinema, cool highlights, bleach-bypass contrast, restless steadicam and music-video editing language' },
+    { value: 'prestige-2010s', label: 'Prestige Film 2010s', direction: '2010s prestige cinema, controlled color grade, shallow-focus large-sensor photography, precise atmospheric composition' },
+    { value: 'modern', label: 'Modern Cinema', direction: 'contemporary cinematic realism, natural motivated light, detailed large-format imagery, fluid stabilized camera movement' },
+    { value: 'retro-future', label: 'Retro-Futurist', direction: 'retro-futurist cinema mixing analog machinery, miniature effects, luminous control panels and bold speculative production design' },
+    { value: 'experimental', label: 'Experimental Art Film', direction: 'experimental art cinema, surreal visual metaphors, mixed media, unexpected temporal rhythms and daring in-camera transitions' },
+] as const;
+
+export type LtxPromptTheme = typeof LTX_PROMPT_THEMES[number]['value'];
+
+export const LTX_PROMPT_SUBTHEMES = [
+    { value: 'surprise', label: 'Surprise Genre', direction: 'an unpredictable genre collision with a coherent emotional arc' },
+    { value: 'action', label: 'Action', direction: 'kinetic physical stakes, escalating movement and a decisive visual payoff' },
+    { value: 'comedy', label: 'Comedy', direction: 'visual comedy driven by timing, escalating mishaps and expressive reactions' },
+    { value: 'drama', label: 'Drama', direction: 'restrained emotional tension, meaningful gestures and a revealing turning point' },
+    { value: 'romance', label: 'Romance', direction: 'tender attraction, charged glances and intimate but tasteful emotional movement' },
+    { value: 'sensual', label: 'Sensual / Erotic', direction: 'tasteful adult sensuality, confident body language, intimate atmosphere and implied desire without explicit nudity or sexual acts' },
+    { value: 'horror', label: 'Horror', direction: 'mounting dread, unsettling environmental motion and a disturbing final reveal' },
+    { value: 'sci-fi', label: 'Sci-Fi', direction: 'speculative technology, strange physical phenomena and a sense of discovery or danger' },
+    { value: 'fantasy', label: 'Fantasy', direction: 'mythic wonder, tangible magic and an action that transforms the surrounding world' },
+    { value: 'nature', label: 'Nature', direction: 'organic animal or environmental behavior shaped by weather, light and natural forces' },
+    { value: 'documentary', label: 'Documentary', direction: 'observational authenticity, unscripted detail, credible ambient behavior and an informative visual discovery' },
+] as const;
+
+export type LtxPromptSubtheme = typeof LTX_PROMPT_SUBTHEMES[number]['value'];
+
+export const LTX_PROMPT_AUDIO_STYLES = [
+    { value: 'natural', label: 'No Music / Natural Sound', direction: 'No musical score. Use only restrained, scene-specific diegetic sound and natural ambience; brief silence is welcome when dramatically appropriate.' },
+    { value: 'silence', label: 'Complete Silence', direction: 'Absolute silence throughout: no music, ambience, dialogue, Foley, hum, or sound effects.' },
+    { value: 'surprise', label: 'Surprise Audio', direction: 'Choose one deliberate audio approach, with a real possibility of silence or natural ambience instead of automatically adding music.' },
+    { value: 'cinematic', label: 'Cinematic Score', direction: 'A concise cinematic score with a specific emotional motif, sparse enough to fit the shot without trailer-style bombast.' },
+    { value: 'orchestral', label: 'Orchestral', direction: 'A short orchestral cue with clearly named instruments and dynamics tailored to the action.' },
+    { value: 'electronic', label: 'Electronic', direction: 'A focused electronic cue with specific synth texture, pulse, and tempo appropriate to the scene.' },
+    { value: 'synthwave', label: 'Synthwave / 1980s', direction: 'A compact 1980s-inspired synth cue with analog arpeggio, gated percussion, and a clearly defined mood.' },
+    { value: 'jazz', label: 'Jazz', direction: 'A brief jazz cue naming its lead instruments, rhythm, and performance character.' },
+    { value: 'rock', label: 'Rock', direction: 'A short rock cue with a specific guitar, bass, and drum character; avoid generic stadium music.' },
+    { value: 'acoustic', label: 'Acoustic / Folk', direction: 'A restrained acoustic cue using specific organic instruments and an intimate performance style.' },
+    { value: 'horror', label: 'Horror Drone', direction: 'A minimal unsettling drone or textural sting that supports tension without masking diegetic sounds.' },
+    { value: 'documentary', label: 'Documentary Minimal', direction: 'A subtle documentary underscore using one or two restrained instruments, leaving natural ambience prominent.' },
+] as const;
+
+export type LtxPromptAudioStyle = typeof LTX_PROMPT_AUDIO_STYLES[number]['value'];
+
+const getRandomItem = <T,>(items: readonly T[]): T => items[Math.floor(Math.random() * items.length)];
+
+const resolvePromptStyle = <T extends { value: string; direction: string }>(items: readonly T[], requested: string): T => {
+    const choices = items.filter(({ value }) => value !== 'surprise');
+    return requested === 'surprise' ? getRandomItem(choices) : items.find(({ value }) => value === requested) || getRandomItem(choices);
+};
+
+const resolveAudioStyle = (requested: LtxPromptAudioStyle) => {
+    if (requested !== 'surprise') return LTX_PROMPT_AUDIO_STYLES.find(({ value }) => value === requested) || LTX_PROMPT_AUDIO_STYLES[0];
+    return getRandomItem(LTX_PROMPT_AUDIO_STYLES.filter(({ value }) => value !== 'surprise'));
+};
+
+const includeRequiredDialogue = (prompt: string, requiredDialogue?: string): string => {
+    const dialogue = requiredDialogue?.trim().replace(/"/g, "'");
+    if (!dialogue) return prompt;
+    const speakingCue = `The visible character speaks clearly and naturally, saying: "${dialogue}"`;
+    return prompt.includes(speakingCue) ? prompt : `${prompt.trim()} ${speakingCue}`;
+};
+
+const createLocalLtxPrompt = (requestedTheme: LtxPromptTheme, requestedSubtheme: LtxPromptSubtheme, requestedAudioStyle: LtxPromptAudioStyle, durationSeconds: number, previousPrompt?: string, ttsContext?: string): string => {
+    const theme = resolvePromptStyle(LTX_PROMPT_THEMES, requestedTheme);
+    const subtheme = resolvePromptStyle(LTX_PROMPT_SUBTHEMES, requestedSubtheme);
+    const audioStyle = resolveAudioStyle(requestedAudioStyle);
+    const subjects = ['a night-shift projectionist discovers a moving figure inside a blank frame', 'two rival weather researchers chase a luminous storm across an empty salt flat', 'an elegant stranger arrives at a roadside diner carrying a ticking glass suitcase', 'a retired stage performer returns to an abandoned theater as the scenery begins moving by itself', 'a wildlife cinematographer follows an animal leaving impossible footprints through a flooded forest', 'a young mechanic awakens a forgotten machine beneath a crowded apartment building'];
+    const actions = durationSeconds <= 4
+        ? ['One immediate physical action reaches a clear visual beat within the shot.', 'A single simple movement unfolds in real time and ends on one readable reaction.']
+        : durationSeconds <= 8
+            ? ['One focused action develops through two readable beats and reaches a concise payoff.', 'A simple cause triggers one believable reaction and a clear final beat.']
+            : ['The movement grows from a quiet observation into a decisive physical action with a surprising final beat.', 'A small background anomaly triggers a chain of believable reactions, practical movement, and a visual reversal.'];
+    const cameras = ['The camera makes a slow push-in before orbiting gently around the subject.', 'A low tracking shot follows the movement, ending on a close reaction.', 'The shot begins wide, then transitions into a steady handheld medium shot.'];
+    const lighting = ['Practical light sources evolve through the shot, creating moving shadows and tactile reflections.', 'Directional light changes with the action while atmosphere and lens behavior remain physically believable.', 'The lighting reveals new story information as the subject moves through layered depth.'];
+    const opening = previousPrompt
+        ? `Continue directly from this previous scene: ${previousPrompt.trim()} The next beat introduces a fresh escalation without repeating the earlier action.`
+        : ttsContext?.trim()
+            ? `Build the scene around this narrative context: "${ttsContext.trim().replace(/"/g, "'")}".`
+        : `${getRandomItem(subjects)}.`;
+    return `${opening} This is one continuous ${durationSeconds}-second shot. Genre direction: ${subtheme.direction}. Visual language: ${theme.direction}. ${getRandomItem(actions)} ${getRandomItem(cameras)} ${getRandomItem(lighting)} Audio direction: ${audioStyle.direction}`;
+};
+
+export const generateLtxDirectorPrompt = async (
+    sourceImage: File | null,
+    theme: LtxPromptTheme,
+    subtheme: LtxPromptSubtheme,
+    audioStyle: LtxPromptAudioStyle,
+    durationSeconds: number,
+    previousPrompt?: string,
+    requiredDialogue?: string,
+    ttsContext?: string,
+) => {
+    const selectedTheme = resolvePromptStyle(LTX_PROMPT_THEMES, theme);
+    const selectedSubtheme = resolvePromptStyle(LTX_PROMPT_SUBTHEMES, subtheme);
+    const selectedAudioStyle = resolveAudioStyle(audioStyle);
+    const variation = crypto.randomUUID();
+    const continuation = previousPrompt?.trim()
+        ? `Continue the narrative directly from the previous clip below. Preserve its established characters, location, causality, and final beat, but advance the action instead of paraphrasing or repeating it. The new prompt must also work as a self-contained video-generation instruction. Previous clip: "${previousPrompt.trim()}". `
+        : '';
+    const imageStartingPoint = previousPrompt?.trim()
+        ? 'Treat the supplied image as the exact visual starting point and reconcile it naturally with the continuing story. '
+        : 'Treat the supplied image as the exact visual starting point. ';
+    const pacing = durationSeconds <= 4
+        ? 'Use only one immediate, simple physical action and one clear visual beat. No setup, secondary event, or multi-step action can fit.'
+        : durationSeconds <= 8
+            ? 'Use one focused action with at most two quickly readable beats and one concise payoff.'
+            : 'Use one focused action that may develop through at most three readable beats before its payoff.';
+    const timing = `The entire described action must unfold naturally in real time within exactly ${durationSeconds} seconds. ${pacing} Do not use a montage, sequence of scenes, time jump, location change, or more action than a performer and camera can complete in ${durationSeconds} seconds.`;
+    const audioDirection = `Audio direction: ${selectedAudioStyle.direction} Describe only audio that can occur within ${durationSeconds} seconds. Follow this audio direction exactly and never add unspecified background music.`;
+    const dialogueDirection = requiredDialogue?.trim() && ttsContext?.trim()
+        ? `The visible character must speak this exact dialogue without translating, paraphrasing, shortening, or adding words: "${requiredDialogue.trim().replace(/"/g, "'")}". Describe natural lip movement and performance that match this line. `
+        : '';
+    const contextDirection = ttsContext?.trim()
+        ? `Use this TTS script as narrative and visual context for the random scene, including its concrete subjects when filmable: "${ttsContext.trim().replace(/"/g, "'")}". Do not quote or require spoken dialogue unless separately instructed. `
+        : '';
+    const instruction = sourceImage
+        ? `Analyze the supplied image and write one inventive English prompt for an LTX image-to-video clip. ${continuation}${imageStartingPoint}Preserve the visible subject, identity, clothing, composition, and environment. ${timing} ${contextDirection}${dialogueDirection}Genre direction: ${selectedSubtheme.direction}. Visual era and filmmaking language: ${selectedTheme.direction}. ${audioDirection} Include era-authentic camera behavior, practical light, and realistic secondary motion only when they fit the available time. Avoid generic walking, smiling, posing, floating particles, and empty cinematic adjectives unless the image uniquely requires them. Do not describe a new still image. Do not use headings or preamble. Return only the final video prompt. Variation key: ${variation}`
+        : `Write one highly original English prompt for an LTX text-to-video clip. ${continuation}${timing} ${contextDirection}${dialogueDirection}Genre direction: ${selectedSubtheme.direction}. Visual era and filmmaking language: ${selectedTheme.direction}. ${audioDirection} Invent an unusual but filmable subject, a specific location, and a compact action with a clear payoff. Include era-authentic camera behavior, practical light, and physical secondary motion only when they fit the available time. Avoid generic heroes, neon alleys, simple walking, floating particles, and stock trailer language. Do not use headings or preamble. Return only the final video prompt. Variation key: ${variation}`;
+    try {
+        const result = await generateMammouthText(instruction, sourceImage ? [sourceImage] : []);
+        return { ...result, text: includeRequiredDialogue(result.text.trim().replace(/^['"`]+|['"`]+$/g, ''), requiredDialogue) };
+    } catch (error) {
+        if (sourceImage) throw error;
+        return { text: includeRequiredDialogue(createLocalLtxPrompt(theme, subtheme, audioStyle, durationSeconds, previousPrompt, ttsContext), requiredDialogue) };
+    }
+};
 
 // Remove local initialization
 // const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
@@ -57,7 +194,7 @@ const sanitizeFilename = (filename: string): string => {
 }
 
 // --- Module state for cancellation ---
-let currentExecution: { clientId: string; ws: WebSocket } | null = null;
+let currentExecution: { clientId: string; ws: WebSocket; reject: (reason?: any) => void } | null = null;
 
 export const cancelComfyUIExecution = async (): Promise<void> => {
     if (!currentExecution) {
@@ -72,6 +209,8 @@ export const cancelComfyUIExecution = async (): Promise<void> => {
         await fetch(`${url}/interrupt`, { method: 'POST' });
         console.log("ComfyUI execution interrupt requested.");
 
+        currentExecution.reject(new Error('Operation was cancelled by the user.'));
+
         if (currentExecution.ws.readyState === WebSocket.OPEN) {
             currentExecution.ws.close();
         }
@@ -82,8 +221,164 @@ export const cancelComfyUIExecution = async (): Promise<void> => {
     }
 };
 
+export const CHATTERBOX_LANGUAGES = [
+    'English', 'German', 'Norwegian', 'Arabic', 'Danish', 'Greek', 'Spanish',
+    'Finnish', 'French', 'Hebrew', 'Hindi', 'Italian', 'Japanese', 'Korean',
+    'Malay', 'Dutch', 'Polish', 'Portuguese', 'Swedish', 'Swahili', 'Turkish',
+    'Chinese',
+] as const;
+
+export type ChatterboxLanguage = typeof CHATTERBOX_LANGUAGES[number];
+
+const LEGACY_CHATTERBOX_LANGUAGES: readonly ChatterboxLanguage[] = ['English', 'German', 'Norwegian'];
+
+export interface ChatterboxTtsOptions {
+    language: ChatterboxLanguage;
+    device: 'auto' | 'cpu' | 'cuda';
+    exaggeration: number;
+    temperature: number;
+    cfgWeight: number;
+    seed: number;
+    audioPromptPath: string;
+    enableChunking: boolean;
+    maxCharsPerChunk: number;
+    chunkCombinationMethod: 'auto' | 'concatenate' | 'crossfade';
+    silenceBetweenChunksMs: number;
+    filenamePrefix: string;
+}
+
+export type ChatterboxTtsReference =
+    | { type: 'upload'; file: File }
+    | { type: 'suite'; voice: string };
+
+export interface TtsReferenceVoice {
+    value: string;
+    label: string;
+}
+
+const formatTtsVoiceLabel = (voice: string): string => {
+    const filename = voice.split('/').pop() || voice;
+    return filename.replace(/\.[^.]+$/, '').replace(/_/g, ' ');
+};
+
+export const getTtsReferenceVoices = async (): Promise<TtsReferenceVoice[]> => {
+    const url = getComfyUIUrl();
+    if (!url) throw new Error('ComfyUI URL not set');
+    const response = await fetch(`${url}/object_info/UnifiedTTSTextNode`);
+    if (!response.ok) throw new Error('Could not load TTS Audio Suite voices.');
+    const objectInfo = await response.json();
+    const choices = objectInfo?.UnifiedTTSTextNode?.input?.required?.narrator_voice?.[0];
+    if (!Array.isArray(choices)) throw new Error('TTS Audio Suite did not return a voice list.');
+    return choices
+        .filter((voice): voice is string => typeof voice === 'string' && voice !== 'none')
+        .map((voice) => ({ value: voice, label: formatTtsVoiceLabel(voice) }));
+};
+
+export const generateChatterboxTts = async (
+    text: string,
+    reference: ChatterboxTtsReference,
+    options: ChatterboxTtsOptions,
+    updateProgress: (message: string, value: number) => void,
+): Promise<string> => {
+    const uploadedAudio = reference.type === 'upload'
+        ? await (async () => {
+            updateProgress('Uploading reference voice...', 0.05);
+            return uploadLtxMedia(reference.file);
+        })()
+        : null;
+    const isOfficialMultilingual = reference.type === 'suite' || !LEGACY_CHATTERBOX_LANGUAGES.includes(options.language);
+    const workflow = isOfficialMultilingual ? {
+        ...(uploadedAudio ? { '26': {
+            inputs: { audio: uploadedAudio.name },
+            class_type: 'LoadAudio',
+            _meta: { title: 'Load Audio' },
+        } } : {}),
+        '42': {
+            inputs: {
+                model_version: 'v1',
+                language: options.language,
+                device: options.device,
+                exaggeration: options.exaggeration,
+                temperature: options.temperature,
+                cfg_weight: options.cfgWeight,
+                repetition_penalty: 1.2,
+                min_p: 0.05,
+                top_p: 1,
+            },
+            class_type: 'ChatterBoxOfficial23LangEngineNode',
+            _meta: { title: 'ChatterBox Official 23-Lang Engine' },
+        },
+        '43': {
+            inputs: {
+                TTS_engine: ['42', 0],
+                text: text.trim(),
+                narrator_voice: reference.type === 'suite' ? reference.voice : 'none',
+                seed: options.seed,
+                ...(uploadedAudio ? { opt_narrator: ['26', 0] } : {}),
+                enable_chunking: options.enableChunking,
+                max_chars_per_chunk: options.maxCharsPerChunk,
+                chunk_combination_method: options.chunkCombinationMethod,
+                silence_between_chunks_ms: options.silenceBetweenChunksMs,
+                enable_audio_cache: true,
+                batch_size: 0,
+            },
+            class_type: 'UnifiedTTSTextNode',
+            _meta: { title: 'TTS Text' },
+        },
+        '49': {
+            inputs: {
+                filename_prefix: options.filenamePrefix || 'audio/ChatterB',
+                audio: ['43', 0],
+            },
+            class_type: 'SaveAudio',
+            _meta: { title: 'Save Audio' },
+        },
+    } : {
+        '26': {
+            inputs: { audio: uploadedAudio!.name },
+            class_type: 'LoadAudio',
+            _meta: { title: 'Load Audio' },
+        },
+        '39': {
+            inputs: { string: text.trim() },
+            class_type: 'String Literal',
+            _meta: { title: 'String Literal' },
+        },
+        '42': {
+            inputs: {
+                text: ['39', 0],
+                language: options.language,
+                device: options.device,
+                exaggeration: options.exaggeration,
+                temperature: options.temperature,
+                cfg_weight: options.cfgWeight,
+                seed: options.seed,
+                audio_prompt_path: options.audioPromptPath,
+                enable_chunking: options.enableChunking,
+                max_chars_per_chunk: options.maxCharsPerChunk,
+                chunk_combination_method: options.chunkCombinationMethod,
+                silence_between_chunks_ms: options.silenceBetweenChunksMs,
+                reference_audio: ['26', 0],
+            },
+            class_type: 'ChatterBoxVoiceTTS',
+            _meta: { title: 'ChatterBox Voice TTS' },
+        },
+        '49': {
+            inputs: {
+                filename_prefix: options.filenamePrefix || 'audio/ChatterB',
+                audio: ['42', 0],
+            },
+            class_type: 'SaveAudio',
+            _meta: { title: 'Save Audio' },
+        },
+    };
+    const { audioUrl } = await executeWorkflow(workflow, updateProgress, true, 0);
+    if (!audioUrl) throw new Error('ComfyUI completed without returning a TTS audio file.');
+    return audioUrl;
+};
+
 // --- Mammouth-based Prompt Generation ---
-type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image';
+type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image';
 
 const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
     switch (modelType) {
@@ -100,6 +395,7 @@ const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
             return 'Your response MUST be a detailed, narrative paragraph written in a natural language. Describe the scene as if you were writing a story or giving instructions to a human artist. Use full, descriptive sentences.';
         case 'wan2.2':
         case 'sdxl':
+        case 'qwen-edit':
         case 'nunchaku-kontext-flux': // I2I prompt is often best as a sentence
         default:
             return 'Your response MUST be a single, concise, natural language sentence.';
@@ -285,8 +581,11 @@ const queuePrompt = async (prompt: any, clientId: string): Promise<string> => {
 const executeWorkflow = async (
     workflow: any,
     onProgress: (message: string, value: number) => void,
-    isLongJob: boolean = false
-): Promise<{ images: string[], videoUrl: string | null }> => {
+    isLongJob: boolean = false,
+    expectedImageCount: number = 1,
+    imageNodeOrder?: string[],
+    onNodeOutput?: (nodeId: string, output: any) => void,
+): Promise<{ images: string[], videoUrl: string | null, audioUrl: string | null }> => {
     const url = getComfyUIUrl();
     if (!url) throw new Error("ComfyUI URL not set");
     const clientId = getClientId();
@@ -296,7 +595,7 @@ const executeWorkflow = async (
     return new Promise((resolve, reject) => {
         onProgress("Connecting to ComfyUI...", 0.1);
         const ws = new WebSocket(wsUrl);
-        currentExecution = { clientId, ws };
+        currentExecution = { clientId, ws, reject };
 
         const cleanup = () => {
             if (currentExecution && currentExecution.clientId === clientId) {
@@ -332,9 +631,12 @@ const executeWorkflow = async (
                     break;
                 case 'executed':
                     const eventOutput = data.data.output;
+                    onNodeOutput?.(String(data.data.node), eventOutput);
                     const hasMediaOutput = eventOutput && (
                         Array.isArray(eventOutput.images) ||
                         Array.isArray(eventOutput.videos) ||
+                        Array.isArray(eventOutput.audio) ||
+                        Array.isArray(eventOutput.audios) ||
                         Array.isArray(eventOutput.gifs) ||
                         Array.isArray(eventOutput.files) ||
                         Array.isArray(eventOutput.ui?.videos)
@@ -368,14 +670,24 @@ const executeWorkflow = async (
                         const outputs = history.outputs;
                         const imageOutputs = [];
                         let videoUrl = null;
+                        let audioUrl = null;
 
                         for (const nodeId in outputs) {
                             const nodeOutput = outputs[nodeId];
+                            const genericFiles = Array.isArray(nodeOutput.files) ? nodeOutput.files : [];
+                            const audioFiles = genericFiles.filter((file: any) => /\.(wav|mp3|flac|m4a|ogg|opus|aac)$/i.test(file.filename || ''));
+                            const audioList = Array.isArray(nodeOutput.audio)
+                                ? nodeOutput.audio
+                                : Array.isArray(nodeOutput.audios) ? nodeOutput.audios : audioFiles;
+                            if (audioList.length > 0 && audioList[0].filename) {
+                                const audioFile = audioList[0];
+                                audioUrl = `${url}/view?filename=${encodeURIComponent(audioFile.filename)}&subfolder=${encodeURIComponent(audioFile.subfolder || '')}&type=${encodeURIComponent(audioFile.type || 'output')}`;
+                            }
                             let videoList = [];
                             if (nodeOutput.ui && Array.isArray(nodeOutput.ui.videos)) videoList = nodeOutput.ui.videos;
                             else if (Array.isArray(nodeOutput.videos)) videoList = nodeOutput.videos;
                             else if (Array.isArray(nodeOutput.gifs)) videoList = nodeOutput.gifs;
-                            else if (Array.isArray(nodeOutput.files)) videoList = nodeOutput.files;
+                            else if (genericFiles.length > 0) videoList = genericFiles.filter((file: any) => !audioFiles.includes(file));
                             if (videoList.length > 0) {
                                 const videoFile = videoList[0];
                                 if (videoFile.filename) {
@@ -385,8 +697,9 @@ const executeWorkflow = async (
                             }
                         }
 
-                        for (const nodeId in outputs) {
-                            if (outputs[nodeId].images) {
+                        const imageOutputNodeIds = imageNodeOrder || Object.keys(outputs);
+                        for (const nodeId of imageOutputNodeIds) {
+                            if (outputs[nodeId]?.images) {
                                 for (const image of outputs[nodeId].images) {
                                     const isVideoFile = image.format?.startsWith('video/') || image.filename?.endsWith('.mp4');
                                     if (isVideoFile && !videoUrl) {
@@ -406,10 +719,13 @@ const executeWorkflow = async (
                             }
                         }
 
-                        resolve({ images: imageOutputs, videoUrl });
+                        if (!videoUrl && !audioUrl && imageOutputs.length < expectedImageCount) {
+                            onProgress(`Generated ${imageOutputs.length}/${expectedImageCount} images...`, 0.95);
+                            break;
+                        }
+                        resolve({ images: imageOutputs, videoUrl, audioUrl });
                     } catch (err) {
                         reject(err);
-                    } finally {
                         cleanup();
                     }
                     break;
@@ -436,6 +752,277 @@ const executeWorkflow = async (
     });
 };
 
+export interface SeedVr2UpscaleOptions {
+    ditModel: string;
+    vaeModel: string;
+    resolution: number;
+    seed?: number;
+    ditDevice: string;
+    blocksToSwap: number;
+    swapIoComponents: boolean;
+    ditOffloadDevice: string;
+    cacheDitModel: boolean;
+    attentionMode: string;
+    vaeDevice: string;
+    vaeEncodeTiled: boolean;
+    vaeEncodeTileSize: number;
+    vaeEncodeTileOverlap: number;
+    vaeDecodeTiled: boolean;
+    vaeDecodeTileSize: number;
+    vaeDecodeTileOverlap: number;
+    tileDebug: string;
+    vaeOffloadDevice: string;
+    cacheVaeModel: boolean;
+    batchSize: number;
+    uniformBatchSize: boolean;
+    colorCorrection: string;
+    temporalOverlap: number;
+    prependFrames: number;
+    inputNoiseScale: number;
+    latentNoiseScale: number;
+    upscalerOffloadDevice: string;
+    enableDebug: boolean;
+}
+
+export const generateSeedVr2Upscale = async (
+    sourceImage: File,
+    options: SeedVr2UpscaleOptions,
+    updateProgress: (message: string, value: number) => void,
+): Promise<string> => {
+    const resolution = Math.min(2180, Math.max(256, Math.round(options.resolution / 2) * 2));
+    const url = getComfyUIUrl();
+    if (!url) throw new Error('ComfyUI URL not set');
+    const objectInfoResponse = await fetch(`${url}/object_info`);
+    if (!objectInfoResponse.ok) throw new Error('Could not inspect the installed ComfyUI nodes.');
+    const objectInfo = await objectInfoResponse.json();
+    const requiredNodes = ['SeedVR2LoadDiTModel', 'SeedVR2LoadVAEModel', 'SeedVR2VideoUpscaler'];
+    const missingNodes = requiredNodes.filter((nodeName) => !objectInfo[nodeName]);
+    if (missingNodes.length > 0) {
+        throw new Error(`SeedVR2 custom nodes are not installed or loaded: ${missingNodes.join(', ')}.`);
+    }
+    const hasEasyCleanup = Boolean(objectInfo['easy cleanGpuUsed'] && objectInfo['easy clearCacheAll']);
+    updateProgress('Uploading source image...', 0.05);
+    const uploadedImage = await uploadImage(sourceImage);
+    const workflow: Record<string, any> = {
+        '20': {
+            inputs: {
+                model: options.ditModel,
+                device: options.ditDevice,
+                blocks_to_swap: options.blocksToSwap,
+                swap_io_components: options.swapIoComponents,
+                offload_device: options.ditOffloadDevice,
+                cache_model: options.cacheDitModel,
+                attention_mode: options.attentionMode,
+            },
+            class_type: 'SeedVR2LoadDiTModel',
+            _meta: { title: 'SeedVR2 Load DiT Model' },
+        },
+        '26': {
+            inputs: { image: uploadedImage.name },
+            class_type: 'LoadImage',
+            _meta: { title: 'Load Image' },
+        },
+        '29': {
+            inputs: {
+                model: options.vaeModel,
+                device: options.vaeDevice,
+                encode_tiled: options.vaeEncodeTiled,
+                encode_tile_size: options.vaeEncodeTileSize,
+                encode_tile_overlap: options.vaeEncodeTileOverlap,
+                decode_tiled: options.vaeDecodeTiled,
+                decode_tile_size: options.vaeDecodeTileSize,
+                decode_tile_overlap: options.vaeDecodeTileOverlap,
+                tile_debug: options.tileDebug,
+                offload_device: options.vaeOffloadDevice,
+                cache_model: options.cacheVaeModel,
+            },
+            class_type: 'SeedVR2LoadVAEModel',
+            _meta: { title: 'SeedVR2 Load VAE Model' },
+        },
+        '33': {
+            inputs: {
+                seed: options.seed ?? Math.floor(Math.random() * 4294967295),
+                resolution,
+                max_resolution: resolution,
+                batch_size: options.batchSize,
+                uniform_batch_size: options.uniformBatchSize,
+                color_correction: options.colorCorrection,
+                temporal_overlap: options.temporalOverlap,
+                prepend_frames: options.prependFrames,
+                input_noise_scale: options.inputNoiseScale,
+                latent_noise_scale: options.latentNoiseScale,
+                offload_device: options.upscalerOffloadDevice,
+                enable_debug: options.enableDebug,
+                image: [hasEasyCleanup ? '28' : '26', 0],
+                dit: ['20', 0],
+                vae: ['29', 0],
+            },
+            class_type: 'SeedVR2VideoUpscaler',
+            _meta: { title: 'SeedVR2 Image Upscaler' },
+        },
+        '24': {
+            inputs: { filename_prefix: 'upscaled/seedvr2', images: ['33', 0] },
+            class_type: 'SaveImage',
+            _meta: { title: 'Save Upscaled Image' },
+        },
+    };
+    if (hasEasyCleanup) {
+        workflow['22'] = {
+            inputs: { anything: ['26', 0] },
+            class_type: 'easy cleanGpuUsed',
+            _meta: { title: 'Clean VRAM Used' },
+        };
+        workflow['28'] = {
+            inputs: { anything: ['22', 0] },
+            class_type: 'easy clearCacheAll',
+            _meta: { title: 'Clear Cache All' },
+        };
+    }
+    const result = await executeWorkflow(workflow, updateProgress, true);
+    if (!result.images[0]) throw new Error('SeedVR2 completed without returning an image.');
+    return result.images[0];
+};
+
+export interface ZImageCreativeLora {
+    enabled: boolean;
+    name: string;
+    strength: number;
+}
+
+export interface ZImageCreativeUpscaleOptions {
+    turboUnet: string;
+    baseUnet: string;
+    vae: string;
+    clip: string;
+    upscaleModel: string;
+    florenceModel: string;
+    florencePrecision: string;
+    florenceAttention: string;
+    promptPrefix: string;
+    turboLoras: ZImageCreativeLora[];
+    baseLoras: ZImageCreativeLora[];
+    turboShift: number;
+    baseShift: number;
+    upscaleFactor: number;
+    maxStepScale: number;
+    steps: number;
+    sampler: string;
+    scheduler: string;
+    tailStepsFirst: number;
+    tailStepsLast: number;
+    refineSampler: string;
+    refineScheduler: string;
+    refineSteps: number;
+    refineEnterSigma: number;
+    seed?: number;
+    sageAttention: string;
+    allowCompile: boolean;
+    florenceKeepLoaded: boolean;
+    florenceMaxTokens: number;
+    florenceBeams: number;
+    florenceSample: boolean;
+}
+
+export const generateZImageCreativeUpscale = async (
+    sourceImage: File,
+    sourceDimensions: { width: number; height: number },
+    options: ZImageCreativeUpscaleOptions,
+    updateProgress: (message: string, value: number) => void,
+    onPromptReady?: (prompt: string) => void,
+): Promise<string> => {
+    const url = getComfyUIUrl();
+    if (!url) throw new Error('ComfyUI URL not set');
+    const objectInfoResponse = await fetch(`${url}/object_info`);
+    if (!objectInfoResponse.ok) throw new Error('Could not inspect the installed ComfyUI nodes.');
+    const objectInfo = await objectInfoResponse.json();
+    const requiredNodes = ['UNETLoader', 'VAELoader', 'CLIPLoaderGGUF', 'Florence2Run', 'DownloadAndLoadFlorence2Model', 'AddTextPrefix', 'easy showAnything', 'ZImageTurboProgressiveLockedUpscale', 'UpscaleModelLoader'];
+    const missingNodes = requiredNodes.filter((nodeName) => !objectInfo[nodeName]);
+    if (missingNodes.length > 0) throw new Error(`Z-Image Creative Upscale nodes are not installed or loaded: ${missingNodes.join(', ')}.`);
+
+    updateProgress('Uploading source image for Florence2...', 0.05);
+    const uploadedImage = await uploadImage(sourceImage);
+    const upscaleFactor = Math.min(8, Math.max(1, options.upscaleFactor));
+    const targetLongSide = 2180;
+    const targetScale = targetLongSide / Math.max(sourceDimensions.width, sourceDimensions.height);
+    const targetWidth = sourceDimensions.width * targetScale;
+    const targetHeight = sourceDimensions.height * targetScale;
+    const latentWidth = Math.max(64, Math.floor(targetWidth / upscaleFactor / 16) * 16);
+    const latentHeight = Math.max(64, Math.floor(targetHeight / upscaleFactor / 16) * 16);
+    const seed = options.seed ?? Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+    const workflow: Record<string, any> = {
+        '1': { inputs: { unet_name: options.baseUnet, weight_dtype: 'default' }, class_type: 'UNETLoader', _meta: { title: 'Base Refine Model' } },
+        '4': { inputs: { vae_name: options.vae }, class_type: 'VAELoader', _meta: { title: 'VAE' } },
+        '5': { inputs: { clip_name: options.clip, type: 'lumina2' }, class_type: 'CLIPLoaderGGUF', _meta: { title: 'Z-Image Text Encoder' } },
+        '7': { inputs: { text: ['237', 0], clip: ['5', 0] }, class_type: 'CLIPTextEncode', _meta: { title: 'Florence2 Creative Prompt' } },
+        '8': { inputs: { conditioning: ['7', 0] }, class_type: 'ConditioningZeroOut', _meta: { title: 'Zero Negative Conditioning' } },
+        '15': { inputs: { shift: options.turboShift, model: ['54', 0] }, class_type: 'ModelSamplingAuraFlow', _meta: { title: 'Turbo Generation Sampling' } },
+        '40': { inputs: { model_name: options.upscaleModel }, class_type: 'UpscaleModelLoader', _meta: { title: 'Pixel Upscale Model' } },
+        '54': { inputs: { unet_name: options.turboUnet, weight_dtype: 'default' }, class_type: 'UNETLoader', _meta: { title: 'Turbo Generation Model' } },
+        '115': { inputs: { image: uploadedImage.name }, class_type: 'LoadImage', _meta: { title: 'Creative Upscale Source' } },
+        '200': { inputs: { shift: options.baseShift, model: ['1', 0] }, class_type: 'ModelSamplingAuraFlow', _meta: { title: 'Base Refine Sampling' } },
+        '230': { inputs: { width: latentWidth, height: latentHeight, batch_size: 1 }, class_type: 'EmptySD3LatentImage', _meta: { title: 'Aspect-Matched Creative Latent' } },
+        '237': { inputs: { anything: ['242', 0] }, class_type: 'easy showAnything', _meta: { title: 'Florence2 Prompt Output' } },
+        '240': {
+            inputs: {
+                text_input: '', task: 'more_detailed_caption', fill_mask: false,
+                keep_model_loaded: options.florenceKeepLoaded, max_new_tokens: options.florenceMaxTokens,
+                num_beams: options.florenceBeams, do_sample: options.florenceSample,
+                output_mask_select: '', seed, image: ['115', 0], florence2_model: ['241', 0],
+            },
+            class_type: 'Florence2Run', _meta: { title: 'Florence2 Image Prompt' },
+        },
+        '241': {
+            inputs: { model: options.florenceModel, precision: options.florencePrecision, convert_to_safetensors: options.florenceAttention },
+            class_type: 'DownloadAndLoadFlorence2Model', _meta: { title: 'Florence2 Model' },
+        },
+        '242': { inputs: { texts: ['240', 2], prefix: options.promptPrefix }, class_type: 'AddTextPrefix', _meta: { title: 'Creative Prompt Prefix' } },
+        '198': {
+            inputs: {
+                upscale_factor: upscaleFactor, max_step_scale: options.maxStepScale,
+                steps: options.steps, sampler: options.sampler, scheduler: options.scheduler,
+                tail_steps_first_upscale: options.tailStepsFirst, tail_steps_last_upscale: options.tailStepsLast,
+                seed, refine_sampler: options.refineSampler, refine_scheduler: options.refineScheduler,
+                refine_steps: options.refineSteps, refine_enter_sigma: options.refineEnterSigma,
+                model: ['15', 0], latent: ['230', 0], positive: ['7', 0], negative: ['8', 0],
+                vae: ['4', 0], upscale_model: ['40', 0], refine_model: ['200', 0],
+            },
+            class_type: 'ZImageTurboProgressiveLockedUpscale', _meta: { title: 'Z-Image Creative Progressive Upscale' },
+        },
+        '13': { inputs: { filename_prefix: 'upscaled/z_image_creative', images: ['198', 1] }, class_type: 'SaveImage', _meta: { title: 'Save Creative Upscale' } },
+    };
+
+    const chainLoras = (modelNodeId: string, loras: ZImageCreativeLora[], prefix: string): string => {
+        let currentNodeId = modelNodeId;
+        loras.forEach((lora, index) => {
+            if (!lora.enabled || !lora.name) return;
+            const nodeId = `${prefix}_lora_${index + 1}`;
+            workflow[nodeId] = {
+                inputs: { lora_name: lora.name, strength_model: lora.strength, model: [currentNodeId, 0] },
+                class_type: 'LoraLoaderModelOnly', _meta: { title: `${prefix === 'turbo' ? 'Turbo Generation' : 'Base Refine'} LoRA ${index + 1}` },
+            };
+            currentNodeId = nodeId;
+        });
+        return currentNodeId;
+    };
+    workflow['15'].inputs.model = [chainLoras('54', options.turboLoras, 'turbo'), 0];
+    const baseModelNode = chainLoras('1', options.baseLoras, 'base');
+    if (objectInfo['PathchSageAttentionKJ']) {
+        workflow['144'] = { inputs: { sage_attention: options.sageAttention, allow_compile: options.allowCompile, model: [baseModelNode, 0] }, class_type: 'PathchSageAttentionKJ', _meta: { title: 'Base Refine Sage Attention' } };
+        workflow['200'].inputs.model = ['144', 0];
+    } else {
+        workflow['200'].inputs.model = [baseModelNode, 0];
+    }
+
+    const result = await executeWorkflow(workflow, updateProgress, true, 1, ['13'], (nodeId, output) => {
+        if (nodeId !== '237') return;
+        const rawText = output?.text ?? output?.string ?? output?.value;
+        const textValue = Array.isArray(rawText) ? rawText[0] : rawText;
+        if (typeof textValue === 'string' && textValue.trim()) onPromptReady?.(textValue.trim());
+    });
+    if (!result.images[0]) throw new Error('Z-Image Creative Upscale completed without returning an image.');
+    return result.images[0];
+};
+
 // Helper to upload image to ComfyUI
 const uploadImageToComfyUI = async (file: File): Promise<string> => {
     const formData = new FormData();
@@ -456,7 +1043,7 @@ const uploadImageToComfyUI = async (file: File): Promise<string> => {
     return data.name;
 };
 
-const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null): Promise<any> => {
+const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null, referenceImages: File[] = []): Promise<any> => {
     let workflow;
 
     const findNodeKey = (wf: any, identifier: string, by: 'title' | 'class_type' | 'key') => {
@@ -489,6 +1076,55 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         case 'nunchaku-flux-image': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE)); break;
         case 'flux-krea': workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE)); break;
         case 'face-detailer-sd1.5': workflow = JSON.parse(JSON.stringify(COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE)); break;
+        case 'qwen-edit': {
+            if (!sourceFile) throw new Error('Qwen Image Edit requires a source image.');
+            workflow = JSON.parse(JSON.stringify(COMFYUI_QWEN_EDIT_WORKFLOW_TEMPLATE));
+
+            const inputImages = [sourceFile, ...referenceImages].slice(0, 3);
+            const uploadedImages = await Promise.all(inputImages.map(uploadImage));
+            workflow["78"].inputs.image = uploadedImages[0].name;
+            for (let index = 1; index < uploadedImages.length; index += 1) {
+                const nodeId = `qwen_edit_image_${index + 1}`;
+                workflow[nodeId] = {
+                    inputs: { image: uploadedImages[index].name },
+                    class_type: 'LoadImage',
+                    _meta: { title: `Source Image ${index + 1}` },
+                };
+                workflow["110"].inputs[`image${index + 1}`] = [nodeId, 0];
+                workflow["111"].inputs[`image${index + 1}`] = [nodeId, 0];
+            }
+
+            workflow["110"].inputs.prompt = options.comfyNegativePrompt || '';
+            workflow["111"].inputs.prompt = options.comfyPrompt || '';
+            workflow["37"].inputs.unet_name = options.comfyQwenEditUnet;
+            workflow["116"].inputs.clip_name = options.comfyQwenEditClip;
+            workflow["39"].inputs.vae_name = options.comfyQwenEditVae;
+            workflow["66"].inputs.shift = options.comfyQwenEditShift ?? 2.5;
+            workflow["93"].inputs.megapixels = options.comfyQwenEditMegapixels ?? 1;
+
+            let modelInput: [string, number] = ["37", 0];
+            if (options.comfyQwenEditUseLora) {
+                for (let index = 1; index <= 5; index += 1) {
+                    const name = options[`comfyQwenEditLora${index}Name` as keyof GenerationOptions] as string;
+                    if (!name) continue;
+                    const strength = options[`comfyQwenEditLora${index}Strength` as keyof GenerationOptions] as number | undefined;
+                    const nodeId = `qwen_edit_lora_${index}`;
+                    workflow[nodeId] = {
+                        inputs: { lora_name: name, strength_model: strength ?? 1, model: modelInput },
+                        class_type: 'LoraLoaderModelOnly',
+                        _meta: { title: `Qwen Edit LoRA ${index}` },
+                    };
+                    modelInput = [nodeId, 0];
+                }
+            }
+            workflow["66"].inputs.model = modelInput;
+            workflow["3"].inputs.steps = options.comfySteps ?? 8;
+            workflow["3"].inputs.cfg = options.comfyCfg ?? 1;
+            workflow["3"].inputs.sampler_name = options.comfySampler || 'euler_ancestral';
+            workflow["3"].inputs.scheduler = options.comfyScheduler || 'beta57';
+            workflow["3"].inputs.seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+            break;
+        }
 
         case 'flux': {
             workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_WORKFLOW_TEMPLATE));
@@ -873,10 +1509,16 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
     }
 
     const posPromptKey = findNodeKey(workflow, "Positive Prompt", 'title');
-    if (posPromptKey) workflow[posPromptKey].inputs.text = options.comfyPrompt || '';
+    if (posPromptKey) {
+        const promptInput = 'prompt' in workflow[posPromptKey].inputs ? 'prompt' : 'text';
+        workflow[posPromptKey].inputs[promptInput] = options.comfyPrompt || '';
+    }
 
     const negPromptKey = findNodeKey(workflow, "Negative Prompt", 'title');
-    if (negPromptKey) workflow[negPromptKey].inputs.text = options.comfyNegativePrompt || '';
+    if (negPromptKey) {
+        const promptInput = 'prompt' in workflow[negPromptKey].inputs ? 'prompt' : 'text';
+        workflow[negPromptKey].inputs[promptInput] = options.comfyNegativePrompt || '';
+    }
 
     if (['sd1.5', 'sdxl'].includes(options.comfyModelType!)) {
         const ckptLoaderKey = findNodeKey(workflow, "CheckpointLoaderSimple", 'class_type');
@@ -1175,12 +1817,13 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
 export const generateComfyUIPortraits = async (
     sourceImage: File | null,
     options: GenerationOptions,
-    updateProgress: (message: string, value: number) => void
+    updateProgress: (message: string, value: number) => void,
+    referenceImages: File[] = [],
 ): Promise<{ images: { src: string, seed: number }[]; finalPrompt: string }> => {
     const allImages: { src: string, seed: number }[] = [];
-    const baseWorkflow = await buildWorkflow(options, sourceImage);
+    const baseWorkflow = await buildWorkflow(options, sourceImage, referenceImages);
 
-    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf'].includes(options.comfyModelType!);
+    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit'].includes(options.comfyModelType!);
     const numImages = options.comfyModelType === 'face-detailer-sd1.5' ? 1 : options.numImages;
 
     let currentSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
@@ -1233,6 +1876,31 @@ export const generateComfyUIPortraits = async (
     // I will capture the seed used before modifying it for the next iteration.
 
     return { images: allImages, finalPrompt: options.comfyPrompt || '' };
+};
+
+export const generateComfyUICharacterAngles = async (
+    sourceImage: File,
+    options: GenerationOptions,
+    updateProgress: (message: string, value: number) => void,
+): Promise<{ images: { src: string; seed: number }[]; finalPrompt: string }> => {
+    updateProgress('Uploading character source...', 0.05);
+    const uploadedImage = await uploadImage(sourceImage);
+    const { workflow, prompts, seed } = buildCharacterAnglesWorkflow(uploadedImage.name, options);
+    const outputCount = prompts.length;
+    const result = await executeWorkflow(
+        workflow,
+        updateProgress,
+        true,
+        outputCount,
+        Array.from({ length: outputCount }, (_, index) => `save_${index}`),
+    );
+    if (result.images.length !== outputCount) {
+        throw new Error(`ComfyUI returned ${result.images.length}/${outputCount} character outputs.`);
+    }
+    return {
+        images: result.images.map((src, index) => ({ src, seed: seed + index })),
+        finalPrompt: prompts.join('\n\n'),
+    };
 };
 
 export const generateComfyUIVideo = async (
@@ -1435,7 +2103,7 @@ export const generateLtxDirectorVideo = async (
         updateProgress('Uploading soundtrack...', 0.1);
         const audioInfo = await uploadLtxMedia(audio);
         audioSegments = [{
-            id: crypto.randomUUID(), start: 0, length: segments.reduce((total, segment) => total + segment.durationSeconds, 0),
+            id: crypto.randomUUID(), start: 0, length: startFrame,
             audioFile: audioInfo.name,
             audioB64: `/api/view?filename=${encodeURIComponent(audioInfo.name)}&type=${encodeURIComponent(audioInfo.type || 'input')}&subfolder=${encodeURIComponent(audioInfo.subfolder || '')}`,
         }];
@@ -1462,17 +2130,20 @@ export const generateLtxDirectorVideo = async (
     workflow['79'].inputs.preview_rate = options.frameRate;
     workflow['77'].inputs.ckpt_name = options.checkpoint;
 
+    delete workflow['80'];
+    delete workflow['93'];
+    delete workflow['96'];
     let modelInput: [string, number] = ['79', 0];
-    const loraNodeIds = ['80', '93', '96'];
-    loraNodeIds.forEach((nodeId, index) => {
-        const lora = options.loras[index];
-        if (!lora?.enabled || !lora.name) {
-            delete workflow[nodeId];
-            return;
-        }
-        workflow[nodeId].inputs.lora_name = lora.name;
-        workflow[nodeId].inputs.strength_model = lora.strength;
-        workflow[nodeId].inputs.model = modelInput;
+    options.loras.filter((lora) => lora.enabled && lora.name).forEach((lora, index) => {
+        const nodeId = `ltx_director_lora_${index + 1}`;
+        workflow[nodeId] = {
+            inputs: {
+                lora_name: lora.name,
+                strength_model: lora.strength,
+                model: modelInput,
+            },
+            class_type: 'LoraLoaderModelOnly',
+        };
         modelInput = [nodeId, 0];
     });
     workflow['46'].inputs.model = modelInput;
@@ -1482,8 +2153,8 @@ export const generateLtxDirectorVideo = async (
     return videoUrl;
 };
 
-export const exportComfyUIWorkflow = async (options: GenerationOptions, sourceFile: File | null): Promise<void> => {
-    const workflow = await buildWorkflow(options, sourceFile);
+export const exportComfyUIWorkflow = async (options: GenerationOptions, sourceFile: File | null, referenceImages: File[] = []): Promise<void> => {
+    const workflow = await buildWorkflow(options, sourceFile, referenceImages);
     const jsonString = JSON.stringify(workflow, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);

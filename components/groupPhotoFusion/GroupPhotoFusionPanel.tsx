@@ -23,6 +23,7 @@ import GroupPhotoFusionLoader from './GroupPhotoFusionLoader';
 import { DownloadIcon, RefreshIcon, ZoomIcon, ZipIcon, SaveIcon, CheckIcon, SpinnerIcon } from '../icons';
 import DebugSection from './DebugSection';
 import { dataUrlToThumbnail } from '../../utils/imageUtils';
+import { SendToLTXButton } from '../SendToLTXButton';
 
 const GroupPhotoFusionPanel: React.FC = () => {
   const dispatch: AppDispatch = useDispatch();
@@ -31,6 +32,10 @@ const GroupPhotoFusionPanel: React.FC = () => {
       isLoading, generatedImages, error, isDebugMode, debugInfos
   } = useSelector((state: RootState) => state.groupPhotoFusion);
   const generationOptions = useSelector((state: RootState) => state.generation.options);
+  const ltxPrompt = selectedPose?.getPrompt(uploadedFiles.map(file => {
+    const persona = PERSONAS.find(item => item.id === file.personaId);
+    return persona?.description || '';
+  }), quality, !!backgroundFile);
 
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
@@ -309,6 +314,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
                         >
                            {image.saveStatus === 'saving' ? <SpinnerIcon className="w-6 h-6 animate-spin" /> : image.saveStatus === 'saved' ? <CheckIcon className="w-6 h-6" /> : <SaveIcon className="w-6 h-6" />}
                         </button>
+                        <SendToLTXButton imageDataUrl={image.base64} prompt={ltxPrompt} className="text-white rounded-full p-3 bg-black/50 hover:bg-black/80" />
                       </>
                     )}
                      {image.status === 'error' && (

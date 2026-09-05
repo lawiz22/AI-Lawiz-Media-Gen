@@ -2,6 +2,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { GeneratedClothing, GeneratedObject, GeneratedPose } from '../types';
 import { DownloadIcon, SaveIcon, SpinnerIcon, CheckIcon, CloseIcon, CodeBracketIcon, CopyIcon, DocumentTextIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
+import { SendToLTXButton } from './SendToLTXButton';
 
 interface ExtractorResultsGridProps {
   items: (GeneratedClothing | GeneratedObject | GeneratedPose)[];
@@ -186,6 +187,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                                         >
                                             {item.saved === 'saving' ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : item.saved === 'saved' ? <CheckIcon className="w-4 h-4"/> : <SaveIcon className="w-4 h-4"/>}
                                         </button>
+                                        {image && <SendToLTXButton imageDataUrl={image} prompt={getDescriptionText(item)} />}
                                     </div>
                                 </div>
                             </div>
@@ -291,6 +293,13 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                                             {selectedItemModal.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : selectedItemModal.saved === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
                                             {selectedItemModal.saved === 'saving' ? 'Saving...' : selectedItemModal.saved === 'saved' ? 'Saved to Library' : 'Save to Library'}
                                         </button>
+                                        {getModalImage(selectedItemModal) && <SendToLTXButton
+                                            imageDataUrl={getModalImage(selectedItemModal)}
+                                            prompt={getDescriptionText(selectedItemModal)}
+                                            showLabel
+                                            onSent={handleCloseModals}
+                                            className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 bg-bg-tertiary text-text-primary font-bold rounded-lg hover:bg-accent hover:text-accent-text transition-colors"
+                                        />}
                                     </div>
                                 </div>
                             </div>

@@ -8,10 +8,10 @@ import { ImageUploader } from './ImageUploader';
 import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup, generateWanVideoPromptFromImage } from '../services/comfyUIService';
 import type { LibraryItem, PromptGenState, GenerationOptions } from '../types';
 import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon, CodeBracketIcon, WorkflowIcon, CloseIcon } from './icons';
-import { fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
+import { fileToResizedDataUrl, dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { WAN_VIDEO_PROMPT_BLOCKS, CAMERA_MOVES } from '../constants';
 import { updateOptions, setGenerationMode } from '../store/generationSlice';
-import { setActiveTab } from '../store/appSlice';
+import { queueLtxTransfer, setActiveTab } from '../store/appSlice';
 
 
 interface PromptPart {
@@ -279,6 +279,13 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const [isPickerOpen, setPickerOpen] = useState(false);
     const [promptToUse, setPromptToUse] = useState<string>('');
 
+    const allWanSubjects = useMemo(() => {
+        return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.subjects))];
+    }, []);
+
+    const allWanActions = useMemo(() => {
+        return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.actions))];
+    }, []);
 
     const allWanEnvironments = useMemo(() => {
         return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.environments))];
@@ -287,6 +294,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const allWanStyles = useMemo(() => {
         return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.styles))];
     }, []);
+
+    const activeWanBlock = wanVideoCategory ? WAN_VIDEO_PROMPT_BLOCKS[wanVideoCategory] : null;
 
     useEffect(() => {
         let finalPrompt = `${qwenTitle.trim()}\n`;
@@ -493,11 +502,12 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         }
     };
 
-    // --- WAN 2.2 Video Prompt Builder Logic ---
+    // --- LTX Video Prompt Builder Logic ---
     useEffect(() => {
+        const action = wanVideoAction.trim();
         const parts = [
             wanVideoMode === 'image' ? wanVideoBasePrompt : wanVideoSubject,
-            wanVideoAction,
+            action ? `The subject performs this action: ${action}` : '',
             wanVideoEnvironment,
             wanVideoCameraMove,
             wanVideoStyle,
@@ -528,6 +538,16 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             setWanVideoCopyButtonText('Copied!');
             setTimeout(() => setWanVideoCopyButtonText('Copy Prompt'), 2000);
         });
+    };
+
+    const handleSendWanVideoToLtx = async () => {
+        if (!wanVideoFinalPrompt.trim()) return;
+        try {
+            const imageDataUrl = wanVideoImage ? await fileToDataUrl(wanVideoImage) : undefined;
+            dispatch(queueLtxTransfer({ imageDataUrl, prompt: wanVideoFinalPrompt }));
+        } catch (err: any) {
+            setWanVideoError(err.message || 'Failed to send the prompt to LTX Director.');
+        }
     };
     
     const handleQwenCopy = () => {
@@ -567,7 +587,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         { id: 'extract-background', label: 'Extract Background' },
         { id: 'extract-subject', label: 'Extract Subject' },
         { id: 'prompt-soup', label: 'Magical Prompt Soup' },
-        { id: 'wan-video', label: 'WAN 2.2 Video' },
+        { id: 'wan-video', label: 'LTX Video Prompt' },
         { id: 'qwen-image', label: 'Qwen Prompt Tool'},
     ];
 
@@ -792,9 +812,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             
             {activeSubTab === 'wan-video' && (
                 <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-pink-500 space-y-8">
-                     <h2 className="text-xl font-bold text-pink-500">WAN 2.2 Video Prompt Builder</h2>
+                            <h2 className="text-xl font-bold text-pink-500">LTX Video Prompt Builder</h2>
                      <p className="text-sm text-text-secondary -mt-6">
-                        Craft the perfect prompt for text-to-video generation using a structured formula.
+                                Build an action-focused prompt and send it directly to LTX Director.
                     </p>
                     <div className="flex items-center justify-center gap-2 bg-bg-tertiary p-1 rounded-full max-w-sm mx-auto">
                         <button onClick={() => setWanVideoMode('scratch')} className={`w-1/2 py-2 text-sm font-bold rounded-full transition-colors ${wanVideoMode === 'scratch' ? 'bg-accent text-accent-text' : ''}`}>From Scratch</button>
@@ -824,7 +844,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         {wanVideoMode === 'scratch' && (
                             <div className="lg:col-span-1">
                                 <label className="block text-sm font-medium text-text-secondary">Category</label>
-                                <select value={wanVideoCategory} onChange={e => dispatch(updatePromptGenState({ wanVideoCategory: e.target.value as any, wanVideoSubject: '', wanVideoEnvironment: '', wanVideoStyle: '' }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
+                                <select value={wanVideoCategory} onChange={e => dispatch(updatePromptGenState({ wanVideoCategory: e.target.value as PromptGenState['wanVideoCategory'], wanVideoSubject: '', wanVideoAction: '', wanVideoEnvironment: '', wanVideoStyle: '' }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
+                                    <option value="">None / All Categories</option>
                                     {Object.keys(WAN_VIDEO_PROMPT_BLOCKS).map(key => <option key={key} value={key}>{key.charAt(0).toUpperCase() + key.slice(1).replace('-', ' / ')}</option>)}
                                 </select>
                             </div>
@@ -833,27 +854,30 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <div className="lg:col-span-2">
                                 <label className="block text-sm font-medium text-text-secondary">Subject</label>
                                 <select value={wanVideoSubject} onChange={e => dispatch(updatePromptGenState({ wanVideoSubject: e.target.value }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
-                                    <option value="">-- Select Subject --</option>
-                                    {WAN_VIDEO_PROMPT_BLOCKS[wanVideoCategory].subjects.map(s => <option key={s} value={s}>{s}</option>)}
+                                    <option value="">None</option>
+                                    {(activeWanBlock?.subjects || allWanSubjects).map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
                         )}
                         <div>
                             <label className="block text-sm font-medium text-text-secondary">Action</label>
-                            <input type="text" value={wanVideoAction} onChange={e => dispatch(updatePromptGenState({ wanVideoAction: e.target.value }))} placeholder="e.g., walking, running, flying" className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm" />
+                            <select value={wanVideoAction} onChange={e => { dispatch(updatePromptGenState({ wanVideoAction: e.target.value })); setWanVideoError(null); }} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
+                                <option value="">None</option>
+                                {(wanVideoMode === 'image' || !activeWanBlock ? allWanActions : activeWanBlock.actions).map(action => <option key={action} value={action}>{action}</option>)}
+                            </select>
                         </div>
                         <div className="lg:col-span-2">
                             <label className="block text-sm font-medium text-text-secondary">Environment</label>
                             <select value={wanVideoEnvironment} onChange={e => dispatch(updatePromptGenState({ wanVideoEnvironment: e.target.value }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
-                                <option value="">-- Select Environment --</option>
-                                {(wanVideoMode === 'image' ? allWanEnvironments : WAN_VIDEO_PROMPT_BLOCKS[wanVideoCategory].environments).map(e => <option key={e} value={e}>{e}</option>)}
+                                <option value="">None</option>
+                                {(wanVideoMode === 'image' || !activeWanBlock ? allWanEnvironments : activeWanBlock.environments).map(e => <option key={e} value={e}>{e}</option>)}
                             </select>
                         </div>
                         <div className="lg:col-span-2">
                             <label className="block text-sm font-medium text-text-secondary">Style / Mood</label>
                             <select value={wanVideoStyle} onChange={e => dispatch(updatePromptGenState({ wanVideoStyle: e.target.value }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
-                                <option value="">-- Select Style --</option>
-                                {(wanVideoMode === 'image' ? allWanStyles : WAN_VIDEO_PROMPT_BLOCKS[wanVideoCategory].styles).map(s => <option key={s} value={s}>{s}</option>)}
+                                <option value="">None</option>
+                                {(wanVideoMode === 'image' || !activeWanBlock ? allWanStyles : activeWanBlock.styles).map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
                         <div>
@@ -866,14 +890,14 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                     
                     <div className="pt-4 border-t border-border-primary">
                         <label className="block text-sm font-medium text-text-secondary mb-1">Final Prompt</label>
-                        <textarea value={wanVideoFinalPrompt} readOnly className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm h-28 text-pink-400 font-semibold" />
+                            <textarea value={wanVideoFinalPrompt} onChange={e => dispatch(updatePromptGenState({ wanVideoFinalPrompt: e.target.value }))} placeholder="Choose prompt elements above, then refine the generated prompt here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm h-28 text-pink-400 font-semibold focus:ring-accent focus:border-accent" />
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-                             <button onClick={() => handleSavePrompt(wanVideoFinalPrompt, 'wan-video', 'wan2.2', wanVideoImage)} disabled={!wanVideoFinalPrompt || wanVideoPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${wanVideoPromptSaveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                                <button onClick={() => handleSavePrompt(wanVideoFinalPrompt, 'wan-video', 'wan2.2', wanVideoImage)} disabled={!wanVideoFinalPrompt.trim() || wanVideoPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${wanVideoPromptSaveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
                                 {wanVideoPromptSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : wanVideoPromptSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
                                 {wanVideoPromptSaveStatus === 'saved' ? 'Saved!' : 'Save'}
                             </button>
-                            <button onClick={handleWanVideoCopy} disabled={!wanVideoFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><CopyIcon className="w-5 h-5" /> {wanVideoCopyButtonText}</button>
-                            <button onClick={() => onUsePrompt(wanVideoFinalPrompt)} disabled={!wanVideoFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><SendIcon className="w-5 h-5" />Use</button>
+                            <button onClick={handleWanVideoCopy} disabled={!wanVideoFinalPrompt.trim()} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><CopyIcon className="w-5 h-5" /> {wanVideoCopyButtonText}</button>
+                            <button onClick={handleSendWanVideoToLtx} disabled={!wanVideoFinalPrompt.trim()} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><SendIcon className="w-5 h-5" />Send to LTX</button>
                         </div>
                     </div>
                 </div>

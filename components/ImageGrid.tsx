@@ -7,6 +7,8 @@ import { addSessionTokenUsage } from '../store/appSlice';
 import { setImageSaveStatus } from '../store/generationSlice';
 import { DownloadIcon, EnhanceIcon, SpinnerIcon, ZoomIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddAsSourceIcon, CopyIcon, SaveIcon, CheckIcon, CharacterIcon, InfoIcon } from './icons';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, generateMammouthImage } from '../services/mammouthService';
+import { SendToLTXButton } from './SendToLTXButton';
+import { CHARACTER_ANGLES, getEnabledCharacterAngles } from '../services/characterAnglesWorkflow';
 import type { GenerationOptions, LibraryItem } from '../types';
 import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromDataUrl, dataUrlToFile } from '../utils/imageUtils';
 
@@ -56,6 +58,7 @@ interface ImageGridProps {
   }[];
   onSendToI2I: (imageData: string) => void;
   onSendToCharacter: (imageData: string) => void;
+  onSendToUpscale: (imageData: string) => void;
   lastUsedPrompt?: string | null;
   options: GenerationOptions;
   sourceImage: File | null;
@@ -64,7 +67,7 @@ interface ImageGridProps {
   generationTime?: number | null;
 }
 
-export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSendToCharacter, lastUsedPrompt, options, sourceImage, characterName, activeTab, generationTime }) => {
+export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSendToCharacter, onSendToUpscale, lastUsedPrompt, options, sourceImage, characterName, activeTab, generationTime }) => {
   const dispatch: AppDispatch = useDispatch();
   const [enhancedImages, setEnhancedImages] = useState<Record<number, string>>({});
   const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
@@ -306,6 +309,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
   }
 
   const currentZoomedSrc = zoomedImageIndex !== null ? (enhancedImages[zoomedImageIndex] || images[zoomedImageIndex].src) : null;
+  const enabledCharacterAngles = getEnabledCharacterAngles(options);
 
   return (
     <>
@@ -362,10 +366,20 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
             const hasError = !!errorIndex[index];
             const savingStatus = image.saved;
             const { usageMetadata } = image;
+            const characterAngle = enabledCharacterAngles[index];
+            const characterOutputNumber = characterAngle ? CHARACTER_ANGLES.findIndex(angle => angle.id === characterAngle.id) + 1 : index + 1;
+            const characterOutputLabel = characterAngle
+              ? options.comfyCharacterAngleSettings?.[characterAngle.id]?.angle?.trim() || `Output ${characterOutputNumber}`
+              : `Output ${index + 1}`;
 
             return (
               <div key={index} className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
                 <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="object-cover w-full h-full" />
+                {activeTab === 'character-generator' && options.provider === 'comfyui' && characterAngle && (
+                  <div className="absolute left-2 top-2 rounded-md bg-black/70 px-2 py-1 text-xs font-bold text-white shadow-lg">
+                    {characterOutputLabel}
+                  </div>
+                )}
 
                 {/* Unified hover overlay for all actions */}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity z-10">
@@ -412,6 +426,14 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                             className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
                           >
                             <DownloadIcon className="w-5 h-5" />
+                          </button>
+                          <SendToLTXButton imageDataUrl={finalSrc} prompt={lastUsedPrompt} className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
+                          <button
+                            onClick={() => onSendToUpscale(finalSrc)}
+                            title="Upscale with SeedVR2"
+                            className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                          >
+                            <EnhanceIcon className="w-5 h-5" />
                           </button>
                           {!enhancedImages[index] && (
                             <button

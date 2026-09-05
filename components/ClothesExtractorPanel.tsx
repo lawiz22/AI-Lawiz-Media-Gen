@@ -15,6 +15,7 @@ import { mediaPipeToOpenPose, renderPoseSkeleton } from '../utils/poseRenderer';
 import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose, MannequinStyle, LibraryItem, PoseOutputMode } from '../types';
 import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon, FontIcon, DownloadIcon, SaveIcon, CheckIcon } from './icons';
 import { dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
+import { SendToLTXButton } from './SendToLTXButton';
 
 interface ExtractorToolsPanelProps {
     onOpenLibraryForClothes: () => void;
@@ -487,6 +488,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                                         {generatedFontChart.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : generatedFontChart.saved === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
                                         {generatedFontChart.saved === 'saving' ? 'Saving...' : generatedFontChart.saved === 'saved' ? 'Saved' : 'Save to Library'}
                                     </button>
+                                    <SendToLTXButton imageDataUrl={generatedFontChart.src} prompt="A camera explores the generated typography chart with smooth cinematic motion." showLabel className="flex items-center gap-2 px-4 py-2 bg-bg-primary text-text-secondary font-semibold rounded-lg hover:bg-accent hover:text-accent-text" />
                                 </div>
                             </div>
                         )}

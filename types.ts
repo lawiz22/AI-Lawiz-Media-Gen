@@ -9,6 +9,73 @@ declare global {
       setApiKey: (key: string) => Promise<boolean>;
       getMammouthApiKey: () => Promise<string>;
       setMammouthApiKey: (key: string) => Promise<boolean>;
+      getCivitaiSettings: () => Promise<{ regularApiKey: string; redApiKey: string; comfyUIRoot: string }>;
+      setCivitaiApiKey: (provider: 'regular' | 'red', key: string) => Promise<boolean>;
+      selectComfyUIRoot: () => Promise<string | null>;
+      getCivitaiInventory: () => Promise<import('./services/civitaiService').CivitaiInventory>;
+      refreshCivitaiLibrarySafety: (request: {
+        kind: 'all' | 'lora' | 'checkpoint' | 'diffusion';
+        family: import('./services/civitaiService').CivitaiFamily;
+      }) => Promise<import('./services/civitaiService').CivitaiInventory>;
+      setLocalModelSafety: (request: { modelPath: string; safety: 'sfw' | 'nsfw' | null }) => Promise<import('./services/civitaiService').CivitaiInventory>;
+      setLocalModelArchiveLink: (request: { modelPath: string; url: string }) => Promise<import('./services/civitaiService').CivitaiInventory>;
+      fetchLocalModelArchive: (request: { modelPath: string }) => Promise<import('./services/civitaiService').CivitaiInventory>;
+      scanCivitaiLibrary: (request: {
+        provider: 'regular' | 'red';
+        kind: 'all' | 'lora' | 'checkpoint' | 'diffusion';
+        family: import('./services/civitaiService').CivitaiFamily;
+      }) => Promise<import('./services/civitaiService').CivitaiInventory>;
+      classifyCivitaiModelRoot: (provider: 'regular' | 'red') => Promise<{
+        total: number;
+        moved: number;
+        unmatched: number;
+        conflicts: number;
+        errors: number;
+        results: Array<{ fileName: string; status: 'moved' | 'unmatched' | 'conflict' | 'error'; destination?: string; modelName?: string; error?: string }>;
+      }>;
+      getLocalModelPreview: (modelPath: string, metadata?: { modelId?: number; versionId?: number }) => Promise<{ url: string; type: 'image' | 'video' } | null>;
+      selectLocalModelPreview: (modelPath: string) => Promise<string | null>;
+      reclassifyLocalModel: (request: {
+        modelPath: string;
+        kind: 'lora' | 'checkpoint' | 'diffusion';
+        folder: 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
+      }) => Promise<import('./services/civitaiService').CivitaiInventoryItem>;
+      fetchLocalModelUsageMetadata: (request: {
+        modelPath: string;
+        provider: 'regular' | 'red';
+        source: 'civitai' | 'archive';
+      }) => Promise<import('./services/civitaiService').CivitaiInventoryItem>;
+      setLocalModelUsageMetadata: (request: {
+        modelPath: string;
+        triggerWords?: string[];
+        sampler?: string;
+        scheduler?: string;
+        steps?: number;
+        cfg?: number;
+      }) => Promise<import('./services/civitaiService').CivitaiInventoryItem>;
+      getLocalModelPromptExamples: (request: {
+        modelPath: string;
+        provider: 'regular' | 'red';
+        sources: Array<'civitai' | 'archive'>;
+      }) => Promise<Array<{ positive: string; negative?: string; source: 'civitai' | 'archive' }>>;
+      downloadCivitaiModel: (request: {
+        downloadId: string;
+        provider: 'regular' | 'red';
+        url: string;
+        fileName: string;
+        destination: 'checkpoint' | 'diffusion' | 'lora';
+        modelFolder: 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
+      }) => Promise<{ path: string; receivedBytes: number }>;
+      updateCivitaiModel: (request: {
+        downloadId: string;
+        provider: 'regular' | 'red';
+        modelPath: string;
+        mode: 'keep' | 'replace';
+      }) => Promise<{ path: string; fileName: string; receivedBytes: number; versionName: string }>;
+      cancelCivitaiDownload: (downloadId: string) => Promise<boolean>;
+      onCivitaiDownloadProgress: (callback: (progress: { downloadId: string; receivedBytes: number; totalBytes: number }) => void) => () => void;
+      onCivitaiScanProgress: (callback: (progress: { completed: number; total: number; fileName: string; stage: string }) => void) => () => void;
+      onCivitaiSafetyProgress: (callback: (progress: { completed: number; total: number; modelId?: number; stage: string }) => void) => () => void;
     };
   }
 }
@@ -29,7 +96,7 @@ export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | '
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = string;
-export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image';
+export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image';
 export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui' | 'mammouth';
 export type VideoProvider = 'gemini' | 'comfyui';
@@ -77,6 +144,12 @@ export interface GenerationOptions {
   // ComfyUI-specific
   comfyPrompt?: string;
   comfyNegativePrompt?: string;
+  comfyPromptExampleSource?: {
+    modelPath: string;
+    modelName: string;
+    provider: 'regular' | 'red';
+    sources: Array<'civitai' | 'archive'>;
+  };
   comfyModelType?: ComfyModelType;
   comfyModel?: string; // Checkpoint name
   comfySteps?: number;
@@ -132,6 +205,48 @@ export interface GenerationOptions {
   comfyQwenVae?: string;
   comfyQwenClip?: string;
   comfyQwenShift?: number;
+
+  // Qwen Image Edit
+  comfyQwenEditUnet?: string;
+  comfyQwenEditClip?: string;
+  comfyQwenEditVae?: string;
+  comfyQwenEditShift?: number;
+  comfyQwenEditMegapixels?: number;
+  comfyQwenEditUseLora?: boolean;
+  comfyQwenEditLora1Name?: string;
+  comfyQwenEditLora1Strength?: number;
+  comfyQwenEditLora2Name?: string;
+  comfyQwenEditLora2Strength?: number;
+  comfyQwenEditLora3Name?: string;
+  comfyQwenEditLora3Strength?: number;
+  comfyQwenEditLora4Name?: string;
+  comfyQwenEditLora4Strength?: number;
+  comfyQwenEditLora5Name?: string;
+  comfyQwenEditLora5Strength?: number;
+
+  // Character multi-angle Qwen Edit workflow
+  comfyCharacterUnet?: string;
+  comfyCharacterClip?: string;
+  comfyCharacterVae?: string;
+  comfyCharacterLightningLora?: string;
+  comfyCharacterLightningStrength?: number;
+  comfyCharacterAnglesLora?: string;
+  comfyCharacterAnglesStrength?: number;
+  comfyCharacterUseAdditionalLora?: boolean;
+  comfyCharacterAdditionalLora?: string;
+  comfyCharacterAdditionalLoraStrength?: number;
+  comfyCharacterSteps?: number;
+  comfyCharacterCfg?: number;
+  comfyCharacterSampler?: string;
+  comfyCharacterScheduler?: string;
+  comfyCharacterShift?: number;
+  comfyCharacterMegapixels?: number;
+  comfyCharacterAngleSettings?: Record<string, {
+    enabled?: boolean;
+    angle: string;
+    pose: string;
+    expression: string;
+  }>;
 
   // Z-Image
   comfyZImageUseLora?: boolean;
@@ -384,7 +499,7 @@ export interface ExtractorState {
   fontError: string | null;
 }
 
-export type LibraryItemType = 'image' | 'character' | 'video' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font' | 'group-fusion' | 'past-forward-photo' | 'preset';
+export type LibraryItemType = 'image' | 'character' | 'video' | 'audio-tts' | 'tts-reference' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font' | 'group-fusion' | 'past-forward-photo' | 'preset';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
 
 export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';
@@ -423,6 +538,42 @@ export interface ThemeGenerationInfo {
   albumSelectedLogo?: { name: string; thumbnail: string };
 }
 
+export interface LtxDirectorGenerationInfo {
+  segments: {
+    prompt: string;
+    ttsText?: string;
+    durationSeconds: number;
+    hasSourceImage: boolean;
+    sourceImage?: string;
+  }[];
+  frameRate: number;
+  guideStrength: number;
+  checkpoint: string;
+  loras: {
+    name: string;
+    strength: number;
+  }[];
+  audioName?: string;
+}
+
+export interface TtsGenerationInfo {
+  text: string;
+  referenceAudioName: string;
+  referenceSource?: 'suite' | 'upload' | 'library';
+  language?: string;
+  device: string;
+  exaggeration: number;
+  temperature: number;
+  cfgWeight: number;
+  seed: number;
+  audioPromptPath: string;
+  enableChunking: boolean;
+  maxCharsPerChunk: number;
+  chunkCombinationMethod: string;
+  silenceBetweenChunksMs: number;
+  filenamePrefix: string;
+}
+
 export interface LibraryItem {
   id: number; // Unique ID, typically a timestamp
   name?: string;
@@ -431,6 +582,8 @@ export interface LibraryItem {
   thumbnail: string; // data URL for a small thumbnail
   options?: GenerationOptions;
   themeOptions?: ThemeGenerationInfo;
+  ltxDirectorOptions?: LtxDirectorGenerationInfo;
+  ttsOptions?: TtsGenerationInfo;
   sourceImage?: string; // data URL for image/video generations
   startFrame?: string; // data URL for video generations
   endFrame?: string; // data URL for video generations
@@ -503,10 +656,10 @@ export interface PromptGenState {
   soupPrompt: string;
   soupPromptSaveStatus: 'idle' | 'saving' | 'saved';
   soupHistory: string[];
-  // WAN 2.2 Video Prompt Builder
+  // LTX Video Prompt Builder
   wanVideoImage: File | null;
   wanVideoBasePrompt: string;
-  wanVideoCategory: 'fantasy' | 'sci-fi' | 'nature' | 'artistic';
+  wanVideoCategory: '' | 'fantasy' | 'sci-fi' | 'nature' | 'artistic' | '70s-vibes' | 'cinematic' | 'people' | 'vehicles' | 'sports' | 'horror' | 'historical' | 'product' | 'music-dance';
   wanVideoSubject: string;
   wanVideoAction: string;
   wanVideoEnvironment: string;
@@ -588,6 +741,18 @@ export interface AppSliceState {
   comfyUIObjectInfo: any | null;
   versionInfo: VersionInfo | null;
   globalError: { title: string; message: string } | null;
+  pendingLtxTransfer: {
+    id: string;
+    imageDataUrl?: string;
+    prompt?: string;
+    ttsText?: string;
+    audioDataUrl?: string;
+    audioName?: string;
+    videoDataUrl?: string;
+    directorOptions?: LtxDirectorGenerationInfo;
+    selectedCheckpoint?: string;
+    selectedLora?: string;
+  } | null;
 
   // Modals & Panels
   isSettingsModalOpen: boolean;

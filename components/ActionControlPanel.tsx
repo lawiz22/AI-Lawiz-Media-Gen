@@ -27,7 +27,9 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
         ? (generationMode === 't2i' ? (options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL)
         : options.provider === 'mammouth'
             ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
-            : (options.comfyModelType || 'sdxl');
+            : options.comfyCharacterUnet
+                ? `Qwen Edit Multi-Angle (${options.comfyCharacterUnet})`
+                : (options.comfyModelType || 'sdxl');
 
     return (
         <div className="bg-bg-secondary p-4 rounded-2xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">

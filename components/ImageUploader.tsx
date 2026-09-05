@@ -75,11 +75,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
   };
 
   return (
-    <div>
+    <div className="min-w-0">
       {label && <label htmlFor={id} className="block text-sm font-medium text-text-secondary mb-2">{label}</label>}
       <label
         htmlFor={disabled ? undefined : id}
-        className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg transition-colors duration-200
+        className={`relative flex flex-col items-center justify-center w-full h-48 overflow-hidden border-2 border-dashed rounded-lg transition-colors duration-200
         ${disabled 
             ? 'border-border-primary bg-bg-tertiary/50 opacity-50 cursor-not-allowed' 
             : isDragging 
