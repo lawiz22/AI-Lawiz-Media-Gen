@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LAWIZ'S Media Generator</title>
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Permanent+Marker&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://esm.sh/react-image-crop@11.0.5/dist/ReactCrop.css">
+    <style>
+      :root {
+        font-family: 'Inter', sans-serif;
+      }
+      body {
+        margin: 0;
+        background-color: var(--color-bg-primary, #111827);
+      }
+    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+
+<style>
+  :root[data-theme="cyberpunk"] {
+    --color-bg-primary: #030712;
+    --color-bg-secondary: #111827;
+    --color-bg-tertiary: #1f2937;
+    --color-bg-tertiary-hover: #374151;
+    --color-border: #374151;
+    --color-text-primary: #f9fafb;
+    --color-text-secondary: #9ca3af;
+    --color-text-muted: #6b7280;
+    --color-accent: #06b6d4;
+    --color-accent-light: #38c7e0;
+    --color-accent-lighter: #69d8eb;
+    --color-accent-text: #ffffff;
+    --color-accent-hover: #0891b2;
+    --color-danger: #f87171;
+    --color-danger-bg: rgba(127, 29, 29, 0.2);
+    --color-banner-fill: #e0f2fe;
+    --color-banner-glow-1: #0ea5e9;
+    --color-banner-glow-2: #0284c7;
+    --color-highlight-green: #4ade80;
+    --color-highlight-yellow: #facc15;
+  }
+  :root[data-theme="synthwave"] {
+    --color-bg-primary: #1a103c;
+    --color-bg-secondary: #2c1e5b;
+    --color-bg-tertiary: #452a8a;
+    --color-bg-tertiary-hover: #5935b5;
+    --color-border: #6d48c7;
+    --color-text-primary: #f3e8ff;
+    --color-text-secondary: #d8b4fe;
+    --color-text-muted: #a78bfa;
+    --color-accent: #ec4899;
+    --color-accent-light: #f06bab;
+    --color-accent-lighter: #f48ecb;
+    --color-accent-text: #ffffff;
+    --color-accent-hover: #db2777;
+    --color-danger: #fb923c;
+    --color-danger-bg: rgba(154, 52, 18, 0.2);
+    --color-banner-fill: #f5d0fe;
+    --color-banner-glow-1: #ec4899;
+    --color-banner-glow-2: #c026d3;
+    --color-highlight-green: #4ade80;
+    --color-highlight-yellow: #facc15;
+  }
+  :root[data-theme="studio-light"] {
+    --color-bg-primary: #ffffff;
+    --color-bg-secondary: #f9fafb;
+    --color-bg-tertiary: #f3f4f6;
+    --color-bg-tertiary-hover: #e5e7eb;
+    --color-border: #d1d5db;
+    --color-text-primary: #111827;
+    --color-text-secondary: #4b5563;
+    --color-text-muted: #6b7280;
+    --color-accent: #2563eb;
+    --color-accent-light: #5182f0;
+    --color-accent-lighter: #7da1f5;
+    --color-accent-text: #ffffff;
+    --color-accent-hover: #1d4ed8;
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.1);
+    --color-banner-fill: #1e3a8a;
+    --color-banner-glow-1: #2563eb;
+    --color-banner-glow-2: #1e40af;
+    --color-highlight-green: #16a34a;
+    --color-highlight-yellow: #ca8a04;
+  }
+  :root[data-theme="70s-groove"] {
+    --color-bg-primary: #3B2F2F;
+    --color-bg-secondary: #5D4037;
+    --color-bg-tertiary: #795548;
+    --color-bg-tertiary-hover: #8D6E63;
+    --color-border: #A1887F;
+    --color-text-primary: #FFCC80;
+    --color-text-secondary: #AED581;
+    --color-text-muted: #BCAAA4;
+    --color-accent: #FF7043;
+    --color-accent-light: #ff8d69;
+    --color-accent-lighter: #ffab8f;
+    --color-accent-text: #FFFFFF;
+    --color-accent-hover: #F4511E;
+    --color-danger: #E57373;
+    --color-danger-bg: rgba(229, 115, 115, 0.1);
+    --color-banner-fill: #FFCC80;
+    --color-banner-glow-1: #FF7043;
+    --color-banner-glow-2: #E64A19;
+    --color-highlight-green: #4ade80;
+    --color-highlight-yellow: #facc15;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out forwards;
+  }
+  .bg-grid-white\[\/0\.05\] {
+    background-image: linear-gradient(white 1px, transparent 1px), linear-gradient(to right, white 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+</style>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'bg-primary': 'var(--color-bg-primary)',
+            'bg-secondary': 'var(--color-bg-secondary)',
+            'bg-tertiary': 'var(--color-bg-tertiary)',
+            'bg-tertiary-hover': 'var(--color-bg-tertiary-hover)',
+            'text-primary': 'var(--color-text-primary)',
+            'text-secondary': 'var(--color-text-secondary)',
+            'text-muted': 'var(--color-text-muted)',
+            'accent': 'var(--color-accent)',
+            'accent-light': 'var(--color-accent-light)',
+            'accent-lighter': 'var(--color-accent-lighter)',
+            'accent-text': 'var(--color-accent-text)',
+            'accent-hover': 'var(--color-accent-hover)',
+            'border-primary': 'var(--color-border)',
+            'danger': 'var(--color-danger)',
+            'danger-bg': 'var(--color-danger-bg)',
+            'highlight-green': 'var(--color-highlight-green)',
+            'highlight-yellow': 'var(--color-highlight-yellow)',
+          },
+          fontFamily: {
+            'caveat': ['Caveat', 'cursive'],
+            'permanent-marker': ['"Permanent Marker"', 'cursive'],
+          },
+        },
+      },
+    };
+  </script>
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19?dev",
+    "react-dom/client": "https://esm.sh/react-dom@19/client?dev",
+    "react-dom": "https://esm.sh/react-dom@19?dev",
+    "react/": "https://esm.sh/react@19/",
+    "react-dom/": "https://esm.sh/react-dom@19/",
+    "react-redux": "https://esm.sh/react-redux@9.2.0?deps=react@19&dev",
+    "@reduxjs/toolkit": "https://esm.sh/@reduxjs/toolkit@2.12.0?dev",
+    "@google/genai": "https://esm.sh/@google/genai@2.20.0?dev",
+    "@mediapipe/tasks-vision": "https://esm.sh/@mediapipe/tasks-vision@0.10.14?dev",
+    "jszip": "https://esm.sh/jszip@3.10.1?dev",
+    "idb": "https://esm.sh/idb@8.0.0?dev",
+    "url": "https://esm.sh/url@0.11.3?dev",
+    "react-image-crop": "https://esm.sh/react-image-crop@11.0.5?deps=react@19&dev",
+    "framer-motion": "https://esm.sh/framer-motion@13.1.1?deps=react@19&dev",
+    "clsx": "https://esm.sh/clsx@2.1.1?dev",
+    "tailwind-merge": "https://esm.sh/tailwind-merge@2.4.0?dev"
+  }
+}
+</script>
+  <script type="module" crossorigin src="./assets/index-C2BFNGGT.js"></script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script async src="https://apis.google.com/js/api.js"></script>
+    <script async src="https://accounts.google.com/gsi/client"></script>
+  </body>
+</html>

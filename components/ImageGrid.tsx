@@ -359,7 +359,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className={`grid gap-4 ${images.length === 1 ? 'grid-cols-1 max-w-2xl mx-auto' : 'grid-cols-1 md:grid-cols-2'}`}>
           {images.map((image, index) => {
             const isEnhancing = enhancingIndex === index;
             const finalSrc = enhancedImages[index] || image.src;
@@ -373,8 +373,8 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
               : `Output ${index + 1}`;
 
             return (
-              <div key={index} className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
-                <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="object-cover w-full h-full" />
+              <div key={index} className="group relative min-h-64 bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
+                <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="block w-full max-h-[72vh] object-contain" />
                 {activeTab === 'character-generator' && options.provider === 'comfyui' && characterAngle && (
                   <div className="absolute left-2 top-2 rounded-md bg-black/70 px-2 py-1 text-xs font-bold text-white shadow-lg">
                     {characterOutputLabel}
@@ -400,7 +400,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                     </div>
 
                     {/* Main Action Buttons (Centered) */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                    <div className="absolute inset-x-2 top-1/2 -translate-y-1/2">
                       {isEnhancing ? (
                         <div className="text-center text-white">
                           <SpinnerIcon className="w-8 h-8 animate-spin mx-auto mb-2" />
@@ -412,7 +412,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                           <p className="text-xs mt-1">{errorIndex[index]}</p>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center justify-center gap-2">
                           <button
                             onClick={() => handleOpenZoom(index)}
                             title="Zoom In"

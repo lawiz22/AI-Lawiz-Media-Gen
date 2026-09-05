@@ -1,0 +1,345 @@
+LAWIZ MEDIA GENERATOR - COMFYUI REQUIRED NODES
+================================================
+
+Audit date: 2026-09-05
+Source audited: every class_type used in constants.ts,
+services/comfyUIService.ts, services/characterAnglesWorkflow.ts and
+services/ltxDirectorWorkflow.ts.
+
+SUMMARY
+-------
+
+Lawiz currently references 88 distinct ComfyUI node classes.
+
+- 54 are included in a current ComfyUI installation (core + comfy_extras).
+- 34 are supplied by external custom-node packs.
+- The complete feature set uses 20 external repositories when the LTX Director
+  compatibility dependency is included.
+
+IMPORTANT: update ComfyUI before installing custom nodes. Recent versions include
+WAN, Qwen Image/Edit, FLUX, LTX audio/video and advanced sampler nodes that older
+ComfyUI installations do not contain.
+
+The easiest installation method is ComfyUI Manager:
+
+1. Update ComfyUI.
+2. Open Manager > Custom Nodes Manager.
+3. Search for and install every package in the COMPLETE INSTALL LIST below.
+4. Use Manager > Install Missing Custom Nodes if it is available.
+5. Restart ComfyUI completely.
+6. Reopen Lawiz and reconnect to ComfyUI.
+
+For manual installation, clone each repository into:
+
+  C:\ComfyUI_windows_portable\ComfyUI\custom_nodes
+
+Then follow that repository's installation instructions. Prefer Manager because
+packages such as Nunchaku, SeedVR2, Impact Pack and TTS Audio Suite require extra
+Python dependencies or installation scripts.
+
+
+COMPLETE INSTALL LIST - ALL LAWIZ FEATURES
+------------------------------------------
+
+[01] ComfyUI-GGUF
+Repository: https://github.com/city96/ComfyUI-GGUF
+Lawiz nodes: CLIPLoaderGGUF, DualCLIPLoaderGGUF, UnetLoaderGGUF
+Used by: Qwen GGUF, Qwen Edit GGUF, WAN GGUF, FLUX Krea GGUF, Z-Image GGUF.
+
+[02] ComfyUI-MultiGPU
+Repository: https://github.com/pollockjj/ComfyUI-MultiGPU
+Lawiz node: CLIPLoaderMultiGPU
+Used by: Qwen Image workflow using the MultiGPU CLIP loader.
+
+[03] ComfyUI-nunchaku
+Repository: https://github.com/nunchux-ai/ComfyUI-nunchaku
+Documentation: https://nunchaku.tech/docs/ComfyUI-nunchaku/get_started/installation.html
+Lawiz nodes: NunchakuFluxDiTLoader, NunchakuFluxLoraLoader,
+NunchakuTextEncoderLoader
+Used by: Nunchaku FLUX image and Nunchaku Kontext modes.
+Special note: use the official installer instructions because the Nunchaku wheel
+must match Python, PyTorch, CUDA and the GPU architecture.
+
+[04] ComfyUI-SeedVR2_VideoUpscaler
+Repository: https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler
+Manager name: ComfyUI-SeedVR2_VideoUpscaler
+Lawiz nodes: SeedVR2LoadDiTModel, SeedVR2LoadVAEModel,
+SeedVR2VideoUpscaler
+Used by: SeedVR2 image/video upscale panel.
+Models are downloaded automatically on first use or stored under
+ComfyUI/models/SEEDVR2.
+
+[05] ComfyUI-Easy-Use
+Repository: https://github.com/yolain/ComfyUI-Easy-Use
+Lawiz nodes: easy cleanGpuUsed, easy clearCacheAll, easy showAnything
+Used by: SeedVR2 cleanup and Z-Image creative prompt handling.
+
+[06] ComfyUI-Florence2
+Repository: https://github.com/kijai/ComfyUI-Florence2
+Lawiz nodes: DownloadAndLoadFlorence2Model, Florence2Run
+Used by: Z-Image creative upscale prompt generation.
+
+[07] ComfyUI-ZImageTurboProgressiveLockedUpscale
+Repository: https://github.com/peterkickasspeter-civit/ComfyUI-ZImageTurboProgressiveLockedUpscale
+Lawiz node: ZImageTurboProgressiveLockedUpscale
+Used by: Z-Image creative upscale.
+
+[08] ComfyUI-KJNodes
+Repository: https://github.com/kijai/ComfyUI-KJNodes
+Lawiz nodes: LTX2SamplingPreviewOverride, PathchSageAttentionKJ,
+StringConstantMultiline, VAELoaderKJ
+Used by: LTX Director, WAN video SageAttention, prompt string utilities and
+advanced VAE loading.
+
+[09] WhatDreamsCost-ComfyUI
+Repository: https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI
+Lawiz nodes: LTXDirector, LTXDirectorGuide
+Used by: LTX 2.3 Director timeline workflow.
+
+[10] ComfyUI-LTXVideo
+Repository: https://github.com/Lightricks/ComfyUI-LTXVideo
+Used by: required compatibility dependency of WhatDreamsCost LTX Director.
+Important: WhatDreamsCost requires the latest ComfyUI-LTXVideo and latest
+ComfyUI-KJNodes even though recent ComfyUI versions provide several LTX classes
+natively.
+
+[11] ComfyUI-VideoHelperSuite
+Repository: https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite
+Lawiz node: VHS_VideoCombine
+Used by: WAN 2.2 text-to-video and image-to-video output encoding.
+FFmpeg must also be available to ComfyUI.
+
+[12] ComfyUI Impact Pack
+Repository: https://github.com/ltdrdata/ComfyUI-Impact-Pack
+Lawiz nodes: FaceDetailer, SAMLoader
+Used by: SD 1.5 Face Detailer.
+
+[13] ComfyUI Impact Subpack
+Repository: https://github.com/ltdrdata/ComfyUI-Impact-Subpack
+Lawiz node: UltralyticsDetectorProvider
+Used by: SD 1.5 Face Detailer bounding-box detector.
+This is separate from Impact Pack and must also be installed.
+
+[14] rgthree-comfy
+Repository: https://github.com/rgthree/rgthree-comfy
+Lawiz node: Power Lora Loader (rgthree)
+Used by: FLUX Krea multi-LoRA workflow.
+
+[15] ControlAltAI Nodes
+Repository: https://github.com/gseth/ControlAltAI-Nodes
+Lawiz node: FluxResolutionNode
+Used by: Qwen T2I GGUF resolution calculation.
+
+[16] VRGameDevGirl Custom Nodes
+Repository: https://github.com/vrgamegirl19/comfyui-vrgamedevgirl
+Lawiz node: FastFilmGrain
+Used by: optional film grain in WAN video workflows.
+
+[17] ComfyUI Simple Readable Metadata-SG
+Repository: https://github.com/ShammiG/ComfyUI-Simple_Readable_Metadata-SG
+Lawiz node: SimpleReadableMetadataSG
+Used by: Character Angles source-image loading and metadata handling.
+
+[18] TTS Audio Suite
+Repository: https://github.com/diodiogod/TTS-Audio-Suite
+Lawiz nodes: ChatterBoxOfficial23LangEngineNode, UnifiedTTSTextNode
+Used by: multilingual ChatterBox TTS mode.
+Special note: install with Manager so its install.py can resolve Python and audio
+dependencies correctly.
+
+[19] ComfyUI_ChatterBox_Voice
+Repository: https://github.com/ShmuelRonen/ComfyUI_ChatterBox_Voice
+Lawiz node: ChatterBoxVoiceTTS
+Used by: voice-cloning ChatterBox TTS mode.
+
+[20] comfy-image-saver
+Repository: https://github.com/giriss/comfy-image-saver
+Lawiz node used from this pack: String Literal
+Used by: voice-cloning ChatterBox workflow.
+Note: ComfyLiterals can expose a node with the same class name, but the audited
+working installation resolves it from comfy-image-saver.
+
+
+PACKAGES BY LAWIZ FEATURE
+-------------------------
+
+Basic SD 1.5 / SDXL / standard FLUX
+  - Current ComfyUI only; no custom nodes required.
+
+Qwen Image GGUF
+  - ComfyUI-GGUF
+  - ComfyUI-MultiGPU for the MultiGPU workflow variant
+  - ControlAltAI Nodes for FluxResolutionNode
+
+Qwen Image Edit / Character Angles
+  - Current ComfyUI (Qwen edit nodes are now native)
+  - ComfyUI-GGUF when a GGUF text encoder is selected
+  - ComfyUI Simple Readable Metadata-SG for Character Angles
+
+Z-Image generation
+  - Current ComfyUI
+  - ComfyUI-GGUF when GGUF models are selected
+
+Z-Image creative upscale
+  - ComfyUI-Florence2
+  - ComfyUI-ZImageTurboProgressiveLockedUpscale
+  - ComfyUI-Easy-Use
+  - ComfyUI-KJNodes when SageAttention is enabled
+
+SeedVR2 upscale
+  - ComfyUI-SeedVR2_VideoUpscaler
+  - ComfyUI-Easy-Use
+
+WAN 2.2 image/video generation
+  - Current ComfyUI
+  - ComfyUI-GGUF for GGUF loaders
+  - ComfyUI-KJNodes for PathchSageAttentionKJ
+  - ComfyUI-VideoHelperSuite for VHS_VideoCombine
+  - VRGameDevGirl Custom Nodes for optional FastFilmGrain
+
+Nunchaku FLUX / Kontext
+  - ComfyUI-nunchaku
+
+FLUX Krea
+  - ComfyUI-GGUF
+  - rgthree-comfy
+
+SD 1.5 Face Detailer
+  - ComfyUI Impact Pack
+  - ComfyUI Impact Subpack
+
+LTX 2.3 Director
+  - WhatDreamsCost-ComfyUI
+  - ComfyUI-LTXVideo (latest)
+  - ComfyUI-KJNodes (latest)
+
+Text-to-Speech
+  - TTS Audio Suite for multilingual ChatterBox
+  - ComfyUI_ChatterBox_Voice for voice cloning
+  - comfy-image-saver or another compatible provider of String Literal
+
+
+CURRENT REFERENCE INSTALLATION STATUS
+-------------------------------------
+
+ComfyUI checked at: http://127.0.0.1:8188/object_info
+ComfyUI root checked: C:\ComfyUI_windows_portable\ComfyUI
+
+Result: 85 of 88 Lawiz node classes are currently loaded.
+
+Missing classes:
+  - NunchakuFluxDiTLoader
+  - NunchakuFluxLoraLoader
+  - NunchakuTextEncoderLoader
+
+Install or repair ComfyUI-nunchaku to enable both Nunchaku modes. The current
+installation does not expose these three nodes.
+
+
+EXHAUSTIVE NODE CLASS INVENTORY
+-------------------------------
+
+Native in current ComfyUI / comfy_extras (54):
+  AddTextPrefix
+  BasicGuider
+  BasicScheduler
+  CFGGuider
+  CFGNorm
+  CheckpointLoaderSimple
+  CLIPLoader
+  CLIPTextEncode
+  CLIPVisionEncode
+  CLIPVisionLoader
+  ConditioningZeroOut
+  CreateVideo
+  DualCLIPLoader
+  EmptyHunyuanLatentVideo
+  EmptyLatentImage
+  EmptySD3LatentImage
+  FluxGuidance
+  FluxKontextImageScale
+  ImageScaleBy
+  ImageScaleToTotalPixels
+  ImageUpscaleWithModel
+  KSampler
+  KSamplerAdvanced
+  KSamplerSelect
+  LatentUpscaleModelLoader
+  LoadAudio
+  LoadImage
+  LoraLoader
+  LoraLoaderModelOnly
+  LTXVAudioVAEDecode
+  LTXVConcatAVLatent
+  LTXVConditioning
+  LTXVCropGuides
+  LTXVLatentUpsampler
+  LTXVSeparateAVLatent
+  MaskToImage
+  ModelSamplingAuraFlow
+  ModelSamplingFlux
+  ModelSamplingSD3
+  PreviewImage
+  RandomNoise
+  ReferenceLatent
+  SamplerCustomAdvanced
+  SaveAudio
+  SaveImage
+  SaveVideo
+  TextEncodeQwenImageEditPlus
+  UNETLoader
+  UpscaleModelLoader
+  VAEDecode
+  VAEEncode
+  VAELoader
+  WanFirstLastFrameToVideo
+  WanImageToVideo
+
+External custom nodes (34):
+  ChatterBoxOfficial23LangEngineNode       - TTS Audio Suite
+  ChatterBoxVoiceTTS                       - ComfyUI_ChatterBox_Voice
+  CLIPLoaderGGUF                           - ComfyUI-GGUF
+  CLIPLoaderMultiGPU                       - ComfyUI-MultiGPU
+  DownloadAndLoadFlorence2Model            - ComfyUI-Florence2
+  DualCLIPLoaderGGUF                       - ComfyUI-GGUF
+  easy cleanGpuUsed                        - ComfyUI-Easy-Use
+  easy clearCacheAll                       - ComfyUI-Easy-Use
+  easy showAnything                        - ComfyUI-Easy-Use
+  FaceDetailer                             - ComfyUI Impact Pack
+  FastFilmGrain                            - VRGameDevGirl Custom Nodes
+  Florence2Run                             - ComfyUI-Florence2
+  FluxResolutionNode                       - ControlAltAI Nodes
+  LTX2SamplingPreviewOverride              - ComfyUI-KJNodes
+  LTXDirector                              - WhatDreamsCost-ComfyUI
+  LTXDirectorGuide                         - WhatDreamsCost-ComfyUI
+  NunchakuFluxDiTLoader                    - ComfyUI-nunchaku
+  NunchakuFluxLoraLoader                   - ComfyUI-nunchaku
+  NunchakuTextEncoderLoader                - ComfyUI-nunchaku
+  PathchSageAttentionKJ                    - ComfyUI-KJNodes
+  Power Lora Loader (rgthree)              - rgthree-comfy
+  SAMLoader                                - ComfyUI Impact Pack
+  SeedVR2LoadDiTModel                      - ComfyUI-SeedVR2_VideoUpscaler
+  SeedVR2LoadVAEModel                      - ComfyUI-SeedVR2_VideoUpscaler
+  SeedVR2VideoUpscaler                     - ComfyUI-SeedVR2_VideoUpscaler
+  SimpleReadableMetadataSG                 - Simple Readable Metadata-SG
+  String Literal                           - comfy-image-saver / ComfyLiterals
+  StringConstantMultiline                  - ComfyUI-KJNodes
+  UltralyticsDetectorProvider              - ComfyUI Impact Subpack
+  UnetLoaderGGUF                           - ComfyUI-GGUF
+  UnifiedTTSTextNode                       - TTS Audio Suite
+  VAELoaderKJ                              - ComfyUI-KJNodes
+  VHS_VideoCombine                         - ComfyUI-VideoHelperSuite
+  ZImageTurboProgressiveLockedUpscale      - Z-Image Progressive Locked Upscale
+
+
+WHAT THIS FILE DOES NOT INSTALL
+-------------------------------
+
+This is a node dependency list, not a model inventory. Checkpoints, diffusion
+models, LoRAs, CLIP/text encoders, VAEs, SAM/Ultralytics detectors, upscale
+models and SeedVR2 model weights are separate files. Lawiz reads the available
+model choices from ComfyUI after the required node classes have loaded.
+
+If a workflow reports "Node does not exist", compare the exact class name in the
+error with the exhaustive inventory above, update the corresponding package,
+restart ComfyUI, then reconnect Lawiz.
