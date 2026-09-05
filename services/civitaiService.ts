@@ -54,6 +54,7 @@ export interface CivitaiUsageMetadata {
     scheduler?: string;
     steps?: number;
     cfg?: number;
+    guidance?: number;
     source: 'civitai' | 'archive' | 'manual';
     updatedAt: string;
 }

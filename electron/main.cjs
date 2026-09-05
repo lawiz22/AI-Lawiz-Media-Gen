@@ -225,19 +225,27 @@ function findRecommendedSettings(value) {
         const scheduler = entries.scheduler ?? entries.scheduletype ?? entries.schedule;
         const steps = Number(entries.steps);
         const cfg = Number(entries.cfgscale ?? entries.cfg);
+        const guidance = Number(entries.guidance);
         const candidate = {
             sampler: typeof sampler === 'string' ? sampler.trim() : undefined,
             scheduler: typeof scheduler === 'string' ? scheduler.trim() : undefined,
             steps: Number.isFinite(steps) && steps > 0 ? steps : undefined,
             cfg: Number.isFinite(cfg) && cfg > 0 ? cfg : undefined,
+            guidance: Number.isFinite(guidance) && guidance > 0 ? guidance : undefined,
         };
         const score = Object.values(candidate).filter(item => item !== undefined).length;
         if (score >= 2) candidates.push({ candidate, score });
         for (const child of Object.values(current)) if (child && typeof child === 'object') visit(child);
     };
     visit(value);
-    candidates.sort((left, right) => right.score - left.score);
-    return candidates[0]?.candidate;
+    const grouped = new Map();
+    for (const { candidate, score } of candidates) {
+        const key = JSON.stringify(candidate);
+        const existing = grouped.get(key);
+        grouped.set(key, { candidate, score, count: (existing?.count || 0) + 1 });
+    }
+    return [...grouped.values()]
+        .sort((left, right) => right.count - left.count || right.score - left.score)[0]?.candidate;
 }
 
 function collectPromptExamples(value, source) {
@@ -308,7 +316,42 @@ function getWorkflowPromptExample(workflow) {
     return positiveCandidates[0] ? { positive: positiveCandidates[0], negative: negativeCandidates[0], source: 'archive' } : undefined;
 }
 
-async function fetchArchiveGalleryExamples(value) {
+function getWorkflowRecommendedSettings(workflow) {
+    const nodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
+    const settings = {};
+    const kSampler = nodes.find(node => node?.type === 'KSampler');
+    if (Array.isArray(kSampler?.widgets_values)) {
+        const [, , steps, cfg, sampler, scheduler] = kSampler.widgets_values;
+        if (Number(steps) > 0) settings.steps = Number(steps);
+        if (Number(cfg) > 0) settings.cfg = Number(cfg);
+        if (typeof sampler === 'string') settings.sampler = sampler;
+        if (typeof scheduler === 'string') settings.scheduler = scheduler;
+    }
+    const advancedSampler = nodes.find(node => node?.type === 'KSamplerAdvanced');
+    if (Array.isArray(advancedSampler?.widgets_values)) {
+        const [, , , steps, cfg, sampler, scheduler] = advancedSampler.widgets_values;
+        if (Number(steps) > 0) settings.steps ??= Number(steps);
+        if (Number(cfg) > 0) settings.cfg ??= Number(cfg);
+        if (typeof sampler === 'string') settings.sampler ??= sampler;
+        if (typeof scheduler === 'string') settings.scheduler ??= scheduler;
+    }
+    const samplerSelect = nodes.find(node => node?.type === 'KSamplerSelect');
+    if (typeof samplerSelect?.widgets_values?.[0] === 'string') settings.sampler ??= samplerSelect.widgets_values[0];
+    const basicScheduler = nodes.find(node => node?.type === 'BasicScheduler');
+    if (Array.isArray(basicScheduler?.widgets_values)) {
+        const [scheduler, steps] = basicScheduler.widgets_values;
+        if (typeof scheduler === 'string') settings.scheduler ??= scheduler;
+        if (Number(steps) > 0) settings.steps ??= Number(steps);
+    }
+    const fluxTextEncoder = nodes.find(node => node?.type === 'CLIPTextEncodeFlux');
+    if (Array.isArray(fluxTextEncoder?.widgets_values)) {
+        const guidance = fluxTextEncoder.widgets_values.findLast(value => Number.isFinite(Number(value)));
+        if (Number(guidance) > 0) settings.guidance = Number(guidance);
+    }
+    return Object.keys(settings).length >= 2 ? settings : undefined;
+}
+
+async function fetchArchiveGalleryWorkflows(value, limit = 20) {
     const postIds = [];
     const visit = current => {
         if (!current || typeof current !== 'object') return;
@@ -320,8 +363,8 @@ async function fetchArchiveGalleryExamples(value) {
         }
     };
     visit(value);
-    const uniqueIds = [...new Set(postIds)].slice(0, 20);
-    const examples = [];
+    const uniqueIds = [...new Set(postIds)].slice(0, limit);
+    const workflows = [];
     let nextIndex = 0;
     const worker = async () => {
         while (nextIndex < uniqueIds.length) {
@@ -330,15 +373,19 @@ async function fetchArchiveGalleryExamples(value) {
             try {
                 const response = await fetch(`https://genur.art/api/posts/${postId}/workflow?download=1`, { redirect: 'follow' });
                 if (!response.ok) continue;
-                const example = getWorkflowPromptExample(await response.json());
-                if (example) examples.push(example);
+                workflows.push(await response.json());
             } catch {
                 // Some archived gallery entries do not retain their workflow.
             }
         }
     };
     await Promise.all(Array.from({ length: Math.min(4, uniqueIds.length) }, worker));
-    return examples;
+    return workflows;
+}
+
+async function fetchArchiveGalleryExamples(value) {
+    const workflows = await fetchArchiveGalleryWorkflows(value);
+    return workflows.map(getWorkflowPromptExample).filter(Boolean);
 }
 
 async function saveUsageMetadata(resolvedPath, usageMetadata) {
@@ -1219,12 +1266,14 @@ ipcMain.handle('set-local-model-usage-metadata', async (event, request) => {
     const triggerWords = normalizeTriggerWords(request?.triggerWords);
     const steps = Number(request?.steps);
     const cfg = Number(request?.cfg);
+    const guidance = Number(request?.guidance);
     const values = {
         triggerWords: triggerWords.length ? triggerWords : undefined,
         sampler: String(request?.sampler || '').trim() || undefined,
         scheduler: String(request?.scheduler || '').trim() || undefined,
         steps: Number.isFinite(steps) && steps > 0 ? steps : undefined,
         cfg: Number.isFinite(cfg) && cfg > 0 ? cfg : undefined,
+        guidance: Number.isFinite(guidance) && guidance > 0 ? guidance : undefined,
     };
     const usageMetadata = Object.values(values).some(value => value !== undefined) ? {
         ...values,
@@ -1244,6 +1293,7 @@ ipcMain.handle('fetch-local-model-usage-metadata', async (event, request) => {
     if (!item) throw new Error('Model is missing from the local inventory.');
 
     let metadataSource;
+    let galleryWorkflows = [];
     if (source === 'civitai') {
         let version;
         if (item.installedVersionId) {
@@ -1260,7 +1310,16 @@ ipcMain.handle('fetch-local-model-usage-metadata', async (event, request) => {
         let model;
         const modelId = version?.modelId || item.modelId;
         if (modelId) model = await fetchCivitaiJson(provider, `/api/v1/models/${modelId}`);
-        metadataSource = { version, model };
+        let images = [];
+        if (version?.id) {
+            try {
+                const imageResult = await fetchCivitaiJson(provider, `/api/v1/images?modelVersionId=${version.id}&limit=100&sort=Most%20Reactions&period=AllTime`);
+                images = imageResult?.items || [];
+            } catch {
+                // Model and version metadata may still contain usable recommendations.
+            }
+        }
+        metadataSource = { version, model, images };
     } else {
         const sha256 = String(item.sha256 || await hashFile(resolvedPath)).toLowerCase();
         const response = await fetch(`https://civitaiarchive.com/sha256/${sha256}`, { redirect: 'follow' });
@@ -1268,21 +1327,43 @@ ipcMain.handle('fetch-local-model-usage-metadata', async (event, request) => {
         const html = await response.text();
         const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/i);
         if (!nextDataMatch) throw new Error('CivArchive returned no structured metadata.');
-        metadataSource = JSON.parse(nextDataMatch[1])?.props?.pageProps;
+        const pageProps = JSON.parse(nextDataMatch[1])?.props?.pageProps;
+        const archiveSources = [pageProps];
+        const archiveModel = Array.isArray(pageProps?.models) ? pageProps.models[0] : undefined;
+        const modelId = archiveModel?.id;
+        const versionId = archiveModel?.version?.id || archiveModel?.versions?.[0]?.id;
+        if (modelId) {
+            const modelUrl = new URL(`/models/${modelId}`, 'https://civitaiarchive.com');
+            if (versionId) modelUrl.searchParams.set('modelVersionId', versionId);
+            const modelResponse = await fetch(modelUrl, { redirect: 'follow' });
+            if (modelResponse.ok) {
+                const modelHtml = await modelResponse.text();
+                const modelDataMatch = modelHtml.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/i);
+                if (modelDataMatch) archiveSources.push(JSON.parse(modelDataMatch[1])?.props?.pageProps);
+            }
+        }
+        galleryWorkflows = await fetchArchiveGalleryWorkflows(archiveSources, 6);
+        metadataSource = archiveSources;
     }
 
     const existing = item.usageMetadata || {};
-    let usageMetadata;
-    if (item.kind === 'lora') {
-        const directWords = normalizeTriggerWords(metadataSource?.version?.trainedWords);
-        const triggerWords = normalizeTriggerWords(directWords.length ? directWords : findTriggerWords(metadataSource));
-        if (!triggerWords.length) throw new Error(`No trigger words were found on ${source === 'archive' ? 'CivArchive' : 'Civitai'}.`);
-        usageMetadata = { ...existing, triggerWords, source, updatedAt: new Date().toISOString() };
-    } else {
-        const settings = findRecommendedSettings(metadataSource);
-        if (!settings) throw new Error(`No recommended generation settings were found on ${source === 'archive' ? 'CivArchive' : 'Civitai'}.`);
-        usageMetadata = { ...existing, ...settings, source, updatedAt: new Date().toISOString() };
+    const directWords = normalizeTriggerWords(metadataSource?.version?.trainedWords);
+    const triggerWords = normalizeTriggerWords(directWords.length ? directWords : findTriggerWords(metadataSource));
+    const settings = findRecommendedSettings(metadataSource)
+        || galleryWorkflows.map(getWorkflowRecommendedSettings).find(Boolean);
+    if (item.kind === 'lora' && !triggerWords.length && !settings) {
+        throw new Error(`No trigger words or recommended settings were found on ${source === 'archive' ? 'CivArchive' : 'Civitai'}.`);
     }
+    if (item.kind !== 'lora' && !settings) {
+        throw new Error(`No recommended generation settings were found on ${source === 'archive' ? 'CivArchive' : 'Civitai'}.`);
+    }
+    const usageMetadata = {
+        ...existing,
+        ...(triggerWords.length ? { triggerWords } : {}),
+        ...(settings || {}),
+        source,
+        updatedAt: new Date().toISOString(),
+    };
     return saveUsageMetadata(resolvedPath, usageMetadata);
 });
 

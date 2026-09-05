@@ -52,6 +52,7 @@ declare global {
         scheduler?: string;
         steps?: number;
         cfg?: number;
+        guidance?: number;
       }) => Promise<import('./services/civitaiService').CivitaiInventoryItem>;
       getLocalModelPromptExamples: (request: {
         modelPath: string;
