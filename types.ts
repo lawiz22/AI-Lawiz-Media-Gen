@@ -150,6 +150,7 @@ export interface GenerationOptions {
     modelName: string;
     provider: 'regular' | 'red';
     sources: Array<'civitai' | 'archive'>;
+    triggerWords?: string[];
   };
   comfyModelType?: ComfyModelType;
   comfyModel?: string; // Checkpoint name

@@ -76,6 +76,13 @@ interface ModelPromptExample {
     source: 'civitai' | 'archive';
 }
 
+const appendMissingTriggerWords = (prompt: string, triggerWords: string[] = []) => {
+    const trimmedPrompt = prompt.trim();
+    const normalizedPrompt = trimmedPrompt.toLowerCase();
+    const additions = triggerWords.filter(word => word.trim() && !normalizedPrompt.includes(word.trim().toLowerCase()));
+    return additions.length ? `${trimmedPrompt}${trimmedPrompt ? ', ' : ''}${additions.join(', ')}` : trimmedPrompt;
+};
+
 // Helper function to safely extract model lists from ComfyUI's object_info
 const getModelListFromInfo = (widgetInfo: any): string[] => {
     if (Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0])) {
@@ -217,8 +224,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     };
 
     const applyPromptExample = (example: ModelPromptExample) => {
+        const prompt = appendMissingTriggerWords(example.positive, options.comfyPromptExampleSource?.triggerWords);
         updateOptions({
-            comfyPrompt: example.positive,
+            comfyPrompt: prompt,
             ...(example.negative ? { comfyNegativePrompt: example.negative } : {}),
         });
         setPromptExamplesOpen(false);

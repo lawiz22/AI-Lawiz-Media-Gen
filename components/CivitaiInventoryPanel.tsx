@@ -305,6 +305,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
         const currentState = store.getState();
         const generationOptions = currentState.generation.options;
         const recommendedSettings = getRecommendedSettingUpdates(workflow.modelType, selectedItem.usageMetadata, currentState.app.comfyUIObjectInfo);
+        const savedTriggers = item.kind === 'lora' ? selectedItem.usageMetadata?.triggerWords || [] : [];
         const updates: Partial<GenerationOptions> = {
             provider: 'comfyui',
             comfyModelType: workflow.modelType,
@@ -314,10 +315,10 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                 modelName: item.modelName || item.fileName,
                 provider,
                 sources: exampleSources,
+                triggerWords: savedTriggers,
             } : undefined,
         };
         if (item.kind === 'lora') {
-            const savedTriggers = selectedItem.usageMetadata?.triggerWords || [];
             const compatibleBaseModel = getCompatibleBaseModel(workflow.modelType, currentState.app.comfyUIObjectInfo);
             Object.assign(updates, {
                 [`${workflow.loraPrefix}UseLora`]: true,
