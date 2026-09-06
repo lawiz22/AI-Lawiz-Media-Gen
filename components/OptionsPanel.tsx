@@ -202,6 +202,24 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const [promptExamplesOpen, setPromptExamplesOpen] = useState(false);
     const [promptExamplesLoading, setPromptExamplesLoading] = useState(false);
     const [promptExamplesError, setPromptExamplesError] = useState('');
+    const [promptExamplesStorage, setPromptExamplesStorage] = useState<'sidecar' | 'remote' | null>(null);
+    const [promptSidecarAvailable, setPromptSidecarAvailable] = useState(false);
+    const [promptExamplesSaving, setPromptExamplesSaving] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+        const modelPath = options.comfyPromptExampleSource?.modelPath;
+        setPromptExamples([]);
+        setPromptExamplesOpen(false);
+        setPromptExamplesStorage(null);
+        setPromptSidecarAvailable(false);
+        if (modelPath && window.electron) {
+            window.electron.hasLocalModelPromptExamples(modelPath)
+                .then(available => { if (active) setPromptSidecarAvailable(available); })
+                .catch(() => undefined);
+        }
+        return () => { active = false; };
+    }, [options.comfyPromptExampleSource?.modelPath]);
 
     const openPromptExamples = async () => {
         const source = options.comfyPromptExampleSource;
@@ -210,16 +228,36 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         setPromptExamplesLoading(true);
         setPromptExamplesError('');
         setPromptExamples([]);
+        setPromptExamplesStorage(null);
         try {
-            setPromptExamples(await window.electron.getLocalModelPromptExamples({
+            const result = await window.electron.getLocalModelPromptExamples({
                 modelPath: source.modelPath,
                 provider: source.provider,
                 sources: source.sources,
-            }));
+            });
+            setPromptExamples(result.examples);
+            setPromptExamplesStorage(result.storage);
+            setPromptSidecarAvailable(result.storage === 'sidecar');
         } catch (error) {
             setPromptExamplesError(error instanceof Error ? error.message : 'Prompt examples could not be loaded.');
         } finally {
             setPromptExamplesLoading(false);
+        }
+    };
+
+    const saveAllPromptExamples = async () => {
+        const modelPath = options.comfyPromptExampleSource?.modelPath;
+        if (!modelPath || !window.electron || !promptExamples.length) return;
+        setPromptExamplesSaving(true);
+        setPromptExamplesError('');
+        try {
+            await window.electron.saveLocalModelPromptExamples({ modelPath, examples: promptExamples });
+            setPromptExamplesStorage('sidecar');
+            setPromptSidecarAvailable(true);
+        } catch (error) {
+            setPromptExamplesError(error instanceof Error ? error.message : 'Prompt examples could not be saved.');
+        } finally {
+            setPromptExamplesSaving(false);
         }
     };
 
@@ -1189,7 +1227,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         </div>
                     )}
 
-                    {options.comfyPromptExampleSource && window.electron && <button type="button" onClick={openPromptExamples} disabled={isDisabled || promptExamplesLoading} className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">{promptExamplesLoading && <SpinnerIcon className="w-4 h-4 animate-spin" />}{promptExamplesLoading ? 'Loading examples...' : `Prompt examples · ${options.comfyPromptExampleSource.modelName}`}</button>}
+                    {options.comfyPromptExampleSource && window.electron && <button type="button" onClick={openPromptExamples} disabled={isDisabled || promptExamplesLoading} className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">{promptExamplesLoading && <SpinnerIcon className="w-4 h-4 animate-spin" />}{promptExamplesLoading ? 'Loading examples...' : `${promptSidecarAvailable ? 'Local prompts' : 'Find prompt examples'} · ${options.comfyPromptExampleSource.modelName}`}</button>}
                     <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea />
                     {modelType !== 'nunchaku-kontext-flux' && modelType !== 'nunchaku-flux-image' && modelType !== 'flux-krea' && (
                         <TextInput label="Negative Prompt" value={options.comfyNegativePrompt || ''} onChange={handleOptionChange('comfyNegativePrompt')} disabled={isDisabled} isTextArea />
@@ -1360,7 +1398,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 {options.provider === 'comfyui' ? renderComfyUIOptions() : renderGeminiOptions()}
             </div>
 
-            {promptExamplesOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPromptExamplesOpen(false)}><div role="dialog" aria-modal="true" aria-label="Model prompt examples" className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border-primary bg-bg-secondary shadow-xl" onClick={event => event.stopPropagation()}><div className="flex items-center justify-between gap-3 border-b border-border-primary p-4"><div className="min-w-0"><h3 className="font-bold text-text-primary">Prompt examples</h3><p className="truncate text-xs text-text-muted">{options.comfyPromptExampleSource?.modelName}</p></div><button type="button" onClick={() => setPromptExamplesOpen(false)} className="rounded p-2 text-text-secondary hover:bg-bg-tertiary" aria-label="Close prompt examples"><CloseIcon className="h-5 w-5" /></button></div><div className="min-h-32 overflow-y-auto divide-y divide-border-primary">{promptExamplesLoading && <div className="grid min-h-32 place-items-center"><SpinnerIcon className="h-6 w-6 animate-spin text-blue-400" /></div>}{promptExamplesError && <p className="p-4 text-sm text-red-400">{promptExamplesError}</p>}{!promptExamplesLoading && !promptExamplesError && promptExamples.map((example, index) => <div key={`${example.source}-${index}`} className="space-y-2 p-4"><div className="flex items-center justify-between gap-3"><span className={`text-[10px] font-bold uppercase ${example.source === 'archive' ? 'text-emerald-400' : 'text-blue-400'}`}>{example.source === 'archive' ? 'CivArchive' : 'Civitai'}</span><button type="button" onClick={() => applyPromptExample(example)} className="rounded bg-accent px-3 py-1.5 text-xs font-bold text-accent-text">Use prompt</button></div><div><p className="text-[10px] font-bold uppercase text-text-muted">Positive</p><p className="mt-1 whitespace-pre-wrap break-words text-sm text-text-primary">{example.positive}</p></div>{example.negative && <div><p className="text-[10px] font-bold uppercase text-text-muted">Negative</p><p className="mt-1 whitespace-pre-wrap break-words text-xs text-text-secondary">{example.negative}</p></div>}</div>)}</div></div></div>}
+            {promptExamplesOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPromptExamplesOpen(false)}><div role="dialog" aria-modal="true" aria-label="Model prompt examples" className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border-primary bg-bg-secondary shadow-xl" onClick={event => event.stopPropagation()}><div className="flex items-center justify-between gap-3 border-b border-border-primary p-4"><div className="min-w-0"><h3 className="font-bold text-text-primary">Prompt examples</h3><p className="truncate text-xs text-text-muted">{options.comfyPromptExampleSource?.modelName}{promptExamplesStorage === 'sidecar' ? ' · Saved locally' : ''}</p></div><div className="flex items-center gap-2">{promptExamplesStorage === 'remote' && promptExamples.length > 0 && <button type="button" onClick={saveAllPromptExamples} disabled={promptExamplesSaving} className="rounded border border-emerald-500/60 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50">{promptExamplesSaving ? 'Saving...' : 'Save all locally'}</button>}<button type="button" onClick={() => setPromptExamplesOpen(false)} className="rounded p-2 text-text-secondary hover:bg-bg-tertiary" aria-label="Close prompt examples"><CloseIcon className="h-5 w-5" /></button></div></div><div className="min-h-32 overflow-y-auto divide-y divide-border-primary">{promptExamplesLoading && <div className="grid min-h-32 place-items-center"><SpinnerIcon className="h-6 w-6 animate-spin text-blue-400" /></div>}{promptExamplesError && <p className="p-4 text-sm text-red-400">{promptExamplesError}</p>}{!promptExamplesLoading && promptExamples.map((example, index) => <div key={`${example.source}-${index}`} className="space-y-2 p-4"><div className="flex items-center justify-between gap-3"><span className={`text-[10px] font-bold uppercase ${example.source === 'archive' ? 'text-emerald-400' : 'text-blue-400'}`}>{example.source === 'archive' ? 'CivArchive' : 'Civitai'}</span><button type="button" onClick={() => applyPromptExample(example)} className="rounded bg-accent px-3 py-1.5 text-xs font-bold text-accent-text">Use prompt</button></div><div><p className="text-[10px] font-bold uppercase text-text-muted">Positive</p><p className="mt-1 whitespace-pre-wrap break-words text-sm text-text-primary">{example.positive}</p></div>{example.negative && <div><p className="text-[10px] font-bold uppercase text-text-muted">Negative</p><p className="mt-1 whitespace-pre-wrap break-words text-xs text-text-secondary">{example.negative}</p></div>}</div>)}</div></div></div>}
 
         </div>
     );

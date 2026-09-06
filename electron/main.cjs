@@ -207,6 +207,25 @@ async function readUsageSidecar(filePath) {
     }
 }
 
+async function readPromptSidecar(filePath) {
+    const stem = filePath.slice(0, -path.extname(filePath).length);
+    try {
+        const sidecar = JSON.parse(await fs.promises.readFile(`${stem}.prompts.json`, 'utf8'));
+        if (!Array.isArray(sidecar?.prompts)) return [];
+        return sidecar.prompts
+            .filter(example => typeof example?.positive === 'string' && example.positive.trim().length >= 3)
+            .map(example => ({
+                positive: example.positive.trim().slice(0, 12000),
+                negative: typeof example.negative === 'string' && example.negative.trim() ? example.negative.trim().slice(0, 12000) : undefined,
+                source: example.source === 'archive' ? 'archive' : 'civitai',
+            }))
+            .slice(0, 100);
+    } catch (error) {
+        if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
+        return [];
+    }
+}
+
 function normalizeTriggerWords(value) {
     const values = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[,\n]/) : [];
     return [...new Set(values.map(word => String(word).trim()).filter(Boolean))].slice(0, 50);
@@ -271,7 +290,7 @@ function collectPromptExamples(value, source) {
         for (const child of Object.values(current)) if (child && typeof child === 'object') visit(child);
     };
     visit(value);
-    return [...new Map(examples.map(example => [`${example.positive}\n${example.negative || ''}`, example])).values()].slice(0, 20);
+    return [...new Map(examples.map(example => [`${example.positive}\n${example.negative || ''}`, example])).values()].slice(0, 100);
 }
 
 function collectArchiveUsageExamples(value) {
@@ -619,6 +638,7 @@ async function moveModelCompanions(sourcePath, destinationPath) {
         [`${sourceStem}.archive.jpeg`, `${destinationStem}.archive.jpeg`],
         [`${sourceStem}.archive.webp`, `${destinationStem}.archive.webp`],
         [`${sourceStem}.usage.json`, `${destinationStem}.usage.json`],
+        [`${sourceStem}.prompts.json`, `${destinationStem}.prompts.json`],
     ];
     const existingCompanions = companions.filter(([source]) => fs.existsSync(source));
     const collision = existingCompanions.find(([, destination]) => fs.existsSync(destination));
@@ -1371,6 +1391,8 @@ ipcMain.handle('fetch-local-model-usage-metadata', async (event, request) => {
 
 ipcMain.handle('get-local-model-prompt-examples', async (event, request) => {
     const { resolvedPath } = assertLocalModelPath(request?.modelPath);
+    const localExamples = await readPromptSidecar(resolvedPath);
+    if (localExamples.length) return { examples: localExamples, storage: 'sidecar' };
     const provider = request?.provider;
     if (provider !== 'regular' && provider !== 'red') throw new Error('Unknown Civitai provider.');
     const requestedSources = [...new Set(Array.isArray(request?.sources) ? request.sources : [])]
@@ -1441,9 +1463,40 @@ ipcMain.handle('get-local-model-prompt-examples', async (event, request) => {
             failures.push(error instanceof Error ? error.message : 'CivArchive lookup failed.');
         }
     }
-    const uniqueExamples = [...new Map(examples.map(example => [`${example.positive}\n${example.negative || ''}`, example])).values()].slice(0, 20);
+    const uniqueExamples = [...new Map(examples.map(example => [`${example.positive}\n${example.negative || ''}`, example])).values()].slice(0, 100);
     if (!uniqueExamples.length) throw new Error(failures[0] || 'No prompt examples were found for this model.');
-    return uniqueExamples;
+    return { examples: uniqueExamples, storage: 'remote' };
+});
+
+ipcMain.handle('has-local-model-prompt-examples', async (event, modelPath) => {
+    const { resolvedPath } = assertLocalModelPath(modelPath);
+    return (await readPromptSidecar(resolvedPath)).length > 0;
+});
+
+ipcMain.handle('save-local-model-prompt-examples', async (event, request) => {
+    const { resolvedPath } = assertLocalModelPath(request?.modelPath);
+    const examples = (Array.isArray(request?.examples) ? request.examples : [])
+        .filter(example => typeof example?.positive === 'string' && example.positive.trim().length >= 3)
+        .map(example => ({
+            positive: example.positive.trim().slice(0, 12000),
+            negative: typeof example.negative === 'string' && example.negative.trim() ? example.negative.trim().slice(0, 12000) : undefined,
+            source: example.source === 'archive' ? 'archive' : 'civitai',
+        }));
+    const uniqueExamples = [...new Map(examples.map(example => [`${example.positive}\n${example.negative || ''}`, example])).values()].slice(0, 100);
+    if (!uniqueExamples.length) throw new Error('There are no prompt examples to save.');
+    const stem = resolvedPath.slice(0, -path.extname(resolvedPath).length);
+    const sidecarPath = `${stem}.prompts.json`;
+    const temporaryPath = `${sidecarPath}.tmp`;
+    const sidecar = {
+        schemaVersion: 1,
+        modelFile: path.basename(resolvedPath),
+        savedAt: new Date().toISOString(),
+        prompts: uniqueExamples,
+    };
+    await fs.promises.writeFile(temporaryPath, JSON.stringify(sidecar, null, 2), 'utf8');
+    await fs.promises.rm(sidecarPath, { force: true });
+    await fs.promises.rename(temporaryPath, sidecarPath);
+    return { path: sidecarPath, count: uniqueExamples.length };
 });
 
 ipcMain.handle('download-civitai-model', async (event, request) => {

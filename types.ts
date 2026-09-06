@@ -58,7 +58,15 @@ declare global {
         modelPath: string;
         provider: 'regular' | 'red';
         sources: Array<'civitai' | 'archive'>;
-      }) => Promise<Array<{ positive: string; negative?: string; source: 'civitai' | 'archive' }>>;
+      }) => Promise<{
+        examples: Array<{ positive: string; negative?: string; source: 'civitai' | 'archive' }>;
+        storage: 'sidecar' | 'remote';
+      }>;
+      hasLocalModelPromptExamples: (modelPath: string) => Promise<boolean>;
+      saveLocalModelPromptExamples: (request: {
+        modelPath: string;
+        examples: Array<{ positive: string; negative?: string; source: 'civitai' | 'archive' }>;
+      }) => Promise<{ path: string; count: number }>;
       downloadCivitaiModel: (request: {
         downloadId: string;
         provider: 'regular' | 'red';

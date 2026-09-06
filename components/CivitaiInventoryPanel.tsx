@@ -50,13 +50,6 @@ const inferPreviewType = (url?: string | null): 'image' | 'video' => url && /\.(
 const getComfyRelativePath = (item: CivitaiInventoryItem) => item.relativePath.replace(/^[^\\/]+[\\/]/, '');
 const isItemReviewed = (item: CivitaiInventoryItem) => item.userOwned || item.status === 'matched' || Boolean(item.archiveInfo);
 
-const appendTriggerWords = (prompt: string, triggerWords: string[]) => {
-    const currentPrompt = prompt.trim();
-    const normalizedPrompt = currentPrompt.toLowerCase();
-    const additions = triggerWords.filter(word => word.trim() && !normalizedPrompt.includes(word.trim().toLowerCase()));
-    return additions.length ? `${currentPrompt}${currentPrompt ? ', ' : ''}${additions.join(', ')}` : currentPrompt;
-};
-
 const SAMPLER_OPTIONS = ['', 'euler', 'euler_ancestral', 'heun', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpm_fast', 'dpm_adaptive', 'dpmpp_2s_ancestral', 'dpmpp_sde', 'dpmpp_2m', 'dpmpp_2m_sde', 'dpmpp_3m_sde', 'ddim', 'uni_pc', 'uni_pc_bh2'];
 const SCHEDULER_OPTIONS = ['', 'normal', 'karras', 'exponential', 'sgm_uniform', 'simple', 'ddim_uniform', 'beta', 'linear_quadratic', 'kl_optimal'];
 
@@ -308,7 +301,6 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
             setUsageBusy(false);
         }
         const currentState = store.getState();
-        const generationOptions = currentState.generation.options;
         const recommendedSettings = getRecommendedSettingUpdates(workflow.modelType, selectedItem.usageMetadata, currentState.app.comfyUIObjectInfo);
         const savedTriggers = item.kind === 'lora' ? selectedItem.usageMetadata?.triggerWords || [] : [];
         const updates: Partial<GenerationOptions> = {
@@ -348,8 +340,8 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                 [`${workflow.loraPrefix}UseLora`]: true,
                 [`${workflow.loraPrefix}Lora1Name`]: modelPath,
                 [`${workflow.loraPrefix}Lora1Strength`]: 1,
+                comfyPrompt: savedTriggers.join(', '),
                 ...(compatibleBaseModel ? { [workflow.checkpointField]: compatibleBaseModel } : {}),
-                ...(savedTriggers.length ? { comfyPrompt: appendTriggerWords(generationOptions.comfyPrompt || '', savedTriggers) } : {}),
             });
             }
         } else {

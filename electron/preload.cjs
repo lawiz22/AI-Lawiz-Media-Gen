@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('electron', {
     fetchLocalModelUsageMetadata: (request) => ipcRenderer.invoke('fetch-local-model-usage-metadata', request),
     setLocalModelUsageMetadata: (request) => ipcRenderer.invoke('set-local-model-usage-metadata', request),
     getLocalModelPromptExamples: (request) => ipcRenderer.invoke('get-local-model-prompt-examples', request),
+    hasLocalModelPromptExamples: (modelPath) => ipcRenderer.invoke('has-local-model-prompt-examples', modelPath),
+    saveLocalModelPromptExamples: (request) => ipcRenderer.invoke('save-local-model-prompt-examples', request),
     downloadCivitaiModel: (request) => ipcRenderer.invoke('download-civitai-model', request),
     updateCivitaiModel: (request) => ipcRenderer.invoke('update-civitai-model', request),
     cancelCivitaiDownload: (downloadId) => ipcRenderer.invoke('cancel-civitai-download', downloadId),
