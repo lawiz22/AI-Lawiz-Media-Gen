@@ -1690,7 +1690,7 @@ export const COMFYUI_Z_IMAGE_WORKFLOW_TEMPLATE = {
     "inputs": {
       "shift": 3,
       "model": [
-        "48",
+        "28",
         0
       ]
     },
@@ -1776,20 +1776,6 @@ export const COMFYUI_Z_IMAGE_WORKFLOW_TEMPLATE = {
     "class_type": "VAEEncode",
     "_meta": {
       "title": "VAE Encode"
-    }
-  },
-  "48": {
-    "inputs": {
-      "lora_name": "Z-TURBO_Photography_35mmPhoto_1536.safetensors",
-      "strength_model": 1,
-      "model": [
-        "28",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "LoraLoaderModelOnly"
     }
   }
 };

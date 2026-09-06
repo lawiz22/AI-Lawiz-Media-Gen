@@ -33,6 +33,13 @@ const initialOptions: GenerationOptions = {
   comfySampler: 'euler',
   comfyScheduler: 'normal',
 
+  // Z-Image CacheDiT defaults
+  comfyZImageUseCacheDit: true,
+  comfyZImageCacheDitModelType: 'Auto',
+  comfyZImageCacheDitWarmupSteps: 3,
+  comfyZImageCacheDitSkipInterval: 2,
+  comfyZImageCacheDitPrintSummary: true,
+
   // Refine Feature Defaults
   useRefine: false,
   refineDenoise: 0.5,

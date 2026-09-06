@@ -6,6 +6,7 @@ import { Banner } from './Banner';
 import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, PencilIcon, ResetIcon, PromptIcon, QuestionMarkCircleIcon, SwatchIcon } from './icons';
 import { Logo } from './Logo';
 import type { User, VersionInfo, DriveFolder, Provider } from '../types';
+import { getTabAccentStyle } from '../utils/accentTheme';
 
 interface HeaderProps {
   theme: string;
@@ -102,14 +103,14 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="bg-bg-secondary/50 backdrop-blur-sm p-3 shadow-lg sticky top-0 z-10 border-b border-border-primary">
+    <header className="bg-bg-secondary/50 backdrop-blur-sm p-3 shadow-lg sticky top-0 z-10 border-b border-border-primary" style={getTabAccentStyle(activeTab)}>
       <div className="container mx-auto flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 flex-shrink-0">
             <Logo />
           </div>
           <Banner />
-          {(activeTab === 'image-generator' || activeTab === 'character-generator' || activeTab === 'group-photo-fusion' || activeTab === 'extractor-tools' || activeTab === 'logo-theme-generator') && (
+          {(activeTab === 'image-generator' || activeTab === 'character-generator' || activeTab === 'fun' || activeTab === 'extractor-tools' || activeTab === 'logo-theme-generator') && (
             <div className={`hidden lg:flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-lg border-2 ${provider !== 'comfyui'
               ? 'border-accent text-accent bg-accent/10'
               : 'border-highlight-green text-highlight-green bg-highlight-green/10'

@@ -16,6 +16,14 @@ import type { GeneratedClothing, IdentifiedClothing, IdentifiedObject, Generated
 import { GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon, FontIcon, DownloadIcon, SaveIcon, CheckIcon } from './icons';
 import { dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 import { SendToLTXButton } from './SendToLTXButton';
+import { createAccentStyle } from '../utils/accentTheme';
+
+const EXTRACTOR_ACCENT_STYLES: Record<string, React.CSSProperties> = {
+    clothes: createAccentStyle('#fb923c', '#fdba74', '#ea580c'),
+    objects: createAccentStyle('#4ade80', '#86efac', '#16a34a'),
+    poses: createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
+    font: createAccentStyle('#f472b6', '#f9a8d4', '#db2777'),
+};
 
 interface ExtractorToolsPanelProps {
     onOpenLibraryForClothes: () => void;
@@ -351,7 +359,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     };
     
     return (
-        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto">
+        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto" style={EXTRACTOR_ACCENT_STYLES[activeSubTab] || EXTRACTOR_ACCENT_STYLES.clothes}>
              <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
 
              <div className={activeSubTab === 'clothes' ? 'block' : 'hidden'}>

@@ -1386,6 +1386,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         }
         case 'z-image': {
             workflow = JSON.parse(JSON.stringify(COMFYUI_Z_IMAGE_WORKFLOW_TEMPLATE));
+            delete workflow["48"];
 
             // 1. Set Prompts
             if (workflow["6"]) workflow["6"].inputs.text = options.comfyPrompt;
@@ -1424,17 +1425,32 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
                 if (options.comfyZImageLora4Name) currentModelNode = addLoraNode(options.comfyZImageLora4Name, options.comfyZImageLora4Strength || 1.0, currentModelNode);
             }
 
-            // Connect final LoRA output to AuraFlow (Node 11) or KSampler (Node 3)
+            // Connect the final LoRA output to AuraFlow when Shift is enabled.
             if (options.comfyZImageUseShift) {
                 if (workflow["11"]) {
                     workflow["11"].inputs.model = currentModelNode;
                     if (options.comfyZImageShift !== undefined) workflow["11"].inputs.shift = options.comfyZImageShift;
                 }
-                // Node 3 is connected to Node 11 in template, so no change needed for Node 3 input if using Shift
-            } else {
-                // Bypass Node 11 (Shift)
-                if (workflow["3"]) workflow["3"].inputs.model = currentModelNode;
+                currentModelNode = ["11", 0];
             }
+
+            // CacheDiT wraps the fully configured model immediately before sampling.
+            if (options.comfyZImageUseCacheDit ?? true) {
+                workflow["z_image_cache_dit"] = {
+                    inputs: {
+                        model: currentModelNode,
+                        enable: true,
+                        model_type: options.comfyZImageCacheDitModelType || 'Auto',
+                        warmup_steps: options.comfyZImageCacheDitWarmupSteps ?? 3,
+                        skip_interval: options.comfyZImageCacheDitSkipInterval ?? 2,
+                        print_summary: options.comfyZImageCacheDitPrintSummary ?? true,
+                    },
+                    class_type: "CacheDiT_Model_Optimizer",
+                    _meta: { title: "CacheDiT Accelerator" },
+                };
+                currentModelNode = ["z_image_cache_dit", 0];
+            }
+            if (workflow["3"]) workflow["3"].inputs.model = currentModelNode;
 
             // 4. Set KSampler Parameters
             if (workflow["3"]) {
@@ -2055,11 +2071,26 @@ export const generateComfyUIVideo = async (
 };
 
 export interface LtxDirectorOptions {
+    modelVersion: '2.3' | '2.5';
     frameRate: number;
     guideStrength: number;
     imageScalePercent: number;
+    vaeDecodeMode: 'standard' | 'tiled';
+    vaeTileSize: number;
+    vaeOverlap: number;
+    vaeTemporalSize: number;
+    vaeTemporalOverlap: number;
+    useCacheDit: boolean;
+    cacheDitWarmupSteps: number;
+    cacheDitSkipInterval: number;
+    cacheDitNoiseScale: number;
+    cacheDitPrintSummary: boolean;
     seed?: number;
     checkpoint: string;
+    textEncoder: string;
+    videoVae: string;
+    audioVae: string;
+    latentUpscaler: string;
     loras: Array<{ enabled: boolean; name: string; strength: number }>;
 }
 
@@ -2179,7 +2210,35 @@ export const generateLtxDirectorVideo = async (
     });
     workflow['28'].inputs.noise_seed = options.seed ?? Math.floor(Math.random() * 1e15);
     workflow['79'].inputs.preview_rate = options.frameRate;
-    workflow['77'].inputs.ckpt_name = options.checkpoint;
+    if (options.modelVersion === '2.5') {
+        workflow['77'] = {
+            inputs: { unet_name: options.checkpoint },
+            class_type: 'UnetLoaderGGUF',
+        };
+        workflow['84'] = {
+            inputs: { clip_name: options.textEncoder, type: 'ltxv', device: 'default' },
+            class_type: 'CLIPLoader',
+        };
+    } else {
+        workflow['77'].inputs.ckpt_name = options.checkpoint;
+    }
+    workflow['3'].inputs.vae_name = options.videoVae;
+    workflow['4'].inputs.vae_name = options.audioVae;
+    workflow['57'].inputs.model_name = options.latentUpscaler;
+    if (options.vaeDecodeMode === 'tiled') {
+        workflow['15'] = {
+            inputs: {
+                samples: ['14', 2],
+                vae: ['3', 0],
+                tile_size: Math.min(4096, Math.max(64, Math.round(options.vaeTileSize / 32) * 32)),
+                overlap: Math.min(4096, Math.max(0, Math.round(options.vaeOverlap / 32) * 32)),
+                temporal_size: Math.min(4096, Math.max(8, Math.round(options.vaeTemporalSize / 4) * 4)),
+                temporal_overlap: Math.min(4096, Math.max(4, Math.round(options.vaeTemporalOverlap / 4) * 4)),
+            },
+            class_type: 'VAEDecodeTiled',
+            _meta: { title: 'VAE Decode (Tiled)' },
+        };
+    }
 
     delete workflow['80'];
     delete workflow['93'];
@@ -2197,6 +2256,21 @@ export const generateLtxDirectorVideo = async (
         };
         modelInput = [nodeId, 0];
     });
+    if (options.useCacheDit) {
+        workflow['ltx_cache_dit'] = {
+            inputs: {
+                model: modelInput,
+                enable: true,
+                warmup_steps: Math.min(20, Math.max(3, Math.round(options.cacheDitWarmupSteps))),
+                skip_interval: Math.min(15, Math.max(2, Math.round(options.cacheDitSkipInterval))),
+                noise_scale: Math.min(0.01, Math.max(0, options.cacheDitNoiseScale)),
+                print_summary: options.cacheDitPrintSummary,
+            },
+            class_type: 'CacheDiT_LTX2_Optimizer',
+            _meta: { title: 'CacheDiT LTX-2 Accelerator' },
+        };
+        modelInput = ['ltx_cache_dit', 0];
+    }
     workflow['46'].inputs.model = modelInput;
 
     const { videoUrl } = await executeWorkflow(workflow, updateProgress, true);

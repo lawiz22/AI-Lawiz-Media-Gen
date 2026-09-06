@@ -11,6 +11,13 @@ import { generateMammouthImage } from '../services/mammouthService';
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { BANNER_ASPECT_RATIO_OPTIONS, BANNER_STYLE_OPTIONS, BANNER_LOGO_PLACEMENT_OPTIONS } from '../constants';
 import { SendToLTXButton } from './SendToLTXButton';
+import { createAccentStyle } from '../utils/accentTheme';
+
+const LOGO_ACCENT_STYLES: Record<string, React.CSSProperties> = {
+    logo: createAccentStyle('#f472b6', '#f9a8d4', '#db2777'),
+    banner: createAccentStyle('#4ade80', '#86efac', '#16a34a'),
+    'album-cover': createAccentStyle('#f87171', '#fca5a5', '#dc2626'),
+};
 
 const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
     if (!text) return '';
@@ -542,7 +549,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
 
     return (
         <>
-            <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto">
+            <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto" style={LOGO_ACCENT_STYLES[activeSubTab] || LOGO_ACCENT_STYLES.logo}>
                 <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
 
                 <div className={activeSubTab === 'logo' ? 'block' : 'hidden'}>
@@ -669,7 +676,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                     <Section 
                         title="Banner Generator"
                         description="Design eye-catching banners for social media, websites, or advertisements. Combine text and imagery for impactful visuals."
-                        borderColor="var(--color-highlight-green)"
+                        borderColor="var(--color-accent)"
                     >
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                             <div className="space-y-6">
@@ -780,7 +787,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                     <Section 
                         title="Album Cover Generator"
                         description="Design the perfect 1:1 album cover for your music. Specify genre, era, and media type for a pitch-perfect result."
-                        borderColor="var(--color-danger)"
+                        borderColor="var(--color-accent)"
                     >
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                             {/* --- Left Column: Controls --- */}

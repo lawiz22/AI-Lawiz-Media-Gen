@@ -44,7 +44,8 @@ COMPLETE INSTALL LIST - ALL LAWIZ FEATURES
 [01] ComfyUI-GGUF
 Repository: https://github.com/city96/ComfyUI-GGUF
 Lawiz nodes: CLIPLoaderGGUF, DualCLIPLoaderGGUF, UnetLoaderGGUF
-Used by: Qwen GGUF, Qwen Edit GGUF, WAN GGUF, FLUX Krea GGUF, Z-Image GGUF.
+Used by: Qwen GGUF, Qwen Edit GGUF, WAN GGUF, FLUX Krea GGUF, Z-Image GGUF
+and the LTX Director 2.5 diffusion model.
 
 [02] ComfyUI-MultiGPU
 Repository: https://github.com/pollockjj/ComfyUI-MultiGPU
@@ -94,7 +95,7 @@ advanced VAE loading.
 [09] WhatDreamsCost-ComfyUI
 Repository: https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI
 Lawiz nodes: LTXDirector, LTXDirectorGuide
-Used by: LTX 2.3 Director timeline workflow.
+Used by: LTX 2.3 and LTX 2.5 Director timeline workflows.
 
 [10] ComfyUI-LTXVideo
 Repository: https://github.com/Lightricks/ComfyUI-LTXVideo

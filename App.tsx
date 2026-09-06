@@ -70,6 +70,12 @@ import { setDriveService, initializeDriveSync } from './services/libraryService'
 import GroupPhotoFusionPanel from './components/groupPhotoFusion/GroupPhotoFusionPanel';
 import PastForwardPanel from './components/pastForward/PastForwardPanel';
 import { PERSONAS } from './groupPhotoFusion/constants';
+import { createAccentStyle, getTabAccentStyle } from './utils/accentTheme';
+
+const FUN_ACCENT_STYLES = {
+    'photo-fusion': createAccentStyle('#fb7185', '#fda4af', '#e11d48'),
+    'past-forward': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
+};
 
 const App: React.FC = () => {
     // --- Redux Dispatch ---
@@ -83,6 +89,7 @@ const App: React.FC = () => {
     const [generationTimes, setGenerationTimes] = useState<Record<string, number | null>>({});
     const [upscaleSourceFile, setUpscaleSourceFile] = useState<File | null>(null);
     const [isUpscalePickerOpen, setIsUpscalePickerOpen] = useState(false);
+    const [activeFunSubTab, setActiveFunSubTab] = useState<'photo-fusion' | 'past-forward'>('photo-fusion');
 
     // --- App State (from appSlice) ---
     const {
@@ -209,8 +216,8 @@ const App: React.FC = () => {
             });
         } else if (newOpts.comfyModelType === 'z-image') {
             applyDefaultsIfMissing({
-                comfyZImageUseLora: true,
-                comfyZImageLora1Name: "Z-TURBO_Photography_35mmPhoto_1536.safetensors",
+                comfyZImageUseLora: false,
+                comfyZImageLora1Name: "",
                 comfyZImageLora1Strength: 1.0,
                 comfyZImageLora2Name: "",
                 comfyZImageLora2Strength: 1.0,
@@ -223,6 +230,11 @@ const App: React.FC = () => {
                 comfyZImageClip: "Qwen3-4B-UD-Q8_K_XL.gguf",
                 comfyZImageShift: 3.0,
                 comfyZImageUseShift: true,
+                comfyZImageUseCacheDit: true,
+                comfyZImageCacheDitModelType: "Auto",
+                comfyZImageCacheDitWarmupSteps: 3,
+                comfyZImageCacheDitSkipInterval: 2,
+                comfyZImageCacheDitPrintSummary: true,
                 comfySteps: 8,
                 comfyCfg: 1.0,
                 comfySampler: "euler",
@@ -355,7 +367,12 @@ const App: React.FC = () => {
     }, [fontSize]);
 
     const handleTabChange = (tabId: string) => {
-        dispatch(setActiveTab(tabId));
+        if (tabId === 'group-photo-fusion' || tabId === 'past-forward') {
+            setActiveFunSubTab(tabId === 'past-forward' ? 'past-forward' : 'photo-fusion');
+            dispatch(setActiveTab('fun'));
+        } else {
+            dispatch(setActiveTab(tabId));
+        }
 
         // Ensure Character Generator starts in I2I mode with clean prompt state and character logic
         if (tabId === 'character-generator') {
@@ -633,7 +650,7 @@ const App: React.FC = () => {
         activeModel = characterOptions.provider === 'mammouth'
             ? (characterOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
             : DEFAULT_GEMINI_IMAGE_MODEL;
-    } else if (activeTab === 'group-photo-fusion') {
+    } else if (activeTab === 'fun') {
         activeModel = options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'extractor-tools') {
         if (options.provider === 'mammouth') activeModel = options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL;
@@ -643,8 +660,6 @@ const App: React.FC = () => {
         else if (activeExtractorSubTab === 'font') activeModel = DEFAULT_GEMINI_IMAGE_MODEL;
         else activeModel = 'gemini-2.5-flash';
     } else if (activeTab === 'logo-theme-generator') {
-        activeModel = options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
-    } else if (activeTab === 'past-forward') {
         activeModel = options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     }
 
@@ -749,29 +764,28 @@ const App: React.FC = () => {
                 {/* Navigation Tabs */}
                 <div className="flex flex-nowrap justify-start xl:justify-center gap-0.5 mb-4 sticky top-0 z-[11] bg-bg-primary/95 backdrop-blur-md p-1 rounded-lg border border-border-primary shadow-sm mx-auto w-full max-w-7xl overflow-x-auto">
                     {[
-                        { id: 'image-generator', label: 'Image Gen', icon: <ImageGeneratorIcon className="w-4 h-4" /> },
-                        { id: 'character-generator', label: 'Character', icon: <CharacterIcon className="w-4 h-4" /> },
-                        { id: 'ltx-director', label: 'LTX Director', icon: <VideoIcon className="w-4 h-4" /> },
-                        { id: 'tts', label: 'TTS', icon: <MicrophoneIcon className="w-4 h-4" /> },
-                        { id: 'prompt-generator', label: 'Prompt', icon: <PromptIcon className="w-4 h-4" /> },
-                        { id: 'extractor-tools', label: 'Extractor', icon: <ExtractorIcon className="w-4 h-4" /> },
-                        { id: 'group-photo-fusion', label: 'Fusion', icon: <GroupPhotoFusionIcon className="w-4 h-4" /> },
-                        { id: 'past-forward', label: 'PastForward', icon: <PastForwardIcon className="w-4 h-4" /> },
-                        { id: 'logo-theme-generator', label: 'Logo', icon: <SwatchIcon className="w-4 h-4" /> },
-                        { id: 'video-utils', label: 'Tools', icon: <VideoUtilsIcon className="w-4 h-4" /> },
-                        { id: 'upscale', label: 'Upscale', icon: <EnhanceIcon className="w-4 h-4" /> },
-                        { id: 'civitai', label: 'Models/LoRAs', icon: <DownloadIcon className="w-4 h-4" /> },
-                        { id: 'library', label: 'Library', icon: <LibraryIcon className="w-4 h-4" /> },
-                        ...(currentUser.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: <AdminIcon className="w-4 h-4" /> }] : [])
+                        { id: 'image-generator', label: 'Image Gen', icon: <ImageGeneratorIcon className="w-4 h-4" />, activeClass: 'border-cyan-400 bg-cyan-400/15 text-cyan-300 shadow-cyan-500/20' },
+                        { id: 'character-generator', label: 'Character', icon: <CharacterIcon className="w-4 h-4" />, activeClass: 'border-fuchsia-400 bg-fuchsia-400/15 text-fuchsia-300 shadow-fuchsia-500/20' },
+                        { id: 'ltx-director', label: 'LTX Director', icon: <VideoIcon className="w-4 h-4" />, activeClass: 'border-amber-400 bg-amber-400/15 text-amber-300 shadow-amber-500/20' },
+                        { id: 'tts', label: 'TTS', icon: <MicrophoneIcon className="w-4 h-4" />, activeClass: 'border-emerald-400 bg-emerald-400/15 text-emerald-300 shadow-emerald-500/20' },
+                        { id: 'prompt-generator', label: 'Prompt', icon: <PromptIcon className="w-4 h-4" />, activeClass: 'border-violet-400 bg-violet-400/15 text-violet-300 shadow-violet-500/20' },
+                        { id: 'extractor-tools', label: 'Extractor', icon: <ExtractorIcon className="w-4 h-4" />, activeClass: 'border-orange-400 bg-orange-400/15 text-orange-300 shadow-orange-500/20' },
+                        { id: 'fun', label: 'Fun', icon: <GroupPhotoFusionIcon className="w-4 h-4" />, activeClass: 'border-rose-400 bg-rose-400/15 text-rose-300 shadow-rose-500/20' },
+                        { id: 'logo-theme-generator', label: 'Logo', icon: <SwatchIcon className="w-4 h-4" />, activeClass: 'border-pink-400 bg-pink-400/15 text-pink-300 shadow-pink-500/20' },
+                        { id: 'video-utils', label: 'Tools', icon: <VideoUtilsIcon className="w-4 h-4" />, activeClass: 'border-sky-400 bg-sky-400/15 text-sky-300 shadow-sky-500/20' },
+                        { id: 'upscale', label: 'Upscale', icon: <EnhanceIcon className="w-4 h-4" />, activeClass: 'border-lime-400 bg-lime-400/15 text-lime-300 shadow-lime-500/20' },
+                        { id: 'civitai', label: 'Models/LoRAs', icon: <DownloadIcon className="w-4 h-4" />, activeClass: 'border-teal-400 bg-teal-400/15 text-teal-300 shadow-teal-500/20' },
+                        { id: 'library', label: 'Library', icon: <LibraryIcon className="w-4 h-4" />, activeClass: 'border-indigo-400 bg-indigo-400/15 text-indigo-300 shadow-indigo-500/20' },
+                        ...(currentUser.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: <AdminIcon className="w-4 h-4" />, activeClass: 'border-red-400 bg-red-400/15 text-red-300 shadow-red-500/20' }] : [])
                     ].map((tab) => (
                         <button
                             key={tab.id}
                             onClick={() => handleTabChange(tab.id)}
                             aria-label={tab.label}
                             title={tab.label}
-                            className={`flex items-center gap-1 px-2 py-1 rounded-md font-medium transition-all duration-200 text-[10px] md:text-xs whitespace-nowrap ${activeTab === tab.id
-                                ? 'bg-accent text-accent-text shadow-sm'
-                                : 'bg-transparent text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
+                            className={`flex items-center gap-1 border px-2 py-1 rounded-md font-medium transition-all duration-200 text-[10px] md:text-xs whitespace-nowrap ${activeTab === tab.id
+                                ? `${tab.activeClass} shadow-sm`
+                                : 'border-transparent bg-transparent text-text-secondary hover:border-border-primary hover:bg-bg-tertiary hover:text-text-primary'
                                 }`}
                         >
                             {tab.icon}
@@ -781,8 +795,8 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Content Views - Centered Wrapper */}
-                <div className="w-full max-w-7xl mx-auto">
-                    {['group-photo-fusion', 'extractor-tools', 'logo-theme-generator', 'past-forward'].includes(activeTab) && (
+                <div className="w-full max-w-7xl mx-auto border-t-2 border-accent pt-3" style={getTabAccentStyle(activeTab)}>
+                    {['fun', 'extractor-tools', 'logo-theme-generator'].includes(activeTab) && (
                         <CloudImageProviderBar
                             options={options}
                             updateOptions={(updates) => dispatch(updateOptions(updates))}
@@ -1074,9 +1088,11 @@ const App: React.FC = () => {
                         </div>
                     </React.Activity>
 
-                    <React.Activity mode={activeTab === 'past-forward' ? 'visible' : 'hidden'}><PastForwardPanel /></React.Activity>
+                    {activeTab === 'fun' && <div className="mb-4 flex justify-center"><div className="inline-flex rounded-md border border-rose-400/40 bg-bg-secondary p-1 shadow-sm"><button type="button" onClick={() => setActiveFunSubTab('photo-fusion')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'photo-fusion' ? 'bg-rose-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-rose-300'}`}><GroupPhotoFusionIcon className="h-4 w-4" />Photo Fusion</button><button type="button" onClick={() => setActiveFunSubTab('past-forward')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'past-forward' ? 'bg-cyan-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-cyan-300'}`}><PastForwardIcon className="h-4 w-4" />Past Forward</button></div></div>}
 
-                    <React.Activity mode={activeTab === 'group-photo-fusion' ? 'visible' : 'hidden'}><GroupPhotoFusionPanel /></React.Activity>
+                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'past-forward' ? 'visible' : 'hidden'}><div style={FUN_ACCENT_STYLES['past-forward']}><PastForwardPanel /></div></React.Activity>
+
+                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'photo-fusion' ? 'visible' : 'hidden'}><div style={FUN_ACCENT_STYLES['photo-fusion']}><GroupPhotoFusionPanel /></div></React.Activity>
 
                     <React.Activity mode={activeTab === 'prompt-generator' ? 'visible' : 'hidden'}>
                         <PromptGeneratorPanel

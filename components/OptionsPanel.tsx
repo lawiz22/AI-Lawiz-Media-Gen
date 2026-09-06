@@ -341,6 +341,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     }, [comfyUIObjectInfo]);
 
     const comfyVaes = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name), [comfyUIObjectInfo]);
+    const cacheDitModelTypes = useMemo(() => {
+        const installed = getModelListFromInfo(comfyUIObjectInfo?.CacheDiT_Model_Optimizer?.input?.required?.model_type);
+        return Array.from(new Set(['Auto', 'Z-Image', ...installed]));
+    }, [comfyUIObjectInfo]);
 
     const comfyClips = useMemo(() => {
         const sources = [
@@ -1223,6 +1227,17 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                     step={0.1}
                                     disabled={isDisabled}
                                 />
+                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
+                                    <input type="checkbox" checked={options.comfyZImageUseCacheDit ?? true} onChange={handleOptionChange('comfyZImageUseCacheDit')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
+                                    Enable CacheDiT Accelerator
+                                </label>
+                                {(options.comfyZImageUseCacheDit ?? true) && <div className="grid grid-cols-1 gap-4 rounded-md border border-border-secondary bg-bg-primary/50 p-3 sm:grid-cols-2">
+                                    <SelectInput label="CacheDiT Model Type" value={options.comfyZImageCacheDitModelType || 'Auto'} onChange={handleOptionChange('comfyZImageCacheDitModelType')} options={cacheDitModelTypes.map(value => ({ value, label: value }))} disabled={isDisabled} />
+                                    <NumberSlider label={`Warmup Steps: ${options.comfyZImageCacheDitWarmupSteps ?? 3}`} value={options.comfyZImageCacheDitWarmupSteps ?? 3} onChange={handleSliderChange('comfyZImageCacheDitWarmupSteps')} min={0} max={100} step={1} disabled={isDisabled} />
+                                    <NumberSlider label={`Skip Interval: ${options.comfyZImageCacheDitSkipInterval ?? 2}`} value={options.comfyZImageCacheDitSkipInterval ?? 2} onChange={handleSliderChange('comfyZImageCacheDitSkipInterval')} min={0} max={10} step={1} disabled={isDisabled} />
+                                    <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={options.comfyZImageCacheDitPrintSummary ?? true} onChange={handleOptionChange('comfyZImageCacheDitPrintSummary')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />Print performance summary</label>
+                                    {!comfyUIObjectInfo?.CacheDiT_Model_Optimizer && <p className="text-xs text-warning sm:col-span-2">CacheDiT is installed but not loaded by ComfyUI. Restart ComfyUI before generating with this option.</p>}
+                                </div>}
                             </div>
                         </div>
                     )}

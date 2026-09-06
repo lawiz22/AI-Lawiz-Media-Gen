@@ -43,10 +43,13 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 
 ### LTX Director and Audio
 
-- Build an LTX 2.3 timeline from prompt-only clips, image clips, or both.
+- Build LTX 2.3 or LTX 2.5 timelines from prompt-only clips, image clips, or both.
 - Give every clip its own prompt and duration, with optional generated continuation prompts.
-- Add soundtrack or generated speech context and control frame rate and guidance.
+- Add photos and soundtrack audio from local files or directly from the Library.
+- Add generated speech context and control frame rate and guidance.
 - Configure the LTX checkpoint and up to three LoRAs.
+- Reduce final decode VRAM usage with tiled VAE decoding and an adjustable tile size.
+- Accelerate both LTX profiles with optional CacheDiT settings shared across LTX 2.3 and LTX 2.5.
 - Generate the final video through ComfyUI and download the result.
 - Generate multilingual speech through supported Chatterbox ComfyUI nodes and reference voices.
 
@@ -80,6 +83,8 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 | Civitai API key | Optional authenticated model operations |
 
 Each local workflow requires its referenced models and custom nodes to be installed in ComfyUI. The application reads available choices from ComfyUI's `/object_info` endpoint, but it does not install workflow dependencies automatically.
+
+LTX Director requires the latest WhatDreamsCost LTX Director, ComfyUI-LTXVideo, and ComfyUI-KJNodes packages. LTX 2.5 also uses ComfyUI-GGUF. CacheDiT acceleration requires [ComfyUI-CacheDiT](https://github.com/Jasonzzt/ComfyUI-CacheDiT), which exposes `CacheDiT_LTX2_Optimizer`; restart ComfyUI after installing or updating it so the node appears in `/object_info`.
 
 ## Setup
 
@@ -131,6 +136,8 @@ In Electron, API keys are persisted through `electron-store`. Do not commit API 
 2. Enter the ComfyUI URL in **Connection Settings**. The default expected address is `http://127.0.0.1:8188`.
 3. Confirm the connection indicator is active. The application then reads installed checkpoints, LoRAs, UNets, VAEs, text encoders, samplers, schedulers, and custom nodes.
 4. Open **Models/LoRAs** to select the ComfyUI root folder, scan local models, and retrieve metadata.
+
+LTX 2.3 and LTX 2.5 use the same CacheDiT controls. New projects enable acceleration with 8 warmup steps, a skip interval of 3, a noise scale of `0.001`, and summary output enabled. These defaults do not overwrite explicit values restored from saved projects.
 
 Large local libraries are indexed from these directories:
 

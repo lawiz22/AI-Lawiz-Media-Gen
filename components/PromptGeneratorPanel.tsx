@@ -12,6 +12,7 @@ import { fileToResizedDataUrl, dataUrlToThumbnail, fileToDataUrl } from '../util
 import { WAN_VIDEO_PROMPT_BLOCKS, CAMERA_MOVES } from '../constants';
 import { updateOptions, setGenerationMode } from '../store/generationSlice';
 import { queueLtxTransfer, setActiveTab } from '../store/appSlice';
+import { createAccentStyle } from '../utils/accentTheme';
 
 
 interface PromptPart {
@@ -21,6 +22,15 @@ interface PromptPart {
 
 type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
 type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
+
+const PROMPT_ACCENT_STYLES: Record<string, React.CSSProperties> = {
+    'from-image': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
+    'extract-background': createAccentStyle('#4ade80', '#86efac', '#16a34a'),
+    'extract-subject': createAccentStyle('#facc15', '#fde047', '#ca8a04'),
+    'prompt-soup': createAccentStyle('#a78bfa', '#c4b5fd', '#7c3aed'),
+    'wan-video': createAccentStyle('#f472b6', '#f9a8d4', '#db2777'),
+    'qwen-image': createAccentStyle('#60a5fa', '#93c5fd', '#2563eb'),
+};
 
 const createPromptThumbnail = (text: string, type: PromptCategory, modelType: PromptModelType | 'wan2.2' | 'qwen-image'): string => {
     const colors: Record<PromptCategory, string> = {
@@ -592,7 +602,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     ];
 
     return (
-        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto">
+        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto" style={PROMPT_ACCENT_STYLES[activeSubTab] || PROMPT_ACCENT_STYLES['prompt-soup']}>
             <div className="mb-4 border border-border-primary bg-bg-primary/50 p-3 text-sm text-text-secondary">
                 Prompt analysis powered by Mammouth AI
             </div>
@@ -669,8 +679,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             )}
 
             {activeSubTab === 'extract-background' && (
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-green space-y-8">
-                    <h2 className="text-xl font-bold text-highlight-green">Extract Background from Image</h2>
+                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
+                    <h2 className="text-xl font-bold text-accent">Extract Background from Image</h2>
                     <p className="text-sm text-text-secondary -mt-6">
                         Upload a photo to generate a prompt describing only the background. This is useful for creating consistent environments.
                     </p>
@@ -690,7 +700,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div className="space-y-4">
                             <div>
                                 <label htmlFor="generated-bg-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Background Prompt</label>
-                                <textarea id="generated-bg-prompt" value={bgPrompt} onChange={(e) => dispatch(updatePromptGenState({ bgPrompt: e.target.value }))} readOnly={isBgLoading} placeholder="Your generated background prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-green font-medium" rows={10}/>
+                                <textarea id="generated-bg-prompt" value={bgPrompt} onChange={(e) => dispatch(updatePromptGenState({ bgPrompt: e.target.value }))} readOnly={isBgLoading} placeholder="Your generated background prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-accent font-medium" rows={10}/>
                             </div>
                             {bgError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{bgError}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -711,8 +721,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             )}
 
             {activeSubTab === 'extract-subject' && (
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-yellow space-y-8">
-                     <h2 className="text-xl font-bold text-highlight-yellow">Extract Subject from Image</h2>
+                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
+                    <h2 className="text-xl font-bold text-accent">Extract Subject from Image</h2>
                      <p className="text-sm text-text-secondary -mt-6">
                         Upload a photo to generate a prompt describing only the main subject(s). This is useful for isolating characters or objects from their environment.
                     </p>
@@ -732,7 +742,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         <div className="space-y-4">
                             <div>
                                 <label htmlFor="generated-subject-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Subject Prompt</label>
-                                <textarea id="generated-subject-prompt" value={subjectPrompt} onChange={(e) => dispatch(updatePromptGenState({ subjectPrompt: e.target.value }))} readOnly={isSubjectLoading} placeholder="Your generated subject prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-highlight-yellow font-medium" rows={10}/>
+                                <textarea id="generated-subject-prompt" value={subjectPrompt} onChange={(e) => dispatch(updatePromptGenState({ subjectPrompt: e.target.value }))} readOnly={isSubjectLoading} placeholder="Your generated subject prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-accent font-medium" rows={10}/>
                             </div>
                             {subjectError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{subjectError}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -811,8 +821,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             )}
             
             {activeSubTab === 'wan-video' && (
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-pink-500 space-y-8">
-                            <h2 className="text-xl font-bold text-pink-500">LTX Video Prompt Builder</h2>
+                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
+                            <h2 className="text-xl font-bold text-accent">LTX Video Prompt Builder</h2>
                      <p className="text-sm text-text-secondary -mt-6">
                                 Build an action-focused prompt and send it directly to LTX Director.
                     </p>
@@ -890,7 +900,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                     
                     <div className="pt-4 border-t border-border-primary">
                         <label className="block text-sm font-medium text-text-secondary mb-1">Final Prompt</label>
-                            <textarea value={wanVideoFinalPrompt} onChange={e => dispatch(updatePromptGenState({ wanVideoFinalPrompt: e.target.value }))} placeholder="Choose prompt elements above, then refine the generated prompt here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm h-28 text-pink-400 font-semibold focus:ring-accent focus:border-accent" />
+                            <textarea value={wanVideoFinalPrompt} onChange={e => dispatch(updatePromptGenState({ wanVideoFinalPrompt: e.target.value }))} placeholder="Choose prompt elements above, then refine the generated prompt here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm h-28 text-accent font-semibold focus:ring-accent focus:border-accent" />
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
                                 <button onClick={() => handleSavePrompt(wanVideoFinalPrompt, 'wan-video', 'wan2.2', wanVideoImage)} disabled={!wanVideoFinalPrompt.trim() || wanVideoPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${wanVideoPromptSaveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
                                 {wanVideoPromptSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : wanVideoPromptSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
@@ -904,8 +914,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             )}
 
             {activeSubTab === 'qwen-image' && (
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-blue-400 space-y-8">
-                    <h2 className="text-2xl font-bold text-blue-400">Qwen Image Prompt Builder</h2>
+                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
+                    <h2 className="text-2xl font-bold text-accent">Qwen Image Prompt Builder</h2>
                     <p className="text-sm text-text-secondary -mt-6">
                         Construct a structured prompt for Qwen Image models using this formula-based builder.
                     </p>
@@ -998,7 +1008,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                              <textarea 
                                 value={qwenFinalPrompt}
                                 readOnly 
-                                className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm h-96 text-blue-300 font-mono"
+                                className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm h-96 text-accent font-mono"
                             />
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <button onClick={() => handleSavePrompt(qwenFinalPrompt, 'qwen-image', 'qwen-image', null)} disabled={!qwenFinalPrompt || qwenPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${qwenPromptSaveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>

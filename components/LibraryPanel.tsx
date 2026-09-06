@@ -222,6 +222,8 @@ const renderOptionsDetails = (options?: GenerationOptions, mediaType?: LibraryIt
                     <DetailItem label="CLIP" value={options.comfyZImageClip} />
                     <DetailItem label="Shift" value={options.comfyZImageShift} />
                     <DetailItem label="Use Shift" value={options.comfyZImageUseShift} />
+                    <DetailItem label="CacheDiT" value={options.comfyZImageUseCacheDit} />
+                    {options.comfyZImageUseCacheDit && <DetailItem label="CacheDiT Settings" value={`${options.comfyZImageCacheDitModelType || 'Auto'} · warmup ${options.comfyZImageCacheDitWarmupSteps ?? 3} · skip ${options.comfyZImageCacheDitSkipInterval ?? 2} · summary ${options.comfyZImageCacheDitPrintSummary ?? true ? 'on' : 'off'}`} />}
                     <DetailItem label="Megapixel" value={options.megapixel} />
                   </>
                 )}
@@ -739,7 +741,14 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                     ))}
                     <DetailItem label="Frame Rate" value={`${selectedItemModal.ltxDirectorOptions.frameRate} fps`} />
                     <DetailItem label="Guide Strength" value={selectedItemModal.ltxDirectorOptions.guideStrength} />
-                    <DetailItem label="Checkpoint" value={selectedItemModal.ltxDirectorOptions.checkpoint} isCode />
+                    <DetailItem label="VAE Decode" value={selectedItemModal.ltxDirectorOptions.vaeDecodeMode === 'standard' ? 'Standard' : `Tiled · ${selectedItemModal.ltxDirectorOptions.vaeTileSize ?? 256}px · overlap ${selectedItemModal.ltxDirectorOptions.vaeOverlap ?? 64} · temporal ${selectedItemModal.ltxDirectorOptions.vaeTemporalSize ?? 64}/${selectedItemModal.ltxDirectorOptions.vaeTemporalOverlap ?? 4}`} />
+                    <DetailItem label="CacheDiT LTX-2" value={(selectedItemModal.ltxDirectorOptions.useCacheDit ?? true) ? `On · warmup ${selectedItemModal.ltxDirectorOptions.cacheDitWarmupSteps ?? 8} · skip ${selectedItemModal.ltxDirectorOptions.cacheDitSkipInterval ?? 3} · noise ${selectedItemModal.ltxDirectorOptions.cacheDitNoiseScale ?? 0.001}` : 'Off'} />
+                    <DetailItem label="LTX Version" value={selectedItemModal.ltxDirectorOptions.modelVersion || '2.3'} />
+                    <DetailItem label={selectedItemModal.ltxDirectorOptions.modelVersion === '2.5' ? 'GGUF Diffusion Model' : 'Checkpoint'} value={selectedItemModal.ltxDirectorOptions.checkpoint} isCode />
+                    {selectedItemModal.ltxDirectorOptions.textEncoder && <DetailItem label="Text Encoder" value={selectedItemModal.ltxDirectorOptions.textEncoder} isCode />}
+                    {selectedItemModal.ltxDirectorOptions.videoVae && <DetailItem label="Video VAE" value={selectedItemModal.ltxDirectorOptions.videoVae} isCode />}
+                    {selectedItemModal.ltxDirectorOptions.audioVae && <DetailItem label="Audio VAE" value={selectedItemModal.ltxDirectorOptions.audioVae} isCode />}
+                    {selectedItemModal.ltxDirectorOptions.latentUpscaler && <DetailItem label="Latent Upscaler" value={selectedItemModal.ltxDirectorOptions.latentUpscaler} isCode />}
                     {selectedItemModal.ltxDirectorOptions.loras.map((lora, index) => (
                       <DetailItem key={index} label={`LoRA ${index + 1} (${lora.strength})`} value={lora.name} isCode />
                     ))}

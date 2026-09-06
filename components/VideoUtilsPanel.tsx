@@ -10,6 +10,13 @@ import { dataUrlToFile, dataUrlToThumbnail, createPaletteThumbnail, fileToResize
 import { resizeImageFile, cropImageFile } from '../utils/imageProcessing';
 import type { LibraryItem, VideoUtilsState, PaletteColor, ColorPickerState, ResizeCropState } from '../types';
 import { ImageUploader } from './ImageUploader';
+import { createAccentStyle } from '../utils/accentTheme';
+
+const VIDEO_UTILS_ACCENT_STYLES: Record<string, React.CSSProperties> = {
+    frames: createAccentStyle('#38bdf8', '#7dd3fc', '#0284c7'),
+    colors: createAccentStyle('#4ade80', '#86efac', '#16a34a'),
+    'resize-crop': createAccentStyle('#facc15', '#fde047', '#ca8a04'),
+};
 
 // --- Color Naming Utilities (Client-Side) ---
 const colorNameList = [
@@ -356,10 +363,10 @@ const ResizeCropTool: React.FC<{
     };
 
     return (
-        <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-yellow">
+        <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">
             <div className="flex items-center gap-3 mb-4">
-                <CropIcon className="w-8 h-8 text-highlight-yellow" />
-                <h2 className="text-2xl font-bold text-highlight-yellow">Resize & Crop</h2>
+                <CropIcon className="w-8 h-8 text-accent" />
+                <h2 className="text-2xl font-bold text-accent">Resize & Crop</h2>
             </div>
             <p className="text-sm text-text-secondary mb-6">
                 Quickly resize or crop your images to a specific aspect ratio or scale.
@@ -695,7 +702,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     ];
 
     return (
-        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto">
+        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto" style={VIDEO_UTILS_ACCENT_STYLES[activeSubTab] || VIDEO_UTILS_ACCENT_STYLES.frames}>
              <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
             {/* --- Frame Extractor --- */}
             <div className={activeSubTab === 'frames' ? 'block' : 'hidden'}>
@@ -832,10 +839,10 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
 
             {/* --- Color Palette Extractor --- */}
              <div className={activeSubTab === 'colors' ? 'block' : 'hidden'}>
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-highlight-green">
+                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">
                     <div className="flex items-center gap-3 mb-4">
-                        <PaletteIcon className="w-8 h-8 text-highlight-green" />
-                        <h2 className="text-2xl font-bold text-highlight-green">Color Palette Extractor</h2>
+                        <PaletteIcon className="w-8 h-8 text-accent" />
+                        <h2 className="text-2xl font-bold text-accent">Color Palette Extractor</h2>
                     </div>
                     <p className="text-sm text-text-secondary mb-6">
                         Upload an image to extract a color palette. Re-shuffle the results or click a color to pick a new one from the image.

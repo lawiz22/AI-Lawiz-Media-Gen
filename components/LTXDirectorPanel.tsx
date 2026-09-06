@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { CheckIcon, DiceIcon, DownloadIcon, GenerateIcon, PauseIcon, PlayIcon, SaveIcon, SpinnerIcon, UploadCloudIcon } from './icons';
+import { CheckIcon, DiceIcon, DownloadIcon, GenerateIcon, LibraryIcon, PauseIcon, PlayIcon, SaveIcon, SpinnerIcon, UploadCloudIcon } from './icons';
 import { generateLtxDirectorPrompt, generateLtxDirectorVideo, LTX_PROMPT_AUDIO_STYLES, LTX_PROMPT_SUBTHEMES, LTX_PROMPT_THEMES, type LtxPromptAudioStyle, type LtxPromptSubtheme, type LtxPromptTheme } from '../services/comfyUIService';
 import { addSessionTokenUsage, clearLtxTransfer } from '../store/appSlice';
 import { addToLibrary } from '../store/librarySlice';
 import type { AppDispatch, RootState } from '../store/store';
 import type { LibraryItem, LtxDirectorGenerationInfo } from '../types';
-import { createVideoPlaceholderThumbnail, dataUrlToFile, dataUrlToThumbnail, fileToDataUrl, fileToResizedDataUrl, videoToThumbnail } from '../utils/imageUtils';
+import { createVideoPlaceholderThumbnail, dataUrlToFile, dataUrlToThumbnail, fileToDataUrl, fileToResizedDataUrl, getAudioMimeType, normalizeAudioDataUrl, videoToThumbnail } from '../utils/imageUtils';
+import { LibraryPickerModal } from './LibraryPickerModal';
 
 interface LTXDirectorPanelProps {
     isComfyUIConnected: boolean | null;
@@ -38,12 +39,69 @@ interface DirectorGenerationSnapshot {
     frameRate: number;
     guideStrength: number;
     imageScalePercent: number;
+    vaeDecodeMode: 'standard' | 'tiled';
+    vaeTileSize: number;
+    vaeOverlap: number;
+    vaeTemporalSize: number;
+    vaeTemporalOverlap: number;
+    useCacheDit: boolean;
+    cacheDitWarmupSteps: number;
+    cacheDitSkipInterval: number;
+    cacheDitNoiseScale: number;
+    cacheDitPrintSummary: boolean;
+    modelVersion: LtxModelVersion;
     checkpoint: string;
+    textEncoder: string;
+    videoVae: string;
+    audioVae: string;
+    latentUpscaler: string;
     loras: DirectorLora[];
     audioName?: string;
 }
 
-const DEFAULT_CHECKPOINT = 'LTX2\\sulphur2Base_distilled.safetensors';
+type LtxModelVersion = '2.3' | '2.5';
+
+interface LtxModelProfile {
+    checkpoint: string;
+    textEncoder: string;
+    videoVae: string;
+    audioVae: string;
+    latentUpscaler: string;
+    loras: DirectorLora[];
+}
+
+const LTX_MODEL_PROFILES: Record<LtxModelVersion, LtxModelProfile> = {
+    '2.3': {
+        checkpoint: 'LTX2\\sulphur2Base_distilled.safetensors',
+        textEncoder: 'gemma312BAbliterated_v10aExperimental.safetensors + ltx-2.3_text_projection_bf16.safetensors',
+        videoVae: 'LTX23_video_vae_bf16.safetensors',
+        audioVae: 'LTX23_audio_vae_bf16.safetensors',
+        latentUpscaler: 'ltx-2.3-spatial-upscaler-x2-1.1.safetensors',
+        loras: [
+            { enabled: true, name: 'LTX2\\ltx-2-19b-distilled-lora_resized_dynamic_fro09_avg_rank_175_fp8.safetensors', strength: 0.5 },
+            { enabled: true, name: 'LTX2\\LTX2.3_Crisp_Enhance.safetensors', strength: 0.7 },
+            { enabled: true, name: 'LTX2\\LTX2.3_reasoning_I2V_V3.safetensors', strength: 0.9 },
+            { enabled: false, name: '', strength: 1 },
+            { enabled: false, name: '', strength: 1 },
+        ],
+    },
+    '2.5': {
+        checkpoint: 'LTX-2.5-Distilled-Q4_K_M.gguf',
+        textEncoder: 'gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors',
+        videoVae: 'ltx-2.5-video-vae-bf16.safetensors',
+        audioVae: 'ltx-2.5-audio-vae-bf16.safetensors',
+        latentUpscaler: 'ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors',
+        loras: [
+            { enabled: true, name: 'LTX2\\ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors', strength: 1 },
+            { enabled: true, name: 'LTX2\\LTX-2.3-OmniNFT-RL-Lora_bf16.safetensors', strength: 0.8 },
+            { enabled: true, name: 'LTX2\\ltx2.3-transition.safetensors', strength: 0.4 },
+            { enabled: false, name: '', strength: 1 },
+            { enabled: false, name: '', strength: 1 },
+        ],
+    },
+};
+
+const DEFAULT_CHECKPOINT = LTX_MODEL_PROFILES['2.3'].checkpoint;
 const MIN_CLIP_DURATION = 3;
 const MIN_AUDIO_CLIP_DURATION = 1;
 const MAX_CLIP_DURATION = 15;
@@ -85,13 +143,7 @@ const getAudioDuration = (file: File): Promise<number> => new Promise((resolve) 
     media.onerror = () => finish(5);
     media.src = objectUrl;
 });
-const DEFAULT_LORAS: DirectorLora[] = [
-    { enabled: true, name: 'LTX2\\ltx-2-19b-distilled-lora_resized_dynamic_fro09_avg_rank_175_fp8.safetensors', strength: 0.5 },
-    { enabled: true, name: 'LTX2\\LTX2.3_Crisp_Enhance.safetensors', strength: 0.7 },
-    { enabled: true, name: 'LTX2\\LTX2.3_reasoning_I2V_V3.safetensors', strength: 0.9 },
-    { enabled: false, name: '', strength: 1 },
-    { enabled: false, name: '', strength: 1 },
-];
+const DEFAULT_LORAS = LTX_MODEL_PROFILES['2.3'].loras;
 
 const getModelList = (widgetInfo: any): string[] => Array.isArray(widgetInfo?.[0]) ? widgetInfo[0] : [];
 
@@ -112,8 +164,25 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
     const [frameRate, setFrameRate] = useState(24);
     const [guideStrength, setGuideStrength] = useState(1);
     const [imageScalePercent, setImageScalePercent] = useState(100);
+    const [vaeDecodeMode, setVaeDecodeMode] = useState<'standard' | 'tiled'>('tiled');
+    const [vaeTileSize, setVaeTileSize] = useState(256);
+    const [vaeOverlap, setVaeOverlap] = useState(64);
+    const [vaeTemporalSize, setVaeTemporalSize] = useState(64);
+    const [vaeTemporalOverlap, setVaeTemporalOverlap] = useState(4);
+    const [useCacheDit, setUseCacheDit] = useState(true);
+    const [cacheDitWarmupSteps, setCacheDitWarmupSteps] = useState(8);
+    const [cacheDitSkipInterval, setCacheDitSkipInterval] = useState(3);
+    const [cacheDitNoiseScale, setCacheDitNoiseScale] = useState(0.001);
+    const [cacheDitPrintSummary, setCacheDitPrintSummary] = useState(true);
     const [advancedOpen, setAdvancedOpen] = useState(false);
+    const [imageLibraryOpen, setImageLibraryOpen] = useState(false);
+    const [audioLibraryOpen, setAudioLibraryOpen] = useState(false);
+    const [modelVersion, setModelVersion] = useState<LtxModelVersion>('2.3');
     const [checkpoint, setCheckpoint] = useState(DEFAULT_CHECKPOINT);
+    const [textEncoder, setTextEncoder] = useState(LTX_MODEL_PROFILES['2.3'].textEncoder);
+    const [videoVae, setVideoVae] = useState(LTX_MODEL_PROFILES['2.3'].videoVae);
+    const [audioVae, setAudioVae] = useState(LTX_MODEL_PROFILES['2.3'].audioVae);
+    const [latentUpscaler, setLatentUpscaler] = useState(LTX_MODEL_PROFILES['2.3'].latentUpscaler);
     const [loras, setLoras] = useState<DirectorLora[]>(DEFAULT_LORAS);
     const [isGenerating, setIsGenerating] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -139,9 +208,23 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
         && playheadSeconds - selectedStart >= MIN_AUDIO_CLIP_DURATION
         && selectedStart + selectedSegment.durationSeconds - playheadSeconds >= MIN_AUDIO_CLIP_DURATION);
     const checkpoints = useMemo(() => {
-        const models = getModelList(comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name);
-        return Array.from(new Set([checkpoint, DEFAULT_CHECKPOINT, ...models].filter(Boolean)));
-    }, [checkpoint, comfyUIObjectInfo]);
+        const models = modelVersion === '2.5'
+            ? getModelList(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name)
+            : getModelList(comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name);
+        return Array.from(new Set([checkpoint, LTX_MODEL_PROFILES[modelVersion].checkpoint, ...models].filter(Boolean)));
+    }, [checkpoint, comfyUIObjectInfo, modelVersion]);
+    const textEncoderModels = useMemo(() => {
+        const models = getModelList(comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name);
+        return Array.from(new Set([textEncoder, ...models].filter(Boolean)));
+    }, [comfyUIObjectInfo, textEncoder]);
+    const vaeModels = useMemo(() => {
+        const models = getModelList(comfyUIObjectInfo?.VAELoaderKJ?.input?.required?.vae_name);
+        return Array.from(new Set([videoVae, audioVae, ...models].filter(Boolean)));
+    }, [audioVae, comfyUIObjectInfo, videoVae]);
+    const latentUpscalerModels = useMemo(() => {
+        const models = getModelList(comfyUIObjectInfo?.LatentUpscaleModelLoader?.input?.required?.model_name);
+        return Array.from(new Set([latentUpscaler, ...models].filter(Boolean)));
+    }, [comfyUIObjectInfo, latentUpscaler]);
     const loraModels = useMemo(() => {
         const models = getModelList(comfyUIObjectInfo?.LoraLoaderModelOnly?.input?.required?.lora_name);
         return Array.from(new Set([
@@ -231,10 +314,27 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                     return restoredSegments;
                 });
                 setSelectedId(restoredSegments[0]?.id || '');
+                const restoredModelVersion = options.modelVersion || '2.3';
+                const restoredProfile = LTX_MODEL_PROFILES[restoredModelVersion];
+                setModelVersion(restoredModelVersion);
                 setFrameRate(options.frameRate);
                 setGuideStrength(options.guideStrength);
                 setImageScalePercent(options.imageScalePercent ?? 100);
+                setVaeDecodeMode(options.vaeDecodeMode || 'tiled');
+                setVaeTileSize(options.vaeTileSize ?? 256);
+                setVaeOverlap(options.vaeOverlap ?? 64);
+                setVaeTemporalSize(options.vaeTemporalSize ?? 64);
+                setVaeTemporalOverlap(options.vaeTemporalOverlap ?? 4);
+                setUseCacheDit(options.useCacheDit ?? true);
+                setCacheDitWarmupSteps(options.cacheDitWarmupSteps ?? 8);
+                setCacheDitSkipInterval(options.cacheDitSkipInterval ?? 3);
+                setCacheDitNoiseScale(options.cacheDitNoiseScale ?? 0.001);
+                setCacheDitPrintSummary(options.cacheDitPrintSummary ?? true);
                 setCheckpoint(options.checkpoint);
+                setTextEncoder(options.textEncoder || restoredProfile.textEncoder);
+                setVideoVae(options.videoVae || restoredProfile.videoVae);
+                setAudioVae(options.audioVae || restoredProfile.audioVae);
+                setLatentUpscaler(options.latentUpscaler || restoredProfile.latentUpscaler);
                 setLoras([
                     ...options.loras.slice(0, 5).map((lora) => ({ enabled: true, ...lora })),
                     ...Array.from({ length: Math.max(0, 5 - options.loras.length) }, () => ({ enabled: false, name: '', strength: 1 })),
@@ -323,13 +423,12 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
         return () => { cancelled = true; };
     }, [dispatch, pendingTransfer]);
 
-    const addImages = (files: FileList | null) => {
-        if (!files?.length) return;
+    const addImageFiles = (files: File[]) => {
+        if (!files.length) return;
         if (audioTimelineLocked && segments.length) {
             const selectedIndex = Math.max(0, segments.findIndex((segment) => segment.id === selectedSegment?.id));
-            const images = Array.from(files);
             setSegments((current) => current.map((segment, index) => {
-                const image = images[index - selectedIndex];
+                const image = files[index - selectedIndex];
                 if (!image || index < selectedIndex) return segment;
                 if (segment.imageUrl) URL.revokeObjectURL(segment.imageUrl);
                 return { ...segment, image, imageUrl: URL.createObjectURL(image) };
@@ -337,12 +436,28 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
             if (imageInput.current) imageInput.current.value = '';
             return;
         }
-        const additions = Array.from(files).map((image) => ({
+        const additions = files.map((image) => ({
             id: crypto.randomUUID(), image, imageUrl: URL.createObjectURL(image), prompt: '', durationSeconds: 5,
         }));
         setSegments((current) => [...current, ...additions]);
         setSelectedId(additions[0].id);
         if (imageInput.current) imageInput.current.value = '';
+    };
+
+    const addImages = (files: FileList | null) => addImageFiles(files ? Array.from(files) : []);
+
+    const selectLibraryImage = async (item: LibraryItem) => {
+        try {
+            const response = await fetch(item.media);
+            if (!response.ok) throw new Error(`Could not read the selected image (${response.status}).`);
+            const blob = await response.blob();
+            const extension = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+            const name = `${(item.name || 'library-image').replace(/\.[^/.]+$/, '')}.${extension}`;
+            addImageFiles([new File([blob], name, { type: blob.type || `image/${extension}` })]);
+            setError('');
+        } catch (selectionError) {
+            setError(selectionError instanceof Error ? selectionError.message : 'Could not load the selected library image.');
+        }
     };
 
     const addPromptClip = () => {
@@ -454,6 +569,21 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
         setAudioTimelineLocked(false);
     };
 
+    const selectLibraryAudio = async (item: LibraryItem) => {
+        try {
+            const response = await fetch(normalizeAudioDataUrl(item.media));
+            if (!response.ok) throw new Error(`Could not read the selected audio (${response.status}).`);
+            const blob = await response.blob();
+            const mimeType = getAudioMimeType(item.name || '', blob.type);
+            const extension = mimeType === 'audio/mpeg' ? 'mp3' : mimeType === 'audio/flac' ? 'flac' : mimeType === 'audio/ogg' ? 'ogg' : mimeType === 'audio/mp4' ? 'm4a' : 'wav';
+            const name = `${(item.name || 'library-audio').replace(/\.[^/.]+$/, '')}.${extension}`;
+            await handleAudioFile(new File([blob], name, { type: mimeType }));
+            setError('');
+        } catch (selectionError) {
+            setError(selectionError instanceof Error ? selectionError.message : 'Could not load the selected library audio.');
+        }
+    };
+
     const seekAudio = (event: React.MouseEvent<HTMLDivElement>) => {
         if (!audioPlayer.current || !totalDuration) return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -475,6 +605,20 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
 
     const updateLora = (index: number, changes: Partial<DirectorLora>) => {
         setLoras((current) => current.map((lora, loraIndex) => loraIndex === index ? { ...lora, ...changes } : lora));
+    };
+
+    const changeModelVersion = (nextVersion: LtxModelVersion) => {
+        if (nextVersion === modelVersion) return;
+        const profile = LTX_MODEL_PROFILES[nextVersion];
+        setModelVersion(nextVersion);
+        setCheckpoint(profile.checkpoint);
+        setTextEncoder(profile.textEncoder);
+        setVideoVae(profile.videoVae);
+        setAudioVae(profile.audioVae);
+        setLatentUpscaler(profile.latentUpscaler);
+        setLoras(profile.loras.map((lora) => ({ ...lora })));
+        setAdvancedOpen(true);
+        setError('');
     };
 
     const generateSegmentPrompt = async (segment: DirectorSegment) => {
@@ -527,7 +671,22 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
             frameRate,
             guideStrength,
             imageScalePercent,
+            vaeDecodeMode,
+            vaeTileSize,
+            vaeOverlap,
+            vaeTemporalSize,
+            vaeTemporalOverlap,
+            useCacheDit,
+            cacheDitWarmupSteps,
+            cacheDitSkipInterval,
+            cacheDitNoiseScale,
+            cacheDitPrintSummary,
+            modelVersion,
             checkpoint,
+            textEncoder,
+            videoVae,
+            audioVae,
+            latentUpscaler,
             loras: loras.filter((lora) => lora.enabled).map((lora) => ({ ...lora })),
             audioName: audio?.name,
         };
@@ -535,7 +694,28 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
             const result = await generateLtxDirectorVideo(
                 snapshot.segments,
                 audio,
-                { frameRate, guideStrength, imageScalePercent, checkpoint, loras: snapshot.loras },
+                {
+                    modelVersion: snapshot.modelVersion,
+                    frameRate: snapshot.frameRate,
+                    guideStrength: snapshot.guideStrength,
+                    imageScalePercent: snapshot.imageScalePercent,
+                    vaeDecodeMode: snapshot.vaeDecodeMode,
+                    vaeTileSize: snapshot.vaeTileSize,
+                    vaeOverlap: snapshot.vaeOverlap,
+                    vaeTemporalSize: snapshot.vaeTemporalSize,
+                    vaeTemporalOverlap: snapshot.vaeTemporalOverlap,
+                    useCacheDit: snapshot.useCacheDit,
+                    cacheDitWarmupSteps: snapshot.cacheDitWarmupSteps,
+                    cacheDitSkipInterval: snapshot.cacheDitSkipInterval,
+                    cacheDitNoiseScale: snapshot.cacheDitNoiseScale,
+                    cacheDitPrintSummary: snapshot.cacheDitPrintSummary,
+                    checkpoint: snapshot.checkpoint,
+                    textEncoder: snapshot.textEncoder,
+                    videoVae: snapshot.videoVae,
+                    audioVae: snapshot.audioVae,
+                    latentUpscaler: snapshot.latentUpscaler,
+                    loras: snapshot.loras,
+                },
                 (message, value) => { setProgressMessage(message); setProgress(value); },
             );
             setVideoUrl(result);
@@ -574,7 +754,22 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                 frameRate: generationSnapshot.frameRate,
                 guideStrength: generationSnapshot.guideStrength,
                 imageScalePercent: generationSnapshot.imageScalePercent,
+                vaeDecodeMode: generationSnapshot.vaeDecodeMode,
+                vaeTileSize: generationSnapshot.vaeTileSize,
+                vaeOverlap: generationSnapshot.vaeOverlap,
+                vaeTemporalSize: generationSnapshot.vaeTemporalSize,
+                vaeTemporalOverlap: generationSnapshot.vaeTemporalOverlap,
+                useCacheDit: generationSnapshot.useCacheDit,
+                cacheDitWarmupSteps: generationSnapshot.cacheDitWarmupSteps,
+                cacheDitSkipInterval: generationSnapshot.cacheDitSkipInterval,
+                cacheDitNoiseScale: generationSnapshot.cacheDitNoiseScale,
+                cacheDitPrintSummary: generationSnapshot.cacheDitPrintSummary,
+                modelVersion: generationSnapshot.modelVersion,
                 checkpoint: generationSnapshot.checkpoint,
+                textEncoder: generationSnapshot.textEncoder,
+                videoVae: generationSnapshot.videoVae,
+                audioVae: generationSnapshot.audioVae,
+                latentUpscaler: generationSnapshot.latentUpscaler,
                 loras: generationSnapshot.loras.map(({ name, strength }) => ({ name, strength })),
                 audioName: generationSnapshot.audioName,
             };
@@ -599,8 +794,11 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
     return (
         <section className="mx-auto max-w-7xl overflow-hidden rounded-lg border border-zinc-700 bg-[#111214] text-zinc-100 shadow-2xl">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-700 bg-[#17181b] px-4 py-3">
-                <div><h2 className="text-lg font-bold">LTX Director</h2><p className="text-xs text-zinc-400">{segments.length} clips · {Number(totalDuration.toFixed(1))}s · LTX 2.3</p></div>
+                <div><h2 className="text-lg font-bold">LTX Director</h2><p className="text-xs text-zinc-400">{segments.length} clips · {Number(totalDuration.toFixed(1))}s · LTX {modelVersion}</p></div>
                 <div className="flex items-center gap-2">
+                    <div className="flex h-9 rounded-md border border-zinc-600 bg-zinc-900 p-0.5" aria-label="LTX model version">
+                        {(['2.3', '2.5'] as const).map((version) => <button key={version} type="button" onClick={() => changeModelVersion(version)} aria-pressed={modelVersion === version} className={`rounded px-3 text-xs font-bold transition-colors ${modelVersion === version ? 'bg-amber-400 text-zinc-950' : 'text-zinc-400 hover:text-zinc-100'}`}>LTX {version}</button>)}
+                    </div>
                     <span className={`h-2 w-2 rounded-full ${isComfyUIConnected ? 'bg-emerald-400' : 'bg-red-400'}`} />
                     <span className="hidden text-xs text-zinc-400 sm:inline">{isComfyUIConnected ? 'ComfyUI online' : 'ComfyUI offline'}</span>
                     <button onClick={() => setAdvancedOpen((open) => !open)} className={`h-9 rounded-md border px-3 text-sm font-semibold ${advancedOpen ? 'border-amber-400 text-amber-300' : 'border-zinc-600 text-zinc-300 hover:border-zinc-400'}`}>Advanced</button>
@@ -612,11 +810,51 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
 
             {advancedOpen && <div className="border-b border-zinc-700 bg-[#191a1e] p-4">
                 <div className="grid gap-4 lg:grid-cols-[1.3fr_2fr]">
-                    <label className="text-xs font-semibold text-zinc-400">LTX CHECKPOINT
+                    <div className="grid content-start gap-3">
+                    <label className="text-xs font-semibold text-zinc-400">{modelVersion === '2.5' ? 'DIFFUSION MODEL · GGUF' : 'LTX CHECKPOINT'}
                         <select value={checkpoint} onChange={(event) => setCheckpoint(event.target.value)} className="mt-2 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
                             {checkpoints.map((model) => <option key={model} value={model}>{model}</option>)}
                         </select>
                     </label>
+                    {modelVersion === '2.5' ? <label className="text-xs font-semibold text-zinc-400">TEXT ENCODER · SINGLE CLIP
+                        <select value={textEncoder} onChange={(event) => setTextEncoder(event.target.value)} className="mt-2 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                            {textEncoderModels.map((model) => <option key={model} value={model}>{model}</option>)}
+                        </select>
+                    </label> : <div className="rounded-md border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400"><span className="font-semibold">TEXT ENCODERS · DUAL CLIP</span><p className="mt-1 break-all text-zinc-300">{textEncoder}</p></div>}
+                    <label className="text-xs font-semibold text-zinc-400">VIDEO VAE
+                        <select value={videoVae} onChange={(event) => setVideoVae(event.target.value)} className="mt-2 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">{vaeModels.map((model) => <option key={model} value={model}>{model}</option>)}</select>
+                    </label>
+                    <label className="text-xs font-semibold text-zinc-400">AUDIO VAE
+                        <select value={audioVae} onChange={(event) => setAudioVae(event.target.value)} className="mt-2 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">{vaeModels.map((model) => <option key={model} value={model}>{model}</option>)}</select>
+                    </label>
+                    <label className="text-xs font-semibold text-zinc-400">LATENT UPSCALER
+                        <select value={latentUpscaler} onChange={(event) => setLatentUpscaler(event.target.value)} className="mt-2 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">{latentUpscalerModels.map((model) => <option key={model} value={model}>{model}</option>)}</select>
+                    </label>
+                    <div className="rounded-md border border-zinc-700 bg-zinc-900/60 p-3">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            <span className="text-xs font-semibold text-zinc-400">VAE DECODE</span>
+                            <div className="flex h-8 rounded-md border border-zinc-600 bg-zinc-950 p-0.5" role="group" aria-label="VAE decode mode">
+                                {(['standard', 'tiled'] as const).map((mode) => <button key={mode} type="button" onClick={() => setVaeDecodeMode(mode)} aria-pressed={vaeDecodeMode === mode} className={`rounded px-3 text-xs font-semibold capitalize ${vaeDecodeMode === mode ? 'bg-amber-400 text-zinc-950' : 'text-zinc-400 hover:text-zinc-100'}`}>{mode}</button>)}
+                            </div>
+                        </div>
+                        {vaeDecodeMode === 'tiled' && <div className="grid grid-cols-2 gap-2">
+                            <label className="text-[10px] font-semibold text-zinc-500">TILE SIZE<input type="number" min="64" max="4096" step="32" value={vaeTileSize} onChange={(event) => setVaeTileSize(Number(event.target.value))} className="mt-1 w-full rounded border border-zinc-600 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100" /></label>
+                            <label className="text-[10px] font-semibold text-zinc-500">OVERLAP<input type="number" min="0" max="4096" step="32" value={vaeOverlap} onChange={(event) => setVaeOverlap(Number(event.target.value))} className="mt-1 w-full rounded border border-zinc-600 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100" /></label>
+                            <label className="text-[10px] font-semibold text-zinc-500">TEMPORAL SIZE<input type="number" min="8" max="4096" step="4" value={vaeTemporalSize} onChange={(event) => setVaeTemporalSize(Number(event.target.value))} className="mt-1 w-full rounded border border-zinc-600 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100" /></label>
+                            <label className="text-[10px] font-semibold text-zinc-500">TEMPORAL OVERLAP<input type="number" min="4" max="4096" step="4" value={vaeTemporalOverlap} onChange={(event) => setVaeTemporalOverlap(Number(event.target.value))} className="mt-1 w-full rounded border border-zinc-600 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100" /></label>
+                        </div>}
+                    </div>
+                    <div className="rounded-md border border-zinc-700 bg-zinc-900/60 p-3">
+                        <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-300"><input type="checkbox" checked={useCacheDit} onChange={(event) => setUseCacheDit(event.target.checked)} className="accent-amber-400" />Enable CacheDiT LTX-2 Accelerator</label>
+                        {useCacheDit && <div className="mt-3 grid grid-cols-2 gap-2">
+                            <label className="text-[10px] font-semibold text-zinc-500">WARMUP STEPS<input type="number" min="3" max="20" step="1" value={cacheDitWarmupSteps} onChange={(event) => setCacheDitWarmupSteps(Number(event.target.value))} className="mt-1 w-full rounded border border-zinc-600 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100" /></label>
+                            <label className="text-[10px] font-semibold text-zinc-500">SKIP INTERVAL<input type="number" min="2" max="15" step="1" value={cacheDitSkipInterval} onChange={(event) => setCacheDitSkipInterval(Number(event.target.value))} className="mt-1 w-full rounded border border-zinc-600 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100" /></label>
+                            <label className="text-[10px] font-semibold text-zinc-500">NOISE SCALE<input type="number" min="0" max="0.01" step="0.0001" value={cacheDitNoiseScale} onChange={(event) => setCacheDitNoiseScale(Number(event.target.value))} className="mt-1 w-full rounded border border-zinc-600 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100" /></label>
+                            <label className="flex cursor-pointer items-center gap-2 self-end pb-2 text-xs font-semibold text-zinc-400"><input type="checkbox" checked={cacheDitPrintSummary} onChange={(event) => setCacheDitPrintSummary(event.target.checked)} className="accent-amber-400" />Print summary</label>
+                            {!comfyUIObjectInfo?.CacheDiT_LTX2_Optimizer && <p className="text-[11px] text-amber-300 col-span-2">Restart ComfyUI if the CacheDiT LTX-2 node is not loaded yet.</p>}
+                        </div>}
+                    </div>
+                    </div>
                     <div className="grid gap-2">
                         {loras.map((lora, index) => <div key={index} className="grid grid-cols-[auto_1fr_80px] items-center gap-2">
                             <input type="checkbox" checked={lora.enabled} onChange={(event) => updateLora(index, { enabled: event.target.checked })} aria-label={`Enable LoRA ${index + 1}`} className="accent-amber-400" />
@@ -636,8 +874,9 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                         {selectedSegment?.imageUrl ? <img src={selectedSegment.imageUrl} alt="Selected clip" className="h-full w-full object-contain" /> : selectedSegment ? <span className="px-5 text-center text-xs text-zinc-400">Prompt-only clip<br /><span className="text-zinc-600">Click to assign a photo</span></span> : <span className="flex flex-col items-center gap-2 text-xs text-zinc-400"><UploadCloudIcon className="h-7 w-7" />Add photos or prompt</span>}
                     </button>
                     <input ref={imageInput} type="file" accept="image/*" multiple className="hidden" onChange={(event) => addImages(event.target.files)} />
-                    <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="mt-3 grid grid-cols-3 gap-2">
                         <button onClick={() => imageInput.current?.click()} className="rounded-md border border-zinc-600 py-2 text-sm font-semibold text-zinc-200 hover:border-amber-400">+ Photos</button>
+                        <button onClick={() => setImageLibraryOpen(true)} title="Choose a photo from Library" className="flex items-center justify-center gap-1 rounded-md border border-zinc-600 py-2 text-sm font-semibold text-zinc-200 hover:border-amber-400"><LibraryIcon className="h-4 w-4" />Library</button>
                         <button onClick={addPromptClip} className="rounded-md border border-zinc-600 py-2 text-sm font-semibold text-zinc-200 hover:border-amber-400">{audioTimelineLocked ? 'Split midpoint' : '+ Prompt clip'}</button>
                     </div>
 
@@ -651,7 +890,10 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                         <label className="block text-xs font-semibold text-zinc-400">IMAGE SCALE
                             <div className="mt-2 flex items-center gap-3"><input type="range" min="25" max="100" step="5" value={imageScalePercent} onChange={(event) => setImageScalePercent(Number(event.target.value))} className="w-full accent-amber-400" /><span className="w-10 text-right text-sm">{imageScalePercent}%</span></div>
                         </label>
-                        <button onClick={() => audioInput.current?.click()} className={`w-full rounded-md border px-3 py-2 text-left text-xs ${audio ? 'border-cyan-400 text-cyan-200' : 'border-dashed border-zinc-600 text-zinc-400'}`}>{audio ? audio.name : '+ Optional soundtrack'}</button>
+                        <div className="grid grid-cols-[1fr_auto] gap-2">
+                            <button onClick={() => audioInput.current?.click()} className={`min-w-0 truncate rounded-md border px-3 py-2 text-left text-xs ${audio ? 'border-cyan-400 text-cyan-200' : 'border-dashed border-zinc-600 text-zinc-400'}`}>{audio ? audio.name : '+ Optional soundtrack'}</button>
+                            <button onClick={() => setAudioLibraryOpen(true)} title="Choose audio from Library" aria-label="Choose audio from Library" className="flex h-full items-center justify-center rounded-md border border-zinc-600 px-3 text-zinc-300 hover:border-cyan-400 hover:text-cyan-200"><LibraryIcon className="h-4 w-4" /></button>
+                        </div>
                         <input ref={audioInput} type="file" accept="audio/*" className="hidden" onChange={(event) => void handleAudioFile(event.target.files?.[0] || null)} />
                     </div>
                 </aside>
@@ -760,6 +1002,18 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                     </div>}
                 </div>
             </div>
+            <LibraryPickerModal
+                isOpen={imageLibraryOpen}
+                onClose={() => setImageLibraryOpen(false)}
+                onSelectItem={(item) => void selectLibraryImage(item)}
+                filter={['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'group-fusion', 'past-forward-photo']}
+            />
+            <LibraryPickerModal
+                isOpen={audioLibraryOpen}
+                onClose={() => setAudioLibraryOpen(false)}
+                onSelectItem={(item) => void selectLibraryAudio(item)}
+                filter={['audio-tts', 'tts-reference']}
+            />
         </section>
     );
 };

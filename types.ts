@@ -276,6 +276,11 @@ export interface GenerationOptions {
   comfyZImageClip?: string;
   comfyZImageShift?: number;
   comfyZImageUseShift?: boolean;
+  comfyZImageUseCacheDit?: boolean;
+  comfyZImageCacheDitModelType?: string;
+  comfyZImageCacheDitWarmupSteps?: number;
+  comfyZImageCacheDitSkipInterval?: number;
+  comfyZImageCacheDitPrintSummary?: boolean;
   // SD 1.5 LoRA Settings
   comfySd15UseLora?: boolean;
   comfySd15Lora1Name?: string;
@@ -562,7 +567,22 @@ export interface LtxDirectorGenerationInfo {
   frameRate: number;
   guideStrength: number;
   imageScalePercent?: number;
+  vaeDecodeMode?: 'standard' | 'tiled';
+  vaeTileSize?: number;
+  vaeOverlap?: number;
+  vaeTemporalSize?: number;
+  vaeTemporalOverlap?: number;
+  useCacheDit?: boolean;
+  cacheDitWarmupSteps?: number;
+  cacheDitSkipInterval?: number;
+  cacheDitNoiseScale?: number;
+  cacheDitPrintSummary?: boolean;
+  modelVersion?: '2.3' | '2.5';
   checkpoint: string;
+  textEncoder?: string;
+  videoVae?: string;
+  audioVae?: string;
+  latentUpscaler?: string;
   loras: {
     name: string;
     strength: number;
