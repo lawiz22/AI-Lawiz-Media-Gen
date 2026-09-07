@@ -108,7 +108,7 @@ export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | '
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = string;
-export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image';
+export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'krea2-simple';
 export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui' | 'mammouth';
 export type VideoProvider = 'gemini' | 'comfyui';
@@ -172,6 +172,48 @@ export interface GenerationOptions {
   comfySeed?: number;
   comfySeedControl?: 'fixed' | 'increment' | 'decrement' | 'randomize';
   comfySeedIncrement?: number;
+
+  // FLUX2 Simple
+  comfyFlux2Prompt?: string;
+  comfyFlux2NegativePrompt?: string;
+  comfyFlux2Unet?: string;
+  comfyFlux2Clip?: string;
+  comfyFlux2Vae?: string;
+  comfyFlux2Resolution?: string;
+  comfyFlux2UseLora?: boolean;
+  comfyFlux2Lora1Name?: string;
+  comfyFlux2Lora1Strength?: number;
+  comfyFlux2Lora2Name?: string;
+  comfyFlux2Lora2Strength?: number;
+  comfyFlux2Lora3Name?: string;
+  comfyFlux2Lora3Strength?: number;
+  comfyFlux2Lora4Name?: string;
+  comfyFlux2Lora4Strength?: number;
+  comfyFlux2Lora5Name?: string;
+  comfyFlux2Lora5Strength?: number;
+  comfyFlux2Lora6Name?: string;
+  comfyFlux2Lora6Strength?: number;
+
+  // KREA2 Simple
+  comfyKreaPrompt?: string;
+  comfyKreaNegativePrompt?: string;
+  comfyKreaUnet?: string;
+  comfyKreaClip?: string;
+  comfyKreaVae?: string;
+  comfyKreaResolution?: string;
+  comfyKreaUseLora?: boolean;
+  comfyKreaLora1Name?: string;
+  comfyKreaLora1Strength?: number;
+  comfyKreaLora2Name?: string;
+  comfyKreaLora2Strength?: number;
+  comfyKreaLora3Name?: string;
+  comfyKreaLora3Strength?: number;
+  comfyKreaLora4Name?: string;
+  comfyKreaLora4Strength?: number;
+  comfyKreaLora5Name?: string;
+  comfyKreaLora5Strength?: number;
+  comfyKreaLora6Name?: string;
+  comfyKreaLora6Strength?: number;
 
   // Refine Feature (T2I SD 1.5)
   useRefine?: boolean;
@@ -859,6 +901,8 @@ export interface GenerationSliceState {
   maskImage: File | null;
   elementImages: File[];
   options: GenerationOptions;
+  comfyOptionsByModel: Partial<Record<ComfyModelType, GenerationOptions>>;
+  comfyDefaultOptionsByModel: Partial<Record<ComfyModelType, GenerationOptions>>;
   characterOptions: GenerationOptions; // Added character options
   isLoading: boolean;
   progressMessage: string;

@@ -1,4 +1,4 @@
-import React, { ChangeEvent, useMemo } from 'react';
+import React, { ChangeEvent, useMemo, useState } from 'react';
 import { GenerationOptions } from '../types';
 import { NumberSlider, SelectInput, TextInput } from './InputComponents';
 
@@ -23,6 +23,7 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
     isDisabled,
     comfyUIObjectInfo
 }) => {
+    const [isOpen, setIsOpen] = useState(true);
     const handleSliderChange = (field: keyof GenerationOptions) => (e: ChangeEvent<HTMLInputElement>) => {
         updateOptions({ [field]: parseFloat(e.target.value) });
     };
@@ -42,15 +43,27 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
     }, [comfyUIObjectInfo]);
 
     const modelType = options.comfyModelType;
+    const samplerOptions = Array.from(new Set([options.comfySampler, ...comfySamplers].filter(Boolean) as string[]));
+    const schedulerOptions = Array.from(new Set([options.comfyScheduler, ...comfySchedulers].filter(Boolean) as string[]));
 
     // Only show for SDXL, SD1.5, FLUX, Qwen, Z-Image
-    if (modelType !== 'sdxl' && modelType !== 'sd1.5' && modelType !== 'flux' && modelType !== 'qwen-t2i-gguf' && modelType !== 'qwen-edit' && modelType !== 'z-image') {
+    if (modelType !== 'sdxl' && modelType !== 'sd1.5' && modelType !== 'flux' && modelType !== 'qwen-t2i-gguf' && modelType !== 'qwen-edit' && modelType !== 'z-image' && modelType !== 'flux2-simple' && modelType !== 'krea2-simple') {
         return null;
     }
 
     return (
-        <div className="bg-bg-secondary p-4 rounded-lg shadow-md border border-border-primary space-y-4">
-            <h3 className="text-md font-bold text-accent tracking-wider uppercase border-b border-accent/30 pb-2">Sampler Settings</h3>
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
+            <button
+                type="button"
+                onClick={() => setIsOpen(open => !open)}
+                aria-expanded={isOpen}
+                className="flex w-full items-center justify-between border-b border-accent/30 pb-2 text-left text-md font-bold uppercase tracking-wider text-accent"
+            >
+                <span>Sampler Settings</span>
+                <span aria-hidden="true">{isOpen ? '−' : '+'}</span>
+            </button>
+
+            {isOpen && <div className="mt-4 space-y-4">
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <NumberSlider
@@ -74,16 +87,18 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
                     label="Sampler"
                     value={options.comfySampler || ''}
                     onChange={handleOptionChange('comfySampler')}
-                    options={comfySamplers.map(s => ({ value: s, label: s }))}
+                    options={samplerOptions.map(s => ({ value: s, label: s }))}
                     disabled={isDisabled}
                 />
-                <SelectInput
-                    label="Scheduler"
-                    value={options.comfyScheduler || ''}
-                    onChange={handleOptionChange('comfyScheduler')}
-                    options={comfySchedulers.map(s => ({ value: s, label: s }))}
-                    disabled={isDisabled}
-                />
+                {modelType !== 'flux2-simple' && (
+                    <SelectInput
+                        label="Scheduler"
+                        value={options.comfyScheduler || ''}
+                        onChange={handleOptionChange('comfyScheduler')}
+                        options={schedulerOptions.map(s => ({ value: s, label: s }))}
+                        disabled={isDisabled}
+                    />
+                )}
             </div>
 
             {modelType === 'flux' && (
@@ -96,7 +111,7 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
                 />
             )}
 
-            {(modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux' || modelType === 'qwen-t2i-gguf' || modelType === 'qwen-edit' || modelType === 'z-image') && (
+            {(modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux' || modelType === 'qwen-t2i-gguf' || modelType === 'qwen-edit' || modelType === 'z-image' || modelType === 'flux2-simple' || modelType === 'krea2-simple') && (
                 <div className="pt-2 border-t border-border-primary/50">
                     <h4 className="text-md font-semibold text-text-secondary mb-2">Seed</h4>
                     <div className="grid grid-cols-2 gap-4">
@@ -126,6 +141,7 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
                     )}
                 </div>
             )}
+            </div>}
         </div>
     );
 };

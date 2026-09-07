@@ -13,6 +13,10 @@ import {
     COMFYUI_QWEN_EDIT_WORKFLOW_TEMPLATE,
     COMFYUI_FLUX_WORKFLOW_TEMPLATE,
     COMFYUI_Z_IMAGE_WORKFLOW_TEMPLATE,
+    COMFYUI_FLUX2_SIMPLE_WORKFLOW_TEMPLATE,
+    FLUX2_RESOLUTION_OPTIONS,
+    COMFYUI_KREA2_SIMPLE_WORKFLOW_TEMPLATE,
+    KREA2_RESOLUTION_OPTIONS,
 } from "../constants";
 
 import { generateMammouthText } from './mammouthService';
@@ -378,7 +382,7 @@ export const generateChatterboxTts = async (
 };
 
 // --- Mammouth-based Prompt Generation ---
-type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image';
+type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'krea2-simple';
 
 const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
     switch (modelType) {
@@ -390,6 +394,8 @@ const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
         case 'flux-krea':
         case 'qwen-t2i-gguf':
         case 'z-image':
+        case 'flux2-simple':
+        case 'krea2-simple':
             return 'Your response MUST be a single, detailed, artistic, and descriptive paragraph. Use rich vocabulary.';
         case 'gemini':
             return 'Your response MUST be a detailed, narrative paragraph written in a natural language. Describe the scene as if you were writing a story or giving instructions to a human artist. Use full, descriptive sentences.';
@@ -1162,7 +1168,8 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             if (options.comfyFluxUseLora) {
                 let currentLoraIndex = 0;
                 for (let i = 1; i <= 4; i++) {
-                    const loraName = options[`comfyFluxLora${i}Name` as keyof GenerationOptions] as string;
+                    const configuredName = options[`comfyFluxLora${i}Name` as keyof GenerationOptions] as string | undefined;
+                    const loraName = i === 1 && configuredName === undefined ? 'Flux\\flux-turbo.safetensors' : configuredName;
                     const loraStrength = options[`comfyFluxLora${i}Strength` as keyof GenerationOptions] as number;
 
                     if (loraName && loraName !== 'None') {
@@ -1520,17 +1527,80 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             }
             break;
         }
+        case 'flux2-simple': {
+            workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX2_SIMPLE_WORKFLOW_TEMPLATE));
+            workflow["93"].inputs.text = options.comfyFlux2Prompt || '';
+            workflow["86"].inputs.text = options.comfyFlux2NegativePrompt || '';
+            workflow["94"].inputs.unet_name = options.comfyFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf';
+            workflow["91"].inputs.clip_name = options.comfyFlux2Clip || 'qwen_3_4b.safetensors';
+            workflow["92"].inputs.vae_name = options.comfyFlux2Vae || 'flux2-vae.safetensors';
+
+            const resolution = FLUX2_RESOLUTION_OPTIONS.find(option => option.value === options.comfyFlux2Resolution) || FLUX2_RESOLUTION_OPTIONS[8];
+            workflow["87"].inputs.value = resolution.width;
+            workflow["88"].inputs.value = resolution.height;
+
+            for (let index = 1; index <= 6; index += 1) {
+                const name = options[`comfyFlux2Lora${index}Name` as keyof GenerationOptions] as string | undefined || '';
+                const strength = options[`comfyFlux2Lora${index}Strength` as keyof GenerationOptions] as number | undefined ?? 1;
+                workflow["99"].inputs[`lora_${index}`] = {
+                    on: (options.comfyFlux2UseLora ?? true) && Boolean(name),
+                    lora: name,
+                    strength,
+                };
+            }
+            workflow["81"].inputs.steps = options.comfySteps ?? 20;
+            workflow["82"].inputs.cfg = options.comfyCfg ?? 4;
+            workflow["80"].inputs.sampler_name = options.comfySampler || 'euler';
+            workflow["89"].inputs.noise_seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+            break;
+        }
+        case 'krea2-simple': {
+            workflow = JSON.parse(JSON.stringify(COMFYUI_KREA2_SIMPLE_WORKFLOW_TEMPLATE));
+            workflow["104"].inputs.text = options.comfyKreaPrompt || '';
+            workflow["17"].inputs.text = options.comfyKreaNegativePrompt || '';
+            workflow["106:1"].inputs.unet_name = options.comfyKreaUnet || 'krea2_raw_fp8_scaled.safetensors';
+            workflow["106:13"].inputs.clip_name = options.comfyKreaClip || 'qwen3vl_4b_fp8_scaled.safetensors';
+            workflow["106:4"].inputs.vae_name = options.comfyKreaVae || 'qwen_image_vae.safetensors';
+
+            const resolution = KREA2_RESOLUTION_OPTIONS.find(option => option.value === options.comfyKreaResolution) || KREA2_RESOLUTION_OPTIONS[0];
+            workflow["106:10"].inputs.width = resolution.width;
+            workflow["106:10"].inputs.height = resolution.height;
+            workflow["106:10"].inputs.batch_size = 1;
+
+            const defaultKreaLoras = [
+                { name: 'KREA\\krea2_turbo_lora_rank_64_bf16.safetensors', strength: 0.6 },
+                { name: 'KREA\\snofs_krea_v1_nostrip.safetensors', strength: 1 },
+            ];
+            for (let index = 1; index <= 6; index += 1) {
+                const configuredName = options[`comfyKreaLora${index}Name` as keyof GenerationOptions] as string | undefined;
+                const name = configuredName === undefined ? (defaultKreaLoras[index - 1]?.name || '') : configuredName;
+                const configuredStrength = options[`comfyKreaLora${index}Strength` as keyof GenerationOptions] as number | undefined;
+                const strength = configuredStrength ?? defaultKreaLoras[index - 1]?.strength ?? 1;
+                workflow["57"].inputs[`lora_${index}`] = {
+                    on: (options.comfyKreaUseLora ?? true) && Boolean(name),
+                    lora: name,
+                    strength,
+                };
+            }
+            workflow["2"].inputs.steps = options.comfySteps ?? 10;
+            workflow["2"].inputs.cfg = options.comfyCfg ?? 1;
+            workflow["2"].inputs.sampler_name = options.comfySampler || 'er_sde';
+            workflow["2"].inputs.scheduler = options.comfyScheduler || 'beta';
+            workflow["2"].inputs.seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+            break;
+        }
         case 'sdxl':
         default: workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE)); break;
     }
 
-    const posPromptKey = findNodeKey(workflow, "Positive Prompt", 'title');
+    const usesDedicatedPrompts = options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'flux2-simple';
+    const posPromptKey = usesDedicatedPrompts ? undefined : findNodeKey(workflow, "Positive Prompt", 'title');
     if (posPromptKey) {
         const promptInput = 'prompt' in workflow[posPromptKey].inputs ? 'prompt' : 'text';
         workflow[posPromptKey].inputs[promptInput] = options.comfyPrompt || '';
     }
 
-    const negPromptKey = findNodeKey(workflow, "Negative Prompt", 'title');
+    const negPromptKey = usesDedicatedPrompts ? undefined : findNodeKey(workflow, "Negative Prompt", 'title');
     if (negPromptKey) {
         const promptInput = 'prompt' in workflow[negPromptKey].inputs ? 'prompt' : 'text';
         workflow[negPromptKey].inputs[promptInput] = options.comfyNegativePrompt || '';
@@ -1839,7 +1909,7 @@ export const generateComfyUIPortraits = async (
     const allImages: { src: string, seed: number }[] = [];
     const baseWorkflow = await buildWorkflow(options, sourceImage, referenceImages);
 
-    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit'].includes(options.comfyModelType!);
+    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'flux2-simple', 'krea2-simple'].includes(options.comfyModelType!);
     const numImages = options.comfyModelType === 'face-detailer-sd1.5' ? 1 : options.numImages;
 
     let currentSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
@@ -1872,6 +1942,9 @@ export const generateComfyUIPortraits = async (
                     // Seed remains unchanged
                     break;
             }
+                } else if (options.comfyModelType === 'flux2-simple') {
+                    currentWorkflow["89"].inputs.noise_seed = seedForThisImage;
+                    currentSeed = Math.floor(Math.random() * 1e15);
         }
 
         const progressWrapper = (message: string, value: number) => {
@@ -1891,7 +1964,12 @@ export const generateComfyUIPortraits = async (
     // RE-WRITING THE FUNCTION CONTENT FOR REPLACEMENT
     // I will capture the seed used before modifying it for the next iteration.
 
-    return { images: allImages, finalPrompt: options.comfyPrompt || '' };
+    const finalPrompt = options.comfyModelType === 'krea2-simple'
+        ? options.comfyKreaPrompt
+        : options.comfyModelType === 'flux2-simple'
+            ? options.comfyFlux2Prompt
+            : options.comfyPrompt;
+    return { images: allImages, finalPrompt: finalPrompt || '' };
 };
 
 export const generateComfyUICharacterAngles = async (

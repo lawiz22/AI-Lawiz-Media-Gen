@@ -1,3 +1,5 @@
+import type { ComfyModelType, GenerationOptions } from '../types';
+
 export type CivitaiProvider = 'regular' | 'red';
 export type CivitaiModelType = 'Checkpoint' | 'LORA';
 export type CivitaiFamily = 'all' | 'sd15' | 'sdxl' | 'flux' | 'qwen' | 'qwen-edit' | 'zit-base' | 'zit-turbo' | 'ltx-23';
@@ -112,6 +114,65 @@ export interface CivitaiInventory {
     root: string;
     items: CivitaiInventoryItem[];
 }
+
+const WORKFLOW_DEFAULT_SETTINGS: Partial<Record<ComfyModelType, Pick<GenerationOptions, 'comfySteps' | 'comfyCfg' | 'comfySampler' | 'comfyScheduler' | 'comfyFluxGuidance'>>> = {
+    'sd1.5': { comfySteps: 25, comfyCfg: 7, comfySampler: 'euler', comfyScheduler: 'normal' },
+    sdxl: { comfySteps: 25, comfyCfg: 5.5, comfySampler: 'euler', comfyScheduler: 'normal' },
+    flux: { comfySteps: 10, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'simple', comfyFluxGuidance: 3.5 },
+    'qwen-t2i-gguf': { comfySteps: 4, comfyCfg: 1, comfySampler: 'euler_ancestral', comfyScheduler: 'beta57' },
+    'z-image': { comfySteps: 8, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'simple' },
+    'flux2-simple': { comfySteps: 20, comfyCfg: 4, comfySampler: 'euler' },
+    'krea2-simple': { comfySteps: 10, comfyCfg: 1, comfySampler: 'er_sde', comfyScheduler: 'beta' },
+};
+
+const getComfyOptions = (widgetInfo: unknown): string[] => Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0]) ? widgetInfo[0] : [];
+
+const normalizeComfyOption = (value: string) => value.toLowerCase()
+    .replace(/\+\+/g, 'pp')
+    .replace(/\+/g, 'p')
+    .replace(/ancestral/g, 'a')
+    .replace(/[^a-z0-9]/g, '');
+
+const resolveComfyOption = (recommendation: string | undefined, options: string[]) => {
+    if (!recommendation) return undefined;
+    const normalizedRecommendation = normalizeComfyOption(recommendation);
+    return [...options]
+        .sort((left, right) => normalizeComfyOption(right).length - normalizeComfyOption(left).length)
+        .find(option => normalizedRecommendation.includes(normalizeComfyOption(option)));
+};
+
+export const getRecommendedSettingUpdates = (modelType: ComfyModelType, usageMetadata: CivitaiInventoryItem['usageMetadata'], objectInfo: any): Partial<GenerationOptions> => {
+    const defaults = WORKFLOW_DEFAULT_SETTINGS[modelType] || {};
+    const samplerOptions = getComfyOptions(objectInfo?.KSampler?.input?.required?.sampler_name);
+    const schedulerOptions = getComfyOptions(objectInfo?.KSampler?.input?.required?.scheduler);
+    const sampler = resolveComfyOption(usageMetadata?.sampler, samplerOptions) || defaults.comfySampler;
+    const scheduler = resolveComfyOption(usageMetadata?.scheduler, schedulerOptions)
+        || resolveComfyOption(usageMetadata?.sampler, schedulerOptions)
+        || defaults.comfyScheduler;
+    const updates: Partial<GenerationOptions> = {
+        ...defaults,
+        ...(usageMetadata?.steps ? { comfySteps: usageMetadata.steps } : {}),
+        ...(usageMetadata?.cfg ? { comfyCfg: usageMetadata.cfg } : {}),
+        ...(modelType === 'flux' && usageMetadata?.guidance ? { comfyFluxGuidance: usageMetadata.guidance } : {}),
+        ...(sampler ? { comfySampler: sampler } : {}),
+        ...(scheduler ? { comfyScheduler: scheduler } : {}),
+    };
+    if (modelType === 'qwen-t2i-gguf') {
+        updates.comfySteps = 4;
+        updates.comfyCfg = 1;
+    }
+    return updates;
+};
+
+const normalizeModelPath = (value: string) => value.replace(/\\/g, '/').replace(/^models\//i, '').toLowerCase();
+
+export const getComfyRelativePath = (item: CivitaiInventoryItem) => item.relativePath.replace(/^[^\\/]+[\\/]/, '');
+
+export const findInventoryModel = (inventory: CivitaiInventory, modelPath: string): CivitaiInventoryItem | undefined => {
+    const normalizedModelPath = normalizeModelPath(modelPath);
+    return inventory.items.find(item => normalizeModelPath(getComfyRelativePath(item)) === normalizedModelPath)
+        || inventory.items.find(item => item.fileName.toLowerCase() === normalizedModelPath.split('/').pop());
+};
 
 const PROVIDER_ORIGINS: Record<CivitaiProvider, string> = {
     regular: 'https://civitai.com',

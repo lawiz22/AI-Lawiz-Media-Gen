@@ -14,6 +14,7 @@ import { DEFAULT_GEMINI_IMAGE_MODEL, GEMINI_IMAGE_MODELS, generateBackgroundImag
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, getMammouthImageModels } from '../services/mammouthService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
 import { saveToLibrary } from '../services/libraryService';
+import { findInventoryModel, getRecommendedSettingUpdates } from '../services/civitaiService';
 import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon, LibraryIcon, SaveIcon, CheckIcon, DiceIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { dataUrlToFile, fileToDataUrl, dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
@@ -279,6 +280,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const [mammouthModels, setMammouthModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
     const [loadingMammouthModels, setLoadingMammouthModels] = useState(false);
     const [characterAdvancedOpen, setCharacterAdvancedOpen] = useState(false);
+    const [comfyModelsOpen, setComfyModelsOpen] = useState(false);
 
     useEffect(() => {
         const fetchModels = async () => {
@@ -315,6 +317,15 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
     // --- Memoized Model Lists from ComfyUI Object Info ---
     const comfyModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name), [comfyUIObjectInfo]);
+    const filteredComfyModels = useMemo(() => comfyModels.filter(model => {
+        const lowerModel = model.toLowerCase();
+        if (options.comfyModelType === 'sd1.5' || options.comfyModelType === 'face-detailer-sd1.5') {
+            return lowerModel.includes('sd1.5') || lowerModel.includes('sd 1.5');
+        }
+        if (options.comfyModelType === 'sdxl') return lowerModel.includes('sdxl');
+        if (options.comfyModelType === 'flux') return lowerModel.includes('flux');
+        return true;
+    }), [comfyModels, options.comfyModelType]);
 
     const comfySamplers = useMemo(() => {
         const list = getModelListFromInfo(comfyUIObjectInfo?.KSampler?.input?.required?.sampler_name);
@@ -419,15 +430,63 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const comfyBboxModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.UltralyticsDetectorProvider?.input?.required?.model_name), [comfyUIObjectInfo]);
     const comfySamModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.SAMLoader?.input?.required?.model_name), [comfyUIObjectInfo]);
 
-    const prevComfyModelType = useRef<GenerationOptions['comfyModelType']>();
-
     useEffect(() => {
-        if (options.provider === 'comfyui' && options.comfyModelType !== prevComfyModelType.current) {
-            // ... (Logic for ComfyUI defaults)
-            // Assuming no changes needed here as per instructions
+        if (options.provider !== 'comfyui' || !options.comfyModelType) return;
+
+        const modelType = options.comfyModelType;
+        let field: keyof GenerationOptions | undefined;
+        let candidates: string[] = [];
+
+        if (modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux' || modelType === 'face-detailer-sd1.5') {
+            field = 'comfyModel';
+            candidates = filteredComfyModels;
+        } else if (modelType === 'qwen-t2i-gguf') {
+            field = 'comfyQwenUnet';
+            candidates = comfyGgufModels.filter(model => /qwen/i.test(model));
+        } else if (modelType === 'qwen-edit') {
+            field = 'comfyQwenEditUnet';
+            candidates = comfyUnets.filter(model => /qwen.*edit|edit.*qwen/i.test(model));
+        } else if (modelType === 'z-image') {
+            field = 'comfyZImageUnet';
+            candidates = comfyUnets.filter(model => /z[-_ ]?image|\bzit\b/i.test(model));
+        } else if (modelType === 'flux2-simple') {
+            field = 'comfyFlux2Unet';
+            candidates = comfyGgufModels.filter(model => /flux[-_ ]?2|klein/i.test(model));
+        } else if (modelType === 'krea2-simple') {
+            field = 'comfyKreaUnet';
+            candidates = comfyUnets.filter(model => /krea/i.test(model));
+        } else if (modelType === 'nunchaku-kontext-flux' || modelType === 'nunchaku-flux-image') {
+            field = 'comfyNunchakuModel';
+            candidates = nunchakuModels;
+        } else if (modelType === 'flux-krea') {
+            field = 'comfyFluxKreaModel';
+            candidates = comfyGgufModels.filter(model => /flux/i.test(model));
         }
-        prevComfyModelType.current = options.comfyModelType;
-    }, [options.provider, options.comfyModelType, updateOptions, comfyModels, comfyLoras, comfyVaes, comfyClips, comfyGgufModels, t5GgufEncoderModels, t5SafetensorEncoderModels, comfySamplers, comfySchedulers, nunchakuModels, nunchakuAttentions, comfyUpscaleModels, comfyBboxModels, comfySamModels]);
+
+        if (!field || candidates.length === 0) return;
+        const configuredModel = String(options[field] || '');
+        const selectedModel = candidates.find(model => model.toLowerCase() === configuredModel.toLowerCase()) || candidates[0];
+        let cancelled = false;
+
+        const applyModelDefaults = async () => {
+            const updates: Partial<GenerationOptions> = configuredModel === selectedModel ? {} : { [field]: selectedModel };
+            if (window.electron) {
+                try {
+                    const inventory = await window.electron.getCivitaiInventory();
+                    const inventoryItem = findInventoryModel(inventory, selectedModel);
+                    if (inventoryItem?.usageMetadata) {
+                        Object.assign(updates, getRecommendedSettingUpdates(modelType, inventoryItem.usageMetadata, comfyUIObjectInfo));
+                    }
+                } catch (error) {
+                    console.warn('Could not apply local model recommendations.', error);
+                }
+            }
+            if (!cancelled && Object.keys(updates).length > 0) updateOptions(updates);
+        };
+
+        void applyModelDefaults();
+        return () => { cancelled = true; };
+    }, [options.provider, options.comfyModelType, options.comfyModel, options.comfyQwenUnet, options.comfyQwenEditUnet, options.comfyZImageUnet, options.comfyFlux2Unet, options.comfyKreaUnet, options.comfyNunchakuModel, options.comfyFluxKreaModel, updateOptions, comfyUIObjectInfo, filteredComfyModels, comfyGgufModels, comfyUnets, nunchakuModels]);
 
 
     useEffect(() => {
@@ -464,7 +523,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
         const changesActiveModel = field === 'comfyModelType'
             || field === 'comfyModel'
-            || /^(?:comfyQwenUnet|comfyZImageUnet|comfy(?:Sd15|Sdxl|Flux|Qwen|ZImage)Lora\dName)$/.test(String(field));
+            || /^(?:comfyQwenUnet|comfyZImageUnet|comfyFlux2Unet|comfyKreaUnet|comfy(?:Sd15|Sdxl|Flux|Flux2|Qwen|ZImage|Krea)Lora\dName)$/.test(String(field));
 
         if (field === 'imageStyle') {
             if (options.provider === 'gemini') {
@@ -487,32 +546,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         if (field === 'mammouthImageModel') {
             updateOptions({ mammouthImageModel: value as string });
-            return;
-        }
-
-        const getStylePrefix = (opts: GenerationOptions) => {
-            if (opts.imageStyle === 'photorealistic') {
-                return `${opts.photoStyle}, ${opts.eraStyle}, `;
-            } else if (opts.imageStyle) {
-                return `${opts.imageStyle}, `;
-            }
-            return '';
-        };
-
-        if (options.provider === 'comfyui' && ['imageStyle', 'photoStyle', 'eraStyle'].includes(field)) {
-            const oldPrefix = getStylePrefix(options);
-            const tempOptions = { ...options, [field]: value as string };
-            const newPrefix = getStylePrefix(tempOptions);
-
-            let currentPrompt = options.comfyPrompt || '';
-
-            if (oldPrefix && currentPrompt.startsWith(oldPrefix)) {
-                currentPrompt = currentPrompt.substring(oldPrefix.length);
-            }
-
-            const newPrompt = `${newPrefix}${currentPrompt}`;
-
-            updateOptions({ [field]: value, comfyPrompt: newPrompt });
             return;
         }
 
@@ -1009,14 +1042,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 </div>}
             </OptionSection>
 
-            <OptionSection title="Style">
-                <SelectInput label="Image Style" value={options.imageStyle} onChange={handleOptionChange('imageStyle')} options={IMAGE_STYLE_OPTIONS} disabled={isDisabled} />
-                {options.imageStyle === 'photorealistic' && <>
-                    <SelectInput label="Photo Style" value={options.photoStyle} onChange={handleOptionChange('photoStyle')} options={PHOTO_STYLE_OPTIONS} disabled={isDisabled} />
-                    <SelectInput label="Era / Medium" value={options.eraStyle} onChange={handleOptionChange('eraStyle')} options={ERA_STYLE_OPTIONS} disabled={isDisabled} />
-                </>}
-            </OptionSection>
-
             <button onClick={() => setCharacterAdvancedOpen(open => !open)} className={`w-full rounded-md border px-4 py-2 text-sm font-bold transition-colors ${characterAdvancedOpen ? 'border-accent bg-accent/10 text-accent' : 'border-border-primary bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
                 Advanced {characterAdvancedOpen ? '−' : '+'}
             </button>
@@ -1094,20 +1119,24 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 }
 
                 <OptionSection title="Model & Prompt">
+                    <button
+                        type="button"
+                        onClick={() => setComfyModelsOpen(open => !open)}
+                        aria-expanded={comfyModelsOpen}
+                        className={`w-full rounded-md border px-4 py-2 text-sm font-bold transition-colors ${comfyModelsOpen
+                            ? 'border-accent text-accent'
+                            : 'border-border-primary bg-bg-tertiary text-text-secondary hover:border-accent hover:text-text-primary'
+                            }`}
+                    >
+                        Models &amp; CLIP {comfyModelsOpen ? '−' : '+'}
+                    </button>
 
-
-                    <div className="space-y-2">
-                        <SelectInput label="Image Style" value={options.imageStyle} onChange={handleOptionChange('imageStyle')} options={IMAGE_STYLE_OPTIONS} disabled={isDisabled} />
-                        {options.imageStyle === 'photorealistic' && (
-                            <>
-                                <SelectInput label="Photo Style" value={options.photoStyle} onChange={handleOptionChange('photoStyle')} options={PHOTO_STYLE_OPTIONS} disabled={isDisabled} />
-                                <SelectInput label="Era / Medium" value={options.eraStyle} onChange={handleOptionChange('eraStyle')} options={ERA_STYLE_OPTIONS} disabled={isDisabled} />
-                            </>
+                    {comfyModelsOpen && <div className="space-y-4 rounded-md border border-border-primary bg-bg-tertiary p-3">
+                        {(modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux' || modelType === 'face-detailer-sd1.5') && (
+                            <SelectInput label="Checkpoint" value={options.comfyModel || ''} onChange={handleOptionChange('comfyModel')} options={[{ value: '', label: 'Select Checkpoint' }, ...filteredComfyModels.map(model => ({ value: model, label: model }))]} disabled={isDisabled} />
                         )}
-
                         {modelType === 'flux' && (
-                            <div className="pt-2 border-t border-border-primary/50 space-y-2">
-                                <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Flux Models</h4>
+                            <div className="space-y-4">
                                 <SelectInput
                                     label="CLIP 1 (T5)"
                                     value={options.comfyFluxClip1 || ''}
@@ -1133,8 +1162,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         )}
 
                         {modelType === 'qwen-t2i-gguf' && (
-                            <div className="pt-2 border-t border-border-primary/50 space-y-2">
-                                <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Qwen Models</h4>
+                            <div className="space-y-4">
                                 <SelectInput
                                     label="Unet (GGUF)"
                                     value={options.comfyQwenUnet || ''}
@@ -1156,16 +1184,50 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                     options={comfyVaes.map(m => ({ value: m, label: m }))}
                                     disabled={isDisabled}
                                 />
-                                <NumberSlider
-                                    label={`Model Sampling AuraFlow (Shift): ${options.comfyQwenShift || 2.5}`}
-                                    value={options.comfyQwenShift || 2.5}
-                                    onChange={handleSliderChange('comfyQwenShift')}
-                                    min={0.0}
-                                    max={10.0}
-                                    step={0.1}
-                                    disabled={isDisabled}
-                                />
                             </div>
+                        )}
+
+                        {modelType === 'qwen-edit' && <div className="space-y-4">
+                            <SelectInput label="Diffusion Model (UNET)" value={options.comfyQwenEditUnet || ''} onChange={handleOptionChange('comfyQwenEditUnet')} options={Array.from(new Set([options.comfyQwenEditUnet, ...comfyUnets].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                            <SelectInput label="CLIP (GGUF)" value={options.comfyQwenEditClip || ''} onChange={handleOptionChange('comfyQwenEditClip')} options={Array.from(new Set([options.comfyQwenEditClip, ...t5GgufEncoderModels].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                            <SelectInput label="VAE" value={options.comfyQwenEditVae || ''} onChange={handleOptionChange('comfyQwenEditVae')} options={Array.from(new Set([options.comfyQwenEditVae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                        </div>}
+
+                        {modelType === 'z-image' && <div className="space-y-4">
+                            <SelectInput label="UNET Model (Safetensors)" value={options.comfyZImageUnet || ''} onChange={handleOptionChange('comfyZImageUnet')} options={comfyUnets.map(model => ({ value: model, label: model }))} disabled={isDisabled} />
+                            <SelectInput label="CLIP Model (GGUF)" value={options.comfyZImageClip || ''} onChange={handleOptionChange('comfyZImageClip')} options={t5GgufEncoderModels.map(model => ({ value: model, label: model }))} disabled={isDisabled} />
+                            <SelectInput label="VAE Model" value={options.comfyZImageVae || ''} onChange={handleOptionChange('comfyZImageVae')} options={comfyVaes.map(model => ({ value: model, label: model }))} disabled={isDisabled} />
+                        </div>}
+
+                        {modelType === 'flux2-simple' && <div className="space-y-4">
+                            <SelectInput label="UNET Model (GGUF)" value={options.comfyFlux2Unet || ''} onChange={handleOptionChange('comfyFlux2Unet')} options={Array.from(new Set([options.comfyFlux2Unet, ...comfyGgufModels].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                            <SelectInput label="CLIP Model" value={options.comfyFlux2Clip || ''} onChange={handleOptionChange('comfyFlux2Clip')} options={Array.from(new Set([options.comfyFlux2Clip, ...comfyClips].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                            <SelectInput label="VAE Model" value={options.comfyFlux2Vae || ''} onChange={handleOptionChange('comfyFlux2Vae')} options={Array.from(new Set([options.comfyFlux2Vae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                        </div>}
+
+                        {modelType === 'krea2-simple' && <div className="space-y-4">
+                            <SelectInput label="UNET Model" value={options.comfyKreaUnet || ''} onChange={handleOptionChange('comfyKreaUnet')} options={Array.from(new Set([options.comfyKreaUnet, ...comfyUnets].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                            <SelectInput label="CLIP Model" value={options.comfyKreaClip || ''} onChange={handleOptionChange('comfyKreaClip')} options={Array.from(new Set([options.comfyKreaClip, ...comfyClips].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                            <SelectInput label="VAE Model" value={options.comfyKreaVae || ''} onChange={handleOptionChange('comfyKreaVae')} options={Array.from(new Set([options.comfyKreaVae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                        </div>}
+
+                        {modelType === 'face-detailer-sd1.5' && <div className="space-y-4">
+                            <SelectInput label="BBOX Model" value={options.comfyDetailerBboxModel || ''} onChange={handleOptionChange('comfyDetailerBboxModel')} options={comfyBboxModels.map(model => ({ value: model, label: model }))} disabled={isDisabled} />
+                            <SelectInput label="SAM Model" value={options.comfyDetailerSamModel || ''} onChange={handleOptionChange('comfyDetailerSamModel')} options={comfySamModels.map(model => ({ value: model, label: model }))} disabled={isDisabled} />
+                        </div>}
+                    </div>}
+
+                    <div className="space-y-2">
+                        {modelType === 'qwen-t2i-gguf' && (
+                            <NumberSlider
+                                label={`Model Sampling AuraFlow (Shift): ${options.comfyQwenShift || 2.5}`}
+                                value={options.comfyQwenShift || 2.5}
+                                onChange={handleSliderChange('comfyQwenShift')}
+                                min={0.0}
+                                max={10.0}
+                                step={0.1}
+                                disabled={isDisabled}
+                            />
                         )}
 
                         {modelType === 'qwen-edit' && (
@@ -1180,9 +1242,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                     maxImages={2}
                                     label="Add Reference Image(s)"
                                 />
-                                <SelectInput label="Diffusion Model (UNET)" value={options.comfyQwenEditUnet || ''} onChange={handleOptionChange('comfyQwenEditUnet')} options={Array.from(new Set([options.comfyQwenEditUnet, ...comfyUnets].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
-                                <SelectInput label="CLIP (GGUF)" value={options.comfyQwenEditClip || ''} onChange={handleOptionChange('comfyQwenEditClip')} options={Array.from(new Set([options.comfyQwenEditClip, ...t5GgufEncoderModels].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
-                                <SelectInput label="VAE" value={options.comfyQwenEditVae || ''} onChange={handleOptionChange('comfyQwenEditVae')} options={Array.from(new Set([options.comfyQwenEditVae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                                 <NumberSlider label={`AuraFlow Shift: ${options.comfyQwenEditShift ?? 2.5}`} value={options.comfyQwenEditShift ?? 2.5} onChange={handleSliderChange('comfyQwenEditShift')} min={0} max={10} step={0.1} disabled={isDisabled} />
                                 <NumberSlider label={`Source Megapixels: ${options.comfyQwenEditMegapixels ?? 1}`} value={options.comfyQwenEditMegapixels ?? 1} onChange={handleSliderChange('comfyQwenEditMegapixels')} min={0.25} max={4} step={0.25} disabled={isDisabled} />
                             </div>
@@ -1192,29 +1251,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     {/* Z-Image Models */}
                     {modelType === 'z-image' && (
                         <div className="mt-4 p-4 bg-bg-tertiary rounded-lg border border-border-secondary">
-                            <h3 className="text-sm font-medium text-text-primary mb-3">Z-Image Models</h3>
                             <div className="grid grid-cols-1 gap-4">
-                                <SelectInput
-                                    label="Unet Model (Safetensors)"
-                                    value={options.comfyZImageUnet || ''}
-                                    onChange={handleOptionChange('comfyZImageUnet')}
-                                    options={comfyUnets.map(m => ({ value: m, label: m }))}
-                                    disabled={isDisabled}
-                                />
-                                <SelectInput
-                                    label="CLIP Model (GGUF)"
-                                    value={options.comfyZImageClip || ''}
-                                    onChange={handleOptionChange('comfyZImageClip')}
-                                    options={t5GgufEncoderModels.map(m => ({ value: m, label: m }))}
-                                    disabled={isDisabled}
-                                />
-                                <SelectInput
-                                    label="VAE Model"
-                                    value={options.comfyZImageVae || ''}
-                                    onChange={handleOptionChange('comfyZImageVae')}
-                                    options={comfyVaes.map(m => ({ value: m, label: m }))}
-                                    disabled={isDisabled}
-                                />
                                 <CheckboxSlider
                                     label="Enable Model Sampling AuraFlow (Shift)"
                                     isChecked={options.comfyZImageUseShift ?? true}
@@ -1243,9 +1280,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     )}
 
                     {options.comfyPromptExampleSource && window.electron && <button type="button" onClick={openPromptExamples} disabled={isDisabled || promptExamplesLoading} className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">{promptExamplesLoading && <SpinnerIcon className="w-4 h-4 animate-spin" />}{promptExamplesLoading ? 'Loading examples...' : `${promptSidecarAvailable ? 'Local prompts' : 'Find prompt examples'} · ${options.comfyPromptExampleSource.modelName}`}</button>}
-                    <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={handleOptionChange('comfyPrompt')} disabled={isDisabled} isTextArea />
+                    <TextInput label="Positive Prompt" value={modelType === 'krea2-simple' ? (options.comfyKreaPrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2Prompt || '') : (options.comfyPrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' ? 'comfyKreaPrompt' : modelType === 'flux2-simple' ? 'comfyFlux2Prompt' : 'comfyPrompt')} disabled={isDisabled} isTextArea />
                     {modelType !== 'nunchaku-kontext-flux' && modelType !== 'nunchaku-flux-image' && modelType !== 'flux-krea' && (
-                        <TextInput label="Negative Prompt" value={options.comfyNegativePrompt || ''} onChange={handleOptionChange('comfyNegativePrompt')} disabled={isDisabled} isTextArea />
+                        <TextInput label="Negative Prompt" value={modelType === 'krea2-simple' ? (options.comfyKreaNegativePrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2NegativePrompt || '') : (options.comfyNegativePrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' ? 'comfyKreaNegativePrompt' : modelType === 'flux2-simple' ? 'comfyFlux2NegativePrompt' : 'comfyNegativePrompt')} disabled={isDisabled} isTextArea />
                     )}
                 </OptionSection>
 
@@ -1354,10 +1391,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
                 {modelType === 'face-detailer-sd1.5' && (
                     <>
-                        <OptionSection title="Face Detailer Models">
-                            <SelectInput label="BBOX Model" value={options.comfyDetailerBboxModel || ''} onChange={handleOptionChange('comfyDetailerBboxModel')} options={comfyBboxModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="SAM Model" value={options.comfyDetailerSamModel || ''} onChange={handleOptionChange('comfyDetailerSamModel')} options={comfySamModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                        </OptionSection>
                         <OptionSection title="Face Detailer Settings">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <SelectInput label="Sampler" value={options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={comfySamplers.map(s => ({ value: s, label: s }))} disabled={isDisabled} />

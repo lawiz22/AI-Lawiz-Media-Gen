@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch } from 'react-redux';
-import { CIVITAI_FAMILIES, CivitaiFamily, CivitaiInventory, CivitaiInventoryItem, CivitaiModelFolder, CivitaiProvider, formatModelSize, getCivitaiModelUrl } from '../services/civitaiService';
+import { CIVITAI_FAMILIES, CivitaiFamily, CivitaiInventory, CivitaiInventoryItem, CivitaiModelFolder, CivitaiProvider, formatModelSize, getCivitaiModelUrl, getComfyRelativePath, getRecommendedSettingUpdates } from '../services/civitaiService';
 import { queueLtxTransfer, setActiveTab } from '../store/appSlice';
 import { setGenerationMode, updateOptions } from '../store/generationSlice';
 import { store, type AppDispatch } from '../store/store';
@@ -47,7 +47,6 @@ const getItemFolder = (item: CivitaiInventoryItem): CivitaiModelFolder => {
 
 const getFolderLabel = (folder: CivitaiModelFolder) => folder === 'LTX2' ? 'LTX 2.3 (LTX2)' : folder;
 const inferPreviewType = (url?: string | null): 'image' | 'video' => url && /\.(?:mp4|webm|mov)(?:[?#]|$)/i.test(url) ? 'video' : 'image';
-const getComfyRelativePath = (item: CivitaiInventoryItem) => item.relativePath.replace(/^[^\\/]+[\\/]/, '');
 const isItemReviewed = (item: CivitaiInventoryItem) => item.userOwned || item.status === 'matched' || Boolean(item.archiveInfo);
 
 const SAMPLER_OPTIONS = ['', 'euler', 'euler_ancestral', 'heun', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpm_fast', 'dpm_adaptive', 'dpmpp_2s_ancestral', 'dpmpp_sde', 'dpmpp_2m', 'dpmpp_2m_sde', 'dpmpp_3m_sde', 'ddim', 'uni_pc', 'uni_pc_bh2'];
@@ -71,46 +70,6 @@ const getCompatibleBaseModel = (modelType: ComfyModelType, objectInfo: any): str
     if (modelType === 'flux') return checkpoints.find(model => /flux/i.test(model));
     if (modelType === 'sdxl') return checkpoints.find(model => /sdxl|pony|illustrious|noobai/i.test(model));
     return checkpoints.find(model => /sd[._ -]?1[._ -]?5/i.test(model));
-};
-
-const WORKFLOW_DEFAULT_SETTINGS: Partial<Record<ComfyModelType, Pick<GenerationOptions, 'comfySteps' | 'comfyCfg' | 'comfySampler' | 'comfyScheduler' | 'comfyFluxGuidance'>>> = {
-    'sd1.5': { comfySteps: 25, comfyCfg: 7, comfySampler: 'euler', comfyScheduler: 'normal' },
-    sdxl: { comfySteps: 25, comfyCfg: 5.5, comfySampler: 'euler', comfyScheduler: 'normal' },
-    flux: { comfySteps: 10, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'simple', comfyFluxGuidance: 3.5 },
-    'qwen-t2i-gguf': { comfySteps: 4, comfyCfg: 1, comfySampler: 'euler_ancestral', comfyScheduler: 'beta57' },
-    'z-image': { comfySteps: 8, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'simple' },
-};
-
-const normalizeComfyOption = (value: string) => value.toLowerCase()
-    .replace(/\+\+/g, 'pp')
-    .replace(/\+/g, 'p')
-    .replace(/ancestral/g, 'a')
-    .replace(/[^a-z0-9]/g, '');
-
-const resolveComfyOption = (recommendation: string | undefined, options: string[]) => {
-    if (!recommendation) return undefined;
-    const normalizedRecommendation = normalizeComfyOption(recommendation);
-    return [...options]
-        .sort((left, right) => normalizeComfyOption(right).length - normalizeComfyOption(left).length)
-        .find(option => normalizedRecommendation.includes(normalizeComfyOption(option)));
-};
-
-const getRecommendedSettingUpdates = (modelType: ComfyModelType, usageMetadata: CivitaiInventoryItem['usageMetadata'], objectInfo: any): Partial<GenerationOptions> => {
-    const defaults = WORKFLOW_DEFAULT_SETTINGS[modelType] || {};
-    const samplerOptions = getComfyOptions(objectInfo?.KSampler?.input?.required?.sampler_name);
-    const schedulerOptions = getComfyOptions(objectInfo?.KSampler?.input?.required?.scheduler);
-    const sampler = resolveComfyOption(usageMetadata?.sampler, samplerOptions) || defaults.comfySampler;
-    const scheduler = resolveComfyOption(usageMetadata?.scheduler, schedulerOptions)
-        || resolveComfyOption(usageMetadata?.sampler, schedulerOptions)
-        || defaults.comfyScheduler;
-    return {
-        ...defaults,
-        ...(usageMetadata?.steps ? { comfySteps: usageMetadata.steps } : {}),
-        ...(usageMetadata?.cfg ? { comfyCfg: usageMetadata.cfg } : {}),
-        ...(modelType === 'flux' && usageMetadata?.guidance ? { comfyFluxGuidance: usageMetadata.guidance } : {}),
-        ...(sampler ? { comfySampler: sampler } : {}),
-        ...(scheduler ? { comfyScheduler: scheduler } : {}),
-    };
 };
 
 const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelType; loraPrefix: string; checkpointField: keyof GenerationOptions } => {
@@ -330,7 +289,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                     comfyQwenLora3Strength: 1,
                     comfyQwenLora4Name: '',
                     comfyQwenLora4Strength: 1,
-                    comfySteps: isQwenLightning && /8steps/i.test(modelPath) ? 8 : 4,
+                    comfySteps: 4,
                     comfyCfg: 1,
                     comfyPrompt: savedTriggers.join(', '),
                     ...(compatibleBaseModel ? { [workflow.checkpointField]: compatibleBaseModel } : {}),

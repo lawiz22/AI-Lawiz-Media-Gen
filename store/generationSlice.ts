@@ -28,8 +28,8 @@ const initialOptions: GenerationOptions = {
   comfyModelType: 'qwen-t2i-gguf',
   comfyPrompt: '',
   comfyNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed, disfigured',
-  comfySteps: 25,
-  comfyCfg: 5.5,
+  comfySteps: 4,
+  comfyCfg: 1,
   comfySampler: 'euler',
   comfyScheduler: 'normal',
 
@@ -175,6 +175,10 @@ const initialState: GenerationSliceState = {
   maskImage: null,
   elementImages: [],
   options: initialOptions,
+  comfyOptionsByModel: {},
+  comfyDefaultOptionsByModel: {
+    'qwen-t2i-gguf': { ...initialOptions, provider: 'comfyui' },
+  },
   characterOptions: initialCharacterOptions,
   isLoading: false,
   progressMessage: '',
@@ -225,6 +229,36 @@ const generationSlice = createSlice({
     updateOptions: (state, action: PayloadAction<Partial<GenerationOptions>>) => {
       state.options = { ...state.options, ...action.payload };
     },
+    switchComfyModelOptions: (state, action: PayloadAction<Partial<GenerationOptions> & { comfyModelType: ComfyModelType }>) => {
+      const currentModelType = state.options.comfyModelType;
+      if (currentModelType) {
+        state.comfyOptionsByModel[currentModelType] = { ...state.options };
+      }
+
+      const sharedPrompts = {
+        comfyPrompt: state.options.comfyPrompt,
+        comfyNegativePrompt: state.options.comfyNegativePrompt,
+      };
+      const savedOptions = state.comfyOptionsByModel[action.payload.comfyModelType];
+      const nextOptions = savedOptions
+        ? { ...savedOptions, ...sharedPrompts, provider: 'comfyui', comfyModelType: action.payload.comfyModelType }
+        : { ...state.options, ...action.payload, ...sharedPrompts, provider: 'comfyui' };
+      if (!savedOptions && action.payload.comfyModelType === 'krea2-simple') {
+        nextOptions.comfyKreaPrompt = state.options.comfyPrompt || '';
+        nextOptions.comfyKreaNegativePrompt = state.options.comfyNegativePrompt || '';
+      } else if (!savedOptions && action.payload.comfyModelType === 'flux2-simple') {
+        nextOptions.comfyFlux2Prompt = state.options.comfyPrompt || '';
+        nextOptions.comfyFlux2NegativePrompt = state.options.comfyNegativePrompt || '';
+      }
+      if (action.payload.comfyModelType === 'qwen-t2i-gguf') {
+        nextOptions.comfySteps = 4;
+        nextOptions.comfyCfg = 1;
+      }
+      state.options = nextOptions;
+      if (!state.comfyDefaultOptionsByModel[action.payload.comfyModelType]) {
+        state.comfyDefaultOptionsByModel[action.payload.comfyModelType] = { ...nextOptions };
+      }
+    },
     setCharacterOptions: (state, action: PayloadAction<GenerationOptions>) => {
       state.characterOptions = action.payload;
     },
@@ -270,6 +304,18 @@ const generationSlice = createSlice({
         'image-generator': { images: [], lastUsedPrompt: null },
         'character-generator': { images: [], lastUsedPrompt: null },
       };
+      const activeModelType = state.options.comfyModelType;
+      const activeModelDefaults = activeModelType && state.comfyDefaultOptionsByModel[activeModelType];
+      if (activeModelDefaults) {
+        state.options = {
+          ...activeModelDefaults,
+          provider: state.options.provider,
+          comfyModelType: activeModelType,
+          comfyPrompt: '',
+          comfyNegativePrompt: initialOptions.comfyNegativePrompt,
+        };
+      }
+      state.comfyOptionsByModel = {};
       state.characterName = '';
       state.shouldGenerateCharacterName = false;
       state.maskImage = null;
@@ -278,6 +324,10 @@ const generationSlice = createSlice({
       const resetDefaults: Partial<GenerationOptions> = {
         geminiPrompt: '',
         comfyPrompt: '',
+        comfyFlux2Prompt: '',
+        comfyFlux2NegativePrompt: '',
+        comfyKreaPrompt: '',
+        comfyKreaNegativePrompt: '',
         comfyPromptExampleSource: undefined,
         customBackground: '',
         customClothingPrompt: '',
@@ -311,7 +361,7 @@ export const {
   setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
   setClothingImage, setBackgroundImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
   setMaskImage, setElementImages, setOptions, updateOptions, setCharacterOptions, updateCharacterOptions, setLoadingState,
-  updateProgress, setGeneratedImages, setImageSaveStatus, setLastUsedPrompt, resetGenerationState
+  switchComfyModelOptions, updateProgress, setGeneratedImages, setImageSaveStatus, setLastUsedPrompt, resetGenerationState
 } = generationSlice.actions;
 
 // --- Selectors ---
@@ -361,7 +411,12 @@ export const selectIsReadyToGenerate = createSelector(
         return !!isComfyUIConnected && !!sourceImage && getEnabledCharacterAngles(activeOptions).length > 0;
       }
       const isI2IMode = generationMode === 'i2i';
-      const baseReady = !!isComfyUIConnected && !!activeOptions.comfyPrompt?.trim();
+      const activePrompt = activeOptions.comfyModelType === 'krea2-simple'
+        ? activeOptions.comfyKreaPrompt
+        : activeOptions.comfyModelType === 'flux2-simple'
+          ? activeOptions.comfyFlux2Prompt
+          : activeOptions.comfyPrompt;
+      const baseReady = !!isComfyUIConnected && !!activePrompt?.trim();
       if (isI2IMode) {
         return baseReady && !!sourceImage;
       }

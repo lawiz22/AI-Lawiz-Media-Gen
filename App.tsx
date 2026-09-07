@@ -12,7 +12,7 @@ import {
     setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
     setClothingImage, setBackgroundImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
     setMaskImage, setElementImages, setOptions, updateOptions, setCharacterOptions, updateCharacterOptions, setLoadingState,
-    updateProgress, setGeneratedImages, setLastUsedPrompt, resetGenerationState,
+    switchComfyModelOptions, updateProgress, setGeneratedImages, setLastUsedPrompt, resetGenerationState,
     selectIsReadyToGenerate
 } from './store/generationSlice';
 import {
@@ -139,6 +139,10 @@ const App: React.FC = () => {
     const isReadyToGenerate = useSelector(selectIsReadyToGenerate);
     // Determine which options object to use based on the active tab
     const currentOptions = activeTab === 'character-generator' ? characterOptions : options;
+    const imageGeneratorContentKey = options.provider === 'comfyui'
+        ? `image-generator:${options.comfyModelType || 'sdxl'}`
+        : 'image-generator';
+    const activeGenerationContentKey = activeTab === 'image-generator' ? imageGeneratorContentKey : activeTab;
 
     // --- Memoized Handlers for Redux ---
     const handleSetOptions = useCallback((newOptions: GenerationOptions) => {
@@ -149,7 +153,7 @@ const App: React.FC = () => {
         }
     }, [dispatch, activeTab]);
 
-    const handleUpdateOptions = useCallback((opts: Partial<GenerationOptions>) => {
+    const handleUpdateOptions = useCallback((opts: Partial<GenerationOptions>, switchModel = false) => {
         const newOpts = { ...opts };
 
         // Helper to apply defaults only if keys are missing in newOpts
@@ -165,7 +169,7 @@ const App: React.FC = () => {
         if (newOpts.comfyModelType === 'flux') {
             applyDefaultsIfMissing({
                 comfyFluxUseLora: true,
-                comfyFluxLora1Name: "flux-turbo.safetensors",
+                comfyFluxLora1Name: "Flux\\flux-turbo.safetensors",
                 comfyFluxLora1Strength: 1.0,
                 comfyFluxClip1: "t5xxl_fp8_e4m3fn_scaled.safetensors",
                 comfyFluxClip2: "clip_l.safetensors",
@@ -242,14 +246,71 @@ const App: React.FC = () => {
                 megapixel: 1.0,
                 aspectRatio: "1:1"
             });
+        } else if (newOpts.comfyModelType === 'flux2-simple') {
+            applyDefaultsIfMissing({
+                comfyFlux2Prompt: '',
+                comfyFlux2NegativePrompt: '',
+                comfyFlux2Unet: 'flux-2-klein-4b-Q4_K_M.gguf',
+                comfyFlux2Clip: 'qwen_3_4b.safetensors',
+                comfyFlux2Vae: 'flux2-vae.safetensors',
+                comfyFlux2Resolution: '832x1216',
+                comfyFlux2UseLora: true,
+                comfyFlux2Lora1Name: '',
+                comfyFlux2Lora1Strength: 1,
+                comfyFlux2Lora2Name: '',
+                comfyFlux2Lora2Strength: 1,
+                comfyFlux2Lora3Name: '',
+                comfyFlux2Lora3Strength: 1,
+                comfyFlux2Lora4Name: '',
+                comfyFlux2Lora4Strength: 1,
+                comfyFlux2Lora5Name: '',
+                comfyFlux2Lora5Strength: 1,
+                comfyFlux2Lora6Name: '',
+                comfyFlux2Lora6Strength: 1,
+                comfySteps: 20,
+                comfyCfg: 4,
+                comfySampler: 'euler',
+            });
+        } else if (newOpts.comfyModelType === 'krea2-simple') {
+            applyDefaultsIfMissing({
+                comfyKreaPrompt: '',
+                comfyKreaNegativePrompt: '',
+                comfyKreaUnet: 'krea2_raw_fp8_scaled.safetensors',
+                comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
+                comfyKreaVae: 'qwen_image_vae.safetensors',
+                comfyKreaResolution: '832x1216',
+                comfyKreaUseLora: true,
+                comfyKreaLora1Name: 'KREA\\krea2_turbo_lora_rank_64_bf16.safetensors',
+                comfyKreaLora1Strength: 0.6,
+                comfyKreaLora2Name: 'KREA\\snofs_krea_v1_nostrip.safetensors',
+                comfyKreaLora2Strength: 1,
+                comfyKreaLora3Name: '',
+                comfyKreaLora3Strength: 1,
+                comfyKreaLora4Name: '',
+                comfyKreaLora4Strength: 1,
+                comfyKreaLora5Name: '',
+                comfyKreaLora5Strength: 1,
+                comfyKreaLora6Name: '',
+                comfyKreaLora6Strength: 1,
+                comfySteps: 10,
+                comfyCfg: 1,
+                comfySampler: 'er_sde',
+                comfyScheduler: 'beta',
+            });
         }
 
         if (activeTab === 'character-generator') {
             dispatch(updateCharacterOptions(newOpts));
+        } else if (switchModel && newOpts.comfyModelType) {
+            dispatch(switchComfyModelOptions({ ...newOpts, comfyModelType: newOpts.comfyModelType }));
         } else {
             dispatch(updateOptions(newOpts));
         }
     }, [dispatch, activeTab]);
+
+    const handleSwitchComfyModel = useCallback((modelType: NonNullable<GenerationOptions['comfyModelType']>) => {
+        handleUpdateOptions({ comfyModelType: modelType }, true);
+    }, [handleUpdateOptions]);
 
     const handleSetVideoStartFrame = useCallback(async (file: File | null) => {
         if (!file) return;
@@ -417,11 +478,11 @@ const App: React.FC = () => {
 
     const handleGenerate = async () => {
         const startTime = performance.now();
-        setGenerationTimes(prev => ({ ...prev, [activeTab]: null }));
+        setGenerationTimes(prev => ({ ...prev, [activeGenerationContentKey]: null }));
 
         dispatch(setLoadingState({ isLoading: true }));
-        dispatch(setGeneratedImages({ tabId: activeTab, images: [] }));
-        dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: null }));
+        dispatch(setGeneratedImages({ tabId: activeGenerationContentKey, images: [] }));
+        dispatch(setLastUsedPrompt({ tabId: activeGenerationContentKey, prompt: null }));
         dispatch(setGlobalError(null));
         if (!shouldGenerateCharacterName) {
             dispatch(setCharacterName(''));
@@ -464,11 +525,11 @@ const App: React.FC = () => {
                 result = { images: [], finalPrompt: null };
             }
 
-            dispatch(setGeneratedImages({ tabId: activeTab, images: result.images }));
-            dispatch(setLastUsedPrompt({ tabId: activeTab, prompt: result.finalPrompt }));
+            dispatch(setGeneratedImages({ tabId: activeGenerationContentKey, images: result.images }));
+            dispatch(setLastUsedPrompt({ tabId: activeGenerationContentKey, prompt: result.finalPrompt }));
 
             const endTime = performance.now();
-            setGenerationTimes(prev => ({ ...prev, [activeTab]: (endTime - startTime) / 1000 }));
+            setGenerationTimes(prev => ({ ...prev, [activeGenerationContentKey]: (endTime - startTime) / 1000 }));
 
             if (result.images) {
                 for (const image of result.images) {
@@ -649,7 +710,9 @@ const App: React.FC = () => {
     } else if (activeTab === 'character-generator') {
         activeModel = characterOptions.provider === 'mammouth'
             ? (characterOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
-            : DEFAULT_GEMINI_IMAGE_MODEL;
+            : characterOptions.provider === 'comfyui'
+                ? 'Qwen-Edit-Multi-Angle'
+                : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'fun') {
         activeModel = options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'extractor-tools') {
@@ -808,25 +871,31 @@ const App: React.FC = () => {
                             <ImageGeneratorHeader
                                 options={currentOptions}
                                 updateOptions={handleUpdateOptions}
+                                switchComfyModel={handleSwitchComfyModel}
                                 generationMode={generationMode}
                                 setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
+                                onExportWorkflow={() => {
+                                    const generatedImages = generatedContent[imageGeneratorContentKey]?.images || [];
+                                    const lastImage = generatedImages.length > 0 ? generatedImages[generatedImages.length - 1] as any : null;
+                                    const optionsToExport = lastImage && lastImage.seed !== undefined
+                                        ? { ...currentOptions, comfySeed: lastImage.seed }
+                                        : currentOptions;
+                                    exportComfyUIWorkflow(optionsToExport, sourceImage, elementImages.slice(0, 2));
+                                }}
                                 isDisabled={isLoading}
-                                comfyModels={
-                                    comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || []
-                                }
                             />
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                                 <div className="lg:col-span-1 space-y-8">
                                     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                                        <div className="flex items-center justify-between mb-4">
+                                        <div className="mb-4 flex flex-wrap items-center gap-3">
                                             <h2 className="text-xl font-bold text-accent">
-                                                {generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image')
+                                                {currentOptions.provider === 'comfyui' && generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image')
                                                     ? '1. Refine (Optional)'
                                                     : '1. Source & Context'}
                                             </h2>
                                         </div>
 
-                                        {generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image') ? (
+                                        {currentOptions.provider === 'comfyui' && generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image') ? (
                                             <div className="space-y-4">
                                                 <div className="flex items-center gap-2">
                                                     <input
@@ -927,7 +996,11 @@ const App: React.FC = () => {
                                                 } else {
                                                     prompt = await generatePromptFromImage(sourceImage);
                                                 }
-                                                dispatch(updateOptions({ comfyPrompt: prompt }));
+                                                dispatch(updateOptions(currentOptions.comfyModelType === 'krea2-simple'
+                                                    ? { comfyKreaPrompt: prompt }
+                                                    : currentOptions.comfyModelType === 'flux2-simple'
+                                                        ? { comfyFlux2Prompt: prompt }
+                                                        : { comfyPrompt: prompt }));
                                             } catch (error) {
                                                 console.error("Failed to generate prompt:", error);
                                                 dispatch(setGlobalError({ title: "Prompt Generation Failed", message: "Could not generate prompt from image." }));
@@ -958,50 +1031,72 @@ const App: React.FC = () => {
                                         generationMode={generationMode}
                                         onGenerate={handleGenerate}
                                         onReset={handleReset}
-                                        onExportWorkflow={() => {
-                                            const generatedImages = generatedContent['image-generator']?.images || [];
-                                            const lastImage = generatedImages.length > 0 ? generatedImages[generatedImages.length - 1] as any : null;
-                                            const optionsToExport = lastImage && lastImage.seed !== undefined
-                                                ? { ...currentOptions, comfySeed: lastImage.seed }
-                                                : currentOptions;
-                                            exportComfyUIWorkflow(optionsToExport, sourceImage, elementImages.slice(0, 2));
-                                        }}
                                         isReady={isReadyToGenerate}
                                         isDisabled={isLoading}
+                                        updateOptions={handleUpdateOptions}
                                     />
                                     {isLoading ? (
                                         <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />
                                     ) : (
                                         <ImageGrid
-                                            images={generatedContent['image-generator']?.images || []}
+                                            images={generatedContent[imageGeneratorContentKey]?.images || []}
                                             onSendToI2I={handleSendToI2I}
                                             onSendToCharacter={handleSendToCharacter}
                                             onSendToUpscale={handleSendToUpscale}
-                                            lastUsedPrompt={generatedContent['image-generator']?.lastUsedPrompt}
+                                            lastUsedPrompt={generatedContent[imageGeneratorContentKey]?.lastUsedPrompt}
                                             options={currentOptions}
                                             sourceImage={sourceImage}
-                                            activeTab={activeTab}
-                                            generationTime={generationTimes[activeTab]}
+                                            activeTab={imageGeneratorContentKey}
+                                            generationTime={generationTimes[imageGeneratorContentKey]}
                                         />
                                     )}
-                                    <LoraSettingsPanel
-                                        options={currentOptions}
-                                        updateOptions={(opts) => dispatch(updateOptions(opts))}
-                                        isDisabled={isLoading}
-                                        availableLoras={availableLoras}
-                                    />
-                                    <SamplerSettingsPanel
-                                        options={currentOptions}
-                                        updateOptions={(opts) => dispatch(updateOptions(opts))}
-                                        isDisabled={isLoading}
-                                        comfyUIObjectInfo={comfyUIObjectInfo}
-                                    />
+                                    {currentOptions.provider === 'comfyui' && <>
+                                        <LoraSettingsPanel
+                                            options={currentOptions}
+                                            updateOptions={(opts) => dispatch(updateOptions(opts))}
+                                            isDisabled={isLoading}
+                                            availableLoras={availableLoras}
+                                        />
+                                        <SamplerSettingsPanel
+                                            options={currentOptions}
+                                            updateOptions={(opts) => dispatch(updateOptions(opts))}
+                                            isDisabled={isLoading}
+                                            comfyUIObjectInfo={comfyUIObjectInfo}
+                                        />
+                                    </>}
                                 </div>
                             </div>
                         </>
                     </React.Activity>
 
                     <React.Activity mode={activeTab === 'character-generator' ? 'visible' : 'hidden'}>
+                        <>
+                        <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-border-primary bg-bg-secondary p-2 shadow-sm">
+                            <div className="flex gap-1 rounded-lg bg-bg-tertiary p-1">
+                                <button
+                                    type="button"
+                                    onClick={() => handleUpdateOptions({ provider: 'comfyui' })}
+                                    disabled={isLoading}
+                                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${currentOptions.provider === 'comfyui'
+                                        ? 'bg-accent text-accent-text shadow-sm'
+                                        : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
+                                        } disabled:cursor-not-allowed disabled:opacity-50`}
+                                >
+                                    ComfyUI
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleUpdateOptions({ provider: 'mammouth' })}
+                                    disabled={isLoading}
+                                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${currentOptions.provider === 'mammouth'
+                                        ? 'bg-accent text-accent-text shadow-sm'
+                                        : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
+                                        } disabled:cursor-not-allowed disabled:opacity-50`}
+                                >
+                                    Mammouth
+                                </button>
+                            </div>
+                        </div>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                             <div className="lg:col-span-1 space-y-8">
                                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
@@ -1039,7 +1134,7 @@ const App: React.FC = () => {
                                     comfyUIObjectInfo={comfyUIObjectInfo}
                                     comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                                     sourceImage={sourceImage}
-                                    hideProviderSwitch={false}
+                                    hideProviderSwitch={true}
                                     hideGenerationModeSwitch={true} // Hide mode switch, locked to I2I
                                     title="2. Character Options"
                                     activeTab={activeTab}
@@ -1064,7 +1159,6 @@ const App: React.FC = () => {
                                     generationMode="i2i"
                                     onGenerate={handleGenerate}
                                     onReset={handleReset}
-                                    onExportWorkflow={() => { }}
                                     isReady={isReadyToGenerate}
                                     isDisabled={isLoading}
                                 />
@@ -1086,6 +1180,7 @@ const App: React.FC = () => {
                                 )}
                             </div>
                         </div>
+                        </>
                     </React.Activity>
 
                     {activeTab === 'fun' && <div className="mb-4 flex justify-center"><div className="inline-flex rounded-md border border-rose-400/40 bg-bg-secondary p-1 shadow-sm"><button type="button" onClick={() => setActiveFunSubTab('photo-fusion')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'photo-fusion' ? 'bg-rose-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-rose-300'}`}><GroupPhotoFusionIcon className="h-4 w-4" />Photo Fusion</button><button type="button" onClick={() => setActiveFunSubTab('past-forward')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'past-forward' ? 'bg-cyan-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-cyan-300'}`}><PastForwardIcon className="h-4 w-4" />Past Forward</button></div></div>}

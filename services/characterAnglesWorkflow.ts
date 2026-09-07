@@ -58,12 +58,6 @@ const buildSharedInstructions = (options: GenerationOptions): string => {
         instructions.push(`Change the background to ${options.customBackground.trim()}.`);
     }
 
-    if (options.imageStyle === 'photorealistic') {
-        instructions.push(`Render as ${options.photoStyle}, ${options.eraStyle}.`);
-    } else {
-        instructions.push(`Render in ${options.imageStyle} style.`);
-    }
-
     return instructions.join(' ');
 };
 

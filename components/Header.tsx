@@ -111,10 +111,10 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <Banner />
           {(activeTab === 'image-generator' || activeTab === 'character-generator' || activeTab === 'fun' || activeTab === 'extractor-tools' || activeTab === 'logo-theme-generator') && (
-            <div className={`hidden lg:flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-lg border-2 ${provider !== 'comfyui'
-              ? 'border-accent text-accent bg-accent/10'
-              : 'border-highlight-green text-highlight-green bg-highlight-green/10'
-              }`}>
+            <div
+              className="hidden lg:flex items-center gap-2 rounded-lg border-2 border-accent px-4 py-1.5 text-sm font-bold text-accent"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-accent) 10%, transparent)' }}
+            >
               {provider !== 'comfyui' ? (
                 <PromptIcon className="w-5 h-5" />
               ) : (

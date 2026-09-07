@@ -24,7 +24,7 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 ### Image and Character Generation
 
 - Text-to-image and image-to-image generation through Mammouth AI or ComfyUI.
-- Local workflows for SD 1.5, SDXL, Flux, Qwen Image, Qwen Edit, Z-Image, Nunchaku Flux, Flux Krea, and face detailing.
+- Local workflows for SD 1.5, SDXL, Flux, FLUX2 Simple, Qwen Image, Qwen Edit, Z-Image, KREA2 Simple, Nunchaku Flux, Flux Krea, and face detailing.
 - Adjustable checkpoints, UNets, CLIP models, VAEs, samplers, schedulers, seeds, dimensions, and LoRA chains.
 - Refine mode with source-image denoise control.
 - Character generation with pose, clothing, background, and multi-angle controls.
@@ -83,6 +83,12 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 | Civitai API key | Optional authenticated model operations |
 
 Each local workflow requires its referenced models and custom nodes to be installed in ComfyUI. The application reads available choices from ComfyUI's `/object_info` endpoint, but it does not install workflow dependencies automatically.
+
+KREA2 Simple uses `Power Lora Loader (rgthree)` from rgthree-comfy with the KREA2 diffusion model, KREA2 CLIP encoder, Qwen Image VAE, and KREA LoRAs installed in their corresponding ComfyUI model folders.
+
+FLUX2 Simple uses ComfyUI-GGUF, `Power Lora Loader (rgthree)`, `Flux2Scheduler`, and `EmptyFlux2LatentImage` with the FLUX2 Klein GGUF diffusion model, FLUX2 CLIP encoder, FLUX2 VAE, and compatible LoRAs installed in their corresponding ComfyUI model folders.
+
+The standard Flux workflow automatically enables `Flux\flux-turbo.safetensors` at strength `1`. Qwen T2I always uses 4 steps and CFG `1`, including when Library metadata contains different recommended values.
 
 LTX Director requires the latest WhatDreamsCost LTX Director, ComfyUI-LTXVideo, and ComfyUI-KJNodes packages. LTX 2.5 also uses ComfyUI-GGUF. CacheDiT acceleration requires [ComfyUI-CacheDiT](https://github.com/Jasonzzt/ComfyUI-CacheDiT), which exposes `CacheDiT_LTX2_Optimizer`; restart ComfyUI after installing or updating it so the node appears in `/object_info`.
 

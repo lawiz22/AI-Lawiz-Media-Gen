@@ -1178,6 +1178,68 @@ export const COMFYUI_QWEN_T2I_GGUF_WORKFLOW_TEMPLATE = {
   "99": { "inputs": { "images": ["8", 0] }, "class_type": "PreviewImage", "_meta": { "title": "Preview Image" } }
 };
 
+export const KREA2_RESOLUTION_OPTIONS = [
+  { value: '832x1216', label: 'Portrait Standard · 832×1216', width: 832, height: 1216 },
+  { value: '1040x1520', label: 'Portrait HD · 1040×1520', width: 1040, height: 1520 },
+  { value: '896x1152', label: 'Portrait Wide Standard · 896×1152', width: 896, height: 1152 },
+  { value: '1120x1440', label: 'Portrait Wide HD · 1120×1440', width: 1120, height: 1440 },
+  { value: '1024x1024', label: 'Square Standard · 1024×1024', width: 1024, height: 1024 },
+  { value: '1280x1280', label: 'Square HD · 1280×1280', width: 1280, height: 1280 },
+  { value: '1216x832', label: 'Landscape Standard · 1216×832', width: 1216, height: 832 },
+  { value: '1520x1040', label: 'Landscape HD · 1520×1040', width: 1520, height: 1040 },
+  { value: '1152x896', label: 'Landscape Wide Standard · 1152×896', width: 1152, height: 896 },
+  { value: '1440x1120', label: 'Landscape Wide HD · 1440×1120', width: 1440, height: 1120 },
+] as const;
+
+export const FLUX2_RESOLUTION_OPTIONS = [
+  { value: '1024x1024', label: 'Square · 1024×1024', width: 1024, height: 1024 },
+  { value: '1440x1440', label: 'Square HD · 1440×1440', width: 1440, height: 1440 },
+  { value: '1024x1536', label: 'Portrait Classic · 1024×1536', width: 1024, height: 1536 },
+  { value: '1280x1920', label: 'Portrait Classic HD · 1280×1920', width: 1280, height: 1920 },
+  { value: '896x1120', label: 'Portrait Web · 896×1120', width: 896, height: 1120 },
+  { value: '1080x1920', label: 'Portrait Tall · 1080×1920', width: 1080, height: 1920 },
+  { value: '896x1600', label: 'Portrait Tall · 896×1600', width: 896, height: 1600 },
+  { value: '720x1280', label: 'Portrait Tall · 720×1280', width: 720, height: 1280 },
+  { value: '832x1216', label: 'Portrait CivitAI · 832×1216', width: 832, height: 1216 },
+  { value: '1216x832', label: 'Wide Photo CivitAI · 1216×832', width: 1216, height: 832 },
+  { value: '1536x1024', label: 'Wide Photo · 1536×1024', width: 1536, height: 1024 },
+  { value: '1920x1080', label: 'Widescreen · 1920×1080', width: 1920, height: 1080 },
+  { value: '1600x900', label: 'Widescreen · 1600×900', width: 1600, height: 900 },
+  { value: '1280x720', label: 'Widescreen · 1280×720', width: 1280, height: 720 },
+] as const;
+
+export const COMFYUI_FLUX2_SIMPLE_WORKFLOW_TEMPLATE = {
+  "80": { "inputs": { "sampler_name": "euler" }, "class_type": "KSamplerSelect", "_meta": { "title": "KSamplerSelect" } },
+  "81": { "inputs": { "steps": 20, "width": ["87", 0], "height": ["88", 0] }, "class_type": "Flux2Scheduler", "_meta": { "title": "Flux2Scheduler" } },
+  "82": { "inputs": { "cfg": 4, "model": ["99", 0], "positive": ["93", 0], "negative": ["86", 0] }, "class_type": "CFGGuider", "_meta": { "title": "GuideCFG" } },
+  "83": { "inputs": { "noise": ["89", 0], "guider": ["82", 0], "sampler": ["80", 0], "sigmas": ["81", 0], "latent_image": ["85", 0] }, "class_type": "SamplerCustomAdvanced", "_meta": { "title": "SamplerCustomAdvanced" } },
+  "84": { "inputs": { "samples": ["83", 0], "vae": ["92", 0] }, "class_type": "VAEDecode", "_meta": { "title": "VAE Decode" } },
+  "85": { "inputs": { "width": ["87", 0], "height": ["88", 0], "batch_size": 1 }, "class_type": "EmptyFlux2LatentImage", "_meta": { "title": "Empty Flux2 Latent Image" } },
+  "86": { "inputs": { "text": "", "clip": ["99", 1] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Negative Prompt" } },
+  "87": { "inputs": { "value": 832 }, "class_type": "PrimitiveInt", "_meta": { "title": "Width" } },
+  "88": { "inputs": { "value": 1216 }, "class_type": "PrimitiveInt", "_meta": { "title": "Height" } },
+  "89": { "inputs": { "noise_seed": 1001869159528562 }, "class_type": "RandomNoise", "_meta": { "title": "Random Noise" } },
+  "91": { "inputs": { "clip_name": "qwen_3_4b.safetensors", "type": "flux2", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
+  "92": { "inputs": { "vae_name": "flux2-vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Load VAE" } },
+  "93": { "inputs": { "text": "", "clip": ["99", 1] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Positive Prompt" } },
+  "94": { "inputs": { "unet_name": "flux-2-klein-4b-Q4_K_M.gguf" }, "class_type": "UnetLoaderGGUF", "_meta": { "title": "Unet Loader (GGUF)" } },
+  "96": { "inputs": { "filename_prefix": "Flux2/Imagen", "images": ["84", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Image" } },
+  "99": { "inputs": { "PowerLoraLoaderHeaderWidget": { "type": "PowerLoraLoaderHeaderWidget" }, "lora_1": { "on": false, "lora": "", "strength": 1 }, "lora_2": { "on": false, "lora": "", "strength": 1 }, "lora_3": { "on": false, "lora": "", "strength": 1 }, "lora_4": { "on": false, "lora": "", "strength": 1 }, "lora_5": { "on": false, "lora": "", "strength": 1 }, "lora_6": { "on": false, "lora": "", "strength": 1 }, "➕ Add Lora": "", "model": ["94", 0], "clip": ["91", 0] }, "class_type": "Power Lora Loader (rgthree)", "_meta": { "title": "Power Lora Loader (rgthree)" } }
+};
+
+export const COMFYUI_KREA2_SIMPLE_WORKFLOW_TEMPLATE = {
+  "2": { "inputs": { "seed": 1028201299316842, "steps": 10, "cfg": 1, "sampler_name": "er_sde", "scheduler": "beta", "denoise": 1, "model": ["57", 0], "positive": ["104", 0], "negative": ["17", 0], "latent_image": ["106:10", 0] }, "class_type": "KSampler", "_meta": { "title": "KSampler" } },
+  "3": { "inputs": { "samples": ["2", 0], "vae": ["106:4", 0] }, "class_type": "VAEDecode", "_meta": { "title": "VAE Decode" } },
+  "17": { "inputs": { "text": "", "clip": ["57", 1] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Negative Prompt" } },
+  "33": { "inputs": { "filename_prefix": "Krea2/Imagen", "images": ["3", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Image" } },
+  "57": { "inputs": { "PowerLoraLoaderHeaderWidget": { "type": "PowerLoraLoaderHeaderWidget" }, "lora_1": { "on": true, "lora": "KREA\\krea2_turbo_lora_rank_64_bf16.safetensors", "strength": 0.6 }, "lora_2": { "on": true, "lora": "KREA\\snofs_krea_v1_nostrip.safetensors", "strength": 1 }, "➕ Add Lora": "", "model": ["106:1", 0], "clip": ["106:13", 0] }, "class_type": "Power Lora Loader (rgthree)", "_meta": { "title": "Power Lora Loader (rgthree)" } },
+  "104": { "inputs": { "text": "", "clip": ["57", 1] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Positive Prompt" } },
+  "106:4": { "inputs": { "vae_name": "qwen_image_vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Load VAE" } },
+  "106:10": { "inputs": { "width": 832, "height": 1216, "batch_size": 1 }, "class_type": "EmptyLatentImage", "_meta": { "title": "Empty Latent Image" } },
+  "106:13": { "inputs": { "clip_name": "qwen3vl_4b_fp8_scaled.safetensors", "type": "krea2", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
+  "106:1": { "inputs": { "unet_name": "krea2_raw_fp8_scaled.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "Load Diffusion Model" } }
+};
+
 export const COMFYUI_T2I_WORKFLOWS = [
   { value: 'sd1.5', label: 'SD 1.5' },
   { value: 'sdxl', label: 'SDXL' },
@@ -1185,6 +1247,8 @@ export const COMFYUI_T2I_WORKFLOWS = [
   { value: 'wan2.2', label: 'WAN 2.2' },
   { value: 'qwen-t2i-gguf', label: 'Qwen T2I GGUF' },
   { value: 'z-image', label: 'Z-Image' },
+  { value: 'flux2-simple', label: 'FLUX2 Simple' },
+  { value: 'krea2-simple', label: 'KREA2 Simple' },
 ];
 
 export const COMFYUI_I2I_WORKFLOWS = [
