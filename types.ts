@@ -73,7 +73,7 @@ declare global {
         url: string;
         fileName: string;
         destination: 'checkpoint' | 'diffusion' | 'lora';
-        modelFolder: 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
+        modelFolder: '.' | 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'flux2' | 'krea' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
         modelId: number;
         modelVersionId: number;
         versionName: string;
@@ -108,7 +108,7 @@ export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | '
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = string;
-export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'krea2-simple';
+export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'krea2-simple' | 'krea2-raw';
 export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui' | 'mammouth';
 export type VideoProvider = 'gemini' | 'comfyui';

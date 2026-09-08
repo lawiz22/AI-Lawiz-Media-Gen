@@ -55,7 +55,7 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
             const lowerQuery = "flux";
             return availableLoras.filter(lora => {
                 const lowerName = lora.toLowerCase();
-                return lowerName.includes(lowerQuery);
+                return lowerName.includes(lowerQuery) && !/flux[-_ ]?2|klein/.test(lowerName);
             });
         } else if (options.comfyModelType === 'qwen-t2i-gguf' || options.comfyModelType === 'qwen-edit') {
             const lowerQuery = "qwen";
@@ -72,13 +72,13 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
         } else if (options.comfyModelType === 'flux2-simple') {
             const queries = ['flux2', 'flux-2', 'klein'];
             return availableLoras.filter(lora => queries.some(query => lora.toLowerCase().includes(query)));
-        } else if (options.comfyModelType === 'krea2-simple') {
+        } else if (options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw') {
             return availableLoras.filter(lora => lora.toLowerCase().includes('krea'));
         }
         return [];
     }, [availableLoras, options.comfyModelType]);
 
-    const loraSlotCount = options.comfyModelType === 'qwen-edit' ? 5 : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'flux2-simple' ? 6 : 4;
+    const loraSlotCount = options.comfyModelType === 'qwen-edit' ? 5 : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw' || options.comfyModelType === 'flux2-simple' ? 6 : 4;
     const loraOptions = useMemo(() => {
         const configured = Array.from({ length: loraSlotCount }, (_, index) => {
             const prefix = options.comfyModelType === 'sd1.5' ? 'comfySd15'
@@ -87,7 +87,7 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
                         : options.comfyModelType === 'qwen-edit' ? 'comfyQwenEdit'
                             : options.comfyModelType === 'qwen-t2i-gguf' ? 'comfyQwen'
                                 : options.comfyModelType === 'z-image' ? 'comfyZImage'
-                                    : options.comfyModelType === 'krea2-simple' ? 'comfyKrea'
+                                    : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw' ? 'comfyKrea'
                                         : options.comfyModelType === 'flux2-simple' ? 'comfyFlux2'
                                             : '';
             return prefix ? options[`${prefix}Lora${index + 1}Name` as keyof GenerationOptions] as string : '';
@@ -96,7 +96,7 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
         return [{ value: '', label: 'None' }, ...values.map(lora => ({ value: lora, label: lora }))];
     }, [filteredLoras, loraSlotCount, options]);
 
-    if (options.comfyModelType !== 'sd1.5' && options.comfyModelType !== 'sdxl' && options.comfyModelType !== 'flux' && options.comfyModelType !== 'qwen-t2i-gguf' && options.comfyModelType !== 'qwen-edit' && options.comfyModelType !== 'z-image' && options.comfyModelType !== 'flux2-simple' && options.comfyModelType !== 'krea2-simple') {
+    if (options.comfyModelType !== 'sd1.5' && options.comfyModelType !== 'sdxl' && options.comfyModelType !== 'flux' && options.comfyModelType !== 'qwen-t2i-gguf' && options.comfyModelType !== 'qwen-edit' && options.comfyModelType !== 'z-image' && options.comfyModelType !== 'flux2-simple' && options.comfyModelType !== 'krea2-simple' && options.comfyModelType !== 'krea2-raw') {
         return null;
     }
 
@@ -106,7 +106,7 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
     const isQwenEdit = options.comfyModelType === 'qwen-edit';
     const isZImage = options.comfyModelType === 'z-image';
     const isFlux2 = options.comfyModelType === 'flux2-simple';
-    const isKrea = options.comfyModelType === 'krea2-simple';
+    const isKrea = options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw';
 
     let prefix = 'comfySd15';
     let title = 'LoRA Settings (SD 1.5)';
@@ -131,7 +131,7 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
         title = 'LoRA Settings (FLUX2 Simple)';
     } else if (isKrea) {
         prefix = 'comfyKrea';
-        title = 'LoRA Settings (KREA2 Simple)';
+        title = `LoRA Settings (${options.comfyModelType === 'krea2-raw' ? 'KREA2 RAW' : 'KREA2 Simple'})`;
     }
 
     return (

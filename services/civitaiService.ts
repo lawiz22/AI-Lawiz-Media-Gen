@@ -2,9 +2,9 @@ import type { ComfyModelType, GenerationOptions } from '../types';
 
 export type CivitaiProvider = 'regular' | 'red';
 export type CivitaiModelType = 'Checkpoint' | 'LORA';
-export type CivitaiFamily = 'all' | 'sd15' | 'sdxl' | 'flux' | 'qwen' | 'qwen-edit' | 'zit-base' | 'zit-turbo' | 'ltx-23';
+export type CivitaiFamily = 'all' | 'sd15' | 'sdxl' | 'flux' | 'flux2' | 'krea2' | 'qwen' | 'qwen-edit' | 'zit-base' | 'zit-turbo' | 'ltx-23';
 export type CivitaiDestination = 'checkpoint' | 'diffusion' | 'lora';
-export type CivitaiModelFolder = 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
+export type CivitaiModelFolder = '.' | 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'flux2' | 'krea' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
 export type CivitaiSort = 'Highest Rated' | 'Most Downloaded' | 'Most Liked' | 'Newest' | 'Most Images';
 
 export interface CivitaiFile {
@@ -123,6 +123,7 @@ const WORKFLOW_DEFAULT_SETTINGS: Partial<Record<ComfyModelType, Pick<GenerationO
     'z-image': { comfySteps: 8, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'simple' },
     'flux2-simple': { comfySteps: 20, comfyCfg: 4, comfySampler: 'euler' },
     'krea2-simple': { comfySteps: 10, comfyCfg: 1, comfySampler: 'er_sde', comfyScheduler: 'beta' },
+    'krea2-raw': { comfyCfg: 1 },
 };
 
 const getComfyOptions = (widgetInfo: unknown): string[] => Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0]) ? widgetInfo[0] : [];
@@ -184,6 +185,8 @@ export const CIVITAI_FAMILIES: Array<{ id: CivitaiFamily; label: string; query: 
     { id: 'sd15', label: 'SD 1.5', query: '', baseModel: 'SD 1.5' },
     { id: 'sdxl', label: 'SDXL', query: '', baseModel: 'SDXL 1.0' },
     { id: 'flux', label: 'FLUX', query: 'Flux' },
+    { id: 'flux2', label: 'FLUX2', query: 'Flux 2 Klein' },
+    { id: 'krea2', label: 'KREA2', query: 'Krea 2' },
     { id: 'qwen', label: 'Qwen', query: 'Qwen Image' },
     { id: 'qwen-edit', label: 'Qwen Edit', query: 'Qwen Image Edit' },
     { id: 'zit-base', label: 'ZIT Base', query: 'Z-Image Base' },
@@ -208,7 +211,7 @@ export const getCivitaiModelUrl = (provider: CivitaiProvider, modelId: number) =
 export const getDefaultDestination = (model: CivitaiModel, version: CivitaiModelVersion, family: CivitaiFamily): CivitaiDestination => {
     if (model.type.toUpperCase() === 'LORA') return 'lora';
     const modelFolder = getCivitaiModelFolder(model, version, family);
-    if (modelFolder === 'Flux' || modelFolder === 'QWEN' || modelFolder === 'ZIT' || modelFolder === 'LTX2' || modelFolder === 'LTX2_camera_control') {
+    if (modelFolder === 'Flux' || modelFolder === 'flux2' || modelFolder === 'krea' || modelFolder === 'QWEN' || modelFolder === 'ZIT' || modelFolder === 'LTX2' || modelFolder === 'LTX2_camera_control') {
         return 'diffusion';
     }
     return 'checkpoint';
@@ -216,6 +219,8 @@ export const getDefaultDestination = (model: CivitaiModel, version: CivitaiModel
 
 export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModelVersion, family: CivitaiFamily): CivitaiModelFolder => {
     const versionIdentity = `${version.baseModel || ''} ${version.baseModelType || ''} ${version.name}`.toLowerCase();
+    if (/flux[- ._]?2|klein/.test(versionIdentity)) return 'flux2';
+    if (/krea[- ._]?2/.test(versionIdentity)) return 'krea';
     if (/qwen/.test(versionIdentity)) return 'QWEN';
     if (/z[- ]?image|\bzit\b/.test(versionIdentity)) return 'ZIT';
     if (/\bltx/.test(versionIdentity) && /camera[ _-]*control|control[ _-]*camera/.test(versionIdentity)) return 'LTX2_camera_control';
@@ -223,6 +228,8 @@ export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModel
     if (/\bflux/.test(versionIdentity)) return 'Flux';
     if (/sdxl|pony|illustrious|noobai/.test(versionIdentity)) return 'SDXL';
     const fallbackIdentity = `${family === 'all' ? '' : family} ${model.name}`.toLowerCase();
+    if (/flux[- ._]?2|klein/.test(fallbackIdentity)) return 'flux2';
+    if (/krea[- ._]?2/.test(fallbackIdentity)) return 'krea';
     if (/qwen/.test(fallbackIdentity)) return 'QWEN';
     if (/z[- ]?image|\bzit\b/.test(fallbackIdentity)) return 'ZIT';
     if (/\bltx/.test(fallbackIdentity)) return 'LTX2';
@@ -233,6 +240,7 @@ export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModel
 
 export const getCivitaiDestinationFolder = (model: CivitaiModel, version: CivitaiModelVersion, family: CivitaiFamily, destination: CivitaiDestination): CivitaiModelFolder => {
     const familyFolder = getCivitaiModelFolder(model, version, family);
+    if (destination === 'diffusion' && (familyFolder === 'flux2' || familyFolder === 'krea')) return '.';
     if (destination !== 'checkpoint') return familyFolder;
     if (familyFolder === 'sd15') return 'SD1.5';
     if (familyFolder === 'Flux') {

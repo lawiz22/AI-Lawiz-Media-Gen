@@ -1,6 +1,6 @@
 
 import { createSlice, createSelector, PayloadAction } from '@reduxjs/toolkit';
-import type { GenerationSliceState, GenerationOptions } from '../types';
+import type { ComfyModelType, GenerationSliceState, GenerationOptions } from '../types';
 import type { RootState } from './store';
 import { getEnabledCharacterAngles } from '../services/characterAnglesWorkflow';
 
@@ -49,12 +49,7 @@ const initialOptions: GenerationOptions = {
   comfyQwenUnet: 'qwen-image-Q6_K.gguf',
   comfyQwenClip: 'qwen_2.5_vl_7b_fp8_scaled.safetensors',
   comfyQwenVae: 'qwen_image_vae.safetensors',
-  comfyQwenAuraFlowShift: 2.5,
-  comfyQwenMegaPixel: '1.0',
-  comfyQwenAspectRatio: '1:1 (Perfect Square)',
-  comfyQwenCustomRatio: false,
-  comfyQwenCustomAspectRatio: '1:1',
-  comfyQwenDivisibleBy: 64,
+  comfyQwenShift: 2.5,
   comfyQwenUseLora: true,
   comfyQwenLora1Name: 'QWEN\\Qwen-Image-Lightning-4steps-V2.0.safetensors',
   comfyQwenLora1Strength: 1.0,
@@ -240,10 +235,10 @@ const generationSlice = createSlice({
         comfyNegativePrompt: state.options.comfyNegativePrompt,
       };
       const savedOptions = state.comfyOptionsByModel[action.payload.comfyModelType];
-      const nextOptions = savedOptions
+      const nextOptions: GenerationOptions = savedOptions
         ? { ...savedOptions, ...sharedPrompts, provider: 'comfyui', comfyModelType: action.payload.comfyModelType }
         : { ...state.options, ...action.payload, ...sharedPrompts, provider: 'comfyui' };
-      if (!savedOptions && action.payload.comfyModelType === 'krea2-simple') {
+      if (!savedOptions && (action.payload.comfyModelType === 'krea2-simple' || action.payload.comfyModelType === 'krea2-raw')) {
         nextOptions.comfyKreaPrompt = state.options.comfyPrompt || '';
         nextOptions.comfyKreaNegativePrompt = state.options.comfyNegativePrompt || '';
       } else if (!savedOptions && action.payload.comfyModelType === 'flux2-simple') {
@@ -253,6 +248,14 @@ const generationSlice = createSlice({
       if (action.payload.comfyModelType === 'qwen-t2i-gguf') {
         nextOptions.comfySteps = 4;
         nextOptions.comfyCfg = 1;
+      } else if (action.payload.comfyModelType === 'krea2-simple') {
+        nextOptions.comfyKreaUnet = 'krea2_turbo_fp8_scaled.safetensors';
+        nextOptions.comfyKreaClip = 'qwen3vl_4b_fp8_scaled.safetensors';
+        nextOptions.comfyKreaVae = 'qwen_image_vae.safetensors';
+      } else if (action.payload.comfyModelType === 'krea2-raw') {
+        nextOptions.comfyKreaUnet = 'krea2_raw_fp8_scaled.safetensors';
+        nextOptions.comfyKreaClip = 'qwen3vl_4b_fp8_scaled.safetensors';
+        nextOptions.comfyKreaVae = 'Wan2.1_VAE.safetensors';
       }
       state.options = nextOptions;
       if (!state.comfyDefaultOptionsByModel[action.payload.comfyModelType]) {
@@ -411,7 +414,7 @@ export const selectIsReadyToGenerate = createSelector(
         return !!isComfyUIConnected && !!sourceImage && getEnabledCharacterAngles(activeOptions).length > 0;
       }
       const isI2IMode = generationMode === 'i2i';
-      const activePrompt = activeOptions.comfyModelType === 'krea2-simple'
+      const activePrompt = activeOptions.comfyModelType === 'krea2-simple' || activeOptions.comfyModelType === 'krea2-raw'
         ? activeOptions.comfyKreaPrompt
         : activeOptions.comfyModelType === 'flux2-simple'
           ? activeOptions.comfyFlux2Prompt

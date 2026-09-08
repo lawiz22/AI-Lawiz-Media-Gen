@@ -24,7 +24,7 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 ### Image and Character Generation
 
 - Text-to-image and image-to-image generation through Mammouth AI or ComfyUI.
-- Local workflows for SD 1.5, SDXL, Flux, FLUX2 Simple, Qwen Image, Qwen Edit, Z-Image, KREA2 Simple, Nunchaku Flux, Flux Krea, and face detailing.
+- Local workflows for SD 1.5, SDXL, Flux, FLUX2 Simple, Qwen Image, Qwen Edit, Z-Image, KREA2 Simple, KREA2 RAW, Nunchaku Flux, Flux Krea, and face detailing.
 - Adjustable checkpoints, UNets, CLIP models, VAEs, samplers, schedulers, seeds, dimensions, and LoRA chains.
 - Refine mode with source-image denoise control.
 - Character generation with pose, clothing, background, and multi-angle controls.
@@ -85,6 +85,8 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 Each local workflow requires its referenced models and custom nodes to be installed in ComfyUI. The application reads available choices from ComfyUI's `/object_info` endpoint, but it does not install workflow dependencies automatically.
 
 KREA2 Simple uses `Power Lora Loader (rgthree)` from rgthree-comfy with the KREA2 diffusion model, KREA2 CLIP encoder, Qwen Image VAE, and KREA LoRAs installed in their corresponding ComfyUI model folders.
+
+KREA2 RAW uses the supplied two-stage `ClownsharKSampler_Beta` graph with fixed sampler parameters, selectable KREA models and LoRAs, 29 source resolutions, and `1920x1088` as its default resolution.
 
 FLUX2 Simple uses ComfyUI-GGUF, `Power Lora Loader (rgthree)`, `Flux2Scheduler`, and `EmptyFlux2LatentImage` with the FLUX2 Klein GGUF diffusion model, FLUX2 CLIP encoder, FLUX2 VAE, and compatible LoRAs installed in their corresponding ComfyUI model folders.
 
@@ -152,6 +154,8 @@ ComfyUI/models/checkpoints
 ComfyUI/models/diffusion_models
 ComfyUI/models/loras
 ```
+
+FLUX2 and KREA2 diffusion models are indexed directly from `ComfyUI/models/diffusion_models`. Their LoRAs use the dedicated `ComfyUI/models/loras/flux2` and `ComfyUI/models/loras/krea` folders.
 
 Model-specific metadata is stored beside the model where applicable. Keep these sidecars with the model when moving files outside the application's organizer.
 

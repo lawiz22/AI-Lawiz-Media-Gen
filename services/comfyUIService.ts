@@ -17,6 +17,8 @@ import {
     FLUX2_RESOLUTION_OPTIONS,
     COMFYUI_KREA2_SIMPLE_WORKFLOW_TEMPLATE,
     KREA2_RESOLUTION_OPTIONS,
+    COMFYUI_KREA2_RAW_WORKFLOW_TEMPLATE,
+    KREA2_RAW_RESOLUTION_OPTIONS,
 } from "../constants";
 
 import { generateMammouthText } from './mammouthService';
@@ -382,7 +384,7 @@ export const generateChatterboxTts = async (
 };
 
 // --- Mammouth-based Prompt Generation ---
-type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'krea2-simple';
+type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'krea2-simple' | 'krea2-raw';
 
 const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
     switch (modelType) {
@@ -394,11 +396,19 @@ const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
         case 'flux-krea':
         case 'qwen-t2i-gguf':
         case 'z-image':
-        case 'flux2-simple':
         case 'krea2-simple':
+        case 'krea2-raw':
             return 'Your response MUST be a single, detailed, artistic, and descriptive paragraph. Use rich vocabulary.';
+        case 'flux2-simple':
+            return `Your response MUST follow this exact five-segment FLUX.2 [klein] structure, with one labeled line per segment:
+Subject: identify the main subject precisely.
+Setting: describe where the scene takes place and the spatial composition.
+Details: specify concrete visual features, materials, clothing, textures, objects, and actions.
+Lighting: explain the light sources, direction, quality, color, shadows, and reflections.
+Atmosphere: describe the mood, emotional tone, weather, depth, and overall visual feeling.
+Do not add any preamble, conclusion, markdown bullets, or extra sections.`;
         case 'gemini':
-            return 'Your response MUST be a detailed, narrative paragraph written in a natural language. Describe the scene as if you were writing a story or giving instructions to a human artist. Use full, descriptive sentences.';
+            return 'Write an exceptionally long and exhaustive narrative image description of approximately 600 to 900 words. Use flowing natural-language prose and complete sentences. Describe composition, subjects, identities, expressions, poses, clothing, materials, environment, foreground, background, spatial relationships, lighting, color, textures, camera perspective, lens behavior, atmosphere, mood, and every meaningful visible detail. Remain faithful to the source or supplied ideas, avoid repetition, and do not use headings, lists, preambles, or conclusions.';
         case 'wan2.2':
         case 'sdxl':
         case 'qwen-edit':
@@ -459,7 +469,10 @@ export const generateMagicalPromptSoup = async (
     if (bgPrompt) instruction += `\n2. Background Idea: "${bgPrompt}"`;
     if (subjectPrompt) instruction += `\n3. Subject Idea: "${subjectPrompt}"`;
 
+    instruction += `\n\nRequired final prompt format:\n${getPromptStyleInstruction(modelType)}`;
+
     instruction += `\n\nYour task is to merge these ideas. You MUST respond with a valid JSON object containing a single key "prompt_parts", which is an array of objects. Each object in the array must have two keys: "text" (a small segment of the final prompt) and "source" (an integer: 0 for new/combined ideas, 1 for elements from the Full Scene, 2 for Background, 3 for Subject).
+    When all text values are joined in array order, the resulting prompt MUST satisfy the required final prompt format above. Preserve line breaks inside text values when the format requires labeled segments.
     
     Example response format:
     { "prompt_parts": [ {"text": "A beautiful portrait of", "source": 1}, {"text": "an astronaut", "source": 3}, {"text": "on a neon-lit alien world", "source": 2}, {"text": "in a impressionistic style", "source": 0} ] }
@@ -1558,7 +1571,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             workflow = JSON.parse(JSON.stringify(COMFYUI_KREA2_SIMPLE_WORKFLOW_TEMPLATE));
             workflow["104"].inputs.text = options.comfyKreaPrompt || '';
             workflow["17"].inputs.text = options.comfyKreaNegativePrompt || '';
-            workflow["106:1"].inputs.unet_name = options.comfyKreaUnet || 'krea2_raw_fp8_scaled.safetensors';
+            workflow["106:1"].inputs.unet_name = options.comfyKreaUnet || 'krea2_turbo_fp8_scaled.safetensors';
             workflow["106:13"].inputs.clip_name = options.comfyKreaClip || 'qwen3vl_4b_fp8_scaled.safetensors';
             workflow["106:4"].inputs.vae_name = options.comfyKreaVae || 'qwen_image_vae.safetensors';
 
@@ -1589,11 +1602,42 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             workflow["2"].inputs.seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
             break;
         }
+        case 'krea2-raw': {
+            workflow = JSON.parse(JSON.stringify(COMFYUI_KREA2_RAW_WORKFLOW_TEMPLATE));
+            workflow["48"].inputs.value = options.comfyKreaPrompt || '';
+            workflow["271"].inputs.value = options.comfyKreaNegativePrompt || '';
+            workflow["316"].inputs.unet_name = options.comfyKreaUnet || 'krea2_raw_fp8_scaled.safetensors';
+            workflow["317"].inputs.clip_name = options.comfyKreaClip || 'qwen3vl_4b_fp8_scaled.safetensors';
+            workflow["210"].inputs.vae_name = options.comfyKreaVae || 'Wan2.1_VAE.safetensors';
+
+            const resolution = KREA2_RAW_RESOLUTION_OPTIONS.find(option => option.value === options.comfyKreaResolution) || KREA2_RAW_RESOLUTION_OPTIONS[26];
+            workflow["303"].inputs.width = resolution.width;
+            workflow["303"].inputs.height = resolution.height;
+            workflow["303"].inputs.batch_size = 1;
+
+            const defaultKreaLoras = [
+                { name: 'KREA\\krea2_turbo_lora_rank_64_bf16.safetensors', strength: 0.6 },
+                { name: 'KREA\\snofs_krea_v1_nostrip.safetensors', strength: 1 },
+            ];
+            for (let index = 1; index <= 6; index += 1) {
+                const configuredName = options[`comfyKreaLora${index}Name` as keyof GenerationOptions] as string | undefined;
+                const name = configuredName === undefined ? (defaultKreaLoras[index - 1]?.name || '') : configuredName;
+                const configuredStrength = options[`comfyKreaLora${index}Strength` as keyof GenerationOptions] as number | undefined;
+                const strength = configuredStrength ?? defaultKreaLoras[index - 1]?.strength ?? (index === 6 ? 1.5 : 1);
+                workflow["315"].inputs[`lora_${index}`] = {
+                    on: (options.comfyKreaUseLora ?? true) && Boolean(name),
+                    lora: name || 'None',
+                    strength,
+                };
+            }
+            workflow["276"].inputs.seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+            break;
+        }
         case 'sdxl':
         default: workflow = JSON.parse(JSON.stringify(COMFYUI_WORKFLOW_TEMPLATE)); break;
     }
 
-    const usesDedicatedPrompts = options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'flux2-simple';
+    const usesDedicatedPrompts = options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw' || options.comfyModelType === 'flux2-simple';
     const posPromptKey = usesDedicatedPrompts ? undefined : findNodeKey(workflow, "Positive Prompt", 'title');
     if (posPromptKey) {
         const promptInput = 'prompt' in workflow[posPromptKey].inputs ? 'prompt' : 'text';
@@ -1909,7 +1953,7 @@ export const generateComfyUIPortraits = async (
     const allImages: { src: string, seed: number }[] = [];
     const baseWorkflow = await buildWorkflow(options, sourceImage, referenceImages);
 
-    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'flux2-simple', 'krea2-simple'].includes(options.comfyModelType!);
+    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'flux2-simple', 'krea2-simple', 'krea2-raw'].includes(options.comfyModelType!);
     const numImages = options.comfyModelType === 'face-detailer-sd1.5' ? 1 : options.numImages;
 
     let currentSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
@@ -1945,6 +1989,18 @@ export const generateComfyUIPortraits = async (
                 } else if (options.comfyModelType === 'flux2-simple') {
                     currentWorkflow["89"].inputs.noise_seed = seedForThisImage;
                     currentSeed = Math.floor(Math.random() * 1e15);
+                } else if (options.comfyModelType === 'krea2-raw') {
+                    currentWorkflow["276"].inputs.seed = seedForThisImage;
+                    const seedIncrement = options.comfySeedIncrement || 1;
+                    if (options.comfySeedControl === 'fixed') {
+                        currentSeed = seedForThisImage;
+                    } else if (options.comfySeedControl === 'increment') {
+                        currentSeed += seedIncrement;
+                    } else if (options.comfySeedControl === 'decrement') {
+                        currentSeed -= seedIncrement;
+                    } else {
+                        currentSeed = Math.floor(Math.random() * 1e15);
+                    }
         }
 
         const progressWrapper = (message: string, value: number) => {
@@ -1964,7 +2020,7 @@ export const generateComfyUIPortraits = async (
     // RE-WRITING THE FUNCTION CONTENT FOR REPLACEMENT
     // I will capture the seed used before modifying it for the next iteration.
 
-    const finalPrompt = options.comfyModelType === 'krea2-simple'
+    const finalPrompt = options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw'
         ? options.comfyKreaPrompt
         : options.comfyModelType === 'flux2-simple'
             ? options.comfyFlux2Prompt

@@ -7,7 +7,7 @@ import { ImageUploader } from './ImageUploader';
 // Fix: Corrected typo in imported function name from 'extractSubjectFromImage' to 'extractSubjectPromptFromImage'.
 import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup, generateWanVideoPromptFromImage } from '../services/comfyUIService';
 import type { LibraryItem, PromptGenState, GenerationOptions } from '../types';
-import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon, CodeBracketIcon, WorkflowIcon, CloseIcon } from './icons';
+import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon, WorkflowIcon, CloseIcon } from './icons';
 import { fileToResizedDataUrl, dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { WAN_VIDEO_PROMPT_BLOCKS, CAMERA_MOVES } from '../constants';
 import { updateOptions, setGenerationMode } from '../store/generationSlice';
@@ -20,7 +20,7 @@ interface PromptPart {
   source: number; // 0 for new, 1 for full, 2 for bg, 3 for subject
 }
 
-type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
+type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'flux2-simple' | 'gemini' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
 type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
 
 const PROMPT_ACCENT_STYLES: Record<string, React.CSSProperties> = {
@@ -83,159 +83,115 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
   const dispatch: AppDispatch = useDispatch();
 
     const handleSelectDestination = (provider: 'comfyui' | 'mammouth', comfyModelType?: GenerationOptions['comfyModelType']) => {
-    let optionsUpdate: Partial<GenerationOptions> = {
-      provider,
-      comfyPrompt: prompt, // Always set for comfy
-      geminiPrompt: prompt, // Always set for Gemini
-    };
+        let optionsUpdate: Partial<GenerationOptions> = {
+            provider,
+            comfyPrompt: prompt, // Always set for comfy
+            geminiPrompt: prompt, // Always set for Gemini
+        };
 
-    if (provider === 'mammouth') {
-      optionsUpdate.geminiMode = 't2i';
-    } else { // comfyui
-      optionsUpdate.comfyModelType = comfyModelType;
-    }
+        if (provider === 'mammouth') {
+            optionsUpdate.geminiMode = 't2i';
+        } else { // comfyui
+            optionsUpdate.comfyModelType = comfyModelType;
+            if (comfyModelType === 'flux2-simple') {
+                optionsUpdate.comfyFlux2Prompt = prompt;
+            }
+        }
     
-    dispatch(updateOptions(optionsUpdate));
+        dispatch(updateOptions(optionsUpdate));
     dispatch(setGenerationMode('t2i'));
     dispatch(setActiveTab('image-generator'));
     onClose();
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    if (isOpen) {
-        window.addEventListener('keydown', handleKeyDown);
-    }
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onClose();
+        };
+        if (isOpen) window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+    if (!isOpen) return null;
 
-  const comfyT2iWorkflows = [
-    { id: 'sdxl', label: 'SDXL' },
-    { id: 'sd1.5', label: 'SD 1.5' },
-    { id: 'flux', label: 'FLUX' },
-    { id: 'wan2.2', label: 'WAN 2.2' },
-    { id: 'nunchaku-flux-image', label: 'Nunchaku FLUX' },
-    { id: 'flux-krea', label: 'FLUX Krea' },
-  ];
+    const comfyT2iWorkflows = [
+        { id: 'sdxl', label: 'SDXL' },
+        { id: 'sd1.5', label: 'SD 1.5' },
+        { id: 'flux', label: 'FLUX' },
+        { id: 'flux2-simple', label: 'FLUX2 Simple' },
+        { id: 'nunchaku-flux-image', label: 'Nunchaku FLUX' },
+        { id: 'flux-krea', label: 'FLUX Krea' },
+    ];
 
-  return (
-    <div 
-      className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="prompt-destination-title"
-    >
-      <div 
-        className="bg-bg-secondary w-full max-w-2xl p-6 rounded-2xl shadow-lg border border-border-primary"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 id="prompt-destination-title" className="text-xl font-bold text-accent flex items-center gap-2">
-            <SendIcon className="w-6 h-6" />
-            Use Prompt In...
-          </h2>
-          <button onClick={onClose} className="p-1 rounded-full text-text-secondary hover:bg-bg-tertiary-hover">
-            <CloseIcon className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <p className="text-sm text-text-secondary mb-6">Where would you like to use this generated prompt?</p>
-
-        <div className="space-y-6">
-                                        <div>
-                        <h3 className="text-lg font-semibold text-text-primary mb-3">Mammouth AI</h3>
-                        <button
-                            onClick={() => handleSelectDestination('mammouth')}
-                            className="w-full text-left p-4 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors flex items-center gap-4"
-                        >
-                            <GenerateIcon className="w-8 h-8 text-accent flex-shrink-0" />
-                            <div>
-                                <p className="font-bold">Mammouth T2I</p>
-                                <p className="text-xs text-text-secondary">Use the selected Mammouth image model.</p>
-                            </div>
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-fade-in" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="prompt-destination-title">
+            <div className="w-full max-w-2xl rounded-2xl border border-border-primary bg-bg-secondary p-6 shadow-lg" onClick={event => event.stopPropagation()}>
+                <div className="mb-4 flex items-center justify-between">
+                    <h2 id="prompt-destination-title" className="flex items-center gap-2 text-xl font-bold text-accent"><SendIcon className="h-6 w-6" />Use Prompt In...</h2>
+                    <button onClick={onClose} className="rounded-full p-1 text-text-secondary hover:bg-bg-tertiary-hover"><CloseIcon className="h-5 w-5" /></button>
+                </div>
+                <p className="mb-6 text-sm text-text-secondary">Where would you like to use this generated prompt?</p>
+                <div className="space-y-6">
+                    <div>
+                        <h3 className="mb-3 text-lg font-semibold text-text-primary">Mammouth AI</h3>
+                        <button onClick={() => handleSelectDestination('mammouth')} className="flex w-full items-center gap-4 rounded-lg bg-bg-tertiary p-4 text-left transition-colors hover:bg-bg-tertiary-hover">
+                            <GenerateIcon className="h-8 w-8 flex-shrink-0 text-accent" />
+                            <div><p className="font-bold">Mammouth T2I</p><p className="text-xs text-text-secondary">Use the selected Mammouth image model.</p></div>
                         </button>
                     </div>
-
-          <div>
-            <h3 className="text-lg font-semibold text-text-primary mb-3">ComfyUI (T2I Workflows)</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {comfyT2iWorkflows.map(wf => (
-                <button
-                  key={wf.id}
-                  onClick={() => handleSelectDestination('comfyui', wf.id as GenerationOptions['comfyModelType'])}
-                  className="w-full text-left p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors flex items-center gap-3"
-                >
-                  <WorkflowIcon className="w-6 h-6 text-highlight-green flex-shrink-0" />
-                   <div>
-                    <p className="font-semibold">{wf.label}</p>
-                    <p className="text-xs text-text-secondary">Switch to Image Generator with this workflow.</p>
-                  </div>
-                </button>
-              ))}
+                    <div>
+                        <h3 className="mb-3 text-lg font-semibold text-text-primary">ComfyUI (T2I Workflows)</h3>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            {comfyT2iWorkflows.map(workflow => (
+                                <button key={workflow.id} onClick={() => handleSelectDestination('comfyui', workflow.id as GenerationOptions['comfyModelType'])} className="flex w-full items-center gap-3 rounded-lg bg-bg-tertiary p-3 text-left transition-colors hover:bg-bg-tertiary-hover">
+                                    <WorkflowIcon className="h-6 w-6 flex-shrink-0 text-highlight-green" />
+                                    <div><p className="font-semibold">{workflow.label}</p><p className="text-xs text-text-secondary">Switch to Image Generator with this workflow.</p></div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
-
 interface PromptGeneratorPanelProps {
-    activeSubTab: string;
-    setActiveSubTab: (tabId: string) => void;
-    onUsePrompt: (prompt: string) => void;
-    onOpenLibraryForImage: () => void;
-    onOpenLibraryForBg: () => void;
-    onOpenLibraryForSubject: () => void;
-    onOpenLibraryForWanVideoImage: () => void;
-    onReset: () => void;
+        activeSubTab: string;
+        setActiveSubTab: (tabId: string) => void;
+        onOpenLibraryForImage: () => void;
+        onOpenLibraryForBg: () => void;
+        onOpenLibraryForSubject: () => void;
+        onOpenLibraryForWanVideoImage: () => void;
+        onReset: () => void;
 }
 
-
 interface SubTab {
-  id: string;
-  label: string;
-  icon?: React.ReactNode;
+    id: string;
+    label: string;
+    icon?: React.ReactNode;
 }
 
 interface SubTabsProps {
-  tabs: SubTab[];
-  activeTab: string;
-  onTabClick: (id: string) => void;
+    tabs: SubTab[];
+    activeTab: string;
+    onTabClick: (id: string) => void;
 }
 
 const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
-    <div className="flex items-center border-b-2 border-border-primary mb-8 -mt-2">
-        {tabs.map(tab => (
-            <button
-                key={tab.id}
-                onClick={() => onTabClick(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold transition-colors duration-200 border-b-2 ${
-                    activeTab === tab.id
-                    ? 'border-accent text-accent'
-                    : 'border-transparent text-text-secondary hover:text-text-primary'
-                }`}
-            >
-                {tab.icon}
-                {tab.label}
-            </button>
-        ))}
-    </div>
+        <div className="mb-8 -mt-2 flex items-center border-b-2 border-border-primary">
+                {tabs.map(tab => (
+                        <button key={tab.id} onClick={() => onTabClick(tab.id)} className={`flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-semibold transition-colors duration-200 ${activeTab === tab.id ? 'border-accent text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+                                {tab.icon}{tab.label}
+                        </button>
+                ))}
+        </div>
 );
 
 
 export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     activeSubTab,
     setActiveSubTab,
-    onUsePrompt,
     onOpenLibraryForImage,
     onOpenLibraryForBg,
     onOpenLibraryForSubject,
@@ -249,8 +205,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         promptSaveStatus, bgPromptSaveStatus, subjectPromptSaveStatus, soupPromptSaveStatus,
         wanVideoImage, wanVideoBasePrompt, wanVideoCategory, wanVideoSubject, wanVideoAction,
         wanVideoEnvironment, wanVideoCameraMove, wanVideoStyle, wanVideoFinalPrompt, wanVideoPromptSaveStatus,
-        qwenTitle, qwenUseTextInImage, qwenTextPosition, qwenTextContent, qwenTextStyle, qwenStyleModifiers,
-        qwenFinalPrompt, qwenPromptSaveStatus
     } = state;
 
     // --- Ephemeral state (not persisted) ---
@@ -283,11 +237,13 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const [wanVideoError, setWanVideoError] = useState<string | null>(null);
     const [wanVideoCopyButtonText, setWanVideoCopyButtonText] = useState('Copy Prompt');
     
-    const [qwenCopyButtonText, setQwenCopyButtonText] = useState('Copy Prompt');
-    
     // State for the new destination picker modal
     const [isPickerOpen, setPickerOpen] = useState(false);
     const [promptToUse, setPromptToUse] = useState<string>('');
+
+    useEffect(() => {
+        if (activeSubTab === 'qwen-image') setActiveSubTab('from-image');
+    }, [activeSubTab, setActiveSubTab]);
 
     const allWanSubjects = useMemo(() => {
         return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.subjects))];
@@ -306,26 +262,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     }, []);
 
     const activeWanBlock = wanVideoCategory ? WAN_VIDEO_PROMPT_BLOCKS[wanVideoCategory] : null;
-
-    useEffect(() => {
-        let finalPrompt = `${qwenTitle.trim()}\n`;
-
-        if (qwenUseTextInImage && qwenTextContent.trim()) {
-            finalPrompt += `[text-in-image]\n`;
-            finalPrompt += `position: ${qwenTextPosition}\n`;
-            finalPrompt += `content: ${qwenTextContent.trim()}\n`;
-            if (qwenTextStyle.trim()) {
-                finalPrompt += `style: ${qwenTextStyle.trim()}\n`;
-            }
-        }
-
-        if (qwenStyleModifiers.trim()) {
-            finalPrompt += `[style]\n`;
-            finalPrompt += `${qwenStyleModifiers.trim()}\n`;
-        }
-
-        dispatch(updatePromptGenState({ qwenFinalPrompt: finalPrompt.trim() }));
-    }, [qwenTitle, qwenUseTextInImage, qwenTextPosition, qwenTextContent, qwenTextStyle, qwenStyleModifiers, dispatch]);
 
     const handleSavePrompt = async (
         promptToSave: string, 
@@ -560,19 +496,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         }
     };
     
-    const handleQwenCopy = () => {
-        if (!qwenFinalPrompt) return;
-        navigator.clipboard.writeText(qwenFinalPrompt).then(() => {
-            setQwenCopyButtonText('Copied!');
-            setTimeout(() => setQwenCopyButtonText('Copy Prompt'), 2000);
-        });
-    };
-
-
     const renderPromptTypeButtons = (currentType: PromptModelType, setType: (type: PromptModelType) => void) => {
         const types: { id: PromptModelType; label: string }[] = [
-            { id: 'gemini', label: 'Narrative (Mammouth)' },
-            { id: 'wan2.2', label: 'Photographic (WAN 2.2)' },
+            { id: 'gemini', label: 'Narrative (Very Long)' },
+            { id: 'flux2-simple', label: 'Prompt Segment (FLUX2)' },
             { id: 'flux', label: 'Descriptive (FLUX)' },
             { id: 'sdxl', label: 'Sentence (SDXL)' },
             { id: 'sd1.5', label: 'Keywords (SD1.5)' },
@@ -598,7 +525,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         { id: 'extract-subject', label: 'Extract Subject' },
         { id: 'prompt-soup', label: 'Magical Prompt Soup' },
         { id: 'wan-video', label: 'LTX Video Prompt' },
-        { id: 'qwen-image', label: 'Qwen Prompt Tool'},
     ];
 
     return (

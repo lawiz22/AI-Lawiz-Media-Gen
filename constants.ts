@@ -1,6 +1,6 @@
 
 // Fix: Import Banner type definitions to resolve type errors.
-import type { BannerAspectRatio, BannerStyle, BannerLogoPlacement } from '../types';
+import type { BannerAspectRatio, BannerStyle, BannerLogoPlacement } from './types';
 
 // Fix: Removed circular dependency by defining MAX_IMAGES constant directly.
 export const MAX_IMAGES = 12;
@@ -1191,6 +1191,38 @@ export const KREA2_RESOLUTION_OPTIONS = [
   { value: '1440x1120', label: 'Landscape Wide HD · 1440×1120', width: 1440, height: 1120 },
 ] as const;
 
+export const KREA2_RAW_RESOLUTION_OPTIONS = [
+  { value: '960x1440', label: 'Portrait · 960×1440', width: 960, height: 1440 },
+  { value: '1120x1680', label: 'Portrait HD · 1120×1680', width: 1120, height: 1680 },
+  { value: '912x1216', label: 'Portrait 3:4 · 912×1216', width: 912, height: 1216 },
+  { value: '1200x1600', label: 'Portrait 3:4 HD · 1200×1600', width: 1200, height: 1600 },
+  { value: '1440x1920', label: 'Portrait 3:4 Ultra · 1440×1920', width: 1440, height: 1920 },
+  { value: '1280x1920', label: 'Portrait 2:3 · 1280×1920', width: 1280, height: 1920 },
+  { value: '1088x1920', label: 'Portrait Tall · 1088×1920', width: 1088, height: 1920 },
+  { value: '832x1248', label: 'Portrait Compact · 832×1248', width: 832, height: 1248 },
+  { value: '864x1536', label: 'Portrait 9:16 · 864×1536', width: 864, height: 1536 },
+  { value: '720x1280', label: 'Portrait 9:16 Compact · 720×1280', width: 720, height: 1280 },
+  { value: '832x1040', label: 'Portrait 4:5 · 832×1040', width: 832, height: 1040 },
+  { value: '1152x1440', label: 'Portrait 4:5 HD · 1152×1440', width: 1152, height: 1440 },
+  { value: '1536x1920', label: 'Portrait 4:5 Ultra · 1536×1920', width: 1536, height: 1920 },
+  { value: '1040x1040', label: 'Square · 1040×1040', width: 1040, height: 1040 },
+  { value: '1440x1440', label: 'Square HD · 1440×1440', width: 1440, height: 1440 },
+  { value: '1680x1680', label: 'Square Ultra · 1680×1680', width: 1680, height: 1680 },
+  { value: '1680x1120', label: 'Landscape 3:2 · 1680×1120', width: 1680, height: 1120 },
+  { value: '1440x960', label: 'Landscape 3:2 Compact · 1440×960', width: 1440, height: 960 },
+  { value: '1600x1200', label: 'Landscape 4:3 · 1600×1200', width: 1600, height: 1200 },
+  { value: '1536x864', label: 'Landscape 16:9 · 1536×864', width: 1536, height: 864 },
+  { value: '1280x720', label: 'Landscape 16:9 Compact · 1280×720', width: 1280, height: 720 },
+  { value: '1248x832', label: 'Landscape Compact · 1248×832', width: 1248, height: 832 },
+  { value: '1216x912', label: 'Landscape 4:3 Compact · 1216×912', width: 1216, height: 912 },
+  { value: '1920x1536', label: 'Landscape 5:4 Ultra · 1920×1536', width: 1920, height: 1536 },
+  { value: '1440x1152', label: 'Landscape 5:4 · 1440×1152', width: 1440, height: 1152 },
+  { value: '1040x832', label: 'Landscape 5:4 Compact · 1040×832', width: 1040, height: 832 },
+  { value: '1920x1088', label: 'Widescreen · 1920×1088', width: 1920, height: 1088 },
+  { value: '1920x1280', label: 'Landscape 3:2 Ultra · 1920×1280', width: 1920, height: 1280 },
+  { value: '1920x1440', label: 'Landscape 4:3 Ultra · 1920×1440', width: 1920, height: 1440 },
+] as const;
+
 export const FLUX2_RESOLUTION_OPTIONS = [
   { value: '1024x1024', label: 'Square · 1024×1024', width: 1024, height: 1024 },
   { value: '1440x1440', label: 'Square HD · 1440×1440', width: 1440, height: 1440 },
@@ -1237,7 +1269,25 @@ export const COMFYUI_KREA2_SIMPLE_WORKFLOW_TEMPLATE = {
   "106:4": { "inputs": { "vae_name": "qwen_image_vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Load VAE" } },
   "106:10": { "inputs": { "width": 832, "height": 1216, "batch_size": 1 }, "class_type": "EmptyLatentImage", "_meta": { "title": "Empty Latent Image" } },
   "106:13": { "inputs": { "clip_name": "qwen3vl_4b_fp8_scaled.safetensors", "type": "krea2", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
-  "106:1": { "inputs": { "unet_name": "krea2_raw_fp8_scaled.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "Load Diffusion Model" } }
+  "106:1": { "inputs": { "unet_name": "krea2_turbo_fp8_scaled.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "Load Diffusion Model" } }
+};
+
+export const COMFYUI_KREA2_RAW_WORKFLOW_TEMPLATE = {
+  "6": { "inputs": { "text": ["48", 0], "clip": ["317", 0] }, "class_type": "CLIPTextEncode", "_meta": { "title": "CLIP Text Encode (Prompt)" } },
+  "8": { "inputs": { "samples": ["274", 0], "vae": ["210", 0] }, "class_type": "VAEDecode", "_meta": { "title": "VAE Decode" } },
+  "48": { "inputs": { "value": "" }, "class_type": "PrimitiveStringMultiline", "_meta": { "title": "Positive" } },
+  "210": { "inputs": { "vae_name": "Wan2.1_VAE.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Load VAE" } },
+  "213": { "inputs": { "filename_prefix": "Krea2_RAW/Imagen", "images": ["8", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Image" } },
+  "265": { "inputs": { "eta": 0.5, "sampler_name": "exponential/res_2s", "scheduler": "beta", "steps": 6, "steps_to_run": -1, "denoise": 1, "cfg": ["282", 0], "seed": ["276", 0], "sampler_mode": "standard", "bongmath": true, "model": ["315", 0], "positive": ["6", 0], "negative": ["272", 0], "latent_image": ["303", 0] }, "class_type": "ClownsharKSampler_Beta", "_meta": { "title": "ClownsharKSampler Stage 1" } },
+  "271": { "inputs": { "value": "" }, "class_type": "PrimitiveStringMultiline", "_meta": { "title": "Negative" } },
+  "272": { "inputs": { "text": ["271", 0], "clip": ["317", 0] }, "class_type": "CLIPTextEncode", "_meta": { "title": "CLIP Text Encode (Negative)" } },
+  "274": { "inputs": { "eta": 0.5, "sampler_name": "multistep/deis_3m", "scheduler": "bong_tangent", "steps": 2, "steps_to_run": -1, "denoise": 0.2, "cfg": ["282", 0], "seed": ["276", 0], "sampler_mode": "standard", "bongmath": true, "model": ["315", 0], "positive": ["6", 0], "negative": ["272", 0], "latent_image": ["265", 0] }, "class_type": "ClownsharKSampler_Beta", "_meta": { "title": "ClownsharKSampler Stage 2" } },
+  "276": { "inputs": { "seed": -1 }, "class_type": "Seed (rgthree)", "_meta": { "title": "Seed (rgthree)" } },
+  "282": { "inputs": { "value": 1 }, "class_type": "PrimitiveFloat", "_meta": { "title": "CFG" } },
+  "303": { "inputs": { "width": 1920, "height": 1088, "batch_size": 1 }, "class_type": "EmptyLatentImage", "_meta": { "title": "Empty Latent Image" } },
+  "315": { "inputs": { "PowerLoraLoaderHeaderWidget": { "type": "PowerLoraLoaderHeaderWidget" }, "lora_1": { "on": true, "lora": "KREA\\krea2_turbo_lora_rank_64_bf16.safetensors", "strength": 0.6 }, "lora_2": { "on": true, "lora": "KREA\\snofs_krea_v1_nostrip.safetensors", "strength": 1 }, "lora_3": { "on": false, "lora": "None", "strength": 1 }, "lora_4": { "on": false, "lora": "None", "strength": 1 }, "lora_5": { "on": false, "lora": "None", "strength": 1 }, "lora_6": { "on": false, "lora": "None", "strength": 1.5 }, "➕ Add Lora": "", "model": ["316", 0], "clip": ["317", 0] }, "class_type": "Power Lora Loader (rgthree)", "_meta": { "title": "Power Lora Loader (rgthree)" } },
+  "316": { "inputs": { "unet_name": "krea2_raw_fp8_scaled.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "Load Diffusion Model" } },
+  "317": { "inputs": { "clip_name": "qwen3vl_4b_fp8_scaled.safetensors", "type": "krea2", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
 };
 
 export const COMFYUI_T2I_WORKFLOWS = [
@@ -1249,6 +1299,7 @@ export const COMFYUI_T2I_WORKFLOWS = [
   { value: 'z-image', label: 'Z-Image' },
   { value: 'flux2-simple', label: 'FLUX2 Simple' },
   { value: 'krea2-simple', label: 'KREA2 Simple' },
+  { value: 'krea2-raw', label: 'KREA2 RAW' },
 ];
 
 export const COMFYUI_I2I_WORKFLOWS = [

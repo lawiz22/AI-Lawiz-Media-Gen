@@ -77,6 +77,25 @@ interface ModelPromptExample {
     source: 'civitai' | 'archive';
 }
 
+type PromptExampleSource = NonNullable<GenerationOptions['comfyPromptExampleSource']>;
+type AvailablePromptExampleSource = PromptExampleSource & { hasLocalPrompts: boolean };
+
+const getSelectedLoraNames = (options: GenerationOptions): string[] => {
+    const config = options.comfyModelType === 'sd1.5' ? ['comfySd15', 4]
+        : options.comfyModelType === 'sdxl' ? ['comfySdxl', 4]
+            : options.comfyModelType === 'flux' ? ['comfyFlux', 4]
+                : options.comfyModelType === 'qwen-t2i-gguf' ? ['comfyQwen', 4]
+                    : options.comfyModelType === 'qwen-edit' ? ['comfyQwenEdit', 5]
+                        : options.comfyModelType === 'z-image' ? ['comfyZImage', 4]
+                            : options.comfyModelType === 'flux2-simple' ? ['comfyFlux2', 6]
+                                : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw' ? ['comfyKrea', 6]
+                                    : undefined;
+    if (!config) return [];
+    const [prefix, count] = config as [string, number];
+    return Array.from({ length: count }, (_, index) => options[`${prefix}Lora${index + 1}Name` as keyof GenerationOptions] as string | undefined)
+        .filter((name): name is string => Boolean(name));
+};
+
 const appendMissingTriggerWords = (prompt: string, triggerWords: string[] = []) => {
     const trimmedPrompt = prompt.trim();
     const normalizedPrompt = trimmedPrompt.toLowerCase();
@@ -204,27 +223,55 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const [promptExamplesLoading, setPromptExamplesLoading] = useState(false);
     const [promptExamplesError, setPromptExamplesError] = useState('');
     const [promptExamplesStorage, setPromptExamplesStorage] = useState<'sidecar' | 'remote' | null>(null);
-    const [promptSidecarAvailable, setPromptSidecarAvailable] = useState(false);
+    const [promptExampleSources, setPromptExampleSources] = useState<AvailablePromptExampleSource[]>([]);
+    const [activePromptExampleSource, setActivePromptExampleSource] = useState<AvailablePromptExampleSource | null>(null);
     const [promptExamplesSaving, setPromptExamplesSaving] = useState(false);
+    const selectedLoraNames = getSelectedLoraNames(options);
+    const selectedLoraKey = selectedLoraNames.join('\u0000');
 
     useEffect(() => {
         let active = true;
-        const modelPath = options.comfyPromptExampleSource?.modelPath;
         setPromptExamples([]);
         setPromptExamplesOpen(false);
         setPromptExamplesStorage(null);
-        setPromptSidecarAvailable(false);
-        if (modelPath && window.electron) {
-            window.electron.hasLocalModelPromptExamples(modelPath)
-                .then(available => { if (active) setPromptSidecarAvailable(available); })
-                .catch(() => undefined);
+        setActivePromptExampleSource(null);
+        if (!window.electron) {
+            setPromptExampleSources([]);
+            return () => { active = false; };
         }
+        const loadSources = async () => {
+            const useSource = options.comfyPromptExampleSource;
+            const sources: AvailablePromptExampleSource[] = [];
+            if (useSource) {
+                const hasLocalPrompts = await window.electron!.hasLocalModelPromptExamples(useSource.modelPath).catch(() => false);
+                sources.push({ ...useSource, hasLocalPrompts });
+            }
+            const inventory = await window.electron!.getCivitaiInventory().catch(() => undefined);
+            if (inventory) {
+                for (const loraName of selectedLoraNames) {
+                    const item = findInventoryModel(inventory, loraName);
+                    if (!item || sources.some(source => source.modelPath === item.path)) continue;
+                    const hasLocalPrompts = await window.electron!.hasLocalModelPromptExamples(item.path).catch(() => false);
+                    if (!hasLocalPrompts) continue;
+                    sources.push({
+                        modelPath: item.path,
+                        modelName: item.modelName || item.fileName,
+                        provider: useSource?.provider || 'regular',
+                        sources: ['civitai', ...(item.archiveMirrorUrl ? ['archive' as const] : [])],
+                        triggerWords: item.usageMetadata?.triggerWords,
+                        hasLocalPrompts: true,
+                    });
+                }
+            }
+            if (active) setPromptExampleSources(sources);
+        };
+        void loadSources();
         return () => { active = false; };
-    }, [options.comfyPromptExampleSource?.modelPath]);
+    }, [options.comfyPromptExampleSource?.modelPath, selectedLoraKey]);
 
-    const openPromptExamples = async () => {
-        const source = options.comfyPromptExampleSource;
-        if (!source || !window.electron) return;
+    const openPromptExamples = async (source: AvailablePromptExampleSource) => {
+        if (!window.electron) return;
+        setActivePromptExampleSource(source);
         setPromptExamplesOpen(true);
         setPromptExamplesLoading(true);
         setPromptExamplesError('');
@@ -238,7 +285,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             });
             setPromptExamples(result.examples);
             setPromptExamplesStorage(result.storage);
-            setPromptSidecarAvailable(result.storage === 'sidecar');
         } catch (error) {
             setPromptExamplesError(error instanceof Error ? error.message : 'Prompt examples could not be loaded.');
         } finally {
@@ -247,14 +293,14 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     };
 
     const saveAllPromptExamples = async () => {
-        const modelPath = options.comfyPromptExampleSource?.modelPath;
+        const modelPath = activePromptExampleSource?.modelPath;
         if (!modelPath || !window.electron || !promptExamples.length) return;
         setPromptExamplesSaving(true);
         setPromptExamplesError('');
         try {
             await window.electron.saveLocalModelPromptExamples({ modelPath, examples: promptExamples });
             setPromptExamplesStorage('sidecar');
-            setPromptSidecarAvailable(true);
+            setPromptExampleSources(current => current.map(source => source.modelPath === modelPath ? { ...source, hasLocalPrompts: true } : source));
         } catch (error) {
             setPromptExamplesError(error instanceof Error ? error.message : 'Prompt examples could not be saved.');
         } finally {
@@ -263,11 +309,25 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     };
 
     const applyPromptExample = (example: ModelPromptExample) => {
-        const prompt = appendMissingTriggerWords(example.positive, options.comfyPromptExampleSource?.triggerWords);
-        updateOptions({
-            comfyPrompt: prompt,
-            ...(example.negative ? { comfyNegativePrompt: example.negative } : {}),
-        });
+        const prompt = appendMissingTriggerWords(example.positive, activePromptExampleSource?.triggerWords);
+        const negativePrompt = example.negative?.trim();
+        const safeNegativePrompt = negativePrompt && negativePrompt !== example.positive.trim() ? negativePrompt : '';
+        if (options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw') {
+            updateOptions({
+                comfyKreaPrompt: prompt,
+                comfyKreaNegativePrompt: safeNegativePrompt,
+            });
+        } else if (options.comfyModelType === 'flux2-simple') {
+            updateOptions({
+                comfyFlux2Prompt: prompt,
+                comfyFlux2NegativePrompt: safeNegativePrompt,
+            });
+        } else {
+            updateOptions({
+                comfyPrompt: prompt,
+                ...(example.negative ? { comfyNegativePrompt: example.negative } : {}),
+            });
+        }
         setPromptExamplesOpen(false);
     };
 
@@ -452,9 +512,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         } else if (modelType === 'flux2-simple') {
             field = 'comfyFlux2Unet';
             candidates = comfyGgufModels.filter(model => /flux[-_ ]?2|klein/i.test(model));
-        } else if (modelType === 'krea2-simple') {
-            field = 'comfyKreaUnet';
-            candidates = comfyUnets.filter(model => /krea/i.test(model));
+        } else if (modelType === 'krea2-simple' || modelType === 'krea2-raw') {
+            return;
         } else if (modelType === 'nunchaku-kontext-flux' || modelType === 'nunchaku-flux-image') {
             field = 'comfyNunchakuModel';
             candidates = nunchakuModels;
@@ -1205,7 +1264,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             <SelectInput label="VAE Model" value={options.comfyFlux2Vae || ''} onChange={handleOptionChange('comfyFlux2Vae')} options={Array.from(new Set([options.comfyFlux2Vae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                         </div>}
 
-                        {modelType === 'krea2-simple' && <div className="space-y-4">
+                        {(modelType === 'krea2-simple' || modelType === 'krea2-raw') && <div className="space-y-4">
                             <SelectInput label="UNET Model" value={options.comfyKreaUnet || ''} onChange={handleOptionChange('comfyKreaUnet')} options={Array.from(new Set([options.comfyKreaUnet, ...comfyUnets].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                             <SelectInput label="CLIP Model" value={options.comfyKreaClip || ''} onChange={handleOptionChange('comfyKreaClip')} options={Array.from(new Set([options.comfyKreaClip, ...comfyClips].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                             <SelectInput label="VAE Model" value={options.comfyKreaVae || ''} onChange={handleOptionChange('comfyKreaVae')} options={Array.from(new Set([options.comfyKreaVae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
@@ -1279,10 +1338,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         </div>
                     )}
 
-                    {options.comfyPromptExampleSource && window.electron && <button type="button" onClick={openPromptExamples} disabled={isDisabled || promptExamplesLoading} className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">{promptExamplesLoading && <SpinnerIcon className="w-4 h-4 animate-spin" />}{promptExamplesLoading ? 'Loading examples...' : `${promptSidecarAvailable ? 'Local prompts' : 'Find prompt examples'} · ${options.comfyPromptExampleSource.modelName}`}</button>}
-                    <TextInput label="Positive Prompt" value={modelType === 'krea2-simple' ? (options.comfyKreaPrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2Prompt || '') : (options.comfyPrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' ? 'comfyKreaPrompt' : modelType === 'flux2-simple' ? 'comfyFlux2Prompt' : 'comfyPrompt')} disabled={isDisabled} isTextArea />
+                    {promptExampleSources.length > 0 && <div className="space-y-2">{promptExampleSources.map(source => <button key={source.modelPath} type="button" onClick={() => openPromptExamples(source)} disabled={isDisabled || promptExamplesLoading} className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">{promptExamplesLoading && activePromptExampleSource?.modelPath === source.modelPath && <SpinnerIcon className="w-4 h-4 animate-spin" />}{source.hasLocalPrompts ? 'Local prompts' : 'Find prompt examples'} · {source.modelName}</button>)}</div>}
+                    <TextInput label="Positive Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaPrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2Prompt || '') : (options.comfyPrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaPrompt' : modelType === 'flux2-simple' ? 'comfyFlux2Prompt' : 'comfyPrompt')} disabled={isDisabled} isTextArea />
                     {modelType !== 'nunchaku-kontext-flux' && modelType !== 'nunchaku-flux-image' && modelType !== 'flux-krea' && (
-                        <TextInput label="Negative Prompt" value={modelType === 'krea2-simple' ? (options.comfyKreaNegativePrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2NegativePrompt || '') : (options.comfyNegativePrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' ? 'comfyKreaNegativePrompt' : modelType === 'flux2-simple' ? 'comfyFlux2NegativePrompt' : 'comfyNegativePrompt')} disabled={isDisabled} isTextArea />
+                        <TextInput label="Negative Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaNegativePrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2NegativePrompt || '') : (options.comfyNegativePrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaNegativePrompt' : modelType === 'flux2-simple' ? 'comfyFlux2NegativePrompt' : 'comfyNegativePrompt')} disabled={isDisabled} isTextArea />
                     )}
                 </OptionSection>
 

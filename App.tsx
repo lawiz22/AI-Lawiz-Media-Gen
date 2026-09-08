@@ -275,7 +275,7 @@ const App: React.FC = () => {
             applyDefaultsIfMissing({
                 comfyKreaPrompt: '',
                 comfyKreaNegativePrompt: '',
-                comfyKreaUnet: 'krea2_raw_fp8_scaled.safetensors',
+                comfyKreaUnet: 'krea2_turbo_fp8_scaled.safetensors',
                 comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
                 comfyKreaVae: 'qwen_image_vae.safetensors',
                 comfyKreaResolution: '832x1216',
@@ -296,6 +296,25 @@ const App: React.FC = () => {
                 comfyCfg: 1,
                 comfySampler: 'er_sde',
                 comfyScheduler: 'beta',
+            });
+        } else if (newOpts.comfyModelType === 'krea2-raw') {
+            applyDefaultsIfMissing({
+                comfyKreaPrompt: '',
+                comfyKreaNegativePrompt: '',
+                comfyKreaUnet: 'krea2_raw_fp8_scaled.safetensors',
+                comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
+                comfyKreaVae: 'Wan2.1_VAE.safetensors',
+                comfyKreaResolution: '1920x1088',
+                comfyKreaUseLora: true,
+                comfyKreaLora1Name: 'KREA\\krea2_turbo_lora_rank_64_bf16.safetensors',
+                comfyKreaLora1Strength: 0.6,
+                comfyKreaLora2Name: 'KREA\\snofs_krea_v1_nostrip.safetensors',
+                comfyKreaLora2Strength: 1,
+                comfyKreaLora3Name: '', comfyKreaLora3Strength: 1,
+                comfyKreaLora4Name: '', comfyKreaLora4Strength: 1,
+                comfyKreaLora5Name: '', comfyKreaLora5Strength: 1,
+                comfyKreaLora6Name: '', comfyKreaLora6Strength: 1.5,
+                comfyCfg: 1,
             });
         }
 
@@ -886,6 +905,11 @@ const App: React.FC = () => {
                             />
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                                 <div className="lg:col-span-1 space-y-8">
+                                    {!(currentOptions.provider === 'comfyui'
+                                        && generationMode === 't2i'
+                                        && (currentOptions.comfyModelType === 'flux2-simple'
+                                            || currentOptions.comfyModelType === 'krea2-simple'
+                                            || currentOptions.comfyModelType === 'krea2-raw')) && (
                                     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                         <div className="mb-4 flex flex-wrap items-center gap-3">
                                             <h2 className="text-xl font-bold text-accent">
@@ -973,6 +997,7 @@ const App: React.FC = () => {
                                             />
                                         )}
                                     </div>
+                                    )}
                                     <OptionsPanel
                                         options={currentOptions}
                                         setOptions={handleSetOptions}
@@ -996,7 +1021,7 @@ const App: React.FC = () => {
                                                 } else {
                                                     prompt = await generatePromptFromImage(sourceImage);
                                                 }
-                                                dispatch(updateOptions(currentOptions.comfyModelType === 'krea2-simple'
+                                                dispatch(updateOptions(currentOptions.comfyModelType === 'krea2-simple' || currentOptions.comfyModelType === 'krea2-raw'
                                                     ? { comfyKreaPrompt: prompt }
                                                     : currentOptions.comfyModelType === 'flux2-simple'
                                                         ? { comfyFlux2Prompt: prompt }
@@ -1193,12 +1218,6 @@ const App: React.FC = () => {
                         <PromptGeneratorPanel
                             activeSubTab={activePromptToolsSubTab}
                             setActiveSubTab={(id) => dispatch(setActivePromptToolsSubTab(id))}
-                            onUsePrompt={(prompt) => {
-                                // Logic to copy prompt to relevant fields
-                                if (options.provider === 'gemini') dispatch(updateOptions({ geminiPrompt: prompt }));
-                                else dispatch(updateOptions({ comfyPrompt: prompt, comfyVidWanI2VPositivePrompt: prompt, comfyVidWanT2VPositivePrompt: prompt }));
-                                // Optionally switch tab? For now, let user decide via modal or just stay.
-                            }}
                             onOpenLibraryForImage={() => dispatch(setModalOpen({ modal: 'isPromptGenImagePickerOpen', isOpen: true }))}
                             onOpenLibraryForBg={() => dispatch(setModalOpen({ modal: 'isPromptGenBgImagePickerOpen', isOpen: true }))}
                             onOpenLibraryForSubject={() => dispatch(setModalOpen({ modal: 'isPromptGenSubjectImagePickerOpen', isOpen: true }))}

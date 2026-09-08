@@ -35,7 +35,7 @@ interface Props {
 }
 
 const FOLDERS: Record<LocalKind, CivitaiModelFolder[]> = {
-    lora: ['sd15', 'SDXL', 'Flux', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control'],
+    lora: ['sd15', 'SDXL', 'Flux', 'flux2', 'krea', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control'],
     checkpoint: ['SD1.5', 'SDXL', 'FLUX', 'flux-dev', 'LTX2'],
     diffusion: ['sd15', 'SDXL', 'Flux', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control'],
 };
@@ -55,6 +55,16 @@ const SCHEDULER_OPTIONS = ['', 'normal', 'karras', 'exponential', 'sgm_uniform',
 const getComfyOptions = (widgetInfo: unknown): string[] => Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0]) ? widgetInfo[0] : [];
 
 const getCompatibleBaseModel = (modelType: ComfyModelType, objectInfo: any): string | undefined => {
+    if (modelType === 'flux2-simple') {
+        const models = [
+            ...getComfyOptions(objectInfo?.UnetLoaderGGUF?.input?.required?.unet_name),
+            ...getComfyOptions(objectInfo?.UnetLoaderGGUF?.input?.required?.gguf_name),
+        ];
+        return models.find(model => /flux[-_ ]?2|klein/i.test(model));
+    }
+    if (modelType === 'krea2-simple' || modelType === 'krea2-raw') {
+        return getComfyOptions(objectInfo?.UNETLoader?.input?.required?.unet_name).find(model => /krea[-_ ]?2/i.test(model));
+    }
     if (modelType === 'qwen-t2i-gguf') {
         const models = [
             ...getComfyOptions(objectInfo?.UnetLoaderGGUF?.input?.required?.unet_name),
@@ -72,24 +82,29 @@ const getCompatibleBaseModel = (modelType: ComfyModelType, objectInfo: any): str
     return checkpoints.find(model => /sd[._ -]?1[._ -]?5/i.test(model));
 };
 
-const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelType; loraPrefix: string; checkpointField: keyof GenerationOptions } => {
+const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelType; loraPrefix: string; checkpointField: keyof GenerationOptions; promptField: keyof GenerationOptions } => {
     const pathSegments = item.relativePath.replace(/\\/g, '/').toLowerCase().split('/');
-    if (pathSegments.includes('qwen')) return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet' };
-    if (pathSegments.includes('zit')) return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet' };
-    if (pathSegments.some(segment => segment === 'flux' || segment === 'flux-dev')) return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel' };
-    if (pathSegments.includes('sdxl')) return { modelType: 'sdxl', loraPrefix: 'comfySdxl', checkpointField: 'comfyModel' };
-    if (pathSegments.some(segment => segment === 'sd15' || segment === 'sd1.5')) return { modelType: 'sd1.5', loraPrefix: 'comfySd15', checkpointField: 'comfyModel' };
+    if (pathSegments.includes('flux2')) return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
+    if (pathSegments.includes('krea')) return { modelType: 'krea2-simple', loraPrefix: 'comfyKrea', checkpointField: 'comfyKreaUnet', promptField: 'comfyKreaPrompt' };
+    if (pathSegments.includes('qwen')) return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet', promptField: 'comfyPrompt' };
+    if (pathSegments.includes('zit')) return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet', promptField: 'comfyPrompt' };
+    if (pathSegments.some(segment => segment === 'flux' || segment === 'flux-dev')) return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
+    if (pathSegments.includes('sdxl')) return { modelType: 'sdxl', loraPrefix: 'comfySdxl', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
+    if (pathSegments.some(segment => segment === 'sd15' || segment === 'sd1.5')) return { modelType: 'sd1.5', loraPrefix: 'comfySd15', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
 
     const identity = [
+        item.fileName,
         item.archiveInfo?.baseModel,
         item.installedVersionName,
         item.modelName,
     ].filter(Boolean).join(' ').replace(/\\/g, '/').toLowerCase();
-    if (/\bflux(?:[ ._-]?1)?\b/.test(identity)) return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel' };
-    if (/\bqwen\b/.test(identity)) return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet' };
-    if (/z[-_ ]?image|\bzit\b/.test(identity)) return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet' };
-    if (/\bsdxl\b|stable diffusion xl|\bpony\b|\billustrious\b|\bnoobai\b/.test(identity)) return { modelType: 'sdxl', loraPrefix: 'comfySdxl', checkpointField: 'comfyModel' };
-    return { modelType: 'sd1.5', loraPrefix: 'comfySd15', checkpointField: 'comfyModel' };
+    if (/flux[- ._]?2|klein/.test(identity)) return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
+    if (/krea[- ._]?2/.test(identity)) return { modelType: 'krea2-simple', loraPrefix: 'comfyKrea', checkpointField: 'comfyKreaUnet', promptField: 'comfyKreaPrompt' };
+    if (/\bflux(?:[ ._-]?1)?\b/.test(identity)) return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
+    if (/\bqwen\b/.test(identity)) return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet', promptField: 'comfyPrompt' };
+    if (/z[-_ ]?image|\bzit\b/.test(identity)) return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet', promptField: 'comfyPrompt' };
+    if (/\bsdxl\b|stable diffusion xl|\bpony\b|\billustrious\b|\bnoobai\b/.test(identity)) return { modelType: 'sdxl', loraPrefix: 'comfySdxl', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
+    return { modelType: 'sd1.5', loraPrefix: 'comfySd15', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
 };
 
 const itemMatchesFamily = (item: CivitaiInventoryItem, family: CivitaiFamily) => {
@@ -99,13 +114,19 @@ const itemMatchesFamily = (item: CivitaiInventoryItem, family: CivitaiFamily) =>
         sd15: ['/sd15/', '/sd1.5/'],
         sdxl: ['/sdxl/'],
         flux: ['/flux/', '/flux-dev/'],
+        flux2: ['/flux2/'],
+        krea2: ['/krea/'],
         qwen: ['/qwen/'],
         'qwen-edit': ['/qwen/'],
         'zit-base': ['/zit/'],
         'zit-turbo': ['/zit/'],
         'ltx-23': ['/ltx2/', '/ltx2_camera_control/'],
     };
-    return folders[family].some(folder => normalizedPath.includes(folder));
+    if (folders[family].some(folder => normalizedPath.includes(folder))) return true;
+    const identity = [item.fileName, item.modelName, item.installedVersionName, item.archiveInfo?.baseModel].filter(Boolean).join(' ').toLowerCase();
+    if (family === 'flux2') return /flux[- ._]?2|klein/.test(identity);
+    if (family === 'krea2') return /krea[- ._]?2/.test(identity);
+    return false;
 };
 
 const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiProvider; focused: boolean; onInventoryChange: (inventory: CivitaiInventory) => void; onItemChange: (item: CivitaiInventoryItem) => void; onClassify: (item: CivitaiInventoryItem, kind: LocalKind, folder: CivitaiModelFolder) => Promise<void>; onUpdate: (item: CivitaiInventoryItem, mode: 'keep' | 'replace') => Promise<{ fileName: string; versionName: string }> }> = React.memo(({ item, provider, focused, onInventoryChange, onItemChange, onClassify, onUpdate }) => {
@@ -260,6 +281,9 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
             setUsageBusy(false);
         }
         const currentState = store.getState();
+        if (workflow.modelType === 'krea2-simple' && currentState.generation.options.comfyModelType === 'krea2-raw') {
+            workflow.modelType = 'krea2-raw';
+        }
         const recommendedSettings = getRecommendedSettingUpdates(workflow.modelType, selectedItem.usageMetadata, currentState.app.comfyUIObjectInfo);
         const savedTriggers = item.kind === 'lora' ? selectedItem.usageMetadata?.triggerWords || [] : [];
         const updates: Partial<GenerationOptions> = {
@@ -294,12 +318,22 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                     comfyPrompt: savedTriggers.join(', '),
                     ...(compatibleBaseModel ? { [workflow.checkpointField]: compatibleBaseModel } : {}),
                 });
+            } else if (workflow.modelType === 'krea2-simple' || workflow.modelType === 'krea2-raw') {
+                Object.assign(updates, {
+                    comfyKreaUseLora: true,
+                    comfyKreaLora1Name: modelPath,
+                    comfyKreaLora1Strength: 1,
+                    comfyKreaUnet: workflow.modelType === 'krea2-raw' ? 'krea2_raw_fp8_scaled.safetensors' : 'krea2_turbo_fp8_scaled.safetensors',
+                    comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
+                    comfyKreaVae: workflow.modelType === 'krea2-raw' ? 'Wan2.1_VAE.safetensors' : 'qwen_image_vae.safetensors',
+                    comfyKreaPrompt: savedTriggers.join(', '),
+                });
             } else {
             Object.assign(updates, {
                 [`${workflow.loraPrefix}UseLora`]: true,
                 [`${workflow.loraPrefix}Lora1Name`]: modelPath,
                 [`${workflow.loraPrefix}Lora1Strength`]: 1,
-                comfyPrompt: savedTriggers.join(', '),
+                [workflow.promptField]: savedTriggers.join(', '),
                 ...(compatibleBaseModel ? { [workflow.checkpointField]: compatibleBaseModel } : {}),
             });
             }

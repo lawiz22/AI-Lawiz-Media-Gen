@@ -29,19 +29,19 @@ const MODEL_SCAN_DIRECTORIES = [
     { kind: 'diffusion', directory: 'unet' },
     { kind: 'lora', directory: 'loras' },
 ];
-const MODEL_FOLDERS = new Set(['sd15', 'SD1.5', 'SDXL', 'Flux', 'FLUX', 'flux-dev', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control']);
+const MODEL_FOLDERS = new Set(['.', 'sd15', 'SD1.5', 'SDXL', 'Flux', 'FLUX', 'flux-dev', 'flux2', 'krea', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control']);
 const LOCAL_MODEL_EXTENSIONS = new Set(['.safetensors', '.ckpt', '.pt', '.pth', '.bin', '.gguf']);
 const SCAN_FAMILY_FOLDERS = {
     lora: {
-        sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
+        sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], flux2: ['flux2'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2', 'LTX2_camera_control'],
     },
     checkpoint: {
-        sd15: ['SD1.5'], sdxl: ['SDXL'], flux: ['FLUX', 'flux-dev'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
+        sd15: ['SD1.5'], sdxl: ['SDXL'], flux: ['FLUX', 'flux-dev'], flux2: [], krea2: [], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2'],
     },
     diffusion: {
-        sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
+        sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], flux2: ['.'], krea2: ['.'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2', 'LTX2_camera_control'],
     },
 };
@@ -51,7 +51,11 @@ function inventoryItemMatchesSelection(item, kind, family) {
     if (family === 'all') return true;
     const familyFolders = SCAN_FAMILY_FOLDERS[item.kind]?.[family] || [];
     const pathSegments = String(item.relativePath || '').replace(/\\/g, '/').toLowerCase().split('/');
-    return familyFolders.some(folder => pathSegments.includes(folder.toLowerCase()));
+    if (familyFolders.some(folder => folder !== '.' && pathSegments.includes(folder.toLowerCase()))) return true;
+    const identity = [item.fileName, item.modelName, item.installedVersionName, item.archiveInfo?.baseModel].filter(Boolean).join(' ').toLowerCase();
+    if (family === 'flux2') return /flux[- ._]?2|klein/.test(identity);
+    if (family === 'krea2') return /krea[- ._]?2/.test(identity);
+    return false;
 }
 
 function runQueuedPreviewTask(task) {
@@ -567,6 +571,8 @@ async function cacheCivitaiPreview(filePath, previewUrl) {
 
 function inferModelFolder(model, version) {
     const identity = `${version?.baseModel || ''} ${version?.name || ''} ${model?.name || ''}`.toLowerCase();
+    if (/flux[- ._]?2|klein/.test(identity)) return 'flux2';
+    if (/krea[- ._]?2/.test(identity)) return 'krea';
     if (/qwen/.test(identity)) return 'QWEN';
     if (/z[- ]?image|\bzit\b/.test(identity)) return 'ZIT';
     if (/\bltx/.test(identity) && /camera[ _-]*control|control[ _-]*camera/.test(identity)) return 'LTX2_camera_control';
@@ -578,6 +584,7 @@ function inferModelFolder(model, version) {
 
 function inferDestinationFolder(model, version, category) {
     const folder = inferModelFolder(model, version);
+    if (category === 'diffusion_models' && (folder === 'flux2' || folder === 'krea')) return '.';
     if (category !== 'checkpoints') return folder;
     if (folder === 'sd15') return 'SD1.5';
     if (folder === 'Flux') {

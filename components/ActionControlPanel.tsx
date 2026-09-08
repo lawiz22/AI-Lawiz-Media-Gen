@@ -1,6 +1,6 @@
 import React from 'react';
 import { GenerationOptions } from '../types';
-import { ASPECT_RATIO_OPTIONS, FLUX2_RESOLUTION_OPTIONS, KREA2_RESOLUTION_OPTIONS, MAX_IMAGES } from '../constants';
+import { ASPECT_RATIO_OPTIONS, FLUX2_RESOLUTION_OPTIONS, KREA2_RAW_RESOLUTION_OPTIONS, KREA2_RESOLUTION_OPTIONS, MAX_IMAGES } from '../constants';
 import { GenerateIcon, ResetIcon } from './icons';
 import { DEFAULT_GEMINI_IMAGE_MODEL } from '../services/geminiService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL } from '../services/mammouthService';
@@ -32,6 +32,8 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                 ? `Qwen Edit Multi-Angle (${options.comfyCharacterUnet})`
                 : options.comfyModelType === 'krea2-simple'
                     ? 'KREA2 Simple'
+                    : options.comfyModelType === 'krea2-raw'
+                        ? 'KREA2 RAW'
                     : options.comfyModelType === 'flux2-simple'
                         ? 'FLUX2 Simple'
                     : (options.comfyModelType || 'sdxl');
@@ -52,11 +54,11 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                             <span className="w-8 text-right text-xs text-text-secondary">{(options.megapixel || 1).toFixed(1)}</span>
                         </div>
                     )}
-                    {options.comfyModelType === 'krea2-simple' ? (
+                    {options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw' ? (
                         <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-text-secondary">Resolution:</label>
-                            <select value={options.comfyKreaResolution || '832x1216'} onChange={(event) => updateOptions({ comfyKreaResolution: event.target.value })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs focus:border-accent focus:ring-accent">
-                                {KREA2_RESOLUTION_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            <select value={options.comfyKreaResolution || (options.comfyModelType === 'krea2-raw' ? '1920x1088' : '832x1216')} onChange={(event) => updateOptions({ comfyKreaResolution: event.target.value })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs focus:border-accent focus:ring-accent">
+                                {(options.comfyModelType === 'krea2-raw' ? KREA2_RAW_RESOLUTION_OPTIONS : KREA2_RESOLUTION_OPTIONS).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                             </select>
                         </div>
                     ) : options.comfyModelType === 'flux2-simple' ? (

@@ -50,6 +50,7 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
     const [selectedPresetId, setSelectedPresetId] = useState<string>('');
     const activeModelFamily = MODEL_FAMILIES.find(family =>
         Object.values(family.workflows).includes(options.comfyModelType as ComfyModelType)
+        || (family.id === 'krea2' && options.comfyModelType === 'krea2-raw')
     ) || MODEL_FAMILIES[1];
     const availableGenerationModes = (['t2i', 'i2i'] as const).filter(mode => activeModelFamily.workflows[mode]);
 
@@ -231,15 +232,26 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
                         </button>
                     ))}
                     {options.provider === 'comfyui' && activeModelFamily.id === 'krea2' && (
+                        <>
                         <button
                             type="button"
                             onClick={() => switchComfyModel('krea2-simple')}
                             disabled={isDisabled}
                             aria-pressed={options.comfyModelType === 'krea2-simple'}
-                            className="rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-accent-text shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                            className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${options.comfyModelType === 'krea2-simple' ? 'bg-accent text-accent-text shadow-sm' : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'}`}
                         >
                             SIMPLE KREA
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => switchComfyModel('krea2-raw')}
+                            disabled={isDisabled}
+                            aria-pressed={options.comfyModelType === 'krea2-raw'}
+                            className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${options.comfyModelType === 'krea2-raw' ? 'bg-accent text-accent-text shadow-sm' : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'}`}
+                        >
+                            KREA2 RAW
+                        </button>
+                        </>
                     )}
                     {options.provider === 'comfyui' && activeModelFamily.id === 'flux2' && (
                         <button
