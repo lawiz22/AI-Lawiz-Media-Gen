@@ -57,7 +57,7 @@ export interface CivitaiUsageMetadata {
     steps?: number;
     cfg?: number;
     guidance?: number;
-    source: 'civitai' | 'archive' | 'manual';
+    source: 'civitai' | 'archive' | 'huggingface' | 'manual';
     updatedAt: string;
 }
 
@@ -74,12 +74,28 @@ export interface CivitaiInventoryItem {
     civitaiPreviewType?: 'image' | 'video';
     previewError?: string;
     civitaiCheckedAt?: string;
+    archiveCheckedAt?: string;
+    archiveLookupStatus?: 'found' | 'unmatched';
+    huggingFaceCheckedAt?: string;
+    huggingFaceLookupStatus?: 'found' | 'unmatched';
+    huggingFaceInfo?: {
+        repoId: string;
+        url: string;
+        matchedFile?: string;
+        previewFile?: string;
+        pipelineTag?: string;
+        downloads: number;
+        likes: number;
+        tags?: string[];
+        fetchedAt: string;
+    };
     previewCheckedAt?: string;
     contentSafety?: 'sfw' | 'nsfw';
     safetyOverride?: 'sfw' | 'nsfw';
     safetyCheckedAt?: string;
     archiveMirrorUrl?: string;
     userOwned?: boolean;
+    userFamily?: Exclude<CivitaiFamily, 'all'>;
     usageMetadata?: CivitaiUsageMetadata;
     archiveInfo?: {
         title: string;
@@ -121,7 +137,7 @@ const WORKFLOW_DEFAULT_SETTINGS: Partial<Record<ComfyModelType, Pick<GenerationO
     flux: { comfySteps: 10, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'simple', comfyFluxGuidance: 3.5 },
     'qwen-t2i-gguf': { comfySteps: 4, comfyCfg: 1, comfySampler: 'euler_ancestral', comfyScheduler: 'beta57' },
     'z-image': { comfySteps: 8, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'simple' },
-    'flux2-simple': { comfySteps: 20, comfyCfg: 4, comfySampler: 'euler' },
+    'flux2-simple': { comfySteps: 12, comfyCfg: 1, comfySampler: 'euler' },
     'krea2-simple': { comfySteps: 10, comfyCfg: 1, comfySampler: 'er_sde', comfyScheduler: 'beta' },
     'krea2-raw': { comfyCfg: 1 },
 };
@@ -240,7 +256,6 @@ export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModel
 
 export const getCivitaiDestinationFolder = (model: CivitaiModel, version: CivitaiModelVersion, family: CivitaiFamily, destination: CivitaiDestination): CivitaiModelFolder => {
     const familyFolder = getCivitaiModelFolder(model, version, family);
-    if (destination === 'diffusion' && (familyFolder === 'flux2' || familyFolder === 'krea')) return '.';
     if (destination !== 'checkpoint') return familyFolder;
     if (familyFolder === 'sd15') return 'SD1.5';
     if (familyFolder === 'Flux') {
@@ -281,25 +296,42 @@ export async function searchCivitaiModels(options: {
     if (options.modelType !== 'all') params.append('types', options.modelType);
     if (options.cursor) params.set('cursor', options.cursor);
 
-    const response = await fetch(`${PROVIDER_ORIGINS[options.provider]}/api/v1/models?${params}`, {
-        headers: options.apiKey ? { Authorization: `Bearer ${options.apiKey}` } : {},
-    });
-    if (!response.ok) {
-        throw new Error(`Civitai search failed (${response.status} ${response.statusText}).`);
+    const origins = options.provider === 'red' ? [PROVIDER_ORIGINS.red, PROVIDER_ORIGINS.regular] : [PROVIDER_ORIGINS.regular];
+    let lastResponse: Response | undefined;
+    let lastError: unknown;
+    for (const origin of origins) {
+        try {
+            const response = await fetch(`${origin}/api/v1/models?${params}`, {
+                headers: options.apiKey && origin === PROVIDER_ORIGINS[options.provider] ? { Authorization: `Bearer ${options.apiKey}` } : {},
+            });
+            if (response.ok) {
+                const result = await response.json() as CivitaiSearchResult;
+                if (result.items?.length || origin === origins[origins.length - 1]) return result;
+            }
+            lastResponse = response;
+        } catch (error) {
+            lastError = error;
+        }
     }
-    return response.json();
+    if (!lastResponse && lastError instanceof Error) throw lastError;
+    throw new Error(`Civitai search failed (${lastResponse?.status || 'network'} ${lastResponse?.statusText || 'error'}).`);
 }
 
 export async function getCivitaiModelsByIds(provider: CivitaiProvider, apiKey: string, modelIds: number[]): Promise<CivitaiModel[]> {
     const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+    const origins = provider === 'red' ? [PROVIDER_ORIGINS.red, PROVIDER_ORIGINS.regular] : [PROVIDER_ORIGINS.regular];
     const models: CivitaiModel[] = [];
     let nextIndex = 0;
     const worker = async () => {
         while (nextIndex < modelIds.length) {
             const modelId = modelIds[nextIndex];
             nextIndex += 1;
-            const response = await fetch(`${PROVIDER_ORIGINS[provider]}/api/v1/models/${modelId}`, { headers });
-            if (response.ok) models.push(await response.json() as CivitaiModel);
+            for (const origin of origins) {
+                const response = await fetch(`${origin}/api/v1/models/${modelId}`, { headers: origin === PROVIDER_ORIGINS[provider] ? headers : {} });
+                if (!response.ok) continue;
+                models.push(await response.json() as CivitaiModel);
+                break;
+            }
         }
     };
     await Promise.all(Array.from({ length: Math.min(4, modelIds.length) }, worker));

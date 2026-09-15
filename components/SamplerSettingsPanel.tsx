@@ -69,7 +69,9 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
                     </div>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <SelectInput label="Sampler" value={options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={samplerOptions.map(value => ({ value, label: value }))} disabled={isDisabled} />
-                        {modelType !== 'flux2-simple' && <SelectInput label="Scheduler" value={options.comfyScheduler || ''} onChange={handleOptionChange('comfyScheduler')} options={schedulerOptions.map(value => ({ value, label: value }))} disabled={isDisabled} />}
+                        {modelType === 'flux2-simple'
+                            ? <div><span className="mb-1 block text-sm font-medium text-text-secondary">Scheduler</span><div className="rounded-md border border-border-primary bg-bg-tertiary px-3 py-2 text-sm text-text-primary">Flux2Scheduler (automatic)</div></div>
+                            : <SelectInput label="Scheduler" value={options.comfyScheduler || ''} onChange={handleOptionChange('comfyScheduler')} options={schedulerOptions.map(value => ({ value, label: value }))} disabled={isDisabled} />}
                     </div>
                     {modelType === 'flux' && <NumberSlider label={`FLUX Guidance: ${options.comfyFluxGuidance || 2}`} value={options.comfyFluxGuidance || 2} onChange={handleSliderChange('comfyFluxGuidance')} min={0} max={10} step={0.1} disabled={isDisabled} />}
                 </>}

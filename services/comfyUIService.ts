@@ -23,10 +23,29 @@ import {
 
 import { generateMammouthText } from './mammouthService';
 import { LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './ltxDirectorWorkflow';
-import { buildCharacterAnglesWorkflow } from './characterAnglesWorkflow';
+import { createLtxDialogueInstruction, parseSpeakerTranscript } from '../utils/ttsTranscript';
+import { buildCharacterAnglesWorkflow, buildFlux2CharacterAnglesWorkflow } from './characterAnglesWorkflow';
+import { buildSwapAnythingWorkflow, type SwapAnythingOptions } from './swapAnythingWorkflow';
 
 export const LTX_PROMPT_THEMES = [
-    { value: 'surprise', label: 'Surprise Mix', direction: 'an unexpected hybrid of contrasting cinematic eras and visual techniques' },
+    { value: 'surprise', label: 'Surprise Mix', direction: 'an unexpected but coherent visual treatment selected from cinema, daily life, documentary, social video, art, and commercial imagery' },
+    { value: 'everyday', label: 'Everyday Life', direction: 'warm observational realism focused on ordinary routines, natural gestures, lived-in spaces, and small authentic details' },
+    { value: 'family-home', label: 'Family & Home', direction: 'intimate domestic imagery, affectionate interactions, comfortable interiors, practical daylight, and believable family activity' },
+    { value: 'food-cooking', label: 'Food & Cooking', direction: 'tactile culinary imagery emphasizing hands, ingredients, steam, texture, preparation, and appetizing natural color' },
+    { value: 'street-life', label: 'Street Life', direction: 'candid urban observation with pedestrians, shops, traffic, changing light, layered public activity, and spontaneous moments' },
+    { value: 'travel-diary', label: 'Travel Diary', direction: 'personal travel-journal imagery capturing local routines, architecture, landscapes, transit, weather, and authentic discoveries' },
+    { value: 'social-content', label: 'Social Media / Creator', direction: 'direct, engaging creator content with relatable framing, clear visual action, contemporary pacing, and an authentic personal presence' },
+    { value: 'fashion-editorial', label: 'Fashion Editorial', direction: 'intentional styling, expressive posing in motion, fabric detail, refined color coordination, and confident editorial composition' },
+    { value: 'music-video', label: 'Music Video', direction: 'rhythmic visual storytelling, expressive performance, motivated movement, bold lighting changes, and graphic compositions' },
+    { value: 'commercial', label: 'Commercial / Product', direction: 'polished product-focused imagery with clear visual hierarchy, tactile interaction, controlled highlights, and concise benefit-driven action' },
+    { value: 'documentary-realism', label: 'Documentary Realism', direction: 'patient observational realism, available light, credible environments, unforced behavior, and informative visual detail' },
+    { value: 'nature-wildlife', label: 'Nature & Wildlife', direction: 'immersive natural-history imagery emphasizing animal behavior, wind in vegetation, weather, terrain, and realistic environmental motion' },
+    { value: 'sports-energy', label: 'Sports & Fitness', direction: 'physical precision, visible effort, readable athletic movement, environmental interaction, and energetic but coherent coverage' },
+    { value: 'architecture', label: 'Architecture & Interior', direction: 'careful spatial composition, material texture, changing natural light, human scale, and smooth movement through designed spaces' },
+    { value: 'cozy', label: 'Cozy / Hygge', direction: 'soft practical light, comforting textures, calm domestic gestures, warm restrained color, and an intimate peaceful atmosphere' },
+    { value: 'dreamy', label: 'Dreamy / Ethereal', direction: 'gentle dream logic, luminous atmosphere, graceful slow motion, delicate color, and poetic but physically readable transformations' },
+    { value: 'surreal', label: 'Surreal Everyday', direction: 'an ordinary believable environment interrupted by one precise surreal event while reactions and physical motion remain natural' },
+    { value: 'animation', label: 'Animated / Stylized', direction: 'expressive stylized motion, clear silhouettes, designed color, playful timing, and a consistent handcrafted or animated visual language' },
     { value: 'silent-20s', label: 'Silent Film 1920s', direction: '1920s silent cinema, monochrome orthochromatic film, iris transitions, expressive theatrical blocking, hand-cranked cadence' },
     { value: 'noir-40s', label: 'Film Noir 1940s', direction: '1940s film noir, hard venetian-blind shadows, wet streets, cigarette haze, stark black-and-white photography' },
     { value: 'technicolor-50s', label: 'Technicolor 1950s', direction: 'lush 1950s three-strip Technicolor, studio backdrops, saturated primaries, elegant dolly movement' },
@@ -44,7 +63,31 @@ export const LTX_PROMPT_THEMES = [
 export type LtxPromptTheme = typeof LTX_PROMPT_THEMES[number]['value'];
 
 export const LTX_PROMPT_SUBTHEMES = [
-    { value: 'surprise', label: 'Surprise Genre', direction: 'an unpredictable genre collision with a coherent emotional arc' },
+    { value: 'surprise', label: 'Surprise Activity / Genre', direction: 'choose an unexpected but filmable activity or genre with a coherent emotional beat' },
+    { value: 'slice-of-life', label: 'Slice of Life', direction: 'a recognizable everyday moment built from natural behavior, small details, and a modest satisfying change' },
+    { value: 'morning-routine', label: 'Morning Routine', direction: 'a practical morning ritual with familiar objects, purposeful gestures, changing daylight, and an authentic lived-in rhythm' },
+    { value: 'family-moment', label: 'Family Moment', direction: 'a warm believable interaction between family members centered on one shared task, reaction, or discovery' },
+    { value: 'friends-social', label: 'Friends / Social', direction: 'easy group chemistry, overlapping natural reactions, playful interaction, and a candid shared moment' },
+    { value: 'cooking', label: 'Cooking / Recipe', direction: 'one clearly readable cooking step with tactile ingredients, hand movement, heat, steam, and an appetizing payoff' },
+    { value: 'cafe', label: 'Cafe / Restaurant', direction: 'natural hospitality activity, food or drink preparation, ambient patrons, and one intimate human detail' },
+    { value: 'home-project', label: 'DIY / Home Project', direction: 'a hands-on repair, decoration, or craft step with visible tools, material response, and a useful result' },
+    { value: 'workplace', label: 'Workplace', direction: 'credible professional activity, specific tools or processes, focused body language, and a small workday development' },
+    { value: 'shopping', label: 'Shopping / Market', direction: 'browsing, choosing, exchanging, or inspecting goods amid believable public movement and environmental detail' },
+    { value: 'travel', label: 'Travel / Exploration', direction: 'a compact discovery in transit or at a destination, grounded in local detail, weather, and spontaneous observation' },
+    { value: 'road-trip', label: 'Road Trip', direction: 'movement through a changing roadside environment with candid passenger behavior and one memorable travel beat' },
+    { value: 'sports', label: 'Sports / Fitness', direction: 'one physically accurate exercise or athletic action showing effort, timing, balance, and a clear completion' },
+    { value: 'dance', label: 'Dance', direction: 'a concise expressive dance phrase with readable rhythm, grounded footwork, fabric motion, and spatial progression' },
+    { value: 'music-performance', label: 'Music Performance', direction: 'a believable instrumental or vocal performance moment with synchronized gestures, audience or room response, and musical energy' },
+    { value: 'fashion', label: 'Fashion / Beauty', direction: 'a confident styling, grooming, or wardrobe moment emphasizing material detail, graceful motion, and presentation' },
+    { value: 'pets', label: 'Pets / Animals', direction: 'specific natural animal behavior, responsive human interaction, environmental curiosity, and believable anatomy' },
+    { value: 'gardening', label: 'Garden / Outdoors', direction: 'a tactile outdoor task shaped by plants, soil, water, breeze, insects, and changing natural light' },
+    { value: 'crafts', label: 'Art / Crafts', direction: 'a visible creative process using specific materials, careful handwork, incremental transformation, and a satisfying reveal' },
+    { value: 'tutorial', label: 'Tutorial / How-To', direction: 'one visually clear demonstration step with deliberate hand placement, readable objects, and an immediately understandable result' },
+    { value: 'product-demo', label: 'Product Demo', direction: 'a concise practical product interaction that clearly shows function, material behavior, scale, and outcome' },
+    { value: 'unboxing', label: 'Unboxing / Review', direction: 'an authentic reveal and inspection with tactile packaging detail, spontaneous reaction, and a clear product feature' },
+    { value: 'interview', label: 'Interview / Testimonial', direction: 'a natural speaking moment with subtle expression, attentive body language, environmental context, and restrained coverage' },
+    { value: 'asmr', label: 'ASMR / Satisfying', direction: 'precise repetitive tactile action, close material detail, orderly movement, and satisfying synchronized natural sound' },
+    { value: 'educational', label: 'Educational', direction: 'a concrete visual explanation or demonstration that reveals one useful fact through action rather than exposition' },
     { value: 'action', label: 'Action', direction: 'kinetic physical stakes, escalating movement and a decisive visual payoff' },
     { value: 'comedy', label: 'Comedy', direction: 'visual comedy driven by timing, escalating mishaps and expressive reactions' },
     { value: 'drama', label: 'Drama', direction: 'restrained emotional tension, meaningful gestures and a revealing turning point' },
@@ -58,6 +101,36 @@ export const LTX_PROMPT_SUBTHEMES = [
 ] as const;
 
 export type LtxPromptSubtheme = typeof LTX_PROMPT_SUBTHEMES[number]['value'];
+
+export const LTX_PROMPT_CAMERA_STYLES = [
+    { value: 'surprise', label: 'Surprise Camera', direction: 'choose one camera format and movement style that naturally fits the subject instead of defaulting to polished cinema' },
+    { value: 'iphone-modern', label: 'Modern iPhone', direction: 'modern iPhone video, computational HDR, crisp mobile detail, natural auto-exposure shifts, subtle handheld stabilization, and believable phone framing' },
+    { value: 'iphone-selfie', label: 'iPhone Selfie / Front Camera', direction: 'front-facing iPhone camera, arm-length perspective, direct eye contact, mild wide-angle facial perspective, and authentic creator movement' },
+    { value: 'android-phone', label: 'Android Phone', direction: 'contemporary Android phone video with sharp digital detail, responsive autofocus, vivid but plausible color, and casual handheld operation' },
+    { value: 'camcorder-90s', label: '1990s Camcorder', direction: 'consumer 1990s Hi8 camcorder, 4:3 framing, soft analog detail, handheld zoom, auto-exposure breathing, timestamp-era home-video character' },
+    { value: 'mini-dv-2000s', label: '2000s MiniDV', direction: 'early-2000s MiniDV camcorder, interlaced digital texture, clipped highlights, quick servo zoom, autofocus hunting, and candid home-video framing' },
+    { value: 'vhs-home-video', label: 'VHS Home Video', direction: 'consumer VHS home-video texture, chroma bleed, tape noise, modest dynamic range, imperfect white balance, and spontaneous family-camera movement' },
+    { value: 'super8', label: 'Super 8 Film', direction: 'Super 8 film, compact-frame grain, warm color shifts, slight gate weave, limited exposure latitude, and intimate handheld movement' },
+    { value: '16mm', label: '16mm Film', direction: 'textured 16mm film, organic grain, gentle halation, natural contrast, tactile handheld operation, and documentary immediacy' },
+    { value: '35mm', label: '35mm Film', direction: '35mm motion-picture film, rich photochemical color, fine organic grain, soft highlight rolloff, realistic lens character, and deliberate camera operation' },
+    { value: 'polaroid-motion', label: 'Instant Film Look', direction: 'instant-film-inspired color, soft focus, lifted blacks, imperfect exposure, intimate static composition, and restrained camera movement' },
+    { value: 'dslr', label: 'DSLR Video', direction: 'DSLR video with shallow depth of field, photographic lens rendering, occasional focus pulls, natural handheld micro-movement, and soft background separation' },
+    { value: 'mirrorless', label: 'Modern Mirrorless', direction: 'modern mirrorless camera, clean high-resolution detail, accurate skin tones, controlled autofocus, stabilized handheld movement, and natural dynamic range' },
+    { value: 'cinema-camera', label: 'Digital Cinema Camera', direction: 'professional digital cinema camera, wide dynamic range, restrained color science, precise focus, controlled motion, and realistic cinematic lenses' },
+    { value: 'action-camera', label: 'Action Camera / GoPro', direction: 'body- or object-mounted action camera, ultra-wide perspective, deep focus, strong stabilization, energetic movement, and immersive environmental motion' },
+    { value: 'bodycam', label: 'Bodycam / POV', direction: 'chest-level body camera perspective, continuous first-person movement, wide fixed lens, practical exposure response, and immediate documentary realism' },
+    { value: 'security-camera', label: 'Security Camera', direction: 'fixed surveillance camera, high corner angle, wide field of view, compressed detail, timestamp-like observational distance, and uninterrupted action' },
+    { value: 'webcam', label: 'Webcam / Video Call', direction: 'laptop webcam perspective, fixed eye-level framing, modest dynamic range, slight compression, screen-lit face, and natural video-call behavior' },
+    { value: 'drone', label: 'Drone', direction: 'stable aerial drone footage with readable geography, smooth altitude change, parallax across the environment, and physically plausible flight movement' },
+    { value: 'dashcam', label: 'Dashcam', direction: 'fixed dashboard camera, wide windshield view, subtle vehicle vibration, changing road exposure, reflections, and continuous forward motion' },
+    { value: 'tripod', label: 'Locked Tripod', direction: 'locked-off tripod composition with no camera movement, allowing subject action and environmental motion to carry the shot' },
+    { value: 'handheld-documentary', label: 'Handheld Documentary', direction: 'responsive shoulder-level handheld camera, restrained natural shake, practical reframing, observational distance, and no artificial crane movement' },
+    { value: 'steadicam', label: 'Steadicam / Gimbal', direction: 'smooth human-height stabilized movement that follows the action continuously while preserving believable acceleration and spatial geography' },
+    { value: 'macro', label: 'Macro Lens', direction: 'extreme close-up macro photography, very shallow focus, precise rack focus, magnified texture, and tiny environmental movement' },
+    { value: 'fisheye', label: 'Fisheye Lens', direction: 'pronounced fisheye perspective, curved edges, deep focus, close energetic movement, and playful spatial distortion' },
+] as const;
+
+export type LtxPromptCameraStyle = typeof LTX_PROMPT_CAMERA_STYLES[number]['value'];
 
 export const LTX_PROMPT_AUDIO_STYLES = [
     { value: 'natural', label: 'No Music / Natural Sound', direction: 'No musical score. Use only restrained, scene-specific diegetic sound and natural ambience; brief silence is welcome when dramatically appropriate.' },
@@ -89,36 +162,36 @@ const resolveAudioStyle = (requested: LtxPromptAudioStyle) => {
 };
 
 const includeRequiredDialogue = (prompt: string, requiredDialogue?: string): string => {
-    const dialogue = requiredDialogue?.trim().replace(/"/g, "'");
-    if (!dialogue) return prompt;
-    const speakingCue = `The visible character speaks clearly and naturally, saying: "${dialogue}"`;
+    const speakingCue = createLtxDialogueInstruction(requiredDialogue);
+    if (!speakingCue) return prompt;
     return prompt.includes(speakingCue) ? prompt : `${prompt.trim()} ${speakingCue}`;
 };
 
-const createLocalLtxPrompt = (requestedTheme: LtxPromptTheme, requestedSubtheme: LtxPromptSubtheme, requestedAudioStyle: LtxPromptAudioStyle, durationSeconds: number, previousPrompt?: string, ttsContext?: string): string => {
+const createLocalLtxPrompt = (requestedTheme: LtxPromptTheme, requestedSubtheme: LtxPromptSubtheme, requestedCameraStyle: LtxPromptCameraStyle, requestedAudioStyle: LtxPromptAudioStyle, durationSeconds: number, previousPrompt?: string, ttsContext?: string): string => {
     const theme = resolvePromptStyle(LTX_PROMPT_THEMES, requestedTheme);
     const subtheme = resolvePromptStyle(LTX_PROMPT_SUBTHEMES, requestedSubtheme);
+    const cameraStyle = resolvePromptStyle(LTX_PROMPT_CAMERA_STYLES, requestedCameraStyle);
     const audioStyle = resolveAudioStyle(requestedAudioStyle);
-    const subjects = ['a night-shift projectionist discovers a moving figure inside a blank frame', 'two rival weather researchers chase a luminous storm across an empty salt flat', 'an elegant stranger arrives at a roadside diner carrying a ticking glass suitcase', 'a retired stage performer returns to an abandoned theater as the scenery begins moving by itself', 'a wildlife cinematographer follows an animal leaving impossible footprints through a flooded forest', 'a young mechanic awakens a forgotten machine beneath a crowded apartment building'];
+    const subjects = ['a parent and child decorate a homemade birthday cake in a bright kitchen', 'a commuter tries to keep a paper bag dry during a sudden rain shower', 'two friends assemble a secondhand bookshelf in a small apartment', 'a cook folds dumplings beside a fogged window', 'a dog excitedly discovers its favorite toy under the sofa', 'a street vendor prepares the first order of the morning', 'a gardener repots an overgrown houseplant on a balcony', 'a cyclist repairs a loose chain beside a quiet country road', 'a musician rehearses one difficult phrase in a cluttered bedroom', 'a traveler opens the curtains of a modest hotel room onto an unexpected view', 'an artist pulls fresh paper from a small printing press', 'coworkers improvise a solution when a stack of documents slips from a cart', 'a runner finishes a difficult interval as evening light crosses the track', 'a barista practices a new pattern in steamed milk', 'a grandparent teaches a child how to mend a loose button'];
     const actions = durationSeconds <= 4
         ? ['One immediate physical action reaches a clear visual beat within the shot.', 'A single simple movement unfolds in real time and ends on one readable reaction.']
         : durationSeconds <= 8
             ? ['One focused action develops through two readable beats and reaches a concise payoff.', 'A simple cause triggers one believable reaction and a clear final beat.']
             : ['The movement grows from a quiet observation into a decisive physical action with a surprising final beat.', 'A small background anomaly triggers a chain of believable reactions, practical movement, and a visual reversal.'];
-    const cameras = ['The camera makes a slow push-in before orbiting gently around the subject.', 'A low tracking shot follows the movement, ending on a close reaction.', 'The shot begins wide, then transitions into a steady handheld medium shot.'];
     const lighting = ['Practical light sources evolve through the shot, creating moving shadows and tactile reflections.', 'Directional light changes with the action while atmosphere and lens behavior remain physically believable.', 'The lighting reveals new story information as the subject moves through layered depth.'];
     const opening = previousPrompt
         ? `Continue directly from this previous scene: ${previousPrompt.trim()} The next beat introduces a fresh escalation without repeating the earlier action.`
         : ttsContext?.trim()
             ? `Build the scene around this narrative context: "${ttsContext.trim().replace(/"/g, "'")}".`
         : `${getRandomItem(subjects)}.`;
-    return `${opening} This is one continuous ${durationSeconds}-second shot. Genre direction: ${subtheme.direction}. Visual language: ${theme.direction}. ${getRandomItem(actions)} ${getRandomItem(cameras)} ${getRandomItem(lighting)} Audio direction: ${audioStyle.direction}`;
+    return `${opening} This is one continuous ${durationSeconds}-second shot. Activity or genre direction: ${subtheme.direction}. Visual language: ${theme.direction}. Camera format and behavior: ${cameraStyle.direction}. ${getRandomItem(actions)} ${getRandomItem(lighting)} Audio direction: ${audioStyle.direction}`;
 };
 
 export const generateLtxDirectorPrompt = async (
     sourceImage: File | null,
     theme: LtxPromptTheme,
     subtheme: LtxPromptSubtheme,
+    cameraStyle: LtxPromptCameraStyle,
     audioStyle: LtxPromptAudioStyle,
     durationSeconds: number,
     previousPrompt?: string,
@@ -127,6 +200,7 @@ export const generateLtxDirectorPrompt = async (
 ) => {
     const selectedTheme = resolvePromptStyle(LTX_PROMPT_THEMES, theme);
     const selectedSubtheme = resolvePromptStyle(LTX_PROMPT_SUBTHEMES, subtheme);
+    const selectedCameraStyle = resolvePromptStyle(LTX_PROMPT_CAMERA_STYLES, cameraStyle);
     const selectedAudioStyle = resolveAudioStyle(audioStyle);
     const variation = crypto.randomUUID();
     const continuation = previousPrompt?.trim()
@@ -142,21 +216,24 @@ export const generateLtxDirectorPrompt = async (
             : 'Use one focused action that may develop through at most three readable beats before its payoff.';
     const timing = `The entire described action must unfold naturally in real time within exactly ${durationSeconds} seconds. ${pacing} Do not use a montage, sequence of scenes, time jump, location change, or more action than a performer and camera can complete in ${durationSeconds} seconds.`;
     const audioDirection = `Audio direction: ${selectedAudioStyle.direction} Describe only audio that can occur within ${durationSeconds} seconds. Follow this audio direction exactly and never add unspecified background music.`;
+    const hasMultipleSpeakers = parseSpeakerTranscript(requiredDialogue).length > 0;
     const dialogueDirection = requiredDialogue?.trim() && ttsContext?.trim()
-        ? `The visible character must speak this exact dialogue without translating, paraphrasing, shortening, or adding words: "${requiredDialogue.trim().replace(/"/g, "'")}". Describe natural lip movement and performance that match this line. `
+        ? hasMultipleSpeakers
+            ? `${createLtxDialogueInstruction(requiredDialogue)} Describe distinct natural lip movement and performance for each named character. `
+            : `The visible character must speak this exact dialogue without translating, paraphrasing, shortening, or adding words: "${requiredDialogue.trim().replace(/"/g, "'")}". Describe natural lip movement and performance that match this line. `
         : '';
     const contextDirection = ttsContext?.trim()
         ? `Use this TTS script as narrative and visual context for the random scene, including its concrete subjects when filmable: "${ttsContext.trim().replace(/"/g, "'")}". Do not quote or require spoken dialogue unless separately instructed. `
         : '';
     const instruction = sourceImage
-        ? `Analyze the supplied image and write one inventive English prompt for an LTX image-to-video clip. ${continuation}${imageStartingPoint}Preserve the visible subject, identity, clothing, composition, and environment. ${timing} ${contextDirection}${dialogueDirection}Genre direction: ${selectedSubtheme.direction}. Visual era and filmmaking language: ${selectedTheme.direction}. ${audioDirection} Include era-authentic camera behavior, practical light, and realistic secondary motion only when they fit the available time. Avoid generic walking, smiling, posing, floating particles, and empty cinematic adjectives unless the image uniquely requires them. Do not describe a new still image. Do not use headings or preamble. Return only the final video prompt. Variation key: ${variation}`
-        : `Write one highly original English prompt for an LTX text-to-video clip. ${continuation}${timing} ${contextDirection}${dialogueDirection}Genre direction: ${selectedSubtheme.direction}. Visual era and filmmaking language: ${selectedTheme.direction}. ${audioDirection} Invent an unusual but filmable subject, a specific location, and a compact action with a clear payoff. Include era-authentic camera behavior, practical light, and physical secondary motion only when they fit the available time. Avoid generic heroes, neon alleys, simple walking, floating particles, and stock trailer language. Do not use headings or preamble. Return only the final video prompt. Variation key: ${variation}`;
+        ? `Analyze the supplied image and write one inventive English prompt for an LTX image-to-video clip. ${continuation}${imageStartingPoint}Preserve the visible subject, identity, clothing, composition, and environment. ${timing} ${contextDirection}${dialogueDirection}Activity or genre direction: ${selectedSubtheme.direction}. Visual treatment: ${selectedTheme.direction}. Camera format and behavior: ${selectedCameraStyle.direction}. ${audioDirection} Include practical light and realistic secondary motion only when they fit the available time. The result may be ordinary, documentary, social, artistic, or cinematic according to the selected styles; do not force every scene into a movie narrative. Avoid generic walking, smiling, posing, floating particles, and empty cinematic adjectives unless the image uniquely requires them. Do not describe a new still image. Do not use headings or preamble. Return only the final video prompt. Variation key: ${variation}`
+        : `Write one highly original English prompt for an LTX text-to-video clip. ${continuation}${timing} ${contextDirection}${dialogueDirection}Activity or genre direction: ${selectedSubtheme.direction}. Visual treatment: ${selectedTheme.direction}. Camera format and behavior: ${selectedCameraStyle.direction}. ${audioDirection} Invent a specific person, animal, object, activity, or location and a compact action with a clear payoff. The result may portray daily life, a practical task, documentary observation, creator content, art, sport, travel, or fiction according to the selected styles; do not default to a movie plot. Include practical light and physical secondary motion only when they fit the available time. Avoid generic heroes, neon alleys, simple walking, floating particles, and stock trailer language. Do not use headings or preamble. Return only the final video prompt. Variation key: ${variation}`;
     try {
         const result = await generateMammouthText(instruction, sourceImage ? [sourceImage] : []);
         return { ...result, text: includeRequiredDialogue(result.text.trim().replace(/^['"`]+|['"`]+$/g, ''), requiredDialogue) };
     } catch (error) {
         if (sourceImage) throw error;
-        return { text: includeRequiredDialogue(createLocalLtxPrompt(theme, subtheme, audioStyle, durationSeconds, previousPrompt, ttsContext), requiredDialogue) };
+        return { text: includeRequiredDialogue(createLocalLtxPrompt(theme, subtheme, cameraStyle, audioStyle, durationSeconds, previousPrompt, ttsContext), requiredDialogue) };
     }
 };
 
@@ -231,7 +308,7 @@ export const CHATTERBOX_LANGUAGES = [
     'English', 'German', 'Norwegian', 'Arabic', 'Danish', 'Greek', 'Spanish',
     'Finnish', 'French', 'Hebrew', 'Hindi', 'Italian', 'Japanese', 'Korean',
     'Malay', 'Dutch', 'Polish', 'Portuguese', 'Swedish', 'Swahili', 'Turkish',
-    'Chinese',
+    'Russian', 'Chinese',
 ] as const;
 
 export type ChatterboxLanguage = typeof CHATTERBOX_LANGUAGES[number];
@@ -260,6 +337,32 @@ export type ChatterboxTtsReference =
 export interface TtsReferenceVoice {
     value: string;
     label: string;
+}
+
+export const INDEX_TTS_EMOTIONS = ['Happy', 'Angry', 'Sad', 'Surprised', 'Afraid', 'Disgusted', 'Calm', 'Melancholic'] as const;
+export type IndexTtsEmotion = typeof INDEX_TTS_EMOTIONS[number];
+export type IndexTtsEmotionVector = Record<IndexTtsEmotion, number>;
+export const INDEX_TTS_LANGUAGES = ['English', 'Chinese', 'Japanese', 'Spanish', 'Arabic'] as const;
+export type IndexTtsLanguage = typeof INDEX_TTS_LANGUAGES[number];
+
+export interface IndexTtsOptions {
+    modelPath: string;
+    language: string;
+    device: 'auto' | 'cpu' | 'cuda';
+    emotionAlpha: number;
+    emotionMode: 'manual' | 'qwen';
+    emotionPrompt: string;
+    emotions: IndexTtsEmotionVector;
+    temperature: number;
+    topP: number;
+    topK: number;
+    repetitionPenalty: number;
+    numBeams: number;
+    durationFactor: number;
+    seed: number;
+    intervalSilence: number;
+    enableChunking: boolean;
+    maxCharsPerChunk: number;
 }
 
 const formatTtsVoiceLabel = (voice: string): string => {
@@ -383,6 +486,106 @@ export const generateChatterboxTts = async (
     return audioUrl;
 };
 
+export const generateIndexTts = async (
+    text: string,
+    reference: ChatterboxTtsReference,
+    options: IndexTtsOptions,
+    updateProgress: (message: string, value: number) => void,
+): Promise<string> => {
+    if (!INDEX_TTS_LANGUAGES.includes(options.language as IndexTtsLanguage)) {
+        throw new Error(`IndexTTS does not support ${options.language}. Choose English, Chinese, Japanese, Spanish, or Arabic.`);
+    }
+    const uploadedAudio = reference.type === 'upload'
+        ? await (async () => {
+            updateProgress('Uploading reference voice...', 0.05);
+            return uploadLtxMedia(reference.file);
+        })()
+        : null;
+    const emotionNode = options.emotionMode === 'qwen' ? '124' : '125';
+    const workflow: Record<string, any> = {
+        ...(uploadedAudio ? {
+            '131': {
+                inputs: { audio: uploadedAudio.name },
+                class_type: 'LoadAudio',
+                _meta: { title: 'Load cloned voice' },
+            },
+        } : {}),
+        '47': {
+            inputs: {
+                text: text.trim(),
+                narrator_voice: reference.type === 'suite' ? reference.voice : 'none',
+                seed: options.seed,
+                enable_chunking: options.enableChunking,
+                max_chars_per_chunk: options.maxCharsPerChunk,
+                chunk_combination_method: 'auto',
+                silence_between_chunks_ms: options.intervalSilence,
+                enable_audio_cache: true,
+                batch_size: 0,
+                TTS_engine: ['123', 0],
+                ...(uploadedAudio ? { opt_narrator: ['131', 0] } : {}),
+            },
+            class_type: 'UnifiedTTSTextNode',
+            _meta: { title: 'TTS Text' },
+        },
+        '123': {
+            inputs: {
+                model_path: options.modelPath,
+                device: options.device,
+                emotion_alpha: options.emotionAlpha,
+                use_random: false,
+                max_text_tokens_per_segment: 120,
+                interval_silence: options.intervalSilence,
+                temperature: options.temperature,
+                top_p: options.topP,
+                top_k: options.topK,
+                do_sample: true,
+                length_penalty: 0,
+                num_beams: options.numBeams,
+                repetition_penalty: options.repetitionPenalty,
+                max_mel_tokens: 1500,
+                use_fp16: true,
+                use_deepspeed: false,
+                use_cuda_kernel: 'auto',
+                use_torch_compile: false,
+                use_accel: false,
+                stream_return: false,
+                more_segment_before: 0,
+                low_vram: false,
+                language: options.language,
+                duration_factor: options.durationFactor,
+                text_normalization: true,
+                emotion_control: [emotionNode, 0],
+            },
+            class_type: 'IndexTTSEngineNode',
+            _meta: { title: 'IndexTTS 2 / 2.5 Engine' },
+        },
+        ...(options.emotionMode === 'qwen' ? {
+            '124': {
+                inputs: {
+                    qwen_model: 'qwen0.6bemo4-merge',
+                    emotion_text: `${options.emotionPrompt || 'Infer the natural emotion for this dialogue'}: {seg}`,
+                },
+                class_type: 'QwenEmotionNode',
+                _meta: { title: 'IndexTTS-2 Text Emotion' },
+            },
+        } : {
+            '125': {
+                inputs: { ...options.emotions, emotion_radar_canvas: '' },
+                class_type: 'IndexTTSEmotionOptionsNode',
+                _meta: { title: 'IndexTTS-2 Emotion Vectors' },
+            },
+        }),
+        '140': {
+            inputs: { filename_prefix: 'audio/IndexTTS-Advanced', audio: ['47', 0] },
+            class_type: 'SaveAudio',
+            _meta: { title: 'Save IndexTTS Audio' },
+        },
+    };
+    const { audioUrl } = await executeWorkflow(workflow, updateProgress, true, 0);
+    if (!audioUrl) throw new Error('ComfyUI completed without returning IndexTTS audio.');
+    return audioUrl;
+};
+
 // --- Mammouth-based Prompt Generation ---
 type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'krea2-simple' | 'krea2-raw';
 
@@ -477,6 +680,9 @@ export const generateMagicalPromptSoup = async (
     Example response format:
     { "prompt_parts": [ {"text": "A beautiful portrait of", "source": 1}, {"text": "an astronaut", "source": 3}, {"text": "on a neon-lit alien world", "source": 2}, {"text": "in a impressionistic style", "source": 0} ] }
     `;
+    if (modelType === 'flux2-simple') {
+        instruction += '\nFor FLUX2, prompt_parts MUST contain exactly five objects in this order: Subject, Setting, Details, Lighting, Atmosphere. Each text value must begin with its matching label and end with a newline.';
+    }
 
     const result = await generateMammouthText(instruction);
 
@@ -536,6 +742,33 @@ export const getComfyUIObjectInfo = async (): Promise<any> => {
     const response = await fetch(`${url}/object_info`);
     if (!response.ok) throw new Error('Failed to fetch ComfyUI object info');
     return response.json();
+};
+
+export const generateComfyUISwapAnything = async (
+    destinationImage: File,
+    donorImage: File,
+    options: SwapAnythingOptions,
+    updateProgress: (message: string, value: number) => void,
+): Promise<string> => {
+    updateProgress('Checking Swap Anything nodes...', 0.02);
+    const objectInfo = await getComfyUIObjectInfo();
+    const requiredNodes = [
+        'LoadImage', 'CheckpointLoaderSimple', 'CLIPTextEncode', 'SAM3_Detect', 'GrowMask', 'MaskToImage',
+        'DrawMaskOnImage', 'Cut By Mask', 'Image to RGB [RvTools]', 'ImageScaleToTotalPixels',
+        'GetImageSize', 'VAELoader', 'CLIPLoader', 'UNETLoader', 'VAEEncode', 'ReferenceLatent',
+        'EmptyFlux2LatentImage', 'RandomNoise', 'KSamplerSelect', 'Flux2Scheduler', 'CFGGuider',
+        'SamplerCustomAdvanced', 'VAEDecode', 'SaveImage',
+    ];
+    if (options.lora1Name?.trim() || options.lora2Name?.trim()) requiredNodes.push('LoraLoader');
+    const missingNodes = requiredNodes.filter(nodeName => !objectInfo[nodeName]);
+    if (missingNodes.length > 0) throw new Error(`Swap Anything requires missing ComfyUI nodes: ${missingNodes.join(', ')}.`);
+
+    updateProgress('Uploading destination and donor images...', 0.05);
+    const [destinationUpload, donorUpload] = await Promise.all([uploadImage(destinationImage), uploadImage(donorImage)]);
+    const workflow = buildSwapAnythingWorkflow(destinationUpload.name, donorUpload.name, options);
+    const result = await executeWorkflow(workflow, updateProgress, true, 1, ['save']);
+    if (!result.images[0]) throw new Error('ComfyUI completed without returning a Swap Anything image.');
+    return result.images[0];
 };
 
 const uploadImage = async (file: File): Promise<{ name: string; subfolder: string; type: string }> => {
@@ -1439,10 +1672,10 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             };
 
             if (options.comfyZImageUseLora) {
-                if (options.comfyZImageLora1Name) currentModelNode = addLoraNode(options.comfyZImageLora1Name, options.comfyZImageLora1Strength || 1.0, currentModelNode);
-                if (options.comfyZImageLora2Name) currentModelNode = addLoraNode(options.comfyZImageLora2Name, options.comfyZImageLora2Strength || 1.0, currentModelNode);
-                if (options.comfyZImageLora3Name) currentModelNode = addLoraNode(options.comfyZImageLora3Name, options.comfyZImageLora3Strength || 1.0, currentModelNode);
-                if (options.comfyZImageLora4Name) currentModelNode = addLoraNode(options.comfyZImageLora4Name, options.comfyZImageLora4Strength || 1.0, currentModelNode);
+                if (options.comfyZImageLora1Name) currentModelNode = addLoraNode(options.comfyZImageLora1Name, options.comfyZImageLora1Strength ?? 1.0, currentModelNode);
+                if (options.comfyZImageLora2Name) currentModelNode = addLoraNode(options.comfyZImageLora2Name, options.comfyZImageLora2Strength ?? 1.0, currentModelNode);
+                if (options.comfyZImageLora3Name) currentModelNode = addLoraNode(options.comfyZImageLora3Name, options.comfyZImageLora3Strength ?? 1.0, currentModelNode);
+                if (options.comfyZImageLora4Name) currentModelNode = addLoraNode(options.comfyZImageLora4Name, options.comfyZImageLora4Strength ?? 1.0, currentModelNode);
             }
 
             // Connect the final LoRA output to AuraFlow when Shift is enabled.
@@ -1545,7 +1778,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             workflow["93"].inputs.text = options.comfyFlux2Prompt || '';
             workflow["86"].inputs.text = options.comfyFlux2NegativePrompt || '';
             workflow["94"].inputs.unet_name = options.comfyFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf';
-            workflow["91"].inputs.clip_name = options.comfyFlux2Clip || 'qwen_3_4b.safetensors';
+            workflow["91"].inputs.clip_name = options.comfyFlux2Clip || 'qwen3vl_4b_fp8_scaled.safetensors';
             workflow["92"].inputs.vae_name = options.comfyFlux2Vae || 'flux2-vae.safetensors';
 
             const resolution = FLUX2_RESOLUTION_OPTIONS.find(option => option.value === options.comfyFlux2Resolution) || FLUX2_RESOLUTION_OPTIONS[8];
@@ -1561,8 +1794,8 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
                     strength,
                 };
             }
-            workflow["81"].inputs.steps = options.comfySteps ?? 20;
-            workflow["82"].inputs.cfg = options.comfyCfg ?? 4;
+            workflow["81"].inputs.steps = options.comfySteps ?? 12;
+            workflow["82"].inputs.cfg = options.comfyCfg ?? 1;
             workflow["80"].inputs.sampler_name = options.comfySampler || 'euler';
             workflow["89"].inputs.noise_seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
             break;
@@ -2032,10 +2265,47 @@ export const generateComfyUICharacterAngles = async (
     sourceImage: File,
     options: GenerationOptions,
     updateProgress: (message: string, value: number) => void,
+    clothingImage?: File | null,
+    backgroundImage?: File | null,
+    poseImage?: File | null,
 ): Promise<{ images: { src: string; seed: number }[]; finalPrompt: string }> => {
+    if (options.comfyCharacterMode === 'flux2') {
+        updateProgress('Checking FLUX2 Character nodes...', 0.02);
+        const objectInfo = await getComfyUIObjectInfo();
+        const requiredNodes = [
+            'LoadImage', 'ImageScaleToTotalPixels', 'GetImageSize', 'VAELoader', 'CLIPLoader',
+            'UnetLoaderGGUF', 'VAEEncode', 'CLIPTextEncode', 'ConditioningZeroOut', 'ReferenceLatent',
+            'EmptyFlux2LatentImage', 'RandomNoise', 'KSamplerSelect', 'Flux2Scheduler', 'CFGGuider',
+            'SamplerCustomAdvanced', 'VAEDecode', 'SaveImage',
+        ];
+        if (poseImage) requiredNodes.push('AIO_Preprocessor');
+        if (options.comfyCharacterFlux2UseLoras && (options.comfyCharacterFlux2Lora1Name?.trim() || options.comfyCharacterFlux2Lora2Name?.trim())) requiredNodes.push('LoraLoaderModelOnly');
+        if (options.comfyCharacterFlux2UseCacheDit) requiredNodes.push('CacheDiT_Model_Optimizer');
+        const missingNodes = requiredNodes.filter(nodeName => !objectInfo[nodeName]);
+        if (missingNodes.length > 0) {
+            throw new Error(`FLUX2 Character requires missing ComfyUI nodes: ${missingNodes.join(', ')}.`);
+        }
+    }
     updateProgress('Uploading character source...', 0.05);
     const uploadedImage = await uploadImage(sourceImage);
-    const { workflow, prompts, seed } = buildCharacterAnglesWorkflow(uploadedImage.name, options);
+    let workflowResult: ReturnType<typeof buildCharacterAnglesWorkflow>;
+    if (options.comfyCharacterMode === 'flux2') {
+        const optionalFiles = [
+            options.clothing === 'image' ? clothingImage : null,
+            options.background === 'image' ? backgroundImage : null,
+            poseImage,
+        ];
+        const uploadedReferences = await Promise.all(optionalFiles.map(file => file ? uploadImage(file) : null));
+        workflowResult = buildFlux2CharacterAnglesWorkflow({
+            source: uploadedImage.name,
+            clothing: uploadedReferences[0]?.name,
+            background: uploadedReferences[1]?.name,
+            pose: uploadedReferences[2]?.name,
+        }, options);
+    } else {
+        workflowResult = buildCharacterAnglesWorkflow(uploadedImage.name, options);
+    }
+    const { workflow, prompts, seed } = workflowResult;
     const outputCount = prompts.length;
     const result = await executeWorkflow(
         workflow,
@@ -2206,6 +2476,7 @@ export const generateComfyUIVideo = async (
 
 export interface LtxDirectorOptions {
     modelVersion: '2.3' | '2.5';
+    t2vOrientation: 'landscape' | 'portrait';
     frameRate: number;
     guideStrength: number;
     imageScalePercent: number;
@@ -2227,6 +2498,19 @@ export interface LtxDirectorOptions {
     latentUpscaler: string;
     loras: Array<{ enabled: boolean; name: string; strength: number }>;
 }
+
+export const LTX_T2V_RESOLUTIONS = {
+    landscape: { width: 1024, height: 576 },
+    portrait: { width: 576, height: 1024 },
+} as const;
+
+export const calculateLtxResolution = (width: number, height: number, scalePercent: number) => {
+    const scale = Math.min(100, Math.max(25, scalePercent)) / 100;
+    return {
+        width: Math.max(32, Math.floor(width * scale / 32) * 32),
+        height: Math.max(32, Math.floor(height * scale / 32) * 32),
+    };
+};
 
 export interface LtxDirectorSegment {
     image: File | null;
@@ -2284,9 +2568,14 @@ export const generateLtxDirectorVideo = async (
     let targetHeight = 0;
     if (firstImage) {
         const image = await loadImageElement(firstImage);
-        const scale = Math.min(100, Math.max(25, options.imageScalePercent)) / 100;
-        targetWidth = Math.max(32, Math.floor(image.naturalWidth * scale / 32) * 32);
-        targetHeight = Math.max(32, Math.floor(image.naturalHeight * scale / 32) * 32);
+        const resolution = calculateLtxResolution(image.naturalWidth, image.naturalHeight, options.imageScalePercent);
+        targetWidth = resolution.width;
+        targetHeight = resolution.height;
+    } else {
+        const baseResolution = LTX_T2V_RESOLUTIONS[options.t2vOrientation];
+        const resolution = calculateLtxResolution(baseResolution.width, baseResolution.height, options.imageScalePercent);
+        targetWidth = resolution.width;
+        targetHeight = resolution.height;
     }
     let startFrame = 0;
     for (let index = 0; index < segments.length; index += 1) {

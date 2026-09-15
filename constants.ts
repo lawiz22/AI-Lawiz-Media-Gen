@@ -1242,8 +1242,8 @@ export const FLUX2_RESOLUTION_OPTIONS = [
 
 export const COMFYUI_FLUX2_SIMPLE_WORKFLOW_TEMPLATE = {
   "80": { "inputs": { "sampler_name": "euler" }, "class_type": "KSamplerSelect", "_meta": { "title": "KSamplerSelect" } },
-  "81": { "inputs": { "steps": 20, "width": ["87", 0], "height": ["88", 0] }, "class_type": "Flux2Scheduler", "_meta": { "title": "Flux2Scheduler" } },
-  "82": { "inputs": { "cfg": 4, "model": ["99", 0], "positive": ["93", 0], "negative": ["86", 0] }, "class_type": "CFGGuider", "_meta": { "title": "GuideCFG" } },
+  "81": { "inputs": { "steps": 12, "width": ["87", 0], "height": ["88", 0] }, "class_type": "Flux2Scheduler", "_meta": { "title": "Flux2Scheduler" } },
+  "82": { "inputs": { "cfg": 1, "model": ["99", 0], "positive": ["93", 0], "negative": ["86", 0] }, "class_type": "CFGGuider", "_meta": { "title": "GuideCFG" } },
   "83": { "inputs": { "noise": ["89", 0], "guider": ["82", 0], "sampler": ["80", 0], "sigmas": ["81", 0], "latent_image": ["85", 0] }, "class_type": "SamplerCustomAdvanced", "_meta": { "title": "SamplerCustomAdvanced" } },
   "84": { "inputs": { "samples": ["83", 0], "vae": ["92", 0] }, "class_type": "VAEDecode", "_meta": { "title": "VAE Decode" } },
   "85": { "inputs": { "width": ["87", 0], "height": ["88", 0], "batch_size": 1 }, "class_type": "EmptyFlux2LatentImage", "_meta": { "title": "Empty Flux2 Latent Image" } },
@@ -1251,7 +1251,7 @@ export const COMFYUI_FLUX2_SIMPLE_WORKFLOW_TEMPLATE = {
   "87": { "inputs": { "value": 832 }, "class_type": "PrimitiveInt", "_meta": { "title": "Width" } },
   "88": { "inputs": { "value": 1216 }, "class_type": "PrimitiveInt", "_meta": { "title": "Height" } },
   "89": { "inputs": { "noise_seed": 1001869159528562 }, "class_type": "RandomNoise", "_meta": { "title": "Random Noise" } },
-  "91": { "inputs": { "clip_name": "qwen_3_4b.safetensors", "type": "flux2", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
+  "91": { "inputs": { "clip_name": "qwen3vl_4b_fp8_scaled.safetensors", "type": "flux2", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
   "92": { "inputs": { "vae_name": "flux2-vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Load VAE" } },
   "93": { "inputs": { "text": "", "clip": ["99", 1] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Positive Prompt" } },
   "94": { "inputs": { "unet_name": "flux-2-klein-4b-Q4_K_M.gguf" }, "class_type": "UnetLoaderGGUF", "_meta": { "title": "Unet Loader (GGUF)" } },

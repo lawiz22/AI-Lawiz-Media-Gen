@@ -140,6 +140,24 @@ const initialCharacterOptions: GenerationOptions = {
   provider: 'mammouth',
   geminiMode: 'i2i',
   geminiI2iMode: 'character',
+  comfyCharacterMode: 'qwen',
+  comfyCharacterFlux2Unet: 'flux-2-klein-4b-Q4_K_M.gguf',
+  comfyCharacterFlux2Clip: 'qwen_3_4b.safetensors',
+  comfyCharacterFlux2Vae: 'flux2-vae.safetensors',
+  comfyCharacterFlux2Steps: 4,
+  comfyCharacterFlux2Cfg: 1,
+  comfyCharacterFlux2Sampler: 'euler',
+  comfyCharacterFlux2Megapixels: 1,
+  comfyCharacterFlux2UseLoras: false,
+  comfyCharacterFlux2Lora1Name: '',
+  comfyCharacterFlux2Lora1Strength: 1,
+  comfyCharacterFlux2Lora2Name: '',
+  comfyCharacterFlux2Lora2Strength: 1,
+  comfyCharacterFlux2UseCacheDit: false,
+  comfyCharacterFlux2CacheDitModelType: 'Auto',
+  comfyCharacterFlux2CacheDitWarmupSteps: 3,
+  comfyCharacterFlux2CacheDitSkipInterval: 2,
+  comfyCharacterFlux2CacheDitPrintSummary: true,
   comfyCharacterUnet: 'qwen_image_edit_2509_fp8_e4m3fn.safetensors',
   comfyCharacterClip: 'qwen_2.5_vl_7b_fp8_scaled.safetensors',
   comfyCharacterVae: 'qwen_image_vae.safetensors',
@@ -165,6 +183,7 @@ const initialState: GenerationSliceState = {
   shouldGenerateCharacterName: false,
   clothingImage: null,
   backgroundImage: null,
+  characterPoseImage: null,
   previewedBackgroundImage: null,
   previewedClothingImage: null,
   maskImage: null,
@@ -205,6 +224,9 @@ const generationSlice = createSlice({
     },
     setBackgroundImage: (state, action: PayloadAction<File | null>) => {
       state.backgroundImage = action.payload;
+    },
+    setCharacterPoseImage: (state, action: PayloadAction<File | null>) => {
+      state.characterPoseImage = action.payload;
     },
     setPreviewedBackgroundImage: (state, action: PayloadAction<string | null>) => {
       state.previewedBackgroundImage = action.payload;
@@ -248,6 +270,14 @@ const generationSlice = createSlice({
       if (action.payload.comfyModelType === 'qwen-t2i-gguf') {
         nextOptions.comfySteps = 4;
         nextOptions.comfyCfg = 1;
+      } else if (action.payload.comfyModelType === 'flux2-simple') {
+        nextOptions.comfyFlux2Clip = 'qwen3vl_4b_fp8_scaled.safetensors';
+        nextOptions.comfyFlux2Vae = 'flux2-vae.safetensors';
+        if (!savedOptions) {
+          nextOptions.comfySteps = action.payload.comfySteps ?? 12;
+          nextOptions.comfyCfg = action.payload.comfyCfg ?? 1;
+          nextOptions.comfySampler = action.payload.comfySampler ?? 'euler';
+        }
       } else if (action.payload.comfyModelType === 'krea2-simple') {
         nextOptions.comfyKreaUnet = 'krea2_turbo_fp8_scaled.safetensors';
         nextOptions.comfyKreaClip = 'qwen3vl_4b_fp8_scaled.safetensors';
@@ -301,6 +331,7 @@ const generationSlice = createSlice({
       state.sourceImage = null;
       state.clothingImage = null;
       state.backgroundImage = null;
+      state.characterPoseImage = null;
       state.previewedBackgroundImage = null;
       state.previewedClothingImage = null;
       state.generatedContent = {
@@ -345,6 +376,16 @@ const generationSlice = createSlice({
         comfyCharacterUseAdditionalLora: false,
         comfyCharacterAdditionalLora: '',
         comfyCharacterAdditionalLoraStrength: 1,
+        comfyCharacterFlux2UseLoras: false,
+        comfyCharacterFlux2Lora1Name: '',
+        comfyCharacterFlux2Lora1Strength: 1,
+        comfyCharacterFlux2Lora2Name: '',
+        comfyCharacterFlux2Lora2Strength: 1,
+        comfyCharacterFlux2UseCacheDit: false,
+        comfyCharacterFlux2CacheDitModelType: 'Auto',
+        comfyCharacterFlux2CacheDitWarmupSteps: 3,
+        comfyCharacterFlux2CacheDitSkipInterval: 2,
+        comfyCharacterFlux2CacheDitPrintSummary: true,
       };
 
       state.options = { ...state.options, ...resetDefaults };
@@ -362,7 +403,7 @@ const generationSlice = createSlice({
 
 export const {
   setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
-  setClothingImage, setBackgroundImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
+  setClothingImage, setBackgroundImage, setCharacterPoseImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
   setMaskImage, setElementImages, setOptions, updateOptions, setCharacterOptions, updateCharacterOptions, setLoadingState,
   switchComfyModelOptions, updateProgress, setGeneratedImages, setImageSaveStatus, setLastUsedPrompt, resetGenerationState
 } = generationSlice.actions;
@@ -374,7 +415,7 @@ const selectApp = (state: RootState) => state.app;
 export const selectIsReadyToGenerate = createSelector(
   [selectGeneration, selectApp],
   (generation, app) => {
-    const { isLoading, options, characterOptions, sourceImage, maskImage, elementImages, generationMode } = generation;
+    const { isLoading, options, characterOptions, sourceImage, characterPoseImage, maskImage, elementImages, generationMode } = generation;
     const { isComfyUIConnected, activeTab } = app;
 
     if (isLoading) return false;
@@ -411,6 +452,9 @@ export const selectIsReadyToGenerate = createSelector(
       }
     } else if (activeOptions.provider === 'comfyui') {
       if (activeTab === 'character-generator') {
+        if (activeOptions.comfyCharacterMode === 'flux2' && characterPoseImage && !app.comfyUIObjectInfo?.AIO_Preprocessor) return false;
+        if (activeOptions.comfyCharacterMode === 'flux2' && activeOptions.comfyCharacterFlux2UseLoras && (activeOptions.comfyCharacterFlux2Lora1Name?.trim() || activeOptions.comfyCharacterFlux2Lora2Name?.trim()) && !app.comfyUIObjectInfo?.LoraLoaderModelOnly) return false;
+        if (activeOptions.comfyCharacterMode === 'flux2' && activeOptions.comfyCharacterFlux2UseCacheDit && !app.comfyUIObjectInfo?.CacheDiT_Model_Optimizer) return false;
         return !!isComfyUIConnected && !!sourceImage && getEnabledCharacterAngles(activeOptions).length > 0;
       }
       const isI2IMode = generationMode === 'i2i';

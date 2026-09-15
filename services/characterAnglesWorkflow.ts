@@ -212,3 +212,146 @@ export const buildCharacterAnglesWorkflow = (
 
     return { workflow, prompts, seed };
 };
+
+interface Flux2CharacterReferences {
+    source: string;
+    clothing?: string;
+    background?: string;
+    pose?: string;
+}
+
+const buildFlux2CharacterPrompt = (
+    options: GenerationOptions,
+    angleId: string,
+    references: Flux2CharacterReferences,
+): string => {
+    const angleSettings = {
+        ...DEFAULT_CHARACTER_ANGLE_SETTINGS[angleId],
+        ...options.comfyCharacterAngleSettings?.[angleId],
+    };
+    const angle = getCharacterInstructionValue(angleSettings.angle);
+    const pose = getCharacterInstructionValue(angleSettings.pose);
+    const expression = getCharacterInstructionValue(angleSettings.expression);
+    const instructions = [
+        'Using Picture 1 as the strict visual reference, create a new view of exactly one person: the same single subject shown in Picture 1.',
+        'The final image must contain one person only, with one complete body, one head, and one face. Never duplicate, clone, merge, overlap, or fuse the subject with another person.',
+        'Preserve the exact identity, face, body proportions, silhouette, skin, hair, and distinctive details of the single subject.',
+        references.clothing
+            ? 'Use the clothing reference for the complete outfit, materials, colors, fit, accessories, and garment details.'
+            : options.customClothingPrompt?.trim()
+                ? `Dress the subject in ${options.customClothingPrompt.trim()}.`
+                : 'Keep the original clothing unchanged.',
+        references.background
+            ? 'Place the subject in the background reference while matching its perspective, scale, lighting, and color.'
+            : options.customBackground?.trim()
+                ? `Use this background: ${options.customBackground.trim()}.`
+                : options.background === 'original' || options.background === 'image'
+                    ? 'Keep the original background.'
+                    : `Use a ${options.background} background.`,
+        references.pose
+            ? 'Use the DWPose reference for body structure while applying the requested per-output camera angle and pose variation.'
+            : '',
+        angle ? `Camera angle: ${angle}.` : '',
+        pose ? `Pose: ${pose}.` : '',
+        expression ? `Facial expression: ${expression}.` : '',
+        'Composition: show one clearly separated subject, centered in a single coherent photograph. Preserve identity and design consistency across the complete eight-view set. Produce a photorealistic, anatomically coherent result with no redesign, no extra people, no duplicate body parts, and no fused anatomy.',
+    ];
+    return instructions.filter(Boolean).join(' ');
+};
+
+export const buildFlux2CharacterAnglesWorkflow = (
+    references: Flux2CharacterReferences,
+    options: GenerationOptions,
+): { workflow: Record<string, any>; prompts: string[]; seed: number } => {
+    const enabledAngles = getEnabledCharacterAngles(options);
+    if (enabledAngles.length === 0) throw new Error('Enable at least one character output before generating.');
+
+    const seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+    const megapixels = options.comfyCharacterFlux2Megapixels ?? 1;
+    const workflow: Record<string, any> = {
+        source: { inputs: { image: references.source }, class_type: 'LoadImage', _meta: { title: 'Picture 1 - Subject' } },
+        source_scale: { inputs: { upscale_method: 'nearest-exact', megapixels, resolution_steps: 1, image: ['source', 0] }, class_type: 'ImageScaleToTotalPixels', _meta: { title: 'Scale subject reference' } },
+        source_size: { inputs: { image: ['source_scale', 0] }, class_type: 'GetImageSize', _meta: { title: 'Subject output size' } },
+        vae: { inputs: { vae_name: options.comfyCharacterFlux2Vae || 'flux2-vae.safetensors' }, class_type: 'VAELoader', _meta: { title: 'FLUX2 VAE' } },
+        clip: { inputs: { clip_name: options.comfyCharacterFlux2Clip || 'qwen_3_4b.safetensors', type: 'flux2', device: 'default' }, class_type: 'CLIPLoader', _meta: { title: 'FLUX2 CLIP' } },
+        model: { inputs: { unet_name: options.comfyCharacterFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf' }, class_type: 'UnetLoaderGGUF', _meta: { title: 'FLUX2 Klein model' } },
+        source_latent: { inputs: { pixels: ['source_scale', 0], vae: ['vae', 0] }, class_type: 'VAEEncode', _meta: { title: 'Encode subject reference' } },
+    };
+
+    let samplingModel: [string, number] = ['model', 0];
+    if (options.comfyCharacterFlux2UseLoras) {
+        const loras = [
+            { name: options.comfyCharacterFlux2Lora1Name, strength: options.comfyCharacterFlux2Lora1Strength ?? 1 },
+            { name: options.comfyCharacterFlux2Lora2Name, strength: options.comfyCharacterFlux2Lora2Strength ?? 1 },
+        ];
+        loras.forEach((lora, index) => {
+            if (!lora.name?.trim()) return;
+            const nodeId = `flux2_lora_${index + 1}`;
+            workflow[nodeId] = {
+                inputs: { lora_name: lora.name.trim(), strength_model: lora.strength, model: samplingModel },
+                class_type: 'LoraLoaderModelOnly',
+                _meta: { title: `FLUX2 Character LoRA ${index + 1}` },
+            };
+            samplingModel = [nodeId, 0];
+        });
+    }
+    if (options.comfyCharacterFlux2UseCacheDit) {
+        workflow.flux2_cache_dit = {
+            inputs: {
+                model: samplingModel,
+                enable: true,
+                model_type: options.comfyCharacterFlux2CacheDitModelType || 'Auto',
+                warmup_steps: options.comfyCharacterFlux2CacheDitWarmupSteps ?? 3,
+                skip_interval: options.comfyCharacterFlux2CacheDitSkipInterval ?? 2,
+                print_summary: options.comfyCharacterFlux2CacheDitPrintSummary ?? true,
+            },
+            class_type: 'CacheDiT_Model_Optimizer',
+            _meta: { title: 'FLUX2 Character CacheDiT' },
+        };
+        samplingModel = ['flux2_cache_dit', 0];
+    }
+
+    const referenceLatents: Array<[string, number]> = [['source_latent', 0]];
+    const addImageReference = (id: string, imageName: string, title: string) => {
+        workflow[`${id}_source`] = { inputs: { image: imageName }, class_type: 'LoadImage', _meta: { title } };
+        workflow[`${id}_scale`] = { inputs: { upscale_method: 'nearest-exact', megapixels, resolution_steps: 1, image: [`${id}_source`, 0] }, class_type: 'ImageScaleToTotalPixels', _meta: { title: `Scale ${title}` } };
+        workflow[`${id}_latent`] = { inputs: { pixels: [`${id}_scale`, 0], vae: ['vae', 0] }, class_type: 'VAEEncode', _meta: { title: `Encode ${title}` } };
+        referenceLatents.push([`${id}_latent`, 0]);
+    };
+
+    if (references.clothing) addImageReference('clothing', references.clothing, 'Picture 2 - Clothing');
+    if (references.background) addImageReference('background', references.background, 'Picture 3 - Background');
+    if (references.pose) {
+        workflow.pose_source = { inputs: { image: references.pose }, class_type: 'LoadImage', _meta: { title: 'Picture 4 - Pose' } };
+        workflow.pose_dw = { inputs: { preprocessor: 'DWPreprocessor', resolution: 1024, image: ['pose_source', 0] }, class_type: 'AIO_Preprocessor', _meta: { title: 'DWPose structure' } };
+        workflow.pose_scale = { inputs: { upscale_method: 'nearest-exact', megapixels, resolution_steps: 1, image: ['pose_dw', 0] }, class_type: 'ImageScaleToTotalPixels', _meta: { title: 'Scale pose structure' } };
+        workflow.pose_latent = { inputs: { pixels: ['pose_scale', 0], vae: ['vae', 0] }, class_type: 'VAEEncode', _meta: { title: 'Encode pose structure' } };
+        referenceLatents.push(['pose_latent', 0]);
+    }
+
+    const prompts = enabledAngles.map(({ id }) => buildFlux2CharacterPrompt(options, id, references));
+    enabledAngles.forEach((angle, index) => {
+        const prefix = `output_${index}`;
+        workflow[`${prefix}_prompt`] = { inputs: { text: prompts[index], clip: ['clip', 0] }, class_type: 'CLIPTextEncode', _meta: { title: `Prompt ${angle.label}` } };
+        workflow[`${prefix}_negative`] = { inputs: { conditioning: [`${prefix}_prompt`, 0] }, class_type: 'ConditioningZeroOut', _meta: { title: `Zero negative ${angle.label}` } };
+        workflow[`${prefix}_negative_reference`] = { inputs: { conditioning: [`${prefix}_negative`, 0], latent: ['source_latent', 0] }, class_type: 'ReferenceLatent', _meta: { title: `${angle.label} negative subject reference` } };
+
+        let positive: [string, number] = [`${prefix}_prompt`, 0];
+        referenceLatents.forEach((latent, referenceIndex) => {
+            const referenceId = `${prefix}_reference_${referenceIndex + 1}`;
+            workflow[referenceId] = { inputs: { conditioning: positive, latent }, class_type: 'ReferenceLatent', _meta: { title: `${angle.label} reference ${referenceIndex + 1}` } };
+            positive = [referenceId, 0];
+        });
+
+        workflow[`${prefix}_latent`] = { inputs: { width: ['source_size', 0], height: ['source_size', 1], batch_size: 1 }, class_type: 'EmptyFlux2LatentImage', _meta: { title: `Latent ${angle.label}` } };
+        workflow[`${prefix}_noise`] = { inputs: { noise_seed: seed + index }, class_type: 'RandomNoise', _meta: { title: `Noise ${angle.label}` } };
+        workflow[`${prefix}_sampler_select`] = { inputs: { sampler_name: options.comfyCharacterFlux2Sampler || 'euler' }, class_type: 'KSamplerSelect', _meta: { title: `Sampler ${angle.label}` } };
+        workflow[`${prefix}_scheduler`] = { inputs: { steps: options.comfyCharacterFlux2Steps ?? 4, width: ['source_size', 0], height: ['source_size', 1] }, class_type: 'Flux2Scheduler', _meta: { title: `Schedule ${angle.label}` } };
+        workflow[`${prefix}_guider`] = { inputs: { cfg: options.comfyCharacterFlux2Cfg ?? 1, model: samplingModel, positive, negative: [`${prefix}_negative_reference`, 0] }, class_type: 'CFGGuider', _meta: { title: `Guide ${angle.label}` } };
+        workflow[`${prefix}_sample`] = { inputs: { noise: [`${prefix}_noise`, 0], guider: [`${prefix}_guider`, 0], sampler: [`${prefix}_sampler_select`, 0], sigmas: [`${prefix}_scheduler`, 0], latent_image: [`${prefix}_latent`, 0] }, class_type: 'SamplerCustomAdvanced', _meta: { title: `Sample ${angle.label}` } };
+        workflow[`${prefix}_decode`] = { inputs: { samples: [`${prefix}_sample`, 0], vae: ['vae', 0] }, class_type: 'VAEDecode', _meta: { title: `Decode ${angle.label}` } };
+        workflow[`save_${index}`] = { inputs: { filename_prefix: `Character/FLUX2/${angle.id}`, images: [`${prefix}_decode`, 0] }, class_type: 'SaveImage', _meta: { title: `Save Image - ${angle.label}` } };
+    });
+
+    return { workflow, prompts, seed };
+};

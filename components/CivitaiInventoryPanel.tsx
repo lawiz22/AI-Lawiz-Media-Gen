@@ -36,18 +36,22 @@ interface Props {
 
 const FOLDERS: Record<LocalKind, CivitaiModelFolder[]> = {
     lora: ['sd15', 'SDXL', 'Flux', 'flux2', 'krea', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control'],
-    checkpoint: ['SD1.5', 'SDXL', 'FLUX', 'flux-dev', 'LTX2'],
-    diffusion: ['sd15', 'SDXL', 'Flux', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control'],
+    checkpoint: ['SD1.5', 'SDXL', 'FLUX', 'flux-dev', 'flux2', 'krea', 'LTX2'],
+    diffusion: ['sd15', 'SDXL', 'Flux', 'flux2', 'krea', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control'],
 };
 
-const getItemFolder = (item: CivitaiInventoryItem): CivitaiModelFolder => {
+const getItemFolder = (item: CivitaiInventoryItem): CivitaiModelFolder | '' => {
     const pathSegments = item.relativePath.replace(/\\/g, '/').split('/');
-    return FOLDERS[item.kind].find(folder => pathSegments.some(segment => segment.toLowerCase() === folder.toLowerCase())) || FOLDERS[item.kind][0];
+    return FOLDERS[item.kind].find(folder => pathSegments.some(segment => segment.toLowerCase() === folder.toLowerCase())) || '';
 };
 
-const getFolderLabel = (folder: CivitaiModelFolder) => folder === 'LTX2' ? 'LTX 2.3 (LTX2)' : folder;
+const getFolderLabel = (folder: CivitaiModelFolder) => folder === 'flux2' ? 'FLUX2' : folder === 'krea' ? 'KREA2' : folder === 'LTX2' ? 'LTX 2.3 (LTX2)' : folder;
+type ModelFamily = Exclude<CivitaiFamily, 'all'>;
+const MODEL_CATEGORY_OPTIONS = CIVITAI_FAMILIES.filter((family): family is typeof family & { id: ModelFamily } => family.id !== 'all');
 const inferPreviewType = (url?: string | null): 'image' | 'video' => url && /\.(?:mp4|webm|mov)(?:[?#]|$)/i.test(url) ? 'video' : 'image';
-const isItemReviewed = (item: CivitaiInventoryItem) => item.userOwned || item.status === 'matched' || Boolean(item.archiveInfo);
+const isItemReviewed = (item: CivitaiInventoryItem) => item.userOwned || item.status === 'matched' || Boolean(item.archiveInfo || item.huggingFaceInfo);
+const hasExternalMatch = (item: CivitaiInventoryItem) => ['matched', 'partial'].includes(item.status) || Boolean(item.modelId || item.archiveInfo || item.huggingFaceInfo);
+const canClassifyAsOwned = (item: CivitaiInventoryItem) => !hasExternalMatch(item) && Boolean(item.civitaiCheckedAt) && item.archiveLookupStatus === 'unmatched' && (item.kind === 'lora' || item.huggingFaceLookupStatus === 'unmatched');
 
 const SAMPLER_OPTIONS = ['', 'euler', 'euler_ancestral', 'heun', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpm_fast', 'dpm_adaptive', 'dpmpp_2s_ancestral', 'dpmpp_sde', 'dpmpp_2m', 'dpmpp_2m_sde', 'dpmpp_3m_sde', 'ddim', 'uni_pc', 'uni_pc_bh2'];
 const SCHEDULER_OPTIONS = ['', 'normal', 'karras', 'exponential', 'sgm_uniform', 'simple', 'ddim_uniform', 'beta', 'linear_quadratic', 'kl_optimal'];
@@ -83,6 +87,13 @@ const getCompatibleBaseModel = (modelType: ComfyModelType, objectInfo: any): str
 };
 
 const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelType; loraPrefix: string; checkpointField: keyof GenerationOptions; promptField: keyof GenerationOptions } => {
+    if (item.userFamily === 'flux2') return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
+    if (item.userFamily === 'krea2') return { modelType: 'krea2-simple', loraPrefix: 'comfyKrea', checkpointField: 'comfyKreaUnet', promptField: 'comfyKreaPrompt' };
+    if (item.userFamily === 'flux') return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
+    if (item.userFamily === 'qwen' || item.userFamily === 'qwen-edit') return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet', promptField: 'comfyPrompt' };
+    if (item.userFamily === 'zit-base' || item.userFamily === 'zit-turbo') return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet', promptField: 'comfyPrompt' };
+    if (item.userFamily === 'sdxl') return { modelType: 'sdxl', loraPrefix: 'comfySdxl', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
+    if (item.userFamily === 'sd15') return { modelType: 'sd1.5', loraPrefix: 'comfySd15', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
     const pathSegments = item.relativePath.replace(/\\/g, '/').toLowerCase().split('/');
     if (pathSegments.includes('flux2')) return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
     if (pathSegments.includes('krea')) return { modelType: 'krea2-simple', loraPrefix: 'comfyKrea', checkpointField: 'comfyKreaUnet', promptField: 'comfyKreaPrompt' };
@@ -122,11 +133,28 @@ const itemMatchesFamily = (item: CivitaiInventoryItem, family: CivitaiFamily) =>
         'zit-turbo': ['/zit/'],
         'ltx-23': ['/ltx2/', '/ltx2_camera_control/'],
     };
+    if (family === 'ltx-23' && folders[family].some(folder => normalizedPath.includes(folder))) return true;
+    if (item.userFamily) return item.userFamily === family;
     if (folders[family].some(folder => normalizedPath.includes(folder))) return true;
     const identity = [item.fileName, item.modelName, item.installedVersionName, item.archiveInfo?.baseModel].filter(Boolean).join(' ').toLowerCase();
     if (family === 'flux2') return /flux[- ._]?2|klein/.test(identity);
     if (family === 'krea2') return /krea[- ._]?2/.test(identity);
     return false;
+};
+
+const inferItemFamily = (item: CivitaiInventoryItem): ModelFamily => {
+    if (item.userFamily) return item.userFamily;
+    const identity = [item.relativePath, item.fileName, item.modelName, item.installedVersionName, item.archiveInfo?.baseModel, item.huggingFaceInfo?.repoId, ...(item.huggingFaceInfo?.tags || [])].filter(Boolean).join(' ').replace(/\\/g, '/').toLowerCase();
+    if (/flux[- ._]?2|klein/.test(identity)) return 'flux2';
+    if (/krea[- ._]?2/.test(identity)) return 'krea2';
+    if (/qwen.*edit|edit.*qwen/.test(identity)) return 'qwen-edit';
+    if (/\bqwen\b/.test(identity)) return 'qwen';
+    if (/z[-_ ]?image.*turbo|turbo.*z[-_ ]?image/.test(identity)) return 'zit-turbo';
+    if (/z[-_ ]?image|\bzit\b/.test(identity)) return 'zit-base';
+    if (/\bltx/.test(identity)) return 'ltx-23';
+    if (/\bflux(?:[ ._-]?1)?\b/.test(identity)) return 'flux';
+    if (/\bsdxl\b|stable diffusion xl|\bpony\b|\billustrious\b|\bnoobai\b/.test(identity)) return 'sdxl';
+    return 'sd15';
 };
 
 const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiProvider; focused: boolean; onInventoryChange: (inventory: CivitaiInventory) => void; onItemChange: (item: CivitaiInventoryItem) => void; onClassify: (item: CivitaiInventoryItem, kind: LocalKind, folder: CivitaiModelFolder) => Promise<void>; onUpdate: (item: CivitaiInventoryItem, mode: 'keep' | 'replace') => Promise<{ fileName: string; versionName: string }> }> = React.memo(({ item, provider, focused, onInventoryChange, onItemChange, onClassify, onUpdate }) => {
@@ -135,10 +163,12 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
     const [previewType, setPreviewType] = useState<'image' | 'video'>(item.civitaiPreviewType || inferPreviewType(item.civitaiPreviewUrl));
     const [videoPlaying, setVideoPlaying] = useState(false);
     const [kind, setKind] = useState<LocalKind>(item.kind);
-    const [folder, setFolder] = useState<CivitaiModelFolder>(() => getItemFolder(item));
+    const [folder, setFolder] = useState<CivitaiModelFolder | ''>(() => getItemFolder(item));
+    const [category, setCategory] = useState<ModelFamily>(() => inferItemFamily(item));
     const [safety, setSafety] = useState<'auto' | 'sfw' | 'nsfw'>(item.safetyOverride || 'auto');
     const [busy, setBusy] = useState(false);
     const [archiveError, setArchiveError] = useState('');
+    const [huggingFaceError, setHuggingFaceError] = useState('');
     const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
     const [updateMessage, setUpdateMessage] = useState('');
     const [updateError, setUpdateError] = useState('');
@@ -151,6 +181,11 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
     const [steps, setSteps] = useState(item.usageMetadata?.steps?.toString() || '');
     const [cfg, setCfg] = useState(item.usageMetadata?.cfg?.toString() || '');
     const [guidance, setGuidance] = useState(item.usageMetadata?.guidance?.toString() || '');
+    const externallyMatched = hasExternalMatch(item);
+    const classificationAllowed = canClassifyAsOwned(item);
+    const categoryActionAllowed = externallyMatched || item.userOwned || classificationAllowed;
+    const pendingLookupLabel = item.kind === 'lora' ? 'Check Civitai & CivArchive first' : 'Check Civitai, CivArchive & Hugging Face first';
+    const categoryActionLabel = externallyMatched || item.userOwned ? 'Change category' : classificationAllowed ? 'Classify as my model' : pendingLookupLabel;
 
     useEffect(() => {
         setTriggerWords(item.usageMetadata?.triggerWords?.join(', ') || '');
@@ -184,13 +219,21 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
         } finally { setBusy(false); }
     };
 
-    const classifyAsOwned = async () => {
+    const moveModel = async () => {
         const category = kind === 'lora' ? 'loras' : kind === 'checkpoint' ? 'checkpoints' : 'diffusion_models';
         const destination = `models/${category}/${folder}`;
         if (!window.confirm(`Move ${item.fileName} to ${destination}? Its preview and metadata will move with it.`)) return;
         setBusy(true);
         try {
             await onClassify(item, kind, folder);
+        } finally { setBusy(false); }
+    };
+
+    const changeCategory = async () => {
+        setBusy(true);
+        try {
+            const updated = await window.electron?.setLocalModelCategory({ modelPath: item.path, family: category });
+            if (updated) onItemChange(updated);
         } finally { setBusy(false); }
     };
 
@@ -213,7 +256,18 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
         } finally { setBusy(false); }
     };
 
-    const fetchUsageMetadata = async (source: 'civitai' | 'archive') => {
+    const fetchHuggingFaceInfo = async () => {
+        setBusy(true);
+        setHuggingFaceError('');
+        try {
+            const updated = await window.electron?.fetchLocalModelHuggingFace({ modelPath: item.path });
+            if (updated) onInventoryChange(updated);
+        } catch (error) {
+            setHuggingFaceError(error instanceof Error ? error.message : 'Hugging Face lookup failed.');
+        } finally { setBusy(false); }
+    };
+
+    const fetchUsageMetadata = async (source: 'civitai' | 'archive' | 'huggingface') => {
         setUsageBusy(true);
         setUsageError('');
         try {
@@ -342,6 +396,12 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                 [workflow.checkpointField]: modelPath,
             });
         }
+        if (workflow.modelType === 'flux2-simple') {
+            Object.assign(updates, {
+                comfyFlux2Clip: 'qwen3vl_4b_fp8_scaled.safetensors',
+                comfyFlux2Vae: 'flux2-vae.safetensors',
+            });
+        }
         dispatch(updateOptions(updates));
         dispatch(setGenerationMode('t2i'));
         dispatch(setActiveTab('image-generator'));
@@ -379,15 +439,21 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                     {item.modelId && <a href={getCivitaiModelUrl(provider, item.modelId)} target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:underline">Open Civitai record</a>}
                     <button onClick={fetchArchiveInfo} disabled={busy} className="text-xs text-amber-400 hover:underline disabled:opacity-50">{busy ? item.sha256 ? 'Fetching CivArchive...' : 'Hashing, then fetching...' : item.archiveInfo ? 'Refresh CivArchive' : 'Fetch CivArchive'}</button>
                     {item.archiveMirrorUrl && <a href={item.archiveMirrorUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-400 hover:underline">Open CivArchive link</a>}
+                    {item.kind !== 'lora' && <button onClick={fetchHuggingFaceInfo} disabled={busy} className="text-xs text-violet-400 hover:underline disabled:opacity-50">{item.huggingFaceInfo ? 'Refresh Hugging Face' : 'Find on Hugging Face'}</button>}
+                    {item.huggingFaceInfo && <a href={item.huggingFaceInfo.url} target="_blank" rel="noreferrer" className="text-xs text-violet-400 hover:underline">Open Hugging Face</a>}
                 </div>
                 {item.archiveInfo && <div className="border-l-2 border-emerald-500 pl-2 text-[11px] text-text-secondary space-y-0.5"><p className="font-semibold text-text-primary">{item.archiveInfo.title}{item.archiveInfo.versionName ? ` · ${item.archiveInfo.versionName}` : ''}</p><p>{[item.archiveInfo.creator && `by ${item.archiveInfo.creator}`, item.archiveInfo.modelType, item.archiveInfo.baseModel, `${item.archiveInfo.downloads || 0} downloads`, `${item.archiveInfo.mirrorCount} mirrors`, item.archiveInfo.nsfw ? 'NSFW' : 'SFW'].filter(Boolean).join(' · ')}</p>{item.archiveInfo.description && <p className="line-clamp-2" title={item.archiveInfo.description}>{item.archiveInfo.description}</p>}</div>}
                 {item.archiveInfo?.mirrors.length ? <div className="flex flex-wrap gap-x-2 gap-y-1">{item.archiveInfo.mirrors.slice(0, 3).map(mirror => <a key={mirror.url} href={mirror.url} target="_blank" rel="noreferrer" className="text-[11px] text-emerald-400 hover:underline">{mirror.source}</a>)}</div> : null}
+                {item.archiveLookupStatus === 'unmatched' && <p className="text-[11px] text-text-muted">No matching model found on CivArchive.</p>}
+                {item.huggingFaceInfo && <div className="border-l-2 border-violet-500 pl-2 text-[11px] text-text-secondary"><p className="font-semibold text-text-primary">{item.huggingFaceInfo.repoId}</p><p>{[item.huggingFaceInfo.pipelineTag, item.huggingFaceInfo.matchedFile, `${item.huggingFaceInfo.downloads} downloads`, `${item.huggingFaceInfo.likes} likes`].filter(Boolean).join(' · ')}</p></div>}
+                {item.huggingFaceLookupStatus === 'unmatched' && <p className="text-[11px] text-text-muted">No exact model found on Hugging Face.</p>}
                 {archiveError && <p className="text-[11px] text-red-400">{archiveError}</p>}
+                {huggingFaceError && <p className="text-[11px] text-red-400">{huggingFaceError}</p>}
                 <div className="border-l-2 border-blue-500 pl-2 space-y-1.5">
                     <div className="flex items-center justify-between gap-2"><p className="text-[11px] font-semibold text-text-primary">{item.kind === 'lora' ? 'Trigger words' : 'Recommended settings'}</p><button type="button" onClick={() => setUsageEditorOpen(current => !current)} className="text-[11px] text-blue-400 hover:underline">{usageEditorOpen ? 'Close' : 'Edit'}</button></div>
                     {item.kind === 'lora' ? item.usageMetadata?.triggerWords?.length ? <div className="flex flex-wrap gap-1">{item.usageMetadata.triggerWords.map(word => <span key={word} className="px-1.5 py-0.5 rounded bg-bg-tertiary text-[10px] text-text-secondary">{word}</span>)}</div> : <p className="text-[11px] text-text-muted">No trigger words saved.</p> : null}
                     {item.usageMetadata && [item.usageMetadata.sampler, item.usageMetadata.scheduler, item.usageMetadata.steps && `${item.usageMetadata.steps} steps`, item.usageMetadata.cfg && `CFG ${item.usageMetadata.cfg}`, item.usageMetadata.guidance && `Guidance ${item.usageMetadata.guidance}`].filter(Boolean).length ? <p className="text-[11px] text-text-secondary">{[item.usageMetadata.sampler, item.usageMetadata.scheduler, item.usageMetadata.steps && `${item.usageMetadata.steps} steps`, item.usageMetadata.cfg && `CFG ${item.usageMetadata.cfg}`, item.usageMetadata.guidance && `Guidance ${item.usageMetadata.guidance}`].filter(Boolean).join(' · ')}</p> : item.kind !== 'lora' ? <p className="text-[11px] text-text-muted">No recommended settings saved.</p> : null}
-                    <div className="flex flex-wrap gap-x-3 gap-y-1"><button type="button" onClick={() => fetchUsageMetadata('civitai')} disabled={usageBusy} className="text-[11px] text-blue-400 hover:underline disabled:opacity-50">Find on Civitai</button><button type="button" onClick={() => fetchUsageMetadata('archive')} disabled={usageBusy} className="text-[11px] text-emerald-400 hover:underline disabled:opacity-50">Find on CivArchive</button>{item.usageMetadata && <span className="text-[10px] text-text-muted">Source: {item.usageMetadata.source}</span>}</div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1"><button type="button" onClick={() => fetchUsageMetadata('civitai')} disabled={usageBusy} className="text-[11px] text-blue-400 hover:underline disabled:opacity-50">Find on Civitai</button><button type="button" onClick={() => fetchUsageMetadata('archive')} disabled={usageBusy} className="text-[11px] text-emerald-400 hover:underline disabled:opacity-50">Find on CivArchive</button>{item.kind !== 'lora' && item.huggingFaceInfo && <button type="button" onClick={() => fetchUsageMetadata('huggingface')} disabled={usageBusy} className="text-[11px] text-violet-400 hover:underline disabled:opacity-50">Find on Hugging Face</button>}{item.usageMetadata && <span className="text-[10px] text-text-muted">Source: {item.usageMetadata.source}</span>}</div>
                     {usageEditorOpen && <div className="space-y-1.5 pt-1">{item.kind === 'lora' && <textarea value={triggerWords} onChange={event => setTriggerWords(event.target.value)} rows={2} placeholder="trigger one, trigger two" className="w-full resize-y bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary" />}<div className="grid grid-cols-2 gap-1.5"><MenuSelect value={sampler} onChange={setSampler} ariaLabel="Recommended sampler" options={[...new Set([sampler, ...SAMPLER_OPTIONS])].map(value => ({ value, label: value || 'Sampler: Not set' }))} /><MenuSelect value={scheduler} onChange={setScheduler} ariaLabel="Recommended scheduler" options={[...new Set([scheduler, ...SCHEDULER_OPTIONS])].map(value => ({ value, label: value || 'Scheduler: Not set' }))} /><input type="number" min="1" step="1" value={steps} onChange={event => setSteps(event.target.value)} placeholder="Steps" className="min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary" /><input type="number" min="0.1" step="0.1" value={cfg} onChange={event => setCfg(event.target.value)} placeholder="CFG" className="min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary" />{getImageWorkflow(item).modelType === 'flux' && <input type="number" min="0.1" step="0.1" value={guidance} onChange={event => setGuidance(event.target.value)} placeholder="Guidance" className="min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary" />}</div><div className="flex gap-1.5"><button type="button" onClick={() => saveUsageMetadata()} disabled={usageBusy} className="flex-1 rounded bg-blue-600 px-2 py-1.5 text-[11px] font-bold text-white disabled:opacity-50">Save</button><button type="button" onClick={() => saveUsageMetadata(true)} disabled={usageBusy} className="rounded border border-border-primary px-2 py-1.5 text-[11px] text-text-secondary disabled:opacity-50">Clear</button></div></div>}
                     {usageError && <p className="text-[11px] text-red-400">{usageError}</p>}
                 </div>
@@ -398,10 +464,13 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                     <MenuSelect value={safety} onChange={setSafety} ariaLabel="Model safety" options={[{ value: 'auto', label: 'Safety: Auto' }, { value: 'sfw', label: 'Blue · SFW' }, { value: 'nsfw', label: 'Red · NSFW' }]} />
                     <button onClick={applySafety} disabled={busy} className={`px-3 rounded text-xs font-bold border disabled:opacity-50 ${safety === 'nsfw' ? 'border-red-500 text-red-400' : 'border-blue-500 text-blue-400'}`}>Apply</button>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border-primary/60">
-                    <MenuSelect value={kind} onChange={next => { setKind(next); setFolder(FOLDERS[next][0]); }} ariaLabel="Model type" options={[{ value: 'lora', label: 'LoRA' }, { value: 'checkpoint', label: 'Checkpoint' }, { value: 'diffusion', label: 'Diffusion' }]} />
-                    <MenuSelect value={folder} onChange={setFolder} ariaLabel="Model folder" options={FOLDERS[kind].map(value => ({ value, label: getFolderLabel(value) }))} />
-                    <button onClick={classifyAsOwned} disabled={busy || (kind === item.kind && folder === getItemFolder(item))} className="col-span-2 border border-amber-500/60 text-amber-400 rounded py-1.5 text-xs font-bold hover:bg-amber-500/10 disabled:opacity-50">{isItemReviewed(item) ? 'Move model' : 'Classify as my model'}</button>
+                <div className="space-y-1 pt-1 border-t border-border-primary/60">
+                    <p className="text-[10px] font-semibold uppercase text-text-muted">Model category · file stays in place</p>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1.5"><MenuSelect value={category} onChange={setCategory} ariaLabel="Model category" options={MODEL_CATEGORY_OPTIONS.map(value => ({ value: value.id, label: value.label }))} /><button onClick={changeCategory} disabled={busy || !categoryActionAllowed || item.userFamily === category} className="border border-blue-500/60 text-blue-400 rounded px-3 py-1.5 text-xs font-bold hover:bg-blue-500/10 disabled:opacity-50">{categoryActionLabel}</button></div>
+                </div>
+                <div className="space-y-1 pt-1 border-t border-border-primary/60">
+                    <p className="text-[10px] font-semibold uppercase text-text-muted">Move file to folder</p>
+                    <div className="grid grid-cols-2 gap-1.5"><MenuSelect value={kind} onChange={next => { setKind(next); setFolder(''); }} ariaLabel="Model type" options={[{ value: 'lora', label: 'LoRA' }, { value: 'checkpoint', label: 'Checkpoint' }, { value: 'diffusion', label: 'Diffusion' }]} /><MenuSelect value={folder} onChange={setFolder} ariaLabel="Model folder" options={[{ value: '', label: 'Choose destination...' }, ...FOLDERS[kind].map(value => ({ value, label: getFolderLabel(value) }))]} /><button onClick={moveModel} disabled={busy || !folder || (kind === item.kind && folder === getItemFolder(item))} className="col-span-2 border border-amber-500/60 text-amber-400 rounded py-1.5 text-xs font-bold hover:bg-amber-500/10 disabled:opacity-50">Move model</button></div>
                 </div>
             </div>
             {updateDialogOpen && <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setUpdateDialogOpen(false)}><div className="w-full max-w-lg bg-bg-secondary border border-border-primary rounded-lg p-5 shadow-xl" onClick={event => event.stopPropagation()}><h3 className="text-lg font-bold text-text-primary">Update {item.modelName || item.fileName}</h3><p className="text-sm text-text-secondary mt-2">Install {item.latestVersionName || 'the latest version'}. Do you want to keep the old model as a separate file, or replace it?</p><div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-5"><button type="button" onClick={() => setUpdateDialogOpen(false)} className="px-3 py-2 rounded border border-border-primary text-text-secondary font-bold">Cancel</button><button type="button" onClick={() => updateModel('keep')} className="px-3 py-2 rounded border border-emerald-500 text-emerald-400 font-bold">Keep old</button><button type="button" onClick={() => updateModel('replace')} className="px-3 py-2 rounded bg-amber-400 text-black font-bold">Replace old</button></div></div></div>}
@@ -422,15 +491,21 @@ export const CivitaiInventoryPanel: React.FC<Props> = ({ view, inventory, provid
     const [displayLimit, setDisplayLimit] = useState(40);
     const normalizedQuery = query.trim().toLowerCase();
     const visibleItems = useMemo(() => inventory.items.filter(item => {
+        if (item.path === focusedItemPath) return true;
         if (filter === 'updates' && !item.hasUpdate) return false;
         if (filter === 'review' && isItemReviewed(item)) return false;
         const effectiveSafety = item.safetyOverride || item.contentSafety;
-        if (provider === 'red' ? effectiveSafety !== 'nsfw' : effectiveSafety === 'nsfw') return false;
+        if (provider === 'red' ? effectiveSafety === 'sfw' : effectiveSafety === 'nsfw') return false;
         if (libraryKind !== 'all' && item.kind !== libraryKind) return false;
         if (!itemMatchesFamily(item, libraryFamily)) return false;
         return !normalizedQuery || [item.fileName, item.modelName, item.relativePath, item.installedVersionName].filter(Boolean).some(value => String(value).toLowerCase().includes(normalizedQuery));
-    }), [filter, inventory.items, libraryFamily, libraryKind, normalizedQuery, provider]);
-    const displayedItems = visibleItems.slice(0, displayLimit);
+    }), [filter, focusedItemPath, inventory.items, libraryFamily, libraryKind, normalizedQuery, provider]);
+    const displayedItems = useMemo(() => {
+        const focusedItem = focusedItemPath ? visibleItems.find(item => item.path === focusedItemPath) : undefined;
+        return focusedItem
+            ? [focusedItem, ...visibleItems.filter(item => item.path !== focusedItemPath)].slice(0, displayLimit)
+            : visibleItems.slice(0, displayLimit);
+    }, [displayLimit, focusedItemPath, visibleItems]);
     const matchedCount = inventory.items.filter(isItemReviewed).length;
     const checkpointCount = inventory.items.filter(item => item.kind === 'checkpoint').length;
     const diffusionCount = inventory.items.filter(item => item.kind === 'diffusion').length;
@@ -460,10 +535,10 @@ export const CivitaiInventoryPanel: React.FC<Props> = ({ view, inventory, provid
         if (view !== 'library' || !focusedItemPath) return;
         const item = inventory.items.find(candidate => candidate.path === focusedItemPath);
         if (!item) return;
-        setQuery(item.relativePath);
+        setQuery('');
         setLibraryFamily('all');
         setLibraryKind('all');
-        setFilter(item.hasUpdate ? 'updates' : isItemReviewed(item) ? 'all' : 'review');
+        setFilter('all');
         setDisplayLimit(40);
     }, [focusedItemPath, inventory.items, view]);
 

@@ -91,7 +91,7 @@ const videoSlice = createSlice({
             ...action.payload,
         };
     },
-    setActiveVideoUtilsSubTab: (state, action: PayloadAction<'frames' | 'colors' | 'resize-crop'>) => {
+    setActiveVideoUtilsSubTab: (state, action: PayloadAction<'frames' | 'colors' | 'resize-crop' | 'voice-recorder'>) => {
       state.activeVideoUtilsSubTab = action.payload;
     },
     resetVideoGenerationState: (state) => {

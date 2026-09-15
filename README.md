@@ -4,7 +4,7 @@
 
 **A Windows creative workstation for cloud AI and local ComfyUI production.**
 
-[![Version](https://img.shields.io/badge/version-1.58.0-0ea5e9?style=for-the-badge)](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
+[![Version](https://img.shields.io/badge/version-1.7.0-0ea5e9?style=for-the-badge)](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vite.dev/)
@@ -28,6 +28,7 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 - Adjustable checkpoints, UNets, CLIP models, VAEs, samplers, schedulers, seeds, dimensions, and LoRA chains.
 - Refine mode with source-image denoise control.
 - Character generation with pose, clothing, background, and multi-angle controls.
+- SAM3.1-guided Swap Anything with destination/donor images, editable target regions, optional LoRAs, and FLUX2 sampling.
 - Inpainting, composition, generated masks, and reusable source elements.
 - Exportable ComfyUI workflows and reusable generation presets.
 
@@ -46,12 +47,14 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 - Build LTX 2.3 or LTX 2.5 timelines from prompt-only clips, image clips, or both.
 - Give every clip its own prompt and duration, with optional generated continuation prompts.
 - Add photos and soundtrack audio from local files or directly from the Library.
+- Import Advanced TTS dialogue as speaker-aware clips with optional per-character reference photos.
 - Add generated speech context and control frame rate and guidance.
 - Configure the LTX checkpoint and up to three LoRAs.
 - Reduce final decode VRAM usage with tiled VAE decoding and an adjustable tile size.
 - Accelerate both LTX profiles with optional CacheDiT settings shared across LTX 2.3 and LTX 2.5.
 - Generate the final video through ComfyUI and download the result.
-- Generate multilingual speech through supported Chatterbox ComfyUI nodes and reference voices.
+- Generate multilingual speech through supported Chatterbox and IndexTTS ComfyUI nodes.
+- Build solo or multi-character conversations with named voices, reusable references, per-line emotions, and composite character thumbnails.
 
 ### Creative Tools
 
@@ -61,6 +64,7 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 - Group photo fusion and PastForward transformations.
 - Logo, banner, album-cover, and theme generation.
 - Video frame extraction, palette extraction, image resize, and crop tools.
+- Record a selected microphone, computer output audio, or both; export WAV audio and save it with an optional photo as a reusable voice reference.
 - SeedVR2 and Z-Image creative upscaling workflows.
 
 ### Library
@@ -68,13 +72,14 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 - Persistent local media library backed by IndexedDB.
 - Save source media, results, prompts, seeds, and generation settings.
 - Search, filter, import, export, reuse, and send assets between tools.
+- Store named voice references and character photos for TTS and LTX reuse.
 - Optional Google Drive folder synchronization.
 
 ## Requirements
 
 | Requirement | Purpose |
 | --- | --- |
-| Windows 10 or 11 | Target platform for the packaged Electron application |
+| Windows 10 or 11 | Target platform and Electron system-audio loopback capture |
 | Node.js 20+ and npm | Development and production builds |
 | Mammouth AI API key | Mammouth generation and AI-assisted prompt features |
 | Google Gemini API key | Direct Gemini features, when used |
@@ -88,7 +93,7 @@ KREA2 Simple uses `Power Lora Loader (rgthree)` from rgthree-comfy with the KREA
 
 KREA2 RAW uses the supplied two-stage `ClownsharKSampler_Beta` graph with fixed sampler parameters, selectable KREA models and LoRAs, 29 source resolutions, and `1920x1088` as its default resolution.
 
-FLUX2 Simple uses ComfyUI-GGUF, `Power Lora Loader (rgthree)`, `Flux2Scheduler`, and `EmptyFlux2LatentImage` with the FLUX2 Klein GGUF diffusion model, FLUX2 CLIP encoder, FLUX2 VAE, and compatible LoRAs installed in their corresponding ComfyUI model folders.
+FLUX2 Simple uses ComfyUI-GGUF, `Power Lora Loader (rgthree)`, `Flux2Scheduler`, and `EmptyFlux2LatentImage` with the FLUX2 Klein GGUF diffusion model, FLUX2 CLIP encoder, FLUX2 VAE, and compatible LoRAs installed in their corresponding ComfyUI model folders. Character FLUX2 uses the same FLUX2 model stack with `ReferenceLatent` and two optional LoRAs. Its optional pose reference requires `AIO_Preprocessor` from ComfyUI ControlNet Aux, while optional acceleration requires `CacheDiT_Model_Optimizer` from ComfyUI-CacheDiT.
 
 The standard Flux workflow automatically enables `Flux\flux-turbo.safetensors` at strength `1`. Qwen T2I always uses 4 steps and CFG `1`, including when Library metadata contains different recommended values.
 
@@ -117,7 +122,7 @@ LTX Director requires the latest WhatDreamsCost LTX Director, ComfyUI-LTXVideo, 
 
 4. Sign in locally, open **Connection Settings**, and configure the providers you intend to use.
 
-For browser-only development, run `npm run dev` and open `http://localhost:3000`. Electron-only features such as local model scanning, native file selection, secure key persistence, and CivArchive prompt retrieval require the desktop application.
+For browser-only development, run `npm run dev` and open `http://localhost:3000`. Browser voice recording uses the native screen or tab picker for computer audio. Electron captures Windows system audio directly. Other Electron-only features include local model scanning, native file selection, secure key persistence, and CivArchive prompt retrieval.
 
 ## Configuration
 
@@ -215,7 +220,7 @@ The repository currently has no automated test script. Production validation the
 ## Repository
 
 - Source: [github.com/lawiz22/AI-Lawiz-Media-Gen](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
-- Current application version: `1.58.0`
+- Current application version: `1.7.0`
 - Default development port: `3000`
 - Default ComfyUI endpoint: `http://127.0.0.1:8188`
 

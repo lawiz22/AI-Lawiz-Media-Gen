@@ -10,7 +10,7 @@ import {
 } from './store/appSlice';
 import {
     setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
-    setClothingImage, setBackgroundImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
+    setClothingImage, setBackgroundImage, setCharacterPoseImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
     setMaskImage, setElementImages, setOptions, updateOptions, setCharacterOptions, updateCharacterOptions, setLoadingState,
     switchComfyModelOptions, updateProgress, setGeneratedImages, setLastUsedPrompt, resetGenerationState,
     selectIsReadyToGenerate
@@ -49,6 +49,7 @@ import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
 import { LTXDirectorPanel } from './components/LTXDirectorPanel';
 import { TtsPanel } from './components/TtsPanel';
+import { createLtxScenePrompt, formatIndexTtsTranscript } from './utils/ttsTranscript';
 import { UpscalePanel } from './components/UpscalePanel';
 import { CivitaiPanel } from './components/CivitaiPanel';
 import versionData from './version.json';
@@ -69,12 +70,14 @@ import * as driveService from './services/googleDriveService';
 import { setDriveService, initializeDriveSync } from './services/libraryService';
 import GroupPhotoFusionPanel from './components/groupPhotoFusion/GroupPhotoFusionPanel';
 import PastForwardPanel from './components/pastForward/PastForwardPanel';
+import SwapAnythingPanel from './components/SwapAnythingPanel';
 import { PERSONAS } from './groupPhotoFusion/constants';
 import { createAccentStyle, getTabAccentStyle } from './utils/accentTheme';
 
 const FUN_ACCENT_STYLES = {
     'photo-fusion': createAccentStyle('#fb7185', '#fda4af', '#e11d48'),
     'past-forward': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
+    'swap-anything': createAccentStyle('#f59e0b', '#fbbf24', '#d97706'),
 };
 
 const App: React.FC = () => {
@@ -89,7 +92,7 @@ const App: React.FC = () => {
     const [generationTimes, setGenerationTimes] = useState<Record<string, number | null>>({});
     const [upscaleSourceFile, setUpscaleSourceFile] = useState<File | null>(null);
     const [isUpscalePickerOpen, setIsUpscalePickerOpen] = useState(false);
-    const [activeFunSubTab, setActiveFunSubTab] = useState<'photo-fusion' | 'past-forward'>('photo-fusion');
+    const [activeFunSubTab, setActiveFunSubTab] = useState<'photo-fusion' | 'past-forward' | 'swap-anything'>('photo-fusion');
 
     // --- App State (from appSlice) ---
     const {
@@ -112,7 +115,7 @@ const App: React.FC = () => {
     // --- Generation State (from generationSlice) ---
     const {
         sourceImage, generationMode, characterName, shouldGenerateCharacterName, clothingImage,
-        backgroundImage, previewedBackgroundImage, previewedClothingImage, maskImage, elementImages,
+        backgroundImage, characterPoseImage, previewedBackgroundImage, previewedClothingImage, maskImage, elementImages,
         options, characterOptions, isLoading, progressMessage, progressValue, generatedContent
     } = useSelector((state: RootState) => state.generation);
 
@@ -251,7 +254,7 @@ const App: React.FC = () => {
                 comfyFlux2Prompt: '',
                 comfyFlux2NegativePrompt: '',
                 comfyFlux2Unet: 'flux-2-klein-4b-Q4_K_M.gguf',
-                comfyFlux2Clip: 'qwen_3_4b.safetensors',
+                comfyFlux2Clip: 'qwen3vl_4b_fp8_scaled.safetensors',
                 comfyFlux2Vae: 'flux2-vae.safetensors',
                 comfyFlux2Resolution: '832x1216',
                 comfyFlux2UseLora: true,
@@ -267,8 +270,8 @@ const App: React.FC = () => {
                 comfyFlux2Lora5Strength: 1,
                 comfyFlux2Lora6Name: '',
                 comfyFlux2Lora6Strength: 1,
-                comfySteps: 20,
-                comfyCfg: 4,
+                comfySteps: 12,
+                comfyCfg: 1,
                 comfySampler: 'euler',
             });
         } else if (newOpts.comfyModelType === 'krea2-simple') {
@@ -534,7 +537,7 @@ const App: React.FC = () => {
                 );
             } else if (currentOptions.provider === 'comfyui') {
                 const comfyResult = activeTab === 'character-generator'
-                    ? await generateComfyUICharacterAngles(sourceImage!, characterOptions, localUpdateProgress)
+                    ? await generateComfyUICharacterAngles(sourceImage!, characterOptions, localUpdateProgress, clothingImage, backgroundImage, characterPoseImage)
                     : await generateComfyUIPortraits(sourceImage, options, localUpdateProgress, elementImages.slice(0, 2));
                 result = {
                     images: comfyResult.images.map(img => ({ src: img.src, seed: img.seed, usageMetadata: undefined })),
@@ -730,10 +733,14 @@ const App: React.FC = () => {
         activeModel = characterOptions.provider === 'mammouth'
             ? (characterOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
             : characterOptions.provider === 'comfyui'
-                ? 'Qwen-Edit-Multi-Angle'
+                ? characterOptions.comfyCharacterMode === 'flux2'
+                    ? 'FLUX2-Klein-Multi-Angle'
+                    : 'Qwen-Edit-Multi-Angle'
                 : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'fun') {
-        activeModel = options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
+        activeModel = activeFunSubTab === 'swap-anything'
+            ? 'ComfyUI · FLUX2 Swap Anything'
+            : options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'extractor-tools') {
         if (options.provider === 'mammouth') activeModel = options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL;
         else if (activeExtractorSubTab === 'clothes') activeModel = DEFAULT_GEMINI_IMAGE_MODEL;
@@ -878,7 +885,7 @@ const App: React.FC = () => {
 
                 {/* Content Views - Centered Wrapper */}
                 <div className="w-full max-w-7xl mx-auto border-t-2 border-accent pt-3" style={getTabAccentStyle(activeTab)}>
-                    {['fun', 'extractor-tools', 'logo-theme-generator'].includes(activeTab) && (
+                    {['fun', 'extractor-tools', 'logo-theme-generator'].includes(activeTab) && !(activeTab === 'fun' && activeFunSubTab === 'swap-anything') && (
                         <CloudImageProviderBar
                             options={options}
                             updateOptions={(updates) => dispatch(updateOptions(updates))}
@@ -1121,6 +1128,28 @@ const App: React.FC = () => {
                                     Mammouth
                                 </button>
                             </div>
+                            {currentOptions.provider === 'comfyui' && <div role="tablist" aria-label="ComfyUI character workflow" className="flex gap-1 rounded-lg bg-bg-tertiary p-1">
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={(currentOptions.comfyCharacterMode || 'qwen') === 'qwen'}
+                                    onClick={() => handleUpdateOptions({ comfyCharacterMode: 'qwen' })}
+                                    disabled={isLoading}
+                                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${(currentOptions.comfyCharacterMode || 'qwen') === 'qwen' ? 'bg-accent text-accent-text shadow-sm' : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'} disabled:cursor-not-allowed disabled:opacity-50`}
+                                >
+                                    QWEN
+                                </button>
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={currentOptions.comfyCharacterMode === 'flux2'}
+                                    onClick={() => handleUpdateOptions({ comfyCharacterMode: 'flux2' })}
+                                    disabled={isLoading}
+                                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${currentOptions.comfyCharacterMode === 'flux2' ? 'bg-accent text-accent-text shadow-sm' : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'} disabled:cursor-not-allowed disabled:opacity-50`}
+                                >
+                                    FLUX2
+                                </button>
+                            </div>}
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                             <div className="lg:col-span-1 space-y-8">
@@ -1174,6 +1203,8 @@ const App: React.FC = () => {
                                     setClothingImage={(file) => dispatch(setClothingImage(file))}
                                     backgroundImage={backgroundImage}
                                     setBackgroundImage={(file) => dispatch(setBackgroundImage(file))}
+                                    characterPoseImage={characterPoseImage}
+                                    setCharacterPoseImage={(file) => dispatch(setCharacterPoseImage(file))}
                                     onOpenClothingLibrary={() => dispatch(setModalOpen({ modal: 'isClothingPickerOpen', isOpen: true }))}
                                     onOpenBackgroundLibrary={() => dispatch(setModalOpen({ modal: 'isBackgroundPickerOpen', isOpen: true }))}
                                 />
@@ -1208,11 +1239,13 @@ const App: React.FC = () => {
                         </>
                     </React.Activity>
 
-                    {activeTab === 'fun' && <div className="mb-4 flex justify-center"><div className="inline-flex rounded-md border border-rose-400/40 bg-bg-secondary p-1 shadow-sm"><button type="button" onClick={() => setActiveFunSubTab('photo-fusion')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'photo-fusion' ? 'bg-rose-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-rose-300'}`}><GroupPhotoFusionIcon className="h-4 w-4" />Photo Fusion</button><button type="button" onClick={() => setActiveFunSubTab('past-forward')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'past-forward' ? 'bg-cyan-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-cyan-300'}`}><PastForwardIcon className="h-4 w-4" />Past Forward</button></div></div>}
+                    {activeTab === 'fun' && <div className="mb-4 flex justify-center"><div className="inline-flex flex-wrap rounded-md border border-rose-400/40 bg-bg-secondary p-1 shadow-sm"><button type="button" onClick={() => setActiveFunSubTab('photo-fusion')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'photo-fusion' ? 'bg-rose-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-rose-300'}`}><GroupPhotoFusionIcon className="h-4 w-4" />Photo Fusion</button><button type="button" onClick={() => setActiveFunSubTab('past-forward')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'past-forward' ? 'bg-cyan-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-cyan-300'}`}><PastForwardIcon className="h-4 w-4" />Past Forward</button><button type="button" onClick={() => setActiveFunSubTab('swap-anything')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'swap-anything' ? 'bg-amber-500 text-black' : 'text-text-secondary hover:bg-bg-tertiary hover:text-amber-300'}`}><EnhanceIcon className="h-4 w-4" />Swap Anything</button></div></div>}
 
                     <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'past-forward' ? 'visible' : 'hidden'}><div style={FUN_ACCENT_STYLES['past-forward']}><PastForwardPanel /></div></React.Activity>
 
                     <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'photo-fusion' ? 'visible' : 'hidden'}><div style={FUN_ACCENT_STYLES['photo-fusion']}><GroupPhotoFusionPanel /></div></React.Activity>
+
+                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'swap-anything' ? 'visible' : 'hidden'}><div style={FUN_ACCENT_STYLES['swap-anything']}><SwapAnythingPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} /></div></React.Activity>
 
                     <React.Activity mode={activeTab === 'prompt-generator' ? 'visible' : 'hidden'}>
                         <PromptGeneratorPanel
@@ -1295,9 +1328,15 @@ const App: React.FC = () => {
                     <React.Activity mode={activeTab === 'library' ? 'visible' : 'hidden'}>
                         <LibraryPanel
                             onUpscaleItem={(item) => handleSendToUpscale(item.media, item.name ? `${item.name}.png` : undefined)}
-                            onLoadItem={(item) => {
+                            onLoadItem={(item, loadOptions) => {
                                 // Logic to load item back into generator state
-                                if (item.mediaType === 'image' || item.mediaType === 'character') {
+                                if (item.ltxDirectorOptions) {
+                                    dispatch(queueLtxTransfer({
+                                        imageDataUrl: item.sourceImage || item.startFrame,
+                                        videoDataUrl: item.mediaType === 'video' ? item.media : undefined,
+                                        directorOptions: item.ltxDirectorOptions,
+                                    }));
+                                } else if (item.mediaType === 'image' || item.mediaType === 'character') {
                                     if (item.sourceImage) {
                                         fetch(item.sourceImage).then(r => r.blob()).then(b => dispatch(setSourceImage(new File([b], "source.jpg", { type: "image/jpeg" }))));
                                     }
@@ -1317,25 +1356,31 @@ const App: React.FC = () => {
                                         dispatch(setActiveTab('image-generator'));
                                     }
                                 } else if (item.mediaType === 'video') {
-                                    if (item.ltxDirectorOptions) {
-                                        dispatch(queueLtxTransfer({
-                                            imageDataUrl: item.sourceImage || item.startFrame,
-                                            videoDataUrl: item.media,
-                                            directorOptions: item.ltxDirectorOptions,
-                                        }));
-                                    } else {
-                                        dispatch(setActiveTab('ltx-director'));
-                                    }
+                                    dispatch(setActiveTab('ltx-director'));
                                 } else if (item.mediaType === 'audio-tts') {
-                                    const spokenText = item.ttsOptions?.text.trim() || '';
+                                    const spokenText = item.indexTtsOptions
+                                        ? formatIndexTtsTranscript(item.indexTtsOptions)
+                                        : item.ttsOptions?.text.trim() || '';
                                     const dialogue = spokenText.replace(/"/g, "'");
+                                    const ttsSegments = item.indexTtsOptions?.lines.map((line) => {
+                                        const character = item.indexTtsOptions?.characters.find((candidate) => candidate.id === line.characterId);
+                                        const ttsText = `${character?.name.trim() || 'Character'}: ${line.text.trim()}`;
+                                        return {
+                                            ttsText,
+                                            prompt: createLtxScenePrompt(ttsText),
+                                            imageDataUrl: loadOptions?.importTtsCharacterPhotos ? character?.thumbnail : undefined,
+                                        };
+                                    });
                                     const mimeType = item.media.match(/^data:([^;,]+)/)?.[1] || '';
                                     const extension = mimeType.includes('flac') ? 'flac' : mimeType.includes('mpeg') ? 'mp3' : mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'm4a' : 'wav';
                                     dispatch(queueLtxTransfer({
                                         audioDataUrl: item.media,
                                         audioName: `${item.name || 'tts-result'}.${extension}`,
                                         ttsText: spokenText,
-                                        prompt: dialogue ? `The character speaks clearly and naturally, saying: "${dialogue}"` : 'The character speaks clearly and naturally.',
+                                        ttsSegments,
+                                        prompt: item.indexTtsOptions
+                                            ? createLtxScenePrompt(spokenText)
+                                            : dialogue ? `The character speaks clearly and naturally, saying: "${dialogue}"` : 'The character speaks clearly and naturally.',
                                     }));
                                 }
                                 // Add handling for other types if needed
@@ -1376,15 +1421,22 @@ const App: React.FC = () => {
             <LibraryPickerModal
                 isOpen={isPosePickerOpen}
                 onClose={() => dispatch(setModalOpen({ modal: 'isPosePickerOpen', isOpen: false }))}
-                onSelectItem={(item) => {
+                onSelectItem={async (item) => {
+                    if (characterOptions.comfyCharacterMode === 'flux2') {
+                        const response = await fetch(item.media);
+                        const blob = await response.blob();
+                        dispatch(setCharacterPoseImage(new File([blob], 'pose_ref.jpg', { type: blob.type })));
+                        return;
+                    }
                     dispatch(updateCharacterOptions({
                         poseLibraryItems: [...(characterOptions.poseLibraryItems || []), item],
                         poseMode: 'library'
                     }));
                 }}
                 filter="pose"
-                multiSelect
+                multiSelect={characterOptions.comfyCharacterMode !== 'flux2'}
                 onSelectMultiple={(items) => {
+                    if (characterOptions.comfyCharacterMode === 'flux2') return;
                     dispatch(updateCharacterOptions({
                         poseLibraryItems: items,
                         poseMode: 'library'

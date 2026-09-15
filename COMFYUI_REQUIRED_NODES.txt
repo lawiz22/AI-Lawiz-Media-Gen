@@ -4,16 +4,16 @@ LAWIZ MEDIA GENERATOR - COMFYUI REQUIRED NODES
 Audit date: 2026-09-05
 Source audited: every class_type used in constants.ts,
 services/comfyUIService.ts, services/characterAnglesWorkflow.ts and
-services/ltxDirectorWorkflow.ts.
+services/ltxDirectorWorkflow.ts, including dedicated feature workflow builders.
 
 SUMMARY
 -------
 
-Lawiz currently references 88 distinct ComfyUI node classes.
+Lawiz currently references 97 distinct ComfyUI node classes.
 
-- 54 are included in a current ComfyUI installation (core + comfy_extras).
-- 34 are supplied by external custom-node packs.
-- The complete feature set uses 20 external repositories when the LTX Director
+- 58 are included in a current ComfyUI installation (core + comfy_extras).
+- 39 are supplied by external custom-node packs.
+- The complete feature set uses 24 external repositories when the LTX Director
   compatibility dependency is included.
 
 IMPORTANT: update ComfyUI before installing custom nodes. Recent versions include
@@ -87,10 +87,10 @@ Used by: Z-Image creative upscale.
 
 [08] ComfyUI-KJNodes
 Repository: https://github.com/kijai/ComfyUI-KJNodes
-Lawiz nodes: LTX2SamplingPreviewOverride, PathchSageAttentionKJ,
+Lawiz nodes: DrawMaskOnImage, LTX2SamplingPreviewOverride, PathchSageAttentionKJ,
 StringConstantMultiline, VAELoaderKJ
-Used by: LTX Director, WAN video SageAttention, prompt string utilities and
-advanced VAE loading.
+Used by: Swap Anything mask visualization, LTX Director, WAN video
+SageAttention, prompt string utilities and advanced VAE loading.
 
 [09] WhatDreamsCost-ComfyUI
 Repository: https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI
@@ -160,6 +160,26 @@ Used by: voice-cloning ChatterBox workflow.
 Note: ComfyLiterals can expose a node with the same class name, but the audited
 working installation resolves it from comfy-image-saver.
 
+[21] ComfyUI ControlNet Aux
+Repository: https://github.com/Fannovel16/comfyui_controlnet_aux
+Lawiz node: AIO_Preprocessor
+Used by: optional DWPose structure extraction in FLUX2 Character Angles.
+
+[22] ComfyUI-CacheDiT
+Repository: https://github.com/Jasonzzt/ComfyUI-CacheDiT
+Lawiz node: CacheDiT_Model_Optimizer
+Used by: optional acceleration for Z-Image and FLUX2 Character Angles.
+
+[23] Masquerade Nodes
+Repository: https://github.com/BadCafeCode/masquerade-nodes-comfyui
+Lawiz node: Cut By Mask
+Used by: extracting the selected donor element in Swap Anything.
+
+[24] ComfyUI-RvTools v2
+Repository: https://github.com/r-vage/ComfyUI-RvTools_v2
+Lawiz node: Image to RGB [RvTools]
+Used by: normalizing the extracted donor image in Swap Anything.
+
 
 PACKAGES BY LAWIZ FEATURE
 -------------------------
@@ -176,6 +196,19 @@ Qwen Image Edit / Character Angles
   - Current ComfyUI (Qwen edit nodes are now native)
   - ComfyUI-GGUF when a GGUF text encoder is selected
   - ComfyUI Simple Readable Metadata-SG for Character Angles
+
+FLUX2 Character Angles
+  - Current ComfyUI for GetImageSize, EmptyFlux2LatentImage, Flux2Scheduler,
+    KSamplerSelect, CFGGuider and ReferenceLatent
+  - ComfyUI-GGUF for UnetLoaderGGUF
+  - ComfyUI ControlNet Aux only when an optional pose image uses DWPose
+  - ComfyUI-CacheDiT only when optional CacheDiT acceleration is enabled
+
+Swap Anything (SAM3.1 + FLUX2)
+  - Current ComfyUI for SAM3_Detect and the FLUX2 sampling stack
+  - ComfyUI-KJNodes for DrawMaskOnImage
+  - Masquerade Nodes for Cut By Mask
+  - ComfyUI-RvTools v2 for Image to RGB [RvTools]
 
 Z-Image generation
   - Current ComfyUI
@@ -226,7 +259,9 @@ CURRENT REFERENCE INSTALLATION STATUS
 ComfyUI checked at: http://127.0.0.1:8188/object_info
 ComfyUI root checked: C:\ComfyUI_windows_portable\ComfyUI
 
-Result: 85 of 88 Lawiz node classes are currently loaded.
+Saved result from the previous 88-node audit: 85 of 88 node classes were loaded.
+The four FLUX2 Character additions have not been rechecked against this saved
+installation status. Reconnect Lawiz to ComfyUI to refresh node availability.
 
 Missing classes:
   - NunchakuFluxDiTLoader
@@ -240,7 +275,7 @@ installation does not expose these three nodes.
 EXHAUSTIVE NODE CLASS INVENTORY
 -------------------------------
 
-Native in current ComfyUI / comfy_extras (54):
+Native in current ComfyUI / comfy_extras (58):
   AddTextPrefix
   BasicGuider
   BasicScheduler
@@ -254,11 +289,14 @@ Native in current ComfyUI / comfy_extras (54):
   ConditioningZeroOut
   CreateVideo
   DualCLIPLoader
+  EmptyFlux2LatentImage
   EmptyHunyuanLatentVideo
   EmptyLatentImage
   EmptySD3LatentImage
   FluxGuidance
   FluxKontextImageScale
+  Flux2Scheduler
+  GetImageSize
   ImageScaleBy
   ImageScaleToTotalPixels
   ImageUpscaleWithModel
@@ -283,6 +321,7 @@ Native in current ComfyUI / comfy_extras (54):
   PreviewImage
   RandomNoise
   ReferenceLatent
+  SAM3_Detect
   SamplerCustomAdvanced
   SaveAudio
   SaveImage
@@ -296,13 +335,17 @@ Native in current ComfyUI / comfy_extras (54):
   WanFirstLastFrameToVideo
   WanImageToVideo
 
-External custom nodes (34):
+External custom nodes (39):
+  AIO_Preprocessor                        - ComfyUI ControlNet Aux
+  CacheDiT_Model_Optimizer                - ComfyUI-CacheDiT
   ChatterBoxOfficial23LangEngineNode       - TTS Audio Suite
   ChatterBoxVoiceTTS                       - ComfyUI_ChatterBox_Voice
   CLIPLoaderGGUF                           - ComfyUI-GGUF
   CLIPLoaderMultiGPU                       - ComfyUI-MultiGPU
+  Cut By Mask                              - Masquerade Nodes
   DownloadAndLoadFlorence2Model            - ComfyUI-Florence2
   DualCLIPLoaderGGUF                       - ComfyUI-GGUF
+  DrawMaskOnImage                          - ComfyUI-KJNodes
   easy cleanGpuUsed                        - ComfyUI-Easy-Use
   easy clearCacheAll                       - ComfyUI-Easy-Use
   easy showAnything                        - ComfyUI-Easy-Use
@@ -310,6 +353,7 @@ External custom nodes (34):
   FastFilmGrain                            - VRGameDevGirl Custom Nodes
   Florence2Run                             - ComfyUI-Florence2
   FluxResolutionNode                       - ControlAltAI Nodes
+  Image to RGB [RvTools]                   - ComfyUI-RvTools v2
   LTX2SamplingPreviewOverride              - ComfyUI-KJNodes
   LTXDirector                              - WhatDreamsCost-ComfyUI
   LTXDirectorGuide                         - WhatDreamsCost-ComfyUI

@@ -49,6 +49,7 @@ const FALLBACK_EXTENSIONS: Record<ChatterboxLanguage, readonly string[]> = {
     Dutch: ['Blijf luisteren.', 'Blijf bij me.', 'Niets hier is toeval.', 'De keuze is nu aan jou.', 'Haal adem en ga verder.', 'Eén klein detail verandert alles.'],
     Polish: ['Słuchaj dalej.', 'Zostań ze mną.', 'Nic tutaj nie jest przypadkowe.', 'Wybór należy teraz do ciebie.', 'Weź oddech i ruszaj dalej.', 'Jeden drobny szczegół zmienia wszystko.'],
     Portuguese: ['Continue ouvindo.', 'Fique comigo.', 'Nada aqui acontece por acaso.', 'A escolha agora é sua.', 'Respire e siga em frente.', 'Um pequeno detalhe muda tudo.'],
+    Russian: ['Продолжайте слушать.', 'Оставайтесь со мной.', 'Здесь нет ничего случайного.', 'Теперь выбор за вами.', 'Сделайте вдох и двигайтесь дальше.', 'Одна маленькая деталь меняет всё.'],
     Swedish: ['Fortsätt lyssna.', 'Stanna hos mig.', 'Ingenting här är en slump.', 'Valet är ditt nu.', 'Andas och gå vidare.', 'En liten detalj förändrar allt.'],
     Swahili: ['Endelea kusikiliza.', 'Baki nami.', 'Hakuna jambo hapa lililotokea kwa bahati.', 'Uamuzi ni wako sasa.', 'Vuta pumzi kisha songa mbele.', 'Maelezo madogo hubadilisha kila kitu.'],
     Turkish: ['Dinlemeye devam et.', 'Benimle kal.', 'Burada hiçbir şey tesadüf değil.', 'Seçim artık senin.', 'Nefes al ve ilerle.', 'Küçük bir ayrıntı her şeyi değiştirir.'],
@@ -92,6 +93,7 @@ const LOCALIZED_FALLBACKS: Record<Exclude<ChatterboxLanguage, 'English'>, readon
     Dutch: ['Vandaag begint iets wat we lange tijd onmogelijk achtten.', 'Luister goed, want het kleinste detail kan het antwoord zijn.', 'We hebben nog tijd, maar de volgende beslissing verandert alles.'],
     Polish: ['Dziś zaczyna się coś, co długo uważaliśmy za niemożliwe.', 'Słuchaj uważnie, bo najmniejszy szczegół może być odpowiedzią.', 'Wciąż mamy czas, ale następna decyzja zmieni wszystko.'],
     Portuguese: ['Hoje começa algo que durante muito tempo julgámos impossível.', 'Escute com atenção, pois o menor detalhe pode ser a resposta.', 'Ainda temos tempo, mas a próxima decisão mudará tudo.'],
+    Russian: ['Сегодня начинается то, что мы долго считали невозможным.', 'Слушайте внимательно: самая маленькая деталь может оказаться ответом.', 'У нас ещё есть время, но следующее решение изменит всё.'],
     Swedish: ['I dag börjar något som vi länge trodde var omöjligt.', 'Lyssna noga, för den minsta detaljen kan vara svaret.', 'Vi har fortfarande tid, men nästa beslut förändrar allt.'],
     Swahili: ['Leo linaanza jambo ambalo kwa muda mrefu tulidhani haliwezekani.', 'Sikiliza kwa makini, kwa sababu jambo dogo zaidi linaweza kuwa jibu.', 'Bado tuna wakati, lakini uamuzi unaofuata utabadilisha kila kitu.'],
     Turkish: ['Bugün, uzun zamandır imkânsız sandığımız bir şey başlıyor.', 'Dikkatle dinle, çünkü en küçük ayrıntı cevap olabilir.', 'Hâlâ zamanımız var, ancak bir sonraki karar her şeyi değiştirecek.'],
@@ -189,5 +191,50 @@ export const generateTtsDialogue = async (requestedTheme: TtsDialogueTheme, dura
             usesCharacterBudget,
         );
         return { text, theme: theme.value, themeLabel: theme.label };
+    }
+};
+
+export interface TtsConversationLine {
+    characterName: string;
+    text: string;
+}
+
+export const generateTtsConversationLine = async (
+    requestedTheme: TtsDialogueTheme,
+    durationSeconds: number,
+    language: ChatterboxLanguage,
+    characterName: string,
+    previousLines: TtsConversationLine[],
+    direction: 'continue' | 'new-topic',
+) => {
+    const theme = resolveTheme(requestedTheme);
+    const usesCharacterBudget = CHARACTER_BUDGET_LANGUAGES.includes(language);
+    const maxWords = Math.max(7, Math.floor(durationSeconds * WORDS_PER_SECOND));
+    const minWords = Math.max(6, Math.floor(maxWords * 0.8));
+    const maxCharacters = Math.max(20, Math.floor(durationSeconds * CHARACTERS_PER_SECOND));
+    const minCharacters = Math.max(18, Math.floor(maxCharacters * 0.8));
+    const lengthInstruction = usesCharacterBudget
+        ? `Use ${minCharacters} to ${maxCharacters} ${language} characters, excluding spaces and punctuation.`
+        : `Use ${minWords} to ${maxWords} words.`;
+    const transcript = previousLines
+        .filter((line) => line.text.trim())
+        .slice(-8)
+        .map((line) => `${line.characterName}: ${line.text.trim()}`)
+        .join('\n');
+    const conversationInstruction = direction === 'continue' && transcript
+        ? `Continue this conversation naturally. Respond to its latest idea without repeating it. Previous dialogue:\n${transcript}`
+        : direction === 'new-topic' && transcript
+            ? `Start a clearly different topic from the dialogue below, using a natural conversational transition. Do not continue its latest subject. Previous dialogue:\n${transcript}`
+            : 'Start an original, natural conversation topic.';
+    const instruction = `Write only the next spoken line for ${characterName}, in ${language}. ${conversationInstruction}\nStyle: ${theme.direction}. ${lengthInstruction} Keep the line conversational, specific, and easy to say aloud. Do not include a speaker name, heading, quotation marks, stage directions, sound effects, translation, or commentary.`;
+
+    try {
+        const result = await generateMammouthText(instruction);
+        const text = usesCharacterBudget
+            ? trimToCharacterBudget(result.text, maxCharacters)
+            : trimToWordBudget(result.text, maxWords);
+        return { text, theme: theme.value, themeLabel: theme.label };
+    } catch {
+        return generateTtsDialogue(requestedTheme, durationSeconds, language);
     }
 };

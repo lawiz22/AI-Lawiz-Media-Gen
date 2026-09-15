@@ -28,8 +28,10 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
         ? (generationMode === 't2i' ? (options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL)
         : options.provider === 'mammouth'
             ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
-            : options.comfyCharacterUnet
-                ? `Qwen Edit Multi-Angle (${options.comfyCharacterUnet})`
+            : options.comfyCharacterMode === 'flux2'
+                ? `FLUX2 Klein Multi-Angle (${options.comfyCharacterFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf'})`
+                : options.comfyCharacterUnet
+                    ? `Qwen Edit Multi-Angle (${options.comfyCharacterUnet})`
                 : options.comfyModelType === 'krea2-simple'
                     ? 'KREA2 Simple'
                     : options.comfyModelType === 'krea2-raw'

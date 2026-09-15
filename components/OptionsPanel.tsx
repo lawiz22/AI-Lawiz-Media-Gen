@@ -66,6 +66,8 @@ interface OptionsPanelProps {
     setClothingImage?: (file: File | null) => void;
     backgroundImage?: File | null;
     setBackgroundImage?: (file: File | null) => void;
+    characterPoseImage?: File | null;
+    setCharacterPoseImage?: (file: File | null) => void;
     onOpenClothingLibrary?: () => void;
     onOpenBackgroundLibrary?: () => void;
     hideGeneralSettings?: boolean;
@@ -74,7 +76,7 @@ interface OptionsPanelProps {
 interface ModelPromptExample {
     positive: string;
     negative?: string;
-    source: 'civitai' | 'archive';
+    source: 'civitai' | 'archive' | 'huggingface';
 }
 
 type PromptExampleSource = NonNullable<GenerationOptions['comfyPromptExampleSource']>;
@@ -208,6 +210,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     onOpenMaskPicker, onOpenElementPicker,
     clothingImage, setClothingImage,
     backgroundImage, setBackgroundImage,
+    characterPoseImage, setCharacterPoseImage,
     onOpenClothingLibrary, onOpenBackgroundLibrary,
     hideGeneralSettings = false,
 }) => {
@@ -529,7 +532,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         const applyModelDefaults = async () => {
             const updates: Partial<GenerationOptions> = configuredModel === selectedModel ? {} : { [field]: selectedModel };
-            if (window.electron) {
+            if (window.electron && !options.comfyPromptExampleSource) {
                 try {
                     const inventory = await window.electron.getCivitaiInventory();
                     const inventoryItem = findInventoryModel(inventory, selectedModel);
@@ -540,12 +543,18 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     console.warn('Could not apply local model recommendations.', error);
                 }
             }
+            if (modelType === 'flux2-simple') {
+                Object.assign(updates, {
+                    comfyFlux2Clip: 'qwen3vl_4b_fp8_scaled.safetensors',
+                    comfyFlux2Vae: 'flux2-vae.safetensors',
+                });
+            }
             if (!cancelled && Object.keys(updates).length > 0) updateOptions(updates);
         };
 
         void applyModelDefaults();
         return () => { cancelled = true; };
-    }, [options.provider, options.comfyModelType, options.comfyModel, options.comfyQwenUnet, options.comfyQwenEditUnet, options.comfyZImageUnet, options.comfyFlux2Unet, options.comfyKreaUnet, options.comfyNunchakuModel, options.comfyFluxKreaModel, updateOptions, comfyUIObjectInfo, filteredComfyModels, comfyGgufModels, comfyUnets, nunchakuModels]);
+    }, [options.provider, options.comfyModelType, options.comfyModel, options.comfyQwenUnet, options.comfyQwenEditUnet, options.comfyZImageUnet, options.comfyFlux2Unet, options.comfyKreaUnet, options.comfyNunchakuModel, options.comfyFluxKreaModel, options.comfyPromptExampleSource, updateOptions, comfyUIObjectInfo, filteredComfyModels, comfyGgufModels, comfyUnets, nunchakuModels]);
 
 
     useEffect(() => {
@@ -990,9 +999,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             });
         };
         const enabledOutputCount = getEnabledCharacterAngles(options).length;
-        const backgroundOptions = BACKGROUND_OPTIONS.filter(option => option.value !== 'image');
+        const isFlux2Character = options.comfyCharacterMode === 'flux2';
+        const backgroundOptions = isFlux2Character ? BACKGROUND_OPTIONS : BACKGROUND_OPTIONS.filter(option => option.value !== 'image');
         const clothingOptions = [
             { value: 'original', label: 'Original from Image' },
+            ...(isFlux2Character ? [{ value: 'image', label: 'From Reference Image' }] : []),
             { value: 'prompt', label: 'From Custom Prompt' },
             { value: 'random', label: 'Random from Prompt' },
         ];
@@ -1087,6 +1098,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
             <OptionSection title="Background">
                 <SelectInput label="Background Source" value={options.background} onChange={handleOptionChange('background')} options={backgroundOptions} disabled={isDisabled} />
+                {isFlux2Character && options.background === 'image' && setBackgroundImage && <div className="flex items-center gap-2">
+                    <div className="flex-grow"><ImageUploader label="Optional Background Reference" id="flux2-character-background" onImageUpload={setBackgroundImage} sourceFile={backgroundImage || null} disabled={isDisabled} /></div>
+                    {onOpenBackgroundLibrary && <button type="button" onClick={onOpenBackgroundLibrary} disabled={isDisabled} className="mt-8 rounded-lg bg-bg-tertiary p-3 text-text-secondary hover:bg-bg-tertiary-hover" title="Select background from Library"><LibraryIcon className="h-6 w-6" /></button>}
+                </div>}
                 {(options.background === 'prompt' || options.background === 'random') && <div className="relative">
                     <TextInput label="Background Prompt" value={options.customBackground || ''} onChange={handleOptionChange('customBackground')} placeholder="e.g., a neutral photography studio" disabled={isDisabled} />
                     <button onClick={handleRandomizeBackground} disabled={isDisabled} className="absolute right-0 top-0 p-1 text-text-secondary hover:text-text-primary" title="Randomize background"><RefreshIcon className="h-4 w-4" /></button>
@@ -1094,25 +1109,38 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             </OptionSection>
 
             <OptionSection title="Clothing">
-                <SelectInput label="Clothing Source" value={options.clothing === 'image' ? 'original' : options.clothing} onChange={handleOptionChange('clothing')} options={clothingOptions} disabled={isDisabled} />
+                <SelectInput label="Clothing Source" value={!isFlux2Character && options.clothing === 'image' ? 'original' : options.clothing} onChange={handleOptionChange('clothing')} options={clothingOptions} disabled={isDisabled} />
+                {isFlux2Character && options.clothing === 'image' && setClothingImage && <div className="flex items-center gap-2">
+                    <div className="flex-grow"><ImageUploader label="Optional Clothing Reference" id="flux2-character-clothing" onImageUpload={setClothingImage} sourceFile={clothingImage || null} disabled={isDisabled} /></div>
+                    {onOpenClothingLibrary && <button type="button" onClick={onOpenClothingLibrary} disabled={isDisabled} className="mt-8 rounded-lg bg-bg-tertiary p-3 text-text-secondary hover:bg-bg-tertiary-hover" title="Select clothing from Library"><LibraryIcon className="h-6 w-6" /></button>}
+                </div>}
                 {(options.clothing === 'prompt' || options.clothing === 'random') && <div className="relative">
                     <TextInput label="Clothing Prompt" value={options.customClothingPrompt || ''} onChange={handleOptionChange('customClothingPrompt')} placeholder="e.g., a fitted black suit" disabled={isDisabled} />
                     <button onClick={handleRandomizeClothing} disabled={isDisabled} className="absolute right-0 top-0 p-1 text-text-secondary hover:text-text-primary" title="Randomize clothing"><RefreshIcon className="h-4 w-4" /></button>
                 </div>}
             </OptionSection>
 
+            {isFlux2Character && <OptionSection title="Pose Reference">
+                <p className="text-xs text-text-muted">Optional. DWPose supplies the body structure; each output's angle, pose and expression text still controls its variation.</p>
+                {characterPoseImage && !comfyUIObjectInfo?.AIO_Preprocessor && <p className="rounded-md border border-warning/50 bg-warning-bg p-3 text-xs text-warning">The pose reference requires AIO_Preprocessor from ComfyUI ControlNet Aux.</p>}
+                {setCharacterPoseImage && <div className="flex items-center gap-2">
+                    <div className="flex-grow"><ImageUploader label="Optional Pose Reference" id="flux2-character-pose" onImageUpload={setCharacterPoseImage} sourceFile={characterPoseImage || null} disabled={isDisabled} /></div>
+                    {onOpenPosePicker && <button type="button" onClick={onOpenPosePicker} disabled={isDisabled} className="mt-8 rounded-lg bg-bg-tertiary p-3 text-text-secondary hover:bg-bg-tertiary-hover" title="Select pose from Library"><LibraryIcon className="h-6 w-6" /></button>}
+                </div>}
+            </OptionSection>}
+
             <button onClick={() => setCharacterAdvancedOpen(open => !open)} className={`w-full rounded-md border px-4 py-2 text-sm font-bold transition-colors ${characterAdvancedOpen ? 'border-accent bg-accent/10 text-accent' : 'border-border-primary bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
                 Advanced {characterAdvancedOpen ? '−' : '+'}
             </button>
 
-            {characterAdvancedOpen && <OptionSection title="Qwen Edit Models & LoRAs">
+            {characterAdvancedOpen && !isFlux2Character && <OptionSection title="Qwen Edit Models & LoRAs">
                 <SelectInput label="Diffusion Model (UNET)" value={options.comfyCharacterUnet || ''} onChange={handleOptionChange('comfyCharacterUnet')} options={selectOptions(options.comfyCharacterUnet || '', comfyUnets)} disabled={isDisabled} />
                 <SelectInput label="CLIP" value={options.comfyCharacterClip || ''} onChange={handleOptionChange('comfyCharacterClip')} options={selectOptions(options.comfyCharacterClip || '', comfyClips)} disabled={isDisabled} />
                 <SelectInput label="VAE" value={options.comfyCharacterVae || ''} onChange={handleOptionChange('comfyCharacterVae')} options={selectOptions(options.comfyCharacterVae || '', comfyVaes)} disabled={isDisabled} />
                 <SelectInput label="Lightning LoRA" value={options.comfyCharacterLightningLora || ''} onChange={handleOptionChange('comfyCharacterLightningLora')} options={selectOptions(options.comfyCharacterLightningLora || '', comfyLoras)} disabled={isDisabled} />
-                <NumberSlider label={`Lightning Strength: ${options.comfyCharacterLightningStrength ?? 1}`} value={options.comfyCharacterLightningStrength ?? 1} onChange={handleSliderChange('comfyCharacterLightningStrength')} min={0} max={2} step={0.05} disabled={isDisabled} />
+                <NumberSlider label={`Lightning Strength: ${options.comfyCharacterLightningStrength ?? 1}`} value={options.comfyCharacterLightningStrength ?? 1} onChange={handleSliderChange('comfyCharacterLightningStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} allowDirectInput />
                 <SelectInput label="Multiple Angles LoRA" value={options.comfyCharacterAnglesLora || ''} onChange={handleOptionChange('comfyCharacterAnglesLora')} options={selectOptions(options.comfyCharacterAnglesLora || '', comfyLoras)} disabled={isDisabled} />
-                <NumberSlider label={`Angles Strength: ${options.comfyCharacterAnglesStrength ?? 1}`} value={options.comfyCharacterAnglesStrength ?? 1} onChange={handleSliderChange('comfyCharacterAnglesStrength')} min={0} max={2} step={0.05} disabled={isDisabled} />
+                <NumberSlider label={`Angles Strength: ${options.comfyCharacterAnglesStrength ?? 1}`} value={options.comfyCharacterAnglesStrength ?? 1} onChange={handleSliderChange('comfyCharacterAnglesStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} allowDirectInput />
                 <div className="space-y-3 rounded-md border border-border-primary bg-bg-primary p-4">
                     <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-text-secondary">
                         <input
@@ -1139,10 +1167,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             label={`Additional LoRA Strength: ${options.comfyCharacterAdditionalLoraStrength ?? 1}`}
                             value={options.comfyCharacterAdditionalLoraStrength ?? 1}
                             onChange={handleSliderChange('comfyCharacterAdditionalLoraStrength')}
-                            min={0}
-                            max={2}
-                            step={0.05}
+                            min={-10}
+                            max={10}
+                            step={0.5}
                             disabled={isDisabled}
+                            allowDirectInput
                         />
                     </>}
                 </div>
@@ -1154,6 +1183,43 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 <NumberSlider label={`CFG: ${options.comfyCharacterCfg ?? 1}`} value={options.comfyCharacterCfg ?? 1} onChange={handleSliderChange('comfyCharacterCfg')} min={0.1} max={10} step={0.1} disabled={isDisabled} />
                 <NumberSlider label={`AuraFlow Shift: ${options.comfyCharacterShift ?? 3}`} value={options.comfyCharacterShift ?? 3} onChange={handleSliderChange('comfyCharacterShift')} min={0} max={10} step={0.1} disabled={isDisabled} />
                 <NumberSlider label={`Source Megapixels: ${options.comfyCharacterMegapixels ?? 1}`} value={options.comfyCharacterMegapixels ?? 1} onChange={handleSliderChange('comfyCharacterMegapixels')} min={0.25} max={4} step={0.25} disabled={isDisabled} />
+            </OptionSection>}
+
+            {characterAdvancedOpen && isFlux2Character && <OptionSection title="FLUX2 Models & Sampling">
+                <SelectInput label="Diffusion Model (GGUF)" value={options.comfyCharacterFlux2Unet || ''} onChange={handleOptionChange('comfyCharacterFlux2Unet')} options={selectOptions(options.comfyCharacterFlux2Unet || '', comfyGgufModels)} disabled={isDisabled} />
+                <SelectInput label="CLIP" value={options.comfyCharacterFlux2Clip || ''} onChange={handleOptionChange('comfyCharacterFlux2Clip')} options={selectOptions(options.comfyCharacterFlux2Clip || '', comfyClips)} disabled={isDisabled} />
+                <SelectInput label="VAE" value={options.comfyCharacterFlux2Vae || ''} onChange={handleOptionChange('comfyCharacterFlux2Vae')} options={selectOptions(options.comfyCharacterFlux2Vae || '', comfyVaes)} disabled={isDisabled} />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <SelectInput label="Sampler" value={options.comfyCharacterFlux2Sampler || 'euler'} onChange={handleOptionChange('comfyCharacterFlux2Sampler')} options={selectOptions(options.comfyCharacterFlux2Sampler || 'euler', comfySamplers)} disabled={isDisabled} />
+                    <NumberSlider label={`Steps: ${options.comfyCharacterFlux2Steps ?? 4}`} value={options.comfyCharacterFlux2Steps ?? 4} onChange={handleSliderChange('comfyCharacterFlux2Steps')} min={1} max={40} step={1} disabled={isDisabled} />
+                </div>
+                <NumberSlider label={`CFG: ${options.comfyCharacterFlux2Cfg ?? 1}`} value={options.comfyCharacterFlux2Cfg ?? 1} onChange={handleSliderChange('comfyCharacterFlux2Cfg')} min={0.1} max={10} step={0.1} disabled={isDisabled} />
+                <NumberSlider label={`Source Megapixels: ${options.comfyCharacterFlux2Megapixels ?? 1}`} value={options.comfyCharacterFlux2Megapixels ?? 1} onChange={handleSliderChange('comfyCharacterFlux2Megapixels')} min={0.25} max={4} step={0.25} disabled={isDisabled} />
+                <div className="space-y-4 rounded-md border border-border-secondary bg-bg-primary/50 p-3">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-text-secondary">
+                        <input type="checkbox" checked={!!options.comfyCharacterFlux2UseLoras} onChange={handleOptionChange('comfyCharacterFlux2UseLoras')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
+                        Enable optional LoRAs
+                    </label>
+                    {options.comfyCharacterFlux2UseLoras && <>
+                        <SelectInput label="LoRA 1" value={options.comfyCharacterFlux2Lora1Name || ''} onChange={handleOptionChange('comfyCharacterFlux2Lora1Name')} options={[{ value: '', label: 'None' }, ...selectOptions(options.comfyCharacterFlux2Lora1Name || '', comfyLoras)]} disabled={isDisabled} />
+                        <NumberSlider label={`LoRA 1 Strength: ${options.comfyCharacterFlux2Lora1Strength ?? 1}`} value={options.comfyCharacterFlux2Lora1Strength ?? 1} onChange={handleSliderChange('comfyCharacterFlux2Lora1Strength')} min={-10} max={10} step={0.5} disabled={isDisabled} allowDirectInput />
+                        <SelectInput label="LoRA 2" value={options.comfyCharacterFlux2Lora2Name || ''} onChange={handleOptionChange('comfyCharacterFlux2Lora2Name')} options={[{ value: '', label: 'None' }, ...selectOptions(options.comfyCharacterFlux2Lora2Name || '', comfyLoras)]} disabled={isDisabled} />
+                        <NumberSlider label={`LoRA 2 Strength: ${options.comfyCharacterFlux2Lora2Strength ?? 1}`} value={options.comfyCharacterFlux2Lora2Strength ?? 1} onChange={handleSliderChange('comfyCharacterFlux2Lora2Strength')} min={-10} max={10} step={0.5} disabled={isDisabled} allowDirectInput />
+                    </>}
+                </div>
+                <div className="space-y-4 rounded-md border border-border-secondary bg-bg-primary/50 p-3">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-text-secondary">
+                        <input type="checkbox" checked={!!options.comfyCharacterFlux2UseCacheDit} onChange={handleOptionChange('comfyCharacterFlux2UseCacheDit')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
+                        Enable CacheDiT Accelerator
+                    </label>
+                    {options.comfyCharacterFlux2UseCacheDit && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <SelectInput label="CacheDiT Model Type" value={options.comfyCharacterFlux2CacheDitModelType || 'Auto'} onChange={handleOptionChange('comfyCharacterFlux2CacheDitModelType')} options={cacheDitModelTypes.map(value => ({ value, label: value }))} disabled={isDisabled} />
+                        <NumberSlider label={`Warmup Steps: ${options.comfyCharacterFlux2CacheDitWarmupSteps ?? 3}`} value={options.comfyCharacterFlux2CacheDitWarmupSteps ?? 3} onChange={handleSliderChange('comfyCharacterFlux2CacheDitWarmupSteps')} min={0} max={100} step={1} disabled={isDisabled} />
+                        <NumberSlider label={`Skip Interval: ${options.comfyCharacterFlux2CacheDitSkipInterval ?? 2}`} value={options.comfyCharacterFlux2CacheDitSkipInterval ?? 2} onChange={handleSliderChange('comfyCharacterFlux2CacheDitSkipInterval')} min={0} max={10} step={1} disabled={isDisabled} />
+                        <label className="flex cursor-pointer items-center gap-2 self-end pb-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={options.comfyCharacterFlux2CacheDitPrintSummary ?? true} onChange={handleOptionChange('comfyCharacterFlux2CacheDitPrintSummary')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />Print performance summary</label>
+                        {!comfyUIObjectInfo?.CacheDiT_Model_Optimizer && <p className="text-xs text-warning sm:col-span-2">CacheDiT is not loaded by ComfyUI. Install or restart ComfyUI before generating with this option.</p>}
+                    </div>}
+                </div>
             </OptionSection>}
         </>;
     };
@@ -1367,9 +1433,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             <SelectInput label="VAE Model" value={options.comfyWanVaeModel || ''} onChange={handleOptionChange('comfyWanVaeModel')} options={comfyVaes.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
                         </OptionSection>
                         <OptionSection title="LoRAs">
-                            <CheckboxSlider label="Use FusionX LoRA" isChecked={!!options.comfyWanUseFusionXLora} onCheckboxChange={handleOptionChange('comfyWanUseFusionXLora')} sliderValue={options.comfyWanFusionXLoraStrength || 0} onSliderChange={handleSliderChange('comfyWanFusionXLoraStrength')} min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
-                            <CheckboxSlider label="Use Lightning LoRA" isChecked={!!options.comfyWanUseLightningLora} onCheckboxChange={handleOptionChange('comfyWanUseLightningLora')} sliderValue={options.comfyWanLightningLoraStrength || 0} onSliderChange={handleSliderChange('comfyWanLightningLoraStrength')} min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
-                            <CheckboxSlider label="Use Stock Photo LoRA" isChecked={!!options.comfyWanUseStockPhotoLora} onCheckboxChange={handleOptionChange('comfyWanUseStockPhotoLora')} sliderValue={options.comfyWanStockPhotoLoraStrength || 0} onSliderChange={handleSliderChange('comfyWanStockPhotoLoraStrength')} min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
+                            <CheckboxSlider label="Use FusionX LoRA" isChecked={!!options.comfyWanUseFusionXLora} onCheckboxChange={handleOptionChange('comfyWanUseFusionXLora')} sliderValue={options.comfyWanFusionXLoraStrength || 0} onSliderChange={handleSliderChange('comfyWanFusionXLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
+                            <CheckboxSlider label="Use Lightning LoRA" isChecked={!!options.comfyWanUseLightningLora} onCheckboxChange={handleOptionChange('comfyWanUseLightningLora')} sliderValue={options.comfyWanLightningLoraStrength || 0} onSliderChange={handleSliderChange('comfyWanLightningLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
+                            <CheckboxSlider label="Use Stock Photo LoRA" isChecked={!!options.comfyWanUseStockPhotoLora} onCheckboxChange={handleOptionChange('comfyWanUseStockPhotoLora')} sliderValue={options.comfyWanStockPhotoLoraStrength || 0} onSliderChange={handleSliderChange('comfyWanStockPhotoLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
                         </OptionSection>
                     </>
                 )}
@@ -1405,9 +1471,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             <SelectInput label="T5 XXL Model" value={options.comfyNunchakuT5XXL || ''} onChange={handleOptionChange('comfyNunchakuT5XXL')} options={t5SafetensorEncoderModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
                         </OptionSection>
                         <OptionSection title="LoRAs">
-                            <CheckboxSlider label="Use Turbo LoRA" isChecked={!!options.comfyNunchakuUseTurboLora} onCheckboxChange={handleOptionChange('comfyNunchakuUseTurboLora')} sliderValue={options.comfyNunchakuTurboLoraStrength || 0} onSliderChange={handleSliderChange('comfyNunchakuTurboLoraStrength')} min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
-                            <CheckboxSlider label="Use Nudify LoRA" isChecked={!!options.comfyNunchakuUseNudifyLora} onCheckboxChange={handleOptionChange('comfyNunchakuUseNudifyLora')} sliderValue={options.comfyNunchakuNudifyLoraStrength || 0} onSliderChange={handleSliderChange('comfyNunchakuNudifyLoraStrength')} min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
-                            <CheckboxSlider label="Use Detail LoRA" isChecked={!!options.comfyNunchakuUseDetailLora} onCheckboxChange={handleOptionChange('comfyNunchakuUseDetailLora')} sliderValue={options.comfyNunchakuDetailLoraStrength || 0} onSliderChange={handleSliderChange('comfyNunchakuDetailLoraStrength')} min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
+                            <CheckboxSlider label="Use Turbo LoRA" isChecked={!!options.comfyNunchakuUseTurboLora} onCheckboxChange={handleOptionChange('comfyNunchakuUseTurboLora')} sliderValue={options.comfyNunchakuTurboLoraStrength || 0} onSliderChange={handleSliderChange('comfyNunchakuTurboLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
+                            <CheckboxSlider label="Use Nudify LoRA" isChecked={!!options.comfyNunchakuUseNudifyLora} onCheckboxChange={handleOptionChange('comfyNunchakuUseNudifyLora')} sliderValue={options.comfyNunchakuNudifyLoraStrength || 0} onSliderChange={handleSliderChange('comfyNunchakuNudifyLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
+                            <CheckboxSlider label="Use Detail LoRA" isChecked={!!options.comfyNunchakuUseDetailLora} onCheckboxChange={handleOptionChange('comfyNunchakuUseDetailLora')} sliderValue={options.comfyNunchakuDetailLoraStrength || 0} onSliderChange={handleSliderChange('comfyNunchakuDetailLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
                         </OptionSection>
                     </>
                 )}
@@ -1431,9 +1497,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             <SelectInput label="VAE" value={options.comfyFluxKreaVae || ''} onChange={handleOptionChange('comfyFluxKreaVae')} options={comfyVaes.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
                         </OptionSection>
                         <OptionSection title="LoRAs">
-                            <CheckboxSlider label="Woman LoRA" isChecked={!!options.useP1x4r0maWomanLora} onCheckboxChange={handleOptionChange('useP1x4r0maWomanLora')} sliderValue={options.p1x4r0maWomanLoraStrength || 0} onSliderChange={handleSliderChange('p1x4r0maWomanLoraStrength')} min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
-                            <CheckboxSlider label="Nipple Diffusion LoRA" isChecked={!!options.useNippleDiffusionLora} onCheckboxChange={handleOptionChange('useNippleDiffusionLora')} sliderValue={options.nippleDiffusionLoraStrength || 0} onSliderChange={handleSliderChange('nippleDiffusionLoraStrength')} min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
-                            <CheckboxSlider label="Pussy Diffusion LoRA" isChecked={!!options.usePussyDiffusionLora} onCheckboxChange={handleOptionChange('usePussyDiffusionLora')} sliderValue={options.pussyDiffusionLoraStrength || 0} onSliderChange={handleSliderChange('pussyDiffusionLoraStrength')} min={0} max={2} step={0.1} disabled={isDisabled} sliderLabel="Strength" />
+                            <CheckboxSlider label="Woman LoRA" isChecked={!!options.useP1x4r0maWomanLora} onCheckboxChange={handleOptionChange('useP1x4r0maWomanLora')} sliderValue={options.p1x4r0maWomanLoraStrength || 0} onSliderChange={handleSliderChange('p1x4r0maWomanLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
+                            <CheckboxSlider label="Nipple Diffusion LoRA" isChecked={!!options.useNippleDiffusionLora} onCheckboxChange={handleOptionChange('useNippleDiffusionLora')} sliderValue={options.nippleDiffusionLoraStrength || 0} onSliderChange={handleSliderChange('nippleDiffusionLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
+                            <CheckboxSlider label="Pussy Diffusion LoRA" isChecked={!!options.usePussyDiffusionLora} onCheckboxChange={handleOptionChange('usePussyDiffusionLora')} sliderValue={options.pussyDiffusionLoraStrength || 0} onSliderChange={handleSliderChange('pussyDiffusionLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
                         </OptionSection>
                         <OptionSection title="Upscaler">
                             <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={!!options.comfyFluxKreaUseUpscaler} onChange={handleOptionChange('comfyFluxKreaUseUpscaler')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />Enable Upscaler</label>

@@ -522,7 +522,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const subTabs = [
         { id: 'from-image', label: 'Prompt from Image' },
         { id: 'extract-background', label: 'Extract Background' },
-        { id: 'extract-subject', label: 'Extract Subject' },
+        { id: 'extract-subject', label: 'Subject / Object' },
         { id: 'prompt-soup', label: 'Magical Prompt Soup' },
         { id: 'wan-video', label: 'LTX Video Prompt' },
     ];
@@ -648,7 +648,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
 
             {activeSubTab === 'extract-subject' && (
                 <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
-                    <h2 className="text-xl font-bold text-accent">Extract Subject from Image</h2>
+                    <h2 className="text-xl font-bold text-accent">Extract Subject or Object from Image</h2>
                      <p className="text-sm text-text-secondary -mt-6">
                         Upload a photo to generate a prompt describing only the main subject(s). This is useful for isolating characters or objects from their environment.
                     </p>
@@ -839,116 +839,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                 </div>
             )}
 
-            {activeSubTab === 'qwen-image' && (
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
-                    <h2 className="text-2xl font-bold text-accent">Qwen Image Prompt Builder</h2>
-                    <p className="text-sm text-text-secondary -mt-6">
-                        Construct a structured prompt for Qwen Image models using this formula-based builder.
-                    </p>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* Left Column: Controls */}
-                        <div className="space-y-6">
-                            <div>
-                                <label className="block text-sm font-medium text-text-secondary">1. Main Subject / Scene</label>
-                                <textarea 
-                                    value={qwenTitle}
-                                    onChange={e => dispatch(updatePromptGenState({ qwenTitle: e.target.value }))}
-                                    placeholder="e.g., A majestic cyberpunk phoenix..." 
-                                    className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                                    rows={4}
-                                />
-                            </div>
-                            
-                            <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary/50">
-                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={qwenUseTextInImage}
-                                        onChange={e => dispatch(updatePromptGenState({ qwenUseTextInImage: e.target.checked }))}
-                                        className="rounded text-accent focus:ring-accent"
-                                    />
-                                    2. Add Text-in-Image (Optional)
-                                </label>
-                                {qwenUseTextInImage && (
-                                    <div className="space-y-4 pl-6 border-l-2 border-border-primary">
-                                         <input 
-                                            type="text" 
-                                            value={qwenTextContent}
-                                            onChange={e => dispatch(updatePromptGenState({ qwenTextContent: e.target.value }))}
-                                            placeholder="Text content" 
-                                            className="block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm"
-                                        />
-                                        <div>
-                                            <label className="block text-xs font-medium text-text-muted">Position</label>
-                                            <select 
-                                                value={qwenTextPosition}
-                                                onChange={e => dispatch(updatePromptGenState({ qwenTextPosition: e.target.value as any }))}
-                                                className="mt-1 block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm"
-                                            >
-                                                {['top-left', 'top-center', 'top-right', 'middle-left', 'middle-center', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right'].map(pos => (
-                                                    <option key={pos} value={pos}>{pos.replace('-', ' ')}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <input 
-                                            type="text" 
-                                            value={qwenTextStyle}
-                                            onChange={e => dispatch(updatePromptGenState({ qwenTextStyle: e.target.value }))}
-                                            placeholder="Font / Style (e.g., glowing, futuristic)" 
-                                            className="block w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm"
-                                        />
-                                    </div>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-text-secondary">3. Style Modifiers</label>
-                                 <textarea 
-                                    value={qwenStyleModifiers}
-                                    onChange={e => dispatch(updatePromptGenState({ qwenStyleModifiers: e.target.value }))}
-                                    placeholder="e.g., hyperrealistic, 8k, cinematic..." 
-                                    className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm"
-                                    rows={4}
-                                />
-                            </div>
-                             <div>
-                                <h4 className="text-xs font-semibold text-text-secondary mb-2">Preset Styles</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {['Cinematic', 'Photorealistic', 'Anime', '3D Render', 'Oil Painting', 'Watercolor'].map(style => (
-                                         <button 
-                                            key={style}
-                                            onClick={() => dispatch(updatePromptGenState({ qwenStyleModifiers: (qwenStyleModifiers ? qwenStyleModifiers + ', ' : '') + style.toLowerCase() }))}
-                                            className="px-3 py-1.5 text-xs font-semibold rounded-md transition-colors bg-bg-primary hover:bg-bg-tertiary-hover"
-                                        >
-                                            + {style}
-                                        </button>
-                                    ))}
-                                </div>
-                             </div>
-                        </div>
-                        
-                        {/* Right Column: Result */}
-                        <div className="space-y-4">
-                            <label className="block text-sm font-medium text-text-secondary">Final Prompt</label>
-                             <textarea 
-                                value={qwenFinalPrompt}
-                                readOnly 
-                                className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm h-96 text-accent font-mono"
-                            />
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <button onClick={() => handleSavePrompt(qwenFinalPrompt, 'qwen-image', 'qwen-image', null)} disabled={!qwenFinalPrompt || qwenPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${qwenPromptSaveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
-                                    {qwenPromptSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : qwenPromptSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
-                                    {qwenPromptSaveStatus === 'saved' ? 'Saved!' : 'Save'}
-                                </button>
-                                <button onClick={handleQwenCopy} disabled={!qwenFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><CopyIcon className="w-5 h-5" /> {qwenCopyButtonText}</button>
-                                <button onClick={() => onUsePrompt(qwenFinalPrompt)} disabled={!qwenFinalPrompt} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><SendIcon className="w-5 h-5" />Use</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-            
             <div className="mt-8 pt-4 border-t border-danger-bg">
                 <button onClick={onReset} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
                     <ResetIcon className="w-5 h-5" /> Reset All Prompt Tools

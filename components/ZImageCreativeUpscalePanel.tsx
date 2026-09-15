@@ -6,6 +6,7 @@ import { cancelComfyUIExecution, generateZImageCreativeUpscale, type ZImageCreat
 import { dataUrlToThumbnail } from '../utils/imageUtils';
 import { CheckIcon, CloseIcon, DownloadIcon, GenerateIcon, LibraryIcon, SaveIcon, SpinnerIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
+import { EditableNumberInput } from './InputComponents';
 
 interface Props {
     sourceFile: File | null;
@@ -77,7 +78,11 @@ const LoraGroup: React.FC<{
                 return <div key={index} className="rounded-md border border-border-primary bg-bg-secondary p-3">
                     <label className="flex items-center gap-2 text-xs font-bold text-text-secondary"><input type="checkbox" checked={lora.enabled} onChange={(event) => update(index, { enabled: event.target.checked })} className="accent-accent" />LoRA {index + 1}</label>
                     <select value={lora.name} onChange={(event) => update(index, { name: event.target.value, enabled: Boolean(event.target.value) })} className={controlClass}><option value="">None</option>{models.map((model) => <option key={model} value={model}>{model}</option>)}</select>
-                    <label className="mt-2 block text-xs text-text-muted">Strength: {lora.strength}<input type="range" min="-2" max="2" step="0.05" value={lora.strength} onChange={(event) => update(index, { strength: Number(event.target.value) })} className="mt-1 w-full accent-accent" /></label>
+                    <label className="mt-2 block text-xs text-text-muted">Strength</label>
+                    <div className="mt-1 flex items-center gap-2">
+                        <input type="range" min="-10" max="10" step="0.5" value={lora.strength} onChange={(event) => update(index, { strength: Number(event.target.value) })} aria-label={`LoRA ${index + 1} strength`} className="w-full accent-accent" />
+                        <EditableNumberInput min={-10} max={10} step={0.5} value={lora.strength} onChange={(event) => update(index, { strength: Number(event.target.value) })} ariaLabel={`LoRA ${index + 1} numeric strength`} className="w-20 rounded border border-border-primary bg-bg-tertiary px-2 py-1 text-sm text-text-primary" />
+                    </div>
                 </div>;
             })}
         </div>

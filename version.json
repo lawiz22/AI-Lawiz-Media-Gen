@@ -1,5 +1,5 @@
 {
-  "version": "1.58",
-  "date": "2025-12-12T13:41:00Z",
-  "changes": "Update to version 1.58. Minor updates and fixes."
+  "version": "1.7",
+  "date": "2026-09-15T00:00:00Z",
+  "changes": "Advanced multi-character TTS, speaker-aware LTX transfers with optional character photos, and a new voice recorder for microphone and computer audio references."
 }

@@ -117,6 +117,7 @@ const appSlice = createSlice({
       imageDataUrl?: string;
       prompt?: string;
       ttsText?: string;
+      ttsSegments?: Array<{ prompt: string; ttsText: string; imageDataUrl?: string }>;
       audioDataUrl?: string;
       audioName?: string;
       videoDataUrl?: string;

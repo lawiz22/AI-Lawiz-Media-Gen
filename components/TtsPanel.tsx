@@ -9,6 +9,7 @@ import { CheckIcon, DiceIcon, DownloadIcon, GenerateIcon, LibraryIcon, Microphon
 import { AudioPlayer } from './AudioPlayer';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { estimateSpeechDuration, generateTtsDialogue, TTS_DIALOGUE_THEMES, type TtsDialogueTheme } from '../services/ttsDialogueService';
+import { TtsAdvancedPanel } from './TtsAdvancedPanel';
 
 interface TtsPanelProps {
     isComfyUIConnected: boolean | null;
@@ -34,7 +35,7 @@ const createAudioThumbnail = () => {
     return `data:image/svg+xml;base64,${btoa(svg)}`;
 };
 
-export const TtsPanel: React.FC<TtsPanelProps> = ({ isComfyUIConnected }) => {
+const TtsVoiceClonePanel: React.FC<TtsPanelProps> = ({ isComfyUIConnected }) => {
     const dispatch: AppDispatch = useDispatch();
     const audioInput = useRef<HTMLInputElement>(null);
     const thumbnailInput = useRef<HTMLInputElement>(null);
@@ -350,4 +351,18 @@ export const TtsPanel: React.FC<TtsPanelProps> = ({ isComfyUIConnected }) => {
         <LibraryPickerModal isOpen={isReferencePickerOpen} onClose={() => setIsReferencePickerOpen(false)} onSelectItem={selectLibraryReference} filter={['tts-reference', 'audio-tts']} />
         </>
     );
+};
+
+export const TtsPanel: React.FC<TtsPanelProps> = ({ isComfyUIConnected }) => {
+    const [activeSubgroup, setActiveSubgroup] = useState<'voice-clone' | 'advanced'>('voice-clone');
+
+    return <div>
+        <nav className="mb-4 grid grid-cols-2 border-b border-border-primary" aria-label="TTS tools">
+            <button onClick={() => setActiveSubgroup('voice-clone')} aria-current={activeSubgroup === 'voice-clone' ? 'page' : undefined} className={`border-b-2 px-4 py-3 text-sm font-bold transition-colors ${activeSubgroup === 'voice-clone' ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-primary'}`}>TTS Voice Clone</button>
+            <button onClick={() => setActiveSubgroup('advanced')} aria-current={activeSubgroup === 'advanced' ? 'page' : undefined} className={`border-b-2 px-4 py-3 text-sm font-bold transition-colors ${activeSubgroup === 'advanced' ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-primary'}`}>TTS Advanced</button>
+        </nav>
+        {activeSubgroup === 'voice-clone'
+            ? <TtsVoiceClonePanel isComfyUIConnected={isComfyUIConnected} />
+            : <TtsAdvancedPanel isComfyUIConnected={isComfyUIConnected} />}
+    </div>;
 };

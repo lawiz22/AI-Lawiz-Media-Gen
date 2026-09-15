@@ -11,11 +11,13 @@ import { resizeImageFile, cropImageFile } from '../utils/imageProcessing';
 import type { LibraryItem, VideoUtilsState, PaletteColor, ColorPickerState, ResizeCropState } from '../types';
 import { ImageUploader } from './ImageUploader';
 import { createAccentStyle } from '../utils/accentTheme';
+import { VoiceRecorderPanel } from './VoiceRecorderPanel';
 
 const VIDEO_UTILS_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     frames: createAccentStyle('#38bdf8', '#7dd3fc', '#0284c7'),
     colors: createAccentStyle('#4ade80', '#86efac', '#16a34a'),
     'resize-crop': createAccentStyle('#facc15', '#fde047', '#ca8a04'),
+    'voice-recorder': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
 };
 
 // --- Color Naming Utilities (Client-Side) ---
@@ -699,6 +701,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
         { id: 'frames', label: 'Frame Extractor' },
         { id: 'colors', label: 'Color Palette Extractor' },
         { id: 'resize-crop', label: 'Resize & Crop' },
+        { id: 'voice-recorder', label: 'Voice Recorder' },
     ];
 
     return (
@@ -968,6 +971,10 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                     resizeCrop={resizeCrop}
                     onOpenLibrary={onOpenLibraryForResizeCrop}
                 />
+            </div>
+
+            <div className={activeSubTab === 'voice-recorder' ? 'block' : 'hidden'}>
+                <VoiceRecorderPanel />
             </div>
 
             <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>

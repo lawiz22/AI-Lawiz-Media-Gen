@@ -82,7 +82,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
 
 
 interface LibraryPanelProps {
-  onLoadItem: (item: LibraryItem) => void;
+  onLoadItem: (item: LibraryItem, options?: { importTtsCharacterPhotos: boolean }) => void;
   onUpscaleItem: (item: LibraryItem) => void;
   isDriveConnected: boolean;
   onSyncWithDrive: () => void;
@@ -110,6 +110,7 @@ const getCategoryIcon = (mediaType: LibraryItemType, className: string = "w-4 h-
     case 'pose': return <PoseIcon {...props} />;
     case 'font': return <FontIcon {...props} />;
     case 'past-forward-photo': return <PastForwardIcon {...props} />;
+    case 'preset': return <WorkflowIcon {...props} />;
     default: return null;
   }
 };
@@ -128,6 +129,7 @@ const FILTER_BUTTONS: { id: LibraryItemType; label: string; icon: React.ReactEle
   { id: 'object', label: 'Objects', icon: <CubeIcon className="w-5 h-5" /> },
   { id: 'pose', label: 'Poses', icon: <PoseIcon className="w-5 h-5" /> },
   { id: 'font', label: 'Fonts', icon: <FontIcon className="w-5 h-5" /> },
+  { id: 'preset', label: 'Presets', icon: <WorkflowIcon className="w-5 h-5" /> },
   { id: 'prompt', label: 'Prompts', icon: <DocumentTextIcon className="w-5 h-5" /> },
   { id: 'color-palette', label: 'Palettes', icon: <PaletteIcon className="w-5 h-5" /> },
   { id: 'extracted-frame', label: 'Frames', icon: <FilmIcon className="w-5 h-5" /> },
@@ -420,6 +422,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [selectedItemModal, setSelectedItemModal] = useState<LibraryItem | null>(null);
+  const [importTtsCharacterPhotos, setImportTtsCharacterPhotos] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [hoveredSource, setHoveredSource] = useState<{ src: string; x: number; y: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -711,6 +714,22 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                   <DetailItem label="Item ID" value={selectedItemModal.id} />
                   <DetailItem label="Type" value={selectedItemModal.mediaType} />
                   {selectedItemModal.mediaType === 'prompt' && <DetailItem label="Prompt Text" value={selectedItemModal.media} isCode />}
+                  {selectedItemModal.indexTtsOptions && <div className="space-y-3 rounded-md bg-bg-primary p-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">IndexTTS Advanced</h4>
+                    <DetailItem label="Mode" value={selectedItemModal.indexTtsOptions.mode === 'dialogue' ? 'Multi-character dialogue' : 'Solo voice'} />
+                    <DetailItem label="Engine" value={selectedItemModal.indexTtsOptions.engine === 'chatterbox-multilingual' ? 'ChatterBox Multilingual' : 'IndexTTS 2 / 2.5'} />
+                    <DetailItem label="Model" value={selectedItemModal.indexTtsOptions.modelPath} isCode />
+                    <DetailItem label="Language" value={selectedItemModal.indexTtsOptions.language} />
+                    <DetailItem label="Pause Between Lines" value={`${selectedItemModal.indexTtsOptions.pauseMs} ms`} />
+                    {selectedItemModal.indexTtsOptions.characters.map((character, index) => <div key={character.id} className="rounded border border-border-primary p-2">
+                      <p className="text-xs font-bold text-text-primary">{character.name || `Character ${index + 1}`}</p>
+                      <p className="mt-1 text-xs text-text-muted">{character.referenceAudioName} · {character.referenceSource === 'suite' ? 'Audio Suite' : character.referenceSource === 'library' ? 'Library voice' : 'Uploaded clone'}</p>
+                    </div>)}
+                    {selectedItemModal.indexTtsOptions.lines.map((line, index) => {
+                      const character = selectedItemModal.indexTtsOptions?.characters.find((item) => item.id === line.characterId);
+                      return <div key={index} className="rounded border border-border-primary p-2"><p className="mb-1 text-xs font-bold text-accent">{character?.name || `Line ${index + 1}`} · {line.emotionMode === 'qwen' ? 'Auto emotion' : 'Manual emotion'}</p><p className="whitespace-pre-wrap text-xs text-text-primary">{line.text}</p></div>;
+                    })}
+                  </div>}
                   {selectedItemModal.ttsOptions && <div className="space-y-2 rounded-md bg-bg-primary p-3">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">ChatterBox TTS</h4>
                     <DetailItem label="Text" value={selectedItemModal.ttsOptions.text} isCode />
@@ -755,6 +774,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                     <DetailItem label="Audio" value={selectedItemModal.ltxDirectorOptions.audioName || 'None'} />
                   </div>}
                   {!selectedItemModal.ttsOptions && (selectedItemModal.themeOptions ? renderThemeOptionsDetails(selectedItemModal.themeOptions) : renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType))}
+                  {selectedItemModal.mediaType === 'audio-tts' && selectedItemModal.indexTtsOptions?.characters.some((character) => character.thumbnail) && <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border-primary bg-bg-primary p-3">
+                    <input type="checkbox" checked={importTtsCharacterPhotos} onChange={(event) => setImportTtsCharacterPhotos(event.target.checked)} className="mt-0.5 h-4 w-4 accent-accent" />
+                    <span><span className="block text-sm font-bold text-text-primary">Import character photos into LTX</span><span className="mt-0.5 block text-xs text-text-muted">Assign each saved character photo to that character’s dialogue clips.</span></span>
+                  </label>}
                   <div className="pt-4 flex flex-wrap gap-2">
                     {selectedItemModal.media.startsWith('data:image/') && (
                       <button onClick={() => { onUpscaleItem(selectedItemModal); setSelectedItemModal(null); }} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-primary font-semibold py-2 px-4 rounded-lg hover:bg-accent hover:text-accent-text transition-colors"><GenerateIcon className="w-5 h-5" /> Upscale SeedVR2</button>
@@ -762,7 +785,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                     {selectedItemModal.mediaType === 'prompt' ? (
                       <button onClick={() => { setPromptToUse(selectedItemModal.media); setPickerOpen(true); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><SendIcon className="w-5 h-5" /> Use</button>
                     ) : (
-                      <button onClick={() => { onLoadItem(selectedItemModal); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> {selectedItemModal.mediaType === 'audio-tts' ? 'Use in LTX Video' : 'Load in Generator'}</button>
+                      <button onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> {selectedItemModal.ltxDirectorOptions ? 'Open in LTX Director' : selectedItemModal.mediaType === 'audio-tts' ? 'Use in LTX Video' : 'Load in Generator'}</button>
                     )}
                     <button onClick={() => handleDelete(selectedItemModal.id, selectedItemModal.name || `Item #${selectedItemModal.id}`)} disabled={deletingId === selectedItemModal.id} className="flex items-center justify-center gap-2 bg-danger-bg text-danger font-semibold py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">{deletingId === selectedItemModal.id ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <TrashIcon className="w-5 h-5" />}</button>
                   </div>

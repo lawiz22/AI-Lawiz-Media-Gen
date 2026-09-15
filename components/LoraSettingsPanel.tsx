@@ -165,7 +165,7 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
                         const strengthField = `${prefix}Lora${index}Strength` as keyof GenerationOptions;
 
                         const currentName = options[nameField] as string || '';
-                        const currentStrength = options[strengthField] as number || 1.0;
+                        const currentStrength = options[strengthField] as number | undefined ?? 1.0;
 
                         return (
                             <div key={index} className="flex flex-col gap-3 rounded-md border border-border-primary/50 bg-bg-tertiary p-3">
@@ -181,8 +181,9 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
                                         label={`Str: ${currentStrength}`}
                                         value={currentStrength}
                                         onChange={handleSliderChange(strengthField)}
-                                        min={0} max={2} step={0.1}
+                                        min={-10} max={10} step={0.5}
                                         disabled={isDisabled}
+                                        allowDirectInput
                                     />
                                 )}
                             </div>

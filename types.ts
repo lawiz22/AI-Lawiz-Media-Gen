@@ -10,6 +10,75 @@ declare global {
       getMammouthApiKey: () => Promise<string>;
       setMammouthApiKey: (key: string) => Promise<boolean>;
       getCivitaiSettings: () => Promise<{ regularApiKey: string; redApiKey: string; comfyUIRoot: string }>;
+      searchCivitaiArchive: (request: {
+        q: string;
+        type: string;
+        base_model: string;
+        kind: string;
+        platform: string;
+        sort: string;
+        period: string;
+        rating: string;
+        platform_status: string;
+        page: number;
+      }) => Promise<{
+        items: Array<{
+          id: string;
+          name: string;
+          url: string;
+          modelId?: string;
+          versionId?: string;
+          sha256?: string;
+          imageUrl?: string;
+          videoUrl?: string;
+          type?: string;
+          kind?: string;
+          baseModel?: string;
+          username?: string;
+          platform?: string;
+          downloadCount: number;
+          nsfw: boolean;
+          deleted: boolean;
+        }>;
+        total: number;
+        page: number;
+      }>;
+      getCivitaiArchiveDetails: (request: { url: string; versionId?: string }) => Promise<{
+        modelId?: number;
+        modelName: string;
+        modelType: string;
+        versionId?: number;
+        versionName: string;
+        baseModel: string;
+        versions: Array<{ id: string; name: string; url: string }>;
+        files: Array<{
+          id: string;
+          name: string;
+          type: string;
+          sizeKB: number;
+          sha256?: string;
+          primary: boolean;
+          mirrors: Array<{ source: string; fileName: string; url: string }>;
+        }>;
+      }>;
+      downloadCivitaiArchiveModel: (request: {
+        downloadId: string;
+        url: string;
+        source: string;
+        fileName: string;
+        destination: 'checkpoint' | 'diffusion' | 'lora';
+        modelFolder: import('./services/civitaiService').CivitaiModelFolder;
+        sha256?: string;
+        archiveUrl: string;
+        modelName: string;
+        modelType: string;
+        modelId?: number;
+        versionId?: number;
+        baseModel: string;
+        versionName: string;
+        nsfw: boolean;
+        family: Exclude<import('./services/civitaiService').CivitaiFamily, 'all'>;
+      }) => Promise<{ path: string; receivedBytes: number }>;
       setCivitaiApiKey: (provider: 'regular' | 'red', key: string) => Promise<boolean>;
       selectComfyUIRoot: () => Promise<string | null>;
       getCivitaiInventory: () => Promise<import('./services/civitaiService').CivitaiInventory>;
@@ -18,8 +87,10 @@ declare global {
         family: import('./services/civitaiService').CivitaiFamily;
       }) => Promise<import('./services/civitaiService').CivitaiInventory>;
       setLocalModelSafety: (request: { modelPath: string; safety: 'sfw' | 'nsfw' | null }) => Promise<import('./services/civitaiService').CivitaiInventory>;
+      setLocalModelCategory: (request: { modelPath: string; family: Exclude<import('./services/civitaiService').CivitaiFamily, 'all'> }) => Promise<import('./services/civitaiService').CivitaiInventoryItem>;
       setLocalModelArchiveLink: (request: { modelPath: string; url: string }) => Promise<import('./services/civitaiService').CivitaiInventory>;
       fetchLocalModelArchive: (request: { modelPath: string }) => Promise<import('./services/civitaiService').CivitaiInventory>;
+      fetchLocalModelHuggingFace: (request: { modelPath: string }) => Promise<import('./services/civitaiService').CivitaiInventory>;
       scanCivitaiLibrary: (request: {
         provider: 'regular' | 'red';
         kind: 'all' | 'lora' | 'checkpoint' | 'diffusion';
@@ -38,12 +109,12 @@ declare global {
       reclassifyLocalModel: (request: {
         modelPath: string;
         kind: 'lora' | 'checkpoint' | 'diffusion';
-        folder: 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
+        folder: '.' | 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'flux2' | 'krea' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
       }) => Promise<import('./services/civitaiService').CivitaiInventoryItem>;
       fetchLocalModelUsageMetadata: (request: {
         modelPath: string;
         provider: 'regular' | 'red';
-        source: 'civitai' | 'archive';
+        source: 'civitai' | 'archive' | 'huggingface';
       }) => Promise<import('./services/civitaiService').CivitaiInventoryItem>;
       setLocalModelUsageMetadata: (request: {
         modelPath: string;
@@ -57,15 +128,15 @@ declare global {
       getLocalModelPromptExamples: (request: {
         modelPath: string;
         provider: 'regular' | 'red';
-        sources: Array<'civitai' | 'archive'>;
+        sources: Array<'civitai' | 'archive' | 'huggingface'>;
       }) => Promise<{
-        examples: Array<{ positive: string; negative?: string; source: 'civitai' | 'archive' }>;
+        examples: Array<{ positive: string; negative?: string; source: 'civitai' | 'archive' | 'huggingface' }>;
         storage: 'sidecar' | 'remote';
       }>;
       hasLocalModelPromptExamples: (modelPath: string) => Promise<boolean>;
       saveLocalModelPromptExamples: (request: {
         modelPath: string;
-        examples: Array<{ positive: string; negative?: string; source: 'civitai' | 'archive' }>;
+        examples: Array<{ positive: string; negative?: string; source: 'civitai' | 'archive' | 'huggingface' }>;
       }) => Promise<{ path: string; count: number }>;
       downloadCivitaiModel: (request: {
         downloadId: string;
@@ -280,6 +351,24 @@ export interface GenerationOptions {
   comfyQwenEditLora5Strength?: number;
 
   // Character multi-angle Qwen Edit workflow
+  comfyCharacterMode?: 'qwen' | 'flux2';
+  comfyCharacterFlux2Unet?: string;
+  comfyCharacterFlux2Clip?: string;
+  comfyCharacterFlux2Vae?: string;
+  comfyCharacterFlux2Steps?: number;
+  comfyCharacterFlux2Cfg?: number;
+  comfyCharacterFlux2Sampler?: string;
+  comfyCharacterFlux2Megapixels?: number;
+  comfyCharacterFlux2UseLoras?: boolean;
+  comfyCharacterFlux2Lora1Name?: string;
+  comfyCharacterFlux2Lora1Strength?: number;
+  comfyCharacterFlux2Lora2Name?: string;
+  comfyCharacterFlux2Lora2Strength?: number;
+  comfyCharacterFlux2UseCacheDit?: boolean;
+  comfyCharacterFlux2CacheDitModelType?: string;
+  comfyCharacterFlux2CacheDitWarmupSteps?: number;
+  comfyCharacterFlux2CacheDitSkipInterval?: number;
+  comfyCharacterFlux2CacheDitPrintSummary?: boolean;
   comfyCharacterUnet?: string;
   comfyCharacterClip?: string;
   comfyCharacterVae?: string;
@@ -608,6 +697,7 @@ export interface LtxDirectorGenerationInfo {
   }[];
   frameRate: number;
   guideStrength: number;
+  t2vOrientation?: 'landscape' | 'portrait';
   imageScalePercent?: number;
   vaeDecodeMode?: 'standard' | 'tiled';
   vaeTileSize?: number;
@@ -650,6 +740,29 @@ export interface TtsGenerationInfo {
   filenamePrefix: string;
 }
 
+export interface IndexTtsGenerationInfo {
+  mode: 'solo' | 'dialogue';
+  engine?: 'index-tts' | 'chatterbox-multilingual';
+  modelPath: string;
+  language: string;
+  pauseMs: number;
+  characters: Array<{
+    id: string;
+    name: string;
+    referenceAudioName: string;
+    referenceSource: 'suite' | 'upload' | 'library';
+    thumbnail?: string;
+    emotions: Record<string, number>;
+  }>;
+  lines: Array<{
+    characterId: string;
+    text: string;
+    emotionMode: 'manual' | 'qwen';
+    emotionPrompt?: string;
+    emotions?: Record<string, number>;
+  }>;
+}
+
 export interface LibraryItem {
   id: number; // Unique ID, typically a timestamp
   name?: string;
@@ -660,6 +773,7 @@ export interface LibraryItem {
   themeOptions?: ThemeGenerationInfo;
   ltxDirectorOptions?: LtxDirectorGenerationInfo;
   ttsOptions?: TtsGenerationInfo;
+  indexTtsOptions?: IndexTtsGenerationInfo;
   sourceImage?: string; // data URL for image/video generations
   startFrame?: string; // data URL for video generations
   endFrame?: string; // data URL for video generations
@@ -822,6 +936,7 @@ export interface AppSliceState {
     imageDataUrl?: string;
     prompt?: string;
     ttsText?: string;
+    ttsSegments?: Array<{ prompt: string; ttsText: string; imageDataUrl?: string }>;
     audioDataUrl?: string;
     audioName?: string;
     videoDataUrl?: string;
@@ -896,6 +1011,7 @@ export interface GenerationSliceState {
   shouldGenerateCharacterName: boolean;
   clothingImage: File | null;
   backgroundImage: File | null;
+  characterPoseImage: File | null;
   previewedBackgroundImage: string | null;
   previewedClothingImage: string | null;
   maskImage: File | null;

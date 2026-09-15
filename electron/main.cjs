@@ -1,5 +1,5 @@
 
-const { app, BrowserWindow, ipcMain, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, desktopCapturer, ipcMain, dialog, nativeImage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -18,6 +18,7 @@ let activePreviewRequests = 0;
 const pendingPreviewInventoryUpdates = new Map();
 let previewInventoryFlushTimer;
 const CIVITAI_HOSTS = new Set(['civitai.com', 'www.civitai.com', 'civitai.red', 'www.civitai.red']);
+const ARCHIVE_DOWNLOAD_HOSTS = new Set(['civitaiarchive.com', 'www.civitaiarchive.com', 'civitai.com', 'www.civitai.com', 'civitai.red', 'www.civitai.red', 'huggingface.co', 'www.huggingface.co']);
 const MODEL_DESTINATIONS = {
     checkpoint: 'checkpoints',
     diffusion: 'diffusion_models',
@@ -30,6 +31,7 @@ const MODEL_SCAN_DIRECTORIES = [
     { kind: 'lora', directory: 'loras' },
 ];
 const MODEL_FOLDERS = new Set(['.', 'sd15', 'SD1.5', 'SDXL', 'Flux', 'FLUX', 'flux-dev', 'flux2', 'krea', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control']);
+const MODEL_FAMILIES = new Set(['sd15', 'sdxl', 'flux', 'flux2', 'krea2', 'qwen', 'qwen-edit', 'zit-base', 'zit-turbo', 'ltx-23']);
 const LOCAL_MODEL_EXTENSIONS = new Set(['.safetensors', '.ckpt', '.pt', '.pth', '.bin', '.gguf']);
 const SCAN_FAMILY_FOLDERS = {
     lora: {
@@ -37,11 +39,11 @@ const SCAN_FAMILY_FOLDERS = {
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2', 'LTX2_camera_control'],
     },
     checkpoint: {
-        sd15: ['SD1.5'], sdxl: ['SDXL'], flux: ['FLUX', 'flux-dev'], flux2: [], krea2: [], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
+        sd15: ['SD1.5'], sdxl: ['SDXL'], flux: ['FLUX', 'flux-dev'], flux2: ['flux2'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2'],
     },
     diffusion: {
-        sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], flux2: ['.'], krea2: ['.'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
+        sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], flux2: ['flux2'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2', 'LTX2_camera_control'],
     },
 };
@@ -49,6 +51,7 @@ const SCAN_FAMILY_FOLDERS = {
 function inventoryItemMatchesSelection(item, kind, family) {
     if (kind !== 'all' && item.kind !== kind) return false;
     if (family === 'all') return true;
+    if (item.userFamily) return item.userFamily === family;
     const familyFolders = SCAN_FAMILY_FOLDERS[item.kind]?.[family] || [];
     const pathSegments = String(item.relativePath || '').replace(/\\/g, '/').toLowerCase().split('/');
     if (familyFolders.some(folder => folder !== '.' && pathSegments.includes(folder.toLowerCase()))) return true;
@@ -115,10 +118,12 @@ async function buildFastLocalInventory(event) {
         const previousItem = previousItems.get(localFile.path);
         const cachedHash = hashCache[localFile.path];
         const archiveSidecar = previousItem?.archiveInfo ? undefined : await readArchiveSidecar(localFile.path);
+        const huggingFaceSidecar = previousItem?.huggingFaceInfo ? undefined : await readHuggingFaceSidecar(localFile.path);
         const usageSidecar = previousItem?.usageMetadata ? undefined : await readUsageSidecar(localFile.path);
         items.push({
             ...(previousItem || {}),
             ...(archiveSidecar || {}),
+            ...(huggingFaceSidecar || {}),
             ...(usageSidecar || {}),
             path: localFile.path,
             relativePath: path.relative(modelRoot, localFile.path),
@@ -188,6 +193,7 @@ function findModelPreviewPath(filePath) {
         `${stem}.preview.png`, `${stem}.preview.jpg`, `${stem}.preview.jpeg`, `${stem}.preview.webp`,
         `${stem}.png`, `${stem}.jpg`, `${stem}.jpeg`, `${stem}.webp`,
         `${stem}.archive.png`, `${stem}.archive.jpg`, `${stem}.archive.jpeg`, `${stem}.archive.webp`,
+        `${stem}.huggingface.png`, `${stem}.huggingface.jpg`, `${stem}.huggingface.jpeg`, `${stem}.huggingface.webp`,
     ].find(candidate => fs.existsSync(candidate));
 }
 
@@ -195,6 +201,16 @@ async function readArchiveSidecar(filePath) {
     const stem = filePath.slice(0, -path.extname(filePath).length);
     try {
         return JSON.parse(await fs.promises.readFile(`${stem}.archive.json`, 'utf8'));
+    } catch (error) {
+        if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
+        return undefined;
+    }
+}
+
+async function readHuggingFaceSidecar(filePath) {
+    const stem = filePath.slice(0, -path.extname(filePath).length);
+    try {
+        return JSON.parse(await fs.promises.readFile(`${stem}.huggingface.json`, 'utf8'));
     } catch (error) {
         if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
         return undefined;
@@ -221,7 +237,7 @@ async function readPromptSidecar(filePath) {
             .map(example => ({
                 positive: example.positive.trim().slice(0, 12000),
                 negative: typeof example.negative === 'string' && example.negative.trim() ? example.negative.trim().slice(0, 12000) : undefined,
-                source: example.source === 'archive' ? 'archive' : 'civitai',
+                source: example.source === 'archive' || example.source === 'huggingface' ? example.source : 'civitai',
             }))
             .slice(0, 100);
     } catch (error) {
@@ -277,6 +293,39 @@ function findRecommendedSettings(value) {
         .sort((left, right) => right.count - left.count || right.score - left.score)[0]?.candidate;
 }
 
+function findHuggingFaceRecommendedSettings(markdown, item) {
+    const steps = Number(markdown.match(/num_inference_steps\s*=\s*(\d+)/i)?.[1]);
+    const guidanceScale = Number(markdown.match(/(?:true_)?guidance_scale\s*=\s*(\d+(?:\.\d+)?)/i)?.[1]);
+    const settings = {
+        steps: Number.isFinite(steps) && steps > 0 ? steps : undefined,
+    };
+    if (Number.isFinite(guidanceScale) && guidanceScale > 0) {
+        const identity = [item.userFamily, item.fileName, item.modelName, item.huggingFaceInfo?.repoId].filter(Boolean).join(' ').toLowerCase();
+        if (/\bflux(?:[ ._-]?1)?\b/.test(identity) && !/flux[- ._]?2|klein/.test(identity)) settings.guidance = guidanceScale;
+        else settings.cfg = guidanceScale;
+    }
+    return Object.values(settings).some(value => value !== undefined) ? settings : undefined;
+}
+
+async function fetchHuggingFaceRecommendedSettings(item) {
+    if (item.kind === 'lora') throw new Error('Hugging Face settings are currently available only for checkpoints and diffusion models.');
+    if (!item.huggingFaceInfo?.repoId) throw new Error('Find this model on Hugging Face before requesting its settings.');
+    const repositories = [item.huggingFaceInfo.repoId];
+    for (let index = 0; index < repositories.length && index < 5; index += 1) {
+        const repoId = repositories[index];
+        const response = await fetch(`https://huggingface.co/${repoId}/raw/main/README.md`);
+        if (!response.ok) continue;
+        const markdown = await response.text();
+        const settings = findHuggingFaceRecommendedSettings(markdown, item);
+        if (settings) return settings;
+        for (const match of markdown.matchAll(/https:\/\/huggingface\.co\/([\w.-]+\/[\w.-]+)/gi)) {
+            const linkedRepo = match[1];
+            if (!repositories.some(candidate => candidate.toLowerCase() === linkedRepo.toLowerCase())) repositories.push(linkedRepo);
+        }
+    }
+    return undefined;
+}
+
 function collectPromptExamples(value, source) {
     const examples = [];
     const visit = current => {
@@ -295,6 +344,22 @@ function collectPromptExamples(value, source) {
     };
     visit(value);
     return [...new Map(examples.map(example => [`${example.positive}\n${example.negative || ''}`, example])).values()].slice(0, 100);
+}
+
+function collectHuggingFacePromptExamples(markdown) {
+    const examples = [];
+    const add = value => {
+        const positive = String(value || '')
+            .replace(/^['"`]+|['"`]+$/g, '')
+            .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+            .trim();
+        if (positive.length < 12 || /^https?:\/\/\S+$/i.test(positive)) return;
+        examples.push({ positive: positive.slice(0, 12000), source: 'huggingface' });
+    };
+    for (const match of markdown.matchAll(/^\s*(?:[-*]\s*)?(?:\*\*)?(?:positive\s+|example\s+)?prompt(?:\*\*)?\s*[:=-]\s*(.+)$/gim)) add(match[1]);
+    for (const match of markdown.matchAll(/^\s*-\s*(?:text|prompt)\s*:\s*(.+)$/gim)) add(match[1]);
+    for (const match of markdown.matchAll(/(?:^|\n)#{1,6}\s+(?:example\s+)?prompts?\s*\n+```(?:text|txt|plaintext)?\s*\n([\s\S]*?)```/gi)) add(match[1]);
+    return [...new Map(examples.map(example => [example.positive, example])).values()].slice(0, 50);
 }
 
 function collectArchiveUsageExamples(value) {
@@ -459,6 +524,25 @@ async function cacheArchivePreview(filePath, imageUrl) {
     return destinationPath;
 }
 
+async function cacheHuggingFacePreview(filePath, imageUrl) {
+    if (!imageUrl) return undefined;
+    const parsedUrl = new URL(imageUrl);
+    if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== 'huggingface.co') throw new Error('Invalid Hugging Face image URL.');
+    const response = await fetch(parsedUrl, { redirect: 'follow' });
+    if (!response.ok) throw new Error(`Hugging Face image failed (${response.status} ${response.statusText}).`);
+    const contentType = (response.headers.get('content-type') || '').split(';')[0].toLowerCase();
+    const extension = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[contentType];
+    if (!extension) throw new Error(`Unsupported Hugging Face image type: ${contentType || 'unknown'}.`);
+    const content = Buffer.from(await response.arrayBuffer());
+    if (content.length > 15 * 1024 * 1024) throw new Error('Hugging Face image is larger than 15 MB.');
+    const stem = filePath.slice(0, -path.extname(filePath).length);
+    const destinationPath = `${stem}.huggingface${extension}`;
+    await Promise.all(['.png', '.jpg', '.jpeg', '.webp'].filter(candidate => candidate !== extension).map(candidate => fs.promises.rm(`${stem}.huggingface${candidate}`, { force: true })));
+    await fs.promises.writeFile(`${destinationPath}.part`, content);
+    await fs.promises.rename(`${destinationPath}.part`, destinationPath);
+    return destinationPath;
+}
+
 function assertLocalModelPath(filePath) {
     const comfyUIRoot = store.get('comfyui_root', '');
     if (!comfyUIRoot) throw new Error('Select your ComfyUI folder first.');
@@ -510,15 +594,26 @@ function hashFile(filePath) {
 }
 
 async function fetchCivitaiJson(provider, endpoint) {
-    const origin = provider === 'red' ? 'https://civitai.red' : 'https://civitai.com';
-    const apiKey = store.get(`civitai_${provider}_api_key`, '');
-    const response = await fetch(`${origin}${endpoint}`, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {} });
-    if (!response.ok) {
-        const error = new Error(`Civitai lookup failed (${response.status} ${response.statusText}).`);
-        error.status = response.status;
-        throw error;
+    const origins = provider === 'red' ? ['https://civitai.red', 'https://civitai.com'] : ['https://civitai.com'];
+    let lastResponse;
+    let lastError;
+    for (const origin of origins) {
+        try {
+            const keyProvider = origin.includes('civitai.red') ? 'red' : 'regular';
+            const apiKey = store.get(`civitai_${keyProvider}_api_key`, '');
+            const response = await fetch(`${origin}${endpoint}`, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {} });
+            if (response.ok) return response.json();
+            lastResponse = response;
+            if (provider !== 'red') break;
+        } catch (error) {
+            lastError = error;
+            if (provider !== 'red') throw error;
+        }
     }
-    return response.json();
+    if (!lastResponse && lastError) throw lastError;
+    const error = new Error(`Civitai lookup failed (${lastResponse.status} ${lastResponse.statusText}).`);
+    error.status = lastResponse.status;
+    throw error;
 }
 
 function getLatestCompatibleVersion(model, installedVersion) {
@@ -584,7 +679,6 @@ function inferModelFolder(model, version) {
 
 function inferDestinationFolder(model, version, category) {
     const folder = inferModelFolder(model, version);
-    if (category === 'diffusion_models' && (folder === 'flux2' || folder === 'krea')) return '.';
     if (category !== 'checkpoints') return folder;
     if (folder === 'sd15') return 'SD1.5';
     if (folder === 'Flux') {
@@ -644,6 +738,11 @@ async function moveModelCompanions(sourcePath, destinationPath) {
         [`${sourceStem}.archive.jpg`, `${destinationStem}.archive.jpg`],
         [`${sourceStem}.archive.jpeg`, `${destinationStem}.archive.jpeg`],
         [`${sourceStem}.archive.webp`, `${destinationStem}.archive.webp`],
+        [`${sourceStem}.huggingface.json`, `${destinationStem}.huggingface.json`],
+        [`${sourceStem}.huggingface.png`, `${destinationStem}.huggingface.png`],
+        [`${sourceStem}.huggingface.jpg`, `${destinationStem}.huggingface.jpg`],
+        [`${sourceStem}.huggingface.jpeg`, `${destinationStem}.huggingface.jpeg`],
+        [`${sourceStem}.huggingface.webp`, `${destinationStem}.huggingface.webp`],
         [`${sourceStem}.usage.json`, `${destinationStem}.usage.json`],
         [`${sourceStem}.prompts.json`, `${destinationStem}.prompts.json`],
     ];
@@ -671,6 +770,15 @@ function createWindow() {
             sandbox: false,
             webSecurity: false,
         },
+    });
+
+    mainWindow.webContents.session.setDisplayMediaRequestHandler(async (_request, callback) => {
+        try {
+            const sources = await desktopCapturer.getSources({ types: ['screen'] });
+            callback({ video: sources[0], audio: 'loopback' });
+        } catch {
+            callback({});
+        }
     });
 
     const startUrl = isDev
@@ -762,6 +870,200 @@ ipcMain.handle('get-civitai-settings', () => ({
     comfyUIRoot: store.get('comfyui_root', ''),
 }));
 
+ipcMain.handle('search-civitai-archive', async (event, request = {}) => {
+    const params = new URLSearchParams();
+    const query = String(request.q || '').trim().slice(0, 500);
+    if (query) params.set('q', query);
+    for (const key of ['type', 'base_model', 'kind', 'platform']) {
+        const value = String(request[key] || 'all');
+        if (value !== 'all') params.set(key, value.slice(0, 100));
+    }
+    const sort = ['relevance', 'top', 'newest', 'oldest', 'deleted_newest', 'deleted_oldest'].includes(request.sort) ? request.sort : 'relevance';
+    const period = ['all', 'week', 'month', 'quarter', 'half', 'year'].includes(request.period) ? request.period : 'all';
+    const rating = ['all', 'safe', 'explicit'].includes(request.rating) ? request.rating : 'all';
+    const platformStatus = ['all', 'available', 'deleted'].includes(request.platform_status) ? request.platform_status : 'all';
+    const page = Math.max(1, Math.min(100, Number.parseInt(request.page, 10) || 1));
+    params.set('sort', sort);
+    params.set('period', period);
+    params.set('rating', rating);
+    params.set('platform_status', platformStatus);
+    params.set('page', String(page));
+
+    const response = await fetch(`https://civitaiarchive.com/search?${params}`, { redirect: 'follow' });
+    if (!response.ok) throw new Error(`CivArchive search failed (${response.status} ${response.statusText}).`);
+    const html = await response.text();
+    const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/i);
+    if (!nextDataMatch) throw new Error('CivArchive returned no structured search data.');
+    const data = JSON.parse(nextDataMatch[1])?.props?.pageProps?.data;
+    const items = Array.isArray(data?.results) ? data.results.map(item => ({
+        id: String(item.id || item.url || item.name),
+        name: String(item.name || 'Untitled result'),
+        url: new URL(String(item.url || '/'), 'https://civitaiarchive.com').toString(),
+        modelId: item.model_id != null ? String(item.model_id) : undefined,
+        versionId: item.version_id != null ? String(item.version_id) : undefined,
+        sha256: String(item.url || '').match(/\/sha256\/([a-f0-9]{64})/i)?.[1]?.toUpperCase(),
+        imageUrl: item.image_url ? String(item.image_url) : undefined,
+        videoUrl: item.video_url ? String(item.video_url) : undefined,
+        type: item.type ? String(item.type) : undefined,
+        kind: item.kind ? String(item.kind) : undefined,
+        baseModel: item.base_model ? String(item.base_model) : undefined,
+        username: item.username ? String(item.username) : undefined,
+        platform: item.platform ? String(item.platform) : undefined,
+        downloadCount: Number(item.download_count) || 0,
+        nsfw: Boolean(item.is_nsfw),
+        deleted: Boolean(item.is_deleted),
+    })) : [];
+    return { items, total: Number(data?.total_hits) || items.length, page };
+});
+
+ipcMain.handle('get-civitai-archive-details', async (event, request = {}) => {
+    const detailUrl = new URL(String(request.url || ''), 'https://civitaiarchive.com');
+    if (detailUrl.protocol !== 'https:' || !['civitaiarchive.com', 'www.civitaiarchive.com'].includes(detailUrl.hostname)) {
+        throw new Error('Invalid CivArchive detail URL.');
+    }
+    if (request.versionId) detailUrl.searchParams.set('modelVersionId', String(request.versionId));
+    const response = await fetch(detailUrl, { redirect: 'follow' });
+    if (!response.ok) throw new Error(`CivArchive detail lookup failed (${response.status} ${response.statusText}).`);
+    const html = await response.text();
+    const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/i);
+    if (!nextDataMatch) throw new Error('CivArchive returned no structured model data.');
+    const pageProps = JSON.parse(nextDataMatch[1])?.props?.pageProps;
+    const model = pageProps?.model || pageProps?.models?.[0];
+    const version = model?.version || model?.versions?.find(candidate => String(candidate.id) === String(request.versionId)) || model?.versions?.[0];
+    if (!model || !version) throw new Error('No downloadable model version was found on CivArchive.');
+
+    const files = (version.files || []).filter(file => LOCAL_MODEL_EXTENSIONS.has(path.extname(String(file.name || '')).toLowerCase())).map(file => {
+        const candidates = [
+            file.download_url && { source: model.platform || 'source', fileName: file.name, url: file.download_url },
+            ...(Array.isArray(file.mirrors) ? file.mirrors : []),
+        ].filter(candidate => candidate?.url && !candidate.is_gated && !candidate.is_paid).map(candidate => {
+            const url = new URL(String(candidate.url), 'https://civitaiarchive.com');
+            return {
+                source: String(candidate.source || url.hostname),
+                fileName: path.basename(String(candidate.filename || candidate.fileName || file.name)),
+                url: url.toString(),
+            };
+        }).filter(candidate => {
+            const url = new URL(candidate.url);
+            return url.protocol === 'https:' && ARCHIVE_DOWNLOAD_HOSTS.has(url.hostname) && LOCAL_MODEL_EXTENSIONS.has(path.extname(candidate.fileName).toLowerCase());
+        });
+        const mirrors = [...new Map(candidates.map(candidate => [candidate.url, candidate])).values()];
+        return {
+            id: String(file.id || file.sha256 || file.name),
+            name: String(file.name),
+            type: String(file.type || model.type || 'Model'),
+            sizeKB: Number(file.size_kb) || 0,
+            sha256: file.sha256 ? String(file.sha256).toUpperCase() : undefined,
+            primary: Boolean(file.is_primary),
+            mirrors,
+        };
+    }).filter(file => file.mirrors.length > 0);
+
+    return {
+        modelId: Number(model.civitai_model_id ?? model.id) || undefined,
+        modelName: String(model.name || 'CivArchive model'),
+        modelType: String(model.type || ''),
+        versionId: Number(version.civitai_model_version_id ?? version.id) || undefined,
+        versionName: String(version.name || version.id),
+        baseModel: String(version.base_model || ''),
+        versions: (model.versions || []).map(candidate => ({
+            id: String(candidate.id),
+            name: String(candidate.name || candidate.id),
+            url: new URL(String(candidate.url || detailUrl.pathname), 'https://civitaiarchive.com').toString(),
+        })),
+        files,
+    };
+});
+
+ipcMain.handle('download-civitai-archive-model', async (event, request = {}) => {
+    const { downloadId, url, fileName, destination, modelFolder, sha256, archiveUrl, modelName, modelType, baseModel, versionName } = request;
+    if (!downloadId || activeModelDownloads.has(downloadId)) throw new Error('Invalid or duplicate download ID.');
+    const parsedUrl = new URL(String(url || ''));
+    if (parsedUrl.protocol !== 'https:' || !ARCHIVE_DOWNLOAD_HOSTS.has(parsedUrl.hostname)) throw new Error('Unsupported CivArchive mirror host.');
+    if (!MODEL_DESTINATIONS[destination]) throw new Error('Unsupported ComfyUI model destination.');
+    if (!MODEL_FOLDERS.has(modelFolder)) throw new Error('Unsupported ComfyUI model folder.');
+    const comfyUIRoot = store.get('comfyui_root', '');
+    if (!comfyUIRoot) throw new Error('Select your ComfyUI folder before downloading.');
+    const safeFileName = path.basename(String(fileName || '')).replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+    if (!safeFileName || !LOCAL_MODEL_EXTENSIONS.has(path.extname(safeFileName).toLowerCase())) throw new Error('Invalid model filename.');
+
+    const destinationDirectory = path.join(comfyUIRoot, 'models', MODEL_DESTINATIONS[destination], modelFolder);
+    let finalPath = path.join(destinationDirectory, safeFileName);
+    if (fs.existsSync(finalPath)) throw new Error('This model file already exists in the selected library folder.');
+    const partialPath = `${finalPath}.part`;
+    const controller = new AbortController();
+    activeModelDownloads.set(downloadId, controller);
+    try {
+        await fs.promises.mkdir(destinationDirectory, { recursive: true });
+        const mirrorProvider = parsedUrl.hostname.endsWith('civitai.red')
+            ? 'red'
+            : parsedUrl.hostname.endsWith('civitai.com')
+                ? 'regular'
+                : undefined;
+        const apiKey = mirrorProvider ? store.get(`civitai_${mirrorProvider}_api_key`, '') : '';
+        const response = await fetch(parsedUrl, {
+            headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+            redirect: 'follow',
+            signal: controller.signal,
+        });
+        if (!response.ok || !response.body) {
+            if (response.status === 401 && mirrorProvider) {
+                const service = mirrorProvider === 'red' ? 'civitai.red' : 'civitai.com';
+                throw new Error(`CivArchive mirror download failed (401 Unauthorized). Save a valid ${service} API key in the Civitai section, then retry.`);
+            }
+            throw new Error(`CivArchive mirror download failed (${response.status} ${response.statusText}).`);
+        }
+        const totalBytes = Number(response.headers.get('content-length')) || 0;
+        let receivedBytes = 0;
+        const output = fs.createWriteStream(partialPath);
+        try {
+            for await (const chunk of response.body) {
+                if (!output.write(chunk)) await new Promise(resolve => output.once('drain', resolve));
+                receivedBytes += chunk.length;
+                event.sender.send('civitai-download-progress', { downloadId, receivedBytes, totalBytes });
+            }
+            await new Promise((resolve, reject) => output.end(error => error ? reject(error) : resolve()));
+        } catch (error) {
+            output.destroy();
+            throw error;
+        }
+        await fs.promises.rename(partialPath, finalPath);
+        const sidecar = {
+            archiveMirrorUrl: String(archiveUrl || ''),
+            archiveLookupStatus: 'found',
+            archiveCheckedAt: new Date().toISOString(),
+            sha256: /^[a-f0-9]{64}$/i.test(String(sha256 || '')) ? String(sha256).toUpperCase() : undefined,
+            modelName: String(modelName || safeFileName),
+            modelType: String(modelType || ''),
+            modelId: Number.isSafeInteger(Number(request.modelId)) ? Number(request.modelId) : undefined,
+            installedVersionId: Number.isSafeInteger(Number(request.versionId)) ? Number(request.versionId) : undefined,
+            installedVersionName: String(versionName || ''),
+            contentSafety: request.nsfw ? 'nsfw' : 'sfw',
+            userFamily: request.family || undefined,
+            status: 'matched',
+            archiveInfo: {
+                title: String(modelName || safeFileName),
+                modelType: String(modelType || ''),
+                baseModel: String(baseModel || ''),
+                versionName: String(versionName || ''),
+                nsfw: Boolean(request.nsfw),
+                mirrorCount: 1,
+                mirrors: [{ source: String(request.source || parsedUrl.hostname), fileName: safeFileName, url: parsedUrl.toString() }],
+                fetchedAt: new Date().toISOString(),
+            },
+        };
+        const stem = finalPath.slice(0, -path.extname(finalPath).length);
+        await fs.promises.writeFile(`${stem}.archive.json`, JSON.stringify(sidecar, null, 2), 'utf8');
+        return { path: finalPath, receivedBytes };
+    } catch (error) {
+        await fs.promises.rm(partialPath, { force: true }).catch(() => {});
+        if (error?.name === 'AbortError') throw new Error('Download cancelled.');
+        throw error;
+    } finally {
+        activeModelDownloads.delete(downloadId);
+    }
+});
+
 ipcMain.handle('set-civitai-api-key', (event, provider, key) => {
     if (provider !== 'regular' && provider !== 'red') {
         throw new Error('Unknown Civitai provider.');
@@ -827,6 +1129,8 @@ ipcMain.handle('scan-civitai-library', async (event, request) => {
         const stat = await fs.promises.stat(localFile.path);
         const cached = previousCache[localFile.path];
         const previousItem = previousItems.get(localFile.path);
+        const archiveSidecar = previousItem?.archiveInfo ? undefined : await readArchiveSidecar(localFile.path);
+        const huggingFaceSidecar = previousItem?.huggingFaceInfo ? undefined : await readHuggingFaceSidecar(localFile.path);
         const usageSidecar = previousItem?.usageMetadata ? undefined : await readUsageSidecar(localFile.path);
         const unchanged = Boolean(previousItem && cached?.size === stat.size && cached?.mtimeMs === stat.mtimeMs && cached.sha256);
         const localPreviewPath = findModelPreviewPath(localFile.path);
@@ -852,6 +1156,8 @@ ipcMain.handle('scan-civitai-library', async (event, request) => {
         } : await readModelSidecar(localFile.path);
         const item = {
             ...(previousItem || {}),
+            ...(archiveSidecar || {}),
+            ...(huggingFaceSidecar || {}),
             ...(usageSidecar || {}),
             path: localFile.path,
             relativePath: path.relative(modelRoot, localFile.path),
@@ -1031,6 +1337,30 @@ ipcMain.handle('set-local-model-safety', async (event, request) => {
     return inventory;
 });
 
+ipcMain.handle('set-local-model-category', async (event, request) => {
+    const { resolvedPath } = assertLocalModelPath(request?.modelPath);
+    const family = request?.family;
+    if (!MODEL_FAMILIES.has(family)) throw new Error('Unsupported model category.');
+    const inventory = store.get('civitai_inventory', { scannedAt: null, root: '', items: [] });
+    let updatedItem;
+    inventory.items = (inventory.items || []).map(item => {
+        if (item.path !== resolvedPath) return item;
+        const externallyMatched = ['matched', 'partial'].includes(item.status) || Boolean(item.modelId || item.archiveInfo || item.huggingFaceInfo);
+        const huggingFaceChecked = item.kind === 'lora' || item.huggingFaceLookupStatus === 'unmatched';
+        const canClaimAsOwned = Boolean(item.civitaiCheckedAt) && item.archiveLookupStatus === 'unmatched' && huggingFaceChecked;
+        if (!externallyMatched && !item.userOwned && !canClaimAsOwned) throw new Error('Check Civitai and CivArchive before classifying this model.');
+        updatedItem = {
+            ...item,
+            userFamily: family,
+            userOwned: item.userOwned || (!externallyMatched && canClaimAsOwned),
+        };
+        return updatedItem;
+    });
+    if (!updatedItem) throw new Error('Model is missing from the local inventory.');
+    store.set('civitai_inventory', inventory);
+    return updatedItem;
+});
+
 ipcMain.handle('set-local-model-archive-link', async (event, request) => {
     const { resolvedPath } = assertLocalModelPath(request?.modelPath);
     const rawUrl = String(request?.url || '').trim();
@@ -1051,6 +1381,11 @@ ipcMain.handle('fetch-local-model-archive', async (event, request) => {
     const inventory = store.get('civitai_inventory', { scannedAt: null, root: '', items: [] });
     const item = (inventory.items || []).find(candidate => candidate.path === resolvedPath);
     if (!item) throw new Error('Model is not present in the local inventory.');
+    const updateArchiveLookup = updates => {
+        inventory.items = (inventory.items || []).map(candidate => candidate.path === resolvedPath ? { ...candidate, ...updates } : candidate);
+        store.set('civitai_inventory', inventory);
+        return inventory;
+    };
 
     let sha256 = String(item.sha256 || '').toLowerCase();
     if (!/^[a-f0-9]{64}$/.test(sha256)) {
@@ -1062,13 +1397,14 @@ ipcMain.handle('fetch-local-model-archive', async (event, request) => {
     }
     const archiveMirrorUrl = `https://civitaiarchive.com/sha256/${sha256}`;
     const response = await fetch(archiveMirrorUrl, { redirect: 'follow' });
+    if (response.status === 404) return updateArchiveLookup({ archiveCheckedAt: new Date().toISOString(), archiveLookupStatus: 'unmatched' });
     if (!response.ok) throw new Error(`CivArchive lookup failed (${response.status} ${response.statusText}).`);
     const html = await response.text();
     const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/i);
     if (!nextDataMatch) throw new Error('CivArchive returned no structured metadata.');
     const pageProps = JSON.parse(nextDataMatch[1])?.props?.pageProps;
     const model = pageProps?.models?.[0];
-    if (!model) throw new Error('CivArchive has no model information for this SHA-256.');
+    if (!model) return updateArchiveLookup({ archiveCheckedAt: new Date().toISOString(), archiveLookupStatus: 'unmatched' });
     const version = model.version || model.versions?.[0];
     const allMirrors = [...(pageProps.files || []), ...(version?.files || []).flatMap(file => file.mirrors || [])];
     const uniqueMirrors = [...new Map(allMirrors.filter(mirror => mirror?.url).map(mirror => {
@@ -1095,6 +1431,8 @@ ipcMain.handle('fetch-local-model-archive', async (event, request) => {
     const sidecarData = {
         archiveMirrorUrl,
         archiveInfo,
+        archiveCheckedAt: archiveInfo.fetchedAt,
+        archiveLookupStatus: 'found',
         previewPath: currentPreviewPath || archivePreviewPath,
         sha256: sha256.toUpperCase(),
         modelName: item.modelName || archiveInfo.title,
@@ -1106,7 +1444,63 @@ ipcMain.handle('fetch-local-model-archive', async (event, request) => {
     };
     const stem = resolvedPath.slice(0, -path.extname(resolvedPath).length);
     await fs.promises.writeFile(`${stem}.archive.json`, JSON.stringify(sidecarData, null, 2), 'utf8');
-    inventory.items = (inventory.items || []).map(candidate => candidate.path === resolvedPath ? { ...candidate, ...sidecarData } : candidate);
+    return updateArchiveLookup(sidecarData);
+});
+
+ipcMain.handle('fetch-local-model-hugging-face', async (event, request) => {
+    const { resolvedPath } = assertLocalModelPath(request?.modelPath);
+    const inventory = store.get('civitai_inventory', { scannedAt: null, root: '', items: [] });
+    const item = (inventory.items || []).find(candidate => candidate.path === resolvedPath);
+    if (!item) throw new Error('Model is not present in the local inventory.');
+    if (item.kind === 'lora') throw new Error('Hugging Face lookup is currently available only for checkpoints and diffusion models.');
+
+    const fileName = path.basename(resolvedPath);
+    const stem = fileName.slice(0, -path.extname(fileName).length);
+    const searchText = stem.replace(/[^a-z0-9]+/gi, ' ').trim();
+    const response = await fetch(`https://huggingface.co/api/models?search=${encodeURIComponent(searchText)}&limit=20&full=true`);
+    if (!response.ok) throw new Error(`Hugging Face lookup failed (${response.status} ${response.statusText}).`);
+    const models = await response.json();
+    const normalize = value => String(value || '').toLowerCase().replace(/\.(?:safetensors|ckpt|pt|pth|bin|gguf)$/i, '').replace(/[^a-z0-9]/g, '');
+    const normalizedStem = normalize(stem);
+    const exactFileMatch = models.find(model => (model.siblings || []).some(file => path.basename(String(file.rfilename || '')).toLowerCase() === fileName.toLowerCase()));
+    const exactRepoMatch = models.find(model => normalize(String(model.id || '').split('/').pop()) === normalizedStem);
+    const model = exactFileMatch || exactRepoMatch;
+    const checkedAt = new Date().toISOString();
+    const imageFiles = (model?.siblings || []).map(file => String(file.rfilename || '')).filter(name => /\.(?:png|jpe?g|webp)$/i.test(name));
+    const previewFile = imageFiles.find(name => /(?:preview|thumbnail|cover|realism)/i.test(path.basename(name))) || imageFiles[0];
+    const currentPreviewPath = item.previewPath || findModelPreviewPath(resolvedPath);
+    let huggingFacePreviewPath;
+    if (model && previewFile && !currentPreviewPath) {
+        const encodedFile = previewFile.split('/').map(encodeURIComponent).join('/');
+        try {
+            huggingFacePreviewPath = await cacheHuggingFacePreview(resolvedPath, `https://huggingface.co/${model.id}/resolve/main/${encodedFile}`);
+        } catch {
+            // Model identification still succeeds if its optional preview cannot be cached.
+        }
+    }
+    const updates = model ? {
+        huggingFaceCheckedAt: checkedAt,
+        huggingFaceLookupStatus: 'found',
+        huggingFaceInfo: {
+            repoId: model.id,
+            url: `https://huggingface.co/${model.id}`,
+            matchedFile: (model.siblings || []).find(file => path.basename(String(file.rfilename || '')).toLowerCase() === fileName.toLowerCase())?.rfilename,
+            previewFile,
+            pipelineTag: model.pipeline_tag,
+            downloads: Number(model.downloads) || 0,
+            likes: Number(model.likes) || 0,
+            tags: Array.isArray(model.tags) ? model.tags.slice(0, 20) : [],
+            fetchedAt: checkedAt,
+        },
+        previewPath: currentPreviewPath || huggingFacePreviewPath,
+    } : {
+        huggingFaceCheckedAt: checkedAt,
+        huggingFaceLookupStatus: 'unmatched',
+        huggingFaceInfo: undefined,
+    };
+    const sidecarPath = `${resolvedPath.slice(0, -path.extname(resolvedPath).length)}.huggingface.json`;
+    await fs.promises.writeFile(sidecarPath, JSON.stringify(updates, null, 2), 'utf8');
+    inventory.items = (inventory.items || []).map(candidate => candidate.path === resolvedPath ? { ...candidate, ...updates } : candidate);
     store.set('civitai_inventory', inventory);
     return inventory;
 });
@@ -1280,8 +1674,6 @@ ipcMain.handle('reclassify-local-model', async (event, request) => {
             relativePath: path.relative(modelRoot, destinationPath),
             kind: request.kind,
             previewPath: findModelPreviewPath(destinationPath),
-            status: 'matched',
-            userOwned: true,
         };
         return updatedItem;
     });
@@ -1315,7 +1707,7 @@ ipcMain.handle('set-local-model-usage-metadata', async (event, request) => {
 ipcMain.handle('fetch-local-model-usage-metadata', async (event, request) => {
     const { resolvedPath } = assertLocalModelPath(request?.modelPath);
     const { source, provider } = request || {};
-    if (source !== 'civitai' && source !== 'archive') throw new Error('Unknown metadata source.');
+    if (source !== 'civitai' && source !== 'archive' && source !== 'huggingface') throw new Error('Unknown metadata source.');
     if (provider !== 'regular' && provider !== 'red') throw new Error('Unknown Civitai provider.');
     const inventory = store.get('civitai_inventory', { scannedAt: null, root: '', items: [] });
     const item = (inventory.items || []).find(candidate => candidate.path === resolvedPath);
@@ -1323,6 +1715,16 @@ ipcMain.handle('fetch-local-model-usage-metadata', async (event, request) => {
 
     let metadataSource;
     let galleryWorkflows = [];
+    if (source === 'huggingface') {
+        const settings = await fetchHuggingFaceRecommendedSettings(item);
+        if (!settings) throw new Error('No explicit recommended generation settings were found in this Hugging Face model card or its linked model cards.');
+        return saveUsageMetadata(resolvedPath, {
+            ...(item.usageMetadata || {}),
+            ...settings,
+            source: 'huggingface',
+            updatedAt: new Date().toISOString(),
+        });
+    }
     if (source === 'civitai') {
         let version;
         if (item.installedVersionId) {
@@ -1403,7 +1805,7 @@ ipcMain.handle('get-local-model-prompt-examples', async (event, request) => {
     const provider = request?.provider;
     if (provider !== 'regular' && provider !== 'red') throw new Error('Unknown Civitai provider.');
     const requestedSources = [...new Set(Array.isArray(request?.sources) ? request.sources : [])]
-        .filter(source => source === 'civitai' || source === 'archive');
+        .filter(source => source === 'civitai' || source === 'archive' || source === 'huggingface');
     const inventory = store.get('civitai_inventory', { scannedAt: null, root: '', items: [] });
     const item = (inventory.items || []).find(candidate => candidate.path === resolvedPath);
     if (!item) throw new Error('Model is missing from the local inventory.');
@@ -1411,31 +1813,34 @@ ipcMain.handle('get-local-model-prompt-examples', async (event, request) => {
     const examples = [];
     const failures = [];
     if (requestedSources.includes('civitai')) {
-        try {
-            let version;
-            if (item.installedVersionId) {
-                try {
-                    version = await fetchCivitaiJson(provider, `/api/v1/model-versions/${item.installedVersionId}`);
-                } catch (error) {
-                    if (error.status !== 404) throw error;
+        const providers = provider === 'red' ? ['red', 'regular'] : ['regular', 'red'];
+        for (const currentProvider of providers) {
+            try {
+                let version;
+                if (item.installedVersionId) {
+                    try {
+                        version = await fetchCivitaiJson(currentProvider, `/api/v1/model-versions/${item.installedVersionId}`);
+                    } catch (error) {
+                        if (error.status !== 404) throw error;
+                    }
                 }
-            }
-            if (!version) version = await fetchCivitaiJson(provider, `/api/v1/model-versions/by-hash/${item.sha256 || await hashFile(resolvedPath)}`);
-            let model;
-            const modelId = version?.modelId || item.modelId;
-            if (modelId) model = await fetchCivitaiJson(provider, `/api/v1/models/${modelId}`);
-            let images = [];
-            if (version?.id) {
-                try {
-                    const imageResult = await fetchCivitaiJson(provider, `/api/v1/images?modelVersionId=${version.id}&limit=100&sort=Most%20Reactions&period=AllTime`);
-                    images = imageResult?.items || [];
-                } catch (error) {
-                    failures.push(error instanceof Error ? error.message : 'Civitai image lookup failed.');
+                if (!version) version = await fetchCivitaiJson(currentProvider, `/api/v1/model-versions/by-hash/${item.sha256 || await hashFile(resolvedPath)}`);
+                let model;
+                const modelId = version?.modelId || item.modelId;
+                if (modelId) model = await fetchCivitaiJson(currentProvider, `/api/v1/models/${modelId}`);
+                let images = [];
+                if (version?.id) {
+                    try {
+                        const imageResult = await fetchCivitaiJson(currentProvider, `/api/v1/images?modelVersionId=${version.id}&limit=100&sort=Most%20Reactions&period=AllTime`);
+                        images = imageResult?.items || [];
+                    } catch (error) {
+                        failures.push(error instanceof Error ? error.message : `${currentProvider} image lookup failed.`);
+                    }
                 }
+                examples.push(...collectPromptExamples({ version, model, images }, 'civitai'));
+            } catch (error) {
+                failures.push(error instanceof Error ? error.message : `${currentProvider} Civitai lookup failed.`);
             }
-            examples.push(...collectPromptExamples({ version, model, images }, 'civitai'));
-        } catch (error) {
-            failures.push(error instanceof Error ? error.message : 'Civitai lookup failed.');
         }
     }
     if (requestedSources.includes('archive')) {
@@ -1470,8 +1875,42 @@ ipcMain.handle('get-local-model-prompt-examples', async (event, request) => {
             failures.push(error instanceof Error ? error.message : 'CivArchive lookup failed.');
         }
     }
+    if (requestedSources.includes('huggingface')) {
+        try {
+            let repoId = item.huggingFaceInfo?.repoId;
+            if (!repoId) {
+                const fileName = path.basename(resolvedPath);
+                const stem = fileName.slice(0, -path.extname(fileName).length);
+                const searchText = stem.replace(/[^a-z0-9]+/gi, ' ').trim();
+                const response = await fetch(`https://huggingface.co/api/models?search=${encodeURIComponent(searchText)}&limit=20&full=true`);
+                if (!response.ok) throw new Error(`Hugging Face search failed (${response.status} ${response.statusText}).`);
+                const models = await response.json();
+                const normalize = value => String(value || '').toLowerCase().replace(/\.(?:safetensors|ckpt|pt|pth|bin|gguf)$/i, '').replace(/[^a-z0-9]/g, '');
+                const normalizedStem = normalize(stem);
+                const match = models.find(model => (model.siblings || []).some(file => path.basename(String(file.rfilename || '')).toLowerCase() === fileName.toLowerCase()))
+                    || models.find(model => normalize(String(model.id || '').split('/').pop()) === normalizedStem);
+                repoId = match?.id;
+            }
+            if (!repoId) throw new Error('Hugging Face could not identify this LoRA repository.');
+            let markdown = '';
+            for (const branch of ['main', 'master']) {
+                const response = await fetch(`https://huggingface.co/${repoId}/raw/${branch}/README.md`);
+                if (response.ok) {
+                    markdown = await response.text();
+                    break;
+                }
+            }
+            if (!markdown) throw new Error('Hugging Face README could not be loaded.');
+            examples.push(...collectHuggingFacePromptExamples(markdown));
+        } catch (error) {
+            failures.push(error instanceof Error ? error.message : 'Hugging Face lookup failed.');
+        }
+    }
     const uniqueExamples = [...new Map(examples.map(example => [`${example.positive}\n${example.negative || ''}`, example])).values()].slice(0, 100);
-    if (!uniqueExamples.length) throw new Error(failures[0] || 'No prompt examples were found for this model.');
+    if (!uniqueExamples.length) {
+        const details = [...new Set(failures)].slice(0, 4).join(' | ');
+        throw new Error(`No prompt examples were found after checking Civitai Blue, Civitai Red, CivArchive, and Hugging Face.${details ? ` ${details}` : ''}`);
+    }
     return { examples: uniqueExamples, storage: 'remote' };
 });
 
@@ -1487,7 +1926,7 @@ ipcMain.handle('save-local-model-prompt-examples', async (event, request) => {
         .map(example => ({
             positive: example.positive.trim().slice(0, 12000),
             negative: typeof example.negative === 'string' && example.negative.trim() ? example.negative.trim().slice(0, 12000) : undefined,
-            source: example.source === 'archive' ? 'archive' : 'civitai',
+            source: example.source === 'archive' || example.source === 'huggingface' ? example.source : 'civitai',
         }));
     const uniqueExamples = [...new Map(examples.map(example => [`${example.positive}\n${example.negative || ''}`, example])).values()].slice(0, 100);
     if (!uniqueExamples.length) throw new Error('There are no prompt examples to save.');
