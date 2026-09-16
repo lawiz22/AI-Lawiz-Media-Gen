@@ -44,6 +44,7 @@ import { OptionsPanel } from './components/OptionsPanel';
 import { ImageGrid } from './components/ImageGrid';
 import { Loader } from './components/Loader';
 import { ConnectionSettingsModal } from './components/ComfyUIConnection';
+import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL } from './services/ollamaService';
 import { LibraryPanel } from './components/LibraryPanel';
 import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
@@ -88,6 +89,8 @@ const App: React.FC = () => {
     const [comfyUrlForHelper, setComfyUrlForHelper] = useState('');
     const [localGeminiKey, setLocalGeminiKey] = useState('');
     const [localMammouthKey, setLocalMammouthKey] = useState('');
+    const [localOllamaUrl, setLocalOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || DEFAULT_OLLAMA_URL);
+    const [localOllamaModel, setLocalOllamaModel] = useState(() => localStorage.getItem('ollama_model') || DEFAULT_OLLAMA_MODEL);
     const [isGeneratingRefinePrompt, setIsGeneratingRefinePrompt] = useState(false);
     const [generationTimes, setGenerationTimes] = useState<Record<string, number | null>>({});
     const [upscaleSourceFile, setUpscaleSourceFile] = useState<File | null>(null);
@@ -589,7 +592,7 @@ const App: React.FC = () => {
         }
     };
 
-    const handleSaveSettings = async (comfyUIUrl: string, googleClientId: string, geminiApiKey?: string, mammouthApiKey?: string) => {
+    const handleSaveSettings = async (comfyUIUrl: string, googleClientId: string, geminiApiKey?: string, mammouthApiKey?: string, ollamaUrl?: string, ollamaModel?: string) => {
         localStorage.setItem('comfyui_url', comfyUIUrl);
         localStorage.setItem('google_client_id', googleClientId);
         checkComfyUIConnection(comfyUIUrl);
@@ -626,6 +629,12 @@ const App: React.FC = () => {
         } else {
             dispatch(setIsMammouthConnected(false));
         }
+        const nextOllamaUrl = ollamaUrl?.trim() || DEFAULT_OLLAMA_URL;
+        const nextOllamaModel = ollamaModel?.trim() || DEFAULT_OLLAMA_MODEL;
+        localStorage.setItem('ollama_url', nextOllamaUrl);
+        localStorage.setItem('ollama_model', nextOllamaModel);
+        setLocalOllamaUrl(nextOllamaUrl);
+        setLocalOllamaModel(nextOllamaModel);
     };
 
     const handleSendToI2I = async (imageDataUrl: string) => {
@@ -823,6 +832,8 @@ const App: React.FC = () => {
                     initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
                     initialGeminiApiKey={localGeminiKey}
                     initialMammouthApiKey={localMammouthKey}
+                    initialOllamaUrl={localOllamaUrl}
+                    initialOllamaModel={localOllamaModel}
                     onSave={handleSaveSettings}
                     onConnectionFail={(url) => setComfyUrlForHelper(url)}
                 />
@@ -1256,6 +1267,10 @@ const App: React.FC = () => {
                             onOpenLibraryForSubject={() => dispatch(setModalOpen({ modal: 'isPromptGenSubjectImagePickerOpen', isOpen: true }))}
                             onOpenLibraryForWanVideoImage={() => dispatch(setModalOpen({ modal: 'isWanVideoImagePickerOpen', isOpen: true }))}
                             onReset={handlePromptGenReset}
+                            isComfyUIConnected={isComfyUIConnected}
+                            comfyUIObjectInfo={comfyUIObjectInfo}
+                            ollamaUrl={localOllamaUrl}
+                            defaultOllamaModel={localOllamaModel}
                         />
                     </React.Activity>
 

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { checkConnection } from '../services/comfyUIService';
 import { testMammouthConnection } from '../services/mammouthService';
+import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, testOllamaConnection } from '../services/ollamaService';
 import { CloseIcon, SpinnerIcon } from './icons';
 
 interface ConnectionSettingsModalProps {
@@ -12,13 +13,15 @@ interface ConnectionSettingsModalProps {
   initialGoogleClientId: string;
   initialGeminiApiKey?: string;
   initialMammouthApiKey?: string;
-  onSave: (comfyUIUrl: string, googleClientId: string, geminiApiKey?: string, mammouthApiKey?: string) => void;
+  initialOllamaUrl: string;
+  initialOllamaModel: string;
+  onSave: (comfyUIUrl: string, googleClientId: string, geminiApiKey?: string, mammouthApiKey?: string, ollamaUrl?: string, ollamaModel?: string) => void;
   onConnectionFail: (url: string) => void;
 }
 
 type ConnectionStatus = 'idle' | 'testing' | 'success' | 'failed';
 
-export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = ({ isOpen, onClose, initialComfyUIUrl, initialGoogleClientId, initialGeminiApiKey, initialMammouthApiKey, onSave, onConnectionFail }) => {
+export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = ({ isOpen, onClose, initialComfyUIUrl, initialGoogleClientId, initialGeminiApiKey, initialMammouthApiKey, initialOllamaUrl, initialOllamaModel, onSave, onConnectionFail }) => {
   const [comfyUrl, setComfyUrl] = useState<string>('');
   const [googleClientId, setGoogleClientId] = useState<string>('');
   const [geminiApiKey, setGeminiApiKey] = useState<string>('');
@@ -27,6 +30,11 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
   const [comfyStatusMessage, setComfyStatusMessage] = useState<string>('');
   const [mammouthStatus, setMammouthStatus] = useState<ConnectionStatus>('idle');
   const [mammouthStatusMessage, setMammouthStatusMessage] = useState<string>('');
+  const [ollamaUrl, setOllamaUrl] = useState(DEFAULT_OLLAMA_URL);
+  const [ollamaModel, setOllamaModel] = useState(DEFAULT_OLLAMA_MODEL);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [ollamaStatus, setOllamaStatus] = useState<ConnectionStatus>('idle');
+  const [ollamaStatusMessage, setOllamaStatusMessage] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -34,10 +42,14 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
       setGoogleClientId(initialGoogleClientId || '');
       setGeminiApiKey(initialGeminiApiKey || '');
       setMammouthApiKey(initialMammouthApiKey || '');
+      setOllamaUrl(initialOllamaUrl || DEFAULT_OLLAMA_URL);
+      setOllamaModel(initialOllamaModel || DEFAULT_OLLAMA_MODEL);
+      setOllamaModels([]);
       setComfyStatus('idle'); // Reset status when opening
       setMammouthStatus('idle');
+      setOllamaStatus('idle');
     }
-  }, [initialComfyUIUrl, initialGoogleClientId, initialGeminiApiKey, initialMammouthApiKey, isOpen]);
+  }, [initialComfyUIUrl, initialGoogleClientId, initialGeminiApiKey, initialMammouthApiKey, initialOllamaUrl, initialOllamaModel, isOpen]);
 
   const handleTestConnection = async () => {
     setComfyStatus('testing');
@@ -54,7 +66,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
   };
 
   const handleSave = () => {
-    onSave(comfyUrl, googleClientId, geminiApiKey, mammouthApiKey);
+    onSave(comfyUrl, googleClientId, geminiApiKey, mammouthApiKey, ollamaUrl, ollamaModel);
     onClose();
   };
 
@@ -64,6 +76,15 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     const result = await testMammouthConnection(mammouthApiKey);
     setMammouthStatus(result.success ? 'success' : 'failed');
     setMammouthStatusMessage(result.message);
+  };
+
+  const handleTestOllama = async () => {
+    setOllamaStatus('testing');
+    setOllamaStatusMessage('');
+    const result = await testOllamaConnection(ollamaUrl);
+    setOllamaModels(result.models);
+    setOllamaStatus(result.success ? 'success' : 'failed');
+    setOllamaStatusMessage(result.message);
   };
 
   const getStatusColor = () => {
@@ -152,6 +173,22 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
                 {comfyStatusMessage || (comfyStatus === 'testing' ? 'Testing connection...' : '')}
               </p>
             )}
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-text-primary mb-2">Ollama Server</h3>
+            <p className="text-sm text-text-secondary mb-4">Connect to Ollama Desktop for local prompt analysis and Magic Soup.</p>
+            <label htmlFor="ollama-url" className="block text-sm font-medium text-text-secondary">Server URL</label>
+            <div className="mt-1 flex items-center gap-2">
+              <input id="ollama-url" type="text" value={ollamaUrl} onChange={(event) => { setOllamaUrl(event.target.value); setOllamaStatus('idle'); }} className="block w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" placeholder={DEFAULT_OLLAMA_URL} />
+              <button type="button" onClick={handleTestOllama} disabled={ollamaStatus === 'testing' || !ollamaUrl.trim()} className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-bg-tertiary px-4 py-2 font-semibold text-text-secondary hover:bg-bg-tertiary-hover disabled:opacity-50">
+                {ollamaStatus === 'testing' ? <SpinnerIcon className="h-5 w-5 animate-spin" /> : 'Test'}
+              </button>
+            </div>
+            <label htmlFor="ollama-model" className="mt-3 block text-sm font-medium text-text-secondary">Default Model</label>
+            <input id="ollama-model" type="text" list="ollama-model-options" value={ollamaModel} onChange={(event) => setOllamaModel(event.target.value)} className="mt-1 block w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" placeholder={DEFAULT_OLLAMA_MODEL} />
+            <datalist id="ollama-model-options">{ollamaModels.map((model) => <option key={model} value={model} />)}</datalist>
+            {ollamaStatus !== 'idle' && <p className={`mt-2 text-sm font-medium ${ollamaStatus === 'success' ? 'text-green-400' : ollamaStatus === 'failed' ? 'text-danger' : 'text-accent'}`}>{ollamaStatusMessage || 'Testing connection...'}</p>}
           </div>
 
           {/* Gemini API Key Section */}

@@ -656,6 +656,116 @@ export const extractSubjectPromptFromImage = async (sourceImage: File, modelType
     return text;
 };
 
+export type Florence2PromptMode = 'image' | 'background' | 'subject';
+
+export interface Florence2PromptOptions {
+    model: string;
+    task: string;
+    precision?: string;
+    attention?: string;
+    keepModelLoaded?: boolean;
+    maxNewTokens?: number;
+    numBeams?: number;
+    doSample?: boolean;
+}
+
+const cleanFlorencePrompt = (text: string) => text
+    .trim()
+    .replace(/^(?:The image (?:shows|is)|A (?:digital |cartoon )?(?:painting|drawing|illustration|photograph|photo) of|A close-up photograph of)\s+/i, '')
+    .trim();
+
+export const generateFlorence2Prompt = async (
+    sourceImage: File,
+    mode: Florence2PromptMode,
+    options: Florence2PromptOptions,
+    updateProgress: (message: string, value: number) => void = () => undefined,
+): Promise<string> => {
+    const url = getComfyUIUrl();
+    if (!url) throw new Error('ComfyUI URL not set');
+    if (!options.model.trim()) throw new Error('Select a Florence2 model.');
+    if (!options.task.trim()) throw new Error('Select a Florence2 task.');
+
+    updateProgress('Checking Florence2 nodes...', 0.05);
+    const objectInfo = await getComfyUIObjectInfo();
+    const requiredNodes = ['LoadImage', 'Florence2Run', 'DownloadAndLoadFlorence2Model', 'ShowText|pysssss'];
+    const missingNodes = requiredNodes.filter((nodeName) => !objectInfo[nodeName]);
+    if (missingNodes.length > 0) throw new Error(`Florence2 prompt generation requires missing ComfyUI nodes: ${missingNodes.join(', ')}.`);
+
+    updateProgress('Uploading source image...', 0.12);
+    const uploadedImage = await uploadImage(sourceImage);
+    const tasksWithTextInput = new Set([
+        'referring_expression_segmentation',
+        'caption_to_phrase_grounding',
+        'docvqa',
+    ]);
+    const textInput = tasksWithTextInput.has(options.task)
+        ? mode === 'background'
+            ? 'Describe only the background and environment.'
+            : mode === 'subject'
+                ? 'Describe only the main person, animal, or object.'
+                : 'Describe the complete image.'
+        : '';
+    const workflow: Record<string, any> = {
+        '44': {
+            inputs: { image: uploadedImage.name },
+            class_type: 'LoadImage',
+            _meta: { title: 'Prompt Source Image' },
+        },
+        '5': {
+            inputs: {
+                model: options.model,
+                precision: options.precision || 'fp16',
+                convert_to_safetensors: options.attention || 'sdpa',
+            },
+            class_type: 'DownloadAndLoadFlorence2Model',
+            _meta: { title: 'Florence2 Prompt Model' },
+        },
+        '4': {
+            inputs: {
+                text_input: textInput,
+                task: options.task,
+                fill_mask: false,
+                keep_model_loaded: options.keepModelLoaded ?? false,
+                max_new_tokens: options.maxNewTokens ?? 1024,
+                num_beams: options.numBeams ?? 3,
+                do_sample: options.doSample ?? true,
+                output_mask_select: '',
+                seed: Math.floor(Math.random() * Number.MAX_SAFE_INTEGER),
+                image: ['44', 0],
+                florence2_model: ['5', 0],
+            },
+            class_type: 'Florence2Run',
+            _meta: { title: 'Florence2 Prompt Analysis' },
+        },
+        '48': {
+            inputs: { text_0: '', text: ['4', 2] },
+            class_type: 'ShowText|pysssss',
+            _meta: { title: 'Florence2 Prompt Output' },
+        },
+    };
+
+    updateProgress('Queueing Florence2 prompt...', 0.2);
+    const promptId = await queuePrompt(workflow, getClientId());
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+        const response = await fetch(`${url}/history/${promptId}`);
+        if (response.ok) {
+            const history = (await response.json())[promptId];
+            if (history?.status?.status_str === 'error') throw new Error('Florence2 failed in ComfyUI. Check the ComfyUI console for details.');
+            const output = history?.outputs?.['48'];
+            const rawText = output?.text ?? output?.string ?? output?.value;
+            const text = Array.isArray(rawText) ? rawText.find((value) => typeof value === 'string' && value.trim()) : rawText;
+            if (typeof text === 'string' && text.trim()) {
+                updateProgress('Florence2 prompt ready.', 1);
+                return cleanFlorencePrompt(text);
+            }
+            if (history?.status?.completed) throw new Error('Florence2 completed without returning prompt text.');
+        }
+        updateProgress('Florence2 is analyzing the image...', Math.min(0.9, 0.25 + attempt * 0.01));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    throw new Error('Florence2 prompt generation timed out.');
+};
+
 export const generateMagicalPromptSoup = async (
     fullPrompt: string,
     bgPrompt: string,

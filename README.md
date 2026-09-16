@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**A Windows creative workstation for cloud AI and local ComfyUI production.**
+**A Windows creative workstation for cloud AI, Ollama, and local ComfyUI production.**
 
 [![Version](https://img.shields.io/badge/version-1.7.0-0ea5e9?style=for-the-badge)](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
@@ -11,11 +11,11 @@
 [![Electron](https://img.shields.io/badge/Electron-44-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Windows](https://img.shields.io/badge/Windows-desktop-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
 
-[Features](#features) · [Requirements](#requirements) · [Setup](#setup) · [ComfyUI](#comfyui-setup) · [Production](#production-build)
+[Features](#features) · [Screenshots](#screenshots) · [Requirements](#requirements) · [Setup](#setup) · [Ollama](#ollama-setup) · [ComfyUI](#comfyui-setup) · [Production](#production-build)
 
 </div>
 
-LAWIZ'S Media Generator combines image generation, character creation, video direction, speech synthesis, asset extraction, upscaling, and model management in one React/Electron desktop application. It can use hosted generation through Mammouth AI or execute configurable workflows on a local ComfyUI server.
+LAWIZ'S Media Generator combines image generation, character creation, video direction, speech synthesis, asset extraction, upscaling, and model management in one React/Electron desktop application. It can use hosted generation through Mammouth AI, local language and vision models through Ollama, or configurable workflows on a local ComfyUI server.
 
 > This repository contains the application and workflow definitions. AI checkpoints, LoRAs, ComfyUI, custom nodes, and third-party API access are not bundled.
 
@@ -58,7 +58,9 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 
 ### Creative Tools
 
-- Prompt analysis, prompt generation, and prompt mixing.
+- Prompt analysis through Mammouth AI, Ollama vision models, or ComfyUI Florence2.
+- Local Ollama background and subject extraction with selectable installed models.
+- Creative Magic Soup generation through Mammouth AI or Ollama, with adjustable creativity and source-color attribution.
 - Clothes, subject, object, background, pose, mannequin, and font extraction.
 - MediaPipe pose detection with ControlNet-compatible output.
 - Group photo fusion and PastForward transformations.
@@ -75,6 +77,25 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 - Store named voice references and character photos for TTS and LTX reuse.
 - Optional Google Drive folder synchronization.
 
+## Screenshots
+
+The README is prepared for eight screenshots covering the main workflows. Capture them at `1600×900` or wider, keep the application theme consistent, hide API keys and personal information, and save them under [`assets/screenshots`](assets/screenshots) using the filenames below.
+
+| File | Recommended capture |
+| --- | --- |
+| `01-image-generator.png` | Image Generator with provider, workflow options, source image, and generated result visible |
+| `02-prompt-providers.png` | Prompt from Image showing Mammouth, Ollama, and Florence2 plus the Ollama model selector |
+| `03-magic-prompt-soup.png` | Magic Soup at high creativity with three source prompts and a colorful generated result |
+| `04-character-generator.png` | Character workflow with reference image, pose/clothing controls, and multiple results |
+| `05-ltx-director.png` | LTX Director timeline containing several clips, character photos, prompts, and audio |
+| `06-advanced-tts.png` | Advanced TTS multi-character dialogue with named voices, photos, and emotions |
+| `07-model-library.png` | Models/LoRAs inventory with previews, metadata, filters, and a selected model |
+| `08-voice-recorder-library.png` | Voice Recorder ready or recorded state beside a saved voice reference in the Library |
+
+The image tags are already placed throughout this document as comments. After adding a screenshot, remove the surrounding `<!--` and `-->` from its matching tag. See [`assets/screenshots/README.md`](assets/screenshots/README.md) for the capture checklist.
+
+<!-- ![Image Generator with local and cloud workflow controls](assets/screenshots/01-image-generator.png) -->
+
 ## Requirements
 
 | Requirement | Purpose |
@@ -83,6 +104,7 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 | Node.js 20+ and npm | Development and production builds |
 | Mammouth AI API key | Mammouth generation and AI-assisted prompt features |
 | Google Gemini API key | Direct Gemini features, when used |
+| Ollama | Optional local prompt analysis, extraction, and Magic Soup |
 | ComfyUI | Local image, video, TTS, and upscale workflows |
 | Google OAuth client ID | Optional Google Drive synchronization |
 | Civitai API key | Optional authenticated model operations |
@@ -131,12 +153,34 @@ Connection settings are entered inside the application:
 | Setting | Typical value | Required for |
 | --- | --- | --- |
 | ComfyUI URL | `http://127.0.0.1:8188` | Local workflows |
+| Ollama URL | `http://127.0.0.1:11434` | Local prompt tools |
+| Ollama model | `huihui_ai/qwen3-vl-abliterated:8b` | Default local vision and text model |
 | Mammouth API key | Provider-issued key | Mammouth generation and prompt tools |
 | Gemini API key | Google AI key | Direct Gemini generation |
 | Google OAuth client ID | OAuth web client ID | Drive synchronization |
 | Civitai API key | Civitai account key | Authenticated model operations |
 
 In Electron, API keys are persisted through `electron-store`. Do not commit API keys or place secrets directly in source files. For browser development, `GEMINI_API_KEY` can be supplied through a local Vite environment file that remains outside version control.
+
+## Ollama Setup
+
+1. Install and start [Ollama](https://ollama.com/) for Windows.
+2. Pull the default local vision model:
+
+	```powershell
+	ollama pull huihui_ai/qwen3-vl-abliterated:8b
+	```
+
+3. Open **Connection Settings**, keep the default URL `http://127.0.0.1:11434`, and click **Test**. A successful test reports how many installed models are available.
+4. Select the default model or another installed model. The Prompt tools refresh their model list from Ollama's `/api/tags` endpoint.
+
+Ollama is available in **Prompt from Image**, **Extract Background**, **Subject / Object**, and **Magical Prompt Soup**. Florence2 remains available only in **Prompt from Image** because its caption tasks cannot reliably isolate a background or subject. Ollama image analysis requests use a larger context window automatically, while Magic Soup asks the selected model to synthesize a new concept instead of concatenating source descriptions.
+
+When using browser-only development, local browser security may block Ollama even when the desktop application works. If that happens, allow the development origin through Ollama's `OLLAMA_ORIGINS` setting and restart Ollama.
+
+<!-- ![Prompt providers and selectable Ollama models](assets/screenshots/02-prompt-providers.png) -->
+
+<!-- ![Creative Ollama Magic Soup generated from three source prompts](assets/screenshots/03-magic-prompt-soup.png) -->
 
 ## ComfyUI Setup
 
@@ -163,6 +207,16 @@ ComfyUI/models/loras
 FLUX2 and KREA2 diffusion models are indexed directly from `ComfyUI/models/diffusion_models`. Their LoRAs use the dedicated `ComfyUI/models/loras/flux2` and `ComfyUI/models/loras/krea` folders.
 
 Model-specific metadata is stored beside the model where applicable. Keep these sidecars with the model when moving files outside the application's organizer.
+
+<!-- ![Character Generator references, controls, and results](assets/screenshots/04-character-generator.png) -->
+
+<!-- ![LTX Director multi-clip timeline](assets/screenshots/05-ltx-director.png) -->
+
+<!-- ![Advanced TTS multi-character dialogue](assets/screenshots/06-advanced-tts.png) -->
+
+<!-- ![Local Models and LoRAs inventory](assets/screenshots/07-model-library.png) -->
+
+<!-- ![Voice Recorder and reusable Library voice reference](assets/screenshots/08-voice-recorder-library.png) -->
 
 ## Development
 
@@ -215,7 +269,7 @@ The repository currently has no automated test script. Production validation the
 - [Electron](https://www.electronjs.org/) and [electron-builder](https://www.electron.build/)
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) API and WebSocket execution tracking
 - [MediaPipe](https://ai.google.dev/edge/mediapipe/solutions/guide), IndexedDB, and optional Google Drive integration
-- Mammouth AI, Google Gemini, Civitai, and CivArchive integrations
+- Mammouth AI, Ollama, Google Gemini, Civitai, and CivArchive integrations
 
 ## Repository
 
@@ -223,5 +277,7 @@ The repository currently has no automated test script. Production validation the
 - Current application version: `1.7.0`
 - Default development port: `3000`
 - Default ComfyUI endpoint: `http://127.0.0.1:8188`
+- Default Ollama endpoint: `http://127.0.0.1:11434`
+- Default Ollama model: `huihui_ai/qwen3-vl-abliterated:8b`
 
 No license file is currently included. Unless a license is added, reuse and redistribution rights are not granted by this repository.

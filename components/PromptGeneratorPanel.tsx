@@ -5,7 +5,8 @@ import { addToLibrary } from '../store/librarySlice';
 import { setPromptSaveStatus, updatePromptGenState } from '../store/promptGenSlice';
 import { ImageUploader } from './ImageUploader';
 // Fix: Corrected typo in imported function name from 'extractSubjectFromImage' to 'extractSubjectPromptFromImage'.
-import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateMagicalPromptSoup, generateWanVideoPromptFromImage } from '../services/comfyUIService';
+import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateFlorence2Prompt, generateMagicalPromptSoup, generateWanVideoPromptFromImage } from '../services/comfyUIService';
+import { generateOllamaPromptFromImage, generateOllamaPromptSoup, testOllamaConnection } from '../services/ollamaService';
 import type { LibraryItem, PromptGenState, GenerationOptions } from '../types';
 import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon, WorkflowIcon, CloseIcon } from './icons';
 import { fileToResizedDataUrl, dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
@@ -22,6 +23,12 @@ interface PromptPart {
 
 type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'flux2-simple' | 'gemini' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
 type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
+type AnalysisProvider = 'mammouth' | 'ollama' | 'comfyui';
+
+const getComfyChoices = (input: any): string[] => {
+    const choices = Array.isArray(input?.[0]) ? input[0] : [];
+    return choices.filter((choice: unknown): choice is string => typeof choice === 'string' && Boolean(choice));
+};
 
 const PROMPT_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     'from-image': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
@@ -164,6 +171,10 @@ interface PromptGeneratorPanelProps {
         onOpenLibraryForSubject: () => void;
         onOpenLibraryForWanVideoImage: () => void;
         onReset: () => void;
+        isComfyUIConnected: boolean | null;
+        comfyUIObjectInfo: any | null;
+        ollamaUrl: string;
+        defaultOllamaModel: string;
 }
 
 interface SubTab {
@@ -196,7 +207,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     onOpenLibraryForBg,
     onOpenLibraryForSubject,
     onOpenLibraryForWanVideoImage,
-    onReset
+    onReset,
+    isComfyUIConnected,
+    comfyUIObjectInfo,
+    ollamaUrl,
+    defaultOllamaModel,
 }) => {
     const dispatch: AppDispatch = useDispatch();
     const state = useSelector((state: RootState) => state.promptGen.promptGenState);
@@ -212,6 +227,12 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [copyButtonText, setCopyButtonText] = useState('Copy Prompt');
+    const [analysisProvider, setAnalysisProvider] = useState<AnalysisProvider>('mammouth');
+    const [florenceModel, setFlorenceModel] = useState('MiaoshouAI/Florence-2-large-PromptGen-v2.0');
+    const [florenceTask, setFlorenceTask] = useState('detailed_caption');
+    const [ollamaModel, setOllamaModel] = useState(defaultOllamaModel);
+    const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+    const [isOllamaConnected, setIsOllamaConnected] = useState<boolean | null>(null);
 
     const [bgModelType, setBgModelType] = useState<PromptModelType>('sdxl');
     const [isBgLoading, setIsBgLoading] = useState<boolean>(false);
@@ -240,6 +261,55 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     // State for the new destination picker modal
     const [isPickerOpen, setPickerOpen] = useState(false);
     const [promptToUse, setPromptToUse] = useState<string>('');
+
+    const florenceModels = useMemo(
+        () => getComfyChoices(comfyUIObjectInfo?.DownloadAndLoadFlorence2Model?.input?.required?.model),
+        [comfyUIObjectInfo],
+    );
+    const florenceTasks = useMemo(
+        () => getComfyChoices(comfyUIObjectInfo?.Florence2Run?.input?.required?.task),
+        [comfyUIObjectInfo],
+    );
+    const hasFlorenceNodes = Boolean(
+        comfyUIObjectInfo?.LoadImage
+        && comfyUIObjectInfo?.Florence2Run
+        && comfyUIObjectInfo?.DownloadAndLoadFlorence2Model
+        && comfyUIObjectInfo?.['ShowText|pysssss'],
+    );
+    const isFlorenceUnavailable = analysisProvider === 'comfyui'
+        && (isComfyUIConnected !== true || !hasFlorenceNodes || !florenceModel || !florenceTask);
+    const isOllamaUnavailable = analysisProvider === 'ollama' && (isOllamaConnected !== true || !ollamaModel.trim());
+
+    useEffect(() => {
+        if (florenceModels.length > 0 && !florenceModels.includes(florenceModel)) setFlorenceModel(florenceModels[0]);
+    }, [florenceModel, florenceModels]);
+
+    useEffect(() => {
+        if (florenceTasks.includes('detailed_caption')) {
+            if (!florenceTasks.includes(florenceTask)) setFlorenceTask('detailed_caption');
+        } else if (florenceTasks.length > 0 && !florenceTasks.includes(florenceTask)) {
+            setFlorenceTask(florenceTasks[0]);
+        }
+    }, [florenceTask, florenceTasks]);
+
+    useEffect(() => {
+        setOllamaModel(defaultOllamaModel);
+    }, [defaultOllamaModel]);
+
+    useEffect(() => {
+        let cancelled = false;
+        setIsOllamaConnected(null);
+        testOllamaConnection(ollamaUrl).then((result) => {
+            if (cancelled) return;
+            setIsOllamaConnected(result.success);
+            setOllamaModels(result.models);
+        });
+        return () => { cancelled = true; };
+    }, [ollamaUrl]);
+
+    useEffect(() => {
+        if (analysisProvider === 'comfyui' && activeSubTab !== 'from-image') setAnalysisProvider('ollama');
+    }, [activeSubTab, analysisProvider]);
 
     useEffect(() => {
         if (activeSubTab === 'qwen-image') setActiveSubTab('from-image');
@@ -299,7 +369,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setIsLoading(true);
         setError(null);
         try {
-            const generatedPrompt = await generateComfyUIPromptFromSource(image, modelType);
+            const generatedPrompt = analysisProvider === 'comfyui'
+                ? await generateFlorence2Prompt(image, 'image', { model: florenceModel, task: florenceTask })
+                : analysisProvider === 'ollama'
+                    ? await generateOllamaPromptFromImage(image, 'image', modelType, ollamaUrl, ollamaModel)
+                    : await generateComfyUIPromptFromSource(image, modelType);
             dispatch(updatePromptGenState({ prompt: generatedPrompt }));
         } catch (err: any) {
             setError(err.message || 'An unknown error occurred.');
@@ -336,7 +410,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setIsBgLoading(true);
         setBgError(null);
         try {
-            const generatedPrompt = await extractBackgroundPromptFromImage(bgImage, bgModelType);
+            const generatedPrompt = analysisProvider === 'ollama'
+                ? await generateOllamaPromptFromImage(bgImage, 'background', bgModelType, ollamaUrl, ollamaModel)
+                : await extractBackgroundPromptFromImage(bgImage, bgModelType);
             dispatch(updatePromptGenState({ bgPrompt: generatedPrompt }));
         } catch (err: any) {
             setBgError(err.message || 'An unknown error occurred.');
@@ -366,7 +442,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setIsSubjectLoading(true);
         setSubjectError(null);
         try {
-            const generatedPrompt = await extractSubjectPromptFromImage(subjectImage, subjectModelType);
+            const generatedPrompt = analysisProvider === 'ollama'
+                ? await generateOllamaPromptFromImage(subjectImage, 'subject', subjectModelType, ollamaUrl, ollamaModel)
+                : await extractSubjectPromptFromImage(subjectImage, subjectModelType);
             dispatch(updatePromptGenState({ subjectPrompt: generatedPrompt }));
         } catch (err: any) {
             setSubjectError(err.message || 'An unknown error occurred.');
@@ -396,13 +474,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setIsSoupLoading(true);
         setSoupError(null);
         try {
-            const generatedParts = await generateMagicalPromptSoup(
-                prompt,
-                bgPrompt,
-                subjectPrompt,
-                soupModelType,
-                soupCreativity
-            );
+            const generatedParts = analysisProvider === 'ollama'
+                ? await generateOllamaPromptSoup(prompt, bgPrompt, subjectPrompt, soupModelType, soupCreativity, ollamaUrl, ollamaModel)
+                : await generateMagicalPromptSoup(prompt, bgPrompt, subjectPrompt, soupModelType, soupCreativity);
             const fullPromptString = generatedParts.map(p => p.text).join(' ');
             setSoupPromptParts(generatedParts);
             dispatch(updatePromptGenState({ 
@@ -519,6 +593,61 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         );
     };
 
+    const renderOllamaControls = (currentType: PromptModelType, setType: (type: PromptModelType) => void) => (
+        <div className="space-y-3">
+            <div>
+                <label className="mb-1 block text-sm font-medium text-text-secondary">Ollama Model</label>
+                <select value={ollamaModel} onChange={(event) => { setOllamaModel(event.target.value); localStorage.setItem('ollama_model', event.target.value); }} className="block w-full rounded-md border border-border-primary bg-bg-primary p-2 text-sm">
+                    {[...new Set([ollamaModel, ...ollamaModels])].filter(Boolean).map((model) => <option key={model} value={model}>{model}</option>)}
+                </select>
+            </div>
+            <div>
+                <label className="mb-2 block text-sm font-medium text-text-secondary">Prompt Type</label>
+                {renderPromptTypeButtons(currentType, setType)}
+            </div>
+            {isOllamaConnected === null && <p className="text-xs text-text-muted">Checking Ollama connection...</p>}
+            {isOllamaConnected === false && <p className="text-xs text-danger">Ollama is not connected. Check its URL in Connection Settings.</p>}
+        </div>
+    );
+
+    const renderAnalysisControls = (currentType: PromptModelType, setType: (type: PromptModelType) => void, allowFlorence = false) => (
+        <div className="space-y-4">
+            <div>
+                <label className="mb-2 block text-sm font-medium text-text-secondary">Analysis Provider</label>
+                <div className={`grid ${allowFlorence ? 'grid-cols-3' : 'grid-cols-2'} rounded-md border border-border-primary bg-bg-primary p-1`}>
+                    <button type="button" onClick={() => setAnalysisProvider('mammouth')} className={`rounded px-3 py-2 text-sm font-semibold transition-colors ${analysisProvider === 'mammouth' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary-hover'}`}>Mammouth AI</button>
+                    <button type="button" onClick={() => setAnalysisProvider('ollama')} className={`rounded px-3 py-2 text-sm font-semibold transition-colors ${analysisProvider === 'ollama' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary-hover'}`}>Ollama</button>
+                    {allowFlorence && <button type="button" onClick={() => setAnalysisProvider('comfyui')} className={`rounded px-3 py-2 text-sm font-semibold transition-colors ${analysisProvider === 'comfyui' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary-hover'}`}>Florence2</button>}
+                </div>
+            </div>
+            {analysisProvider === 'mammouth' ? (
+                <div>
+                    <label className="mb-2 block text-sm font-medium text-text-secondary">Prompt Type</label>
+                    {renderPromptTypeButtons(currentType, setType)}
+                </div>
+            ) : analysisProvider === 'ollama' ? renderOllamaControls(currentType, setType) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                        <label className="mb-1 block text-sm font-medium text-text-secondary">Florence2 Model</label>
+                        <select value={florenceModel} onChange={(event) => setFlorenceModel(event.target.value)} disabled={florenceModels.length === 0} className="block w-full rounded-md border border-border-primary bg-bg-primary p-2 text-sm disabled:opacity-50">
+                            {florenceModels.length === 0 && <option value={florenceModel}>{florenceModel}</option>}
+                            {florenceModels.map((model) => <option key={model} value={model}>{model}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-sm font-medium text-text-secondary">Florence2 Task</label>
+                        <select value={florenceTask} onChange={(event) => setFlorenceTask(event.target.value)} disabled={florenceTasks.length === 0} className="block w-full rounded-md border border-border-primary bg-bg-primary p-2 text-sm disabled:opacity-50">
+                            {florenceTasks.length === 0 && <option value={florenceTask}>{florenceTask}</option>}
+                            {florenceTasks.map((task) => <option key={task} value={task}>{task}</option>)}
+                        </select>
+                    </div>
+                    {isComfyUIConnected !== true && <p className="text-xs text-danger sm:col-span-2">Connect ComfyUI to use Florence2.</p>}
+                    {isComfyUIConnected === true && !hasFlorenceNodes && <p className="text-xs text-danger sm:col-span-2">Install Florence2 and pysssss ShowText custom nodes, then reconnect ComfyUI.</p>}
+                </div>
+            )}
+        </div>
+    );
+
     const subTabs = [
         { id: 'from-image', label: 'Prompt from Image' },
         { id: 'extract-background', label: 'Extract Background' },
@@ -530,7 +659,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto" style={PROMPT_ACCENT_STYLES[activeSubTab] || PROMPT_ACCENT_STYLES['prompt-soup']}>
             <div className="mb-4 border border-border-primary bg-bg-primary/50 p-3 text-sm text-text-secondary">
-                Prompt analysis powered by Mammouth AI
+                {activeSubTab === 'prompt-soup'
+                    ? `Prompt remix powered by ${analysisProvider === 'ollama' ? 'Ollama' : 'Mammouth AI'}`
+                    : activeSubTab === 'from-image' || activeSubTab === 'extract-background' || activeSubTab === 'extract-subject'
+                        ? `Prompt analysis powered by ${analysisProvider === 'comfyui' ? 'ComfyUI Florence2' : analysisProvider === 'ollama' ? 'Ollama' : 'Mammouth AI'}`
+                        : 'Prompt tools'}
             </div>
             <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
 
@@ -559,13 +692,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                     <LibraryIcon className="w-6 h-6"/>
                                 </button>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>
-                                {renderPromptTypeButtons(modelType, setModelType)}
-                            </div>
+                            {renderAnalysisControls(modelType, setModelType, true)}
                             <button
                                 onClick={handleGenerate}
-                                disabled={!image || isLoading}
+                                disabled={!image || isLoading || isFlorenceUnavailable || isOllamaUnavailable}
                                 style={image && !isLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
                                 className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary"
                             >
@@ -618,8 +748,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 </div>
                                 <button onClick={onOpenLibraryForBg} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library"><LibraryIcon className="w-6 h-6"/></button>
                             </div>
-                            <div><label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>{renderPromptTypeButtons(bgModelType, setBgModelType)}</div>
-                            <button onClick={handleBgGenerate} disabled={!bgImage || isBgLoading} style={bgImage && !isBgLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary">
+                            {renderAnalysisControls(bgModelType, setBgModelType)}
+                            <button onClick={handleBgGenerate} disabled={!bgImage || isBgLoading || isOllamaUnavailable} style={bgImage && !isBgLoading && !isOllamaUnavailable ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary">
                                 {isBgLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}{isBgLoading ? 'Generating...' : 'Generate Background Prompt'}
                             </button>
                         </div>
@@ -660,8 +790,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 </div>
                                 <button onClick={onOpenLibraryForSubject} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library"><LibraryIcon className="w-6 h-6"/></button>
                             </div>
-                            <div><label className="block text-sm font-medium text-text-secondary mb-2">Prompt Type</label>{renderPromptTypeButtons(subjectModelType, setSubjectModelType)}</div>
-                            <button onClick={handleSubjectGenerate} disabled={!subjectImage || isSubjectLoading} style={subjectImage && !isSubjectLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary">
+                            {renderAnalysisControls(subjectModelType, setSubjectModelType)}
+                            <button onClick={handleSubjectGenerate} disabled={!subjectImage || isSubjectLoading || isOllamaUnavailable} style={subjectImage && !isSubjectLoading && !isOllamaUnavailable ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-primary text-text-secondary">
                                 {isSubjectLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}{isSubjectLoading ? 'Generating...' : 'Generate Subject Prompt'}
                             </button>
                         </div>
@@ -696,13 +826,13 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                         <div className="space-y-6 bg-bg-tertiary p-6 rounded-lg border border-border-primary/50">
-                            <div><label className="block text-sm font-medium text-text-secondary mb-2">Output Prompt Type</label>{renderPromptTypeButtons(soupModelType, setSoupModelType)}</div>
+                            {renderAnalysisControls(soupModelType, setSoupModelType)}
                             <div>
                                 <label className="block text-sm font-medium text-text-secondary">Creativity: {soupCreativity}</label>
                                 <input type="range" min="0" max="1" step="0.1" value={soupCreativity} onChange={(e) => setSoupCreativity(parseFloat(e.target.value))} disabled={isSoupLoading} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" />
                                 <p className="text-xs text-text-muted mt-1">Higher values lead to more unexpected combinations.</p>
                             </div>
-                            <button onClick={handleGenerateSoup} disabled={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading} style={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading ? {} : { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
+                            <button onClick={handleGenerateSoup} disabled={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading || isOllamaUnavailable} style={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading || isOllamaUnavailable ? {} : { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
                                 {isSoupLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}{isSoupLoading ? 'Stirring...' : 'Create Soup'}
                             </button>
                         </div>
