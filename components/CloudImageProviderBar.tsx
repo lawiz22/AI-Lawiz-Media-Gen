@@ -7,9 +7,10 @@ interface CloudImageProviderBarProps {
     options: GenerationOptions;
     updateOptions: (options: Partial<GenerationOptions>) => void;
     disabled?: boolean;
+    action?: React.ReactNode;
 }
 
-export const CloudImageProviderBar: React.FC<CloudImageProviderBarProps> = ({ options, updateOptions, disabled }) => {
+export const CloudImageProviderBar: React.FC<CloudImageProviderBarProps> = ({ options, updateOptions, disabled, action }) => {
     const [models, setModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
     const [loading, setLoading] = useState(false);
 
@@ -49,6 +50,7 @@ export const CloudImageProviderBar: React.FC<CloudImageProviderBarProps> = ({ op
                     {loading && <SpinnerIcon className="absolute right-2 top-2.5 w-4 h-4 animate-spin text-text-muted" />}
                 </div>
             )}
+            {action && <div className="ml-auto shrink-0">{action}</div>}
         </div>
     );
 };

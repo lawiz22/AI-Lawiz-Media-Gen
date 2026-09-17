@@ -377,7 +377,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                     comfyKreaUseLora: true,
                     comfyKreaLora1Name: modelPath,
                     comfyKreaLora1Strength: 1,
-                    comfyKreaUnet: workflow.modelType === 'krea2-raw' ? 'krea2_raw_fp8_scaled.safetensors' : 'krea2_turbo_fp8_scaled.safetensors',
+                    comfyKreaUnet: 'krea2_raw_fp8_scaled.safetensors',
                     comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
                     comfyKreaVae: workflow.modelType === 'krea2-raw' ? 'Wan2.1_VAE.safetensors' : 'qwen_image_vae.safetensors',
                     comfyKreaPrompt: savedTriggers.join(', '),

@@ -54,7 +54,6 @@ const initialState: AppSliceState = {
   isFontSourcePickerOpen: false,
   isMaskPickerOpen: false,
   isElementPickerOpen: false,
-  isWanVideoImagePickerOpen: false,
   isResizeCropPickerOpen: false,
   isGroupFusionPickerOpen: false,
 

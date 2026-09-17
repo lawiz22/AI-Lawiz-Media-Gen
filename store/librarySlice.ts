@@ -51,6 +51,18 @@ export const deleteFromLibrary = createAsyncThunk('library/deleteFromLibrary', a
     }
 });
 
+export const updateLibraryItem = createAsyncThunk(
+    'library/updateLibraryItem',
+    async ({ id, changes }: { id: number; changes: Partial<LibraryItem> }, thunkAPI) => {
+        try {
+            await libraryService.updateLibraryItem(id, changes);
+            return { id, changes };
+        } catch (err: any) {
+            return thunkAPI.rejectWithValue(err.message);
+        }
+    },
+);
+
 export const clearLibraryItems = createAsyncThunk('library/clearLibrary', async (_, thunkAPI) => {
     try {
         await libraryService.clearLibrary();
@@ -109,6 +121,14 @@ const librarySlice = createSlice({
             .addCase(deleteFromLibrary.rejected, (state, action) => {
                 state.status = 'failed';
                 state.error = action.payload as string || 'Failed to delete item';
+            })
+            .addCase(updateLibraryItem.fulfilled, (state, action) => {
+                const item = state.items.find(candidate => candidate.id === action.payload.id);
+                if (item) Object.assign(item, action.payload.changes);
+                state.error = null;
+            })
+            .addCase(updateLibraryItem.rejected, (state, action) => {
+                state.error = action.payload as string || 'Failed to update library item';
             })
             .addCase(clearLibraryItems.fulfilled, (state) => {
                 state.items = [];

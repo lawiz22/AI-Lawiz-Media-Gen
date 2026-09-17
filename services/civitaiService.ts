@@ -137,7 +137,7 @@ const WORKFLOW_DEFAULT_SETTINGS: Partial<Record<ComfyModelType, Pick<GenerationO
     flux: { comfySteps: 10, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'simple', comfyFluxGuidance: 3.5 },
     'qwen-t2i-gguf': { comfySteps: 4, comfyCfg: 1, comfySampler: 'euler_ancestral', comfyScheduler: 'beta57' },
     'z-image': { comfySteps: 8, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'simple' },
-    'flux2-simple': { comfySteps: 12, comfyCfg: 1, comfySampler: 'euler' },
+    'flux2-simple': { comfySteps: 10, comfyCfg: 1, comfySampler: 'euler' },
     'krea2-simple': { comfySteps: 10, comfyCfg: 1, comfySampler: 'er_sde', comfyScheduler: 'beta' },
     'krea2-raw': { comfyCfg: 1 },
 };
@@ -177,6 +177,10 @@ export const getRecommendedSettingUpdates = (modelType: ComfyModelType, usageMet
     if (modelType === 'qwen-t2i-gguf') {
         updates.comfySteps = 4;
         updates.comfyCfg = 1;
+    } else if (modelType === 'flux2-simple') {
+        updates.comfySteps = 10;
+        updates.comfyCfg = 1;
+        updates.comfySampler = 'euler';
     }
     return updates;
 };
@@ -224,7 +228,7 @@ export const getCivitaiAccountUrl = (provider: CivitaiProvider) => `${PROVIDER_O
 
 export const getCivitaiModelUrl = (provider: CivitaiProvider, modelId: number) => `${PROVIDER_ORIGINS[provider]}/models/${modelId}`;
 
-export const getDefaultDestination = (model: CivitaiModel, version: CivitaiModelVersion, family: CivitaiFamily): CivitaiDestination => {
+export const getDefaultDestination = (model: CivitaiModel, version: CivitaiModelVersion | undefined, family: CivitaiFamily): CivitaiDestination => {
     if (model.type.toUpperCase() === 'LORA') return 'lora';
     const modelFolder = getCivitaiModelFolder(model, version, family);
     if (modelFolder === 'Flux' || modelFolder === 'flux2' || modelFolder === 'krea' || modelFolder === 'QWEN' || modelFolder === 'ZIT' || modelFolder === 'LTX2' || modelFolder === 'LTX2_camera_control') {
@@ -233,8 +237,8 @@ export const getDefaultDestination = (model: CivitaiModel, version: CivitaiModel
     return 'checkpoint';
 };
 
-export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModelVersion, family: CivitaiFamily): CivitaiModelFolder => {
-    const versionIdentity = `${version.baseModel || ''} ${version.baseModelType || ''} ${version.name}`.toLowerCase();
+export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModelVersion | undefined, family: CivitaiFamily): CivitaiModelFolder => {
+    const versionIdentity = `${version?.baseModel || ''} ${version?.baseModelType || ''} ${version?.name || ''}`.toLowerCase();
     if (/flux[- ._]?2|klein/.test(versionIdentity)) return 'flux2';
     if (/krea[- ._]?2/.test(versionIdentity)) return 'krea';
     if (/qwen/.test(versionIdentity)) return 'QWEN';
@@ -254,12 +258,12 @@ export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModel
     return 'sd15';
 };
 
-export const getCivitaiDestinationFolder = (model: CivitaiModel, version: CivitaiModelVersion, family: CivitaiFamily, destination: CivitaiDestination): CivitaiModelFolder => {
+export const getCivitaiDestinationFolder = (model: CivitaiModel, version: CivitaiModelVersion | undefined, family: CivitaiFamily, destination: CivitaiDestination): CivitaiModelFolder => {
     const familyFolder = getCivitaiModelFolder(model, version, family);
     if (destination !== 'checkpoint') return familyFolder;
     if (familyFolder === 'sd15') return 'SD1.5';
     if (familyFolder === 'Flux') {
-        const identity = `${version.baseModel || ''} ${version.name} ${model.name}`.toLowerCase();
+        const identity = `${version?.baseModel || ''} ${version?.name || ''} ${model.name}`.toLowerCase();
         return /flux(?:\.?1)?[ _-]*dev|flux-dev/.test(identity) ? 'flux-dev' : 'FLUX';
     }
     return familyFolder;

@@ -1,25 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../store/store';
 import { addToLibrary } from '../store/librarySlice';
 import { setPromptSaveStatus, updatePromptGenState } from '../store/promptGenSlice';
 import { ImageUploader } from './ImageUploader';
 // Fix: Corrected typo in imported function name from 'extractSubjectFromImage' to 'extractSubjectPromptFromImage'.
-import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateFlorence2Prompt, generateMagicalPromptSoup, generateWanVideoPromptFromImage } from '../services/comfyUIService';
-import { generateOllamaPromptFromImage, generateOllamaPromptSoup, testOllamaConnection } from '../services/ollamaService';
-import type { LibraryItem, PromptGenState, GenerationOptions } from '../types';
+import { generateComfyUIPromptFromSource, extractBackgroundPromptFromImage, extractSubjectPromptFromImage, generateFlorence2Prompt, generateMagicalPromptSoup } from '../services/comfyUIService';
+import { generateOllamaPromptFromImage, generateOllamaPromptSoup, testOllamaConnection, type OllamaActivity } from '../services/ollamaService';
+import type { LibraryItem, PromptGenState, GenerationOptions, PromptSoupPart } from '../types';
 import { GenerateIcon, SpinnerIcon, CopyIcon, SendIcon, SaveIcon, CheckIcon, LibraryIcon, ResetIcon, WorkflowIcon, CloseIcon } from './icons';
-import { fileToResizedDataUrl, dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
-import { WAN_VIDEO_PROMPT_BLOCKS, CAMERA_MOVES } from '../constants';
-import { updateOptions, setGenerationMode } from '../store/generationSlice';
-import { queueLtxTransfer, setActiveTab } from '../store/appSlice';
+import { fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
+import { updateOptions, setGenerationMode, switchComfyModelOptions } from '../store/generationSlice';
+import { setActiveTab } from '../store/appSlice';
 import { createAccentStyle } from '../utils/accentTheme';
+import { getPromptDestinationOptions, PROMPT_T2I_WORKFLOWS } from '../utils/promptDestination';
 
-
-interface PromptPart {
-  text: string;
-  source: number; // 0 for new, 1 for full, 2 for bg, 3 for subject
-}
 
 type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'flux2-simple' | 'gemini' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
 type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
@@ -35,11 +30,10 @@ const PROMPT_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     'extract-background': createAccentStyle('#4ade80', '#86efac', '#16a34a'),
     'extract-subject': createAccentStyle('#facc15', '#fde047', '#ca8a04'),
     'prompt-soup': createAccentStyle('#a78bfa', '#c4b5fd', '#7c3aed'),
-    'wan-video': createAccentStyle('#f472b6', '#f9a8d4', '#db2777'),
     'qwen-image': createAccentStyle('#60a5fa', '#93c5fd', '#2563eb'),
 };
 
-const createPromptThumbnail = (text: string, type: PromptCategory, modelType: PromptModelType | 'wan2.2' | 'qwen-image'): string => {
+const createPromptThumbnail = (text: string, type: PromptCategory, modelType: PromptModelType | 'wan2.2' | 'qwen-image', promptParts?: PromptSoupPart[]): string => {
     const colors: Record<PromptCategory, string> = {
         image: '#06b6d4',
         background: '#4ade80',
@@ -61,7 +55,30 @@ const createPromptThumbnail = (text: string, type: PromptCategory, modelType: Pr
         lines.push(cleanedText.substring(i, i + charsPerLine));
     }
 
-    const tspan = lines.slice(0, 6).map((line, index) => `<tspan x="15" dy="${index === 0 ? 0 : '1.4em'}">${line}</tspan>`).join('');
+    const sourceColors: Record<number, string> = { 0: textColor, 1: '#22d3ee', 2: '#4ade80', 3: '#facc15' };
+    const coloredLines: PromptSoupPart[][] = [];
+    if (promptParts?.length) {
+        let currentLine: PromptSoupPart[] = [];
+        let currentLength = 0;
+        for (const part of promptParts) {
+            for (const word of part.text.split(/\s+/).filter(Boolean)) {
+                if (currentLength > 0 && currentLength + word.length + 1 > charsPerLine) {
+                    coloredLines.push(currentLine);
+                    currentLine = [];
+                    currentLength = 0;
+                    if (coloredLines.length === 6) break;
+                }
+                const prefix = currentLength > 0 ? ' ' : '';
+                currentLine.push({ text: `${prefix}${word}`, source: part.source });
+                currentLength += prefix.length + word.length;
+            }
+            if (coloredLines.length === 6) break;
+        }
+        if (currentLine.length > 0 && coloredLines.length < 6) coloredLines.push(currentLine);
+    }
+    const coloredText = coloredLines.length
+        ? coloredLines.map((line, index) => `<tspan x="15" dy="${index === 0 ? 0 : '1.4em'}">${line.map(part => `<tspan fill="${sourceColors[part.source] || textColor}">${part.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</tspan>`).join('')}</tspan>`).join('')
+        : lines.slice(0, 6).map((line, index) => `<tspan x="15" dy="${index === 0 ? 0 : '1.4em'}">${line}</tspan>`).join('');
 
     const finalSvg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
@@ -72,12 +89,14 @@ const createPromptThumbnail = (text: string, type: PromptCategory, modelType: Pr
         <text x="15" y="60" font-family="sans-serif" font-size="12px" fill="${modelTypeColor}" style="text-transform: uppercase; letter-spacing: 0.5px;">${type.replace('-', ' ')} Prompt</text>
         
         <text x="15" y="100" font-family="sans-serif" font-size="14px" fill="${textColor}">
-            ${tspan}${lines.length > 6 ? '<tspan x="15" dy="1.4em">...</tspan>' : ''}
+            ${coloredText}${!coloredLines.length && lines.length > 6 ? '<tspan x="15" dy="1.4em">...</tspan>' : ''}
         </text>
     </svg>
     `;
 
-    return `data:image/svg+xml;base64,${btoa(finalSvg)}`;
+    const svgBytes = new TextEncoder().encode(finalSvg);
+    const binarySvg = Array.from(svgBytes, byte => String.fromCharCode(byte)).join('');
+    return `data:image/svg+xml;base64,${btoa(binarySvg)}`;
 };
 
 interface PromptDestinationPickerModalProps {
@@ -90,22 +109,11 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
   const dispatch: AppDispatch = useDispatch();
 
     const handleSelectDestination = (provider: 'comfyui' | 'mammouth', comfyModelType?: GenerationOptions['comfyModelType']) => {
-        let optionsUpdate: Partial<GenerationOptions> = {
-            provider,
-            comfyPrompt: prompt, // Always set for comfy
-            geminiPrompt: prompt, // Always set for Gemini
-        };
-
         if (provider === 'mammouth') {
-            optionsUpdate.geminiMode = 't2i';
-        } else { // comfyui
-            optionsUpdate.comfyModelType = comfyModelType;
-            if (comfyModelType === 'flux2-simple') {
-                optionsUpdate.comfyFlux2Prompt = prompt;
-            }
+            dispatch(updateOptions({ provider, geminiPrompt: prompt, geminiMode: 't2i' }));
+        } else if (comfyModelType) {
+            dispatch(switchComfyModelOptions(getPromptDestinationOptions(prompt, comfyModelType)));
         }
-    
-        dispatch(updateOptions(optionsUpdate));
     dispatch(setGenerationMode('t2i'));
     dispatch(setActiveTab('image-generator'));
     onClose();
@@ -120,15 +128,6 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
     }, [isOpen, onClose]);
 
     if (!isOpen) return null;
-
-    const comfyT2iWorkflows = [
-        { id: 'sdxl', label: 'SDXL' },
-        { id: 'sd1.5', label: 'SD 1.5' },
-        { id: 'flux', label: 'FLUX' },
-        { id: 'flux2-simple', label: 'FLUX2 Simple' },
-        { id: 'nunchaku-flux-image', label: 'Nunchaku FLUX' },
-        { id: 'flux-krea', label: 'FLUX Krea' },
-    ];
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-fade-in" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="prompt-destination-title">
@@ -149,7 +148,7 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
                     <div>
                         <h3 className="mb-3 text-lg font-semibold text-text-primary">ComfyUI (T2I Workflows)</h3>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            {comfyT2iWorkflows.map(workflow => (
+                            {PROMPT_T2I_WORKFLOWS.map(workflow => (
                                 <button key={workflow.id} onClick={() => handleSelectDestination('comfyui', workflow.id as GenerationOptions['comfyModelType'])} className="flex w-full items-center gap-3 rounded-lg bg-bg-tertiary p-3 text-left transition-colors hover:bg-bg-tertiary-hover">
                                     <WorkflowIcon className="h-6 w-6 flex-shrink-0 text-highlight-green" />
                                     <div><p className="font-semibold">{workflow.label}</p><p className="text-xs text-text-secondary">Switch to Image Generator with this workflow.</p></div>
@@ -169,7 +168,6 @@ interface PromptGeneratorPanelProps {
         onOpenLibraryForImage: () => void;
         onOpenLibraryForBg: () => void;
         onOpenLibraryForSubject: () => void;
-        onOpenLibraryForWanVideoImage: () => void;
         onReset: () => void;
         isComfyUIConnected: boolean | null;
         comfyUIObjectInfo: any | null;
@@ -199,6 +197,50 @@ const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
         </div>
 );
 
+const OllamaActivityPanel: React.FC<{ activity: OllamaActivity; model: string; onClose: () => void; onStop: () => void }> = ({ activity, model, onClose, onStop }) => {
+    const phaseLabels = {
+        loading: 'Loading model',
+        thinking: 'Thinking',
+        responding: 'Writing response',
+        complete: 'Complete',
+        cancelled: 'Stopped',
+        failed: 'Failed',
+    };
+    const isActive = activity.phase === 'loading' || activity.phase === 'thinking' || activity.phase === 'responding';
+    return (
+        <div className="mb-6 overflow-hidden rounded-md border border-emerald-400/40 bg-bg-primary shadow-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-border-primary bg-emerald-500/10 px-3 py-2">
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
+                        {isActive && <SpinnerIcon className="h-4 w-4 animate-spin" />}
+                        Ollama · {phaseLabels[activity.phase]}
+                    </div>
+                    <p className="truncate text-xs text-text-muted" title={model}>{model}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    {isActive && <button type="button" onClick={onStop} className="rounded border border-red-400/50 bg-red-500/10 px-2 py-1 text-xs font-bold text-red-300 hover:bg-red-500/20">Stop</button>}
+                    <button type="button" onClick={onClose} className="rounded p-1 text-text-secondary hover:bg-bg-tertiary-hover" aria-label="Close Ollama activity"><CloseIcon className="h-4 w-4" /></button>
+                </div>
+            </div>
+            <div className="grid max-h-56 grid-cols-1 gap-3 overflow-y-auto p-3 md:grid-cols-2">
+                <div>
+                    <p className="mb-1 text-xs font-semibold uppercase text-text-muted">Thinking</p>
+                    <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words font-mono text-xs text-text-secondary">{activity.thinking || (activity.phase === 'loading' ? 'Preparing request and loading model…' : 'This model is not exposing its reasoning.')}</pre>
+                </div>
+                <div>
+                    <p className="mb-1 text-xs font-semibold uppercase text-text-muted">Live output</p>
+                    <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words font-mono text-xs text-accent">{activity.response || 'Waiting for response…'}</pre>
+                </div>
+            </div>
+            <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border-primary px-3 py-2 text-xs text-text-muted">
+                <span>Input tokens: {activity.promptTokens ?? 'pending'}</span>
+                <span>Output tokens: {activity.responseTokens ?? 'pending'}</span>
+                <span>Speed: {activity.tokensPerSecond ? `${activity.tokensPerSecond.toFixed(1)} tok/s` : 'pending'}</span>
+            </div>
+        </div>
+    );
+};
+
 
 export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     activeSubTab,
@@ -206,7 +248,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     onOpenLibraryForImage,
     onOpenLibraryForBg,
     onOpenLibraryForSubject,
-    onOpenLibraryForWanVideoImage,
     onReset,
     isComfyUIConnected,
     comfyUIObjectInfo,
@@ -218,8 +259,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const { 
         image, prompt, bgImage, bgPrompt, subjectImage, subjectPrompt, soupPrompt, soupHistory,
         promptSaveStatus, bgPromptSaveStatus, subjectPromptSaveStatus, soupPromptSaveStatus,
-        wanVideoImage, wanVideoBasePrompt, wanVideoCategory, wanVideoSubject, wanVideoAction,
-        wanVideoEnvironment, wanVideoCameraMove, wanVideoStyle, wanVideoFinalPrompt, wanVideoPromptSaveStatus,
     } = state;
 
     // --- Ephemeral state (not persisted) ---
@@ -233,6 +272,23 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const [ollamaModel, setOllamaModel] = useState(defaultOllamaModel);
     const [ollamaModels, setOllamaModels] = useState<string[]>([]);
     const [isOllamaConnected, setIsOllamaConnected] = useState<boolean | null>(null);
+    const [ollamaActivity, setOllamaActivity] = useState<OllamaActivity | null>(null);
+    const ollamaAbortController = useRef<AbortController | null>(null);
+
+    const startOllamaRequest = () => {
+        ollamaAbortController.current?.abort();
+        const controller = new AbortController();
+        ollamaAbortController.current = controller;
+        return controller;
+    };
+
+    const stopOllamaRequest = () => {
+        ollamaAbortController.current?.abort();
+        ollamaAbortController.current = null;
+        setOllamaActivity(current => current ? { ...current, phase: 'cancelled' } : current);
+    };
+
+    useEffect(() => () => ollamaAbortController.current?.abort(), []);
 
     const [bgModelType, setBgModelType] = useState<PromptModelType>('sdxl');
     const [isBgLoading, setIsBgLoading] = useState<boolean>(false);
@@ -251,12 +307,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const [soupCopyButtonText, setSoupCopyButtonText] = useState('Copy Prompt');
     
     const [historyCopyStates, setHistoryCopyStates] = useState<Record<number, string>>({});
-    const [soupPromptParts, setSoupPromptParts] = useState<PromptPart[]>([]);
+    const [soupPromptParts, setSoupPromptParts] = useState<PromptSoupPart[]>([]);
 
-    const [wanVideoMode, setWanVideoMode] = useState<'scratch' | 'image'>('scratch');
-    const [isWanVideoLoading, setIsWanVideoLoading] = useState(false);
-    const [wanVideoError, setWanVideoError] = useState<string | null>(null);
-    const [wanVideoCopyButtonText, setWanVideoCopyButtonText] = useState('Copy Prompt');
     
     // State for the new destination picker modal
     const [isPickerOpen, setPickerOpen] = useState(false);
@@ -312,32 +364,15 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     }, [activeSubTab, analysisProvider]);
 
     useEffect(() => {
-        if (activeSubTab === 'qwen-image') setActiveSubTab('from-image');
+        if (activeSubTab === 'qwen-image' || activeSubTab === 'wan-video') setActiveSubTab('from-image');
     }, [activeSubTab, setActiveSubTab]);
-
-    const allWanSubjects = useMemo(() => {
-        return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.subjects))];
-    }, []);
-
-    const allWanActions = useMemo(() => {
-        return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.actions))];
-    }, []);
-
-    const allWanEnvironments = useMemo(() => {
-        return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.environments))];
-    }, []);
-
-    const allWanStyles = useMemo(() => {
-        return [...new Set(Object.values(WAN_VIDEO_PROMPT_BLOCKS).flatMap(category => category.styles))];
-    }, []);
-
-    const activeWanBlock = wanVideoCategory ? WAN_VIDEO_PROMPT_BLOCKS[wanVideoCategory] : null;
 
     const handleSavePrompt = async (
         promptToSave: string, 
         type: PromptCategory,
         modelTypeToSave: PromptModelType | 'wan2.2' | 'qwen-image',
-        sourceFile: File | null
+        sourceFile: File | null,
+        promptParts?: PromptSoupPart[],
     ) => {
         if (!promptToSave.trim()) return;
         dispatch(setPromptSaveStatus({ type, status: 'saving' }));
@@ -348,10 +383,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                 promptModelType: modelTypeToSave === 'qwen-image' ? 'sdxl' : modelTypeToSave, // Save as sdxl for now
                 name: `${type.charAt(0).toUpperCase() + type.slice(1)} Prompt (${modelTypeToSave.toUpperCase()})`,
                 media: promptToSave,
-                thumbnail: createPromptThumbnail(promptToSave, type, modelTypeToSave),
+                thumbnail: createPromptThumbnail(promptToSave, type, modelTypeToSave, promptParts),
                 sourceImage: sourceFile
                     ? await fileToResizedDataUrl(sourceFile, 512)
                     : undefined,
+                promptParts: promptParts?.length ? promptParts : undefined,
             };
             await dispatch(addToLibrary(item)).unwrap();
             dispatch(setPromptSaveStatus({ type, status: 'saved' }));
@@ -368,16 +404,19 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         }
         setIsLoading(true);
         setError(null);
+        setOllamaActivity(null);
+        const controller = analysisProvider === 'ollama' ? startOllamaRequest() : null;
         try {
             const generatedPrompt = analysisProvider === 'comfyui'
                 ? await generateFlorence2Prompt(image, 'image', { model: florenceModel, task: florenceTask })
                 : analysisProvider === 'ollama'
-                    ? await generateOllamaPromptFromImage(image, 'image', modelType, ollamaUrl, ollamaModel)
+                    ? await generateOllamaPromptFromImage(image, 'image', modelType, ollamaUrl, ollamaModel, setOllamaActivity, controller?.signal)
                     : await generateComfyUIPromptFromSource(image, modelType);
             dispatch(updatePromptGenState({ prompt: generatedPrompt }));
         } catch (err: any) {
-            setError(err.message || 'An unknown error occurred.');
+            setError(err?.name === 'AbortError' ? 'Ollama request stopped.' : err.message || 'An unknown error occurred.');
         } finally {
+            if (ollamaAbortController.current === controller) ollamaAbortController.current = null;
             setIsLoading(false);
         }
     };
@@ -409,14 +448,17 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         }
         setIsBgLoading(true);
         setBgError(null);
+        setOllamaActivity(null);
+        const controller = analysisProvider === 'ollama' ? startOllamaRequest() : null;
         try {
             const generatedPrompt = analysisProvider === 'ollama'
-                ? await generateOllamaPromptFromImage(bgImage, 'background', bgModelType, ollamaUrl, ollamaModel)
+                ? await generateOllamaPromptFromImage(bgImage, 'background', bgModelType, ollamaUrl, ollamaModel, setOllamaActivity, controller?.signal)
                 : await extractBackgroundPromptFromImage(bgImage, bgModelType);
             dispatch(updatePromptGenState({ bgPrompt: generatedPrompt }));
         } catch (err: any) {
-            setBgError(err.message || 'An unknown error occurred.');
+            setBgError(err?.name === 'AbortError' ? 'Ollama request stopped.' : err.message || 'An unknown error occurred.');
         } finally {
+            if (ollamaAbortController.current === controller) ollamaAbortController.current = null;
             setIsBgLoading(false);
         }
     };
@@ -441,14 +483,17 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         }
         setIsSubjectLoading(true);
         setSubjectError(null);
+        setOllamaActivity(null);
+        const controller = analysisProvider === 'ollama' ? startOllamaRequest() : null;
         try {
             const generatedPrompt = analysisProvider === 'ollama'
-                ? await generateOllamaPromptFromImage(subjectImage, 'subject', subjectModelType, ollamaUrl, ollamaModel)
+                ? await generateOllamaPromptFromImage(subjectImage, 'subject', subjectModelType, ollamaUrl, ollamaModel, setOllamaActivity, controller?.signal)
                 : await extractSubjectPromptFromImage(subjectImage, subjectModelType);
             dispatch(updatePromptGenState({ subjectPrompt: generatedPrompt }));
         } catch (err: any) {
-            setSubjectError(err.message || 'An unknown error occurred.');
+            setSubjectError(err?.name === 'AbortError' ? 'Ollama request stopped.' : err.message || 'An unknown error occurred.');
         } finally {
+            if (ollamaAbortController.current === controller) ollamaAbortController.current = null;
             setIsSubjectLoading(false);
         }
     };
@@ -473,9 +518,11 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         }
         setIsSoupLoading(true);
         setSoupError(null);
+        setOllamaActivity(null);
+        const controller = analysisProvider === 'ollama' ? startOllamaRequest() : null;
         try {
             const generatedParts = analysisProvider === 'ollama'
-                ? await generateOllamaPromptSoup(prompt, bgPrompt, subjectPrompt, soupModelType, soupCreativity, ollamaUrl, ollamaModel)
+                ? await generateOllamaPromptSoup(prompt, bgPrompt, subjectPrompt, soupModelType, soupCreativity, ollamaUrl, ollamaModel, setOllamaActivity, controller?.signal)
                 : await generateMagicalPromptSoup(prompt, bgPrompt, subjectPrompt, soupModelType, soupCreativity);
             const fullPromptString = generatedParts.map(p => p.text).join(' ');
             setSoupPromptParts(generatedParts);
@@ -485,8 +532,9 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             }));
 
         } catch (err: any) {
-            setSoupError(err.message || 'An unknown error occurred.');
+            setSoupError(err?.name === 'AbortError' ? 'Ollama request stopped.' : err.message || 'An unknown error occurred.');
         } finally {
+            if (ollamaAbortController.current === controller) ollamaAbortController.current = null;
             setIsSoupLoading(false);
         }
     };
@@ -522,53 +570,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         }
     };
 
-    // --- LTX Video Prompt Builder Logic ---
-    useEffect(() => {
-        const action = wanVideoAction.trim();
-        const parts = [
-            wanVideoMode === 'image' ? wanVideoBasePrompt : wanVideoSubject,
-            action ? `The subject performs this action: ${action}` : '',
-            wanVideoEnvironment,
-            wanVideoCameraMove,
-            wanVideoStyle,
-        ].filter(Boolean).join(', ');
-        dispatch(updatePromptGenState({ wanVideoFinalPrompt: parts }));
-    }, [wanVideoSubject, wanVideoAction, wanVideoEnvironment, wanVideoCameraMove, wanVideoStyle, wanVideoBasePrompt, wanVideoMode, dispatch]);
-
-    const handleWanVideoGenerateFromImage = async () => {
-        if (!wanVideoImage) {
-            setWanVideoError("Please upload an image first.");
-            return;
-        }
-        setIsWanVideoLoading(true);
-        setWanVideoError(null);
-        try {
-            const base = await generateWanVideoPromptFromImage(wanVideoImage);
-            dispatch(updatePromptGenState({ wanVideoBasePrompt: base }));
-        } catch (err: any) {
-            setWanVideoError(err.message || 'Failed to generate prompt from image.');
-        } finally {
-            setIsWanVideoLoading(false);
-        }
-    };
-
-    const handleWanVideoCopy = () => {
-        if (!wanVideoFinalPrompt) return;
-        navigator.clipboard.writeText(wanVideoFinalPrompt).then(() => {
-            setWanVideoCopyButtonText('Copied!');
-            setTimeout(() => setWanVideoCopyButtonText('Copy Prompt'), 2000);
-        });
-    };
-
-    const handleSendWanVideoToLtx = async () => {
-        if (!wanVideoFinalPrompt.trim()) return;
-        try {
-            const imageDataUrl = wanVideoImage ? await fileToDataUrl(wanVideoImage) : undefined;
-            dispatch(queueLtxTransfer({ imageDataUrl, prompt: wanVideoFinalPrompt }));
-        } catch (err: any) {
-            setWanVideoError(err.message || 'Failed to send the prompt to LTX Director.');
-        }
-    };
     
     const renderPromptTypeButtons = (currentType: PromptModelType, setType: (type: PromptModelType) => void) => {
         const types: { id: PromptModelType; label: string }[] = [
@@ -653,7 +654,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         { id: 'extract-background', label: 'Extract Background' },
         { id: 'extract-subject', label: 'Subject / Object' },
         { id: 'prompt-soup', label: 'Magical Prompt Soup' },
-        { id: 'wan-video', label: 'LTX Video Prompt' },
     ];
 
     return (
@@ -666,6 +666,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         : 'Prompt tools'}
             </div>
             <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
+
+            {analysisProvider === 'ollama' && ollamaActivity && (
+                <OllamaActivityPanel activity={ollamaActivity} model={ollamaModel} onClose={() => setOllamaActivity(null)} onStop={stopOllamaRequest} />
+            )}
 
             {activeSubTab === 'from-image' && (
                 <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
@@ -845,7 +849,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             </div>
                             {soupError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{soupError}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <button onClick={() => handleSavePrompt(soupPrompt, 'soup', soupModelType, null)} disabled={!soupPrompt || isSoupLoading || soupPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${soupPromptSaveStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+                                <button onClick={() => handleSavePrompt(soupPrompt, 'soup', soupModelType, null, soupPromptParts)} disabled={!soupPrompt || isSoupLoading || soupPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${soupPromptSaveStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
                                     {soupPromptSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : soupPromptSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                     {soupPromptSaveStatus === 'saved' ? 'Saved!' : 'Save'}
                                 </button>
@@ -876,99 +880,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                 </div>
             )}
             
-            {activeSubTab === 'wan-video' && (
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
-                            <h2 className="text-xl font-bold text-accent">LTX Video Prompt Builder</h2>
-                     <p className="text-sm text-text-secondary -mt-6">
-                                Build an action-focused prompt and send it directly to LTX Director.
-                    </p>
-                    <div className="flex items-center justify-center gap-2 bg-bg-tertiary p-1 rounded-full max-w-sm mx-auto">
-                        <button onClick={() => setWanVideoMode('scratch')} className={`w-1/2 py-2 text-sm font-bold rounded-full transition-colors ${wanVideoMode === 'scratch' ? 'bg-accent text-accent-text' : ''}`}>From Scratch</button>
-                        <button onClick={() => setWanVideoMode('image')} className={`w-1/2 py-2 text-sm font-bold rounded-full transition-colors ${wanVideoMode === 'image' ? 'bg-accent text-accent-text' : ''}`}>From Image</button>
-                    </div>
-
-                    {wanVideoMode === 'image' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-bg-tertiary p-4 rounded-lg">
-                             <div className="flex items-center gap-2">
-                                <div className="flex-grow">
-                                    <ImageUploader label="Upload Photo" id="wan-video-image" onImageUpload={file => dispatch(updatePromptGenState({ wanVideoImage: file, wanVideoBasePrompt: '' }))} sourceFile={wanVideoImage} />
-                                </div>
-                                <button onClick={onOpenLibraryForWanVideoImage} className="mt-8 self-center bg-bg-primary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button>
-                            </div>
-                            <div className="space-y-4">
-                                <button onClick={handleWanVideoGenerateFromImage} disabled={!wanVideoImage || isWanVideoLoading} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover disabled:opacity-50">
-                                    {isWanVideoLoading ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <GenerateIcon className="w-5 h-5" />}
-                                    Generate Base Prompt
-                                </button>
-                                 <textarea value={wanVideoBasePrompt} onChange={e => dispatch(updatePromptGenState({ wanVideoBasePrompt: e.target.value }))} placeholder="Base prompt from image appears here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm h-28" />
-                                {wanVideoError && <p className="text-xs text-danger">{wanVideoError}</p>}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {wanVideoMode === 'scratch' && (
-                            <div className="lg:col-span-1">
-                                <label className="block text-sm font-medium text-text-secondary">Category</label>
-                                <select value={wanVideoCategory} onChange={e => dispatch(updatePromptGenState({ wanVideoCategory: e.target.value as PromptGenState['wanVideoCategory'], wanVideoSubject: '', wanVideoAction: '', wanVideoEnvironment: '', wanVideoStyle: '' }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
-                                    <option value="">None / All Categories</option>
-                                    {Object.keys(WAN_VIDEO_PROMPT_BLOCKS).map(key => <option key={key} value={key}>{key.charAt(0).toUpperCase() + key.slice(1).replace('-', ' / ')}</option>)}
-                                </select>
-                            </div>
-                        )}
-                        {wanVideoMode === 'scratch' && (
-                            <div className="lg:col-span-2">
-                                <label className="block text-sm font-medium text-text-secondary">Subject</label>
-                                <select value={wanVideoSubject} onChange={e => dispatch(updatePromptGenState({ wanVideoSubject: e.target.value }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
-                                    <option value="">None</option>
-                                    {(activeWanBlock?.subjects || allWanSubjects).map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                        )}
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary">Action</label>
-                            <select value={wanVideoAction} onChange={e => { dispatch(updatePromptGenState({ wanVideoAction: e.target.value })); setWanVideoError(null); }} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
-                                <option value="">None</option>
-                                {(wanVideoMode === 'image' || !activeWanBlock ? allWanActions : activeWanBlock.actions).map(action => <option key={action} value={action}>{action}</option>)}
-                            </select>
-                        </div>
-                        <div className="lg:col-span-2">
-                            <label className="block text-sm font-medium text-text-secondary">Environment</label>
-                            <select value={wanVideoEnvironment} onChange={e => dispatch(updatePromptGenState({ wanVideoEnvironment: e.target.value }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
-                                <option value="">None</option>
-                                {(wanVideoMode === 'image' || !activeWanBlock ? allWanEnvironments : activeWanBlock.environments).map(e => <option key={e} value={e}>{e}</option>)}
-                            </select>
-                        </div>
-                        <div className="lg:col-span-2">
-                            <label className="block text-sm font-medium text-text-secondary">Style / Mood</label>
-                            <select value={wanVideoStyle} onChange={e => dispatch(updatePromptGenState({ wanVideoStyle: e.target.value }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
-                                <option value="">None</option>
-                                {(wanVideoMode === 'image' || !activeWanBlock ? allWanStyles : activeWanBlock.styles).map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary">Camera Move</label>
-                            <select value={wanVideoCameraMove} onChange={e => dispatch(updatePromptGenState({ wanVideoCameraMove: e.target.value }))} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
-                                {CAMERA_MOVES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div className="pt-4 border-t border-border-primary">
-                        <label className="block text-sm font-medium text-text-secondary mb-1">Final Prompt</label>
-                            <textarea value={wanVideoFinalPrompt} onChange={e => dispatch(updatePromptGenState({ wanVideoFinalPrompt: e.target.value }))} placeholder="Choose prompt elements above, then refine the generated prompt here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm h-28 text-accent font-semibold focus:ring-accent focus:border-accent" />
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-                                <button onClick={() => handleSavePrompt(wanVideoFinalPrompt, 'wan-video', 'wan2.2', wanVideoImage)} disabled={!wanVideoFinalPrompt.trim() || wanVideoPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${wanVideoPromptSaveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
-                                {wanVideoPromptSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : wanVideoPromptSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5"/> : <SaveIcon className="w-5 h-5"/>}
-                                {wanVideoPromptSaveStatus === 'saved' ? 'Saved!' : 'Save'}
-                            </button>
-                            <button onClick={handleWanVideoCopy} disabled={!wanVideoFinalPrompt.trim()} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><CopyIcon className="w-5 h-5" /> {wanVideoCopyButtonText}</button>
-                            <button onClick={handleSendWanVideoToLtx} disabled={!wanVideoFinalPrompt.trim()} className="flex items-center justify-center gap-2 bg-bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover disabled:opacity-50"><SendIcon className="w-5 h-5" />Send to LTX</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             <div className="mt-8 pt-4 border-t border-danger-bg">
                 <button onClick={onReset} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
                     <ResetIcon className="w-5 h-5" /> Reset All Prompt Tools

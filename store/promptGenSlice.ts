@@ -20,16 +20,6 @@ const initialState: PromptGenSliceState = {
     soupPrompt: '',
     soupPromptSaveStatus: 'idle',
     soupHistory: [],
-    wanVideoImage: null,
-    wanVideoBasePrompt: '',
-    wanVideoCategory: 'sci-fi',
-    wanVideoSubject: '',
-    wanVideoAction: '',
-    wanVideoEnvironment: '',
-    wanVideoCameraMove: '',
-    wanVideoStyle: '',
-    wanVideoFinalPrompt: '',
-    wanVideoPromptSaveStatus: 'idle',
     // Qwen Image pre-filled with an example
     qwenTitle: 'A majestic cyberpunk phoenix, wings made of neon data streams, soaring through a rainy city at night.',
     qwenUseTextInImage: true,
@@ -65,9 +55,6 @@ const promptGenSlice = createSlice({
         if (updates.soupPrompt !== undefined && updates.soupPrompt !== state.promptGenState.soupPrompt) {
             state.promptGenState.soupPromptSaveStatus = 'idle';
         }
-        if (updates.wanVideoFinalPrompt !== undefined && updates.wanVideoFinalPrompt !== state.promptGenState.wanVideoFinalPrompt) {
-            state.promptGenState.wanVideoPromptSaveStatus = 'idle';
-        }
         if (updates.qwenFinalPrompt !== undefined && updates.qwenFinalPrompt !== state.promptGenState.qwenFinalPrompt) {
             state.promptGenState.qwenPromptSaveStatus = 'idle';
         }
@@ -101,9 +88,6 @@ const promptGenSlice = createSlice({
                 break;
             case 'soup': 
                 state.promptGenState.soupPromptSaveStatus = status;
-                break;
-            case 'wan-video':
-                state.promptGenState.wanVideoPromptSaveStatus = status;
                 break;
             case 'qwen-image':
                 state.promptGenState.qwenPromptSaveStatus = status;

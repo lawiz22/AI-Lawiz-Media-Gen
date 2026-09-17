@@ -9,17 +9,45 @@ export interface OllamaConnectionResult {
     models: string[];
 }
 
+export interface OllamaActivity {
+    phase: 'loading' | 'thinking' | 'responding' | 'complete' | 'cancelled' | 'failed';
+    thinking: string;
+    response: string;
+    promptTokens?: number;
+    responseTokens?: number;
+    tokensPerSecond?: number;
+}
+
+export type OllamaActivityCallback = (activity: OllamaActivity) => void;
+
 const normalizeOllamaUrl = (url: string): string => {
     const trimmed = (url || DEFAULT_OLLAMA_URL).trim().replace(/\/+$/, '');
     return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
 };
 
 const cleanResponse = (text: string): string => text
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '')
     .trim()
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/, '')
     .trim();
+
+const recoverStructuredResponse = (text: string): string => {
+    const candidate = text
+        .trim()
+        .replace(/^<think>\s*/i, '')
+        .replace(/\s*<\/think>$/i, '')
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/, '')
+        .trim();
+    if (!candidate) return '';
+    try {
+        JSON.parse(candidate);
+        return candidate;
+    } catch {
+        return '';
+    }
+};
 
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -49,22 +77,31 @@ export const testOllamaConnection = async (url: string): Promise<OllamaConnectio
     }
 };
 
-const chatWithOllama = async (url: string, model: string, content: string, image?: File, format?: object, temperature = 0.35): Promise<string> => {
+const chatWithOllama = async (url: string, model: string, content: string, image?: File, format?: object, temperature = 0.35, onActivity?: OllamaActivityCallback, signal?: AbortSignal): Promise<string> => {
     if (!model.trim()) throw new Error('Select an Ollama model.');
+    onActivity?.({ phase: 'loading', thinking: '', response: '' });
     const images = image ? [await fileToBase64(image)] : undefined;
+    const directAnswerInstruction = format
+        ? 'Return only the requested valid JSON. Do not explain your reasoning and never output <think> tags.'
+        : 'Return only the final image-generation prompt. Do not explain your reasoning and never output <think> tags.';
+    const userContent = /qwen3/i.test(model) ? `${content}\n/no_think` : content;
     const response = await fetch(`${normalizeOllamaUrl(url)}/api/chat`, {
         method: 'POST',
+        signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             model,
-            stream: false,
+            stream: true,
             think: false,
             ...(format ? { format } : {}),
-            messages: [{ role: 'user', content, ...(images ? { images } : {}) }],
+            messages: [
+                { role: 'system', content: directAnswerInstruction },
+                { role: 'user', content: userContent, ...(images ? { images } : {}) },
+            ],
             options: {
                 temperature,
                 num_ctx: image ? 16384 : 8192,
-                num_predict: image ? 1024 : 2048,
+                num_predict: image ? 2048 : 2048,
             },
         }),
     });
@@ -72,9 +109,58 @@ const chatWithOllama = async (url: string, model: string, content: string, image
         const detail = await response.text();
         throw new Error(`Ollama returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
     }
-    const data = await response.json();
-    const text = cleanResponse(data?.message?.content || data?.message?.thinking || '');
-    if (!text) throw new Error('Ollama returned an empty response.');
+    if (!response.body) throw new Error('Ollama did not return a response stream.');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let thinking = '';
+    let responseText = '';
+    let doneReason = '';
+    let finalActivity: OllamaActivity = { phase: 'loading', thinking: '', response: '' };
+
+    const processLine = (line: string) => {
+        if (!line.trim()) return;
+        const data = JSON.parse(line);
+        doneReason = data?.done_reason || doneReason;
+        thinking += data?.message?.thinking || '';
+        responseText += data?.message?.content || '';
+        const evalDuration = Number(data?.eval_duration || 0);
+        const responseTokens = Number(data?.eval_count || 0) || undefined;
+        finalActivity = {
+            phase: data?.done ? 'complete' : responseText ? 'responding' : thinking ? 'thinking' : 'loading',
+            thinking,
+            response: responseText,
+            promptTokens: Number(data?.prompt_eval_count || 0) || undefined,
+            responseTokens,
+            tokensPerSecond: data?.done && responseTokens && evalDuration
+                ? responseTokens / (evalDuration / 1_000_000_000)
+                : undefined,
+        };
+        onActivity?.(finalActivity);
+    };
+
+    while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        lines.forEach(processLine);
+        if (done) break;
+    }
+    processLine(buffer);
+    const text = cleanResponse(responseText) || (format ? recoverStructuredResponse(thinking) : '');
+    if (!responseText && text) {
+        finalActivity = { ...finalActivity, phase: 'complete', response: text };
+        onActivity?.(finalActivity);
+    }
+    if (!text && doneReason === 'length') {
+        onActivity?.({ ...finalActivity, phase: 'failed' });
+        throw new Error('Ollama used the entire output limit for reasoning without producing a final prompt. Try again or choose a less reasoning-heavy model.');
+    }
+    if (!text) {
+        onActivity?.({ ...finalActivity, phase: 'failed' });
+        throw new Error('Ollama returned no final prompt. Try again or choose another model.');
+    }
     return text;
 };
 
@@ -92,6 +178,8 @@ export const generateOllamaPromptFromImage = async (
     modelType: string,
     url: string,
     model: string,
+    onActivity?: OllamaActivityCallback,
+    signal?: AbortSignal,
 ): Promise<string> => {
     const focus = mode === 'background'
         ? 'Analyze only the background and environment. Completely ignore people, animals, foreground objects, clothing, faces, and poses.'
@@ -103,6 +191,10 @@ export const generateOllamaPromptFromImage = async (
         model,
         `${focus} Write the result as a production-ready image-generation prompt. ${getStyleInstruction(modelType)} Start directly with the prompt, without commentary or quotation marks.`,
         sourceImage,
+        undefined,
+        0.35,
+        onActivity,
+        signal,
     );
 };
 
@@ -114,6 +206,8 @@ export const generateOllamaPromptSoup = async (
     creativity: number,
     url: string,
     model: string,
+    onActivity?: OllamaActivityCallback,
+    signal?: AbortSignal,
 ): Promise<Array<{ text: string; source: number }>> => {
     const promptPartsSchema = {
         type: 'object',
@@ -164,7 +258,7 @@ ${subjectPrompt || '(none)'}
 FINAL OUTPUT STYLE:
 ${getStyleInstruction(modelType)}
 
-Return only valid JSON containing 2 to 8 short prompt_parts. Joined in order, their text must form the single final prompt, never the source material followed by a conclusion. Assign source 1, 2, or 3 only when a transformed segment is primarily inspired by that reference; assign source 0 to newly invented or inseparably fused material. Source attribution controls display color and does not permit copying.`, undefined, promptPartsSchema, 0.45 + creativity * 0.65);
+Return only valid JSON containing 2 to 8 short prompt_parts. Joined in order, their text must form the single final prompt, never the source material followed by a conclusion. Assign source 1, 2, or 3 only when a transformed segment is primarily inspired by that reference; assign source 0 to newly invented or inseparably fused material. Source attribution controls display color and does not permit copying.`, undefined, promptPartsSchema, 0.45 + creativity * 0.65, onActivity, signal);
     try {
         const parsed = JSON.parse(text);
         if (!Array.isArray(parsed?.prompt_parts)) throw new Error('Missing prompt_parts');

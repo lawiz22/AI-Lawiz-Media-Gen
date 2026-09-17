@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
-import { deleteFromLibrary, clearLibraryItems, importLibraryItems, fetchLibrary } from '../store/librarySlice';
+import { deleteFromLibrary, clearLibraryItems, importLibraryItems, fetchLibrary, updateLibraryItem } from '../store/librarySlice';
 import type { LibraryItem, LibraryItemType, GenerationOptions, ThemeGenerationInfo, PaletteColor } from '../types';
 import {
   CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon,
@@ -13,9 +13,11 @@ import {
 } from './icons';
 import { createPaletteThumbnail, createVideoPlaceholderThumbnail, normalizeAudioDataUrl } from '../utils/imageUtils';
 import { exportLibraryAsJson } from '../services/libraryService';
-import { updateOptions, setGenerationMode } from '../store/generationSlice';
+import { updateOptions, setGenerationMode, switchComfyModelOptions } from '../store/generationSlice';
 import { setActiveTab } from '../store/appSlice';
 import { AudioPlayer } from './AudioPlayer';
+import { getPromptDestinationOptions, PROMPT_T2I_WORKFLOWS } from '../utils/promptDestination';
+import { LibraryPickerModal } from './LibraryPickerModal';
 
 // --- Confirmation Modal Component (defined in-file to avoid adding new files) ---
 interface ConfirmationModalProps {
@@ -152,6 +154,13 @@ const DetailItem: React.FC<{ label: string; value?: string | number | boolean | 
   );
 };
 
+const getPromptPartColor = (source: number) => {
+  if (source === 1) return 'text-accent';
+  if (source === 2) return 'text-highlight-green';
+  if (source === 3) return 'text-highlight-yellow';
+  return 'text-text-primary';
+};
+
 const LoraDetail: React.FC<{ label: string; name?: string; strength?: number; enabled?: boolean }> = ({ label, name, strength, enabled = true }) => {
   if (!enabled || !name) return null;
   return (
@@ -165,6 +174,16 @@ const LoraDetail: React.FC<{ label: string; name?: string; strength?: number; en
 const renderOptionsDetails = (options?: GenerationOptions, mediaType?: LibraryItemType) => {
   if (!options) return <DetailItem label="Options" value="Not available" />;
   const isImageType = mediaType === 'image' || mediaType === 'character' || mediaType === 'logo' || mediaType === 'banner' || mediaType === 'album-cover' || mediaType === 'clothes' || mediaType === 'object' || mediaType === 'extracted-frame' || mediaType === 'pose' || mediaType === 'font';
+  const comfyPositivePrompt = options.comfyModelType === 'flux2-simple'
+    ? options.comfyFlux2Prompt
+    : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw'
+      ? options.comfyKreaPrompt
+      : options.comfyPrompt;
+  const comfyNegativePrompt = options.comfyModelType === 'flux2-simple'
+    ? options.comfyFlux2NegativePrompt
+    : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw'
+      ? options.comfyKreaNegativePrompt
+      : options.comfyNegativePrompt;
 
   return (
     <div>
@@ -187,9 +206,9 @@ const renderOptionsDetails = (options?: GenerationOptions, mediaType?: LibraryIt
         {options.provider === 'comfyui' && isImageType && (
           <>
             <DetailItem label="Workflow" value={options.comfyModelType} />
-            <DetailItem label="Prompt" value={options.comfyPrompt} isCode />
-            {options.comfyNegativePrompt && <DetailItem label="Negative Prompt" value={options.comfyNegativePrompt} isCode />}
-            {(options.comfyModelType === 'sdxl' || options.comfyModelType === 'sd1.5' || options.comfyModelType === 'flux' || options.comfyModelType === 'qwen-t2i-gguf' || options.comfyModelType === 'z-image') && (
+            <DetailItem label="Prompt" value={comfyPositivePrompt} isCode />
+            {comfyNegativePrompt && <DetailItem label="Negative Prompt" value={comfyNegativePrompt} isCode />}
+            {(['sdxl', 'sd1.5', 'flux', 'qwen-t2i-gguf', 'z-image', 'flux2-simple', 'krea2-simple', 'krea2-raw'] as const).includes(options.comfyModelType as any) && (
               <div className="space-y-2 p-2 mt-2 border-t border-border-primary/50">
                 {/* Common Fields */}
                 <DetailItem label="Steps" value={options.comfySteps} />
@@ -315,17 +334,11 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
   // ... (Implementation remains unchanged) ...
   const dispatch: AppDispatch = useDispatch();
   const handleSelectDestination = (provider: 'mammouth' | 'comfyui', comfyModelType?: GenerationOptions['comfyModelType']) => {
-    let optionsUpdate: Partial<GenerationOptions> = {
-      provider,
-      comfyPrompt: prompt,
-      geminiPrompt: prompt,
-    };
     if (provider === 'mammouth') {
-      optionsUpdate.geminiMode = 't2i';
-    } else {
-      optionsUpdate.comfyModelType = comfyModelType;
+      dispatch(updateOptions({ provider, geminiPrompt: prompt, geminiMode: 't2i' }));
+    } else if (comfyModelType) {
+      dispatch(switchComfyModelOptions(getPromptDestinationOptions(prompt, comfyModelType)));
     }
-    dispatch(updateOptions(optionsUpdate));
     dispatch(setGenerationMode('t2i'));
     dispatch(setActiveTab('image-generator'));
     onClose();
@@ -342,14 +355,6 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
   if (!isOpen) return null;
-  const comfyT2iWorkflows = [
-    { id: 'sdxl', label: 'SDXL' },
-    { id: 'sd1.5', label: 'SD 1.5' },
-    { id: 'flux', label: 'FLUX' },
-    { id: 'wan2.2', label: 'WAN 2.2' },
-    { id: 'nunchaku-flux-image', label: 'Nunchaku FLUX' },
-    { id: 'flux-krea', label: 'FLUX Krea' },
-  ];
   return (
     <div
       className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 animate-fade-in"
@@ -389,7 +394,7 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
           <div>
             <h3 className="text-lg font-semibold text-text-primary mb-3">ComfyUI (T2I Workflows)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {comfyT2iWorkflows.map(wf => (
+              {PROMPT_T2I_WORKFLOWS.map(wf => (
                 <button
                   key={wf.id}
                   onClick={() => handleSelectDestination('comfyui', wf.id as GenerationOptions['comfyModelType'])}
@@ -445,6 +450,19 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
 
   const [isPickerOpen, setPickerOpen] = useState(false);
   const [promptToUse, setPromptToUse] = useState('');
+  const [soupPromptToLink, setSoupPromptToLink] = useState<LibraryItem | null>(null);
+
+  const handleLinkSoupResult = async (result: LibraryItem) => {
+    if (!soupPromptToLink) return;
+    await dispatch(updateLibraryItem({ id: soupPromptToLink.id, changes: { linkedResultId: result.id } })).unwrap();
+    setSelectedItemModal(current => current?.id === soupPromptToLink.id ? { ...current, linkedResultId: result.id } : current);
+    setSoupPromptToLink(null);
+  };
+
+  const handleUnlinkSoupResult = async (item: LibraryItem) => {
+    await dispatch(updateLibraryItem({ id: item.id, changes: { linkedResultId: undefined } })).unwrap();
+    setSelectedItemModal(current => current?.id === item.id ? { ...current, linkedResultId: undefined } : current);
+  };
 
   // NEW: Effect to track loading time and show specific UI message if it hangs
   useEffect(() => {
@@ -534,6 +552,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
   const handleMouseEnterSource = (e: React.MouseEvent, sourceImage?: string) => { if (!sourceImage) return; setHoveredSource({ src: sourceImage, x: e.clientX, y: e.clientY }); };
   const handleMouseLeaveSource = () => { setHoveredSource(null); };
   const getItemThumbnail = (item: LibraryItem) => item.thumbnail || (item.mediaType === 'video' ? createVideoPlaceholderThumbnail() : '');
+  const getItemHoverImage = (item: LibraryItem) => {
+    const linkedResult = item.linkedResultId ? items.find(candidate => candidate.id === item.linkedResultId) : undefined;
+    return linkedResult?.thumbnail || linkedResult?.media || item.sourceImage;
+  };
 
   const renderItemViews = () => {
     if (libraryStatus === 'loading') {
@@ -569,12 +591,12 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
       return (
         <div className="flex flex-col gap-1.5">
           {paginatedItems.map(item => (
-            <div key={item.id} className="group flex items-center gap-3 p-1.5 rounded-lg hover:bg-bg-tertiary transition-colors w-full cursor-pointer" onClick={() => setSelectedItemModal(item)} onMouseEnter={(e) => (item.mediaType === 'prompt' || item.mediaType === 'color-palette') && handleMouseEnterSource(e, item.sourceImage)} onMouseLeave={handleMouseLeaveSource}>
+            <div key={item.id} className="group flex items-center gap-3 p-1.5 rounded-lg hover:bg-bg-tertiary transition-colors w-full cursor-pointer" onClick={() => setSelectedItemModal(item)} onMouseEnter={(e) => (item.mediaType === 'prompt' || item.mediaType === 'color-palette') && handleMouseEnterSource(e, getItemHoverImage(item))} onMouseLeave={handleMouseLeaveSource}>
               <img src={getItemThumbnail(item)} alt={item.name} className="w-10 h-10 object-cover rounded-md flex-shrink-0" />
               <div className="flex-shrink-0 text-text-secondary">{getCategoryIcon(item.mediaType, "w-5 h-5")}</div>
               <div className="flex-grow truncate"><p className="font-medium text-text-primary truncate text-sm">{item.name}</p><p className="text-xs text-text-muted">Created: {new Date(item.id).toLocaleDateString()}</p></div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={(e) => { e.stopPropagation(); onLoadItem(item); }} title="Load in Generator" className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent"><LoadIcon className="w-4 h-4" /></button>
+                <button onClick={(e) => { e.stopPropagation(); if (item.mediaType === 'prompt') { setPromptToUse(item.media); setPickerOpen(true); } else { onLoadItem(item); } }} title={item.mediaType === 'prompt' ? 'Use Prompt' : 'Load in Generator'} className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent">{item.mediaType === 'prompt' ? <SendIcon className="w-4 h-4" /> : <LoadIcon className="w-4 h-4" />}</button>
                 <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name || `Item #${item.id}`); }} disabled={deletingId === item.id} title="Delete Item" className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-danger">{deletingId === item.id ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : <TrashIcon className="w-4 h-4" />}</button>
               </div>
             </div>
@@ -587,7 +609,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
     return (
       <div className={`grid ${gridClasses} gap-4`}>
         {paginatedItems.map(item => (
-          <div key={item.id} className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer" onClick={() => setSelectedItemModal(item)} onMouseEnter={(e) => (item.mediaType === 'prompt' || item.mediaType === 'color-palette') && handleMouseEnterSource(e, item.sourceImage)} onMouseLeave={handleMouseLeaveSource}>
+          <div key={item.id} className="group relative aspect-square bg-bg-tertiary rounded-lg overflow-hidden shadow-md cursor-pointer" onClick={() => setSelectedItemModal(item)} onMouseEnter={(e) => (item.mediaType === 'prompt' || item.mediaType === 'color-palette') && handleMouseEnterSource(e, getItemHoverImage(item))} onMouseLeave={handleMouseLeaveSource}>
             <img src={getItemThumbnail(item)} alt={item.name || `Library item ${item.id}`} className="object-cover w-full h-full" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div className="absolute bottom-0 left-0 p-2 text-white transform translate-y-4 group-hover:translate-y-0 transition-transform"><p className="text-xs font-bold truncate max-w-full">{item.name}</p></div>
@@ -713,7 +735,25 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                 <div className="space-y-4">
                   <DetailItem label="Item ID" value={selectedItemModal.id} />
                   <DetailItem label="Type" value={selectedItemModal.mediaType} />
-                  {selectedItemModal.mediaType === 'prompt' && <DetailItem label="Prompt Text" value={selectedItemModal.media} isCode />}
+                  {selectedItemModal.mediaType === 'prompt' && selectedItemModal.promptParts?.length ? (
+                    <div className="mb-2">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">Prompt Text</h4>
+                      <div className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-bg-primary p-3 font-mono text-xs">
+                        {selectedItemModal.promptParts.map((part, index) => <span key={index} className={getPromptPartColor(part.source)}>{part.text} </span>)}
+                      </div>
+                    </div>
+                  ) : selectedItemModal.mediaType === 'prompt' ? <DetailItem label="Prompt Text" value={selectedItemModal.media} isCode /> : null}
+                  {selectedItemModal.promptType === 'soup' && selectedItemModal.linkedResultId && (() => {
+                    const linkedResult = items.find(item => item.id === selectedItemModal.linkedResultId);
+                    return linkedResult ? <div className="rounded-md border border-border-primary bg-bg-primary p-3">
+                      <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-text-muted">Linked Result</h4>
+                      <div className="flex items-center gap-3">
+                        <img src={linkedResult.thumbnail || linkedResult.media} alt={linkedResult.name || 'Linked result'} className="h-20 w-20 rounded-md object-cover" />
+                        <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-text-primary">{linkedResult.name || `Image #${linkedResult.id}`}</p><p className="text-xs text-text-muted">Library image</p></div>
+                        <button type="button" onClick={() => handleUnlinkSoupResult(selectedItemModal)} className="rounded-md px-2 py-1 text-xs font-semibold text-danger hover:bg-danger-bg">Unlink</button>
+                      </div>
+                    </div> : null;
+                  })()}
                   {selectedItemModal.indexTtsOptions && <div className="space-y-3 rounded-md bg-bg-primary p-3">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">IndexTTS Advanced</h4>
                     <DetailItem label="Mode" value={selectedItemModal.indexTtsOptions.mode === 'dialogue' ? 'Multi-character dialogue' : 'Solo voice'} />
@@ -783,7 +823,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                       <button onClick={() => { onUpscaleItem(selectedItemModal); setSelectedItemModal(null); }} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-primary font-semibold py-2 px-4 rounded-lg hover:bg-accent hover:text-accent-text transition-colors"><GenerateIcon className="w-5 h-5" /> Upscale SeedVR2</button>
                     )}
                     {selectedItemModal.mediaType === 'prompt' ? (
-                      <button onClick={() => { setPromptToUse(selectedItemModal.media); setPickerOpen(true); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><SendIcon className="w-5 h-5" /> Use</button>
+                      <>
+                        <button onClick={() => { setPromptToUse(selectedItemModal.media); setPickerOpen(true); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><SendIcon className="w-5 h-5" /> Use</button>
+                        {selectedItemModal.promptType === 'soup' && <button type="button" onClick={() => setSoupPromptToLink(selectedItemModal)} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-primary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"><PhotographIcon className="w-5 h-5" /> {selectedItemModal.linkedResultId ? 'Change Result' : 'Link Result'}</button>}
+                      </>
                     ) : (
                       <button onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> {selectedItemModal.ltxDirectorOptions ? 'Open in LTX Director' : selectedItemModal.mediaType === 'audio-tts' ? 'Use in LTX Video' : 'Load in Generator'}</button>
                     )}
@@ -796,6 +839,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
         </div>
       )}
       <PromptDestinationPickerModal isOpen={isPickerOpen} onClose={() => setPickerOpen(false)} prompt={promptToUse} />
+      <LibraryPickerModal isOpen={!!soupPromptToLink} onClose={() => setSoupPromptToLink(null)} onSelectItem={handleLinkSoupResult} filter={['image', 'character', 'logo', 'banner', 'album-cover']} />
     </>
   );
 };

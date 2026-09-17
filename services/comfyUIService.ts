@@ -629,15 +629,6 @@ export const generateComfyUIPromptFromSource = async (sourceImage: File, modelTy
     return text;
 };
 
-export const generateWanVideoPromptFromImage = async (sourceImage: File): Promise<string> => {
-    const instruction = `Analyze this image. Describe the main subject and its environment in a concise, cinematic phrase suitable for a text-to-video prompt. For example: "A lion running across the savannah" or "A cyberpunk woman with neon hair in a rainy neon-lit alley". Respond with only the descriptive phrase.`;
-    const result = await generateMammouthText(instruction, [sourceImage]);
-    const text = result.text.trim().replace(/['"`]/g, '');
-    if (!text) throw new Error('AI failed to generate a video prompt from the image.');
-    return text;
-};
-
-
 export const extractBackgroundPromptFromImage = async (sourceImage: File, modelType: ComfyPromptModelType): Promise<string> => {
     const styleInstruction = getPromptStyleInstruction(modelType);
     const instruction = `Analyze ONLY the background of this image, ignoring any people or foreground subjects. Describe the environment in detail. ${styleInstruction}`;
@@ -1904,7 +1895,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
                     strength,
                 };
             }
-            workflow["81"].inputs.steps = options.comfySteps ?? 12;
+            workflow["81"].inputs.steps = options.comfySteps ?? 10;
             workflow["82"].inputs.cfg = options.comfyCfg ?? 1;
             workflow["80"].inputs.sampler_name = options.comfySampler || 'euler';
             workflow["89"].inputs.noise_seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
@@ -1914,7 +1905,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             workflow = JSON.parse(JSON.stringify(COMFYUI_KREA2_SIMPLE_WORKFLOW_TEMPLATE));
             workflow["104"].inputs.text = options.comfyKreaPrompt || '';
             workflow["17"].inputs.text = options.comfyKreaNegativePrompt || '';
-            workflow["106:1"].inputs.unet_name = options.comfyKreaUnet || 'krea2_turbo_fp8_scaled.safetensors';
+            workflow["106:1"].inputs.unet_name = options.comfyKreaUnet || 'krea2_raw_fp8_scaled.safetensors';
             workflow["106:13"].inputs.clip_name = options.comfyKreaClip || 'qwen3vl_4b_fp8_scaled.safetensors';
             workflow["106:4"].inputs.vae_name = options.comfyKreaVae || 'qwen_image_vae.safetensors';
 

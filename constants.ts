@@ -1242,7 +1242,7 @@ export const FLUX2_RESOLUTION_OPTIONS = [
 
 export const COMFYUI_FLUX2_SIMPLE_WORKFLOW_TEMPLATE = {
   "80": { "inputs": { "sampler_name": "euler" }, "class_type": "KSamplerSelect", "_meta": { "title": "KSamplerSelect" } },
-  "81": { "inputs": { "steps": 12, "width": ["87", 0], "height": ["88", 0] }, "class_type": "Flux2Scheduler", "_meta": { "title": "Flux2Scheduler" } },
+  "81": { "inputs": { "steps": 10, "width": ["87", 0], "height": ["88", 0] }, "class_type": "Flux2Scheduler", "_meta": { "title": "Flux2Scheduler" } },
   "82": { "inputs": { "cfg": 1, "model": ["99", 0], "positive": ["93", 0], "negative": ["86", 0] }, "class_type": "CFGGuider", "_meta": { "title": "GuideCFG" } },
   "83": { "inputs": { "noise": ["89", 0], "guider": ["82", 0], "sampler": ["80", 0], "sigmas": ["81", 0], "latent_image": ["85", 0] }, "class_type": "SamplerCustomAdvanced", "_meta": { "title": "SamplerCustomAdvanced" } },
   "84": { "inputs": { "samples": ["83", 0], "vae": ["92", 0] }, "class_type": "VAEDecode", "_meta": { "title": "VAE Decode" } },
@@ -1269,7 +1269,7 @@ export const COMFYUI_KREA2_SIMPLE_WORKFLOW_TEMPLATE = {
   "106:4": { "inputs": { "vae_name": "qwen_image_vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Load VAE" } },
   "106:10": { "inputs": { "width": 832, "height": 1216, "batch_size": 1 }, "class_type": "EmptyLatentImage", "_meta": { "title": "Empty Latent Image" } },
   "106:13": { "inputs": { "clip_name": "qwen3vl_4b_fp8_scaled.safetensors", "type": "krea2", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
-  "106:1": { "inputs": { "unet_name": "krea2_turbo_fp8_scaled.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "Load Diffusion Model" } }
+  "106:1": { "inputs": { "unet_name": "krea2_raw_fp8_scaled.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "Load Diffusion Model" } }
 };
 
 export const COMFYUI_KREA2_RAW_WORKFLOW_TEMPLATE = {

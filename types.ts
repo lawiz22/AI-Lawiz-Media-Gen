@@ -779,10 +779,17 @@ export interface LibraryItem {
   endFrame?: string; // data URL for video generations
   promptType?: PromptCategory;
   promptModelType?: ComfyModelType | 'gemini';
+  promptParts?: PromptSoupPart[];
+  linkedResultId?: number;
   driveFileId?: string; // Google Drive file ID for the media
   previewThumbnail?: string; // AI-generated visual thumbnail for prompts
   poseJson?: string; // For pose items, the ControlNet JSON as a string
   skeletonImage?: string; // For pose items, the data URL for the skeleton visualization
+}
+
+export interface PromptSoupPart {
+  text: string;
+  source: number;
 }
 
 export interface VersionInfo {
@@ -846,17 +853,6 @@ export interface PromptGenState {
   soupPrompt: string;
   soupPromptSaveStatus: 'idle' | 'saving' | 'saved';
   soupHistory: string[];
-  // LTX Video Prompt Builder
-  wanVideoImage: File | null;
-  wanVideoBasePrompt: string;
-  wanVideoCategory: '' | 'fantasy' | 'sci-fi' | 'nature' | 'artistic' | '70s-vibes' | 'cinematic' | 'people' | 'vehicles' | 'sports' | 'horror' | 'historical' | 'product' | 'music-dance';
-  wanVideoSubject: string;
-  wanVideoAction: string;
-  wanVideoEnvironment: string;
-  wanVideoCameraMove: string;
-  wanVideoStyle: string;
-  wanVideoFinalPrompt: string;
-  wanVideoPromptSaveStatus: 'idle' | 'saving' | 'saved';
   // Qwen Image Prompt Builder
   qwenTitle: string;
   qwenUseTextInImage: boolean;
@@ -986,7 +982,6 @@ export interface AppSliceState {
   isFontSourcePickerOpen: boolean;
   isMaskPickerOpen: boolean;
   isElementPickerOpen: boolean;
-  isWanVideoImagePickerOpen: boolean;
   isResizeCropPickerOpen: boolean;
   isGroupFusionPickerOpen: boolean;
 

@@ -6,7 +6,7 @@ import {
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
     openSettingsModal, closeSettingsModal, openVisualSettingsModal, closeVisualSettingsModal, closeAdminPanel,
     openOAuthHelper, closeOAuthHelper, openComfyUIHelper, closeComfyUIHelper,
-    setModalOpen, addSessionTokenUsage, resetSessionTokenUsage, queueLtxTransfer
+    setModalOpen, addSessionTokenUsage, resetSessionTokenUsage, queueLtxTransfer, clearLtxTransfer
 } from './store/appSlice';
 import {
     setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
@@ -23,13 +23,13 @@ import {
     addSoupToHistory, setActivePromptToolsSubTab, resetPromptGenState, updatePromptGenState
 } from './store/promptGenSlice';
 import {
-    setActiveExtractorSubTab, updateExtractorState
+    setActiveExtractorSubTab, updateExtractorState, resetExtractorState
 } from './store/extractorSlice';
 import {
     setActiveLogoThemeSubTab, resetLogoThemeState, updateLogoThemeState
 } from './store/logoThemeSlice';
 import { fetchLibrary, unloadLibrary } from './store/librarySlice';
-import { setUploadedFiles } from './store/groupPhotoFusionSlice';
+import { removeAllFiles, setUploadedFiles } from './store/groupPhotoFusionSlice';
 
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile, Provider } from './types';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
@@ -44,7 +44,7 @@ import { OptionsPanel } from './components/OptionsPanel';
 import { ImageGrid } from './components/ImageGrid';
 import { Loader } from './components/Loader';
 import { ConnectionSettingsModal } from './components/ComfyUIConnection';
-import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL } from './services/ollamaService';
+import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, testOllamaConnection } from './services/ollamaService';
 import { LibraryPanel } from './components/LibraryPanel';
 import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
@@ -61,7 +61,7 @@ import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
 import { ComfyUIConnectionHelperModal } from './components/ComfyUIConnectionHelperModal';
 import { VisualSettingsModal } from './components/VisualSettingsModal';
-import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon, MicrophoneIcon, EnhanceIcon, DownloadIcon } from './components/icons';
+import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon, MicrophoneIcon, EnhanceIcon, DownloadIcon, ResetIcon } from './components/icons';
 import { ImageGeneratorHeader } from './components/ImageGeneratorHeader';
 import { ActionControlPanel } from './components/ActionControlPanel';
 import { CloudImageProviderBar } from './components/CloudImageProviderBar';
@@ -91,11 +91,13 @@ const App: React.FC = () => {
     const [localMammouthKey, setLocalMammouthKey] = useState('');
     const [localOllamaUrl, setLocalOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || DEFAULT_OLLAMA_URL);
     const [localOllamaModel, setLocalOllamaModel] = useState(() => localStorage.getItem('ollama_model') || DEFAULT_OLLAMA_MODEL);
+    const [isOllamaConnected, setIsOllamaConnected] = useState<boolean | null>(null);
     const [isGeneratingRefinePrompt, setIsGeneratingRefinePrompt] = useState(false);
     const [generationTimes, setGenerationTimes] = useState<Record<string, number | null>>({});
     const [upscaleSourceFile, setUpscaleSourceFile] = useState<File | null>(null);
     const [isUpscalePickerOpen, setIsUpscalePickerOpen] = useState(false);
     const [activeFunSubTab, setActiveFunSubTab] = useState<'photo-fusion' | 'past-forward' | 'swap-anything'>('photo-fusion');
+    const [panelResetVersions, setPanelResetVersions] = useState<Record<string, number>>({});
 
     // --- App State (from appSlice) ---
     const {
@@ -109,7 +111,6 @@ const App: React.FC = () => {
         isBannerRefPickerOpen, isBannerPalettePickerOpen, isBannerLogoPickerOpen, isBannerFontPickerOpen,
         isAlbumCoverRefPickerOpen, isAlbumCoverPalettePickerOpen, isAlbumCoverLogoPickerOpen, isAlbumCoverFontPickerOpen,
         isMannequinRefPickerOpen, isRefineSourcePickerOpen, isFontSourcePickerOpen, isMaskPickerOpen, isElementPickerOpen,
-        isWanVideoImagePickerOpen,
         isResizeCropPickerOpen,
         isGroupFusionPickerOpen,
         driveFolder, isSyncing, syncMessage, isDriveConfigured, sessionTokenUsage
@@ -273,7 +274,7 @@ const App: React.FC = () => {
                 comfyFlux2Lora5Strength: 1,
                 comfyFlux2Lora6Name: '',
                 comfyFlux2Lora6Strength: 1,
-                comfySteps: 12,
+                comfySteps: 10,
                 comfyCfg: 1,
                 comfySampler: 'euler',
             });
@@ -281,7 +282,7 @@ const App: React.FC = () => {
             applyDefaultsIfMissing({
                 comfyKreaPrompt: '',
                 comfyKreaNegativePrompt: '',
-                comfyKreaUnet: 'krea2_turbo_fp8_scaled.safetensors',
+                comfyKreaUnet: 'krea2_raw_fp8_scaled.safetensors',
                 comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
                 comfyKreaVae: 'qwen_image_vae.safetensors',
                 comfyKreaResolution: '832x1216',
@@ -365,6 +366,12 @@ const App: React.FC = () => {
         }
     }, [dispatch]);
 
+    const checkOllamaConnection = useCallback(async (url: string) => {
+        setIsOllamaConnected(null);
+        const result = await testOllamaConnection(url);
+        setIsOllamaConnected(result.success);
+    }, []);
+
     useEffect(() => {
         dispatch(setVersionInfo(versionData));
         const savedTheme = localStorage.getItem('theme') || 'cyberpunk';
@@ -387,6 +394,8 @@ const App: React.FC = () => {
         } else {
             dispatch(setIsComfyUIConnected(false));
         }
+
+        checkOllamaConnection(localStorage.getItem('ollama_url') || DEFAULT_OLLAMA_URL);
 
         const savedClientId = localStorage.getItem('google_client_id') || '';
         dispatch(setIsDriveConfigured(!!savedClientId));
@@ -433,7 +442,7 @@ const App: React.FC = () => {
             }
         }
 
-    }, [dispatch, checkConnection]);
+    }, [dispatch, checkComfyUIConnection, checkOllamaConnection]);
 
     useEffect(() => {
         if (activeTab === 'library') {
@@ -500,6 +509,17 @@ const App: React.FC = () => {
     const handleVideoUtilsReset = useCallback(() => {
         dispatch(resetVideoUtilsState());
     }, [dispatch]);
+
+    const handleActivePanelReset = useCallback(() => {
+        if (activeTab === 'ltx-director') dispatch(clearLtxTransfer());
+        if (activeTab === 'prompt-generator') dispatch(resetPromptGenState());
+        if (activeTab === 'extractor-tools') dispatch(resetExtractorState());
+        if (activeTab === 'fun') dispatch(removeAllFiles());
+        if (activeTab === 'logo-theme-generator') dispatch(resetLogoThemeState());
+        if (activeTab === 'video-utils') dispatch(resetVideoUtilsState());
+        if (activeTab === 'upscale') setUpscaleSourceFile(null);
+        setPanelResetVersions(current => ({ ...current, [activeTab]: (current[activeTab] || 0) + 1 }));
+    }, [activeTab, dispatch]);
 
     const handleGenerate = async () => {
         const startTime = performance.now();
@@ -635,6 +655,7 @@ const App: React.FC = () => {
         localStorage.setItem('ollama_model', nextOllamaModel);
         setLocalOllamaUrl(nextOllamaUrl);
         setLocalOllamaModel(nextOllamaModel);
+        await checkOllamaConnection(nextOllamaUrl);
     };
 
     const handleSendToI2I = async (imageDataUrl: string) => {
@@ -801,6 +822,7 @@ const App: React.FC = () => {
                 onOpenVisualSettings={() => dispatch(openVisualSettingsModal())}
                 onOpenComfyUIHelper={() => dispatch(openComfyUIHelper())}
                 isComfyUIConnected={isComfyUIConnected}
+                isOllamaConnected={isOllamaConnected}
                 versionInfo={versionInfo}
                 driveFolder={driveFolder}
                 onDriveConnect={handleDriveConnect}
@@ -896,11 +918,23 @@ const App: React.FC = () => {
 
                 {/* Content Views - Centered Wrapper */}
                 <div className="w-full max-w-7xl mx-auto border-t-2 border-accent pt-3" style={getTabAccentStyle(activeTab)}>
+                    {['ltx-director', 'tts', 'prompt-generator', 'video-utils', 'upscale'].includes(activeTab) || (activeTab === 'fun' && activeFunSubTab === 'swap-anything') ? (
+                        <div className="mb-3 flex justify-end">
+                            <button type="button" onClick={handleActivePanelReset} className="flex items-center gap-2 rounded-md border border-danger/50 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white">
+                                <ResetIcon className="h-4 w-4" /> Reset
+                            </button>
+                        </div>
+                    ) : null}
                     {['fun', 'extractor-tools', 'logo-theme-generator'].includes(activeTab) && !(activeTab === 'fun' && activeFunSubTab === 'swap-anything') && (
                         <CloudImageProviderBar
                             options={options}
                             updateOptions={(updates) => dispatch(updateOptions(updates))}
                             disabled={isLoading}
+                            action={
+                                <button type="button" onClick={handleActivePanelReset} className="flex items-center gap-2 rounded-md border border-danger/50 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white">
+                                    <ResetIcon className="h-4 w-4" /> Reset
+                                </button>
+                            }
                         />
                     )}
                     <React.Activity mode={activeTab === 'image-generator' ? 'visible' : 'hidden'}>
@@ -1252,20 +1286,20 @@ const App: React.FC = () => {
 
                     {activeTab === 'fun' && <div className="mb-4 flex justify-center"><div className="inline-flex flex-wrap rounded-md border border-rose-400/40 bg-bg-secondary p-1 shadow-sm"><button type="button" onClick={() => setActiveFunSubTab('photo-fusion')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'photo-fusion' ? 'bg-rose-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-rose-300'}`}><GroupPhotoFusionIcon className="h-4 w-4" />Photo Fusion</button><button type="button" onClick={() => setActiveFunSubTab('past-forward')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'past-forward' ? 'bg-cyan-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-cyan-300'}`}><PastForwardIcon className="h-4 w-4" />Past Forward</button><button type="button" onClick={() => setActiveFunSubTab('swap-anything')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'swap-anything' ? 'bg-amber-500 text-black' : 'text-text-secondary hover:bg-bg-tertiary hover:text-amber-300'}`}><EnhanceIcon className="h-4 w-4" />Swap Anything</button></div></div>}
 
-                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'past-forward' ? 'visible' : 'hidden'}><div style={FUN_ACCENT_STYLES['past-forward']}><PastForwardPanel /></div></React.Activity>
+                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'past-forward' ? 'visible' : 'hidden'}><div key={`past-forward-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['past-forward']}><PastForwardPanel /></div></React.Activity>
 
-                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'photo-fusion' ? 'visible' : 'hidden'}><div style={FUN_ACCENT_STYLES['photo-fusion']}><GroupPhotoFusionPanel /></div></React.Activity>
+                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'photo-fusion' ? 'visible' : 'hidden'}><div key={`photo-fusion-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['photo-fusion']}><GroupPhotoFusionPanel /></div></React.Activity>
 
-                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'swap-anything' ? 'visible' : 'hidden'}><div style={FUN_ACCENT_STYLES['swap-anything']}><SwapAnythingPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} /></div></React.Activity>
+                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'swap-anything' ? 'visible' : 'hidden'}><div key={`swap-anything-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['swap-anything']}><SwapAnythingPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} /></div></React.Activity>
 
                     <React.Activity mode={activeTab === 'prompt-generator' ? 'visible' : 'hidden'}>
                         <PromptGeneratorPanel
+                            key={`prompt-${panelResetVersions['prompt-generator'] || 0}`}
                             activeSubTab={activePromptToolsSubTab}
                             setActiveSubTab={(id) => dispatch(setActivePromptToolsSubTab(id))}
                             onOpenLibraryForImage={() => dispatch(setModalOpen({ modal: 'isPromptGenImagePickerOpen', isOpen: true }))}
                             onOpenLibraryForBg={() => dispatch(setModalOpen({ modal: 'isPromptGenBgImagePickerOpen', isOpen: true }))}
                             onOpenLibraryForSubject={() => dispatch(setModalOpen({ modal: 'isPromptGenSubjectImagePickerOpen', isOpen: true }))}
-                            onOpenLibraryForWanVideoImage={() => dispatch(setModalOpen({ modal: 'isWanVideoImagePickerOpen', isOpen: true }))}
                             onReset={handlePromptGenReset}
                             isComfyUIConnected={isComfyUIConnected}
                             comfyUIObjectInfo={comfyUIObjectInfo}
@@ -1276,6 +1310,7 @@ const App: React.FC = () => {
 
                     <React.Activity mode={activeTab === 'extractor-tools' ? 'visible' : 'hidden'}>
                         <ExtractorToolsPanel
+                            key={`extractor-${panelResetVersions['extractor-tools'] || 0}`}
                             onOpenLibraryForClothes={() => dispatch(setModalOpen({ modal: 'isClothesSourcePickerOpen', isOpen: true }))}
                             onOpenLibraryForObjects={() => dispatch(setModalOpen({ modal: 'isObjectSourcePickerOpen', isOpen: true }))}
                             onOpenLibraryForPoses={() => dispatch(setModalOpen({ modal: 'isPoseSourcePickerOpen', isOpen: true }))}
@@ -1288,6 +1323,7 @@ const App: React.FC = () => {
 
                     <React.Activity mode={activeTab === 'logo-theme-generator' ? 'visible' : 'hidden'}>
                         <LogoThemeGeneratorPanel
+                            key={`logo-${panelResetVersions['logo-theme-generator'] || 0}`}
                             activeSubTab={activeLogoThemeSubTab}
                             setActiveSubTab={(id) => dispatch(setActiveLogoThemeSubTab(id))}
                             onOpenLibraryForReferences={() => dispatch(setModalOpen({ modal: 'isLogoRefPickerOpen', isOpen: true }))}
@@ -1306,6 +1342,7 @@ const App: React.FC = () => {
 
                     <React.Activity mode={activeTab === 'video-utils' ? 'visible' : 'hidden'}>
                         <VideoUtilsPanel
+                            key={`tools-${panelResetVersions['video-utils'] || 0}`}
                             setStartFrame={handleSetVideoStartFrame}
                             setEndFrame={handleSetVideoEndFrame}
                             onOpenLibrary={() => dispatch(setModalOpen({ modal: 'isColorImagePickerOpen', isOpen: true }))}
@@ -1319,15 +1356,17 @@ const App: React.FC = () => {
 
                     <React.Activity mode={activeTab === 'ltx-director' ? 'visible' : 'hidden'}>
                         <LTXDirectorPanel
+                            key={`ltx-${panelResetVersions['ltx-director'] || 0}`}
                             isComfyUIConnected={isComfyUIConnected}
                             comfyUIObjectInfo={comfyUIObjectInfo}
                         />
                     </React.Activity>
 
-                    <React.Activity mode={activeTab === 'tts' ? 'visible' : 'hidden'}><TtsPanel isComfyUIConnected={isComfyUIConnected} /></React.Activity>
+                    <React.Activity mode={activeTab === 'tts' ? 'visible' : 'hidden'}><TtsPanel key={`tts-${panelResetVersions.tts || 0}`} isComfyUIConnected={isComfyUIConnected} /></React.Activity>
 
                     <React.Activity mode={activeTab === 'upscale' ? 'visible' : 'hidden'}>
                         <UpscalePanel
+                            key={`upscale-${panelResetVersions.upscale || 0}`}
                             sourceFile={upscaleSourceFile}
                             setSourceFile={setUpscaleSourceFile}
                             onOpenLibrary={() => setIsUpscalePickerOpen(true)}
@@ -1352,10 +1391,23 @@ const App: React.FC = () => {
                                         directorOptions: item.ltxDirectorOptions,
                                     }));
                                 } else if (item.mediaType === 'image' || item.mediaType === 'character') {
-                                    if (item.sourceImage) {
-                                        fetch(item.sourceImage).then(r => r.blob()).then(b => dispatch(setSourceImage(new File([b], "source.jpg", { type: "image/jpeg" }))));
-                                    }
                                     if (item.options) {
+                                        const isComfyI2I = item.options.provider === 'comfyui'
+                                            && ['qwen-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux'].includes(item.options.comfyModelType || '');
+                                        const isCloudI2I = item.options.provider !== 'comfyui' && item.options.geminiMode === 'i2i';
+                                        const restoredMode = isComfyI2I || isCloudI2I ? 'i2i' : 't2i';
+                                        dispatch(setGenerationMode(restoredMode));
+                                        dispatch(setMaskImage(null));
+                                        dispatch(setElementImages([]));
+                                        const sourceDataUrl = restoredMode === 'i2i' ? (item.sourceImage || item.media) : null;
+                                        if (sourceDataUrl) {
+                                            fetch(sourceDataUrl).then(async response => {
+                                                const blob = await response.blob();
+                                                dispatch(setSourceImage(new File([blob], "library-source", { type: blob.type || 'image/jpeg' })));
+                                            });
+                                        } else {
+                                            dispatch(setSourceImage(null));
+                                        }
                                         // Determine where to load options based on item type
                                         if (item.mediaType === 'character') {
                                             dispatch(setCharacterOptions(item.options));
@@ -1466,7 +1518,6 @@ const App: React.FC = () => {
             <LibraryPickerModal isOpen={isPromptGenImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ image: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isPromptGenBgImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenBgImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ bgImage: new File([b], "bg_source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isPromptGenSubjectImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenSubjectImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ subjectImage: new File([b], "subj_source.jpg", { type: b.type }) })); }} filter="image" />
-            <LibraryPickerModal isOpen={isWanVideoImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isWanVideoImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ wanVideoImage: new File([b], "wan_source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isClothesSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isClothesSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ clothesSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isObjectSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isObjectSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ objectSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isPoseSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPoseSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ poseSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />

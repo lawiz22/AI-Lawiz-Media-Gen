@@ -4,8 +4,17 @@ import type { ComfyModelType, GenerationSliceState, GenerationOptions } from '..
 import type { RootState } from './store';
 import { getEnabledCharacterAngles } from '../services/characterAnglesWorkflow';
 
+const KREA_TURBO_LORA_FIELDS = [
+  'comfyKreaLora1Name',
+  'comfyKreaLora2Name',
+  'comfyKreaLora3Name',
+  'comfyKreaLora4Name',
+  'comfyKreaLora5Name',
+  'comfyKreaLora6Name',
+] as const;
+
 const initialOptions: GenerationOptions = {
-  provider: 'mammouth',
+  provider: 'comfyui',
   numImages: 1,
   poseMode: 'random',
   poseSelection: [],
@@ -25,13 +34,34 @@ const initialOptions: GenerationOptions = {
   geminiInpaintCustomPrompt: '',
   geminiInpaintTargetPrompt: '',
   geminiComposePrompt: '',
-  comfyModelType: 'qwen-t2i-gguf',
+  comfyModelType: 'krea2-simple',
   comfyPrompt: '',
   comfyNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed, disfigured',
-  comfySteps: 4,
+  comfySteps: 10,
   comfyCfg: 1,
-  comfySampler: 'euler',
-  comfyScheduler: 'normal',
+  comfySampler: 'er_sde',
+  comfyScheduler: 'beta',
+
+  // KREA2 Simple defaults
+  comfyKreaPrompt: '',
+  comfyKreaNegativePrompt: '',
+  comfyKreaUnet: 'krea2_raw_fp8_scaled.safetensors',
+  comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
+  comfyKreaVae: 'qwen_image_vae.safetensors',
+  comfyKreaResolution: '832x1216',
+  comfyKreaUseLora: true,
+  comfyKreaLora1Name: 'KREA\\krea2_turbo_lora_rank_64_bf16.safetensors',
+  comfyKreaLora1Strength: 0.6,
+  comfyKreaLora2Name: 'KREA\\snofs_krea_v1_nostrip.safetensors',
+  comfyKreaLora2Strength: 1,
+  comfyKreaLora3Name: '',
+  comfyKreaLora3Strength: 1,
+  comfyKreaLora4Name: '',
+  comfyKreaLora4Strength: 1,
+  comfyKreaLora5Name: '',
+  comfyKreaLora5Strength: 1,
+  comfyKreaLora6Name: '',
+  comfyKreaLora6Strength: 1,
 
   // Z-Image CacheDiT defaults
   comfyZImageUseCacheDit: true,
@@ -137,7 +167,7 @@ const initialOptions: GenerationOptions = {
 
 const initialCharacterOptions: GenerationOptions = {
   ...initialOptions,
-  provider: 'mammouth',
+  provider: 'comfyui',
   geminiMode: 'i2i',
   geminiI2iMode: 'character',
   comfyCharacterMode: 'qwen',
@@ -191,7 +221,7 @@ const initialState: GenerationSliceState = {
   options: initialOptions,
   comfyOptionsByModel: {},
   comfyDefaultOptionsByModel: {
-    'qwen-t2i-gguf': { ...initialOptions, provider: 'comfyui' },
+    'krea2-simple': { ...initialOptions },
   },
   characterOptions: initialCharacterOptions,
   isLoading: false,
@@ -245,6 +275,11 @@ const generationSlice = createSlice({
     },
     updateOptions: (state, action: PayloadAction<Partial<GenerationOptions>>) => {
       state.options = { ...state.options, ...action.payload };
+      if (action.payload.comfyKreaUnet && /krea2[_ .-]?turbo/i.test(action.payload.comfyKreaUnet)) {
+        for (const field of KREA_TURBO_LORA_FIELDS) {
+          if (/krea2[_ .-]?turbo/i.test(state.options[field] || '')) state.options[field] = '';
+        }
+      }
     },
     switchComfyModelOptions: (state, action: PayloadAction<Partial<GenerationOptions> & { comfyModelType: ComfyModelType }>) => {
       const currentModelType = state.options.comfyModelType;
@@ -258,14 +293,14 @@ const generationSlice = createSlice({
       };
       const savedOptions = state.comfyOptionsByModel[action.payload.comfyModelType];
       const nextOptions: GenerationOptions = savedOptions
-        ? { ...savedOptions, ...sharedPrompts, provider: 'comfyui', comfyModelType: action.payload.comfyModelType }
-        : { ...state.options, ...action.payload, ...sharedPrompts, provider: 'comfyui' };
+        ? { ...savedOptions, ...sharedPrompts, ...action.payload, provider: 'comfyui', comfyModelType: action.payload.comfyModelType }
+        : { ...state.options, ...sharedPrompts, ...action.payload, provider: 'comfyui' };
       if (!savedOptions && (action.payload.comfyModelType === 'krea2-simple' || action.payload.comfyModelType === 'krea2-raw')) {
-        nextOptions.comfyKreaPrompt = state.options.comfyPrompt || '';
-        nextOptions.comfyKreaNegativePrompt = state.options.comfyNegativePrompt || '';
+        nextOptions.comfyKreaPrompt = action.payload.comfyKreaPrompt ?? action.payload.comfyPrompt ?? state.options.comfyPrompt ?? '';
+        nextOptions.comfyKreaNegativePrompt = action.payload.comfyKreaNegativePrompt ?? action.payload.comfyNegativePrompt ?? state.options.comfyNegativePrompt ?? '';
       } else if (!savedOptions && action.payload.comfyModelType === 'flux2-simple') {
-        nextOptions.comfyFlux2Prompt = state.options.comfyPrompt || '';
-        nextOptions.comfyFlux2NegativePrompt = state.options.comfyNegativePrompt || '';
+        nextOptions.comfyFlux2Prompt = action.payload.comfyFlux2Prompt ?? action.payload.comfyPrompt ?? state.options.comfyPrompt ?? '';
+        nextOptions.comfyFlux2NegativePrompt = action.payload.comfyFlux2NegativePrompt ?? action.payload.comfyNegativePrompt ?? state.options.comfyNegativePrompt ?? '';
       }
       if (action.payload.comfyModelType === 'qwen-t2i-gguf') {
         nextOptions.comfySteps = 4;
@@ -274,12 +309,12 @@ const generationSlice = createSlice({
         nextOptions.comfyFlux2Clip = 'qwen3vl_4b_fp8_scaled.safetensors';
         nextOptions.comfyFlux2Vae = 'flux2-vae.safetensors';
         if (!savedOptions) {
-          nextOptions.comfySteps = action.payload.comfySteps ?? 12;
+          nextOptions.comfySteps = action.payload.comfySteps ?? 10;
           nextOptions.comfyCfg = action.payload.comfyCfg ?? 1;
           nextOptions.comfySampler = action.payload.comfySampler ?? 'euler';
         }
       } else if (action.payload.comfyModelType === 'krea2-simple') {
-        nextOptions.comfyKreaUnet = 'krea2_turbo_fp8_scaled.safetensors';
+        nextOptions.comfyKreaUnet = action.payload.comfyKreaUnet ?? 'krea2_raw_fp8_scaled.safetensors';
         nextOptions.comfyKreaClip = 'qwen3vl_4b_fp8_scaled.safetensors';
         nextOptions.comfyKreaVae = 'qwen_image_vae.safetensors';
       } else if (action.payload.comfyModelType === 'krea2-raw') {

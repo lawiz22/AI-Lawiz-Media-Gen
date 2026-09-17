@@ -19,6 +19,7 @@ interface HeaderProps {
   onOpenVisualSettings: () => void;
   onOpenComfyUIHelper: () => void;
   isComfyUIConnected: boolean | null;
+  isOllamaConnected: boolean | null;
   versionInfo: VersionInfo | null;
   driveFolder: DriveFolder | null;
   onDriveConnect: () => void;
@@ -41,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettingsModal,
   onOpenVisualSettings,
   onOpenComfyUIHelper,
-  isComfyUIConnected, versionInfo,
+  isComfyUIConnected, isOllamaConnected, versionInfo,
   driveFolder, onDriveConnect, onDriveDisconnect,
   isDriveConfigured,
   sessionTokenUsage,
@@ -179,6 +180,19 @@ export const Header: React.FC<HeaderProps> = ({
                 <button onClick={onOpenComfyUIHelper} title="Connection failed. Click for help." className="text-text-muted hover:text-accent transition-colors">
                   <QuestionMarkCircleIcon className="w-4 h-4" />
                 </button>
+              )}
+            </div>
+            <div className="mt-1 flex items-center justify-end gap-1">
+              {isOllamaConnected === null ? (
+                <div className="flex items-center justify-end gap-1 text-xs text-text-muted">
+                  <SpinnerIcon className="h-3 w-3 animate-spin" />
+                  <span>OLLAMA Checking...</span>
+                </div>
+              ) : (
+                <div className={`flex items-center justify-end gap-1.5 text-xs font-semibold ${isOllamaConnected ? 'text-green-400' : 'text-danger'}`}>
+                  <span className={`h-2 w-2 rounded-full ${isOllamaConnected ? 'bg-green-400' : 'bg-danger'}`}></span>
+                  <span>OLLAMA {isOllamaConnected ? 'Connected' : 'Not Connected'}</span>
+                </div>
               )}
             </div>
             {sessionTokenUsage && sessionTokenUsage.totalTokenCount > 0 && (

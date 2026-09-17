@@ -145,7 +145,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
       const isGeminiT2I = options.provider === 'gemini' && options.geminiMode === 't2i';
       const isMammouthT2I = options.provider === 'mammouth' && options.geminiMode === 't2i';
 
-      const comfyI2IWorkflows: (GenerationOptions['comfyModelType'])[] = ['nunchaku-kontext-flux', 'face-detailer-sd1.5'];
+      const comfyI2IWorkflows: (GenerationOptions['comfyModelType'])[] = ['qwen-edit', 'nunchaku-kontext-flux', 'face-detailer-sd1.5'];
       const isComfyT2I = options.provider === 'comfyui' && !comfyI2IWorkflows.includes(options.comfyModelType);
 
       if (isEnhanced) {
