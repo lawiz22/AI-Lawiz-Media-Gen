@@ -45,8 +45,25 @@ const getCharacterInstructionValue = (value: string): string => {
     return trimmedValue.toLowerCase() === 'none' || trimmedValue === CHARACTER_NONE_VALUE ? '' : trimmedValue;
 };
 
+const getCharacterResolution = (aspectRatio: string, megapixels: number) => {
+    const [ratioWidth, ratioHeight] = aspectRatio.split(':').map(Number);
+    const ratio = ratioWidth > 0 && ratioHeight > 0 ? ratioWidth / ratioHeight : 1;
+    const totalPixels = Math.max(0.25, megapixels) * 1_000_000;
+    return {
+        width: Math.max(64, Math.round(Math.sqrt(totalPixels * ratio) / 16) * 16),
+        height: Math.max(64, Math.round(Math.sqrt(totalPixels / ratio) / 16) * 16),
+    };
+};
+
+const CHARACTER_IDENTITY_LOCK = [
+    'Use the source person as an exact identity reference, not as inspiration.',
+    'Keep the same facial anatomy and proportions: face shape, forehead, hairline, eyebrows, eye shape and spacing, nose shape, cheekbones, lips, jawline, chin, ears, skin tone, age, and distinctive marks.',
+    'Do not beautify, idealize, average, redesign, or substitute the face, and do not change ethnicity, age, or gender presentation.',
+    'A requested expression may move the facial muscles only; it must not alter the underlying facial structure or identity.',
+].join(' ');
+
 const buildSharedInstructions = (options: GenerationOptions): string => {
-    const instructions = ['Preserve the character identity, facial features, body proportions, and all important visual details.'];
+    const instructions = [CHARACTER_IDENTITY_LOCK, 'Preserve the body proportions and all other important visual details.'];
 
     if (options.clothing === 'original') instructions.push('Keep the original clothing unchanged.');
     else if (options.customClothingPrompt?.trim()) instructions.push(`Change the clothing to ${options.customClothingPrompt.trim()}.`);
@@ -88,6 +105,7 @@ export const buildCharacterAnglesWorkflow = (
     }
     const prompts = buildCharacterAnglePrompts(options);
     const seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+    const resolution = getCharacterResolution(options.aspectRatio || '1:1', options.comfyCharacterMegapixels ?? 1);
     const useAdditionalLora = !!options.comfyCharacterUseAdditionalLora && !!options.comfyCharacterAdditionalLora?.trim();
     const samplingModel = useAdditionalLora ? ['additional_lora', 0] : ['angles_lora', 0];
     const workflow: Record<string, any> = {
@@ -139,23 +157,34 @@ export const buildCharacterAnglesWorkflow = (
             class_type: 'CFGNorm',
             _meta: { title: 'Character CFG normalization' },
         },
-        'scale': {
+        'reference_scale': {
             inputs: {
-                upscale_method: 'nearest-exact',
+                upscale_method: 'lanczos',
                 megapixels: options.comfyCharacterMegapixels ?? 1,
                 resolution_steps: 1,
                 image: ['source', 1],
             },
             class_type: 'ImageScaleToTotalPixels',
-            _meta: { title: 'Scale character source' },
+            _meta: { title: 'Scale uncropped identity reference' },
+        },
+        'output_scale': {
+            inputs: {
+                upscale_method: 'lanczos',
+                width: resolution.width,
+                height: resolution.height,
+                crop: 'center',
+                image: ['source', 1],
+            },
+            class_type: 'ImageScale',
+            _meta: { title: `Prepare ${options.aspectRatio || '1:1'} output canvas` },
         },
         'latent': {
-            inputs: { pixels: ['scale', 0], vae: ['vae', 0] },
+            inputs: { pixels: ['output_scale', 0], vae: ['vae', 0] },
             class_type: 'VAEEncode',
-            _meta: { title: 'Encode character source' },
+            _meta: { title: 'Encode output canvas' },
         },
         'negative': {
-            inputs: { prompt: '', clip: ['clip', 0], vae: ['vae', 0], image1: ['scale', 0] },
+            inputs: { prompt: '', clip: ['clip', 0], vae: ['vae', 0], image1: ['reference_scale', 0] },
             class_type: 'TextEncodeQwenImageEditPlus',
             _meta: { title: 'Character negative prompt' },
         },
@@ -178,7 +207,7 @@ export const buildCharacterAnglesWorkflow = (
         const samplerId = `sampler_${index}`;
         const decodeId = `decode_${index}`;
         workflow[positiveId] = {
-            inputs: { prompt: prompts[index], clip: ['clip', 0], vae: ['vae', 0], image1: ['scale', 0] },
+            inputs: { prompt: prompts[index], clip: ['clip', 0], vae: ['vae', 0], image1: ['reference_scale', 0] },
             class_type: 'TextEncodeQwenImageEditPlus',
             _meta: { title: `Prompt ${angle.label}` },
         };
@@ -235,7 +264,8 @@ const buildFlux2CharacterPrompt = (
     const instructions = [
         'Using Picture 1 as the strict visual reference, create a new view of exactly one person: the same single subject shown in Picture 1.',
         'The final image must contain one person only, with one complete body, one head, and one face. Never duplicate, clone, merge, overlap, or fuse the subject with another person.',
-        'Preserve the exact identity, face, body proportions, silhouette, skin, hair, and distinctive details of the single subject.',
+        CHARACTER_IDENTITY_LOCK,
+        'Preserve the exact body proportions, silhouette, hair, and distinctive details of the single subject.',
         references.clothing
             ? 'Use the clothing reference for the complete outfit, materials, colors, fit, accessories, and garment details.'
             : options.customClothingPrompt?.trim()

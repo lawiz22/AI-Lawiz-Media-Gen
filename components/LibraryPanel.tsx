@@ -15,6 +15,7 @@ import { createPaletteThumbnail, createVideoPlaceholderThumbnail, normalizeAudio
 import { exportLibraryAsJson } from '../services/libraryService';
 import { updateOptions, setGenerationMode, switchComfyModelOptions } from '../store/generationSlice';
 import { setActiveTab } from '../store/appSlice';
+import { setActivePromptToolsSubTab, updatePromptGenState } from '../store/promptGenSlice';
 import { AudioPlayer } from './AudioPlayer';
 import { getPromptDestinationOptions, PROMPT_T2I_WORKFLOWS } from '../utils/promptDestination';
 import { LibraryPickerModal } from './LibraryPickerModal';
@@ -327,12 +328,14 @@ const renderThemeOptionsDetails = (themeOptions: ThemeGenerationInfo) => {
 interface PromptDestinationPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  prompt: string;
+  item: LibraryItem | null;
+  onDestinationSelected: () => void;
 }
 
-const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> = ({ isOpen, onClose, prompt }) => {
+const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> = ({ isOpen, onClose, item, onDestinationSelected }) => {
   // ... (Implementation remains unchanged) ...
   const dispatch: AppDispatch = useDispatch();
+  const prompt = item?.media || '';
   const handleSelectDestination = (provider: 'mammouth' | 'comfyui', comfyModelType?: GenerationOptions['comfyModelType']) => {
     if (provider === 'mammouth') {
       dispatch(updateOptions({ provider, geminiPrompt: prompt, geminiMode: 't2i' }));
@@ -341,6 +344,20 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
     }
     dispatch(setGenerationMode('t2i'));
     dispatch(setActiveTab('image-generator'));
+    onDestinationSelected();
+    onClose();
+  };
+  const handleUseForMagicSoup = () => {
+    if (!item || !['image', 'background', 'subject'].includes(item.promptType || '')) return;
+    const promptUpdate = item.promptType === 'background'
+      ? { bgPrompt: prompt }
+      : item.promptType === 'subject'
+        ? { subjectPrompt: prompt }
+        : { prompt };
+    dispatch(updatePromptGenState(promptUpdate));
+    dispatch(setActivePromptToolsSubTab('prompt-soup'));
+    dispatch(setActiveTab('prompt-generator'));
+    onDestinationSelected();
     onClose();
   };
   useEffect(() => {
@@ -378,6 +395,21 @@ const PromptDestinationPickerModal: React.FC<PromptDestinationPickerModalProps> 
         </div>
         <p className="text-sm text-text-secondary mb-6">Where would you like to use this generated prompt?</p>
         <div className="space-y-6">
+          {item && ['image', 'background', 'subject'].includes(item.promptType || '') && (
+            <div>
+              <h3 className="text-lg font-semibold text-text-primary mb-3">Prompt Tools</h3>
+              <button
+                onClick={handleUseForMagicSoup}
+                className="flex w-full items-center gap-4 rounded-lg border border-violet-400/40 bg-violet-500/10 p-4 text-left transition-colors hover:bg-violet-500/20"
+              >
+                <GenerateIcon className="h-8 w-8 flex-shrink-0 text-violet-300" />
+                <div>
+                  <p className="font-bold text-violet-200">Use for Magic Soup</p>
+                  <p className="text-xs text-text-secondary">Load as the {item.promptType === 'image' ? 'main prompt' : item.promptType} ingredient and open Magical Prompt Soup.</p>
+                </div>
+              </button>
+            </div>
+          )}
           <div>
             <h3 className="text-lg font-semibold text-text-primary mb-3">Mammouth AI</h3>
             <button
@@ -449,7 +481,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
   }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, confirmText: 'Confirm' });
 
   const [isPickerOpen, setPickerOpen] = useState(false);
-  const [promptToUse, setPromptToUse] = useState('');
+  const [promptToUse, setPromptToUse] = useState<LibraryItem | null>(null);
   const [soupPromptToLink, setSoupPromptToLink] = useState<LibraryItem | null>(null);
 
   const handleLinkSoupResult = async (result: LibraryItem) => {
@@ -596,7 +628,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
               <div className="flex-shrink-0 text-text-secondary">{getCategoryIcon(item.mediaType, "w-5 h-5")}</div>
               <div className="flex-grow truncate"><p className="font-medium text-text-primary truncate text-sm">{item.name}</p><p className="text-xs text-text-muted">Created: {new Date(item.id).toLocaleDateString()}</p></div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={(e) => { e.stopPropagation(); if (item.mediaType === 'prompt') { setPromptToUse(item.media); setPickerOpen(true); } else { onLoadItem(item); } }} title={item.mediaType === 'prompt' ? 'Use Prompt' : 'Load in Generator'} className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent">{item.mediaType === 'prompt' ? <SendIcon className="w-4 h-4" /> : <LoadIcon className="w-4 h-4" />}</button>
+                <button onClick={(e) => { e.stopPropagation(); if (item.mediaType === 'prompt') { setPromptToUse(item); setPickerOpen(true); } else { onLoadItem(item); } }} title={item.mediaType === 'prompt' ? 'Use Prompt' : 'Load in Generator'} className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent">{item.mediaType === 'prompt' ? <SendIcon className="w-4 h-4" /> : <LoadIcon className="w-4 h-4" />}</button>
                 <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name || `Item #${item.id}`); }} disabled={deletingId === item.id} title="Delete Item" className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-danger">{deletingId === item.id ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : <TrashIcon className="w-4 h-4" />}</button>
               </div>
             </div>
@@ -824,7 +856,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                     )}
                     {selectedItemModal.mediaType === 'prompt' ? (
                       <>
-                        <button onClick={() => { setPromptToUse(selectedItemModal.media); setPickerOpen(true); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><SendIcon className="w-5 h-5" /> Use</button>
+                        <button onClick={() => { setPromptToUse(selectedItemModal); setPickerOpen(true); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><SendIcon className="w-5 h-5" /> Use</button>
                         {selectedItemModal.promptType === 'soup' && <button type="button" onClick={() => setSoupPromptToLink(selectedItemModal)} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-primary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"><PhotographIcon className="w-5 h-5" /> {selectedItemModal.linkedResultId ? 'Change Result' : 'Link Result'}</button>}
                       </>
                     ) : (
@@ -838,7 +870,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
           </div>
         </div>
       )}
-      <PromptDestinationPickerModal isOpen={isPickerOpen} onClose={() => setPickerOpen(false)} prompt={promptToUse} />
+      <PromptDestinationPickerModal isOpen={isPickerOpen} onClose={() => setPickerOpen(false)} item={promptToUse} onDestinationSelected={() => setSelectedItemModal(null)} />
       <LibraryPickerModal isOpen={!!soupPromptToLink} onClose={() => setSoupPromptToLink(null)} onSelectItem={handleLinkSoupResult} filter={['image', 'character', 'logo', 'banner', 'album-cover']} />
     </>
   );

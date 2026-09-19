@@ -831,6 +831,16 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                         <div className="space-y-6 bg-bg-tertiary p-6 rounded-lg border border-border-primary/50">
                             {renderAnalysisControls(soupModelType, setSoupModelType)}
+                            {(prompt || bgPrompt || subjectPrompt) && (
+                                <div>
+                                    <p className="mb-2 text-sm font-medium text-text-secondary">Soup Ingredients</p>
+                                    <div className="space-y-2 rounded-md border border-border-primary bg-bg-primary p-3 text-xs">
+                                        {prompt && <p className="whitespace-pre-wrap text-accent"><span className="font-bold">Main:</span> {prompt}</p>}
+                                        {bgPrompt && <p className="whitespace-pre-wrap text-highlight-green"><span className="font-bold">Background:</span> {bgPrompt}</p>}
+                                        {subjectPrompt && <p className="whitespace-pre-wrap text-highlight-yellow"><span className="font-bold">Subject:</span> {subjectPrompt}</p>}
+                                    </div>
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-sm font-medium text-text-secondary">Creativity: {soupCreativity}</label>
                                 <input type="range" min="0" max="1" step="0.1" value={soupCreativity} onChange={(e) => setSoupCreativity(parseFloat(e.target.value))} disabled={isSoupLoading} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" />

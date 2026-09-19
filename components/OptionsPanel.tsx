@@ -999,6 +999,30 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             });
         };
         const enabledOutputCount = getEnabledCharacterAngles(options).length;
+        const randomizeAllAngleSettings = () => {
+            const currentSettings = options.comfyCharacterAngleSettings || {};
+            const randomValue = (values: string[]) => values[Math.floor(Math.random() * values.length)];
+            updateOptions({
+                comfyCharacterAngleSettings: Object.fromEntries(CHARACTER_ANGLES.map(({ id }) => [id, {
+                    ...DEFAULT_CHARACTER_ANGLE_SETTINGS[id],
+                    ...currentSettings[id],
+                    angle: randomValue(CHARACTER_ANGLE_OPTIONS),
+                    pose: randomValue(CHARACTER_POSE_OPTIONS),
+                    expression: randomValue(CHARACTER_EXPRESSION_OPTIONS),
+                }])),
+            });
+        };
+        const toggleAllAngleOutputs = () => {
+            const currentSettings = options.comfyCharacterAngleSettings || {};
+            const enabled = enabledOutputCount !== CHARACTER_ANGLES.length;
+            updateOptions({
+                comfyCharacterAngleSettings: Object.fromEntries(CHARACTER_ANGLES.map(({ id }) => [id, {
+                    ...DEFAULT_CHARACTER_ANGLE_SETTINGS[id],
+                    ...currentSettings[id],
+                    enabled,
+                }])),
+            });
+        };
         const isFlux2Character = options.comfyCharacterMode === 'flux2';
         const backgroundOptions = isFlux2Character ? BACKGROUND_OPTIONS : BACKGROUND_OPTIONS.filter(option => option.value !== 'image');
         const clothingOptions = [
@@ -1010,9 +1034,17 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         return <>
             <OptionSection title="Automatic Multi-Angle Set">
-                <div className="flex items-center justify-between gap-3 text-sm text-text-secondary">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-text-secondary">
                     <p>Choose a suggestion or type your own value. Leave a field empty to use Default (nothing).</p>
-                    <span className="shrink-0 font-semibold text-accent">{enabledOutputCount}/8 enabled</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="shrink-0 font-semibold text-accent">{enabledOutputCount}/8 enabled</span>
+                        <button type="button" onClick={randomizeAllAngleSettings} disabled={isDisabled} className="inline-flex h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
+                            <DiceIcon className="h-4 w-4" />Randomize all
+                        </button>
+                        <button type="button" onClick={toggleAllAngleOutputs} disabled={isDisabled} className="inline-flex h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
+                            <CheckIcon className="h-4 w-4" />{enabledOutputCount === CHARACTER_ANGLES.length ? 'Deselect all' : 'Select all'}
+                        </button>
+                    </div>
                 </div>
                 <div className="space-y-3">
                     {CHARACTER_ANGLES.map((angle, index) => {

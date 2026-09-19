@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     CIVITAI_FAMILIES,
     CIVITAI_SORTS,
@@ -60,6 +60,36 @@ const getNextCursor = (metadata?: { nextCursor?: string; nextPage?: string }): s
     }
 };
 
+const getOwnedCivitaiItems = (model: CivitaiModel, inventoryItems: CivitaiInventoryItem[]) => {
+    const modelHashes = new Set(model.modelVersions
+        .flatMap(version => version.files || [])
+        .map(file => file.hashes?.SHA256?.toUpperCase())
+        .filter(Boolean));
+    return inventoryItems.filter(item => item.modelId === model.id || (item.sha256 && modelHashes.has(item.sha256.toUpperCase())));
+};
+
+const normalizeModelFileName = (value: string) => value.replace(/\\/g, '/').split('/').pop()?.toLowerCase() || '';
+
+const findOwnedCivitaiFile = (model: CivitaiModel, version: CivitaiModelVersion, file: CivitaiFile, inventoryItems: CivitaiInventoryItem[]) => {
+    const sha256 = file.hashes?.SHA256?.toUpperCase();
+    if (sha256) {
+        const hashMatch = inventoryItems.find(item => item.sha256?.toUpperCase() === sha256);
+        if (hashMatch) return hashMatch;
+    }
+    const fileName = normalizeModelFileName(file.name);
+    return inventoryItems.find(item => item.modelId === model.id
+        && item.installedVersionId === version.id
+        && normalizeModelFileName(item.fileName) === fileName);
+};
+
+const isCivitaiModelFullyOwned = (model: CivitaiModel, inventoryItems: CivitaiInventoryItem[]) => {
+    const downloadableFiles = model.modelVersions.flatMap(version => version.files
+        .filter(file => file.downloadUrl && file.type !== 'Config')
+        .map(file => ({ version, file })));
+    return downloadableFiles.length > 0
+        && downloadableFiles.every(({ version, file }) => Boolean(findOwnedCivitaiFile(model, version, file, inventoryItems)));
+};
+
 const ModelCard: React.FC<{
     model: CivitaiModel;
     provider: CivitaiProvider;
@@ -71,8 +101,7 @@ const ModelCard: React.FC<{
     onCancel: () => void;
 }> = ({ model, provider, family, inventoryItems, download, onDownload, onOpenOwned, onCancel }) => {
     const versions = model.modelVersions.filter(version => version.files?.length);
-    const modelHashes = new Set(versions.flatMap(version => version.files).map(file => file.hashes?.SHA256?.toUpperCase()).filter(Boolean));
-    const ownedItems = inventoryItems.filter(item => item.modelId === model.id || modelHashes.has(item.sha256.toUpperCase()));
+    const ownedItems = getOwnedCivitaiItems(model, inventoryItems);
     const updateItem = ownedItems.find(item => item.hasUpdate);
     const preferredVersionId = updateItem?.latestVersionId;
     const [versionId, setVersionId] = useState(() => versions.some(version => version.id === preferredVersionId) ? preferredVersionId || 0 : versions[0]?.id || 0);
@@ -81,7 +110,9 @@ const ModelCard: React.FC<{
     const primaryFile = downloadableFiles.find(file => file.primary) || downloadableFiles[0];
     const [fileId, setFileId] = useState(primaryFile?.id || 0);
     const selectedFile = downloadableFiles.find(file => file.id === fileId) || primaryFile;
-    const ownedItem = ownedItems.find(item => item.installedVersionId === selectedVersion?.id) || ownedItems[0];
+    const ownedItem = selectedVersion && selectedFile
+        ? findOwnedCivitaiFile(model, selectedVersion, selectedFile, inventoryItems)
+        : undefined;
     const [destination, setDestination] = useState<CivitaiDestination>(() => getDefaultDestination(model, selectedVersion, family));
     const modelFolder = getCivitaiDestinationFolder(model, selectedVersion, family, destination);
     const preview = getPreviewMedia(model);
@@ -110,9 +141,9 @@ const ModelCard: React.FC<{
                 <span className={`absolute left-3 top-3 px-2 py-1 text-[11px] font-bold rounded ${model.type.toUpperCase() === 'LORA' ? 'bg-amber-500 text-black' : 'bg-black/75 text-white'}`}>
                     {model.type}
                 </span>
-                {ownedItems.length > 0 && (
+                {(ownedItem || ownedItems.length > 0) && (
                     <span className={`absolute right-3 top-3 px-2 py-1 text-[11px] font-bold rounded text-black ${updateItem ? 'bg-amber-400' : 'bg-emerald-400'}`}>
-                        {updateItem ? 'Update available' : 'Owned'}
+                        {ownedItem ? 'Owned' : updateItem ? 'Update available' : 'Partially owned'}
                     </span>
                 )}
             </div>
@@ -199,6 +230,7 @@ export const CivitaiPanel: React.FC = React.memo(() => {
     const [family, setFamily] = useState<CivitaiFamily>('all');
     const [modelType, setModelType] = useState<'all' | CivitaiModelType>('all');
     const [sort, setSort] = useState<CivitaiSort>('Highest Rated');
+    const [hideOwned, setHideOwned] = useState(false);
     const [models, setModels] = useState<CivitaiModel[]>([]);
     const [nextCursor, setNextCursor] = useState<string>();
     const [isSearching, setIsSearching] = useState(false);
@@ -472,6 +504,11 @@ export const CivitaiPanel: React.FC = React.memo(() => {
     }, [provider]);
 
     const providerColor = provider === 'red' ? 'red' : 'blue';
+    const visibleModels = useMemo(
+        () => hideOwned ? models.filter(model => !isCivitaiModelFullyOwned(model, inventory.items)) : models,
+        [hideOwned, inventory.items, models],
+    );
+    const hiddenOwnedCount = models.length - visibleModels.length;
 
     return (
         <div className="space-y-6 pb-10">
@@ -534,13 +571,21 @@ export const CivitaiPanel: React.FC = React.memo(() => {
                     <MenuSelect value={family} onChange={setFamily} ariaLabel="Civitai family" options={CIVITAI_FAMILIES.map(item => ({ value: item.id, label: item.label }))} />
                     <MenuSelect value={modelType} onChange={setModelType} ariaLabel="Civitai model type" options={[{ value: 'all', label: 'Checkpoints + LoRAs' }, { value: 'Checkpoint', label: 'Checkpoints' }, { value: 'LORA', label: 'LoRAs' }]} />
                     <MenuSelect value={sort} onChange={setSort} ariaLabel="Sort models" options={CIVITAI_SORTS.map(item => ({ value: item.value, label: item.label }))} />
+                    <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 py-2.5 text-sm font-semibold text-text-secondary">
+                        <input type="checkbox" checked={hideOwned} onChange={event => setHideOwned(event.target.checked)} className="h-4 w-4 accent-accent" />
+                        Hide models already owned{hiddenOwnedCount > 0 ? ` (${hiddenOwnedCount})` : ''}
+                    </label>
                     <button type="submit" disabled={isSearching} className={`px-5 py-2.5 rounded-md text-white font-bold disabled:opacity-60 md:col-span-2 ${provider === 'red' ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'}`}>{isSearching ? 'Searching…' : 'Search'}</button>
                 </form>
             </section>
 
-            {models.length > 0 ? (
+            {visibleModels.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {models.map(model => <ModelCard key={model.id} model={model} provider={provider} family={family} inventoryItems={inventory.items} download={download} onDownload={startDownload} onOpenOwned={openInventoryItem} onCancel={cancelDownload} />)}
+                    {visibleModels.map(model => <ModelCard key={model.id} model={model} provider={provider} family={family} inventoryItems={inventory.items} download={download} onDownload={startDownload} onOpenOwned={openInventoryItem} onCancel={cancelDownload} />)}
+                </div>
+            ) : models.length > 0 && hideOwned ? (
+                <div className="py-16 text-center border-y border-border-primary">
+                    <p className="text-text-secondary">All results on this page are already in your library.</p>
                 </div>
             ) : !isSearching && !error ? (
                 <div className="py-16 text-center border-y border-border-primary">

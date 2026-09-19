@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { CivitaiDestination, CivitaiFamily, CivitaiInventoryItem, CivitaiModelFolder } from '../services/civitaiService';
 import { formatModelSize } from '../services/civitaiService';
 import { MenuSelect } from './MenuSelect';
@@ -145,14 +145,27 @@ const normalizeFileName = (value: string) => {
     }
 };
 
-const normalizeArchiveUrl = (value?: string) => {
-    if (!value) return '';
-    try {
-        const url = new URL(value, 'https://civitaiarchive.com');
-        return `${url.hostname.replace(/^www\./, '')}${url.pathname.replace(/\/$/, '')}`.toLowerCase();
-    } catch {
-        return value.toLowerCase().replace(/[?#].*$/, '').replace(/\/$/, '');
+const findOwnedArchiveItem = (item: ArchiveSearchItem, inventoryItems: CivitaiInventoryItem[]) => {
+    const sha256 = item.sha256?.toUpperCase();
+    if (sha256) {
+        const hashMatch = inventoryItems.find(candidate => candidate.sha256?.toUpperCase() === sha256);
+        if (hashMatch) return hashMatch;
     }
+    return item.versionId == null ? undefined : inventoryItems.find(candidate =>
+        candidate.installedVersionId != null
+        && String(candidate.installedVersionId) === String(item.versionId));
+};
+
+const findOwnedArchiveFile = (details: ArchiveDetails, file: ArchiveDetails['files'][number], inventoryItems: CivitaiInventoryItem[]) => {
+    const sha256 = file.sha256?.toUpperCase();
+    if (sha256) {
+        const hashMatch = inventoryItems.find(candidate => candidate.sha256?.toUpperCase() === sha256);
+        if (hashMatch) return hashMatch;
+    }
+    const fileNames = new Set([file.name, ...file.mirrors.map(mirror => mirror.fileName)].map(normalizeFileName).filter(Boolean));
+    return inventoryItems.find(candidate => candidate.installedVersionId === details.versionId
+        && (fileNames.has(normalizeFileName(candidate.fileName))
+            || Boolean(candidate.archiveInfo?.mirrors.some(mirror => fileNames.has(normalizeFileName(mirror.fileName))))));
 };
 
 const ArchiveModelCard: React.FC<{
@@ -172,20 +185,9 @@ const ArchiveModelCard: React.FC<{
     const selectedFile = details?.files.find(file => file.id === fileId) || details?.files.find(file => file.primary) || details?.files[0];
     const selectedMirror = selectedFile?.mirrors.find(mirror => mirror.url === mirrorUrl) || selectedFile?.mirrors[0];
     const folder = getArchiveFolder(family, destination, `${details?.baseModel || item.baseModel || ''} ${details?.versionName || ''} ${item.name}`);
-    const hashes = new Set([item.sha256, ...(details?.files.map(file => file.sha256) || [])].filter(Boolean).map(hash => hash!.toUpperCase()));
-    const fileNames = new Set([
-        ...(details?.files.map(file => file.name) || []),
-        ...(details?.files.flatMap(file => file.mirrors.map(mirror => mirror.fileName)) || []),
-    ].map(normalizeFileName).filter(Boolean));
-    const archiveUrl = normalizeArchiveUrl(item.url);
-    const modelIds = new Set([item.modelId, details?.modelId].filter(value => value != null).map(String));
-    const versionIds = new Set([item.versionId, details?.versionId].filter(value => value != null).map(String));
-    const ownedItem = inventoryItems.find(candidate => candidate.sha256 && hashes.has(candidate.sha256.toUpperCase()))
-        || inventoryItems.find(candidate => candidate.modelId != null && modelIds.has(String(candidate.modelId)))
-        || inventoryItems.find(candidate => candidate.installedVersionId != null && versionIds.has(String(candidate.installedVersionId)))
-        || inventoryItems.find(candidate => normalizeArchiveUrl(candidate.archiveMirrorUrl) === archiveUrl)
-        || inventoryItems.find(candidate => fileNames.has(normalizeFileName(candidate.fileName)))
-        || inventoryItems.find(candidate => candidate.archiveInfo?.mirrors.some(mirror => fileNames.has(normalizeFileName(mirror.fileName))));
+    const ownedItem = details && selectedFile
+        ? findOwnedArchiveFile(details, selectedFile, inventoryItems)
+        : findOwnedArchiveItem(item, inventoryItems);
     const active = download?.status === 'downloading' && download.fileName === selectedMirror?.fileName;
     const progress = download?.totalBytes ? Math.min(100, Math.round(download.receivedBytes / download.totalBytes * 100)) : 0;
 
@@ -272,6 +274,7 @@ export const ArchiveCivitPanel: React.FC<ArchiveCivitPanelProps> = ({ inventoryI
     const [period, setPeriod] = useState<OptionValue<typeof PERIOD_OPTIONS>>('all');
     const [rating, setRating] = useState<OptionValue<typeof RATING_OPTIONS>>('all');
     const [status, setStatus] = useState<OptionValue<typeof STATUS_OPTIONS>>('all');
+    const [hideOwned, setHideOwned] = useState(false);
     const [result, setResult] = useState<ArchiveSearchResult | null>(null);
     const [isSearching, setIsSearching] = useState(false);
     const [error, setError] = useState('');
@@ -350,7 +353,14 @@ export const ArchiveCivitPanel: React.FC<ArchiveCivitPanelProps> = ({ inventoryI
         setPeriod('all');
         setRating('all');
         setStatus('all');
+        setHideOwned(false);
     };
+
+    const visibleItems = useMemo(
+        () => result?.items.filter(item => !hideOwned || !findOwnedArchiveItem(item, inventoryItems)) || [],
+        [hideOwned, inventoryItems, result],
+    );
+    const hiddenOwnedCount = (result?.items.length || 0) - visibleItems.length;
 
     return (
         <section className="space-y-5">
@@ -374,22 +384,25 @@ export const ArchiveCivitPanel: React.FC<ArchiveCivitPanelProps> = ({ inventoryI
                     <MenuSelect value={status} options={STATUS_OPTIONS} onChange={setStatus} ariaLabel="Availability" />
                 </div>
                 <div className="flex items-center justify-between gap-3 text-xs text-text-muted">
-                    <span>Search without text to browse the catalog using these filters.</span>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-text-secondary">
+                        <input type="checkbox" checked={hideOwned} onChange={event => setHideOwned(event.target.checked)} className="h-4 w-4 accent-emerald-500" />
+                        Hide models already owned{hiddenOwnedCount > 0 ? ` (${hiddenOwnedCount})` : ''}
+                    </label>
                     <button type="button" onClick={resetFilters} className="shrink-0 px-3 py-1.5 rounded-md border border-border-primary hover:bg-bg-tertiary text-text-secondary">Reset filters</button>
                 </div>
             </form>
             {error && <div className="rounded-md border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>}
             {isSearching ? <div className="grid min-h-64 place-items-center border-y border-border-primary"><div className="flex items-center gap-3 text-text-secondary"><SpinnerIcon className="h-6 w-6 animate-spin" /><span>Searching CivArchive...</span></div></div>
-                : result?.items.length ? <>
-                    <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-text-primary">{result.total.toLocaleString()} results</p><p className="text-xs text-text-muted">Page {result.page} of {Math.max(1, Math.ceil(result.total / 50))}</p></div>
+                : result && visibleItems.length > 0 ? <>
+                    <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-text-primary">{result.total.toLocaleString()} results{hiddenOwnedCount > 0 ? ` · ${hiddenOwnedCount} owned hidden on this page` : ''}</p><p className="text-xs text-text-muted">Page {result.page} of {Math.max(1, Math.ceil(result.total / 50))}</p></div>
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                        {result.items.map(item => <ArchiveModelCard key={item.id} item={item} inventoryItems={inventoryItems} download={download} onDownload={startDownload} onOpenOwned={onOpenOwned} />)}
+                        {visibleItems.map(item => <ArchiveModelCard key={item.id} item={item} inventoryItems={inventoryItems} download={download} onDownload={startDownload} onOpenOwned={onOpenOwned} />)}
                     </div>
                     <div className="flex items-center justify-center gap-3">
                         <button type="button" onClick={() => search(result.page - 1)} disabled={result.page <= 1 || isSearching} className="rounded-md border border-border-primary px-4 py-2 text-sm font-bold text-text-secondary hover:bg-bg-tertiary disabled:opacity-40">Previous</button>
                         <button type="button" onClick={() => search(result.page + 1)} disabled={result.page >= Math.ceil(result.total / 50) || isSearching} className="rounded-md border border-border-primary px-4 py-2 text-sm font-bold text-text-secondary hover:bg-bg-tertiary disabled:opacity-40">Next</button>
                     </div>
-                </> : result ? <div className="border-y border-border-primary py-12 text-center text-sm text-text-muted">No matching result found.</div>
+                </> : result ? <div className="border-y border-border-primary py-12 text-center text-sm text-text-muted">{hideOwned && result.items.length > 0 ? 'All results on this page are already in your library.' : 'No matching result found.'}</div>
                     : <div className="border-y border-border-primary py-12 text-center text-sm text-text-muted">Choose filters and search to browse CivArchive models directly on this page.</div>}
         </section>
     );
