@@ -1,4 +1,4 @@
-import type { GenerationOptions } from '../types';
+import type { Flux2ReferenceRole, GenerationOptions } from '../types';
 import { fileToDataUrl } from '../utils/imageUtils';
 import { buildPromptSegments, decodePose, getRandomPose } from '../utils/promptBuilder';
 
@@ -218,6 +218,26 @@ export const generateMammouthText = async (
             : '';
     if (!text.trim()) throw new Error('Mammouth returned no text response.');
     return { text: text.trim(), usageMetadata: toUsageMetadata(payload.usage) };
+};
+
+const FLUX2_REFERENCE_ANALYSIS: Record<Flux2ReferenceRole, string> = {
+    identity: 'Describe only the person identity to preserve: facial features, hair, apparent age, body proportions, and other defining physical traits.',
+    outfit: 'Describe only the outfit to copy: garment type, colors, material, pattern, cut, and visible accessories.',
+    background: 'Describe only the background to copy: environment, architecture, important objects, colors, and lighting.',
+    pose: 'Treat the image as a pose mannequin and describe only the human pose to copy. Ignore the mannequin appearance, base, clothing, colors, and visual style. Precisely state head direction, torso angle, left and right arm and hand placement, left and right leg and foot placement, body orientation, and weight distribution.',
+    style: 'Describe only the visual style to copy: medium, rendering treatment, palette, texture, and lighting.',
+    custom: 'Describe the single most distinctive visible feature that would be useful to copy into another image.',
+};
+
+export const generateFlux2ReferenceDescription = async (
+    image: File,
+    role: Flux2ReferenceRole,
+): Promise<string> => {
+    const result = await generateMammouthText(
+        `${FLUX2_REFERENCE_ANALYSIS[role]} Return exactly one concise sentence with no heading, bullets, quotation marks, or commentary.`,
+        [image],
+    );
+    return result.text.replace(/^["']|["']$/g, '').trim();
 };
 
 export const generateMammouthImages = async (

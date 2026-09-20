@@ -17,6 +17,7 @@ export type Quality = 'Standard' | 'High' | 'Ultra High';
 export interface GeneratePhotoResult {
   imageBase64: string;
   responseText: string;
+  seed?: number;
   usageMetadata?: {
     promptTokenCount: number;
     candidatesTokenCount: number;
@@ -34,6 +35,7 @@ export interface Persona {
 export interface GeneratedImage {
   id: string;
   base64: string | null;
+  seed?: number;
   status: 'generating' | 'success' | 'error';
   error?: string;
   saveStatus: 'idle' | 'saving' | 'saved';

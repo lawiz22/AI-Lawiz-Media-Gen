@@ -9,7 +9,7 @@ import {
   DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon,
   BannerIcon, AlbumCoverIcon, TrashIcon, LoadIcon, FileExportIcon, UploadIconSimple, GoogleDriveIcon,
   PoseIcon, FontIcon, Squares2X2Icon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, WarningIcon,
-  SendIcon, WorkflowIcon, GenerateIcon, PastForwardIcon, RefreshIcon, MicrophoneIcon
+  SendIcon, WorkflowIcon, GenerateIcon, PastForwardIcon, RefreshIcon, MicrophoneIcon, GroupPhotoFusionIcon
 } from './icons';
 import { createPaletteThumbnail, createVideoPlaceholderThumbnail, normalizeAudioDataUrl } from '../utils/imageUtils';
 import { exportLibraryAsJson } from '../services/libraryService';
@@ -112,6 +112,8 @@ const getCategoryIcon = (mediaType: LibraryItemType, className: string = "w-4 h-
     case 'color-palette': return <PaletteIcon {...props} />;
     case 'pose': return <PoseIcon {...props} />;
     case 'font': return <FontIcon {...props} />;
+    case 'group-fusion': return <GroupPhotoFusionIcon {...props} />;
+    case 'swap-anything': return <RefreshIcon {...props} />;
     case 'past-forward-photo': return <PastForwardIcon {...props} />;
     case 'preset': return <WorkflowIcon {...props} />;
     default: return null;
@@ -121,6 +123,8 @@ const getCategoryIcon = (mediaType: LibraryItemType, className: string = "w-4 h-
 const FILTER_BUTTONS: { id: LibraryItemType; label: string; icon: React.ReactElement }[] = [
   { id: 'image', label: 'Images', icon: <PhotographIcon className="w-5 h-5" /> },
   { id: 'character', label: 'Characters', icon: <CharacterIcon className="w-5 h-5" /> },
+  { id: 'group-fusion', label: 'Photo Fusion', icon: <GroupPhotoFusionIcon className="w-5 h-5" /> },
+  { id: 'swap-anything', label: 'Swap Anything', icon: <RefreshIcon className="w-5 h-5" /> },
   { id: 'past-forward-photo', label: 'Past Forward', icon: <PastForwardIcon className="w-5 h-5" /> },
   { id: 'video', label: 'Videos', icon: <VideoIcon className="w-5 h-5" /> },
   { id: 'audio-tts', label: 'Audio TTS', icon: <MicrophoneIcon className="w-5 h-5" /> },
@@ -174,7 +178,7 @@ const LoraDetail: React.FC<{ label: string; name?: string; strength?: number; en
 
 const renderOptionsDetails = (options?: GenerationOptions, mediaType?: LibraryItemType) => {
   if (!options) return <DetailItem label="Options" value="Not available" />;
-  const isImageType = mediaType === 'image' || mediaType === 'character' || mediaType === 'logo' || mediaType === 'banner' || mediaType === 'album-cover' || mediaType === 'clothes' || mediaType === 'object' || mediaType === 'extracted-frame' || mediaType === 'pose' || mediaType === 'font';
+  const isImageType = mediaType === 'image' || mediaType === 'character' || mediaType === 'logo' || mediaType === 'banner' || mediaType === 'album-cover' || mediaType === 'clothes' || mediaType === 'object' || mediaType === 'extracted-frame' || mediaType === 'pose' || mediaType === 'font' || mediaType === 'group-fusion' || mediaType === 'swap-anything';
   const comfyPositivePrompt = options.comfyModelType === 'flux2-simple'
     ? options.comfyFlux2Prompt
     : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw'
@@ -554,6 +558,22 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
       alert(message);
     }
   };
+  const handleExportSelected = async () => {
+    const selectedCategoryItems = items.filter(item => filter.includes(item.mediaType));
+    const linkedResultIds = new Set(selectedCategoryItems
+      .filter(item => item.mediaType === 'prompt' && item.linkedResultId != null)
+      .map(item => item.linkedResultId!));
+    const selectedItems = [...new Map([
+      ...selectedCategoryItems,
+      ...items.filter(item => linkedResultIds.has(item.id)),
+    ].map(item => [item.id, item])).values()];
+    try {
+      await exportLibraryAsJson(projectName, selectedItems);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown export error.';
+      alert(message);
+    }
+  };
   const handleClearLibrary = () => {
     setConfirmModal({
       isOpen: true, title: 'Clear Entire Library', message: 'Permanently delete ALL items?', confirmText: 'Clear All',
@@ -700,6 +720,9 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
             <input type="file" ref={fileInputRef} className="hidden" accept=".json,application/json" onChange={handleFileSelected} />
             <button onClick={handleExport} disabled={items.length === 0 || isImporting || isSyncing} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
               <FileExportIcon className="w-5 h-5" /> Export
+            </button>
+            <button onClick={handleExportSelected} disabled={filter.length === 0 || isImporting || isSyncing} title={filter.length === 0 ? 'Select one or more categories first' : 'Export selected categories and linked prompt images'} className="flex items-center gap-2 bg-accent text-accent-text font-semibold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50">
+              <FileExportIcon className="w-5 h-5" /> Export selected
             </button>
           </div>
         </div>

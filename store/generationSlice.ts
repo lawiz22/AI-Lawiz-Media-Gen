@@ -42,6 +42,23 @@ const initialOptions: GenerationOptions = {
   comfySampler: 'er_sde',
   comfyScheduler: 'beta',
 
+  // FLUX2 multi-reference edit defaults
+  comfyFlux2EditPrompt: '',
+  comfyFlux2EditUnet: 'flux-2-klein-4b-Q4_K_M.gguf',
+  comfyFlux2EditClip: 'qwen_3_4b.safetensors',
+  comfyFlux2EditVae: 'flux2-vae.safetensors',
+  comfyFlux2EditSteps: 4,
+  comfyFlux2EditCfg: 1,
+  comfyFlux2EditSampler: 'euler',
+  comfyFlux2EditMegapixels: 1,
+  comfyFlux2EditReferenceRoles: ['outfit', 'background', 'pose'],
+  comfyFlux2EditReferenceDescriptions: ['', '', ''],
+  comfyFlux2EditReferenceLibraryPrompts: ['', '', ''],
+  comfyFlux2EditUseCacheDit: false,
+  comfyFlux2EditCacheDitModelType: 'Auto',
+  comfyFlux2EditCacheDitWarmupSteps: 0,
+  comfyFlux2EditCacheDitSkipInterval: 0,
+
   // KREA2 Simple defaults
   comfyKreaPrompt: '',
   comfyKreaNegativePrompt: '',
@@ -92,7 +109,7 @@ const initialOptions: GenerationOptions = {
 
   // Qwen Image Edit defaults
   comfyQwenEditUnet: 'qwen_image_edit_2509_fp8_e4m3fn.safetensors',
-  comfyQwenEditClip: 'Qwen2.5-VL-7B-Instruct-Q6_K.gguf',
+  comfyQwenEditClip: 'qwen_2.5_vl_7b_fp8_scaled.safetensors',
   comfyQwenEditVae: 'qwen_image_vae.safetensors',
   comfyQwenEditShift: 2.5,
   comfyQwenEditMegapixels: 1,
@@ -313,6 +330,13 @@ const generationSlice = createSlice({
           nextOptions.comfyCfg = action.payload.comfyCfg ?? 1;
           nextOptions.comfySampler = action.payload.comfySampler ?? 'euler';
         }
+      } else if (action.payload.comfyModelType === 'flux2-edit') {
+        nextOptions.comfyFlux2EditUnet = action.payload.comfyFlux2EditUnet ?? 'flux-2-klein-4b-Q4_K_M.gguf';
+        nextOptions.comfyFlux2EditClip = action.payload.comfyFlux2EditClip ?? 'qwen_3_4b.safetensors';
+        nextOptions.comfyFlux2EditVae = action.payload.comfyFlux2EditVae ?? 'flux2-vae.safetensors';
+        nextOptions.comfyFlux2EditReferenceRoles = action.payload.comfyFlux2EditReferenceRoles ?? ['outfit', 'background', 'pose'];
+        nextOptions.comfyFlux2EditReferenceDescriptions = action.payload.comfyFlux2EditReferenceDescriptions ?? ['', '', ''];
+        nextOptions.comfyFlux2EditReferenceLibraryPrompts = action.payload.comfyFlux2EditReferenceLibraryPrompts ?? ['', '', ''];
       } else if (action.payload.comfyModelType === 'krea2-simple') {
         nextOptions.comfyKreaUnet = action.payload.comfyKreaUnet ?? 'krea2_raw_fp8_scaled.safetensors';
         nextOptions.comfyKreaClip = 'qwen3vl_4b_fp8_scaled.safetensors';
@@ -395,6 +419,10 @@ const generationSlice = createSlice({
         comfyPrompt: '',
         comfyFlux2Prompt: '',
         comfyFlux2NegativePrompt: '',
+        comfyFlux2EditPrompt: '',
+        comfyFlux2EditReferenceRoles: ['outfit', 'background', 'pose'],
+        comfyFlux2EditReferenceDescriptions: ['', '', ''],
+        comfyFlux2EditReferenceLibraryPrompts: ['', '', ''],
         comfyKreaPrompt: '',
         comfyKreaNegativePrompt: '',
         comfyPromptExampleSource: undefined,
@@ -497,9 +525,16 @@ export const selectIsReadyToGenerate = createSelector(
         ? activeOptions.comfyKreaPrompt
         : activeOptions.comfyModelType === 'flux2-simple'
           ? activeOptions.comfyFlux2Prompt
+          : activeOptions.comfyModelType === 'flux2-edit'
+            ? activeOptions.comfyFlux2EditPrompt || activeOptions.comfyFlux2EditReferenceDescriptions?.find(description => description.trim())
           : activeOptions.comfyPrompt;
       const baseReady = !!isComfyUIConnected && !!activePrompt?.trim();
       if (isI2IMode) {
+        if (activeOptions.comfyModelType === 'flux2-edit') {
+          const usesPose = elementImages.some((_, index) => (activeOptions.comfyFlux2EditReferenceRoles?.[index] || ['outfit', 'background', 'pose'][index]) === 'pose');
+          if (usesPose && !app.comfyUIObjectInfo?.AIO_Preprocessor) return false;
+          if (activeOptions.comfyFlux2EditUseCacheDit && !app.comfyUIObjectInfo?.CacheDiT_Model_Optimizer) return false;
+        }
         return baseReady && !!sourceImage;
       }
       return baseReady;

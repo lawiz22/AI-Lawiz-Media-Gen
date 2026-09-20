@@ -285,11 +285,11 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
     }
 };
 
-export const exportLibraryAsJson = async (projectName: string): Promise<void> => {
+export const exportLibraryAsJson = async (projectName: string, selectedItems?: LibraryItem[]): Promise<void> => {
     try {
-        const items = await idbService.getLibraryItems();
+        const items = selectedItems || await idbService.getLibraryItems();
         if (items.length === 0) {
-            alert("Your library is empty. There is nothing to export.");
+            alert("There are no library items to export.");
             return;
         }
         const jsonParts: BlobPart[] = ['[\n'];
@@ -311,7 +311,7 @@ export const exportLibraryAsJson = async (projectName: string): Promise<void> =>
         const a = document.createElement('a');
         a.href = url;
         const sanitizedName = projectName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-        a.download = `${sanitizedName || 'library'}_backup.json`;
+        a.download = `${sanitizedName || 'library'}_${selectedItems ? 'selected' : 'backup'}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

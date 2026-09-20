@@ -21,7 +21,7 @@ const MODEL_FAMILIES: ModelFamily[] = [
     { id: 'flux', label: 'FLUX', workflows: { t2i: 'flux' } },
     { id: 'qwen', label: 'QWEN', workflows: { t2i: 'qwen-t2i-gguf', i2i: 'qwen-edit' } },
     { id: 'z-image', label: 'Z-Image', workflows: { t2i: 'z-image' } },
-    { id: 'flux2', label: 'FLUX2', workflows: { t2i: 'flux2-simple' } },
+    { id: 'flux2', label: 'FLUX2', workflows: { t2i: 'flux2-simple', i2i: 'flux2-edit' } },
     { id: 'krea2', label: 'KREA2', workflows: { t2i: 'krea2-simple' } },
 ];
 
@@ -253,7 +253,7 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
                         </button>
                         </>
                     )}
-                    {options.provider === 'comfyui' && activeModelFamily.id === 'flux2' && (
+                    {options.provider === 'comfyui' && activeModelFamily.id === 'flux2' && generationMode === 't2i' && (
                         <button
                             type="button"
                             onClick={() => switchComfyModel('flux2-simple')}

@@ -25,12 +25,25 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 
 - Text-to-image and image-to-image generation through Mammouth AI or ComfyUI.
 - Local workflows for SD 1.5, SDXL, Flux, FLUX2 Simple, Qwen Image, Qwen Edit, Z-Image, KREA2 Simple, KREA2 RAW, Nunchaku Flux, Flux Krea, and face detailing.
+- Qwen image-to-image editing with multiple source references passed independently to ComfyUI.
+- FLUX2 Edit with a primary source image and role-based references for identity, outfit, background, pose, style, or custom instructions.
+- Import the FLUX2 source and reference images from the Library, retain saved Library prompts, and generate role-aware reference hints through Mammouth AI. Pose references are analyzed directly for accurate pose guidance.
 - Adjustable checkpoints, UNets, CLIP models, VAEs, samplers, schedulers, seeds, dimensions, and LoRA chains.
 - Refine mode with source-image denoise control.
 - Character generation with pose, clothing, background, and multi-angle controls.
 - SAM3.1-guided Swap Anything with destination/donor images, editable target regions, optional LoRAs, and FLUX2 sampling.
 - Inpainting, composition, generated masks, and reusable source elements.
 - Exportable ComfyUI workflows and reusable generation presets.
+
+### Photo Fusion
+
+- Fuse two to four subject portraits with either local ComfyUI FLUX2 or Mammouth AI; FLUX2 is selected by default.
+- Preserve each uploaded person as a distinct identity with explicit facial-feature and exact-subject-count instructions.
+- Add an optional background reference while retaining personas, scenarios, poses, quality controls, and one to four output images.
+- Configure the FLUX2 model, CLIP, VAE, megapixels, sampler, steps, CFG, seed behavior, and optional CacheDiT acceleration.
+- Retry individual results, inspect debug information, download all outputs as a ZIP, or save selected results to the Library.
+
+<!-- ![FLUX2 Photo Fusion with multiple identities and advanced controls](assets/screenshots/09-photo-fusion.png) -->
 
 ### Local Models and LoRAs
 
@@ -63,7 +76,7 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 - Creative Magic Soup generation through Mammouth AI or Ollama, with adjustable creativity and source-color attribution.
 - Clothes, subject, object, background, pose, mannequin, and font extraction.
 - MediaPipe pose detection with ControlNet-compatible output.
-- Group photo fusion and PastForward transformations.
+- PastForward photo transformations.
 - Logo, banner, album-cover, and theme generation.
 - Video frame extraction, palette extraction, image resize, and crop tools.
 - Record a selected microphone, computer output audio, or both; export WAV audio and save it with an optional photo as a reusable voice reference.
@@ -74,12 +87,13 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 - Persistent local media library backed by IndexedDB.
 - Save source media, results, prompts, seeds, and generation settings.
 - Search, filter, import, export, reuse, and send assets between tools.
+- Organize Photo Fusion, Swap Anything, and FLUX2 Edit assets in dedicated media categories.
 - Store named voice references and character photos for TTS and LTX reuse.
 - Optional Google Drive folder synchronization.
 
 ## Screenshots
 
-The README is prepared for eight screenshots covering the main workflows. Capture them at `1600×900` or wider, keep the application theme consistent, hide API keys and personal information, and save them under [`assets/screenshots`](assets/screenshots) using the filenames below.
+The README is prepared for nine screenshots covering the main workflows. Capture them at `1600×900` or wider, keep the application theme consistent, hide API keys and personal information, and save them under [`assets/screenshots`](assets/screenshots) using the filenames below.
 
 | File | Recommended capture |
 | --- | --- |
@@ -91,6 +105,7 @@ The README is prepared for eight screenshots covering the main workflows. Captur
 | `06-advanced-tts.png` | Advanced TTS multi-character dialogue with named voices, photos, and emotions |
 | `07-model-library.png` | Models/LoRAs inventory with previews, metadata, filters, and a selected model |
 | `08-voice-recorder-library.png` | Voice Recorder ready or recorded state beside a saved voice reference in the Library |
+| `09-photo-fusion.png` | Photo Fusion with FLUX2 selected, multiple subject references, advanced settings, and a fused result |
 
 The image tags are already placed throughout this document as comments. After adding a screenshot, remove the surrounding `<!--` and `-->` from its matching tag. See [`assets/screenshots/README.md`](assets/screenshots/README.md) for the capture checklist.
 
@@ -115,7 +130,9 @@ KREA2 Simple uses `Power Lora Loader (rgthree)` from rgthree-comfy with the KREA
 
 KREA2 RAW uses the supplied two-stage `ClownsharKSampler_Beta` graph with fixed sampler parameters, selectable KREA models and LoRAs, 29 source resolutions, and `1920x1088` as its default resolution.
 
-FLUX2 Simple uses ComfyUI-GGUF, `Power Lora Loader (rgthree)`, `Flux2Scheduler`, and `EmptyFlux2LatentImage` with the FLUX2 Klein GGUF diffusion model, FLUX2 CLIP encoder, FLUX2 VAE, and compatible LoRAs installed in their corresponding ComfyUI model folders. Character FLUX2 uses the same FLUX2 model stack with `ReferenceLatent` and two optional LoRAs. Its optional pose reference requires `AIO_Preprocessor` from ComfyUI ControlNet Aux, while optional acceleration requires `CacheDiT_Model_Optimizer` from ComfyUI-CacheDiT.
+FLUX2 Simple uses ComfyUI-GGUF, `Power Lora Loader (rgthree)`, `Flux2Scheduler`, and `EmptyFlux2LatentImage` with the FLUX2 Klein GGUF diffusion model, FLUX2 CLIP encoder, FLUX2 VAE, and compatible LoRAs installed in their corresponding ComfyUI model folders. FLUX2 Edit and FLUX2 Photo Fusion additionally use `LoadImage`, `ImageScaleToTotalPixels`, `GetImageSize`, `VAEEncode`, and `ReferenceLatent` to encode the source and each independent reference. Character FLUX2 uses the same FLUX2 model stack with `ReferenceLatent` and two optional LoRAs. Pose references require `AIO_Preprocessor` from ComfyUI ControlNet Aux, while optional acceleration requires `CacheDiT_Model_Optimizer` from ComfyUI-CacheDiT.
+
+Photo Fusion maps the first portrait to Picture 1 and each remaining portrait to a distinct FLUX2 identity reference. An optional background is encoded as a separate background reference. Uploaded ComfyUI input names are made unique so same-named Library items cannot overwrite one another during parallel multi-image uploads.
 
 The standard Flux workflow automatically enables `Flux\flux-turbo.safetensors` at strength `1`. Qwen T2I always uses 4 steps and CFG `1`, including when Library metadata contains different recommended values.
 
@@ -205,6 +222,8 @@ ComfyUI/models/loras
 ```
 
 FLUX2 and KREA2 diffusion models are indexed directly from `ComfyUI/models/diffusion_models`. Their LoRAs use the dedicated `ComfyUI/models/loras/flux2` and `ComfyUI/models/loras/krea` folders.
+
+For FLUX2 Photo Fusion, choose **FLUX2** or **Mammouth** from the Photo Fusion engine control. FLUX2 runs locally through the configured ComfyUI endpoint and exposes its advanced model and sampling settings. Mammouth sends each subject as a distinct multimodal input and exposes the hosted image-model selector instead.
 
 Model-specific metadata is stored beside the model where applicable. Keep these sidecars with the model when moving files outside the application's organizer.
 

@@ -179,7 +179,8 @@ export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | '
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = string;
-export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'krea2-simple' | 'krea2-raw';
+export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'flux2-edit' | 'krea2-simple' | 'krea2-raw';
+export type Flux2ReferenceRole = 'identity' | 'outfit' | 'background' | 'pose' | 'style' | 'custom';
 export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui' | 'mammouth';
 export type VideoProvider = 'gemini' | 'comfyui';
@@ -264,6 +265,23 @@ export interface GenerationOptions {
   comfyFlux2Lora5Strength?: number;
   comfyFlux2Lora6Name?: string;
   comfyFlux2Lora6Strength?: number;
+
+  // FLUX2 multi-reference image editing
+  comfyFlux2EditPrompt?: string;
+  comfyFlux2EditUnet?: string;
+  comfyFlux2EditClip?: string;
+  comfyFlux2EditVae?: string;
+  comfyFlux2EditSteps?: number;
+  comfyFlux2EditCfg?: number;
+  comfyFlux2EditSampler?: string;
+  comfyFlux2EditMegapixels?: number;
+  comfyFlux2EditReferenceRoles?: Flux2ReferenceRole[];
+  comfyFlux2EditReferenceDescriptions?: string[];
+  comfyFlux2EditReferenceLibraryPrompts?: string[];
+  comfyFlux2EditUseCacheDit?: boolean;
+  comfyFlux2EditCacheDitModelType?: string;
+  comfyFlux2EditCacheDitWarmupSteps?: number;
+  comfyFlux2EditCacheDitSkipInterval?: number;
 
   // KREA2 Simple
   comfyKreaPrompt?: string;
@@ -648,7 +666,7 @@ export interface ExtractorState {
   fontError: string | null;
 }
 
-export type LibraryItemType = 'image' | 'character' | 'video' | 'audio-tts' | 'tts-reference' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font' | 'group-fusion' | 'past-forward-photo' | 'preset';
+export type LibraryItemType = 'image' | 'character' | 'video' | 'audio-tts' | 'tts-reference' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font' | 'group-fusion' | 'swap-anything' | 'past-forward-photo' | 'preset';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
 
 export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';

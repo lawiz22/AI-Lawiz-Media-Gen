@@ -3,6 +3,7 @@ import { UploadedFile, Pose, Quality, GeneratedImage, DebugInfo } from '../group
 import { POSES } from '../groupPhotoFusion/constants';
 
 interface GroupPhotoFusionState {
+  provider: 'comfyui' | 'mammouth';
   uploadedFiles: UploadedFile[];
   backgroundFile: UploadedFile | null;
   selectedPose: Pose | null;
@@ -16,6 +17,7 @@ interface GroupPhotoFusionState {
 }
 
 const initialState: GroupPhotoFusionState = {
+  provider: 'comfyui',
   uploadedFiles: [],
   backgroundFile: null,
   selectedPose: POSES[0],
@@ -32,6 +34,12 @@ const groupPhotoFusionSlice = createSlice({
   name: 'groupPhotoFusion',
   initialState,
   reducers: {
+    setProvider: (state, action: PayloadAction<'comfyui' | 'mammouth'>) => {
+      state.provider = action.payload;
+      state.generatedImages = null;
+      state.error = null;
+      state.debugInfos = [];
+    },
     setUploadedFiles: (state, action: PayloadAction<UploadedFile[]>) => {
       state.uploadedFiles = action.payload;
       state.generatedImages = null;
@@ -110,6 +118,7 @@ const groupPhotoFusionSlice = createSlice({
 });
 
 export const {
+  setProvider,
     setUploadedFiles,
     setBackgroundFile,
     removeUploadedFile,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, ChangeEvent, useRef } from 'react';
 // Fix: Import `NunchakuAttention` type to be used for casting.
-import type { GenerationOptions, NunchakuAttention, ImageStyle } from '../types';
+import type { Flux2ReferenceRole, GenerationOptions, NunchakuAttention, ImageStyle } from '../types';
 import {
     BACKGROUND_OPTIONS,
     ASPECT_RATIO_OPTIONS,
@@ -11,7 +11,7 @@ import {
     MAX_IMAGES,
 } from '../constants';
 import { DEFAULT_GEMINI_IMAGE_MODEL, GEMINI_IMAGE_MODELS, generateBackgroundImagePreview, generateClothingPreview, generateMaskForImage, getGeminiModels } from '../services/geminiService';
-import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, getMammouthImageModels } from '../services/mammouthService';
+import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, generateFlux2ReferenceDescription, getMammouthImageModels } from '../services/mammouthService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
 import { saveToLibrary } from '../services/libraryService';
 import { findInventoryModel, getRecommendedSettingUpdates } from '../services/civitaiService';
@@ -192,6 +192,95 @@ const ElementImageManager: React.FC<{
     );
 };
 
+const FLUX2_REFERENCE_ROLES: Array<{ value: Flux2ReferenceRole; label: string }> = [
+    { value: 'outfit', label: 'Outfit / Dress' },
+    { value: 'background', label: 'Background' },
+    { value: 'pose', label: 'Pose' },
+    { value: 'style', label: 'Visual Style' },
+    { value: 'custom', label: 'Custom Instruction' },
+];
+
+const Flux2ReferenceManager: React.FC<{
+    images: File[];
+    setImages: (files: File[]) => void;
+    roles: Flux2ReferenceRole[];
+    descriptions: string[];
+    libraryPrompts: string[];
+    updateOptions: (options: Partial<GenerationOptions>) => void;
+    disabled: boolean;
+    onOpenLibrary: () => void;
+}> = ({ images, setImages, roles, descriptions, libraryPrompts, updateOptions, disabled, onOpenLibrary }) => {
+    const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+    const [analyzingIndex, setAnalyzingIndex] = useState<number | null>(null);
+    const [analysisErrors, setAnalysisErrors] = useState<Record<number, string>>({});
+
+    useEffect(() => {
+        const urls = images.map(file => URL.createObjectURL(file));
+        setPreviewUrls(urls);
+        return () => urls.forEach(url => URL.revokeObjectURL(url));
+    }, [images]);
+
+    const updateRole = (index: number, role: Flux2ReferenceRole) => {
+        const next = [...roles];
+        next[index] = role;
+        updateOptions({ comfyFlux2EditReferenceRoles: next });
+    };
+    const updateDescription = (index: number, description: string) => {
+        const next = [...descriptions];
+        next[index] = description;
+        updateOptions({ comfyFlux2EditReferenceDescriptions: next });
+    };
+    const generateDescription = async (index: number, role: Flux2ReferenceRole) => {
+        const savedPrompt = libraryPrompts[index]?.trim();
+        if (savedPrompt && role !== 'pose') {
+            updateDescription(index, savedPrompt);
+            setAnalysisErrors(errors => ({ ...errors, [index]: '' }));
+            return;
+        }
+        setAnalyzingIndex(index);
+        setAnalysisErrors(errors => ({ ...errors, [index]: '' }));
+        try {
+            updateDescription(index, await generateFlux2ReferenceDescription(images[index], role));
+        } catch (error) {
+            setAnalysisErrors(errors => ({ ...errors, [index]: error instanceof Error ? error.message : 'Unable to analyze this image.' }));
+        } finally {
+            setAnalyzingIndex(null);
+        }
+    };
+    const removeImage = (index: number) => {
+        setImages(images.filter((_, imageIndex) => imageIndex !== index));
+        updateOptions({
+            comfyFlux2EditReferenceRoles: roles.filter((_, roleIndex) => roleIndex !== index),
+            comfyFlux2EditReferenceDescriptions: descriptions.filter((_, descriptionIndex) => descriptionIndex !== index),
+            comfyFlux2EditReferenceLibraryPrompts: libraryPrompts.filter((_, promptIndex) => promptIndex !== index),
+        });
+    };
+
+    return <div className="space-y-3">
+        {images.map((file, index) => {
+            const role = roles[index] || (['outfit', 'background', 'pose'] as Flux2ReferenceRole[])[index] || 'custom';
+            return <div key={`${file.name}-${index}`} className="grid grid-cols-[72px_1fr_auto] gap-3 rounded-md border border-border-secondary bg-bg-primary/50 p-3">
+                {previewUrls[index] && <img src={previewUrls[index]} alt={`Picture ${index + 2}`} className="h-[72px] w-[72px] rounded-md object-cover" />}
+                <div className="min-w-0 space-y-2">
+                    <SelectInput label={`Picture ${index + 2} Role`} value={role} onChange={(event) => updateRole(index, event.target.value as Flux2ReferenceRole)} options={FLUX2_REFERENCE_ROLES} disabled={disabled} />
+                    <div className="grid grid-cols-[1fr_auto] items-end gap-2">
+                        <TextInput label="What should be copied?" value={descriptions[index] || ''} onChange={(event) => updateDescription(index, event.target.value)} placeholder={role === 'outfit' ? 'e.g., white satin dress with pearl buttons' : role === 'background' ? 'e.g., bright Parisian apartment at sunset' : role === 'pose' ? 'e.g., standing contrapposto, left hand on hip' : 'Describe precisely how to use this image'} disabled={disabled || analyzingIndex === index} />
+                        <button type="button" onClick={() => generateDescription(index, role)} disabled={disabled || analyzingIndex !== null} className="mb-px rounded-md bg-accent p-2.5 text-accent-text hover:bg-accent-hover disabled:opacity-50" title={libraryPrompts[index]?.trim() && role !== 'pose' ? 'Use the prompt saved with this Library image' : 'Describe this reference with Mammouth'}>
+                            {analyzingIndex === index ? <SpinnerIcon className="h-5 w-5 animate-spin" /> : <GenerateIcon className="h-5 w-5" />}
+                        </button>
+                    </div>
+                    {analysisErrors[index] && <p className="text-xs text-danger">{analysisErrors[index]}</p>}
+                </div>
+                <button type="button" onClick={() => removeImage(index)} disabled={disabled} className="self-start rounded-md p-2 text-text-muted hover:bg-danger-bg hover:text-danger" title="Remove reference"><CloseIcon className="h-4 w-4" /></button>
+            </div>;
+        })}
+        <div className="flex items-center gap-2">
+            <div className="flex-grow"><ImageUploader id="flux2-edit-references" onImageUpload={() => { }} onImagesUpload={(files) => setImages([...images, ...files].slice(0, 3))} multiple disabled={disabled || images.length >= 3} label="Add Reference Image(s)" infoText={`${images.length}/3 - PNG, JPG, WEBP`} /></div>
+            <button type="button" onClick={onOpenLibrary} disabled={disabled || images.length >= 3} className="mt-8 rounded-md bg-bg-tertiary p-3 text-text-secondary hover:bg-bg-tertiary-hover" title="Select from Library"><LibraryIcon className="h-6 w-6" /></button>
+        </div>
+    </div>;
+};
+
 
 // --- Main Component ---
 export const OptionsPanel: React.FC<OptionsPanelProps> = ({
@@ -344,6 +433,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const [loadingMammouthModels, setLoadingMammouthModels] = useState(false);
     const [characterAdvancedOpen, setCharacterAdvancedOpen] = useState(false);
     const [comfyModelsOpen, setComfyModelsOpen] = useState(false);
+    const [flux2EditAdvancedOpen, setFlux2EditAdvancedOpen] = useState(false);
 
     useEffect(() => {
         const fetchModels = async () => {
@@ -512,8 +602,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         } else if (modelType === 'z-image') {
             field = 'comfyZImageUnet';
             candidates = comfyUnets.filter(model => /z[-_ ]?image|\bzit\b/i.test(model));
-        } else if (modelType === 'flux2-simple') {
-            field = 'comfyFlux2Unet';
+        } else if (modelType === 'flux2-simple' || modelType === 'flux2-edit') {
+            field = modelType === 'flux2-edit' ? 'comfyFlux2EditUnet' : 'comfyFlux2Unet';
             candidates = comfyGgufModels.filter(model => /flux[-_ ]?2|klein/i.test(model));
         } else if (modelType === 'krea2-simple' || modelType === 'krea2-raw') {
             return;
@@ -548,13 +638,18 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     comfyFlux2Clip: 'qwen3vl_4b_fp8_scaled.safetensors',
                     comfyFlux2Vae: 'flux2-vae.safetensors',
                 });
+            } else if (modelType === 'flux2-edit') {
+                Object.assign(updates, {
+                    comfyFlux2EditClip: 'qwen_3_4b.safetensors',
+                    comfyFlux2EditVae: 'flux2-vae.safetensors',
+                });
             }
             if (!cancelled && Object.keys(updates).length > 0) updateOptions(updates);
         };
 
         void applyModelDefaults();
         return () => { cancelled = true; };
-    }, [options.provider, options.comfyModelType, options.comfyModel, options.comfyQwenUnet, options.comfyQwenEditUnet, options.comfyZImageUnet, options.comfyFlux2Unet, options.comfyKreaUnet, options.comfyNunchakuModel, options.comfyFluxKreaModel, options.comfyPromptExampleSource, updateOptions, comfyUIObjectInfo, filteredComfyModels, comfyGgufModels, comfyUnets, nunchakuModels]);
+    }, [options.provider, options.comfyModelType, options.comfyModel, options.comfyQwenUnet, options.comfyQwenEditUnet, options.comfyZImageUnet, options.comfyFlux2Unet, options.comfyFlux2EditUnet, options.comfyKreaUnet, options.comfyNunchakuModel, options.comfyFluxKreaModel, options.comfyPromptExampleSource, updateOptions, comfyUIObjectInfo, filteredComfyModels, comfyGgufModels, comfyUnets, nunchakuModels]);
 
 
     useEffect(() => {
@@ -562,7 +657,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         let optionsChanged = false;
 
         if (newOptions.provider === 'comfyui' && activeTab !== 'character-generator') {
-            const isI2IModel = ['qwen-edit', 'face-detailer-sd1.5'].includes(newOptions.comfyModelType!);
+            const isI2IModel = ['qwen-edit', 'flux2-edit', 'face-detailer-sd1.5'].includes(newOptions.comfyModelType!);
             if (generationMode === 'i2i' && !isI2IModel) {
                 optionsChanged = true;
                 newOptions.comfyModelType = 'qwen-edit';
@@ -1266,7 +1361,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         return (
             <>
-                {sourceImage && comfyUIUrl &&
+                {sourceImage && comfyUIUrl && modelType !== 'flux2-edit' &&
                     <div className="bg-bg-tertiary p-3 rounded-md border border-border-primary/50 text-center">
                         <button onClick={onGeneratePrompt} disabled={isGeneratingPrompt} className="w-full flex items-center justify-center gap-2 text-sm bg-bg-primary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
                             {isGeneratingPrompt ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
@@ -1346,7 +1441,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
                         {modelType === 'qwen-edit' && <div className="space-y-4">
                             <SelectInput label="Diffusion Model (UNET)" value={options.comfyQwenEditUnet || ''} onChange={handleOptionChange('comfyQwenEditUnet')} options={Array.from(new Set([options.comfyQwenEditUnet, ...comfyUnets].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
-                            <SelectInput label="CLIP (GGUF)" value={options.comfyQwenEditClip || ''} onChange={handleOptionChange('comfyQwenEditClip')} options={Array.from(new Set([options.comfyQwenEditClip, ...t5GgufEncoderModels].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                            <SelectInput label="CLIP / Text Encoder" value={options.comfyQwenEditClip || ''} onChange={handleOptionChange('comfyQwenEditClip')} options={Array.from(new Set([options.comfyQwenEditClip, ...comfyClips, ...t5GgufEncoderModels].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                             <SelectInput label="VAE" value={options.comfyQwenEditVae || ''} onChange={handleOptionChange('comfyQwenEditVae')} options={Array.from(new Set([options.comfyQwenEditVae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                         </div>}
 
@@ -1356,10 +1451,16 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             <SelectInput label="VAE Model" value={options.comfyZImageVae || ''} onChange={handleOptionChange('comfyZImageVae')} options={comfyVaes.map(model => ({ value: model, label: model }))} disabled={isDisabled} />
                         </div>}
 
-                        {modelType === 'flux2-simple' && <div className="space-y-4">
+                        {(modelType === 'flux2-simple' || modelType === 'flux2-edit') && <div className="space-y-4">
+                            {modelType === 'flux2-edit' ? <>
+                                <SelectInput label="UNET Model (GGUF)" value={options.comfyFlux2EditUnet || ''} onChange={handleOptionChange('comfyFlux2EditUnet')} options={Array.from(new Set([options.comfyFlux2EditUnet, ...comfyGgufModels].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                                <SelectInput label="CLIP Model" value={options.comfyFlux2EditClip || ''} onChange={handleOptionChange('comfyFlux2EditClip')} options={Array.from(new Set([options.comfyFlux2EditClip, ...comfyClips].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                                <SelectInput label="VAE Model" value={options.comfyFlux2EditVae || ''} onChange={handleOptionChange('comfyFlux2EditVae')} options={Array.from(new Set([options.comfyFlux2EditVae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                            </> : <>
                             <SelectInput label="UNET Model (GGUF)" value={options.comfyFlux2Unet || ''} onChange={handleOptionChange('comfyFlux2Unet')} options={Array.from(new Set([options.comfyFlux2Unet, ...comfyGgufModels].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                             <SelectInput label="CLIP Model" value={options.comfyFlux2Clip || ''} onChange={handleOptionChange('comfyFlux2Clip')} options={Array.from(new Set([options.comfyFlux2Clip, ...comfyClips].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                             <SelectInput label="VAE Model" value={options.comfyFlux2Vae || ''} onChange={handleOptionChange('comfyFlux2Vae')} options={Array.from(new Set([options.comfyFlux2Vae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                            </>}
                         </div>}
 
                         {(modelType === 'krea2-simple' || modelType === 'krea2-raw') && <div className="space-y-4">
@@ -1403,6 +1504,37 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                 <NumberSlider label={`Source Megapixels: ${options.comfyQwenEditMegapixels ?? 1}`} value={options.comfyQwenEditMegapixels ?? 1} onChange={handleSliderChange('comfyQwenEditMegapixels')} min={0.25} max={4} step={0.25} disabled={isDisabled} />
                             </div>
                         )}
+                        {modelType === 'flux2-edit' && <div className="space-y-4 border-t border-border-primary/50 pt-3">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">FLUX2 Multi-Reference Edit</h4>
+                            <p className="text-xs text-text-muted">Picture 1 is the source. Add up to three references and describe exactly what FLUX2 should copy from each one.</p>
+                            <Flux2ReferenceManager
+                                images={elementImages.slice(0, 3)}
+                                setImages={(files) => setElementImages(files.slice(0, 3))}
+                                roles={options.comfyFlux2EditReferenceRoles || ['outfit', 'background', 'pose']}
+                                descriptions={options.comfyFlux2EditReferenceDescriptions || []}
+                                libraryPrompts={options.comfyFlux2EditReferenceLibraryPrompts || []}
+                                updateOptions={updateOptions}
+                                disabled={isDisabled}
+                                onOpenLibrary={onOpenElementPicker}
+                            />
+                            {elementImages.some((_, index) => (options.comfyFlux2EditReferenceRoles?.[index] || ['outfit', 'background', 'pose'][index]) === 'pose') && !comfyUIObjectInfo?.AIO_Preprocessor && <p className="rounded-md border border-warning/50 bg-warning-bg p-3 text-xs text-warning">Pose references require AIO_Preprocessor from ComfyUI ControlNet Aux.</p>}
+                            <button type="button" onClick={() => setFlux2EditAdvancedOpen(open => !open)} className={`w-full rounded-md border px-4 py-2 text-sm font-bold transition-colors ${flux2EditAdvancedOpen ? 'border-accent bg-accent/10 text-accent' : 'border-border-primary bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'}`}>Advanced {flux2EditAdvancedOpen ? '−' : '+'}</button>
+                            {flux2EditAdvancedOpen && <div className="space-y-4 rounded-md border border-border-secondary bg-bg-primary/50 p-3">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <SelectInput label="Sampler" value={options.comfyFlux2EditSampler || 'euler'} onChange={handleOptionChange('comfyFlux2EditSampler')} options={Array.from(new Set([options.comfyFlux2EditSampler || 'euler', ...comfySamplers])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                                    <NumberSlider label={`Steps: ${options.comfyFlux2EditSteps ?? 4}`} value={options.comfyFlux2EditSteps ?? 4} onChange={handleSliderChange('comfyFlux2EditSteps')} min={1} max={40} step={1} disabled={isDisabled} />
+                                    <NumberSlider label={`CFG: ${options.comfyFlux2EditCfg ?? 1}`} value={options.comfyFlux2EditCfg ?? 1} onChange={handleSliderChange('comfyFlux2EditCfg')} min={0.1} max={10} step={0.1} disabled={isDisabled} />
+                                    <NumberSlider label={`Source Megapixels: ${options.comfyFlux2EditMegapixels ?? 1}`} value={options.comfyFlux2EditMegapixels ?? 1} onChange={handleSliderChange('comfyFlux2EditMegapixels')} min={0.25} max={4} step={0.25} disabled={isDisabled} />
+                                </div>
+                                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={!!options.comfyFlux2EditUseCacheDit} onChange={handleOptionChange('comfyFlux2EditUseCacheDit')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />Enable CacheDiT Accelerator</label>
+                                {options.comfyFlux2EditUseCacheDit && <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                    <SelectInput label="CacheDiT Model Type" value={options.comfyFlux2EditCacheDitModelType || 'Auto'} onChange={handleOptionChange('comfyFlux2EditCacheDitModelType')} options={cacheDitModelTypes.map(value => ({ value, label: value }))} disabled={isDisabled} />
+                                    <NumberSlider label={`Warmup: ${options.comfyFlux2EditCacheDitWarmupSteps ?? 0}`} value={options.comfyFlux2EditCacheDitWarmupSteps ?? 0} onChange={handleSliderChange('comfyFlux2EditCacheDitWarmupSteps')} min={0} max={20} step={1} disabled={isDisabled} />
+                                    <NumberSlider label={`Skip: ${options.comfyFlux2EditCacheDitSkipInterval ?? 0}`} value={options.comfyFlux2EditCacheDitSkipInterval ?? 0} onChange={handleSliderChange('comfyFlux2EditCacheDitSkipInterval')} min={0} max={10} step={1} disabled={isDisabled} />
+                                    {!comfyUIObjectInfo?.CacheDiT_Model_Optimizer && <p className="text-xs text-warning sm:col-span-3">CacheDiT is not loaded by ComfyUI.</p>}
+                                </div>}
+                            </div>}
+                        </div>}
                     </div>
 
                     {/* Z-Image Models */}
@@ -1437,8 +1569,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     )}
 
                     {promptExampleSources.length > 0 && <div className="space-y-2">{promptExampleSources.map(source => <button key={source.modelPath} type="button" onClick={() => openPromptExamples(source)} disabled={isDisabled || promptExamplesLoading} className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">{promptExamplesLoading && activePromptExampleSource?.modelPath === source.modelPath && <SpinnerIcon className="w-4 h-4 animate-spin" />}{source.hasLocalPrompts ? 'Local prompts' : 'Find prompt examples'} · {source.modelName}</button>)}</div>}
-                    <TextInput label="Positive Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaPrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2Prompt || '') : (options.comfyPrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaPrompt' : modelType === 'flux2-simple' ? 'comfyFlux2Prompt' : 'comfyPrompt')} disabled={isDisabled} isTextArea />
-                    {modelType !== 'nunchaku-kontext-flux' && modelType !== 'nunchaku-flux-image' && modelType !== 'flux-krea' && (
+                    <TextInput label={modelType === 'flux2-edit' ? 'Additional Editing Instructions' : 'Positive Prompt'} value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaPrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2Prompt || '') : modelType === 'flux2-edit' ? (options.comfyFlux2EditPrompt || '') : (options.comfyPrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaPrompt' : modelType === 'flux2-simple' ? 'comfyFlux2Prompt' : modelType === 'flux2-edit' ? 'comfyFlux2EditPrompt' : 'comfyPrompt')} disabled={isDisabled} isTextArea />
+                    {modelType !== 'nunchaku-kontext-flux' && modelType !== 'nunchaku-flux-image' && modelType !== 'flux-krea' && modelType !== 'flux2-edit' && (
                         <TextInput label="Negative Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaNegativePrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2NegativePrompt || '') : (options.comfyNegativePrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaNegativePrompt' : modelType === 'flux2-simple' ? 'comfyFlux2NegativePrompt' : 'comfyNegativePrompt')} disabled={isDisabled} isTextArea />
                     )}
                 </OptionSection>
@@ -1594,7 +1726,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     <OptionSection title="General Settings">
                         {!hideProviderSwitch && <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1"><button onClick={() => updateOptions({ provider: 'comfyui' })} disabled={isDisabled} className={`px-3 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>ComfyUI</button><button onClick={() => updateOptions({ provider: 'mammouth' })} disabled={isDisabled} className={`px-3 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'mammouth' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>Mammouth</button></div>}
                         {!(activeTab === 'character-generator' && options.provider === 'comfyui') && <NumberSlider label={`Number of Images: ${options.numImages}`} value={options.numImages} onChange={(e) => updateOptions({ numImages: parseInt(e.target.value, 10), poseSelection: options.poseSelection.slice(0, parseInt(e.target.value, 10)) })} min={1} max={MAX_IMAGES} step={1} disabled={isDisabled} />}
-                        {!(options.provider === 'comfyui' && options.comfyModelType === 'qwen-t2i-gguf') && (
+                        {!(options.provider === 'comfyui' && (options.comfyModelType === 'qwen-t2i-gguf' || options.comfyModelType === 'flux2-edit')) && (
                             <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={ASPECT_RATIO_OPTIONS} disabled={isDisabled} />
                         )}
                     </OptionSection>

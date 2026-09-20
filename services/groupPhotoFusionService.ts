@@ -1,9 +1,10 @@
 import { GenerateContentResponse } from "@google/genai";
 import { GeneratePhotoResult } from '../groupPhotoFusion/types';
-import type { Provider } from '../types';
+import type { GenerationOptions, Provider } from '../types';
 
 import { getGenAIInstance } from "./geminiService";
 import { generateMammouthImage } from './mammouthService';
+import { generateComfyUIPortraits } from './comfyUIService';
 
 // Remove local initialization
 // const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
@@ -47,6 +48,58 @@ const imageSourceToBase64 = async (source: string) => {
     reader.readAsDataURL(blob);
   });
   return dataUrl.split(',')[1];
+};
+
+export const generateComfyUIGroupPhoto = async (
+  subjectFiles: File[],
+  backgroundFile: File | null,
+  prompt: string,
+  personaDescriptions: string[],
+  options: GenerationOptions,
+  updateProgress: (message: string, value: number) => void,
+): Promise<GeneratePhotoResult> => {
+  if (subjectFiles.length < 2 || subjectFiles.length > 4) {
+    throw new Error('Please provide 2 to 4 subject images.');
+  }
+
+  const subjectCount = subjectFiles.length;
+  const identityLock = [
+    `The final image must contain exactly ${subjectCount} people: Person 1 through Person ${subjectCount}, one person from each identity reference.`,
+    'Do not add background people, bystanders, crowds, reflections of people, portraits of people, or any other human figure.',
+    'Do not omit, duplicate, clone, merge, or blend any person. Each referenced identity must appear exactly once and remain clearly distinct.',
+    'Treat every source face as an exact identity reference, not as inspiration. Keep each person\'s face shape, forehead, hairline, eyebrows, eye shape and spacing, nose, cheekbones, lips, jawline, chin, ears, skin tone, apparent age, ethnicity, and distinctive marks.',
+    'Do not beautify, idealize, average, redesign, or substitute any face. Expressions may change only the facial muscles, never the underlying facial anatomy or identity.',
+  ].join(' ');
+  const referenceImages = [...subjectFiles.slice(1), ...(backgroundFile ? [backgroundFile] : [])];
+  const roles = [
+    ...subjectFiles.slice(1).map(() => 'identity' as const),
+    ...(backgroundFile ? ['background' as const] : []),
+  ];
+  const descriptions = [
+    ...subjectFiles.slice(1).map((_, index) => {
+      const personNumber = index + 2;
+      const persona = personaDescriptions[personNumber - 1]?.trim();
+      return `This is the only identity reference for Person ${personNumber}. Include this person exactly once, preserve their precise facial identity, and keep them distinct from every other subject${persona ? `; portray them as follows: ${persona}` : ''}.`;
+    }),
+    ...(backgroundFile ? ['Use this image as the complete scene background.'] : []),
+  ];
+  const flux2Options: GenerationOptions = {
+    ...options,
+    provider: 'comfyui',
+    comfyModelType: 'flux2-edit',
+    comfyFlux2EditPrompt: `${identityLock} Picture 1 is the only identity reference for Person 1; include this person exactly once. Scene instructions: ${prompt} Apply the scene instructions only to Person 1 through Person ${subjectCount}; they do not authorize additional people. Final composition check: show exactly ${subjectCount} people, with every referenced person appearing once and no other human figures anywhere in the image.`,
+    comfyFlux2EditReferenceRoles: roles,
+    comfyFlux2EditReferenceDescriptions: descriptions,
+    numImages: 1,
+  };
+  const result = await generateComfyUIPortraits(subjectFiles[0], flux2Options, updateProgress, referenceImages);
+  const image = result.images[0];
+  if (!image) throw new Error('ComfyUI completed without returning a Photo Fusion image.');
+  return {
+    imageBase64: await imageSourceToBase64(image.src),
+    responseText: result.finalPrompt,
+    seed: image.seed,
+  };
 };
 
 export const generateGroupPhoto = async (files: File[], prompt: string, provider: Provider = 'gemini', mammouthModel?: string): Promise<GeneratePhotoResult> => {

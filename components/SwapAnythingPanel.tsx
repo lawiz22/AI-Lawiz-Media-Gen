@@ -16,7 +16,7 @@ interface SwapAnythingPanelProps {
     comfyUIObjectInfo: any | null;
 }
 
-const LIBRARY_IMAGE_TYPES: LibraryItemType[] = ['image', 'character', 'clothes', 'object', 'past-forward-photo', 'group-fusion'];
+const LIBRARY_IMAGE_TYPES: LibraryItemType[] = ['image', 'character', 'clothes', 'object', 'past-forward-photo', 'group-fusion', 'swap-anything'];
 
 interface SwapPreset {
     id: string;
@@ -202,7 +202,7 @@ const SwapAnythingPanel: React.FC<SwapAnythingPanelProps> = ({ isComfyUIConnecte
         setSaveStatus('saving');
         try {
             await dispatch(addToLibrary({
-                mediaType: 'image',
+                mediaType: 'swap-anything',
                 name: `Swap Anything - ${options.destinationTarget}`,
                 media: result,
                 thumbnail: await dataUrlToThumbnail(result, 256),

@@ -1304,6 +1304,7 @@ export const COMFYUI_T2I_WORKFLOWS = [
 
 export const COMFYUI_I2I_WORKFLOWS = [
   { value: 'qwen-edit', label: 'Qwen Image Edit (up to 3 images)' },
+  { value: 'flux2-edit', label: 'FLUX2 Image Edit (up to 4 images)' },
   { value: 'face-detailer-sd1.5', label: 'Face Detailer SD 1.5 (i2i)' },
 ];
 
@@ -1319,7 +1320,7 @@ export const COMFYUI_QWEN_EDIT_WORKFLOW_TEMPLATE = {
   "93": { "inputs": { "upscale_method": "lanczos", "megapixels": 1, "resolution_steps": 1, "image": ["78", 0] }, "class_type": "ImageScaleToTotalPixels", "_meta": { "title": "Scale Source Image" } },
   "110": { "inputs": { "prompt": "", "clip": ["116", 0], "vae": ["39", 0], "image1": ["93", 0] }, "class_type": "TextEncodeQwenImageEditPlus", "_meta": { "title": "Negative Prompt" } },
   "111": { "inputs": { "prompt": "", "clip": ["116", 0], "vae": ["39", 0], "image1": ["93", 0] }, "class_type": "TextEncodeQwenImageEditPlus", "_meta": { "title": "Positive Prompt" } },
-  "116": { "inputs": { "clip_name": "Qwen2.5-VL-7B-Instruct-Q6_K.gguf", "type": "qwen_image" }, "class_type": "CLIPLoaderGGUF", "_meta": { "title": "CLIPLoader (GGUF)" } },
+  "116": { "inputs": { "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
   "128": { "inputs": { "filename_prefix": "Qwen_Edit", "images": ["8", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Image" } }
 };
 

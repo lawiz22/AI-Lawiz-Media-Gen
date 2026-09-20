@@ -10,6 +10,10 @@ export const fetchLibrary = createAsyncThunk('library/fetchLibrary', async (_, t
         const items = await idb.getLibraryItems();
         const placeholder = createVideoPlaceholderThumbnail();
         for (const item of items) {
+            if (item.mediaType === 'image' && item.name?.startsWith('Swap Anything - ')) {
+                item.mediaType = 'swap-anything';
+                await idb.updateLibraryItem(item.id, { mediaType: 'swap-anything' });
+            }
             if (!item.ltxDirectorOptions || (item.thumbnail && item.thumbnail !== placeholder) || !item.media) continue;
             try {
                 const thumbnail = await videoToThumbnail(item.media, 256);

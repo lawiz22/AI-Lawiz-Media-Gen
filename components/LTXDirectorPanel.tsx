@@ -1269,7 +1269,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                 isOpen={imageLibraryOpen}
                 onClose={() => setImageLibraryOpen(false)}
                 onSelectItem={(item) => void selectLibraryImage(item)}
-                filter={['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'group-fusion', 'past-forward-photo']}
+                filter={['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'group-fusion', 'swap-anything', 'past-forward-photo']}
             />
             <LibraryPickerModal
                 isOpen={audioLibraryOpen}

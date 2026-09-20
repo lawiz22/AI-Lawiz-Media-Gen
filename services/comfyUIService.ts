@@ -26,6 +26,7 @@ import { LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './ltxDirectorWorkflow';
 import { createLtxDialogueInstruction, parseSpeakerTranscript } from '../utils/ttsTranscript';
 import { buildCharacterAnglesWorkflow, buildFlux2CharacterAnglesWorkflow } from './characterAnglesWorkflow';
 import { buildSwapAnythingWorkflow, type SwapAnythingOptions } from './swapAnythingWorkflow';
+import { buildFlux2EditWorkflow, type Flux2EditReference } from './flux2EditWorkflow';
 
 export const LTX_PROMPT_THEMES = [
     { value: 'surprise', label: 'Surprise Mix', direction: 'an unexpected but coherent visual treatment selected from cinema, daily life, documentary, social video, art, and commercial imagery' },
@@ -587,7 +588,7 @@ export const generateIndexTts = async (
 };
 
 // --- Mammouth-based Prompt Generation ---
-type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'krea2-simple' | 'krea2-raw';
+type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'flux2-edit' | 'krea2-simple' | 'krea2-raw';
 
 const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
     switch (modelType) {
@@ -615,6 +616,7 @@ Do not add any preamble, conclusion, markdown bullets, or extra sections.`;
         case 'wan2.2':
         case 'sdxl':
         case 'qwen-edit':
+        case 'flux2-edit':
         case 'nunchaku-kontext-flux': // I2I prompt is often best as a sentence
         default:
             return 'Your response MUST be a single, concise, natural language sentence.';
@@ -879,7 +881,11 @@ const uploadImage = async (file: File): Promise<{ name: string; subfolder: strin
     const fileBuffer = await file.arrayBuffer();
     const originalFilename = file.name || "image.png";
     const sanitizedFilename = sanitizeFilename(originalFilename);
-    const normalizedFile = new File([fileBuffer], sanitizedFilename, { type: file.type });
+    const extensionIndex = sanitizedFilename.lastIndexOf('.');
+    const basename = extensionIndex > 0 ? sanitizedFilename.slice(0, extensionIndex) : sanitizedFilename;
+    const extension = extensionIndex > 0 ? sanitizedFilename.slice(extensionIndex) : '';
+    const uniqueFilename = `${basename}-${crypto.randomUUID()}${extension}`;
+    const normalizedFile = new File([fileBuffer], uniqueFilename, { type: file.type });
 
     const formData = new FormData();
     formData.append('image', normalizedFile);
@@ -1450,7 +1456,17 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             workflow["110"].inputs.prompt = options.comfyNegativePrompt || '';
             workflow["111"].inputs.prompt = options.comfyPrompt || '';
             workflow["37"].inputs.unet_name = options.comfyQwenEditUnet;
-            workflow["116"].inputs.clip_name = options.comfyQwenEditClip;
+            const configuredClip = options.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors';
+            const qwenEditClip = uploadedImages.length > 1 && configuredClip.toLowerCase().endsWith('.gguf')
+                ? 'qwen_2.5_vl_7b_fp8_scaled.safetensors'
+                : configuredClip;
+            workflow["116"].class_type = qwenEditClip.toLowerCase().endsWith('.gguf') ? 'CLIPLoaderGGUF' : 'CLIPLoader';
+            workflow["116"]._meta.title = qwenEditClip.toLowerCase().endsWith('.gguf') ? 'CLIPLoader (GGUF)' : 'Load CLIP';
+            workflow["116"].inputs = {
+                clip_name: qwenEditClip,
+                type: 'qwen_image',
+                ...(qwenEditClip.toLowerCase().endsWith('.gguf') ? {} : { device: 'default' }),
+            };
             workflow["39"].inputs.vae_name = options.comfyQwenEditVae;
             workflow["66"].inputs.shift = options.comfyQwenEditShift ?? 2.5;
             workflow["93"].inputs.megapixels = options.comfyQwenEditMegapixels ?? 1;
@@ -1476,6 +1492,21 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             workflow["3"].inputs.sampler_name = options.comfySampler || 'euler_ancestral';
             workflow["3"].inputs.scheduler = options.comfyScheduler || 'beta57';
             workflow["3"].inputs.seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+            break;
+        }
+        case 'flux2-edit': {
+            if (!sourceFile) throw new Error('FLUX2 Image Edit requires a source image.');
+            const [sourceUpload, ...referenceUploads] = await Promise.all(
+                [sourceFile, ...referenceImages].map(uploadImage),
+            );
+            const roles = options.comfyFlux2EditReferenceRoles || ['outfit', 'background', 'pose'];
+            const descriptions = options.comfyFlux2EditReferenceDescriptions || [];
+            const references: Flux2EditReference[] = referenceUploads.map((upload, index) => ({
+                imageName: upload.name,
+                role: roles[index] || 'custom',
+                description: descriptions[index] || '',
+            }));
+            workflow = buildFlux2EditWorkflow(sourceUpload.name, references, options).workflow;
             break;
         }
 
@@ -2287,7 +2318,7 @@ export const generateComfyUIPortraits = async (
     const allImages: { src: string, seed: number }[] = [];
     const baseWorkflow = await buildWorkflow(options, sourceImage, referenceImages);
 
-    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'flux2-simple', 'krea2-simple', 'krea2-raw'].includes(options.comfyModelType!);
+    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'flux2-simple', 'flux2-edit', 'krea2-simple', 'krea2-raw'].includes(options.comfyModelType!);
     const numImages = options.comfyModelType === 'face-detailer-sd1.5' ? 1 : options.numImages;
 
     let currentSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
@@ -2298,7 +2329,7 @@ export const generateComfyUIPortraits = async (
         // Capture the seed used for this iteration before it gets updated for the next one
         const seedForThisImage = currentSeed;
 
-        const samplerKey = Object.keys(currentWorkflow).find(k => currentWorkflow[k].class_type.toLowerCase().startsWith('ksampler'));
+        const samplerKey = Object.keys(currentWorkflow).find(k => currentWorkflow[k].class_type === 'KSampler');
         if (samplerKey) {
             currentWorkflow[samplerKey].inputs.seed = seedForThisImage;
 
@@ -2320,8 +2351,9 @@ export const generateComfyUIPortraits = async (
                     // Seed remains unchanged
                     break;
             }
-                } else if (options.comfyModelType === 'flux2-simple') {
-                    currentWorkflow["89"].inputs.noise_seed = seedForThisImage;
+                } else if (options.comfyModelType === 'flux2-simple' || options.comfyModelType === 'flux2-edit') {
+                    const noiseKey = options.comfyModelType === 'flux2-simple' ? '89' : 'noise';
+                    currentWorkflow[noiseKey].inputs.noise_seed = seedForThisImage;
                     currentSeed = Math.floor(Math.random() * 1e15);
                 } else if (options.comfyModelType === 'krea2-raw') {
                     currentWorkflow["276"].inputs.seed = seedForThisImage;
@@ -2358,6 +2390,8 @@ export const generateComfyUIPortraits = async (
         ? options.comfyKreaPrompt
         : options.comfyModelType === 'flux2-simple'
             ? options.comfyFlux2Prompt
+            : options.comfyModelType === 'flux2-edit'
+                ? baseWorkflow.prompt?.inputs?.text
             : options.comfyPrompt;
     return { images: allImages, finalPrompt: finalPrompt || '' };
 };

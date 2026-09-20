@@ -38,6 +38,8 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                         ? 'KREA2 RAW'
                     : options.comfyModelType === 'flux2-simple'
                         ? 'FLUX2 Simple'
+                    : options.comfyModelType === 'flux2-edit'
+                        ? 'FLUX2 Multi-Reference Edit'
                     : (options.comfyModelType || 'sdxl');
 
     return (
@@ -56,7 +58,12 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                             <span className="w-8 text-right text-xs text-text-secondary">{(options.megapixel || 1).toFixed(1)}</span>
                         </div>
                     )}
-                    {options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw' ? (
+                    {options.comfyModelType === 'flux2-edit' ? (
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs font-medium text-text-secondary">Source MP:</label>
+                            <input type="number" min={0.25} max={4} step={0.25} value={options.comfyFlux2EditMegapixels ?? 1} onChange={(event) => updateOptions({ comfyFlux2EditMegapixels: Number(event.target.value) })} disabled={isDisabled} className="w-16 rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-center text-xs focus:border-accent focus:ring-accent" />
+                        </div>
+                    ) : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw' ? (
                         <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-text-secondary">Resolution:</label>
                             <select value={options.comfyKreaResolution || (options.comfyModelType === 'krea2-raw' ? '1920x1088' : '832x1216')} onChange={(event) => updateOptions({ comfyKreaResolution: event.target.value })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs focus:border-accent focus:ring-accent">

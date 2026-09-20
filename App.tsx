@@ -81,6 +81,18 @@ const FUN_ACCENT_STYLES = {
     'swap-anything': createAccentStyle('#f59e0b', '#fbbf24', '#d97706'),
 };
 
+const getLibraryReferencePrompt = (item: LibraryItem): string => {
+    if (['clothes', 'pose', 'object'].includes(item.mediaType) && item.name?.trim()) return item.name.trim();
+    const candidates = [
+        item.options?.comfyFlux2Prompt,
+        item.options?.comfyPrompt,
+        item.options?.geminiPrompt,
+        item.themeOptions?.prompt,
+        item.name,
+    ];
+    return candidates.find(candidate => candidate?.trim() && !/^(image|character)\s*#?\d+/i.test(candidate.trim()))?.trim() || '';
+};
+
 const App: React.FC = () => {
     // --- Redux Dispatch ---
     const dispatch: AppDispatch = useDispatch();
@@ -128,6 +140,7 @@ const App: React.FC = () => {
     const videoEndFrame = useSelector((state: RootState) => state.video.videoEndFrame);
     const videoUtilsState = useSelector((state: RootState) => state.video.videoUtilsState);
     const activeVideoUtilsSubTab = useSelector((state: RootState) => state.video.activeVideoUtilsSubTab);
+    const groupPhotoFusionProvider = useSelector((state: RootState) => state.groupPhotoFusion.provider);
 
     // --- Prompt Gen State (from promptGenSlice) ---
     const activePromptToolsSubTab = useSelector((state: RootState) => state.promptGen.activePromptToolsSubTab);
@@ -189,7 +202,7 @@ const App: React.FC = () => {
         } else if (newOpts.comfyModelType === 'qwen-edit') {
             applyDefaultsIfMissing({
                 comfyQwenEditUnet: 'qwen_image_edit_2509_fp8_e4m3fn.safetensors',
-                comfyQwenEditClip: 'Qwen2.5-VL-7B-Instruct-Q6_K.gguf',
+                comfyQwenEditClip: 'qwen_2.5_vl_7b_fp8_scaled.safetensors',
                 comfyQwenEditVae: 'qwen_image_vae.safetensors',
                 comfyQwenEditShift: 2.5,
                 comfyQwenEditMegapixels: 1,
@@ -204,6 +217,24 @@ const App: React.FC = () => {
                 comfyCfg: 1,
                 comfySampler: 'euler_ancestral',
                 comfyScheduler: 'beta57',
+            });
+        } else if (newOpts.comfyModelType === 'flux2-edit') {
+            applyDefaultsIfMissing({
+                comfyFlux2EditPrompt: '',
+                comfyFlux2EditUnet: 'flux-2-klein-4b-Q4_K_M.gguf',
+                comfyFlux2EditClip: 'qwen_3_4b.safetensors',
+                comfyFlux2EditVae: 'flux2-vae.safetensors',
+                comfyFlux2EditSteps: 4,
+                comfyFlux2EditCfg: 1,
+                comfyFlux2EditSampler: 'euler',
+                comfyFlux2EditMegapixels: 1,
+                comfyFlux2EditReferenceRoles: ['outfit', 'background', 'pose'],
+                comfyFlux2EditReferenceDescriptions: ['', '', ''],
+                comfyFlux2EditReferenceLibraryPrompts: ['', '', ''],
+                comfyFlux2EditUseCacheDit: false,
+                comfyFlux2EditCacheDitModelType: 'Auto',
+                comfyFlux2EditCacheDitWarmupSteps: 0,
+                comfyFlux2EditCacheDitSkipInterval: 0,
             });
         } else if (newOpts.comfyModelType === 'qwen-t2i-gguf') {
             applyDefaultsIfMissing({
@@ -561,7 +592,7 @@ const App: React.FC = () => {
             } else if (currentOptions.provider === 'comfyui') {
                 const comfyResult = activeTab === 'character-generator'
                     ? await generateComfyUICharacterAngles(sourceImage!, characterOptions, localUpdateProgress, clothingImage, backgroundImage, characterPoseImage)
-                    : await generateComfyUIPortraits(sourceImage, options, localUpdateProgress, elementImages.slice(0, 2));
+                    : await generateComfyUIPortraits(sourceImage, options, localUpdateProgress, elementImages.slice(0, options.comfyModelType === 'flux2-edit' ? 3 : 2));
                 result = {
                     images: comfyResult.images.map(img => ({ src: img.src, seed: img.seed, usageMetadata: undefined })),
                     finalPrompt: comfyResult.finalPrompt
@@ -768,8 +799,12 @@ const App: React.FC = () => {
                     : 'Qwen-Edit-Multi-Angle'
                 : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'fun') {
-        activeModel = activeFunSubTab === 'swap-anything'
-            ? 'ComfyUI · FLUX2 Swap Anything'
+        activeModel = activeFunSubTab === 'photo-fusion'
+            ? groupPhotoFusionProvider === 'comfyui'
+                ? 'ComfyUI · FLUX2 Photo Fusion'
+                : `Mammouth · ${options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL}`
+            : activeFunSubTab === 'swap-anything'
+                ? 'ComfyUI · FLUX2 Swap Anything'
             : options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'extractor-tools') {
         if (options.provider === 'mammouth') activeModel = options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL;
@@ -782,7 +817,13 @@ const App: React.FC = () => {
         activeModel = options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     }
 
-    const activeProvider: Provider = activeTab === 'character-generator' ? characterOptions.provider : options.provider;
+    const activeProvider: Provider = activeTab === 'character-generator'
+        ? characterOptions.provider
+        : activeTab === 'fun' && activeFunSubTab === 'photo-fusion'
+            ? groupPhotoFusionProvider
+        : activeTab === 'fun' && activeFunSubTab === 'swap-anything'
+            ? 'comfyui'
+            : options.provider;
 
     const availableLoras = useMemo(() => {
         const getModelListFromInfo = (widgetInfo: any): string[] => {
@@ -918,14 +959,14 @@ const App: React.FC = () => {
 
                 {/* Content Views - Centered Wrapper */}
                 <div className="w-full max-w-7xl mx-auto border-t-2 border-accent pt-3" style={getTabAccentStyle(activeTab)}>
-                    {['ltx-director', 'tts', 'prompt-generator', 'video-utils', 'upscale'].includes(activeTab) || (activeTab === 'fun' && activeFunSubTab === 'swap-anything') ? (
+                    {['ltx-director', 'tts', 'prompt-generator', 'video-utils', 'upscale'].includes(activeTab) || (activeTab === 'fun' && (activeFunSubTab === 'photo-fusion' || activeFunSubTab === 'swap-anything')) ? (
                         <div className="mb-3 flex justify-end">
                             <button type="button" onClick={handleActivePanelReset} className="flex items-center gap-2 rounded-md border border-danger/50 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white">
                                 <ResetIcon className="h-4 w-4" /> Reset
                             </button>
                         </div>
                     ) : null}
-                    {['fun', 'extractor-tools', 'logo-theme-generator'].includes(activeTab) && !(activeTab === 'fun' && activeFunSubTab === 'swap-anything') && (
+                    {(['extractor-tools', 'logo-theme-generator'].includes(activeTab) || (activeTab === 'fun' && activeFunSubTab === 'past-forward')) && (
                         <CloudImageProviderBar
                             options={options}
                             updateOptions={(updates) => dispatch(updateOptions(updates))}
@@ -951,7 +992,7 @@ const App: React.FC = () => {
                                     const optionsToExport = lastImage && lastImage.seed !== undefined
                                         ? { ...currentOptions, comfySeed: lastImage.seed }
                                         : currentOptions;
-                                    exportComfyUIWorkflow(optionsToExport, sourceImage, elementImages.slice(0, 2));
+                                    exportComfyUIWorkflow(optionsToExport, sourceImage, elementImages.slice(0, optionsToExport.comfyModelType === 'flux2-edit' ? 3 : 2));
                                 }}
                                 isDisabled={isLoading}
                             />
@@ -1041,12 +1082,18 @@ const App: React.FC = () => {
                                                 )}
                                             </div>
                                         ) : (
-                                            <ImageUploader
-                                                label={generationMode === 'i2i' ? 'Upload Source Image (Required)' : 'Upload Source Image (Optional for T2I)'}
-                                                id="main-source-upload"
-                                                onImageUpload={(file) => dispatch(setSourceImage(file))}
-                                                sourceFile={sourceImage}
-                                            />
+                                            <div className="space-y-2">
+                                                {currentOptions.comfyModelType === 'flux2-edit' && <div className="flex items-center justify-between">
+                                                    <span className="text-sm font-medium text-text-secondary">Image 1</span>
+                                                    <button type="button" onClick={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: true }))} className="rounded-md bg-bg-tertiary p-2 text-text-secondary hover:bg-bg-tertiary-hover" title="Select Image 1 from Library"><LibraryIcon className="h-5 w-5" /></button>
+                                                </div>}
+                                                <ImageUploader
+                                                    label={generationMode === 'i2i' ? 'Upload Source Image (Required)' : 'Upload Source Image (Optional for T2I)'}
+                                                    id="main-source-upload"
+                                                    onImageUpload={(file) => dispatch(setSourceImage(file))}
+                                                    sourceFile={sourceImage}
+                                                />
+                                            </div>
                                         )}
                                     </div>
                                     )}
@@ -1085,7 +1132,7 @@ const App: React.FC = () => {
                                                 setIsGeneratingRefinePrompt(false);
                                             }
                                         }}
-                                        onExportWorkflow={() => exportComfyUIWorkflow(options, sourceImage, elementImages.slice(0, 2))}
+                                        onExportWorkflow={() => exportComfyUIWorkflow(options, sourceImage, elementImages.slice(0, options.comfyModelType === 'flux2-edit' ? 3 : 2))}
                                         isDisabled={isLoading}
                                         isReady={isReadyToGenerate}
                                         isGeneratingPrompt={isGeneratingRefinePrompt}
@@ -1393,7 +1440,7 @@ const App: React.FC = () => {
                                 } else if (item.mediaType === 'image' || item.mediaType === 'character') {
                                     if (item.options) {
                                         const isComfyI2I = item.options.provider === 'comfyui'
-                                            && ['qwen-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux'].includes(item.options.comfyModelType || '');
+                                            && ['qwen-edit', 'flux2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux'].includes(item.options.comfyModelType || '');
                                         const isCloudI2I = item.options.provider !== 'comfyui' && item.options.geminiMode === 'i2i';
                                         const restoredMode = isComfyI2I || isCloudI2I ? 'i2i' : 't2i';
                                         dispatch(setGenerationMode(restoredMode));
@@ -1511,10 +1558,10 @@ const App: React.FC = () => {
                 }}
             />
             {/* ... Other pickers ... */}
-            <LibraryPickerModal isOpen={isCharacterSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "char_source.jpg", { type: b.type }))); }} filter={['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'past-forward-photo']} />
-            <LibraryPickerModal isOpen={isRefineSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "refine_source.jpg", { type: b.type }))); }} filter="image" />
+            <LibraryPickerModal isOpen={isCharacterSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "char_source.jpg", { type: b.type }))); }} filter={['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo']} />
+            <LibraryPickerModal isOpen={isRefineSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "refine_source.jpg", { type: b.type }))); }} filter={options.comfyModelType === 'flux2-edit' ? ['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo'] : 'image'} />
             <LibraryPickerModal isOpen={isMaskPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setMaskImage(new File([b], "mask.png", { type: b.type }))); }} filter="image" />
-            <LibraryPickerModal isOpen={isElementPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setElementImages([...elementImages, new File([b], `element_${Date.now()}.jpg`, { type: b.type })])); }} filter={['image', 'object', 'clothes']} />
+            <LibraryPickerModal isOpen={isElementPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); const maxReferences = options.comfyModelType === 'flux2-edit' ? 3 : 2; dispatch(setElementImages([...elementImages, new File([b], `element_${Date.now()}.jpg`, { type: b.type })].slice(0, maxReferences))); if (options.comfyModelType === 'flux2-edit' && elementImages.length < 3) { const roles = [...(options.comfyFlux2EditReferenceRoles || ['outfit', 'background', 'pose'])]; const libraryPrompts = [...(options.comfyFlux2EditReferenceLibraryPrompts || [])]; roles[elementImages.length] = item.mediaType === 'clothes' ? 'outfit' : item.mediaType === 'pose' ? 'pose' : roles[elementImages.length] || 'custom'; libraryPrompts[elementImages.length] = getLibraryReferencePrompt(item); dispatch(updateOptions({ comfyFlux2EditReferenceRoles: roles, comfyFlux2EditReferenceLibraryPrompts: libraryPrompts })); } }} filter={['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo']} />
             <LibraryPickerModal isOpen={isPromptGenImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ image: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isPromptGenBgImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenBgImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ bgImage: new File([b], "bg_source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isPromptGenSubjectImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenSubjectImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ subjectImage: new File([b], "subj_source.jpg", { type: b.type }) })); }} filter="image" />
@@ -1526,7 +1573,7 @@ const App: React.FC = () => {
             <LibraryPickerModal isOpen={isColorImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isColorImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ colorPicker: { ...videoUtilsState.colorPicker, imageFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
             <LibraryPickerModal isOpen={isVideoUtilsPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoUtilsPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ videoFile: new File([b], "video.mp4", { type: b.type }) })); }} filter="video" />
             <LibraryPickerModal isOpen={isResizeCropPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ resizeCrop: { ...videoUtilsState.resizeCrop, sourceFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
-            <LibraryPickerModal isOpen={isGroupFusionPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGroupFusionPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); const file = new File([b], "imported.jpg", { type: b.type }); const newFile: UploadedFile = { id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), personaId: 'default' }; dispatch(setUploadedFiles([...uploadedFiles, newFile])); }} filter="image" />
+            <LibraryPickerModal isOpen={isGroupFusionPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGroupFusionPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); const file = new File([b], `group-fusion-${item.id}.jpg`, { type: b.type }); const newFile: UploadedFile = { id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), personaId: 'default' }; dispatch(setUploadedFiles([...uploadedFiles, newFile])); }} filter="image" />
             <LibraryPickerModal isOpen={isUpscalePickerOpen} onClose={() => setIsUpscalePickerOpen(false)} onSelectItem={(item) => { setIsUpscalePickerOpen(false); handleSendToUpscale(item.media, item.name ? `${item.name}.png` : undefined); }} filter={['image', 'character', 'logo', 'banner', 'album-cover']} />
 
             {/* Logo Theme Pickers */}
