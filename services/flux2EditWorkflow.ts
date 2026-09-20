@@ -31,11 +31,14 @@ const roleInstruction = (reference: Flux2EditReference, pictureNumber: number): 
 export const buildFlux2EditPrompt = (
     basePrompt: string,
     references: Flux2EditReference[],
+    requirePhotorealism = true,
 ): string => [
     'Synthesize one final coherent image using Picture 1 as the primary source. Preserve the main subject identity and defining features from Picture 1 unless explicitly instructed otherwise.',
     ...references.map((reference, index) => roleInstruction(reference, index + 2)),
     basePrompt.trim() ? `Additional editing instructions: ${basePrompt.trim()}` : '',
-    'Produce a photorealistic, anatomically coherent result with consistent perspective, scale, lighting, shadows, and color integration.',
+    requirePhotorealism
+        ? 'Produce a photorealistic, anatomically coherent result with consistent perspective, scale, lighting, shadows, and color integration.'
+        : 'Produce a polished, anatomically coherent result with consistent perspective, scale, lighting, shadows, and color integration in the requested non-photographic visual medium.',
 ].filter(Boolean).join(' ');
 
 export const buildFlux2EditWorkflow = (
@@ -45,7 +48,7 @@ export const buildFlux2EditWorkflow = (
 ): { workflow: Record<string, any>; prompt: string; seed: number } => {
     const megapixels = options.comfyFlux2EditMegapixels ?? 1;
     const seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
-    const prompt = buildFlux2EditPrompt(options.comfyFlux2EditPrompt || options.comfyPrompt || '', references);
+    const prompt = buildFlux2EditPrompt(options.comfyFlux2EditPrompt || options.comfyPrompt || '', references, options.comfyFlux2EditRequirePhotorealism !== false);
     const workflow: Record<string, any> = {
         source: { inputs: { image: sourceImageName }, class_type: 'LoadImage', _meta: { title: 'Picture 1 - Source' } },
         source_scale: { inputs: { upscale_method: 'nearest-exact', megapixels, resolution_steps: 1, image: ['source', 0] }, class_type: 'ImageScaleToTotalPixels', _meta: { title: 'Scale source image' } },
@@ -65,6 +68,7 @@ export const buildFlux2EditWorkflow = (
 
     let positive: [string, number] = ['prompt', 0];
     const allLatents: Array<[string, number]> = [['source_latent', 0]];
+    if (options.comfyFlux2EditReinforceSourceIdentity) allLatents.push(['source_latent', 0]);
     references.forEach((reference, index) => {
         const id = `reference_${index + 2}`;
         workflow[`${id}_source`] = { inputs: { image: reference.imageName }, class_type: 'LoadImage', _meta: { title: `Picture ${index + 2} - ${reference.role}` } };

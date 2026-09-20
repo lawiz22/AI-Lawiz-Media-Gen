@@ -278,6 +278,8 @@ export interface GenerationOptions {
   comfyFlux2EditReferenceRoles?: Flux2ReferenceRole[];
   comfyFlux2EditReferenceDescriptions?: string[];
   comfyFlux2EditReferenceLibraryPrompts?: string[];
+  comfyFlux2EditReinforceSourceIdentity?: boolean;
+  comfyFlux2EditRequirePhotorealism?: boolean;
   comfyFlux2EditUseCacheDit?: boolean;
   comfyFlux2EditCacheDitModelType?: string;
   comfyFlux2EditCacheDitWarmupSteps?: number;

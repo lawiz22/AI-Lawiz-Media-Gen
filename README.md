@@ -4,7 +4,7 @@
 
 **A Windows creative workstation for cloud AI, Ollama, and local ComfyUI production.**
 
-[![Version](https://img.shields.io/badge/version-1.7.0-0ea5e9?style=for-the-badge)](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
+[![Version](https://img.shields.io/badge/version-1.8.0-0ea5e9?style=for-the-badge)](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vite.dev/)
@@ -76,7 +76,13 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 - Creative Magic Soup generation through Mammouth AI or Ollama, with adjustable creativity and source-color attribution.
 - Clothes, subject, object, background, pose, mannequin, and font extraction.
 - MediaPipe pose detection with ControlNet-compatible output.
-- PastForward photo transformations.
+- PastForward decade, hairstyle, fantasy, superhero, and historical transformations with local FLUX2 selected by default or Mammouth AI as an alternative.
+- Choose the PastForward source from the computer or the Library with either engine, select any combination of decades, regenerate individual results, or export an album containing only the active decades.
+- Track each selected decade independently with named progress and error details, and open generated results in a full-size uncropped preview.
+- FLUX2 uses theme-specific editing prompts and optional reinforced source conditioning to preserve identity while changing hairstyles, clothing, backgrounds, or visual eras.
+- Superhero Saga renders decade-specific comic-book illustrations rather than photorealistic costume portraits, with complete heroic poses, environments, and cover compositions.
+- Historical Cameo inserts the subject into a concrete event for each decade, with a believable role, supporting crowd, period action, and documentary photographic composition.
+- Enable **Reimagine the scene** to replace the source background, pose, framing, camera angle, lighting, and composition while retaining the recognizable subject identity.
 - Logo, banner, album-cover, and theme generation.
 - Video frame extraction, palette extraction, image resize, and crop tools.
 - Record a selected microphone, computer output audio, or both; export WAV audio and save it with an optional photo as a reusable voice reference.
@@ -293,7 +299,7 @@ The repository currently has no automated test script. Production validation the
 ## Repository
 
 - Source: [github.com/lawiz22/AI-Lawiz-Media-Gen](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
-- Current application version: `1.7.0`
+- Current application version: `1.8.0`
 - Default development port: `3000`
 - Default ComfyUI endpoint: `http://127.0.0.1:8188`
 - Default Ollama endpoint: `http://127.0.0.1:11434`

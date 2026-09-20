@@ -1,28 +1,16 @@
-feat: Integrate Z-Image model, fix Library saving, and add Preset Manager
+feat: upgrade Past Forward with FLUX2 generation and selective timelines
 
-- **Z-Image Integration**:
-  - Added 'z-image' to selectable workflows in `constants.ts`.
-  - Implemented Z-Image workflow template with support for Unet, VAE, CLIP, and Shift parameter.
-  - Added UI components in `OptionsPanel.tsx` for Z-Image model selection and Shift slider.
-  - Added "Use Shift" toggle (`comfyZImageUseShift`) to optionally bypass the AuraFlow node.
-  - Updated `LoraSettingsPanel.tsx` to filter LoRAs for Z-Image (matching "z-image", "z_image", "ZIT").
-  - Enabled Sampler, Scheduler, and Seed controls for Z-Image.
-  - Configured default parameters in `App.tsx` upon model selection.
-  - Updated `comfyUIService.ts` to handle Z-Image workflow generation and prompt styling.
-
-- **Library Saving Fix**:
-  - Updated `LibraryPanel.tsx` to correctly display saved parameters for `qwen-t2i-gguf` and `z-image` models.
-  - Added display fields for Unet, VAE, CLIP, Shift, and specific LoRAs in the library item details view.
-  - Fixed issue where users could not see saved settings for these models, ensuring full parameter persistence visibility.
-
-- **Preset Manager**:
-  - Added Preset Manager to `ImageGeneratorHeader.tsx` allowing users to save and load generation parameters.
-  - Implemented `PresetSaveModal` for naming presets.
-  - Added `preset` type to `types.ts` and updated `libraryService.ts` to support preset storage.
-  - Implemented logic to filter presets by model type and load them instantly.
-  - Fixed bug in `App.tsx` where default parameters would overwrite loaded preset values.
-  - Added **Delete Preset** functionality with a confirmation modal (`ConfirmationModal.tsx`).
-
-- **Refactoring**:
-  - Cleaned up `comfyUIService.ts` logic for model connection and shift parameter handling.
-  - Updated `types.ts` with new Z-Image configuration fields.
+- Add local FLUX2 as the default Past Forward engine while preserving Mammouth as an alternative.
+- Allow source images from local files or the Library for both providers.
+- Add FLUX2 model, CLIP, VAE, sampler, sampling, and CacheDiT controls.
+- Preserve source identity with theme-specific prompts and optional reinforced reference conditioning.
+- Improve realistic decade hairstyles while retaining facial features and source composition.
+- Remove Pet Cartoon-a-tron and align FLUX2 Fantasy You with Mammouth-style full-scene transformations.
+- Render Superhero Saga as decade-specific comic-book art instead of photorealistic costume portraits.
+- Insert Historical Cameo subjects into concrete decade-specific events with authentic crowds and documentary composition.
+- Add an optional Reimagine the scene mode for new backgrounds, poses, framing, camera angles, lighting, and composition.
+- Select individual decades or use Select All and Deselect All before generation.
+- Keep decade selections stable and show named per-decade progress, completion, and errors.
+- Generate and save albums from only the selected completed decades.
+- Open generated results in a full-size uncropped preview modal.
+- Update documentation and bump the application version to 1.8.0.

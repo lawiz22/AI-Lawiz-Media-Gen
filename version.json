@@ -1,5 +1,5 @@
 {
-  "version": "1.7",
-  "date": "2026-09-15T00:00:00Z",
-  "changes": "Advanced multi-character TTS, speaker-aware LTX transfers with optional character photos, and a new voice recorder for microphone and computer audio references."
+  "version": "1.8",
+  "date": "2026-09-20T00:00:00Z",
+  "changes": "Past Forward now supports FLUX2 by default or Mammouth, Library source selection, identity-preserving theme prompts, decade-specific comic superhero rendering, event-aware Historical Cameo scenes, optional full-scene reimagination, selectable decades, per-decade progress and errors, partial albums, and full-size result previews."
 }

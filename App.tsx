@@ -959,14 +959,14 @@ const App: React.FC = () => {
 
                 {/* Content Views - Centered Wrapper */}
                 <div className="w-full max-w-7xl mx-auto border-t-2 border-accent pt-3" style={getTabAccentStyle(activeTab)}>
-                    {['ltx-director', 'tts', 'prompt-generator', 'video-utils', 'upscale'].includes(activeTab) || (activeTab === 'fun' && (activeFunSubTab === 'photo-fusion' || activeFunSubTab === 'swap-anything')) ? (
+                    {['ltx-director', 'tts', 'prompt-generator', 'video-utils', 'upscale'].includes(activeTab) || (activeTab === 'fun' && (activeFunSubTab === 'photo-fusion' || activeFunSubTab === 'past-forward' || activeFunSubTab === 'swap-anything')) ? (
                         <div className="mb-3 flex justify-end">
                             <button type="button" onClick={handleActivePanelReset} className="flex items-center gap-2 rounded-md border border-danger/50 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white">
                                 <ResetIcon className="h-4 w-4" /> Reset
                             </button>
                         </div>
                     ) : null}
-                    {(['extractor-tools', 'logo-theme-generator'].includes(activeTab) || (activeTab === 'fun' && activeFunSubTab === 'past-forward')) && (
+                    {['extractor-tools', 'logo-theme-generator'].includes(activeTab) && (
                         <CloudImageProviderBar
                             options={options}
                             updateOptions={(updates) => dispatch(updateOptions(updates))}
