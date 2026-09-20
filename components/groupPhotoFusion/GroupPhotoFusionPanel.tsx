@@ -6,7 +6,7 @@ import {
     setUploadedFiles, setBackgroundFile, setSelectedPose, setQuality,
     setGeneratedImages, updateGeneratedImage, setError, startOver,
     setIsDebugMode, addDebugInfo, setLoading, removeAllFiles,
-    removeUploadedFile, updatePersona, clearDebugInfos, setSaveStatus,
+    removeUploadedFile, updatePersona, updateCharacterName, clearDebugInfos, setSaveStatus,
     setNumImages, setProvider
 } from '../../store/groupPhotoFusionSlice';
 import { updateOptions as updateGenerationOptions } from '../../store/generationSlice';
@@ -34,6 +34,14 @@ const QWEN_LIGHTNING_PRESETS = {
   4: 'QWEN\\Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors',
   8: 'QWEN\\Qwen-Image-Lightning-8steps-V2.0.safetensors',
 } as const;
+const getSubjectDescriptions = (uploadedFiles: UploadedFile[]) => uploadedFiles.map(uploadedFile => {
+  const persona = PERSONAS.find(item => item.id === uploadedFile.personaId)?.description || '';
+  const characterName = uploadedFile.characterName?.trim();
+  const identityHint = characterName
+    ? `the notable person ${characterName}, whose distinctive recognizable facial identity must be preserved`
+    : '';
+  return [identityHint, persona].filter(Boolean).join('; ');
+});
 
 const GroupPhotoFusionPanel: React.FC = () => {
   const dispatch: AppDispatch = useDispatch();
@@ -43,10 +51,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
   } = useSelector((state: RootState) => state.groupPhotoFusion);
   const generationOptions = useSelector((state: RootState) => state.generation.options);
     const { isComfyUIConnected, isMammouthConnected, comfyUIObjectInfo } = useSelector((state: RootState) => state.app);
-  const ltxPrompt = selectedPose?.getPrompt(uploadedFiles.map(file => {
-    const persona = PERSONAS.find(item => item.id === file.personaId);
-    return persona?.description || '';
-  }), quality, !!backgroundFile);
+  const ltxPrompt = selectedPose?.getPrompt(getSubjectDescriptions(uploadedFiles), quality, !!backgroundFile);
 
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -124,6 +129,10 @@ const GroupPhotoFusionPanel: React.FC = () => {
     dispatch(updatePersona({ id, personaId }));
   };
 
+  const handleCharacterNameChange = (id: string, characterName: string) => {
+    dispatch(updateCharacterName({ id, characterName }));
+  };
+
   const handleRemoveAll = () => {
     dispatch(removeAllFiles());
   };
@@ -163,13 +172,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
       const subjectFiles = uploadedFiles.map(uf => uf.file);
       const isBackgroundSupported = !(selectedPose?.id === 'cinematic-portrait' || selectedPose?.id === 'professional-bw');
       const backgroundToUse = backgroundFile && isBackgroundSupported ? backgroundFile : null;
-      const personaDescriptions = uploadedFiles.map(uf => {
-        if (uf.personaId) {
-            const persona = PERSONAS.find(p => p.id === uf.personaId);
-            return persona ? persona.description : '';
-        }
-        return '';
-      });
+      const personaDescriptions = getSubjectDescriptions(uploadedFiles);
 
       const prompt = selectedPose.getPrompt(personaDescriptions, quality, !!backgroundToUse);
       const baseSeed = generationOptions.comfySeed ?? Math.floor(Math.random() * 1e15);
@@ -264,13 +267,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
     const subjectFiles = uploadedFiles.map(uf => uf.file);
     const isBackgroundSupported = !(selectedPose?.id === 'cinematic-portrait' || selectedPose?.id === 'professional-bw');
     const backgroundToUse = backgroundFile && isBackgroundSupported ? backgroundFile : null;
-    const personaDescriptions = uploadedFiles.map(uf => {
-        if (uf.personaId) {
-            const persona = PERSONAS.find(p => p.id === uf.personaId);
-            return persona ? persona.description : '';
-        }
-        return '';
-    });
+    const personaDescriptions = getSubjectDescriptions(uploadedFiles);
     if (!selectedPose) return;
     const prompt = selectedPose.getPrompt(personaDescriptions, quality, !!backgroundToUse);
 
@@ -478,7 +475,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
       const isBackgroundDisabled = selectedPose?.id === 'cinematic-portrait' || selectedPose?.id === 'professional-bw';
       return (
         <div className="w-full">
-          <ImagePreview files={uploadedFiles} onRemove={handleRemoveImage} onPersonaChange={handlePersonaChange} onRemoveAll={handleRemoveAll} onOpenLibrary={handleOpenLibrary} />
+          <ImagePreview files={uploadedFiles} onRemove={handleRemoveImage} onPersonaChange={handlePersonaChange} onCharacterNameChange={handleCharacterNameChange} onRemoveAll={handleRemoveAll} onOpenLibrary={handleOpenLibrary} />
           <div className="space-y-8 mt-8">
             <BackgroundUpload
               backgroundFile={backgroundFile}

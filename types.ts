@@ -1086,4 +1086,5 @@ export interface UploadedFile {
   file: File;
   previewUrl: string;
   personaId: string;
+  characterName?: string;
 }

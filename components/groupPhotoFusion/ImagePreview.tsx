@@ -7,11 +7,12 @@ interface ImagePreviewProps {
   files: UploadedFile[];
   onRemove: (id: string) => void;
   onPersonaChange: (id: string, personaId: string) => void;
+  onCharacterNameChange: (id: string, characterName: string) => void;
   onRemoveAll: () => void;
   onOpenLibrary: () => void;
 }
 
-const ImagePreview: React.FC<ImagePreviewProps> = ({ files, onRemove, onPersonaChange, onRemoveAll, onOpenLibrary }) => {
+const ImagePreview: React.FC<ImagePreviewProps> = ({ files, onRemove, onPersonaChange, onCharacterNameChange, onRemoveAll, onOpenLibrary }) => {
   const defaultPersona = PERSONAS.find(p => p.id === 'default');
   const femalePersonas = PERSONAS.filter(p => p.type === 'female');
   const malePersonas = PERSONAS.filter(p => p.type === 'male');
@@ -81,6 +82,16 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ files, onRemove, onPersonaC
                         </optgroup>
                     )}
                 </select>
+                <label htmlFor={`character-name-${uploadedFile.id}`} className="mt-2 block text-left text-xs font-medium text-text-secondary">Known person (optional)</label>
+                <input
+                  id={`character-name-${uploadedFile.id}`}
+                  type="text"
+                  value={uploadedFile.characterName || ''}
+                  onChange={(event) => onCharacterNameChange(uploadedFile.id, event.target.value)}
+                  placeholder="e.g. Elvis Presley"
+                  maxLength={80}
+                  className="mt-1 block w-full rounded-lg border border-border-primary bg-bg-tertiary p-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-accent"
+                />
             </div>
           </div>
         ))}

@@ -28,29 +28,65 @@ const QWEN_LIGHTNING_PRESETS = {
     4: 'QWEN\\Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors',
     8: 'QWEN\\Qwen-Image-Lightning-8steps-V2.0.safetensors',
 } as const;
-const FLUX_HAIRSTYLES: Record<string, string> = {
-    '1950s': 'a realistic 1950s swept-back pompadour with neatly sculpted volume and tapered sides',
-    '1960s': 'a realistic 1960s mod hairstyle with a full rounded shape, controlled volume, and period-accurate finish',
-    '1970s': 'a realistic 1970s feathered medium-length hairstyle with soft natural layers and side-swept volume',
-    '1980s': 'a realistic 1980s long layered hairstyle with pronounced volume, feathered sides, and natural individual strands',
-    '1990s': 'a realistic 1990s medium-length grunge hairstyle with relaxed textured layers and natural movement',
-    '2000s': 'a realistic 2000s textured shag hairstyle with defined layers, side-swept fringe, and a natural salon finish',
+const FLUX_HAIRSTYLES: Record<string, Record<'woman' | 'man', string>> = {
+    '1950s': {
+        woman: 'a feminine 1950s softly curled bob or sculpted pageboy with polished waves, natural volume, and a precise period hairline',
+        man: 'a masculine 1950s swept-back pompadour with neatly sculpted volume, a clean side part, and tapered sides',
+    },
+    '1960s': {
+        woman: 'a feminine 1960s bouffant, polished bob, or softly flipped hairstyle with controlled crown volume and curled ends',
+        man: 'a masculine 1960s mod cut with a neat side part, short controlled volume, defined sideburns, and tapered edges',
+    },
+    '1970s': {
+        woman: 'a feminine 1970s feathered shoulder-length hairstyle with soft face-framing layers, outward-curled ends, and natural volume',
+        man: 'a masculine 1970s shag or feathered medium cut with sideburns, layered texture, and controlled natural movement',
+    },
+    '1980s': {
+        woman: 'a feminine 1980s voluminous layered hairstyle with large curls, feathered sides, lifted roots, and defined natural strands',
+        man: 'a masculine 1980s full layered haircut with swept-back volume, shorter sides, a controlled mullet influence, and natural strands',
+    },
+    '1990s': {
+        woman: 'a feminine 1990s layered bob or shoulder-length cut with soft face-framing layers, natural movement, and a polished grunge-era finish',
+        man: 'a masculine 1990s textured crop or grunge cut with relaxed layers, a natural hairline, and understated movement',
+    },
+    '2000s': {
+        woman: 'a feminine early-2000s layered salon hairstyle with side-swept fringe, face-framing layers, smooth volume, and a polished finish',
+        man: 'a masculine early-2000s textured crop or short shag with piecey layers, side-swept fringe, and a natural matte finish',
+    },
 };
-const FLUX_DECADE_REIMAGININGS: Record<string, string> = {
-    '1950s': 'for a woman, a softly curled bob or pageboy with a fitted blouse, cardigan, or day dress and explicitly no necktie or masculine business suit; for a man, a neat side-part or pompadour with a collared shirt and tailored jacket; plus restrained 1950s grooming and authentic black-and-white or early color film photography',
-    '1960s': 'for a woman, a polished bob, bouffant, or softly flipped hairstyle with a shift dress, feminine blouse, or fitted cardigan; for a man, a clean mod cut with a narrow-collar shirt or slim-cut jacket; plus restrained 1960s grooming and warm saturated film',
-    '1970s': 'for a woman, feathered or softly layered hair with a feminine wide-collar blouse, knit top, or flowing earth-toned dress; for a man, a shag or feathered cut with a wide-collar shirt or casual jacket; plus natural 1970s grooming and warm grainy film',
-    '1980s': 'for a woman, a voluminous layered or curled hairstyle with a feminine blouse, dress, or colorful jacket and period-appropriate makeup; for a man, a full layered cut with a polo, denim, or statement jacket; plus punchy flash-lit 1980s analog photography',
-    '1990s': 'for a woman, a layered bob, soft grunge cut, or natural shoulder-length style with a feminine casual top, cardigan, or relaxed jacket; for a man, a textured crop or grunge-era layers with a T-shirt, overshirt, or casual jacket; plus natural grooming and consumer-film color and grain',
-    '2000s': 'for a woman, a layered early-2000s salon style with a fitted feminine top, cardigan, or casual jacket; for a man, a textured crop or shag with a fitted shirt or layered casual jacket; plus restrained period grooming and crisp early-digital-camera rendering',
+const FLUX_DECADE_REIMAGININGS: Record<string, Record<'woman' | 'man', string>> = {
+    '1950s': {
+        woman: 'a softly curled bob or pageboy with a fitted blouse, cardigan, or day dress, feminine styling, restrained 1950s grooming, and authentic black-and-white or early color film photography',
+        man: 'a neat masculine side-part or pompadour with a collared shirt and tailored menswear jacket, restrained 1950s grooming, and authentic black-and-white or early color film photography',
+    },
+    '1960s': {
+        woman: 'a polished bob, bouffant, or softly flipped hairstyle with a shift dress, feminine blouse, or fitted cardigan, feminine 1960s styling, and warm saturated film',
+        man: 'a clean masculine mod cut with a narrow-collar shirt or slim-cut menswear jacket, restrained 1960s grooming, and warm saturated film',
+    },
+    '1970s': {
+        woman: 'feathered or softly layered hair with a feminine wide-collar blouse, knit top, or flowing earth-toned dress, feminine 1970s styling, and warm grainy film',
+        man: 'a masculine shag or feathered cut with a wide-collar menswear shirt or casual jacket, natural 1970s grooming, and warm grainy film',
+    },
+    '1980s': {
+        woman: 'voluminous layered or curled hair with a feminine blouse, dress, or colorful jacket, period-appropriate feminine makeup, and punchy flash-lit 1980s analog photography',
+        man: 'a full masculine layered cut with a polo, denim, or statement menswear jacket, masculine 1980s grooming, and punchy flash-lit analog photography',
+    },
+    '1990s': {
+        woman: 'a layered bob, soft grunge cut, or natural shoulder-length style with a feminine casual top, cardigan, or relaxed jacket, feminine 1990s styling, and natural consumer-film color and grain',
+        man: 'a masculine textured crop or grunge-era layers with a T-shirt, overshirt, or casual menswear jacket, natural 1990s grooming, and consumer-film color and grain',
+    },
+    '2000s': {
+        woman: 'an early-2000s layered salon hairstyle with a fitted feminine top, cardigan, or casual jacket, feminine styling, and crisp early-digital-camera rendering',
+        man: 'a masculine textured crop or shag with a fitted shirt or layered menswear jacket, restrained masculine grooming, and crisp early-digital-camera rendering',
+    },
 };
-const QWEN_DECADE_REIMAGININGS: Record<string, string> = {
-    '1950s': '1950s curled bob or pageboy and fitted blouse, cardigan, or day dress for a woman; neat side-part or pompadour and collared shirt with tailored jacket for a man; black-and-white or early color film',
-    '1960s': '1960s polished bob, bouffant, or flipped hair and shift dress or feminine blouse for a woman; clean mod cut and narrow-collar shirt or slim jacket for a man; warm saturated film',
-    '1970s': '1970s feathered or layered hair and wide-collar blouse, knit top, or flowing dress for a woman; shag or feathered cut and wide-collar shirt or casual jacket for a man; warm grainy film',
-    '1980s': '1980s voluminous curled or layered hair and colorful feminine blouse, dress, or jacket for a woman; full layered cut and polo, denim, or statement jacket for a man; bright flash-lit analog film',
-    '1990s': '1990s layered bob or soft grunge hair and feminine casual top, cardigan, or relaxed jacket for a woman; textured crop or grunge layers and T-shirt, overshirt, or casual jacket for a man; natural consumer film',
-    '2000s': 'early-2000s layered salon hair and fitted feminine top, cardigan, or casual jacket for a woman; textured crop or shag and fitted shirt or layered jacket for a man; crisp early-digital photography',
+const QWEN_DECADE_REIMAGININGS: Record<string, Record<'woman' | 'man', string>> = {
+    '1950s': { woman: '1950s curled bob or pageboy, fitted feminine blouse, cardigan, or day dress, black-and-white or early color film', man: '1950s masculine side-part or pompadour, collared menswear shirt and tailored jacket, black-and-white or early color film' },
+    '1960s': { woman: '1960s polished bob, bouffant, or flipped hair, shift dress or feminine blouse, warm saturated film', man: '1960s masculine mod cut, narrow-collar menswear shirt or slim jacket, warm saturated film' },
+    '1970s': { woman: '1970s feathered or layered hair, feminine wide-collar blouse, knit top, or flowing dress, warm grainy film', man: '1970s masculine shag or feathered cut, wide-collar menswear shirt or casual jacket, warm grainy film' },
+    '1980s': { woman: '1980s voluminous curled or layered hair, colorful feminine blouse, dress, or jacket, bright flash-lit analog film', man: '1980s masculine layered haircut, polo, denim, or statement menswear jacket, bright flash-lit analog film' },
+    '1990s': { woman: '1990s layered bob or soft grunge hair, feminine casual top, cardigan, or relaxed jacket, natural consumer film', man: '1990s masculine textured crop or grunge layers, T-shirt, overshirt, or casual menswear jacket, natural consumer film' },
+    '2000s': { woman: 'early-2000s layered salon hair, fitted feminine top, cardigan, or casual jacket, crisp early-digital photography', man: 'early-2000s masculine textured crop or shag, fitted menswear shirt or layered jacket, crisp early-digital photography' },
 };
 const FLUX_DECADE_SCENE_REIMAGININGS: Record<string, string> = {
     '1950s': 'Place the subject inside a bustling 1950s neighborhood diner, seated sideways on a chrome counter stool while turning naturally toward a server. Use an eye-level three-quarter side view and a medium-wide horizontal-feeling composition that clearly shows the counter, jukebox, tiled floor, booths, patrons, and street through the windows.',
@@ -83,13 +119,13 @@ const THEMES: Record<string, { title: string, description: string, prompt: (deca
         title: 'Through the Decades',
         description: 'The original experience. See yourself reimagined in the style of past decades.',
         prompt: (decade: string) => `Reimagine the person in this photo in the style of the ${decade}. This includes clothing, hairstyle, photo quality, and the overall aesthetic of that decade. The output must be a photorealistic image showing the person clearly.`,
-        fluxPrompt: (decade: string, reimagineScene = false) => `Restyle the source person as the same individual photographed in the ${decade}, using ${FLUX_DECADE_REIMAGININGS[decade]}. Before editing, inspect Picture 1 and select only the styling branch matching the subject's visible gender presentation; never blend the woman and man branches. Preserve that presentation exactly. Never change, swap, masculinize, feminize, or ambiguously reinterpret the subject. Preserve the exact recognizable facial identity, face shape, eyes, nose, mouth, jawline, skin tone, apparent age, and body proportions. ${reimagineScene ? `Preserve identity only, not composition. ${FLUX_DECADE_SCENE_REIMAGININGS[decade]} The stated activity, pose, body orientation, subject placement, viewpoint, and framing are mandatory. Do not reuse the source pose, front-facing alignment, horizon placement, or portrait framing. Use documentary deep focus with readable foreground, middle ground, and background detail. Keep the environment sharp and specific from edge to edge, approximately f/8. No shallow depth of field, portrait-mode blur, generic bokeh, empty backdrop, isolated headshot, or centered passport-style composition.` : 'Preserve the source pose, expression, camera angle, crop, subject placement, and general setting.'} Inspect the source eyes carefully. When Picture 1 has no eyewear, the result must show the same bare, fully visible, unobstructed eyes with no frames or lenses of any kind. Preserve eyewear only when visibly present in Picture 1. Preserve facial hair only when visibly present; otherwise keep the face clean-shaven. Change the hairstyle, wardrobe, grooming, lighting response, color treatment, film grain, and photographic medium enough to make the decade immediately clear. Adapt period hair and clothing naturally to the same subject rather than replacing them with a different person. ${reimagineScene ? 'Render the subject and environment as one candid photograph with consistent perspective, ambient light, film response, and natural interaction.' : 'Keep the existing background composition recognizable, applying only subtle decade-appropriate environmental and photographic details.'} Photorealistic authentic period portrait, not a face replacement, gender transformation, costume caricature, cross-gender styling, or newly invented subject.`,
+        fluxPrompt: (decade: string, reimagineScene = false) => `Restyle the source person as the same individual photographed in the ${decade}. Preserve the exact recognizable facial identity, face shape, eyes, nose, mouth, jawline, skin tone, apparent age, and body proportions. ${reimagineScene ? `Preserve identity only, not composition. ${FLUX_DECADE_SCENE_REIMAGININGS[decade]} The stated activity, pose, body orientation, subject placement, viewpoint, and framing are mandatory. Do not reuse the source pose, front-facing alignment, horizon placement, or portrait framing. Use documentary deep focus with readable foreground, middle ground, and background detail. Keep the environment sharp and specific from edge to edge, approximately f/8. No shallow depth of field, portrait-mode blur, generic bokeh, empty backdrop, isolated headshot, or centered passport-style composition.` : 'Preserve the source pose, expression, camera angle, crop, subject placement, and general setting.'} Inspect the source eyes carefully. When Picture 1 has no eyewear, the result must show the same bare, fully visible, unobstructed eyes with no frames or lenses of any kind. Preserve eyewear only when visibly present in Picture 1. Preserve facial hair only when visibly present; otherwise keep the face clean-shaven. Change the hairstyle, wardrobe, grooming, lighting response, color treatment, film grain, and photographic medium enough to make the decade immediately clear. Adapt period hair and clothing naturally to the same subject rather than replacing them with a different person. ${reimagineScene ? 'Render the subject and environment as one candid photograph with consistent perspective, ambient light, film response, and natural interaction.' : 'Keep the existing background composition recognizable, applying only subtle decade-appropriate environmental and photographic details.'} Photorealistic authentic period portrait, not a face replacement, gender transformation, costume caricature, cross-gender styling, or newly invented subject.`,
     },
     'hairstyles': {
         title: 'Hairstyle Time Machine',
         description: 'Try on the most popular hairstyles from each decade.',
         prompt: (decade: string) => `Reimagine the person in this photo with a popular hairstyle from the ${decade}. The output must be a photorealistic image showing the person clearly, focusing on the hair.`,
-        fluxPrompt: (decade: string) => `Replace the current hair with ${FLUX_HAIRSTYLES[decade]}. Make the new hair visibly different from the source, with believable roots, hairline, strand detail, texture, volume, and lighting. Keep the face, glasses, facial hair, skin, expression, clothing, body, pose, camera framing, and background exactly unchanged. Photorealistic professional hairstyle edit, not a wig, illustration, or beauty-filtered face.`,
+        fluxPrompt: () => `Replace the current hairstyle completely with the selected period hairstyle. Make the new hair visibly different from the source, with believable roots, hairline, strand detail, texture, volume, and lighting. Keep the face, glasses, facial hair, skin, expression, clothing, body, pose, camera framing, and background exactly unchanged. Photorealistic professional hairstyle edit, not a wig, illustration, or beauty-filtered face.`,
     },
     'fantasy': {
         title: 'Fantasy You',
@@ -100,8 +136,8 @@ const THEMES: Record<string, { title: string, description: string, prompt: (deca
     'superhero': {
         title: 'Superhero Saga',
         description: 'Design a superhero version of you from different comic book eras.',
-        prompt: (decade: string) => `Reimagine the person in this photo as an original superhero in ${SUPERHERO_COMIC_STYLES[decade]}. Create a new superhero costume, emblem, powers, action pose, camera angle, city environment, and complete comic-book composition. Preserve the person's recognizable facial identity. The output must be a hand-drawn comic-book illustration, not a photograph, not photorealistic, and not a person wearing a costume in a photo.`,
-        fluxPrompt: (decade: string) => `Reimagine the source person as an original superhero in ${SUPERHERO_COMIC_STYLES[decade]}. Create an entirely new superhero costume, emblem, powers, action pose, body positioning, dramatic camera angle, city environment, lighting, and complete comic-cover composition. Do not reuse the source room, clothing, pose, crop, or photographic rendering. Preserve the person's recognizable face shape, eyes, nose, mouth, eyewear if present, facial hair if present, skin tone, and apparent age, translated into illustrated linework. Render every element as a cohesive hand-drawn comic-book illustration. Absolutely no photography, photorealism, live-action appearance, realistic skin texture, or cosplay photograph.`,
+        prompt: (decade: string) => `Reimagine the source person as an original comic-book hero in ${SUPERHERO_COMIC_STYLES[decade]}. Create a unique costume, emblem, powers, action pose, camera angle, city environment, and complete comic-book composition without copying any existing named hero. Preserve the person's recognizable facial identity, body proportions, apparent age, and skin tone. The output must be a hand-drawn comic-book illustration, not a photograph, not photorealistic, and not a person wearing a costume in a photo.`,
+        fluxPrompt: (decade: string) => `Reimagine the source person as an original comic-book hero in ${SUPERHERO_COMIC_STYLES[decade]}. Create an entirely unique costume, emblem, powers, action pose, body positioning, dramatic camera angle, city environment, lighting, and complete comic-cover composition without copying any existing named hero. Do not reuse the source room, clothing, pose, crop, or photographic rendering. Preserve the person's recognizable face shape, eyes, nose, mouth, eyewear if present, facial hair if present, skin tone, apparent age, and body proportions, translated into illustrated linework. Render every element as a cohesive hand-drawn comic-book illustration. Absolutely no photography, photorealism, live-action appearance, realistic skin texture, or cosplay photograph.`,
     },
     'historical': {
         title: 'Historical Cameo',
@@ -138,11 +174,13 @@ const PastForwardPanel: React.FC = () => {
     const [isGenerating, setIsGenerating] = useState<boolean>(false);
     const [isCreatingAlbum, setIsCreatingAlbum] = useState<boolean>(false);
     const [selectedTheme, setSelectedTheme] = useState<string>('decades');
+    const [subjectGender, setSubjectGender] = useState<'woman' | 'man' | null>(null);
     const [reimagineScene, setReimagineScene] = useState(false);
     const [selectedDecades, setSelectedDecades] = useState<string[]>([...DECADES]);
     const [saveStatuses, setSaveStatuses] = useState<Record<string, 'idle' | 'saving' | 'saved'>>({});
     const [albumSaveStatus, setAlbumSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const provider = generationOptions.pastForwardProvider || 'comfyui';
+    const requiresSubjectGender = selectedTheme === 'superhero' || ((selectedTheme === 'decades' || selectedTheme === 'hairstyles') && provider !== 'mammouth');
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [zoomedImage, setZoomedImage] = useState<{ url: string; decade: string } | null>(null);
@@ -222,8 +260,25 @@ const PastForwardPanel: React.FC = () => {
 
     const generatePastForwardImage = async (prompt: string, fluxPrompt: string, decade: string): Promise<string> => {
         if (!uploadedFile || !uploadedImageBase64) throw new Error('Select a source photo first.');
-        const finalPrompt = reimagineScene ? `${prompt} ${REIMAGINE_SCENE_PROMPT}` : prompt;
-        const finalFluxPrompt = reimagineScene ? `${fluxPrompt} ${REIMAGINE_SCENE_PROMPT}` : fluxPrompt;
+        if (requiresSubjectGender && !subjectGender) throw new Error('Select Woman or Man for the subject identity.');
+        const subjectIdentityPrompt = !requiresSubjectGender
+            ? ''
+            : subjectGender === 'woman'
+                ? selectedTheme === 'superhero'
+                    ? 'The source subject is a woman. Preserve her female sex and feminine gender presentation. Transform this same recognizable woman into an original comic-book heroine with feminine facial structure, anatomy, body proportions, hair, styling, and costume. Do not depict a man, masculine anatomy, a square masculine jaw, a male muscular torso, Superman, an S-shaped chest emblem, or a red-and-blue Superman-style suit.'
+                    : 'Picture 1 depicts a woman. Preserve her female sex and feminine gender presentation exactly. Keep the same recognizable woman, feminine facial structure, anatomy, body proportions, hairline, and styling. Never depict a man, male anatomy, a masculine face, a square masculine jaw, a male muscular torso, menswear, or masculine styling.'
+                : selectedTheme === 'superhero'
+                    ? 'The source subject is a man. Preserve his male sex and masculine gender presentation. Transform this same recognizable man into an original comic-book hero with masculine facial structure, anatomy, body proportions, hair, styling, and costume. Do not depict a woman or feminine anatomy.'
+                    : 'Picture 1 depicts a man. Preserve his male sex and masculine gender presentation exactly. Keep the same recognizable man, masculine facial structure, jawline, anatomy, body proportions, hairline, and grooming. Never depict a woman, feminine anatomy, feminine face, breasts, makeup, a dress, a skirt, a blouse, or feminine styling.';
+        const selectedStylePrompt = !subjectGender
+            ? ''
+            : selectedTheme === 'decades'
+                ? `Use only this selected identity styling instruction: ${FLUX_DECADE_REIMAGININGS[decade][subjectGender]}.`
+                : selectedTheme === 'hairstyles'
+                    ? `Use only this selected identity hairstyle: ${FLUX_HAIRSTYLES[decade][subjectGender]}.`
+                    : '';
+        const finalPrompt = [selectedTheme === 'superhero' ? subjectIdentityPrompt : '', prompt, reimagineScene ? REIMAGINE_SCENE_PROMPT : ''].filter(Boolean).join(' ');
+        const finalFluxPrompt = [subjectIdentityPrompt, selectedStylePrompt, fluxPrompt, reimagineScene ? REIMAGINE_SCENE_PROMPT : ''].filter(Boolean).join(' ');
         if (provider === 'mammouth') {
             setGenerationProgress(current => ({ ...current, [decade]: { value: 0.1, message: `Generating ${decade} with Mammouth...` } }));
             const mammouthPrompt = selectedTheme === 'historical' ? finalFluxPrompt : finalPrompt;
@@ -234,8 +289,18 @@ const PastForwardPanel: React.FC = () => {
         }
         if (provider === 'qwen') {
             const qwenPrompt = selectedTheme === 'decades'
-                ? `Edit Picture 1. Keep the same person's face, age, skin tone, body, and gender presentation. Transform the subject into the ${decade}: ${QWEN_DECADE_REIMAGININGS[decade]}. Replace the hairstyle completely. Replace all visible source clothing and accessories completely. Do not retain the original hairstyle or wardrobe. ${reimagineScene ? `${FLUX_DECADE_SCENE_REIMAGININGS[decade]} Use a new pose, camera angle, framing, and sharp detailed background.` : 'Keep the original pose, framing, and background.'} Show bare eyes when the source has no glasses. Photorealistic.`
-                : finalFluxPrompt;
+                ? subjectGender === 'woman'
+                    ? `Edit Picture 1. The subject is a woman. Keep her female, feminine, and recognizable, with the same face, age, skin tone, and feminine body. Transform her into the ${decade}: ${QWEN_DECADE_REIMAGININGS[decade].woman}. No man, male anatomy, masculine face, menswear, or masculine styling. Replace all source hair and clothing. ${reimagineScene ? `${FLUX_DECADE_SCENE_REIMAGININGS[decade]} Use a new pose and framing.` : 'Keep the original pose, framing, and background.'} Photorealistic.`
+                    : `Edit Picture 1. The subject is a man. Keep him male, masculine, and recognizable, with the same face, age, skin tone, and masculine body. Transform him into the ${decade}: ${QWEN_DECADE_REIMAGININGS[decade].man}. No woman, female anatomy, feminine face, breasts, makeup, dress, skirt, blouse, or feminine styling. Replace all source hair and clothing. ${reimagineScene ? `${FLUX_DECADE_SCENE_REIMAGININGS[decade]} Use a new pose and framing.` : 'Keep the original pose, framing, and background.'} Photorealistic.`
+                : selectedTheme === 'hairstyles'
+                    ? subjectGender === 'woman'
+                        ? `Edit only the hair in Picture 1. The subject is a woman; keep her female, feminine, and recognizable. Replace her hair with ${FLUX_HAIRSTYLES[decade].woman}. Preserve her exact face, feminine features, body, skin, expression, eyewear, clothing, pose, framing, and background. No man, masculine face, masculine haircut, or gender change. Photorealistic.`
+                        : `Edit only the hair in Picture 1. The subject is a man; keep him male, masculine, and recognizable. Replace his hair with ${FLUX_HAIRSTYLES[decade].man}. Preserve his exact face, masculine features, body, skin, expression, facial hair, eyewear, clothing, pose, framing, and background. No woman, feminine face, feminine hairstyle, makeup, or gender change. Photorealistic.`
+                : selectedTheme === 'superhero'
+                    ? subjectGender === 'woman'
+                        ? `Edit Picture 1. The subject is a woman. Keep her female, feminine, and recognizable. Transform her into an original comic-book heroine in ${SUPERHERO_COMIC_STYLES[decade]}. Preserve her face, age, skin tone, and feminine body proportions. Create a unique feminine costume, emblem, powers, action pose, and city cover. No man, male anatomy, masculine jaw or torso, Superman, S emblem, or Superman colors. Hand-drawn comic illustration only.`
+                        : `Edit Picture 1. The subject is a man. Keep him male, masculine, and recognizable. Transform him into an original comic-book hero in ${SUPERHERO_COMIC_STYLES[decade]}. Preserve his face, age, skin tone, and masculine body proportions. Create a unique costume, emblem, powers, action pose, and city cover without copying an existing hero. Hand-drawn comic illustration only.`
+                    : finalFluxPrompt;
             return generateQwenPastForwardImage(
                 uploadedFile,
                 qwenPrompt,
@@ -263,6 +328,7 @@ const PastForwardPanel: React.FC = () => {
 
     const handleGenerateClick = async () => {
         if (!uploadedImageBase64 || selectedDecades.length === 0) return;
+        if (requiresSubjectGender && !subjectGender) return;
 
         const activeDecades = [...selectedDecades];
         setIsGenerating(true);
@@ -313,6 +379,7 @@ const PastForwardPanel: React.FC = () => {
 
     const handleRegenerateDecade = async (decade: string) => {
         if (!uploadedImageBase64) return;
+        if (requiresSubjectGender && !subjectGender) return;
         if (!selectedDecades.includes(decade)) return;
         if (generatedImages[decade]?.status === 'pending') return;
         
@@ -437,7 +504,7 @@ const PastForwardPanel: React.FC = () => {
     const providerReady = provider === 'mammouth'
         ? !!isMammouthConnected
         : !!isComfyUIConnected && missingNodes.length === 0;
-    const isReadyToGenerate = !!uploadedImageBase64 && !!uploadedFile && selectedDecades.length > 0 && providerReady && !isGenerating;
+    const isReadyToGenerate = !!uploadedImageBase64 && !!uploadedFile && selectedDecades.length > 0 && providerReady && !isGenerating && (!requiresSubjectGender || !!subjectGender);
     const hasResults = selectedDecades.some(decade => generatedImages[decade]?.status === 'done');
     const selectedResultsComplete = selectedDecades.length > 0 && selectedDecades.every(decade => generatedImages[decade]?.status === 'done');
     const runningDecades = generationDecades.filter(decade => generatedImages[decade]?.status === 'pending');
@@ -584,6 +651,21 @@ const PastForwardPanel: React.FC = () => {
                             </div>
                         </div>
 
+                        {requiresSubjectGender && <div>
+                            <label className="mb-2 block text-sm font-medium text-text-secondary">Subject Identity</label>
+                            <div className="grid grid-cols-2 gap-2 rounded-md border border-border-primary bg-bg-tertiary p-1">
+                                {(['woman', 'man'] as const).map(gender => <button
+                                    key={gender}
+                                    type="button"
+                                    onClick={() => setSubjectGender(gender)}
+                                    disabled={isGenerating}
+                                    className={`rounded px-3 py-2 text-sm font-bold transition-colors ${subjectGender === gender ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}
+                                >
+                                    {gender === 'woman' ? 'Woman' : 'Man'}
+                                </button>)}
+                            </div>
+                        </div>}
+
                         <label className={`flex items-start gap-3 rounded-md border p-3 transition-colors ${reimagineScene ? 'border-accent bg-accent/10' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-accent'}`}>
                             <input type="checkbox" checked={reimagineScene} onChange={(event) => { setReimagineScene(event.target.checked); setAlbumSaveStatus('idle'); }} disabled={isGenerating} className="mt-0.5 rounded border-border-primary text-accent focus:ring-accent" />
                             <span>
@@ -625,7 +707,7 @@ const PastForwardPanel: React.FC = () => {
                         className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
                     >
                         {isGenerating ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <GenerateIcon className="w-5 h-5"/>}
-                        {isGenerating ? 'Travelling Through Time...' : selectedDecades.length === 0 ? 'Select at least one decade' : `Generate ${selectedDecades.length} with ${providerLabel}`}
+                        {isGenerating ? 'Travelling Through Time...' : selectedDecades.length === 0 ? 'Select at least one decade' : requiresSubjectGender && !subjectGender ? 'Select Woman or Man' : `Generate ${selectedDecades.length} with ${providerLabel}`}
                     </button>
                 </div>
             </div>

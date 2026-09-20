@@ -61,6 +61,13 @@ const groupPhotoFusionSlice = createSlice({
             file.personaId = personaId;
         }
     },
+    updateCharacterName: (state, action: PayloadAction<{ id: string; characterName: string }>) => {
+      const { id, characterName } = action.payload;
+      const file = state.uploadedFiles.find(f => f.id === id);
+      if (file) {
+        file.characterName = characterName;
+      }
+    },
     removeAllFiles: (state) => {
         state.uploadedFiles = [];
         state.backgroundFile = null;
@@ -123,6 +130,7 @@ export const {
     setBackgroundFile,
     removeUploadedFile,
     updatePersona,
+    updateCharacterName,
     removeAllFiles,
     setSelectedPose,
     setQuality,
