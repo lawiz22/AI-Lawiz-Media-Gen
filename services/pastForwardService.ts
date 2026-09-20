@@ -48,3 +48,27 @@ export const generateComfyUIPastForwardImage = async (
     if (!image) throw new Error('ComfyUI completed without returning a Past Forward image.');
     return imageSourceToDataUrl(image.src);
 };
+
+export const generateQwenPastForwardImage = async (
+    sourceFile: File,
+    prompt: string,
+    options: GenerationOptions,
+    allowAdditionalPeople = false,
+    updateProgress: (message: string, value: number) => void = () => undefined,
+): Promise<string> => {
+    const result = await generateComfyUIPortraits(sourceFile, {
+        ...options,
+        provider: 'comfyui',
+        comfyModelType: 'qwen-edit',
+        comfyPrompt: buildFlux2PastForwardPrompt(prompt, allowAdditionalPeople),
+        comfyNegativePrompt: '',
+        comfySteps: options.pastForwardQwenSteps ?? 8,
+        comfyCfg: options.pastForwardQwenCfg ?? 1,
+        comfySampler: options.pastForwardQwenSampler || 'euler_ancestral',
+        comfyScheduler: options.pastForwardQwenScheduler || 'beta57',
+        numImages: 1,
+    }, updateProgress);
+    const image = result.images[0];
+    if (!image) throw new Error('Qwen Edit completed without returning a Past Forward image.');
+    return imageSourceToDataUrl(image.src);
+};

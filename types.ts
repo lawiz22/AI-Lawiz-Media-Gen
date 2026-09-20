@@ -190,6 +190,15 @@ export type NunchakuAttention = 'nunchaku-fp16' | 'flash-attention2';
 
 export interface GenerationOptions {
   provider: Provider;
+  pastForwardProvider?: 'comfyui' | 'qwen' | 'mammouth';
+  pastForwardQwenSteps?: number;
+  pastForwardQwenCfg?: number;
+  pastForwardQwenSampler?: string;
+  pastForwardQwenScheduler?: string;
+  photoFusionQwenSteps?: number;
+  photoFusionQwenCfg?: number;
+  photoFusionQwenSampler?: string;
+  photoFusionQwenScheduler?: string;
   numImages: number;
   aspectRatio: AspectRatio;
   megapixel?: number; // For Z-Image

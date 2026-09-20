@@ -8,6 +8,9 @@ feat: upgrade Past Forward with FLUX2 generation and selective timelines
 - Remove Pet Cartoon-a-tron and align FLUX2 Fantasy You with Mammouth-style full-scene transformations.
 - Render Superhero Saga as decade-specific comic-book art instead of photorealistic costume portraits.
 - Insert Historical Cameo subjects into concrete decade-specific events with authentic crowds and documentary composition.
+- Add Qwen Edit as a Past Forward engine using the same theme and scene prompts as FLUX2.
+- Add Qwen Lightning 4-step and 8-step presets that switch the installed LoRA and sampling steps together.
+- Add Qwen Edit Photo Fusion with concise multi-identity prompts, three-input validation, advanced controls, and Lightning presets.
 - Add an optional Reimagine the scene mode for new backgrounds, poses, framing, camera angles, lighting, and composition.
 - Select individual decades or use Select All and Deselect All before generation.
 - Keep decade selections stable and show named per-decade progress, completion, and errors.

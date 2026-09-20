@@ -14,7 +14,7 @@ import { addToLibrary } from '../../store/librarySlice';
 import { addSessionTokenUsage, setModalOpen } from '../../store/appSlice';
 import { Pose, UploadedFile, Quality, DebugInfo, GeneratedImage } from '../../groupPhotoFusion/types';
 import { POSES, PERSONAS } from '../../groupPhotoFusion/constants';
-import { generateComfyUIGroupPhoto, generateGroupPhoto } from '../../services/groupPhotoFusionService';
+import { generateComfyUIGroupPhoto, generateGroupPhoto, generateQwenGroupPhoto } from '../../services/groupPhotoFusionService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, getMammouthImageModels } from '../../services/mammouthService';
 import FileUpload from './FileUpload';
 import ImagePreview from './ImagePreview';
@@ -30,6 +30,10 @@ import { CheckboxSlider, NumberSlider, SelectInput } from '../InputComponents';
 
 const getOptions = (input: any): string[] => Array.isArray(input?.[0]) ? input[0] : [];
 const withCurrent = (current: string, values: string[]) => Array.from(new Set([current, ...values].filter(Boolean))).map(value => ({ value, label: value }));
+const QWEN_LIGHTNING_PRESETS = {
+  4: 'QWEN\\Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors',
+  8: 'QWEN\\Qwen-Image-Lightning-8steps-V2.0.safetensors',
+} as const;
 
 const GroupPhotoFusionPanel: React.FC = () => {
   const dispatch: AppDispatch = useDispatch();
@@ -49,15 +53,40 @@ const GroupPhotoFusionPanel: React.FC = () => {
   const [mammouthModels, setMammouthModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
   const [isLoadingMammouthModels, setIsLoadingMammouthModels] = useState(false);
   const models = getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name);
+  const qwenModels = getOptions(comfyUIObjectInfo?.UNETLoader?.input?.required?.unet_name);
   const clips = getOptions(comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name);
   const vaes = getOptions(comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name);
   const samplers = getOptions(comfyUIObjectInfo?.KSamplerSelect?.input?.required?.sampler_name);
+  const schedulers = getOptions(comfyUIObjectInfo?.KSampler?.input?.required?.scheduler);
+  const qwenLoras = getOptions(comfyUIObjectInfo?.LoraLoaderModelOnly?.input?.required?.lora_name);
   const cacheDitModels = getOptions(comfyUIObjectInfo?.CacheDiT_Model_Optimizer?.input?.required?.model_type);
-  const requiredNodes = ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'];
-  const missingNodes = comfyUIObjectInfo ? requiredNodes.filter(node => !comfyUIObjectInfo[node]) : [];
-  if (generationOptions.comfyFlux2EditUseCacheDit && comfyUIObjectInfo && !comfyUIObjectInfo.CacheDiT_Model_Optimizer) missingNodes.push('CacheDiT_Model_Optimizer');
+  const fluxRequiredNodes = ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'];
+  const qwenRequiredNodes = ['UNETLoader', 'CLIPLoader', 'VAELoader', 'ModelSamplingAuraFlow', 'CFGNorm', 'TextEncodeQwenImageEditPlus', 'ImageScaleToTotalPixels'];
+  const requiredNodes = provider === 'qwen' ? qwenRequiredNodes : fluxRequiredNodes;
+  const missingNodes = provider === 'mammouth' || !comfyUIObjectInfo ? [] : requiredNodes.filter(node => !comfyUIObjectInfo[node]);
+  if (provider === 'comfyui' && generationOptions.comfyFlux2EditUseCacheDit && comfyUIObjectInfo && !comfyUIObjectInfo.CacheDiT_Model_Optimizer) missingNodes.push('CacheDiT_Model_Optimizer');
 
   const updateFlux2Option = (updates: Partial<typeof generationOptions>) => dispatch(updateGenerationOptions(updates));
+  const activeQwenLoraName = (generationOptions.comfyQwenEditLora1Name || '').toLowerCase();
+  const qwenLightningPreset = activeQwenLoraName.includes('lightning') && activeQwenLoraName.includes('4step') && generationOptions.photoFusionQwenSteps === 4
+    ? 4
+    : activeQwenLoraName.includes('lightning') && activeQwenLoraName.includes('8step') && generationOptions.photoFusionQwenSteps === 8
+      ? 8
+      : null;
+  const selectQwenLightningPreset = (steps: 4 | 8) => {
+    const installedLora = qwenLoras.find(name => {
+      const normalizedName = name.toLowerCase();
+      return normalizedName.includes('qwen') && normalizedName.includes('lightning') && normalizedName.includes(`${steps}step`);
+    });
+    updateFlux2Option({
+      comfyQwenEditUseLora: true,
+      comfyQwenEditLora1Name: installedLora || QWEN_LIGHTNING_PRESETS[steps],
+      comfyQwenEditLora1Strength: 1,
+      photoFusionQwenSteps: steps,
+    });
+  };
+  const qwenInputLimitExceeded = provider === 'qwen' && uploadedFiles.length + (backgroundFile ? 1 : 0) > 3;
+  const providerLabel = provider === 'comfyui' ? 'FLUX2' : provider === 'qwen' ? 'QWEN-Edit' : 'Mammouth';
 
   useEffect(() => {
     if (provider !== 'mammouth') return;
@@ -68,10 +97,18 @@ const GroupPhotoFusionPanel: React.FC = () => {
   }, [provider]);
 
   const handleFilesChange = (files: UploadedFile[]) => {
+    if (provider === 'qwen' && files.length + (backgroundFile ? 1 : 0) > 3) {
+      dispatch(setError('Qwen Edit accepts at most 3 input images. Remove the background or one subject first.'));
+      return;
+    }
     dispatch(setUploadedFiles(files));
   };
 
   const handleBackgroundChange = (file: UploadedFile) => {
+    if (provider === 'qwen' && uploadedFiles.length >= 3) {
+      dispatch(setError('Qwen Edit cannot add a background when 3 subject images are selected.'));
+      return;
+    }
     dispatch(setBackgroundFile(file));
   };
 
@@ -92,16 +129,21 @@ const GroupPhotoFusionPanel: React.FC = () => {
   };
 
   const handleOpenLibrary = useCallback(() => {
-    if (uploadedFiles.length >= 4) {
-        dispatch(setError("You can only add up to 4 subjects."));
+    const subjectLimit = provider === 'qwen' ? 3 - (backgroundFile ? 1 : 0) : 4;
+    if (uploadedFiles.length >= subjectLimit) {
+        dispatch(setError(provider === 'qwen' ? 'Qwen Edit accepts at most 3 total input images.' : 'You can only add up to 4 subjects.'));
         return;
     }
     dispatch(setModalOpen({ modal: 'isGroupFusionPickerOpen', isOpen: true }));
-  }, [uploadedFiles.length, dispatch]);
+  }, [uploadedFiles.length, backgroundFile, provider, dispatch]);
   
   const handleGenerate = useCallback(async () => {
     if (!selectedPose || uploadedFiles.length < 2) {
       dispatch(setError("Please upload 2 to 4 subject photos and select a pose."));
+      return;
+    }
+    if (provider === 'qwen' && uploadedFiles.length + (backgroundFile ? 1 : 0) > 3) {
+      dispatch(setError('Qwen Edit supports 2 to 3 people, or 2 people with one background image.'));
       return;
     }
 
@@ -138,6 +180,20 @@ const GroupPhotoFusionPanel: React.FC = () => {
             'mammouth',
             generationOptions.mammouthImageModel,
           )
+        : provider === 'qwen'
+          ? generateQwenGroupPhoto(
+              subjectFiles,
+              backgroundToUse?.file || null,
+              prompt,
+              personaDescriptions,
+              {
+                ...generationOptions,
+                comfySeed: generationOptions.comfySeedControl === 'fixed'
+                  ? baseSeed
+                  : index === 0 ? baseSeed : Math.floor(Math.random() * 1e15),
+              },
+              () => undefined,
+            )
         : generateComfyUIGroupPhoto(
             subjectFiles,
             backgroundToUse?.file || null,
@@ -221,6 +277,8 @@ const GroupPhotoFusionPanel: React.FC = () => {
     try {
         const result = provider === 'mammouth'
           ? await generateGroupPhoto([...subjectFiles, ...(backgroundToUse ? [backgroundToUse.file] : [])], prompt, 'mammouth', generationOptions.mammouthImageModel)
+          : provider === 'qwen'
+            ? await generateQwenGroupPhoto(subjectFiles, backgroundToUse?.file || null, prompt, personaDescriptions, generationOptions, () => undefined)
           : await generateComfyUIGroupPhoto(subjectFiles, backgroundToUse?.file || null, prompt, personaDescriptions, generationOptions, () => undefined);
         dispatch(updateGeneratedImage({
             id,
@@ -291,10 +349,14 @@ const GroupPhotoFusionPanel: React.FC = () => {
             sourceImage: uploadedFiles[0] ? await fileToDataUrl(uploadedFiles[0].file) : undefined,
             options: {
               ...generationOptions,
-              provider,
+              provider: provider === 'mammouth' ? 'mammouth' : 'comfyui',
               ...(provider === 'comfyui' ? {
                 comfyModelType: 'flux2-edit' as const,
                 comfyFlux2EditPrompt: ltxPrompt,
+                comfySeed: image.seed,
+              } : provider === 'qwen' ? {
+                comfyModelType: 'qwen-edit' as const,
+                comfyPrompt: ltxPrompt,
                 comfySeed: image.seed,
               } : {}),
             },
@@ -456,6 +518,33 @@ const GroupPhotoFusionPanel: React.FC = () => {
                 </div>}
               </div>}
             </div>}
+            {provider === 'qwen' && <div className="mx-auto w-full max-w-4xl rounded-md border border-border-primary bg-bg-secondary">
+              <button type="button" onClick={() => setAdvancedOpen(open => !open)} className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-text-secondary hover:text-accent" aria-expanded={advancedOpen}>
+                <span>QWEN-Edit Advanced Settings</span><span>{advancedOpen ? '−' : '+'}</span>
+              </button>
+              {advancedOpen && <div className="space-y-5 border-t border-border-primary p-4">
+                <div className="space-y-2">
+                  <span className="block text-sm font-medium text-text-secondary">Lightning preset</span>
+                  <div className="grid grid-cols-2 gap-1 rounded-md bg-bg-tertiary p-1">
+                    {([4, 8] as const).map(steps => <button key={steps} type="button" onClick={() => selectQwenLightningPreset(steps)} disabled={isLoading} className={`rounded px-3 py-2 text-xs font-bold transition-colors ${qwenLightningPreset === steps ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>{steps}-step</button>)}
+                  </div>
+                  <p className="text-xs text-text-muted">Switches the installed Lightning LoRA and sampling steps together.</p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <SelectInput label="Qwen Edit Model" value={generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors'} onChange={(event) => updateFlux2Option({ comfyQwenEditUnet: event.target.value })} options={withCurrent(generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors', qwenModels)} disabled={isLoading} />
+                  <SelectInput label="CLIP" value={generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors'} onChange={(event) => updateFlux2Option({ comfyQwenEditClip: event.target.value })} options={withCurrent(generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors', clips)} disabled={isLoading} />
+                  <SelectInput label="VAE" value={generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors'} onChange={(event) => updateFlux2Option({ comfyQwenEditVae: event.target.value })} options={withCurrent(generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors', vaes)} disabled={isLoading} />
+                  <SelectInput label="Lightning LoRA" value={generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8]} onChange={(event) => updateFlux2Option({ comfyQwenEditUseLora: true, comfyQwenEditLora1Name: event.target.value })} options={withCurrent(generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8], qwenLoras)} disabled={isLoading} />
+                  <NumberSlider label={`LoRA Strength: ${generationOptions.comfyQwenEditLora1Strength ?? 1}`} value={generationOptions.comfyQwenEditLora1Strength ?? 1} onChange={(event) => updateFlux2Option({ comfyQwenEditLora1Strength: Number(event.target.value) })} min={0} max={2} step={0.05} disabled={isLoading} allowDirectInput />
+                  <SelectInput label="Sampler" value={generationOptions.photoFusionQwenSampler || 'euler_ancestral'} onChange={(event) => updateFlux2Option({ photoFusionQwenSampler: event.target.value })} options={withCurrent(generationOptions.photoFusionQwenSampler || 'euler_ancestral', samplers)} disabled={isLoading} />
+                  <SelectInput label="Scheduler" value={generationOptions.photoFusionQwenScheduler || 'beta57'} onChange={(event) => updateFlux2Option({ photoFusionQwenScheduler: event.target.value })} options={withCurrent(generationOptions.photoFusionQwenScheduler || 'beta57', schedulers)} disabled={isLoading} />
+                  <NumberSlider label={`Source Megapixels: ${generationOptions.comfyQwenEditMegapixels ?? 1}`} value={generationOptions.comfyQwenEditMegapixels ?? 1} onChange={(event) => updateFlux2Option({ comfyQwenEditMegapixels: Number(event.target.value) })} min={0.25} max={4} step={0.25} disabled={isLoading} allowDirectInput />
+                  <NumberSlider label={`AuraFlow Shift: ${generationOptions.comfyQwenEditShift ?? 2.5}`} value={generationOptions.comfyQwenEditShift ?? 2.5} onChange={(event) => updateFlux2Option({ comfyQwenEditShift: Number(event.target.value) })} min={0} max={10} step={0.1} disabled={isLoading} allowDirectInput />
+                  <NumberSlider label={`Steps: ${generationOptions.photoFusionQwenSteps ?? 8}`} value={generationOptions.photoFusionQwenSteps ?? 8} onChange={(event) => updateFlux2Option({ photoFusionQwenSteps: Number(event.target.value) })} min={1} max={40} step={1} disabled={isLoading} allowDirectInput />
+                  <NumberSlider label={`CFG: ${generationOptions.photoFusionQwenCfg ?? 1}`} value={generationOptions.photoFusionQwenCfg ?? 1} onChange={(event) => updateFlux2Option({ photoFusionQwenCfg: Number(event.target.value) })} min={0.1} max={10} step={0.1} disabled={isLoading} allowDirectInput />
+                </div>
+              </div>}
+            </div>}
           </div>
           <div className="w-full max-w-4xl mx-auto mt-8">
               <h2 className="text-xl font-semibold text-text-primary mb-4 text-center">Number of Pictures</h2>
@@ -481,14 +570,16 @@ const GroupPhotoFusionPanel: React.FC = () => {
           </div>
           <div className="mt-8 text-center">
             {provider === 'comfyui' && !isComfyUIConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect ComfyUI to use FLUX2 Photo Fusion.</p>}
+            {provider === 'qwen' && !isComfyUIConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect ComfyUI to use QWEN-Edit Photo Fusion.</p>}
             {provider === 'mammouth' && !isMammouthConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect Mammouth to use Mammouth Photo Fusion.</p>}
-            {provider === 'comfyui' && missingNodes.length > 0 && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Missing ComfyUI nodes: {missingNodes.join(', ')}</p>}
+            {provider !== 'mammouth' && missingNodes.length > 0 && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Missing ComfyUI nodes: {missingNodes.join(', ')}</p>}
+            {qwenInputLimitExceeded && <p className="mb-3 rounded-md bg-warning-bg p-3 text-sm text-warning">QWEN-Edit accepts at most 3 input images: use 2–3 people without a background, or 2 people with one background.</p>}
             <button
               onClick={handleGenerate}
-              disabled={isLoading || (provider === 'comfyui' ? !isComfyUIConnected || missingNodes.length > 0 : !isMammouthConnected) || !selectedPose || uploadedFiles.length < 2 || uploadedFiles.length > 4}
+              disabled={isLoading || (provider === 'mammouth' ? !isMammouthConnected : !isComfyUIConnected || missingNodes.length > 0) || qwenInputLimitExceeded || !selectedPose || uploadedFiles.length < 2 || uploadedFiles.length > 4}
               className="px-8 py-4 bg-accent text-accent-text font-bold rounded-lg shadow-lg hover:bg-accent-hover disabled:bg-accent/50 disabled:cursor-not-allowed transition-colors duration-300 transform hover:scale-105"
             >
-              {isLoading ? 'Generating...' : `Fuse Photos with ${provider === 'comfyui' ? 'FLUX2' : 'Mammouth'}`}
+              {isLoading ? 'Generating...' : `Fuse Photos with ${providerLabel}`}
             </button>
           </div>
         </div>
@@ -504,6 +595,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
           <span className="text-sm font-semibold text-text-secondary">Photo Fusion engine</span>
           <div className="flex gap-1 rounded-md bg-bg-tertiary p-1">
             <button type="button" onClick={() => dispatch(setProvider('comfyui'))} disabled={isLoading} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'comfyui' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>FLUX2</button>
+            <button type="button" onClick={() => dispatch(setProvider('qwen'))} disabled={isLoading} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'qwen' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>QWEN-Edit</button>
             <button type="button" onClick={() => dispatch(setProvider('mammouth'))} disabled={isLoading} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'mammouth' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>Mammouth</button>
           </div>
           {provider === 'mammouth' && <div className="relative min-w-[240px] flex-1">

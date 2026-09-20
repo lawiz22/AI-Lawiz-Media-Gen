@@ -7,7 +7,7 @@ import { addSessionTokenUsage } from '../../store/appSlice';
 import { updateOptions } from '../../store/generationSlice';
 import { generateMammouthImage } from '../../services/mammouthService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, getMammouthImageModels } from '../../services/mammouthService';
-import { generateComfyUIPastForwardImage } from '../../services/pastForwardService';
+import { generateComfyUIPastForwardImage, generateQwenPastForwardImage } from '../../services/pastForwardService';
 import { createAlbumPage } from '../../utils/pastForwardAlbumUtils';
 import { dataUrlToThumbnail, fileToDataUrl } from '../../utils/imageUtils';
 import type { LibraryItem, LibraryItemType } from '../../types';
@@ -24,6 +24,10 @@ const DECADES = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s'];
 const LIBRARY_IMAGE_TYPES: LibraryItemType[] = ['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo'];
 const getOptions = (input: any): string[] => Array.isArray(input?.[0]) ? input[0] : [];
 const withCurrent = (current: string, values: string[]) => Array.from(new Set([current, ...values].filter(Boolean))).map(value => ({ value, label: value }));
+const QWEN_LIGHTNING_PRESETS = {
+    4: 'QWEN\\Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors',
+    8: 'QWEN\\Qwen-Image-Lightning-8steps-V2.0.safetensors',
+} as const;
 const FLUX_HAIRSTYLES: Record<string, string> = {
     '1950s': 'a realistic 1950s swept-back pompadour with neatly sculpted volume and tapered sides',
     '1960s': 'a realistic 1960s mod hairstyle with a full rounded shape, controlled volume, and period-accurate finish',
@@ -33,12 +37,28 @@ const FLUX_HAIRSTYLES: Record<string, string> = {
     '2000s': 'a realistic 2000s textured shag hairstyle with defined layers, side-swept fringe, and a natural salon finish',
 };
 const FLUX_DECADE_REIMAGININGS: Record<string, string> = {
-    '1950s': 'a sculpted side-part or pompadour, tailored mid-century clothing, a period living room or portrait studio, and authentic black-and-white or early color film photography',
-    '1960s': 'a polished mod hairstyle, slim-cut period clothing with bold details, a colorful mid-century interior or music studio, and warm saturated 1960s film',
-    '1970s': 'a visibly feathered or shag hairstyle, wide-collar earth-toned clothing, a wood-paneled home or recording studio, and warm grainy 1970s film',
-    '1980s': 'a dramatically voluminous layered hairstyle, bold denim or statement clothing, a colorful 1980s interior, and punchy flash-lit analog photography',
-    '1990s': 'a textured grunge-era hairstyle, relaxed layered clothing, a 1990s rehearsal room or urban interior, and natural consumer-film color and grain',
-    '2000s': 'a defined textured hairstyle with an early-2000s salon finish, fitted layered clothing, a contemporary Y2K interior, and crisp early-digital-camera rendering',
+    '1950s': 'for a woman, a softly curled bob or pageboy with a fitted blouse, cardigan, or day dress and explicitly no necktie or masculine business suit; for a man, a neat side-part or pompadour with a collared shirt and tailored jacket; plus restrained 1950s grooming and authentic black-and-white or early color film photography',
+    '1960s': 'for a woman, a polished bob, bouffant, or softly flipped hairstyle with a shift dress, feminine blouse, or fitted cardigan; for a man, a clean mod cut with a narrow-collar shirt or slim-cut jacket; plus restrained 1960s grooming and warm saturated film',
+    '1970s': 'for a woman, feathered or softly layered hair with a feminine wide-collar blouse, knit top, or flowing earth-toned dress; for a man, a shag or feathered cut with a wide-collar shirt or casual jacket; plus natural 1970s grooming and warm grainy film',
+    '1980s': 'for a woman, a voluminous layered or curled hairstyle with a feminine blouse, dress, or colorful jacket and period-appropriate makeup; for a man, a full layered cut with a polo, denim, or statement jacket; plus punchy flash-lit 1980s analog photography',
+    '1990s': 'for a woman, a layered bob, soft grunge cut, or natural shoulder-length style with a feminine casual top, cardigan, or relaxed jacket; for a man, a textured crop or grunge-era layers with a T-shirt, overshirt, or casual jacket; plus natural grooming and consumer-film color and grain',
+    '2000s': 'for a woman, a layered early-2000s salon style with a fitted feminine top, cardigan, or casual jacket; for a man, a textured crop or shag with a fitted shirt or layered casual jacket; plus restrained period grooming and crisp early-digital-camera rendering',
+};
+const QWEN_DECADE_REIMAGININGS: Record<string, string> = {
+    '1950s': '1950s curled bob or pageboy and fitted blouse, cardigan, or day dress for a woman; neat side-part or pompadour and collared shirt with tailored jacket for a man; black-and-white or early color film',
+    '1960s': '1960s polished bob, bouffant, or flipped hair and shift dress or feminine blouse for a woman; clean mod cut and narrow-collar shirt or slim jacket for a man; warm saturated film',
+    '1970s': '1970s feathered or layered hair and wide-collar blouse, knit top, or flowing dress for a woman; shag or feathered cut and wide-collar shirt or casual jacket for a man; warm grainy film',
+    '1980s': '1980s voluminous curled or layered hair and colorful feminine blouse, dress, or jacket for a woman; full layered cut and polo, denim, or statement jacket for a man; bright flash-lit analog film',
+    '1990s': '1990s layered bob or soft grunge hair and feminine casual top, cardigan, or relaxed jacket for a woman; textured crop or grunge layers and T-shirt, overshirt, or casual jacket for a man; natural consumer film',
+    '2000s': 'early-2000s layered salon hair and fitted feminine top, cardigan, or casual jacket for a woman; textured crop or shag and fitted shirt or layered jacket for a man; crisp early-digital photography',
+};
+const FLUX_DECADE_SCENE_REIMAGININGS: Record<string, string> = {
+    '1950s': 'Place the subject inside a bustling 1950s neighborhood diner, seated sideways on a chrome counter stool while turning naturally toward a server. Use an eye-level three-quarter side view and a medium-wide horizontal-feeling composition that clearly shows the counter, jukebox, tiled floor, booths, patrons, and street through the windows.',
+    '1960s': 'Place the subject browsing records in a colorful 1960s music shop, standing in profile while pulling a vinyl album from a waist-high bin and glancing toward a nearby listening booth. Photograph from a slightly low oblique angle in a three-quarter-body composition showing record racks, posters, other shoppers, ceiling fixtures, and storefront depth.',
+    '1970s': 'Place the subject at a relaxed 1970s lakeside gathering beside period cars, standing at a three-quarter angle while talking with another guest and holding a drink at waist level. Use a candid off-center medium-wide composition from shoulder height, with people, picnic furniture, shoreline, cars, trees, and layered activity visible across the frame.',
+    '1980s': 'Place the subject inside a lively 1980s video arcade, leaning into an arcade cabinet with one hand on the controls and looking toward the game screen rather than the camera. Shoot from a low diagonal angle in a dynamic three-quarter-body composition, showing rows of illuminated cabinets, patterned carpet, ceiling lights, players, reflections, and deep interior perspective.',
+    '1990s': 'Place the subject walking out of a busy 1990s independent video store while carrying two VHS cases and turning toward a friend beside the entrance. Use a slightly high candid street-photography angle and an asymmetrical full-to-three-quarter-body frame showing shelves, movie posters, checkout counter, pedestrians, parked period cars, and the surrounding storefront.',
+    '2000s': 'Place the subject at an early-2000s outdoor music festival, stepping through the venue while checking a compact digital camera and speaking to a companion. Use a wide three-quarter rear-side camera angle with the subject off-center, showing the stage, crowd, vendor tents, barriers, signage, and open sky as a coherent event environment.',
 };
 const SUPERHERO_COMIC_STYLES: Record<string, string> = {
     '1950s': 'a 1950s Golden Age comic cover with bold hand-drawn ink outlines, simple heroic anatomy, limited CMYK colors, aged paper, and visible halftone dots',
@@ -49,21 +69,21 @@ const SUPERHERO_COMIC_STYLES: Record<string, string> = {
     '2000s': 'a polished 2000s digital comic cover with crisp ink lines, cinematic panel composition, rich cel shading, controlled highlights, and modern printed-comic color',
 };
 const HISTORICAL_CAMEO_SCENES: Record<string, string> = {
-    '1950s': 'a 1950s civil-rights march on an American city street, walking purposefully near the front among peaceful demonstrators carrying period-appropriate equality signs, wearing authentic mid-century clothing, photographed by a press photographer on grainy black-and-white film',
-    '1960s': 'a crowded 1960s public gathering watching the Apollo 11 Moon landing broadcast, reacting with wonder beside families and journalists, surrounded by period televisions, cameras, furniture, and clothing, captured on warm documentary color film',
+    '1950s': 'a live 1950s television studio broadcast, working as a floor manager beside a bulky studio camera while cueing the presenter, surrounded by hot stage lights, microphone booms, cables, technicians, and a painted set, wearing a tailored mid-century suit and photographed on grainy black-and-white press film',
+    '1960s': 'NASA Mission Control during the Apollo 11 Moon landing in July 1969, working as a mission support engineer at a telemetry console while conferring with nearby controllers, surrounded by headsets, status screens, binders, ashtrays, and period equipment, wearing an authentic white shirt, narrow tie, and identification badge, captured on warm documentary color film',
     '1970s': 'a major 1970s anti-war peace march in Washington, D.C., walking among a dense crowd of demonstrators near the Washington Monument while holding a hand-painted PEACE NOW placard, wearing authentic denim and period clothing, captured as candid documentary photography',
-    '1980s': 'the jubilant crowd at the Berlin Wall in November 1989, standing on the wall among celebrating citizens as people gather on both sides, wearing authentic late-1980s clothing, illuminated by press lights and photographed on high-speed color film',
-    '1990s': 'a lively early-1990s election-night street celebration as an engaged participant among journalists and cheering citizens, surrounded by handmade signs, broadcast cameras, period cars, and authentic 1990s clothing, photographed on candid color film',
-    '2000s': 'the crowded Times Square millennium celebration at midnight entering the year 2000, celebrating among revelers beneath illuminated signs, confetti, broadcast cameras, and authentic turn-of-the-millennium clothing, captured as crisp early-digital news photography',
+    '1980s': 'backstage at the 1985 Live Aid concert at Wembley Stadium, working as a sound engineer at a large analog mixing console while coordinating with stage crew as the brightly lit performance continues beyond the wings, wearing an authentic event credential, headset, and practical 1980s production clothing, photographed on high-speed color film',
+    '1990s': 'NASA mission operations during the 1990 deployment of the Hubble Space Telescope, working as a science-team specialist who points out telemetry on a CRT display while colleagues study orbital diagrams and printed data, wearing authentic early-1990s professional clothing and an identification badge, captured by a documentary news photographer',
+    '2000s': 'trackside at the Sydney 2000 Olympic Games, working as an accredited event photographer kneeling beside the athletics track with a period professional digital camera while competitors and officials move through the stadium behind, wearing an authentic photo vest and credential, captured as crisp early-digital sports journalism',
 };
 const REIMAGINE_SCENE_PROMPT = 'Create a completely new scene and composition that is not based on the source room, background, pose, crop, framing, or camera angle. Place the same recognizable subject in a different era-appropriate environment with a new natural pose, new body positioning, new camera viewpoint, new lighting, and new composition. Preserve only the subject identity and defining facial features from the source.';
 
-const THEMES: Record<string, { title: string, description: string, prompt: (decade: string) => string, fluxPrompt: (decade: string) => string }> = {
+const THEMES: Record<string, { title: string, description: string, prompt: (decade: string) => string, fluxPrompt: (decade: string, reimagineScene?: boolean) => string }> = {
     'decades': {
         title: 'Through the Decades',
         description: 'The original experience. See yourself reimagined in the style of past decades.',
         prompt: (decade: string) => `Reimagine the person in this photo in the style of the ${decade}. This includes clothing, hairstyle, photo quality, and the overall aesthetic of that decade. The output must be a photorealistic image showing the person clearly.`,
-        fluxPrompt: (decade: string) => `Reimagine the entire source photograph as a newly photographed, authentic ${decade} portrait of the same recognizable person. Replace the original hairstyle, clothing, background, lighting, props, color treatment, and photographic medium with ${FLUX_DECADE_REIMAGININGS[decade]}. The transformation must be obvious: do not retain the source hairstyle, wardrobe, room, or modern photographic look. Preserve the person's recognizable facial identity, facial anatomy, eyewear if present, facial hair if present, skin tone, and apparent age. Create a cohesive photorealistic period scene rather than a subtle filter on the source image.`,
+        fluxPrompt: (decade: string, reimagineScene = false) => `Restyle the source person as the same individual photographed in the ${decade}, using ${FLUX_DECADE_REIMAGININGS[decade]}. Before editing, inspect Picture 1 and select only the styling branch matching the subject's visible gender presentation; never blend the woman and man branches. Preserve that presentation exactly. Never change, swap, masculinize, feminize, or ambiguously reinterpret the subject. Preserve the exact recognizable facial identity, face shape, eyes, nose, mouth, jawline, skin tone, apparent age, and body proportions. ${reimagineScene ? `Preserve identity only, not composition. ${FLUX_DECADE_SCENE_REIMAGININGS[decade]} The stated activity, pose, body orientation, subject placement, viewpoint, and framing are mandatory. Do not reuse the source pose, front-facing alignment, horizon placement, or portrait framing. Use documentary deep focus with readable foreground, middle ground, and background detail. Keep the environment sharp and specific from edge to edge, approximately f/8. No shallow depth of field, portrait-mode blur, generic bokeh, empty backdrop, isolated headshot, or centered passport-style composition.` : 'Preserve the source pose, expression, camera angle, crop, subject placement, and general setting.'} Inspect the source eyes carefully. When Picture 1 has no eyewear, the result must show the same bare, fully visible, unobstructed eyes with no frames or lenses of any kind. Preserve eyewear only when visibly present in Picture 1. Preserve facial hair only when visibly present; otherwise keep the face clean-shaven. Change the hairstyle, wardrobe, grooming, lighting response, color treatment, film grain, and photographic medium enough to make the decade immediately clear. Adapt period hair and clothing naturally to the same subject rather than replacing them with a different person. ${reimagineScene ? 'Render the subject and environment as one candid photograph with consistent perspective, ambient light, film response, and natural interaction.' : 'Keep the existing background composition recognizable, applying only subtle decade-appropriate environmental and photographic details.'} Photorealistic authentic period portrait, not a face replacement, gender transformation, costume caricature, cross-gender styling, or newly invented subject.`,
     },
     'hairstyles': {
         title: 'Hairstyle Time Machine',
@@ -86,8 +106,8 @@ const THEMES: Record<string, { title: string, description: string, prompt: (deca
     'historical': {
         title: 'Historical Cameo',
         description: 'Place yourself in famous historical events or scenes.',
-        prompt: (decade: string) => `Insert the person from the source photo naturally into ${HISTORICAL_CAMEO_SCENES[decade]}. Recompose the entire image around that event: give the person a believable role, action, pose, body position, expression, wardrobe, camera angle, lighting, and scale within the crowd. Preserve the person's recognizable facial identity, eyewear if present, facial hair if present, skin tone, and apparent age. The result must look like an authentic photograph taken during the event, not a modern portrait with a replaced background. Include historically appropriate supporting people without duplicating the source person.`,
-        fluxPrompt: (decade: string) => `Reimagine the entire source photograph as a newly captured historical photograph showing the source person participating naturally in ${HISTORICAL_CAMEO_SCENES[decade]}. Replace the source room, clothing, pose, expression, crop, framing, camera angle, lighting, props, and composition. Integrate the person at a believable scale and depth within the action, interacting naturally with the scene rather than facing the camera like a pasted-in portrait. Preserve the person's recognizable face shape, eyes, nose, mouth, eyewear if present, facial hair if present, skin tone, and apparent age. Supporting people must be varied period-appropriate individuals and must not duplicate the source face. Match the event's documentary lens, film grain, color response, shadows, perspective, and ambient light across the entire image. Photorealistic historical documentary photograph, not a studio portrait, costume portrait, backdrop replacement, collage, or modern reenactment.`,
+        prompt: (decade: string) => `Insert the person from the source photo naturally into ${HISTORICAL_CAMEO_SCENES[decade]}. Recompose the entire image around that event: give the person a believable role, visible action, three-quarter or profile body position, event-appropriate expression, completely new period wardrobe, documentary camera angle, lighting, and scale. Preserve the person's recognizable facial identity, eyewear if present, facial hair if present, skin tone, and apparent age. The result must look like an authentic photograph taken during the event, not a centered portrait, selfie, modern portrait with a replaced background, or reenactment. The original shirt and source background must not remain visible. Include historically appropriate supporting people without duplicating the source person.`,
+        fluxPrompt: (decade: string) => `Reimagine the entire source photograph as a newly captured historical photograph showing the source person participating naturally in ${HISTORICAL_CAMEO_SCENES[decade]}. Replace the source room, shirt, clothing, pose, expression, crop, framing, camera angle, lighting, props, and composition. Show the subject actively performing the stated role in a waist-up, three-quarter, or wider environmental composition; do not make a centered front-facing head-and-shoulders portrait. Integrate the person at a believable scale and depth within the action, looking toward the task or another participant instead of staring into the camera. Preserve the person's recognizable face shape, eyes, nose, mouth, eyewear if present, facial hair if present, skin tone, and apparent age. Supporting people must be varied period-appropriate individuals and must not duplicate the source face. Match the event's documentary lens, film grain, color response, shadows, perspective, and ambient light across the entire image. Photorealistic historical documentary photograph, not a selfie, studio portrait, costume portrait, backdrop replacement, collage, or modern reenactment.`,
     },
 };
 
@@ -122,7 +142,7 @@ const PastForwardPanel: React.FC = () => {
     const [selectedDecades, setSelectedDecades] = useState<string[]>([...DECADES]);
     const [saveStatuses, setSaveStatuses] = useState<Record<string, 'idle' | 'saving' | 'saved'>>({});
     const [albumSaveStatus, setAlbumSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-    const [provider, setProvider] = useState<'comfyui' | 'mammouth'>('comfyui');
+    const provider = generationOptions.pastForwardProvider || 'comfyui';
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [zoomedImage, setZoomedImage] = useState<{ url: string; decade: string } | null>(null);
@@ -130,13 +150,17 @@ const PastForwardPanel: React.FC = () => {
     const [isLoadingMammouthModels, setIsLoadingMammouthModels] = useState(false);
 
     const models = getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name);
+    const qwenModels = getOptions(comfyUIObjectInfo?.UNETLoader?.input?.required?.unet_name);
     const clips = getOptions(comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name);
     const vaes = getOptions(comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name);
     const samplers = getOptions(comfyUIObjectInfo?.KSamplerSelect?.input?.required?.sampler_name);
+    const qwenLoras = getOptions(comfyUIObjectInfo?.LoraLoaderModelOnly?.input?.required?.lora_name);
     const cacheDitModels = getOptions(comfyUIObjectInfo?.CacheDiT_Model_Optimizer?.input?.required?.model_type);
-    const requiredNodes = ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'];
-    const missingNodes = comfyUIObjectInfo ? requiredNodes.filter(node => !comfyUIObjectInfo[node]) : [];
-    if (generationOptions.comfyFlux2EditUseCacheDit && comfyUIObjectInfo && !comfyUIObjectInfo.CacheDiT_Model_Optimizer) missingNodes.push('CacheDiT_Model_Optimizer');
+    const fluxRequiredNodes = ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'];
+    const qwenRequiredNodes = ['UNETLoader', 'CLIPLoader', 'VAELoader', 'ModelSamplingAuraFlow', 'CFGNorm', 'TextEncodeQwenImageEditPlus', 'ImageScaleToTotalPixels'];
+    const requiredNodes = provider === 'qwen' ? qwenRequiredNodes : fluxRequiredNodes;
+    const missingNodes = provider === 'mammouth' || !comfyUIObjectInfo ? [] : requiredNodes.filter(node => !comfyUIObjectInfo[node]);
+    if (provider === 'comfyui' && generationOptions.comfyFlux2EditUseCacheDit && comfyUIObjectInfo && !comfyUIObjectInfo.CacheDiT_Model_Optimizer) missingNodes.push('CacheDiT_Model_Optimizer');
 
     useEffect(() => {
         if (provider !== 'mammouth') return;
@@ -202,16 +226,29 @@ const PastForwardPanel: React.FC = () => {
         const finalFluxPrompt = reimagineScene ? `${fluxPrompt} ${REIMAGINE_SCENE_PROMPT}` : fluxPrompt;
         if (provider === 'mammouth') {
             setGenerationProgress(current => ({ ...current, [decade]: { value: 0.1, message: `Generating ${decade} with Mammouth...` } }));
-            const result = await generateMammouthImage(finalPrompt, [uploadedImageBase64], '3:4', generationOptions.mammouthImageModel);
+            const mammouthPrompt = selectedTheme === 'historical' ? finalFluxPrompt : finalPrompt;
+            const result = await generateMammouthImage(mammouthPrompt, [uploadedImageBase64], '3:4', generationOptions.mammouthImageModel);
             if (result.usageMetadata) dispatch(addSessionTokenUsage(result.usageMetadata));
             if (!result.images[0]) throw new Error('Mammouth completed without returning a Past Forward image.');
             return result.images[0];
+        }
+        if (provider === 'qwen') {
+            const qwenPrompt = selectedTheme === 'decades'
+                ? `Edit Picture 1. Keep the same person's face, age, skin tone, body, and gender presentation. Transform the subject into the ${decade}: ${QWEN_DECADE_REIMAGININGS[decade]}. Replace the hairstyle completely. Replace all visible source clothing and accessories completely. Do not retain the original hairstyle or wardrobe. ${reimagineScene ? `${FLUX_DECADE_SCENE_REIMAGININGS[decade]} Use a new pose, camera angle, framing, and sharp detailed background.` : 'Keep the original pose, framing, and background.'} Show bare eyes when the source has no glasses. Photorealistic.`
+                : finalFluxPrompt;
+            return generateQwenPastForwardImage(
+                uploadedFile,
+                qwenPrompt,
+                generationOptions,
+                selectedTheme === 'historical',
+                (message, value) => setGenerationProgress(current => ({ ...current, [decade]: { value, message } })),
+            );
         }
         return generateComfyUIPastForwardImage(
             uploadedFile,
             finalFluxPrompt,
             generationOptions,
-            !reimagineScene && selectedTheme !== 'hairstyles' && selectedTheme !== 'decades' && selectedTheme !== 'fantasy' && selectedTheme !== 'superhero' && selectedTheme !== 'historical',
+            !reimagineScene && selectedTheme !== 'hairstyles' && selectedTheme !== 'fantasy' && selectedTheme !== 'superhero' && selectedTheme !== 'historical',
             selectedTheme !== 'superhero',
             selectedTheme === 'historical',
             (message, value) => setGenerationProgress(current => ({ ...current, [decade]: { value, message } })),
@@ -245,7 +282,7 @@ const PastForwardPanel: React.FC = () => {
             try {
                 setGenerationProgress(current => ({ ...current, [decade]: { value: 0.02, message: `Starting ${decade}...` } }));
                 const prompt = THEMES[selectedTheme].prompt(decade);
-                const resultUrl = await generatePastForwardImage(prompt, THEMES[selectedTheme].fluxPrompt(decade), decade);
+                const resultUrl = await generatePastForwardImage(prompt, THEMES[selectedTheme].fluxPrompt(decade, reimagineScene), decade);
                 setGeneratedImages(prev => ({
                     ...prev,
                     [decade]: { status: 'done', url: resultUrl },
@@ -290,7 +327,7 @@ const PastForwardPanel: React.FC = () => {
 
         try {
             const prompt = THEMES[selectedTheme].prompt(decade);
-            const resultUrl = await generatePastForwardImage(prompt, THEMES[selectedTheme].fluxPrompt(decade), decade);
+            const resultUrl = await generatePastForwardImage(prompt, THEMES[selectedTheme].fluxPrompt(decade, reimagineScene), decade);
             setGeneratedImages(prev => ({
                 ...prev,
                 [decade]: { status: 'done', url: resultUrl },
@@ -397,9 +434,9 @@ const PastForwardPanel: React.FC = () => {
         }
     };
 
-    const providerReady = provider === 'comfyui'
-        ? !!isComfyUIConnected && missingNodes.length === 0
-        : !!isMammouthConnected;
+    const providerReady = provider === 'mammouth'
+        ? !!isMammouthConnected
+        : !!isComfyUIConnected && missingNodes.length === 0;
     const isReadyToGenerate = !!uploadedImageBase64 && !!uploadedFile && selectedDecades.length > 0 && providerReady && !isGenerating;
     const hasResults = selectedDecades.some(decade => generatedImages[decade]?.status === 'done');
     const selectedResultsComplete = selectedDecades.length > 0 && selectedDecades.every(decade => generatedImages[decade]?.status === 'done');
@@ -409,6 +446,25 @@ const PastForwardPanel: React.FC = () => {
     const overallProgress = generationDecades.length > 0
         ? generationDecades.reduce((total, decade) => total + (generationProgress[decade]?.value || 0), 0) / generationDecades.length
         : 0;
+    const activeQwenLoraName = (generationOptions.comfyQwenEditLora1Name || '').toLowerCase();
+    const qwenLightningPreset = activeQwenLoraName.includes('lightning') && activeQwenLoraName.includes('4step') && generationOptions.pastForwardQwenSteps === 4
+        ? 4
+        : activeQwenLoraName.includes('lightning') && activeQwenLoraName.includes('8step') && generationOptions.pastForwardQwenSteps === 8
+            ? 8
+            : null;
+    const selectQwenLightningPreset = (steps: 4 | 8) => {
+        const installedLora = qwenLoras.find(name => {
+            const normalizedName = name.toLowerCase();
+            return normalizedName.includes('qwen') && normalizedName.includes('lightning') && normalizedName.includes(`${steps}step`);
+        });
+        dispatch(updateOptions({
+            comfyQwenEditUseLora: true,
+            comfyQwenEditLora1Name: installedLora || QWEN_LIGHTNING_PRESETS[steps],
+            comfyQwenEditLora1Strength: 1,
+            pastForwardQwenSteps: steps,
+        }));
+    };
+    const providerLabel = provider === 'comfyui' ? 'FLUX2' : provider === 'qwen' ? 'QWEN-Edit' : 'Mammouth';
 
     return (
         <div className="space-y-6">
@@ -418,8 +474,9 @@ const PastForwardPanel: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3 rounded-md border border-border-primary bg-bg-secondary p-3">
                 <span className="text-sm font-semibold text-text-secondary">Past Forward engine</span>
                 <div className="flex gap-1 rounded-md bg-bg-tertiary p-1">
-                    <button type="button" onClick={() => setProvider('comfyui')} disabled={isGenerating} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'comfyui' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>FLUX2</button>
-                    <button type="button" onClick={() => setProvider('mammouth')} disabled={isGenerating} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'mammouth' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>Mammouth</button>
+                    <button type="button" onClick={() => dispatch(updateOptions({ pastForwardProvider: 'comfyui' }))} disabled={isGenerating} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'comfyui' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>FLUX2</button>
+                    <button type="button" onClick={() => dispatch(updateOptions({ pastForwardProvider: 'qwen' }))} disabled={isGenerating} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'qwen' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>QWEN-Edit</button>
+                    <button type="button" onClick={() => dispatch(updateOptions({ pastForwardProvider: 'mammouth' }))} disabled={isGenerating} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'mammouth' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>Mammouth</button>
                 </div>
                 {provider === 'mammouth' && <div className="relative min-w-[240px] flex-1">
                     <select value={generationOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL} onChange={(event) => dispatch(updateOptions({ mammouthImageModel: event.target.value }))} disabled={isGenerating || isLoadingMammouthModels} className="w-full rounded-md border border-border-primary bg-bg-tertiary p-2 pr-8 text-sm" aria-label="Mammouth image model">
@@ -467,6 +524,35 @@ const PastForwardPanel: React.FC = () => {
                                     <NumberSlider label={`Warmup: ${generationOptions.comfyFlux2EditCacheDitWarmupSteps ?? 0}`} value={generationOptions.comfyFlux2EditCacheDitWarmupSteps ?? 0} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditCacheDitWarmupSteps: Number(event.target.value) }))} min={0} max={20} step={1} disabled={isGenerating} allowDirectInput />
                                     <NumberSlider label={`Skip: ${generationOptions.comfyFlux2EditCacheDitSkipInterval ?? 0}`} value={generationOptions.comfyFlux2EditCacheDitSkipInterval ?? 0} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditCacheDitSkipInterval: Number(event.target.value) }))} min={0} max={10} step={1} disabled={isGenerating} allowDirectInput />
                                 </div>}
+                            </div>}
+                        </div>}
+
+                        {provider === 'qwen' && <div className="rounded-md border border-border-primary bg-bg-primary">
+                            <button type="button" onClick={() => setAdvancedOpen(open => !open)} className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-text-secondary hover:text-accent" aria-expanded={advancedOpen}>
+                                <span>QWEN-Edit Advanced Settings</span><span>{advancedOpen ? '−' : '+'}</span>
+                            </button>
+                            {advancedOpen && <div className="space-y-4 border-t border-border-primary p-4">
+                                <div className="space-y-2">
+                                    <span className="block text-sm font-medium text-text-secondary">Lightning preset</span>
+                                    <div className="grid grid-cols-2 gap-1 rounded-md bg-bg-tertiary p-1">
+                                        {([4, 8] as const).map(steps => <button key={steps} type="button" onClick={() => selectQwenLightningPreset(steps)} disabled={isGenerating} className={`rounded px-3 py-2 text-xs font-bold transition-colors ${qwenLightningPreset === steps ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>{steps}-step</button>)}
+                                    </div>
+                                    <p className="text-xs text-text-muted">Changes the Lightning LoRA and sampling steps together.</p>
+                                </div>
+                                <SelectInput label="Qwen Edit Model" value={generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors'} onChange={(event) => dispatch(updateOptions({ comfyQwenEditUnet: event.target.value }))} options={withCurrent(generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors', qwenModels)} disabled={isGenerating} />
+                                <SelectInput label="CLIP" value={generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors'} onChange={(event) => dispatch(updateOptions({ comfyQwenEditClip: event.target.value }))} options={withCurrent(generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors', clips)} disabled={isGenerating} />
+                                <SelectInput label="VAE" value={generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors'} onChange={(event) => dispatch(updateOptions({ comfyQwenEditVae: event.target.value }))} options={withCurrent(generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors', vaes)} disabled={isGenerating} />
+                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={generationOptions.comfyQwenEditUseLora !== false} onChange={(event) => dispatch(updateOptions({ comfyQwenEditUseLora: event.target.checked }))} disabled={isGenerating} className="rounded text-accent focus:ring-accent" />Enable Lightning LoRA</label>
+                                {generationOptions.comfyQwenEditUseLora !== false && <>
+                                    <SelectInput label="Lightning LoRA" value={generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8]} onChange={(event) => dispatch(updateOptions({ comfyQwenEditLora1Name: event.target.value }))} options={withCurrent(generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8], qwenLoras)} disabled={isGenerating} />
+                                    <NumberSlider label={`LoRA Strength: ${generationOptions.comfyQwenEditLora1Strength ?? 1}`} value={generationOptions.comfyQwenEditLora1Strength ?? 1} onChange={(event) => dispatch(updateOptions({ comfyQwenEditLora1Strength: Number(event.target.value) }))} min={0} max={2} step={0.05} disabled={isGenerating} allowDirectInput />
+                                </>}
+                                <SelectInput label="Sampler" value={generationOptions.pastForwardQwenSampler || 'euler_ancestral'} onChange={(event) => dispatch(updateOptions({ pastForwardQwenSampler: event.target.value }))} options={withCurrent(generationOptions.pastForwardQwenSampler || 'euler_ancestral', samplers)} disabled={isGenerating} />
+                                <SelectInput label="Scheduler" value={generationOptions.pastForwardQwenScheduler || 'beta57'} onChange={(event) => dispatch(updateOptions({ pastForwardQwenScheduler: event.target.value }))} options={withCurrent(generationOptions.pastForwardQwenScheduler || 'beta57', getOptions(comfyUIObjectInfo?.KSampler?.input?.required?.scheduler))} disabled={isGenerating} />
+                                <NumberSlider label={`Source Megapixels: ${generationOptions.comfyQwenEditMegapixels ?? 1}`} value={generationOptions.comfyQwenEditMegapixels ?? 1} onChange={(event) => dispatch(updateOptions({ comfyQwenEditMegapixels: Number(event.target.value) }))} min={0.25} max={4} step={0.25} disabled={isGenerating} allowDirectInput />
+                                <NumberSlider label={`AuraFlow Shift: ${generationOptions.comfyQwenEditShift ?? 2.5}`} value={generationOptions.comfyQwenEditShift ?? 2.5} onChange={(event) => dispatch(updateOptions({ comfyQwenEditShift: Number(event.target.value) }))} min={0} max={10} step={0.1} disabled={isGenerating} allowDirectInput />
+                                <NumberSlider label={`Steps: ${generationOptions.pastForwardQwenSteps ?? 8}`} value={generationOptions.pastForwardQwenSteps ?? 8} onChange={(event) => dispatch(updateOptions({ pastForwardQwenSteps: Number(event.target.value) }))} min={1} max={40} step={1} disabled={isGenerating} allowDirectInput />
+                                <NumberSlider label={`CFG: ${generationOptions.pastForwardQwenCfg ?? 1}`} value={generationOptions.pastForwardQwenCfg ?? 1} onChange={(event) => dispatch(updateOptions({ pastForwardQwenCfg: Number(event.target.value) }))} min={0.1} max={10} step={0.1} disabled={isGenerating} allowDirectInput />
                             </div>}
                         </div>}
 
@@ -529,8 +615,9 @@ const PastForwardPanel: React.FC = () => {
 
                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                     {provider === 'comfyui' && !isComfyUIConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect ComfyUI to use FLUX2 Past Forward.</p>}
+                    {provider === 'qwen' && !isComfyUIConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect ComfyUI to use QWEN-Edit Past Forward.</p>}
                     {provider === 'mammouth' && !isMammouthConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect Mammouth to use Mammouth Past Forward.</p>}
-                    {provider === 'comfyui' && missingNodes.length > 0 && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Missing ComfyUI nodes: {missingNodes.join(', ')}</p>}
+                    {provider !== 'mammouth' && missingNodes.length > 0 && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Missing ComfyUI nodes: {missingNodes.join(', ')}</p>}
                     <button 
                         onClick={handleGenerateClick}
                         disabled={!isReadyToGenerate}
@@ -538,7 +625,7 @@ const PastForwardPanel: React.FC = () => {
                         className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
                     >
                         {isGenerating ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <GenerateIcon className="w-5 h-5"/>}
-                        {isGenerating ? 'Travelling Through Time...' : selectedDecades.length === 0 ? 'Select at least one decade' : `Generate ${selectedDecades.length} with ${provider === 'comfyui' ? 'FLUX2' : 'Mammouth'}`}
+                        {isGenerating ? 'Travelling Through Time...' : selectedDecades.length === 0 ? 'Select at least one decade' : `Generate ${selectedDecades.length} with ${providerLabel}`}
                     </button>
                 </div>
             </div>

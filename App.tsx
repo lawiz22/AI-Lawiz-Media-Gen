@@ -802,7 +802,15 @@ const App: React.FC = () => {
         activeModel = activeFunSubTab === 'photo-fusion'
             ? groupPhotoFusionProvider === 'comfyui'
                 ? 'ComfyUI · FLUX2 Photo Fusion'
-                : `Mammouth · ${options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL}`
+                : groupPhotoFusionProvider === 'qwen'
+                    ? `Qwen Edit · ${options.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors'}`
+                    : `Mammouth · ${options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL}`
+            : activeFunSubTab === 'past-forward'
+                ? options.pastForwardProvider === 'mammouth'
+                    ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
+                    : options.pastForwardProvider === 'qwen'
+                        ? `Qwen Edit · ${options.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors'}`
+                    : `FLUX2 Edit · ${options.comfyFlux2EditUnet || 'Default UNet'}`
             : activeFunSubTab === 'swap-anything'
                 ? 'ComfyUI · FLUX2 Swap Anything'
             : options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
@@ -820,7 +828,9 @@ const App: React.FC = () => {
     const activeProvider: Provider = activeTab === 'character-generator'
         ? characterOptions.provider
         : activeTab === 'fun' && activeFunSubTab === 'photo-fusion'
-            ? groupPhotoFusionProvider
+            ? groupPhotoFusionProvider === 'mammouth' ? 'mammouth' : 'comfyui'
+        : activeTab === 'fun' && activeFunSubTab === 'past-forward'
+            ? options.pastForwardProvider === 'mammouth' ? 'mammouth' : 'comfyui'
         : activeTab === 'fun' && activeFunSubTab === 'swap-anything'
             ? 'comfyui'
             : options.provider;

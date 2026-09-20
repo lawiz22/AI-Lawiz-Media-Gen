@@ -15,6 +15,15 @@ const KREA_TURBO_LORA_FIELDS = [
 
 const initialOptions: GenerationOptions = {
   provider: 'comfyui',
+  pastForwardProvider: 'comfyui',
+  pastForwardQwenSteps: 8,
+  pastForwardQwenCfg: 1,
+  pastForwardQwenSampler: 'euler_ancestral',
+  pastForwardQwenScheduler: 'beta57',
+  photoFusionQwenSteps: 8,
+  photoFusionQwenCfg: 1,
+  photoFusionQwenSampler: 'euler_ancestral',
+  photoFusionQwenScheduler: 'beta57',
   numImages: 1,
   poseMode: 'random',
   poseSelection: [],

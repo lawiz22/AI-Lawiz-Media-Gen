@@ -1,5 +1,5 @@
 {
   "version": "1.8",
   "date": "2026-09-20T00:00:00Z",
-  "changes": "Past Forward now supports FLUX2 by default or Mammouth, Library source selection, identity-preserving theme prompts, decade-specific comic superhero rendering, event-aware Historical Cameo scenes, optional full-scene reimagination, selectable decades, per-decade progress and errors, partial albums, and full-size result previews."
+  "changes": "Past Forward and Photo Fusion now support Qwen Edit alongside FLUX2 and Mammouth, with concise Qwen prompts, Lightning 4-step/8-step controls, identity-preserving themes, scene reimagination, selectable decades, progress reporting, partial albums, and full-size previews."
 }

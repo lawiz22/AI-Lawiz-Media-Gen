@@ -50,6 +50,19 @@ const imageSourceToBase64 = async (source: string) => {
   return dataUrl.split(',')[1];
 };
 
+const compactQwenScenePrompt = (prompt: string): string => {
+  const normalizedPrompt = prompt.replace(/\r/g, '').trim();
+  const readSection = (label: string, nextLabels: string[]) => {
+    const end = nextLabels.length ? `(?=\\n(?:${nextLabels.join('|')}):|$)` : '$';
+    return normalizedPrompt.match(new RegExp(`${label}:\\s*([\\s\\S]*?)${end}`, 'i'))?.[1]?.replace(/\s+/g, ' ').trim() || '';
+  };
+  const scenario = readSection('Scenario', ['Pose', 'Style', 'Background', 'Final Image']);
+  const pose = readSection('Pose', ['Style', 'Background', 'Final Image']);
+  const style = readSection('Style', ['Background', 'Final Image']);
+  const background = readSection('Background', ['Final Image']);
+  return [scenario, pose, style, background].filter(Boolean).join(' ');
+};
+
 export const generateComfyUIGroupPhoto = async (
   subjectFiles: File[],
   backgroundFile: File | null,
@@ -98,6 +111,57 @@ export const generateComfyUIGroupPhoto = async (
   return {
     imageBase64: await imageSourceToBase64(image.src),
     responseText: result.finalPrompt,
+    seed: image.seed,
+  };
+};
+
+export const generateQwenGroupPhoto = async (
+  subjectFiles: File[],
+  backgroundFile: File | null,
+  prompt: string,
+  personaDescriptions: string[],
+  options: GenerationOptions,
+  updateProgress: (message: string, value: number) => void,
+): Promise<GeneratePhotoResult> => {
+  const totalInputs = subjectFiles.length + (backgroundFile ? 1 : 0);
+  if (subjectFiles.length < 2 || subjectFiles.length > 3 || totalInputs > 3) {
+    throw new Error('Qwen Edit supports 2 to 3 people, or 2 people with one background image.');
+  }
+
+  const subjectCount = subjectFiles.length;
+  const people = subjectFiles.map((_, index) => {
+    const persona = personaDescriptions[index]?.trim();
+    return `Person ${index + 1} must be the exact person from Picture ${index + 1}${persona ? `, portrayed as ${persona}` : ''}.`;
+  }).join(' ');
+  const backgroundInstruction = backgroundFile
+    ? `Picture ${subjectCount + 1} is the background only; do not copy any person from it.`
+    : '';
+  const compactScenePrompt = compactQwenScenePrompt(prompt);
+  const qwenPrompt = [
+    `Create one cohesive photorealistic group photo with exactly ${subjectCount} people and no additional people.`,
+    people,
+    'Preserve each face, age, skin tone, hair, and body. Keep every identity distinct. Do not omit, duplicate, merge, or swap anyone.',
+    backgroundInstruction,
+    compactScenePrompt,
+  ].filter(Boolean).join(' ');
+  const referenceImages = [...subjectFiles.slice(1), ...(backgroundFile ? [backgroundFile] : [])];
+  const result = await generateComfyUIPortraits(subjectFiles[0], {
+    ...options,
+    provider: 'comfyui',
+    comfyModelType: 'qwen-edit',
+    comfyPrompt: qwenPrompt,
+    comfyNegativePrompt: '',
+    comfySteps: options.photoFusionQwenSteps ?? 8,
+    comfyCfg: options.photoFusionQwenCfg ?? 1,
+    comfySampler: options.photoFusionQwenSampler || 'euler_ancestral',
+    comfyScheduler: options.photoFusionQwenScheduler || 'beta57',
+    numImages: 1,
+  }, updateProgress, referenceImages);
+  const image = result.images[0];
+  if (!image) throw new Error('Qwen Edit completed without returning a Photo Fusion image.');
+  return {
+    imageBase64: await imageSourceToBase64(image.src),
+    responseText: qwenPrompt,
     seed: image.seed,
   };
 };
