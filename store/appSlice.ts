@@ -39,6 +39,7 @@ const initialState: AppSliceState = {
   isVideoEndFramePickerOpen: false,
   isGeminiVideoSourcePickerOpen: false,
   isClothesSourcePickerOpen: false,
+  isHairSourcePickerOpen: false,
   isObjectSourcePickerOpen: false,
   isPoseSourcePickerOpen: false,
   isBannerRefPickerOpen: false,

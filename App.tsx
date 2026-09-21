@@ -37,6 +37,7 @@ import { decodePose, getRandomPose } from './utils/promptBuilder';
 import { DEFAULT_GEMINI_IMAGE_MODEL, generatePortraits, generateCharacterNameForImage, updateGeminiApiKey, getApiKey, generatePromptFromImage } from './services/geminiService';
 import { generateComfyUICharacterAngles, generateComfyUIPortraits, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution, generateComfyUIPromptFromSource } from './services/comfyUIService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, generateMammouthImages, getMammouthApiKey, testMammouthConnection, updateMammouthApiKey } from './services/mammouthService';
+import { buildCharacterAnglePrompts, CHARACTER_ANGLES, getEnabledCharacterAngles } from './services/characterAnglesWorkflow';
 import { Login } from './components/Login';
 import { Header } from './components/Header';
 import { ImageUploader } from './components/ImageUploader';
@@ -106,6 +107,8 @@ const App: React.FC = () => {
     const [isOllamaConnected, setIsOllamaConnected] = useState<boolean | null>(null);
     const [isGeneratingRefinePrompt, setIsGeneratingRefinePrompt] = useState(false);
     const [generationTimes, setGenerationTimes] = useState<Record<string, number | null>>({});
+    const [imageGenerationJobs, setImageGenerationJobs] = useState<Array<{ label: string; progress: number; message: string; status: 'pending' | 'done' | 'error'; src?: string }>>([]);
+    const [characterGenerationJobs, setCharacterGenerationJobs] = useState<Array<{ label: string; progress: number; message: string; status: 'pending' | 'done' | 'error'; src?: string }>>([]);
     const [upscaleSourceFile, setUpscaleSourceFile] = useState<File | null>(null);
     const [isUpscalePickerOpen, setIsUpscalePickerOpen] = useState(false);
     const [activeFunSubTab, setActiveFunSubTab] = useState<'photo-fusion' | 'past-forward' | 'swap-anything'>('photo-fusion');
@@ -119,7 +122,7 @@ const App: React.FC = () => {
         isStartFramePickerOpen, isEndFramePickerOpen, isLogoRefPickerOpen, isLogoPalettePickerOpen, isLogoFontPickerOpen,
         isPromptGenImagePickerOpen, isPromptGenBgImagePickerOpen, isPromptGenSubjectImagePickerOpen,
         isNunchakuSourcePickerOpen, isCharacterSourcePickerOpen,
-        isClothesSourcePickerOpen, isObjectSourcePickerOpen, isPoseSourcePickerOpen,
+        isClothesSourcePickerOpen, isHairSourcePickerOpen, isObjectSourcePickerOpen, isPoseSourcePickerOpen,
         isBannerRefPickerOpen, isBannerPalettePickerOpen, isBannerLogoPickerOpen, isBannerFontPickerOpen,
         isAlbumCoverRefPickerOpen, isAlbumCoverPalettePickerOpen, isAlbumCoverLogoPickerOpen, isAlbumCoverFontPickerOpen,
         isMannequinRefPickerOpen, isRefineSourcePickerOpen, isFontSourcePickerOpen, isMaskPickerOpen, isElementPickerOpen,
@@ -147,6 +150,7 @@ const App: React.FC = () => {
 
     // --- Extractor State (from extractorSlice) ---
     const activeExtractorSubTab = useSelector((state: RootState) => state.extractor.activeExtractorSubTab);
+    const extractorState = useSelector((state: RootState) => state.extractor.extractorState);
 
     // --- Logo & Theme State (from logoThemeSlice) ---
     const logoThemeState = useSelector((state: RootState) => state.logoTheme.logoThemeState);
@@ -556,6 +560,35 @@ const App: React.FC = () => {
         const startTime = performance.now();
         setGenerationTimes(prev => ({ ...prev, [activeGenerationContentKey]: null }));
 
+        const supportsProgressiveCharacter = activeTab === 'character-generator' && (currentOptions.provider === 'comfyui' || currentOptions.provider === 'mammouth');
+        const enabledCharacterAngles = supportsProgressiveCharacter ? getEnabledCharacterAngles(characterOptions) : [];
+        if (supportsProgressiveCharacter) {
+            setCharacterGenerationJobs(enabledCharacterAngles.map((angle, index) => {
+                const outputNumber = CHARACTER_ANGLES.findIndex(candidate => candidate.id === angle.id) + 1;
+                return {
+                    label: characterOptions.comfyCharacterAngleSettings?.[angle.id]?.angle?.trim() || angle.label || `Output ${outputNumber || index + 1}`,
+                    progress: 0,
+                    message: 'Queued',
+                    status: 'pending' as const,
+                };
+            }));
+        } else {
+            setCharacterGenerationJobs([]);
+        }
+
+        const supportsProgressiveImageGeneration = activeTab === 'image-generator' && currentOptions.provider === 'comfyui';
+        const imageOutputCount = currentOptions.comfyModelType === 'face-detailer-sd1.5' ? 1 : currentOptions.numImages;
+        if (supportsProgressiveImageGeneration) {
+            setImageGenerationJobs(Array.from({ length: imageOutputCount }, (_, index) => ({
+                label: `Image ${index + 1}`,
+                progress: 0,
+                message: 'Queued',
+                status: 'pending' as const,
+            })));
+        } else {
+            setImageGenerationJobs([]);
+        }
+
         dispatch(setLoadingState({ isLoading: true }));
         dispatch(setGeneratedImages({ tabId: activeGenerationContentKey, images: [] }));
         dispatch(setLastUsedPrompt({ tabId: activeGenerationContentKey, prompt: null }));
@@ -586,13 +619,79 @@ const App: React.FC = () => {
                 const optionsToUse = activeTab === 'character-generator'
                     ? { ...characterOptions, geminiGeneralEditPrompt: '', geminiI2iMode: 'character' as const, geminiMode: 'i2i' as const }
                     : options;
-                result = await generateMammouthImages(
-                    sourceImage, optionsToUse, localUpdateProgress, clothingImage, backgroundImage, maskImage, elementImages
-                );
+                if (activeTab === 'character-generator') {
+                    if (enabledCharacterAngles.length === 0) throw new Error('Enable at least one character output before generating.');
+                    const prompts = buildCharacterAnglePrompts(characterOptions);
+                    const completedImages: { src: string; usageMetadata?: any }[] = [];
+                    for (let index = 0; index < enabledCharacterAngles.length; index += 1) {
+                        const angle = enabledCharacterAngles[index];
+                        const angleLabel = characterOptions.comfyCharacterAngleSettings?.[angle.id]?.angle?.trim() || angle.label;
+                        const updateOutputProgress = (message: string, value: number) => {
+                            setCharacterGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: value, message } : job));
+                            localUpdateProgress(`${angleLabel}: ${message}`, (index + value) / enabledCharacterAngles.length);
+                        };
+                        try {
+                            updateOutputProgress(`Starting ${angleLabel}...`, 0.02);
+                            const angleResult = await generateMammouthImages(sourceImage, {
+                                ...optionsToUse,
+                                numImages: 1,
+                                poseMode: 'prompt',
+                                poseSelection: [prompts[index]],
+                            }, updateOutputProgress, clothingImage, backgroundImage, maskImage, elementImages);
+                            const image = angleResult.images[0];
+                            if (!image) throw new Error(`Mammouth returned no image for ${angleLabel}.`);
+                            completedImages.push(image);
+                            setCharacterGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: 1, message: `${angleLabel} complete`, status: 'done', src: image.src } : job));
+                            dispatch(setGeneratedImages({ tabId: activeGenerationContentKey, images: [...completedImages] }));
+                        } catch (outputError) {
+                            setCharacterGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: 1, message: outputError instanceof Error ? outputError.message : 'Generation failed', status: 'error' } : job));
+                            throw outputError;
+                        }
+                    }
+                    result = { images: completedImages, finalPrompt: prompts.join('\n\n') };
+                } else {
+                    result = await generateMammouthImages(
+                        sourceImage, optionsToUse, localUpdateProgress, clothingImage, backgroundImage, maskImage, elementImages
+                    );
+                }
             } else if (currentOptions.provider === 'comfyui') {
+                const progressiveImages: { src: string; seed: number }[] = [];
                 const comfyResult = activeTab === 'character-generator'
-                    ? await generateComfyUICharacterAngles(sourceImage!, characterOptions, localUpdateProgress, clothingImage, backgroundImage, characterPoseImage)
-                    : await generateComfyUIPortraits(sourceImage, options, localUpdateProgress, elementImages.slice(0, options.comfyModelType === 'flux2-edit' ? 3 : 2));
+                    ? await generateComfyUICharacterAngles(
+                        sourceImage!, characterOptions, localUpdateProgress, clothingImage, backgroundImage, characterPoseImage,
+                        (index, message, value) => setCharacterGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: value, message } : job)),
+                        (index, image) => {
+                            setCharacterGenerationJobs(current => {
+                                const next = current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: 1, message: `${job.label} complete`, status: 'done' as const, src: image.src } : job);
+                                const completed = next.filter(job => job.status === 'done' && job.src).map(job => ({ src: job.src! }));
+                                dispatch(setGeneratedImages({ tabId: activeGenerationContentKey, images: completed }));
+                                return next;
+                            });
+                        },
+                    )
+                    : await generateComfyUIPortraits(
+                        sourceImage,
+                        options,
+                        localUpdateProgress,
+                        elementImages.slice(0, options.comfyModelType === 'flux2-edit' ? 3 : 2),
+                        activeTab === 'image-generator' ? (index, image) => {
+                            progressiveImages[index] = image;
+                            setImageGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? {
+                                ...job,
+                                progress: 1,
+                                message: `Image ${index + 1} complete`,
+                                status: 'done',
+                                src: image.src,
+                            } : job));
+                            dispatch(setGeneratedImages({
+                                tabId: activeGenerationContentKey,
+                                images: progressiveImages.filter((item): item is { src: string; seed: number } => !!item),
+                            }));
+                        } : undefined,
+                        activeTab === 'image-generator' ? (index, message, value) => {
+                            setImageGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: value, message } : job));
+                        } : undefined,
+                    );
                 result = {
                     images: comfyResult.images.map(img => ({ src: img.src, seed: img.seed, usageMetadata: undefined })),
                     finalPrompt: comfyResult.finalPrompt
@@ -633,6 +732,12 @@ const App: React.FC = () => {
 
         } catch (err: any) {
             console.error("Generation failed:", err);
+            if (activeTab === 'character-generator') {
+                setCharacterGenerationJobs(current => current.map(job => job.status === 'pending' ? { ...job, progress: 1, status: 'error', message: err.message || 'Generation failed' } : job));
+            }
+            if (activeTab === 'image-generator' && currentOptions.provider === 'comfyui') {
+                setImageGenerationJobs(current => current.map(job => job.status === 'pending' ? { ...job, progress: 1, status: 'error', message: err.message || 'Generation failed' } : job));
+            }
             if (err.message?.includes('cancelled by the user')) {
                 console.log("Generation promise rejected due to cancellation.");
             } else {
@@ -815,9 +920,19 @@ const App: React.FC = () => {
                 ? 'ComfyUI · FLUX2 Swap Anything'
             : options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'extractor-tools') {
-        if (options.provider === 'mammouth') activeModel = options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL;
-        else if (activeExtractorSubTab === 'clothes') activeModel = DEFAULT_GEMINI_IMAGE_MODEL;
-        else if (activeExtractorSubTab === 'objects') activeModel = 'gemini-2.5-flash';
+        const extractorGenerationProvider = activeExtractorSubTab === 'clothes'
+            ? extractorState.clothesGenerationProvider
+            : activeExtractorSubTab === 'hair'
+                ? extractorState.hairGenerationProvider
+            : activeExtractorSubTab === 'objects'
+                ? extractorState.objectGenerationProvider
+                : activeExtractorSubTab === 'poses' && extractorState.poseOutputMode === 'mannequin-image'
+                    ? extractorState.poseGenerationProvider
+                : activeExtractorSubTab === 'font'
+                    ? extractorState.fontGenerationProvider || 'flux2'
+                : null;
+        if (extractorGenerationProvider === 'mammouth') activeModel = options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL;
+        else if (extractorGenerationProvider === 'flux2') activeModel = `FLUX2 Edit · ${options.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf'}`;
         else if (activeExtractorSubTab === 'poses') activeModel = 'MediaPipe + Gemini 2.5';
         else if (activeExtractorSubTab === 'font') activeModel = DEFAULT_GEMINI_IMAGE_MODEL;
         else activeModel = 'gemini-2.5-flash';
@@ -827,6 +942,16 @@ const App: React.FC = () => {
 
     const activeProvider: Provider = activeTab === 'character-generator'
         ? characterOptions.provider
+        : activeTab === 'extractor-tools' && activeExtractorSubTab === 'clothes'
+            ? extractorState.clothesGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
+        : activeTab === 'extractor-tools' && activeExtractorSubTab === 'objects'
+            ? extractorState.objectGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
+        : activeTab === 'extractor-tools' && activeExtractorSubTab === 'hair'
+            ? extractorState.hairGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
+        : activeTab === 'extractor-tools' && activeExtractorSubTab === 'poses' && extractorState.poseOutputMode === 'mannequin-image'
+            ? extractorState.poseGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
+        : activeTab === 'extractor-tools' && activeExtractorSubTab === 'font'
+            ? (extractorState.fontGenerationProvider || 'flux2') === 'mammouth' ? 'mammouth' : 'comfyui'
         : activeTab === 'fun' && activeFunSubTab === 'photo-fusion'
             ? groupPhotoFusionProvider === 'mammouth' ? 'mammouth' : 'comfyui'
         : activeTab === 'fun' && activeFunSubTab === 'past-forward'
@@ -980,7 +1105,29 @@ const App: React.FC = () => {
                         <CloudImageProviderBar
                             options={options}
                             updateOptions={(updates) => dispatch(updateOptions(updates))}
-                            disabled={isLoading}
+                            extractorProvider={activeTab === 'extractor-tools'
+                                ? activeExtractorSubTab === 'clothes'
+                                    ? extractorState.clothesGenerationProvider
+                                    : activeExtractorSubTab === 'hair'
+                                        ? extractorState.hairGenerationProvider
+                                    : activeExtractorSubTab === 'objects'
+                                        ? extractorState.objectGenerationProvider
+                                        : activeExtractorSubTab === 'poses' && extractorState.poseOutputMode === 'mannequin-image'
+                                            ? extractorState.poseGenerationProvider
+                                        : activeExtractorSubTab === 'font'
+                                            ? extractorState.fontGenerationProvider || 'flux2'
+                                        : undefined
+                                : undefined}
+                            onExtractorProviderChange={(provider) => dispatch(updateExtractorState(activeExtractorSubTab === 'objects'
+                                ? { objectGenerationProvider: provider }
+                                : activeExtractorSubTab === 'hair'
+                                    ? { hairGenerationProvider: provider }
+                                : activeExtractorSubTab === 'poses'
+                                    ? { poseGenerationProvider: provider }
+                                    : activeExtractorSubTab === 'font'
+                                        ? { fontGenerationProvider: provider }
+                                    : { clothesGenerationProvider: provider }))}
+                            disabled={isLoading || extractorState.isGenerating || extractorState.isGeneratingHair || extractorState.isGeneratingObjects || extractorState.isGeneratingPoses || extractorState.isGeneratingFont}
                             action={
                                 <button type="button" onClick={handleActivePanelReset} className="flex items-center gap-2 rounded-md border border-danger/50 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white">
                                     <ResetIcon className="h-4 w-4" /> Reset
@@ -1169,20 +1316,24 @@ const App: React.FC = () => {
                                         isDisabled={isLoading}
                                         updateOptions={handleUpdateOptions}
                                     />
-                                    {isLoading ? (
+                                    {isLoading && imageGenerationJobs.length === 0 ? (
                                         <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />
                                     ) : (
-                                        <ImageGrid
-                                            images={generatedContent[imageGeneratorContentKey]?.images || []}
-                                            onSendToI2I={handleSendToI2I}
-                                            onSendToCharacter={handleSendToCharacter}
-                                            onSendToUpscale={handleSendToUpscale}
-                                            lastUsedPrompt={generatedContent[imageGeneratorContentKey]?.lastUsedPrompt}
-                                            options={currentOptions}
-                                            sourceImage={sourceImage}
-                                            activeTab={imageGeneratorContentKey}
-                                            generationTime={generationTimes[imageGeneratorContentKey]}
-                                        />
+                                        <>
+                                            {isLoading && <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />}
+                                            <ImageGrid
+                                                images={generatedContent[imageGeneratorContentKey]?.images || []}
+                                                generationJobs={isLoading ? imageGenerationJobs : []}
+                                                onSendToI2I={handleSendToI2I}
+                                                onSendToCharacter={handleSendToCharacter}
+                                                onSendToUpscale={handleSendToUpscale}
+                                                lastUsedPrompt={generatedContent[imageGeneratorContentKey]?.lastUsedPrompt}
+                                                options={currentOptions}
+                                                sourceImage={sourceImage}
+                                                activeTab={imageGeneratorContentKey}
+                                                generationTime={generationTimes[imageGeneratorContentKey]}
+                                            />
+                                        </>
                                     )}
                                     {currentOptions.provider === 'comfyui' && <>
                                         <LoraSettingsPanel
@@ -1320,11 +1471,12 @@ const App: React.FC = () => {
                                     isReady={isReadyToGenerate}
                                     isDisabled={isLoading}
                                 />
-                                {isLoading ? (
+                                {isLoading && characterGenerationJobs.length === 0 ? (
                                     <Loader message={progressMessage} progress={progressValue} />
                                 ) : (
                                     <ImageGrid
                                         images={generatedContent['character-generator']?.images || []}
+                                        generationJobs={characterGenerationJobs}
                                         onSendToI2I={handleSendToI2I}
                                         onSendToCharacter={handleSendToCharacter}
                                         onSendToUpscale={handleSendToUpscale}
@@ -1369,10 +1521,14 @@ const App: React.FC = () => {
                         <ExtractorToolsPanel
                             key={`extractor-${panelResetVersions['extractor-tools'] || 0}`}
                             onOpenLibraryForClothes={() => dispatch(setModalOpen({ modal: 'isClothesSourcePickerOpen', isOpen: true }))}
+                            onOpenLibraryForHair={() => dispatch(setModalOpen({ modal: 'isHairSourcePickerOpen', isOpen: true }))}
                             onOpenLibraryForObjects={() => dispatch(setModalOpen({ modal: 'isObjectSourcePickerOpen', isOpen: true }))}
                             onOpenLibraryForPoses={() => dispatch(setModalOpen({ modal: 'isPoseSourcePickerOpen', isOpen: true }))}
                             onOpenLibraryForMannequinRef={() => dispatch(setModalOpen({ modal: 'isMannequinRefPickerOpen', isOpen: true }))}
                             onOpenLibraryForFont={() => dispatch(setModalOpen({ modal: 'isFontSourcePickerOpen', isOpen: true }))}
+                            ollamaUrl={localOllamaUrl}
+                            defaultOllamaModel={localOllamaModel}
+                            onOllamaModelChange={setLocalOllamaModel}
                             activeSubTab={activeExtractorSubTab}
                             setActiveSubTab={(id) => dispatch(setActiveExtractorSubTab(id))}
                         />
@@ -1576,6 +1732,7 @@ const App: React.FC = () => {
             <LibraryPickerModal isOpen={isPromptGenBgImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenBgImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ bgImage: new File([b], "bg_source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isPromptGenSubjectImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenSubjectImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ subjectImage: new File([b], "subj_source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isClothesSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isClothesSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ clothesSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
+            <LibraryPickerModal isOpen={isHairSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isHairSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ hairSourceFile: new File([b], "source.jpg", { type: b.type }), generatedHair: [] })); }} filter={['image', 'character', 'group-fusion']} />
             <LibraryPickerModal isOpen={isObjectSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isObjectSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ objectSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isPoseSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPoseSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ poseSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
             <LibraryPickerModal isOpen={isMannequinRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMannequinRefPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ mannequinReferenceFile: new File([b], "ref.jpg", { type: b.type }) })); }} filter="image" />

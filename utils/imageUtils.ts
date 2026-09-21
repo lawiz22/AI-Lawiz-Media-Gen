@@ -79,6 +79,58 @@ export const fileToDataUrl = (file: File): Promise<string> => {
     reader.readAsDataURL(file);
   });
 };
+const canvasToJpegBlob = (canvas: HTMLCanvasElement, quality: number): Promise<Blob> => new Promise((resolve, reject) => {
+    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Failed to compress image.')), 'image/jpeg', quality);
+});
+
+export const limitImageFileSize = async (file: File, maxBytes = 20 * 1024 * 1024): Promise<File> => {
+    if (file.size <= maxBytes) return file;
+
+    const sourceUrl = URL.createObjectURL(file);
+    try {
+        const image = new Image();
+        await new Promise<void>((resolve, reject) => {
+            image.onload = () => resolve();
+            image.onerror = () => reject(new Error(`Could not resize ${file.name || 'the source image'}.`));
+            image.src = sourceUrl;
+        });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        let context = canvas.getContext('2d');
+        if (!context) throw new Error('Could not create an image resize canvas.');
+        context.drawImage(image, 0, 0);
+
+        let blob = await canvasToJpegBlob(canvas, 0.9);
+        while (blob.size > maxBytes) {
+            const scale = Math.min(0.9, Math.sqrt(maxBytes / blob.size) * 0.95);
+            const nextWidth = Math.max(1, Math.round(canvas.width * scale));
+            const nextHeight = Math.max(1, Math.round(canvas.height * scale));
+            const resizedCanvas = document.createElement('canvas');
+            resizedCanvas.width = nextWidth;
+            resizedCanvas.height = nextHeight;
+            context = resizedCanvas.getContext('2d');
+            if (!context) throw new Error('Could not create an image resize canvas.');
+            context.drawImage(canvas, 0, 0, nextWidth, nextHeight);
+            canvas.width = nextWidth;
+            canvas.height = nextHeight;
+            canvas.getContext('2d')?.drawImage(resizedCanvas, 0, 0);
+            blob = await canvasToJpegBlob(canvas, 0.88);
+        }
+
+        const baseName = (file.name || 'mammouth-input').replace(/\.[^.]+$/, '');
+        return new File([blob], `${baseName}-mammouth.jpg`, { type: 'image/jpeg', lastModified: file.lastModified });
+    } finally {
+        URL.revokeObjectURL(sourceUrl);
+    }
+};
+
+export const limitImageFilesTotalSize = async (files: File[], maxTotalBytes = 18 * 1024 * 1024): Promise<File[]> => {
+    if (files.length === 0) return [];
+    const maxBytesPerFile = Math.floor(maxTotalBytes / files.length);
+    return Promise.all(files.map(file => limitImageFileSize(file, maxBytesPerFile)));
+};
 
 export const getAudioMimeType = (filename: string, reportedType = ''): string => {
     const extension = filename.split(/[?#]/)[0].split('.').pop()?.toLowerCase();
@@ -360,6 +412,78 @@ export const createBlankImageFile = (width: number, height: number, color: strin
             'image/png'
         );
     });
+};
+
+export const createFontChartGuide = (backgroundColor: string, filename: string): Promise<File> => {
+    return new Promise((resolve, reject) => {
+        const width = 1024;
+        const height = 1536;
+        const rows = ['ABCDEFGHIJKLM', 'NOPQRSTUVWXYZ', 'abcdefghijklm', 'nopqrstuvwxyz', '0123456789'];
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
+        if (!context) return reject(new Error('Could not create the font chart guide.'));
+
+        context.fillStyle = backgroundColor;
+        context.fillRect(0, 0, width, height);
+        const red = parseInt(backgroundColor.slice(1, 3), 16) || 0;
+        const green = parseInt(backgroundColor.slice(3, 5), 16) || 0;
+        const blue = parseInt(backgroundColor.slice(5, 7), 16) || 0;
+        context.fillStyle = (red * 299 + green * 587 + blue * 114) / 1000 > 150 ? '#000000' : '#ffffff';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+
+        const marginX = 54;
+        const rowHeight = 250;
+        const firstRowY = 270;
+        rows.forEach((row, rowIndex) => {
+            const cellWidth = (width - marginX * 2) / row.length;
+            const fontSize = rowIndex < 2 ? 68 : rowIndex < 4 ? 62 : 66;
+            context.font = `700 ${fontSize}px Arial, sans-serif`;
+            [...row].forEach((character, columnIndex) => {
+                context.fillText(character, marginX + cellWidth * (columnIndex + 0.5), firstRowY + rowHeight * rowIndex);
+            });
+        });
+
+        canvas.toBlob(blob => {
+            if (!blob) return reject(new Error('Could not encode the font chart guide.'));
+            resolve(new File([blob], filename, { type: 'image/png' }));
+        }, 'image/png');
+    });
+};
+
+export const getDominantImageColor = async (file: File): Promise<string> => {
+    const bitmap = await createImageBitmap(file);
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) throw new Error('Could not analyze the source colors.');
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        const buckets = new Map<string, { count: number; red: number; green: number; blue: number }>();
+        for (let index = 0; index < pixels.length; index += 4) {
+            if (pixels[index + 3] < 128) continue;
+            const red = pixels[index];
+            const green = pixels[index + 1];
+            const blue = pixels[index + 2];
+            const key = `${red >> 5}-${green >> 5}-${blue >> 5}`;
+            const bucket = buckets.get(key) || { count: 0, red: 0, green: 0, blue: 0 };
+            bucket.count += 1;
+            bucket.red += red;
+            bucket.green += green;
+            bucket.blue += blue;
+            buckets.set(key, bucket);
+        }
+        const dominant = [...buckets.values()].sort((left, right) => right.count - left.count)[0];
+        if (!dominant) return '#ffffff';
+        const toHex = (value: number) => Math.round(value / dominant.count).toString(16).padStart(2, '0');
+        return `#${toHex(dominant.red)}${toHex(dominant.green)}${toHex(dominant.blue)}`;
+    } finally {
+        bitmap.close();
+    }
 };
 
 export const letterboxImage = (file: File, targetAspectRatio: string, fillColor: string = '#111827'): Promise<File> => {

@@ -16,7 +16,7 @@ interface SwapAnythingPanelProps {
     comfyUIObjectInfo: any | null;
 }
 
-const LIBRARY_IMAGE_TYPES: LibraryItemType[] = ['image', 'character', 'clothes', 'object', 'past-forward-photo', 'group-fusion', 'swap-anything'];
+const LIBRARY_IMAGE_TYPES: LibraryItemType[] = ['image', 'character', 'clothes', 'hair', 'object', 'past-forward-photo', 'group-fusion', 'swap-anything'];
 
 interface SwapPreset {
     id: string;

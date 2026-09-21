@@ -10,6 +10,8 @@ interface ExtractorSliceState {
 const initialExtractorState: ExtractorState = {
     clothesSourceFile: null,
     clothesDetails: '',
+  clothesAnalysisProvider: 'mammouth',
+  clothesGenerationProvider: 'flux2',
     isIdentifying: false,
     identifiedItems: [],
     isGenerating: false,
@@ -17,9 +19,18 @@ const initialExtractorState: ExtractorState = {
     clothesError: null,
     generateFolded: false,
     excludeAccessories: true,
+    hairSourceFile: null,
+    hairPersonCount: 1,
+    hairExactFidelity: true,
+    hairGenerationProvider: 'flux2',
+    isGeneratingHair: false,
+    generatedHair: [],
+    hairError: null,
     objectSourceFile: null,
     objectHints: '',
     maxObjects: 5,
+    objectAnalysisProvider: 'mammouth',
+    objectGenerationProvider: 'flux2',
     isIdentifyingObjects: false,
     identifiedObjects: [],
     isGeneratingObjects: false,
@@ -31,9 +42,15 @@ const initialExtractorState: ExtractorState = {
     poseError: null,
     mannequinStyle: 'custom-reference',
     mannequinReferenceFile: null,
-    poseOutputMode: 'controlnet-json',
-    mannequinPromptHint: '',
+    poseOutputMode: 'mannequin-image',
+    mannequinPromptHint: 'a clean white articulated artist mannequin with visible joint construction and a matte studio finish',
+    poseGenerationProvider: 'flux2',
     fontSourceFile: null,
+    fontGenerationProvider: 'flux2',
+    fontUseSourceColors: false,
+    fontFlux2Steps: 8,
+    fontFlux2Cfg: 1.1,
+    fontFlux2Sampler: 'euler',
     isGeneratingFont: false,
     generatedFontChart: null,
     fontError: null,
@@ -60,7 +77,7 @@ const extractorSlice = createSlice({
     resetExtractorState: (state) => {
       state.extractorState = initialState.extractorState;
     },
-    setExtractorItemSaveStatus: (state, action: PayloadAction<{ itemType: 'clothes' | 'objects' | 'poses' | 'font', index?: number, status: 'idle' | 'saving' | 'saved' }>) => {
+    setExtractorItemSaveStatus: (state, action: PayloadAction<{ itemType: 'clothes' | 'hair' | 'objects' | 'poses' | 'font', index?: number, status: 'idle' | 'saving' | 'saved' }>) => {
         const { itemType, index, status } = action.payload;
         switch (itemType) {
             case 'clothes':
@@ -69,6 +86,13 @@ const extractorSlice = createSlice({
                     state.extractorState.generatedClothes = state.extractorState.generatedClothes.map((item, i) =>
                         i === index ? { ...item, saved: status } : item
                     );
+                }
+                break;
+              case 'hair':
+                if (typeof index === 'number' && state.extractorState.generatedHair[index]) {
+                  state.extractorState.generatedHair = state.extractorState.generatedHair.map((item, i) =>
+                    i === index ? { ...item, saved: status } : item
+                  );
                 }
                 break;
             case 'objects':

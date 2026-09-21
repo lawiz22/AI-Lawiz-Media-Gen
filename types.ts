@@ -622,6 +622,13 @@ export interface GeneratedObject {
   saved?: 'idle' | 'saving' | 'saved'; // UI state
 }
 
+export interface GeneratedHair {
+  name: string;
+  image: string;
+  personIndex: number;
+  saved?: 'idle' | 'saving' | 'saved';
+}
+
 export interface IdentifiedPose {
   description: string;
 }
@@ -645,6 +652,8 @@ export interface ExtractorState {
   // Clothes
   clothesSourceFile: File | null;
   clothesDetails: string;
+  clothesAnalysisProvider: 'mammouth' | 'ollama';
+  clothesGenerationProvider: 'flux2' | 'mammouth';
   isIdentifying: boolean;
   identifiedItems: (IdentifiedClothing & { selected: boolean })[];
   isGenerating: boolean;
@@ -652,10 +661,20 @@ export interface ExtractorState {
   clothesError: string | null;
   generateFolded: boolean;
   excludeAccessories: boolean;
+  // Hair
+  hairSourceFile: File | null;
+  hairPersonCount: number;
+  hairExactFidelity: boolean;
+  hairGenerationProvider: 'flux2' | 'mammouth';
+  isGeneratingHair: boolean;
+  generatedHair: GeneratedHair[];
+  hairError: string | null;
   // Objects
   objectSourceFile: File | null;
   objectHints: string;
   maxObjects: number;
+  objectAnalysisProvider: 'mammouth' | 'ollama';
+  objectGenerationProvider: 'flux2' | 'mammouth';
   isIdentifyingObjects: boolean;
   identifiedObjects: (IdentifiedObject & { selected: boolean })[];
   isGeneratingObjects: boolean;
@@ -670,14 +689,20 @@ export interface ExtractorState {
   mannequinReferenceFile: File | null;
   poseOutputMode: PoseOutputMode;
   mannequinPromptHint: string;
+  poseGenerationProvider: 'flux2' | 'mammouth';
   // Font
   fontSourceFile: File | null;
+  fontGenerationProvider: 'flux2' | 'mammouth';
+  fontUseSourceColors: boolean;
+  fontFlux2Steps: number;
+  fontFlux2Cfg: number;
+  fontFlux2Sampler: string;
   isGeneratingFont: boolean;
   generatedFontChart: { src: string; saved: 'idle' | 'saving' | 'saved' } | null;
   fontError: string | null;
 }
 
-export type LibraryItemType = 'image' | 'character' | 'video' | 'audio-tts' | 'tts-reference' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font' | 'group-fusion' | 'swap-anything' | 'past-forward-photo' | 'preset';
+export type LibraryItemType = 'image' | 'character' | 'video' | 'audio-tts' | 'tts-reference' | 'logo' | 'banner' | 'album-cover' | 'clothes' | 'hair' | 'prompt' | 'extracted-frame' | 'object' | 'color-palette' | 'pose' | 'font' | 'group-fusion' | 'swap-anything' | 'past-forward-photo' | 'preset';
 export type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
 
 export type LogoStyle = 'symbolic' | 'wordmark' | 'emblem' | 'abstract' | 'combination' | 'pixel-art' | 'vaporwave' | 'grunge' | 'vintage-badge' | '3d-clay' | 'hand-drawn' | 'geometric';
@@ -996,6 +1021,7 @@ export interface AppSliceState {
   isGeminiVideoSourcePickerOpen: boolean;
 
   isClothesSourcePickerOpen: boolean;
+  isHairSourcePickerOpen: boolean;
   isObjectSourcePickerOpen: boolean;
   isPoseSourcePickerOpen: boolean;
   isBannerRefPickerOpen: boolean;

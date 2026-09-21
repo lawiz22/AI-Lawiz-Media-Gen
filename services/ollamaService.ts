@@ -49,15 +49,46 @@ const recoverStructuredResponse = (text: string): string => {
     }
 };
 
-const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+const blobToBase64 = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
         const value = String(reader.result || '');
         resolve(value.includes(',') ? value.slice(value.indexOf(',') + 1) : value);
     };
     reader.onerror = () => reject(new Error('Could not read the source image.'));
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(blob);
 });
+
+const fileToOllamaImage = async (file: File): Promise<string> => {
+    let bitmap: ImageBitmap;
+    try {
+        bitmap = await createImageBitmap(file);
+    } catch {
+        throw new Error(`The source image '${file.name}' could not be decoded. Convert it to PNG or JPEG and try again.`);
+    }
+
+    try {
+        if (!bitmap.width || !bitmap.height) throw new Error('Invalid image dimensions.');
+        const maxDimension = 2048;
+        const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+        const width = Math.max(1, Math.round(bitmap.width * scale));
+        const height = Math.max(1, Math.round(bitmap.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Could not prepare the source image.');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        context.drawImage(bitmap, 0, 0, width, height);
+        const jpeg = await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not encode the source image.')), 'image/jpeg', 0.92);
+        });
+        return blobToBase64(jpeg);
+    } finally {
+        bitmap.close();
+    }
+};
 
 export const testOllamaConnection = async (url: string): Promise<OllamaConnectionResult> => {
     try {
@@ -80,7 +111,13 @@ export const testOllamaConnection = async (url: string): Promise<OllamaConnectio
 const chatWithOllama = async (url: string, model: string, content: string, image?: File, format?: object, temperature = 0.35, onActivity?: OllamaActivityCallback, signal?: AbortSignal): Promise<string> => {
     if (!model.trim()) throw new Error('Select an Ollama model.');
     onActivity?.({ phase: 'loading', thinking: '', response: '' });
-    const images = image ? [await fileToBase64(image)] : undefined;
+    let images: string[] | undefined;
+    try {
+        images = image ? [await fileToOllamaImage(image)] : undefined;
+    } catch (error) {
+        onActivity?.({ phase: 'failed', thinking: '', response: '' });
+        throw error;
+    }
     const directAnswerInstruction = format
         ? 'Return only the requested valid JSON. Do not explain your reasoning and never output <think> tags.'
         : 'Return only the final image-generation prompt. Do not explain your reasoning and never output <think> tags.';
@@ -107,6 +144,10 @@ const chatWithOllama = async (url: string, model: string, content: string, image
     });
     if (!response.ok) {
         const detail = await response.text();
+        onActivity?.({ phase: 'failed', thinking: '', response: '' });
+        if (response.status === 400 && /failed to load image|does not support images/i.test(detail)) {
+            throw new Error(`Ollama could not process the image with '${model}'. Select an installed vision model (for example Qwen VL, Gemma 3, or LLaVA) and try again.`);
+        }
         throw new Error(`Ollama returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
     }
     if (!response.body) throw new Error('Ollama did not return a response stream.');
@@ -196,6 +237,76 @@ export const generateOllamaPromptFromImage = async (
         onActivity,
         signal,
     );
+};
+
+export const identifyClothingWithOllama = async (
+    sourceImage: File,
+    url: string,
+    model: string,
+    onActivity?: OllamaActivityCallback,
+    signal?: AbortSignal,
+): Promise<Array<{ itemName: string; description: string }>> => {
+    const schema = {
+        type: 'array',
+        items: {
+            type: 'object',
+            properties: {
+                itemName: { type: 'string' },
+                description: { type: 'string' },
+            },
+            required: ['itemName', 'description'],
+        },
+    };
+    const text = await chatWithOllama(
+        url,
+        model,
+        'Create an exhaustive head-to-toe inventory of every separately removable wardrobe item visible in the image. Include main garments and layers, footwear (a matching pair is one item), belts, hats, gloves, scarves, bags, jewelry such as necklaces, earrings and bracelets, watches, eyewear, and hair accessories. A jumpsuit or dress is one garment, but do not stop after finding it: inspect the head, neck, ears, wrists, waist, hands, and feet for accessories. Include partially occluded items when they are identifiable. Never merge an accessory into a garment. Exclude the person, hair, body, and background. Return one array entry per item with a short itemName and a detailed description of color, material, pattern, construction, shape, and distinctive details.',
+        sourceImage,
+        schema,
+        0.2,
+        onActivity,
+        signal,
+    );
+    const items = JSON.parse(text);
+    if (!Array.isArray(items)) throw new Error('Ollama returned an invalid clothing list.');
+    return items;
+};
+
+export const identifyObjectsWithOllama = async (
+    sourceImage: File,
+    maxObjects: number,
+    hints: string,
+    url: string,
+    model: string,
+    onActivity?: OllamaActivityCallback,
+    signal?: AbortSignal,
+): Promise<Array<{ name: string; description: string }>> => {
+    const schema = {
+        type: 'array',
+        maxItems: maxObjects,
+        items: {
+            type: 'object',
+            properties: {
+                name: { type: 'string' },
+                description: { type: 'string' },
+            },
+            required: ['name', 'description'],
+        },
+    };
+    const focus = hints.trim() ? ` Prioritize objects matching this focus: ${hints.trim()}.` : '';
+    const text = await chatWithOllama(
+        url,
+        model,
+        `Identify up to ${maxObjects} distinct, physically separate objects visible in this image.${focus} Inspect the entire frame, including foreground, background, surfaces, hands, and partially occluded areas. Rank objects by visual importance and relevance to the requested focus. Do not include people, body parts, clothing, footwear, jewelry, or the background itself. Never merge separate objects into one entry. Return one array entry per object with a concise name and a detailed description of its color, material, shape, construction, condition, markings, and distinctive features.`,
+        sourceImage,
+        schema,
+        0.2,
+        onActivity,
+        signal,
+    );
+    const objects = JSON.parse(text);
+    if (!Array.isArray(objects)) throw new Error('Ollama returned an invalid object list.');
+    return objects.slice(0, maxObjects);
 };
 
 export const generateOllamaPromptSoup = async (

@@ -21,7 +21,6 @@ import ImagePreview from './ImagePreview';
 import PoseSelector from './PoseSelector';
 import QualitySelector from './QualitySelector';
 import BackgroundUpload from './BackgroundUpload';
-import GroupPhotoFusionLoader from './GroupPhotoFusionLoader';
 import { DownloadIcon, RefreshIcon, ZoomIcon, ZipIcon, SaveIcon, CheckIcon, SpinnerIcon } from '../icons';
 import DebugSection from './DebugSection';
 import { dataUrlToThumbnail, fileToDataUrl } from '../../utils/imageUtils';
@@ -164,6 +163,8 @@ const GroupPhotoFusionPanel: React.FC = () => {
         id: crypto.randomUUID(),
         base64: null,
         status: 'generating',
+      progress: 0,
+      progressMessage: 'Queued',
         saveStatus: 'idle'
     }));
     dispatch(setGeneratedImages(placeholders));
@@ -176,61 +177,60 @@ const GroupPhotoFusionPanel: React.FC = () => {
 
       const prompt = selectedPose.getPrompt(personaDescriptions, quality, !!backgroundToUse);
       const baseSeed = generationOptions.comfySeed ?? Math.floor(Math.random() * 1e15);
-      const generationTasks = Array(numImages).fill(0).map((_, index) => () => provider === 'mammouth'
-        ? generateGroupPhoto(
-            [...subjectFiles, ...(backgroundToUse ? [backgroundToUse.file] : [])],
-            prompt,
-            'mammouth',
-            generationOptions.mammouthImageModel,
-          )
-        : provider === 'qwen'
-          ? generateQwenGroupPhoto(
-              subjectFiles,
-              backgroundToUse?.file || null,
-              prompt,
-              personaDescriptions,
-              {
-                ...generationOptions,
-                comfySeed: generationOptions.comfySeedControl === 'fixed'
-                  ? baseSeed
-                  : index === 0 ? baseSeed : Math.floor(Math.random() * 1e15),
-              },
-              () => undefined,
-            )
-        : generateComfyUIGroupPhoto(
-            subjectFiles,
-            backgroundToUse?.file || null,
-            prompt,
-            personaDescriptions,
-            {
-              ...generationOptions,
-              comfySeed: generationOptions.comfySeedControl === 'fixed'
-                ? baseSeed
-                : generationOptions.comfySeedControl === 'decrement'
-                  ? baseSeed - index * (generationOptions.comfySeedIncrement || 1)
-                  : generationOptions.comfySeedControl === 'increment'
-                    ? baseSeed + index * (generationOptions.comfySeedIncrement || 1)
-                    : index === 0 ? baseSeed : Math.floor(Math.random() * 1e15),
-            },
-            () => undefined,
-          ));
-      const results = await generationTasks.reduce<Promise<PromiseSettledResult<Awaited<ReturnType<typeof generateComfyUIGroupPhoto>>>[]>>(async (pending, task) => {
-        const settled = await pending;
-        settled.push(...await Promise.allSettled([task()]));
-        return settled;
-      }, Promise.resolve([]));
-      
-      results.forEach((result, index) => {
+      for (let index = 0; index < numImages; index += 1) {
         const id = placeholders[index].id;
-        if (result.status === 'fulfilled') {
+        const updateProgress = (message: string, value: number) => dispatch(updateGeneratedImage({ id, progress: value, progressMessage: message }));
+        try {
+          updateProgress('Starting generation...', 0.02);
+          const result = provider === 'mammouth'
+            ? await generateGroupPhoto(
+                [...subjectFiles, ...(backgroundToUse ? [backgroundToUse.file] : [])],
+                prompt,
+                'mammouth',
+                generationOptions.mammouthImageModel,
+                updateProgress,
+              )
+            : provider === 'qwen'
+              ? await generateQwenGroupPhoto(
+                  subjectFiles,
+                  backgroundToUse?.file || null,
+                  prompt,
+                  personaDescriptions,
+                  {
+                    ...generationOptions,
+                    comfySeed: generationOptions.comfySeedControl === 'fixed'
+                      ? baseSeed
+                      : index === 0 ? baseSeed : Math.floor(Math.random() * 1e15),
+                  },
+                  updateProgress,
+                )
+              : await generateComfyUIGroupPhoto(
+                  subjectFiles,
+                  backgroundToUse?.file || null,
+                  prompt,
+                  personaDescriptions,
+                  {
+                    ...generationOptions,
+                    comfySeed: generationOptions.comfySeedControl === 'fixed'
+                      ? baseSeed
+                      : generationOptions.comfySeedControl === 'decrement'
+                        ? baseSeed - index * (generationOptions.comfySeedIncrement || 1)
+                        : generationOptions.comfySeedControl === 'increment'
+                          ? baseSeed + index * (generationOptions.comfySeedIncrement || 1)
+                          : index === 0 ? baseSeed : Math.floor(Math.random() * 1e15),
+                  },
+                  updateProgress,
+                );
           dispatch(updateGeneratedImage({
             id,
-            base64: `data:image/jpeg;base64,${result.value.imageBase64}`,
-            seed: result.value.seed,
+            base64: `data:image/jpeg;base64,${result.imageBase64}`,
+            seed: result.seed,
             status: 'success',
+            progress: 1,
+            progressMessage: 'Complete',
           }));
-          if (result.value.usageMetadata) {
-            dispatch(addSessionTokenUsage(result.value.usageMetadata));
+          if (result.usageMetadata) {
+            dispatch(addSessionTokenUsage(result.usageMetadata));
           }
           if (isDebugMode) {
             dispatch(addDebugInfo({
@@ -238,19 +238,21 @@ const GroupPhotoFusionPanel: React.FC = () => {
               subjects: uploadedFiles,
               background: backgroundToUse,
               quality,
-              apiResponseText: result.value.responseText,
-              generatedImageBase64: result.value.imageBase64,
+              apiResponseText: result.responseText,
+              generatedImageBase64: result.imageBase64,
             }));
           }
-        } else {
+        } catch (generationError) {
           dispatch(updateGeneratedImage({
             id,
             base64: null,
             status: 'error',
-            error: result.reason instanceof Error ? result.reason.message : "An unknown error occurred.",
+            progress: 1,
+            progressMessage: 'Failed',
+            error: generationError instanceof Error ? generationError.message : "An unknown error occurred.",
           }));
         }
-      });
+      }
       
     } catch (err) {
       console.error(err);
@@ -262,7 +264,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
   }, [selectedPose, uploadedFiles, quality, backgroundFile, isDebugMode, dispatch, numImages, generationOptions, provider]);
 
   const handleRetry = useCallback(async (id: string) => {
-    dispatch(updateGeneratedImage({ id, status: 'generating', error: undefined }));
+    dispatch(updateGeneratedImage({ id, status: 'generating', progress: 0, progressMessage: 'Starting retry...', error: undefined }));
     
     const subjectFiles = uploadedFiles.map(uf => uf.file);
     const isBackgroundSupported = !(selectedPose?.id === 'cinematic-portrait' || selectedPose?.id === 'professional-bw');
@@ -270,18 +272,21 @@ const GroupPhotoFusionPanel: React.FC = () => {
     const personaDescriptions = getSubjectDescriptions(uploadedFiles);
     if (!selectedPose) return;
     const prompt = selectedPose.getPrompt(personaDescriptions, quality, !!backgroundToUse);
+    const updateProgress = (message: string, value: number) => dispatch(updateGeneratedImage({ id, progress: value, progressMessage: message }));
 
     try {
         const result = provider === 'mammouth'
-          ? await generateGroupPhoto([...subjectFiles, ...(backgroundToUse ? [backgroundToUse.file] : [])], prompt, 'mammouth', generationOptions.mammouthImageModel)
+          ? await generateGroupPhoto([...subjectFiles, ...(backgroundToUse ? [backgroundToUse.file] : [])], prompt, 'mammouth', generationOptions.mammouthImageModel, updateProgress)
           : provider === 'qwen'
-            ? await generateQwenGroupPhoto(subjectFiles, backgroundToUse?.file || null, prompt, personaDescriptions, generationOptions, () => undefined)
-          : await generateComfyUIGroupPhoto(subjectFiles, backgroundToUse?.file || null, prompt, personaDescriptions, generationOptions, () => undefined);
+            ? await generateQwenGroupPhoto(subjectFiles, backgroundToUse?.file || null, prompt, personaDescriptions, generationOptions, updateProgress)
+          : await generateComfyUIGroupPhoto(subjectFiles, backgroundToUse?.file || null, prompt, personaDescriptions, generationOptions, updateProgress);
         dispatch(updateGeneratedImage({
             id,
             base64: `data:image/jpeg;base64,${result.imageBase64}`,
-          seed: result.seed,
-            status: 'success'
+            seed: result.seed,
+            status: 'success',
+            progress: 1,
+            progressMessage: 'Complete',
         }));
         if (result.usageMetadata) {
             dispatch(addSessionTokenUsage(result.usageMetadata));
@@ -300,6 +305,8 @@ const GroupPhotoFusionPanel: React.FC = () => {
         dispatch(updateGeneratedImage({
             id,
             status: 'error',
+          progress: 1,
+          progressMessage: 'Failed',
             error: err instanceof Error ? err.message : "An unknown error occurred."
         }));
     }
@@ -368,13 +375,11 @@ const GroupPhotoFusionPanel: React.FC = () => {
   };
 
   const renderContent = () => {
-    if (isLoading) {
-      return <GroupPhotoFusionLoader />;
-    }
-
     if (generatedImages) {
         const successfulGenerations = generatedImages.filter(img => img.status === 'success').length;
         const totalGenerations = generatedImages.length;
+        const completedGenerations = generatedImages.filter(img => img.status !== 'generating').length;
+        const overallProgress = generatedImages.reduce((sum, image) => sum + (image.progress || 0), 0) / totalGenerations;
         
         return (
         <>
@@ -387,7 +392,18 @@ const GroupPhotoFusionPanel: React.FC = () => {
             </div>
           )}
           <div className="w-full max-w-5xl text-center">
-            <h2 className="text-2xl font-bold text-text-primary mb-4">Your Fused Photos are Ready!</h2>
+            <h2 className="text-2xl font-bold text-text-primary mb-4">{isLoading ? 'Fusing Photos' : 'Your Fused Photos are Ready!'}</h2>
+            <div className="mb-6 space-y-3 rounded-md border border-border-primary bg-bg-secondary p-4 text-left">
+              <div className="flex items-center justify-between gap-3 text-sm font-semibold"><span className="text-text-primary">Generation progress</span><span className="text-text-secondary">{completedGenerations}/{totalGenerations}</span></div>
+              <div className="h-2 overflow-hidden rounded-full bg-bg-tertiary" role="progressbar" aria-label="Photo Fusion generation progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(overallProgress * 100)}><div className="h-full bg-accent transition-all duration-300" style={{ width: `${Math.round(overallProgress * 100)}%` }} /></div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {generatedImages.map((image, index) => <div key={image.id} className="rounded border border-border-primary bg-bg-primary px-3 py-2">
+                  <div className="mb-1 flex items-center justify-between gap-2 text-xs"><span className="font-bold text-text-primary">Image {index + 1}</span><span className="text-text-muted">{Math.round((image.progress || 0) * 100)}%</span></div>
+                  <div className="h-1 overflow-hidden rounded-full bg-bg-tertiary"><div className={`h-full transition-all duration-300 ${image.status === 'error' ? 'bg-danger' : 'bg-accent'}`} style={{ width: `${Math.round((image.progress || 0) * 100)}%` }} /></div>
+                  <p className="mt-1 truncate text-[11px] text-text-muted" title={image.progressMessage}>{image.progressMessage || 'Queued'}</p>
+                </div>)}
+              </div>
+            </div>
             <div className={`grid grid-cols-1 ${totalGenerations > 1 ? 'sm:grid-cols-2' : ''} gap-6 mb-8`}>
               {generatedImages.map((image, index) => (
                 <div key={image.id} className={`relative group bg-bg-tertiary rounded-lg flex items-center justify-center overflow-hidden ${totalGenerations > 1 ? 'aspect-square' : ''}`}>
@@ -397,7 +413,8 @@ const GroupPhotoFusionPanel: React.FC = () => {
                   {image.status === 'generating' && (
                      <div className="flex flex-col items-center justify-center text-center">
                         <SpinnerIcon className="w-10 h-10 animate-spin text-accent" />
-                        <p className="text-sm text-text-secondary mt-2">Generating...</p>
+                      <p className="text-sm text-text-secondary mt-2">{image.progressMessage || 'Queued'}</p>
+                      <div className="mt-3 h-1.5 w-3/4 overflow-hidden rounded-full bg-bg-primary"><div className="h-full bg-accent transition-all duration-300" style={{ width: `${Math.round((image.progress || 0) * 100)}%` }} /></div>
                     </div>
                   )}
                    {image.status === 'error' && (

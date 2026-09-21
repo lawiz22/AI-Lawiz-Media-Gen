@@ -6,37 +6,47 @@ import { SpinnerIcon } from './icons';
 interface CloudImageProviderBarProps {
     options: GenerationOptions;
     updateOptions: (options: Partial<GenerationOptions>) => void;
+    extractorProvider?: 'flux2' | 'mammouth';
+    onExtractorProviderChange?: (provider: 'flux2' | 'mammouth') => void;
     disabled?: boolean;
     action?: React.ReactNode;
 }
 
-export const CloudImageProviderBar: React.FC<CloudImageProviderBarProps> = ({ options, updateOptions, disabled, action }) => {
+export const CloudImageProviderBar: React.FC<CloudImageProviderBarProps> = ({ options, updateOptions, extractorProvider, onExtractorProviderChange, disabled, action }) => {
     const [models, setModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
     const [loading, setLoading] = useState(false);
+    const activeProvider = extractorProvider || options.provider;
 
     useEffect(() => {
-        if (options.provider !== 'mammouth') return;
+        if (activeProvider !== 'mammouth') return;
         setLoading(true);
         getMammouthImageModels()
             .then(result => setModels(result.length > 0 ? result : [...MAMMOUTH_IMAGE_MODELS].sort()))
             .finally(() => setLoading(false));
-    }, [options.provider]);
+    }, [activeProvider]);
 
     const selectProvider = (provider: Provider) => updateOptions({ provider });
 
     return (
         <div className="bg-bg-secondary border border-border-primary p-3 mb-4 flex flex-wrap items-center gap-3">
-            <span className="text-sm font-semibold text-text-secondary">Image provider</span>
+            <span className="text-sm font-semibold text-text-secondary">{extractorProvider ? 'Image generation' : 'Image provider'}</span>
             <div className="bg-bg-tertiary p-1 rounded-lg flex gap-1">
-                <button
-                    onClick={() => selectProvider('mammouth')}
+                {extractorProvider && <button
+                    onClick={() => onExtractorProviderChange?.('flux2')}
                     disabled={disabled}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-md ${options.provider === 'mammouth' ? 'bg-accent text-accent-text' : 'hover:bg-bg-secondary'}`}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-md ${extractorProvider === 'flux2' ? 'bg-accent text-accent-text' : 'hover:bg-bg-secondary'}`}
+                >
+                    Flux2
+                </button>}
+                <button
+                    onClick={() => extractorProvider ? onExtractorProviderChange?.('mammouth') : selectProvider('mammouth')}
+                    disabled={disabled}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-md ${activeProvider === 'mammouth' ? 'bg-accent text-accent-text' : 'hover:bg-bg-secondary'}`}
                 >
                     Mammouth
                 </button>
             </div>
-            {options.provider === 'mammouth' && (
+            {activeProvider === 'mammouth' && (
                 <div className="relative flex-1 min-w-[240px]">
                     <select
                         value={options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL}

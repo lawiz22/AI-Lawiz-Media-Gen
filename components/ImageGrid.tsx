@@ -65,9 +65,16 @@ interface ImageGridProps {
   characterName?: string;
   activeTab: string;
   generationTime?: number | null;
+  generationJobs?: Array<{
+    label: string;
+    progress: number;
+    message: string;
+    status: 'pending' | 'done' | 'error';
+    src?: string;
+  }>;
 }
 
-export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSendToCharacter, onSendToUpscale, lastUsedPrompt, options, sourceImage, characterName, activeTab, generationTime }) => {
+export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSendToCharacter, onSendToUpscale, lastUsedPrompt, options, sourceImage, characterName, activeTab, generationTime, generationJobs = [] }) => {
   const dispatch: AppDispatch = useDispatch();
   const [enhancedImages, setEnhancedImages] = useState<Record<number, string>>({});
   const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
@@ -304,12 +311,13 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [zoomedImageIndex, handleCloseZoom, handleNextImage, handlePrevImage]);
 
-  if (images.length === 0) {
+  if (images.length === 0 && generationJobs.length === 0) {
     return null;
   }
 
   const currentZoomedSrc = zoomedImageIndex !== null ? (enhancedImages[zoomedImageIndex] || images[zoomedImageIndex].src) : null;
   const enabledCharacterAngles = getEnabledCharacterAngles(options);
+  const displayCount = generationJobs.length || images.length;
 
   return (
     <>
@@ -359,30 +367,39 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
           </div>
         )}
 
-        <div className={`grid gap-4 ${images.length === 1 ? 'grid-cols-1 max-w-2xl mx-auto' : 'grid-cols-1 md:grid-cols-2'}`}>
-          {images.map((image, index) => {
+        <div className={`grid gap-4 ${displayCount === 1 ? 'grid-cols-1 max-w-2xl mx-auto' : 'grid-cols-1 md:grid-cols-2'}`}>
+          {Array.from({ length: displayCount }, (_, index) => {
+            const image = images[index];
+            const generationJob = generationJobs[index];
             const isEnhancing = enhancingIndex === index;
-            const finalSrc = enhancedImages[index] || image.src;
+            const finalSrc = enhancedImages[index] || generationJob?.src || image?.src;
             const hasError = !!errorIndex[index];
-            const savingStatus = image.saved;
-            const { usageMetadata } = image;
+            const savingStatus = image?.saved || 'idle';
+            const usageMetadata = image?.usageMetadata;
             const characterAngle = enabledCharacterAngles[index];
             const characterOutputNumber = characterAngle ? CHARACTER_ANGLES.findIndex(angle => angle.id === characterAngle.id) + 1 : index + 1;
-            const characterOutputLabel = characterAngle
+            const characterOutputLabel = generationJob?.label || (characterAngle
               ? options.comfyCharacterAngleSettings?.[characterAngle.id]?.angle?.trim() || `Output ${characterOutputNumber}`
-              : `Output ${index + 1}`;
+              : `Output ${index + 1}`);
 
             return (
               <div key={index} className="group relative min-h-64 bg-bg-tertiary rounded-lg overflow-hidden shadow-md">
-                <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="block w-full max-h-[72vh] object-contain" />
-                {activeTab === 'character-generator' && options.provider === 'comfyui' && characterAngle && (
+                {generationJob?.status === 'pending' && <div className="flex min-h-64 flex-col items-center justify-center p-6 text-center">
+                  <SpinnerIcon className="h-9 w-9 animate-spin text-accent" />
+                  <p className="mt-3 text-sm font-bold text-text-primary">{characterOutputLabel}</p>
+                  <div className="mt-4 h-2 w-full max-w-xs overflow-hidden rounded-full bg-bg-primary"><div className="h-full bg-accent transition-all duration-300" style={{ width: `${Math.round(generationJob.progress * 100)}%` }} /></div>
+                  <div className="mt-2 flex w-full max-w-xs justify-between gap-3 text-xs text-text-muted"><span className="truncate" title={generationJob.message}>{generationJob.message}</span><span>{Math.round(generationJob.progress * 100)}%</span></div>
+                </div>}
+                {generationJob?.status === 'error' && <div className="flex min-h-64 flex-col items-center justify-center p-6 text-center"><p className="font-bold text-danger">{characterOutputLabel} failed</p><p className="mt-2 text-xs text-danger/80">{generationJob.message}</p></div>}
+                {finalSrc && generationJob?.status !== 'pending' && generationJob?.status !== 'error' && <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="block w-full max-h-[72vh] object-contain" />}
+                {activeTab === 'character-generator' && (characterAngle || generationJob) && (
                   <div className="absolute left-2 top-2 rounded-md bg-black/70 px-2 py-1 text-xs font-bold text-white shadow-lg">
                     {characterOutputLabel}
                   </div>
                 )}
 
                 {/* Unified hover overlay for all actions */}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                {finalSrc && generationJob?.status !== 'pending' && generationJob?.status !== 'error' && <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                   <div className="relative w-full h-full p-2">
                     {/* Save to Library Button (Top Right) */}
                     <div className="absolute top-2 right-2">
@@ -437,7 +454,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                           </button>
                           {!enhancedImages[index] && (
                             <button
-                              onClick={() => handleEnhance(image.src, index)}
+                              onClick={() => handleEnhance(image?.src || finalSrc, index)}
                               disabled={enhancingIndex !== null}
                               title="Enhance Quality"
                               className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -449,7 +466,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                       )}
                     </div>
                   </div>
-                </div>
+                </div>}
                 {/* Token Info Display - higher z-index to appear over the hover overlay */}
                 {usageMetadata && (
                   <div className="group/tooltip absolute bottom-2 left-2 z-20">

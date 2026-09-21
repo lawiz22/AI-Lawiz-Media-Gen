@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../store/store';
@@ -9,11 +8,11 @@ import { generateMammouthImage } from '../../services/mammouthService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, getMammouthImageModels } from '../../services/mammouthService';
 import { generateComfyUIPastForwardImage, generateQwenPastForwardImage } from '../../services/pastForwardService';
 import { createAlbumPage } from '../../utils/pastForwardAlbumUtils';
-import { dataUrlToThumbnail, fileToDataUrl } from '../../utils/imageUtils';
+import { dataUrlToThumbnail, fileToDataUrl, limitImageFileSize } from '../../utils/imageUtils';
 import type { LibraryItem, LibraryItemType } from '../../types';
 import { 
     SaveIcon, SpinnerIcon, CheckIcon, DownloadIcon, RefreshIcon, 
-    GenerateIcon, PastForwardIcon, LibraryIcon
+    GenerateIcon, PastForwardIcon, LibraryIcon, DiceIcon
 } from '../icons';
 import { ImageUploader } from '../ImageUploader';
 import { LibraryPickerModal } from '../LibraryPickerModal';
@@ -28,32 +27,36 @@ const QWEN_LIGHTNING_PRESETS = {
     4: 'QWEN\\Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors',
     8: 'QWEN\\Qwen-Image-Lightning-8steps-V2.0.safetensors',
 } as const;
-const FLUX_HAIRSTYLES: Record<string, Record<'woman' | 'man', string>> = {
+const HAIRSTYLE_CATALOG: Record<string, Record<'woman' | 'man', string[]>> = {
     '1950s': {
-        woman: 'a feminine 1950s softly curled bob or sculpted pageboy with polished waves, natural volume, and a precise period hairline',
-        man: 'a masculine 1950s swept-back pompadour with neatly sculpted volume, a clean side part, and tapered sides',
+        man: ['Pompadour', 'Ducktail', 'Crew Cut', 'Flat Top', 'Ivy League', 'Side Part', 'Slicked-Back Hair', 'Rockabilly Quiff', 'Short Caesar Cut', 'Conservative Taper'],
+        woman: ['Poodle Cut', 'Pin Curls', 'Victory Rolls', 'Short Curly Bob', 'Bouffant', 'Pageboy Cut', 'Chignon', 'Italian Cut', 'Long Waves', 'High Ponytail'],
     },
     '1960s': {
-        woman: 'a feminine 1960s bouffant, polished bob, or softly flipped hairstyle with controlled crown volume and curled ends',
-        man: 'a masculine 1960s mod cut with a neat side part, short controlled volume, defined sideburns, and tapered edges',
+        man: ['Mod Mop Top', 'Beatle Cut', 'Sideburns', 'Crew Cut', 'Textured Crop', 'Shaggy Hair', 'Slicked-Back Hair', 'Rockabilly Pompadour', 'Shoulder-Length Hair', 'Afro'],
+        woman: ['Beehive', 'Bouffant', 'Pixie Cut', 'Flip Hairstyle', 'Long Straight Hair', 'Brigitte Bardot Hair', 'Half-Up Beehive', 'Twiggy Crop', 'Headband Hairstyle', 'Natural Afro'],
     },
     '1970s': {
-        woman: 'a feminine 1970s feathered shoulder-length hairstyle with soft face-framing layers, outward-curled ends, and natural volume',
-        man: 'a masculine 1970s shag or feathered medium cut with sideburns, layered texture, and controlled natural movement',
+        man: ['Shag Haircut', 'Afro', 'Long Layered Hair', 'Mullet', 'Feathered Hair', 'Shoulder-Length Waves', 'Sideburns', 'Disco Slick-Back', 'Pageboy Haircut', 'Punk Spiked Hair'],
+        woman: ['Feathered Layers', 'Farrah Fawcett Hair', 'Long Straight Hair', 'Shag Cut', 'Afro', 'Bohemian Waves', 'Braided Hair', 'Curtain Bangs', 'Disco Curls', 'Punk Mohawk'],
     },
     '1980s': {
-        woman: 'a feminine 1980s voluminous layered hairstyle with large curls, feathered sides, lifted roots, and defined natural strands',
-        man: 'a masculine 1980s full layered haircut with swept-back volume, shorter sides, a controlled mullet influence, and natural strands',
+        man: ['Mullet', 'Jheri Curl', 'Flock of Seagulls Haircut', 'Flat Top', 'Mohawk', 'New Wave Hair', 'Slicked-Back Hair', 'Long Metal Hair', 'Rat Tail', 'High-Top Fade'],
+        woman: ['Big Perm', 'Crimped Hair', 'Side Ponytail', 'Teased Hair', 'Feathered Bangs', 'High-Volume Bob', 'Asymmetrical Haircut', 'Spiral Perm', 'Banana Clip Hairstyle', 'Half-Up Hair with Scrunchie'],
     },
     '1990s': {
-        woman: 'a feminine 1990s layered bob or shoulder-length cut with soft face-framing layers, natural movement, and a polished grunge-era finish',
-        man: 'a masculine 1990s textured crop or grunge cut with relaxed layers, a natural hairline, and understated movement',
+        man: ['Curtained Hair', 'Caesar Cut', 'Frosted Tips', 'Bowl Cut', 'Grunge Long Hair', 'Buzz Cut', 'Boyband Hair', 'Cornrows', 'Spiky Hair', 'High-Top Fade'],
+        woman: ['Rachel Haircut', 'Butterfly Clips Hairstyle', 'Baby Braids', 'Crimped Hair', 'Choppy Bob', 'Layered Hair', 'High Ponytail', 'Space Buns', 'Two-Tone Hair', 'Straight Hair with Middle Part'],
     },
     '2000s': {
-        woman: 'a feminine early-2000s layered salon hairstyle with side-swept fringe, face-framing layers, smooth volume, and a polished finish',
-        man: 'a masculine early-2000s textured crop or short shag with piecey layers, side-swept fringe, and a natural matte finish',
+        man: ['Faux Hawk', 'Spiky Hair', 'Emo Fringe', 'Frosted Tips', 'Long Side-Swept Bangs', 'Buzz Cut', 'Caesar Cut', 'Cornrows', 'Mohawk', 'Surfer Hair'],
+        woman: ['Side-Swept Bangs', 'Chunky Highlights', 'Straightened Hair', 'Scene Hair', 'Razor Cut Layers', 'Low Side Ponytail', 'Pigtails', 'Crimped Hair', 'Long Extensions', 'Pouf Hairstyle'],
     },
 };
+
+const DEFAULT_HAIRSTYLE_SELECTIONS = (gender: 'woman' | 'man') => Object.fromEntries(
+    DECADES.map(decade => [decade, HAIRSTYLE_CATALOG[decade][gender][0]]),
+);
 const FLUX_DECADE_REIMAGININGS: Record<string, Record<'woman' | 'man', string>> = {
     '1950s': {
         woman: 'a softly curled bob or pageboy with a fitted blouse, cardigan, or day dress, feminine styling, restrained 1950s grooming, and authentic black-and-white or early color film photography',
@@ -125,7 +128,7 @@ const THEMES: Record<string, { title: string, description: string, prompt: (deca
         title: 'Hairstyle Time Machine',
         description: 'Try on the most popular hairstyles from each decade.',
         prompt: (decade: string) => `Reimagine the person in this photo with a popular hairstyle from the ${decade}. The output must be a photorealistic image showing the person clearly, focusing on the hair.`,
-        fluxPrompt: () => `Replace the current hairstyle completely with the selected period hairstyle. Make the new hair visibly different from the source, with believable roots, hairline, strand detail, texture, volume, and lighting. Keep the face, glasses, facial hair, skin, expression, clothing, body, pose, camera framing, and background exactly unchanged. Photorealistic professional hairstyle edit, not a wig, illustration, or beauty-filtered face.`,
+        fluxPrompt: () => `Replace the current hairstyle completely with the selected period hairstyle. Make the new hair visibly different from the source, with believable roots, hairline, strand detail, texture, volume, and lighting. Keep the face, facial hair, skin, expression, clothing, body, pose, camera framing, and background exactly unchanged. The eyes and surrounding skin must remain fully visible and unobstructed. Do not add or retain eyeglasses, sunglasses, reading glasses, transparent lenses, frames, monocles, goggles, or any accessory around the eyes, regardless of decade styling. Photorealistic professional hairstyle edit, not a wig, illustration, or beauty-filtered face.`,
     },
     'fantasy': {
         title: 'Fantasy You',
@@ -136,8 +139,8 @@ const THEMES: Record<string, { title: string, description: string, prompt: (deca
     'superhero': {
         title: 'Superhero Saga',
         description: 'Design a superhero version of you from different comic book eras.',
-        prompt: (decade: string) => `Reimagine the source person as an original comic-book hero in ${SUPERHERO_COMIC_STYLES[decade]}. Create a unique costume, emblem, powers, action pose, camera angle, city environment, and complete comic-book composition without copying any existing named hero. Preserve the person's recognizable facial identity, body proportions, apparent age, and skin tone. The output must be a hand-drawn comic-book illustration, not a photograph, not photorealistic, and not a person wearing a costume in a photo.`,
-        fluxPrompt: (decade: string) => `Reimagine the source person as an original comic-book hero in ${SUPERHERO_COMIC_STYLES[decade]}. Create an entirely unique costume, emblem, powers, action pose, body positioning, dramatic camera angle, city environment, lighting, and complete comic-cover composition without copying any existing named hero. Do not reuse the source room, clothing, pose, crop, or photographic rendering. Preserve the person's recognizable face shape, eyes, nose, mouth, eyewear if present, facial hair if present, skin tone, apparent age, and body proportions, translated into illustrated linework. Render every element as a cohesive hand-drawn comic-book illustration. Absolutely no photography, photorealism, live-action appearance, realistic skin texture, or cosplay photograph.`,
+        prompt: (decade: string) => `Reimagine the source person as a completely original super-powered comic protagonist in ${SUPERHERO_COMIC_STYLES[decade]}. Invent a distinctive costume led by emerald, gold, ivory, magenta, silver, or black, with asymmetric panels, an abstract geometric non-letter emblem, original powers, action pose, camera angle, city environment, and complete comic-book composition. Make the design unique to this subject rather than resembling an established character or franchise. Preserve the person's recognizable facial identity, body proportions, apparent age, and skin tone. Inspect the source eyes: when the source has no eyewear, draw bare, fully visible eyes with no glasses, frames, lenses, goggles, mask, visor, or eye accessory. The output must be a hand-drawn comic-book illustration, not a photograph, not photorealistic, and not a person wearing a costume in a photo.`,
+        fluxPrompt: (decade: string) => `Reimagine the source person as a completely original super-powered comic protagonist in ${SUPERHERO_COMIC_STYLES[decade]}. Invent a distinctive costume led by emerald, gold, ivory, magenta, silver, or black, with an asymmetric silhouette, layered armor or fabric panels, an abstract geometric non-letter emblem, original powers, action pose, body positioning, dramatic camera angle, city environment, lighting, and complete comic-cover composition. Make the design unique to this subject rather than resembling an established character or franchise. Do not reuse the source room, clothing, pose, crop, or photographic rendering. Preserve the person's recognizable face shape, eyes, nose, mouth, skin tone, apparent age, and body proportions, translated into illustrated linework. Inspect Picture 1 carefully: if the source has bare eyes, keep both eyes fully visible and unobstructed with no glasses, frames, lenses, goggles, eye mask, visor, or eye accessory; preserve eyewear only when it is visibly present in Picture 1. Render every element as a cohesive hand-drawn comic-book illustration. Absolutely no photography, photorealism, live-action appearance, realistic skin texture, or cosplay photograph.`,
     },
     'historical': {
         title: 'Historical Cameo',
@@ -175,6 +178,10 @@ const PastForwardPanel: React.FC = () => {
     const [isCreatingAlbum, setIsCreatingAlbum] = useState<boolean>(false);
     const [selectedTheme, setSelectedTheme] = useState<string>('decades');
     const [subjectGender, setSubjectGender] = useState<'woman' | 'man' | null>(null);
+    const [selectedHairstyles, setSelectedHairstyles] = useState<Record<'woman' | 'man', Record<string, string>>>(() => ({
+        woman: DEFAULT_HAIRSTYLE_SELECTIONS('woman'),
+        man: DEFAULT_HAIRSTYLE_SELECTIONS('man'),
+    }));
     const [reimagineScene, setReimagineScene] = useState(false);
     const [selectedDecades, setSelectedDecades] = useState<string[]>([...DECADES]);
     const [saveStatuses, setSaveStatuses] = useState<Record<string, 'idle' | 'saving' | 'saved'>>({});
@@ -183,6 +190,8 @@ const PastForwardPanel: React.FC = () => {
     const requiresSubjectGender = selectedTheme === 'superhero' || ((selectedTheme === 'decades' || selectedTheme === 'hairstyles') && provider !== 'mammouth');
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
+    const [themesOpen, setThemesOpen] = useState(true);
+    const [hairstylesOpen, setHairstylesOpen] = useState(true);
     const [zoomedImage, setZoomedImage] = useState<{ url: string; decade: string } | null>(null);
     const [mammouthModels, setMammouthModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
     const [isLoadingMammouthModels, setIsLoadingMammouthModels] = useState(false);
@@ -265,7 +274,7 @@ const PastForwardPanel: React.FC = () => {
             ? ''
             : subjectGender === 'woman'
                 ? selectedTheme === 'superhero'
-                    ? 'The source subject is a woman. Preserve her female sex and feminine gender presentation. Transform this same recognizable woman into an original comic-book heroine with feminine facial structure, anatomy, body proportions, hair, styling, and costume. Do not depict a man, masculine anatomy, a square masculine jaw, a male muscular torso, Superman, an S-shaped chest emblem, or a red-and-blue Superman-style suit.'
+                    ? 'Picture 1 contains one adult woman. The principal protagonist must be this same recognizable woman, with her female sex, feminine facial structure, anatomy, body proportions, hair, and gender presentation preserved. Depict one original comic-book heroine with a clearly feminine face, natural jawline, body shape, and silhouette. Give her an original asymmetric costume led by emerald, gold, ivory, magenta, silver, or black, with an abstract geometric non-letter emblem and powers unique to her. Inspect her eyes in Picture 1: if they are bare, keep both eyes bare, fully visible, and unobstructed without glasses, frames, lenses, goggles, mask, visor, or eye accessory.'
                     : 'Picture 1 depicts a woman. Preserve her female sex and feminine gender presentation exactly. Keep the same recognizable woman, feminine facial structure, anatomy, body proportions, hairline, and styling. Never depict a man, male anatomy, a masculine face, a square masculine jaw, a male muscular torso, menswear, or masculine styling.'
                 : selectedTheme === 'superhero'
                     ? 'The source subject is a man. Preserve his male sex and masculine gender presentation. Transform this same recognizable man into an original comic-book hero with masculine facial structure, anatomy, body proportions, hair, styling, and costume. Do not depict a woman or feminine anatomy.'
@@ -275,14 +284,15 @@ const PastForwardPanel: React.FC = () => {
             : selectedTheme === 'decades'
                 ? `Use only this selected identity styling instruction: ${FLUX_DECADE_REIMAGININGS[decade][subjectGender]}.`
                 : selectedTheme === 'hairstyles'
-                    ? `Use only this selected identity hairstyle: ${FLUX_HAIRSTYLES[decade][subjectGender]}.`
+                    ? `SELECTED HAIRSTYLE: ${selectedHairstyles[subjectGender][decade]}. Apply this one exact named hairstyle, interpreted authentically for the ${decade} and for a ${subjectGender}. Do not blend it with another hairstyle or keep the source haircut. Preserve the source person's natural hair color unless the selected hairstyle specifically requires a color treatment.`
                     : '';
         const finalPrompt = [selectedTheme === 'superhero' ? subjectIdentityPrompt : '', prompt, reimagineScene ? REIMAGINE_SCENE_PROMPT : ''].filter(Boolean).join(' ');
         const finalFluxPrompt = [subjectIdentityPrompt, selectedStylePrompt, fluxPrompt, reimagineScene ? REIMAGINE_SCENE_PROMPT : ''].filter(Boolean).join(' ');
         if (provider === 'mammouth') {
             setGenerationProgress(current => ({ ...current, [decade]: { value: 0.1, message: `Generating ${decade} with Mammouth...` } }));
             const mammouthPrompt = selectedTheme === 'historical' ? finalFluxPrompt : finalPrompt;
-            const result = await generateMammouthImage(mammouthPrompt, [uploadedImageBase64], '3:4', generationOptions.mammouthImageModel);
+            const mammouthSource = await limitImageFileSize(uploadedFile);
+            const result = await generateMammouthImage(mammouthPrompt, [mammouthSource], '3:4', generationOptions.mammouthImageModel);
             if (result.usageMetadata) dispatch(addSessionTokenUsage(result.usageMetadata));
             if (!result.images[0]) throw new Error('Mammouth completed without returning a Past Forward image.');
             return result.images[0];
@@ -294,11 +304,11 @@ const PastForwardPanel: React.FC = () => {
                     : `Edit Picture 1. The subject is a man. Keep him male, masculine, and recognizable, with the same face, age, skin tone, and masculine body. Transform him into the ${decade}: ${QWEN_DECADE_REIMAGININGS[decade].man}. No woman, female anatomy, feminine face, breasts, makeup, dress, skirt, blouse, or feminine styling. Replace all source hair and clothing. ${reimagineScene ? `${FLUX_DECADE_SCENE_REIMAGININGS[decade]} Use a new pose and framing.` : 'Keep the original pose, framing, and background.'} Photorealistic.`
                 : selectedTheme === 'hairstyles'
                     ? subjectGender === 'woman'
-                        ? `Edit only the hair in Picture 1. The subject is a woman; keep her female, feminine, and recognizable. Replace her hair with ${FLUX_HAIRSTYLES[decade].woman}. Preserve her exact face, feminine features, body, skin, expression, eyewear, clothing, pose, framing, and background. No man, masculine face, masculine haircut, or gender change. Photorealistic.`
-                        : `Edit only the hair in Picture 1. The subject is a man; keep him male, masculine, and recognizable. Replace his hair with ${FLUX_HAIRSTYLES[decade].man}. Preserve his exact face, masculine features, body, skin, expression, facial hair, eyewear, clothing, pose, framing, and background. No woman, feminine face, feminine hairstyle, makeup, or gender change. Photorealistic.`
+                        ? `Edit only the hair in Picture 1. The subject is a woman; keep her female, feminine, and recognizable. Replace the source hairstyle completely with one exact authentic ${decade} ${selectedHairstyles.woman[decade]}. Reproduce the defining silhouette, hairline, part, length, volume, texture, strand direction, curls or waves, bangs, and styling construction of that named hairstyle. Do not blend it with another hairstyle or retain the source haircut. Preserve her natural hair color unless the named style specifically requires a color treatment. Preserve her exact face, feminine features, body, skin, expression, existing eyewear state, clothing, pose, framing, lighting, and background pixel-faithfully. Photorealistic professional hair edit.`
+                        : `Edit only the hair in Picture 1. The subject is a man; keep him male, masculine, and recognizable. Replace the source hairstyle completely with one exact authentic ${decade} ${selectedHairstyles.man[decade]}. Reproduce the defining silhouette, hairline, part, length, volume, texture, strand direction, curls or waves, fringe, and styling construction of that named hairstyle. Do not blend it with another hairstyle or retain the source haircut. Preserve his natural hair color unless the named style specifically requires a color treatment. Preserve his exact face, masculine features, body, skin, expression, facial hair, existing eyewear state, clothing, pose, framing, lighting, and background pixel-faithfully. Photorealistic professional hair edit.`
                 : selectedTheme === 'superhero'
                     ? subjectGender === 'woman'
-                        ? `Edit Picture 1. The subject is a woman. Keep her female, feminine, and recognizable. Transform her into an original comic-book heroine in ${SUPERHERO_COMIC_STYLES[decade]}. Preserve her face, age, skin tone, and feminine body proportions. Create a unique feminine costume, emblem, powers, action pose, and city cover. No man, male anatomy, masculine jaw or torso, Superman, S emblem, or Superman colors. Hand-drawn comic illustration only.`
+                        ? `Edit Picture 1. The subject is one adult woman. Keep her female, feminine, and recognizable. Transform this same woman into a completely original comic-book heroine in ${SUPERHERO_COMIC_STYLES[decade]}. Preserve her face, age, skin tone, natural jawline, and feminine body proportions. Create an asymmetric costume led by emerald, gold, ivory, magenta, silver, or black, with an abstract geometric non-letter emblem, original powers, action pose, and city cover unique to her. When Picture 1 has bare eyes, keep both eyes fully visible without glasses, frames, lenses, goggles, mask, visor, or eye accessory. Hand-drawn comic illustration only.`
                         : `Edit Picture 1. The subject is a man. Keep him male, masculine, and recognizable. Transform him into an original comic-book hero in ${SUPERHERO_COMIC_STYLES[decade]}. Preserve his face, age, skin tone, and masculine body proportions. Create a unique costume, emblem, powers, action pose, and city cover without copying an existing hero. Hand-drawn comic illustration only.`
                     : finalFluxPrompt;
             return generateQwenPastForwardImage(
@@ -323,6 +333,20 @@ const PastForwardPanel: React.FC = () => {
     const toggleDecade = (decade: string) => {
         if (isGenerating) return;
         setSelectedDecades(current => DECADES.filter(item => item === decade ? !current.includes(item) : current.includes(item)));
+        setAlbumSaveStatus('idle');
+    };
+
+    const randomizeHairstyles = () => {
+        if (!subjectGender || isGenerating) return;
+        setSelectedHairstyles(current => {
+            const currentGenderSelections = current[subjectGender];
+            const randomized = Object.fromEntries(DECADES.map(decade => {
+                const alternatives = HAIRSTYLE_CATALOG[decade][subjectGender].filter(hairstyle => hairstyle !== currentGenderSelections[decade]);
+                return [decade, alternatives[Math.floor(Math.random() * alternatives.length)] || currentGenderSelections[decade]];
+            }));
+            return { ...current, [subjectGender]: randomized };
+        });
+        setSaveStatuses({});
         setAlbumSaveStatus('idle');
     };
 
@@ -623,9 +647,18 @@ const PastForwardPanel: React.FC = () => {
                             </div>}
                         </div>}
 
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-2">Select Journey Theme</label>
-                            <div className="grid grid-cols-1 gap-2">
+                        <div className="rounded-md border border-border-primary bg-bg-primary">
+                            <button
+                                type="button"
+                                onClick={() => setThemesOpen(open => !open)}
+                                className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-text-secondary hover:text-accent"
+                                aria-expanded={themesOpen}
+                                aria-controls="past-forward-themes"
+                            >
+                                <span>Select Journey Theme</span>
+                                <span aria-hidden="true">{themesOpen ? '−' : '+'}</span>
+                            </button>
+                            {themesOpen && <div id="past-forward-themes" className="grid grid-cols-1 gap-2 border-t border-border-primary p-3">
                                 {Object.entries(THEMES).map(([key, theme]) => (
                                     <button
                                         key={key}
@@ -648,7 +681,7 @@ const PastForwardPanel: React.FC = () => {
                                         </p>
                                     </button>
                                 ))}
-                            </div>
+                            </div>}
                         </div>
 
                         {requiresSubjectGender && <div>
@@ -664,6 +697,53 @@ const PastForwardPanel: React.FC = () => {
                                     {gender === 'woman' ? 'Woman' : 'Man'}
                                 </button>)}
                             </div>
+                        </div>}
+
+                        {selectedTheme === 'hairstyles' && provider !== 'mammouth' && subjectGender && <div className="rounded-md border border-border-primary bg-bg-primary">
+                            <div className="flex items-center gap-2 px-4 py-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setHairstylesOpen(open => !open)}
+                                    className="flex min-w-0 flex-1 items-center justify-between py-1 text-left text-sm font-bold text-text-secondary hover:text-accent"
+                                    aria-expanded={hairstylesOpen}
+                                    aria-controls="past-forward-hairstyles"
+                                >
+                                    <span>Hairstyle by Decade</span>
+                                    <span aria-hidden="true">{hairstylesOpen ? '−' : '+'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={randomizeHairstyles}
+                                    disabled={isGenerating}
+                                    title="Randomize all hairstyles"
+                                    aria-label="Randomize all hairstyles"
+                                    className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <DiceIcon className="h-4 w-4" />
+                                </button>
+                            </div>
+                            {hairstylesOpen && <div id="past-forward-hairstyles" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
+                                {DECADES.map(decade => <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                    <span className="text-xs font-bold text-text-secondary">{decade}</span>
+                                    <select
+                                        value={selectedHairstyles[subjectGender][decade]}
+                                        onChange={(event) => {
+                                            const hairstyle = event.target.value;
+                                            setSelectedHairstyles(current => ({
+                                                ...current,
+                                                [subjectGender]: { ...current[subjectGender], [decade]: hairstyle },
+                                            }));
+                                            setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
+                                            setAlbumSaveStatus('idle');
+                                        }}
+                                        disabled={isGenerating}
+                                        className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
+                                        aria-label={`${decade} ${subjectGender} hairstyle`}
+                                    >
+                                        {HAIRSTYLE_CATALOG[decade][subjectGender].map(hairstyle => <option key={hairstyle} value={hairstyle}>{hairstyle}</option>)}
+                                    </select>
+                                </label>)}
+                            </div>}
                         </div>}
 
                         <label className={`flex items-start gap-3 rounded-md border p-3 transition-colors ${reimagineScene ? 'border-accent bg-accent/10' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-accent'}`}>

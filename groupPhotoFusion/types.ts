@@ -38,6 +38,8 @@ export interface GeneratedImage {
   base64: string | null;
   seed?: number;
   status: 'generating' | 'success' | 'error';
+  progress?: number;
+  progressMessage?: string;
   error?: string;
   saveStatus: 'idle' | 'saving' | 'saved';
 }

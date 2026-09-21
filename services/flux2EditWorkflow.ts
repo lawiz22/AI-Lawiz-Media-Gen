@@ -17,7 +17,7 @@ const roleInstruction = (reference: Flux2EditReference, pictureNumber: number): 
         case 'background':
             return `Use Picture ${pictureNumber} for the scene background, matching its environment, perspective, lighting, and colors.${suffix}`;
         case 'pose':
-            return `Apply the body pose and structure from Picture ${pictureNumber} while preserving the identity and appearance from Picture 1.${suffix}`;
+            return `Use Picture ${pictureNumber} strictly as the authoritative structural pose reference. Match its body orientation, balance and weight-bearing leg, head direction, torso bend and rotation, shoulder and hip angles, and the articulation and placement of both arms, hands, legs, and feet. Do not simplify it into a neutral standing pose and do not copy appearance from this pose guide; preserve the intended subject appearance from Picture 1 and the editing instructions.${suffix}`;
         case 'style':
             return `Apply the visual style from Picture ${pictureNumber} without copying its subject identity.${suffix}`;
         case 'custom':

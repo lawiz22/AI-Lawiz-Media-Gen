@@ -25,6 +25,7 @@ const getCategoryIcon = (mediaType: LibraryItemType) => {
         case 'banner': return <BannerIcon className="w-4 h-4 text-white" />;
         case 'album-cover': return <AlbumCoverIcon className="w-4 h-4 text-white" />;
         case 'clothes': return <TshirtIcon className="w-4 h-4 text-white" />;
+        case 'hair': return <CharacterIcon className="w-4 h-4 text-white" />;
         case 'prompt': return <DocumentTextIcon className="w-4 h-4 text-white" />;
         case 'extracted-frame': return <FilmIcon className="w-4 h-4 text-white" />;
         case 'object': return <CubeIcon className="w-4 h-4 text-white" />;

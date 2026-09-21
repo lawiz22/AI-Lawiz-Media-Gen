@@ -24,7 +24,7 @@ import {
 import { generateMammouthText } from './mammouthService';
 import { LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './ltxDirectorWorkflow';
 import { createLtxDialogueInstruction, parseSpeakerTranscript } from '../utils/ttsTranscript';
-import { buildCharacterAnglesWorkflow, buildFlux2CharacterAnglesWorkflow } from './characterAnglesWorkflow';
+import { buildCharacterAnglesWorkflow, buildFlux2CharacterAnglesWorkflow, CHARACTER_ANGLES, getEnabledCharacterAngles } from './characterAnglesWorkflow';
 import { buildSwapAnythingWorkflow, type SwapAnythingOptions } from './swapAnythingWorkflow';
 import { buildFlux2EditWorkflow, type Flux2EditReference } from './flux2EditWorkflow';
 
@@ -2314,6 +2314,8 @@ export const generateComfyUIPortraits = async (
     options: GenerationOptions,
     updateProgress: (message: string, value: number) => void,
     referenceImages: File[] = [],
+    onImageReady: (index: number, image: { src: string; seed: number }) => void = () => undefined,
+    updateOutputProgress: (index: number, message: string, value: number) => void = () => undefined,
 ): Promise<{ images: { src: string, seed: number }[]; finalPrompt: string }> => {
     const allImages: { src: string, seed: number }[] = [];
     const baseWorkflow = await buildWorkflow(options, sourceImage, referenceImages);
@@ -2372,11 +2374,19 @@ export const generateComfyUIPortraits = async (
         const progressWrapper = (message: string, value: number) => {
             const overallProgress = (i + value) / numImages;
             updateProgress(`Image ${i + 1}/${numImages}: ${message}`, overallProgress);
+            updateOutputProgress(i, message, value);
         };
 
         try {
+            updateOutputProgress(i, `Starting image ${i + 1}...`, 0.02);
             const result = await executeWorkflow(currentWorkflow, progressWrapper, isLongJob);
-            result.images.forEach(img => allImages.push({ src: img, seed: seedForThisImage }));
+            result.images.forEach(img => {
+                const image = { src: img, seed: seedForThisImage };
+                const outputIndex = allImages.length;
+                allImages.push(image);
+                updateOutputProgress(outputIndex, `Image ${outputIndex + 1} complete`, 1);
+                onImageReady(outputIndex, image);
+            });
         } catch (error) {
             console.error(`Error generating image ${i + 1}:`, error);
             throw error;
@@ -2403,6 +2413,8 @@ export const generateComfyUICharacterAngles = async (
     clothingImage?: File | null,
     backgroundImage?: File | null,
     poseImage?: File | null,
+    updateOutputProgress: (index: number, message: string, value: number) => void = () => undefined,
+    onOutputReady: (index: number, image: { src: string; seed: number }, prompt: string) => void = () => undefined,
 ): Promise<{ images: { src: string; seed: number }[]; finalPrompt: string }> => {
     if (options.comfyCharacterMode === 'flux2') {
         updateProgress('Checking FLUX2 Character nodes...', 0.02);
@@ -2423,39 +2435,56 @@ export const generateComfyUICharacterAngles = async (
     }
     updateProgress('Uploading character source...', 0.05);
     const uploadedImage = await uploadImage(sourceImage);
-    let workflowResult: ReturnType<typeof buildCharacterAnglesWorkflow>;
+    let uploadedReferences: ({ name: string } | null)[] = [];
     if (options.comfyCharacterMode === 'flux2') {
         const optionalFiles = [
             options.clothing === 'image' ? clothingImage : null,
             options.background === 'image' ? backgroundImage : null,
             poseImage,
         ];
-        const uploadedReferences = await Promise.all(optionalFiles.map(file => file ? uploadImage(file) : null));
-        workflowResult = buildFlux2CharacterAnglesWorkflow({
-            source: uploadedImage.name,
-            clothing: uploadedReferences[0]?.name,
-            background: uploadedReferences[1]?.name,
-            pose: uploadedReferences[2]?.name,
-        }, options);
-    } else {
-        workflowResult = buildCharacterAnglesWorkflow(uploadedImage.name, options);
+        uploadedReferences = await Promise.all(optionalFiles.map(file => file ? uploadImage(file) : null));
     }
-    const { workflow, prompts, seed } = workflowResult;
-    const outputCount = prompts.length;
-    const result = await executeWorkflow(
-        workflow,
-        updateProgress,
-        true,
-        outputCount,
-        Array.from({ length: outputCount }, (_, index) => `save_${index}`),
-    );
-    if (result.images.length !== outputCount) {
-        throw new Error(`ComfyUI returned ${result.images.length}/${outputCount} character outputs.`);
+
+    const enabledAngles = getEnabledCharacterAngles(options);
+    const baseSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+    const images: { src: string; seed: number }[] = [];
+    const prompts: string[] = [];
+    for (const [index, angle] of enabledAngles.entries()) {
+        const angleSettings = Object.fromEntries(CHARACTER_ANGLES.map(({ id }) => [id, {
+            ...options.comfyCharacterAngleSettings?.[id],
+            enabled: id === angle.id,
+        }]));
+        const singleOutputOptions: GenerationOptions = {
+            ...options,
+            comfySeed: baseSeed + index,
+            comfyCharacterAngleSettings: {
+                ...angleSettings,
+                [angle.id]: { ...options.comfyCharacterAngleSettings?.[angle.id], enabled: true },
+            },
+        };
+        const workflowResult = options.comfyCharacterMode === 'flux2'
+            ? buildFlux2CharacterAnglesWorkflow({
+                source: uploadedImage.name,
+                clothing: uploadedReferences[0]?.name,
+                background: uploadedReferences[1]?.name,
+                pose: uploadedReferences[2]?.name,
+            }, singleOutputOptions)
+            : buildCharacterAnglesWorkflow(uploadedImage.name, singleOutputOptions);
+        const outputProgress = (message: string, value: number) => {
+            updateOutputProgress(index, message, value);
+            updateProgress(`${angle.label}: ${message}`, (index + value) / enabledAngles.length);
+        };
+        updateOutputProgress(index, `Starting ${angle.label}...`, 0.02);
+        const result = await executeWorkflow(workflowResult.workflow, outputProgress, true, 1, ['save_0']);
+        const src = result.images[0];
+        if (!src) throw new Error(`ComfyUI returned no image for ${angle.label}.`);
+        const image = { src, seed: baseSeed + index };
+        images.push(image);
+        prompts.push(workflowResult.prompts[0]);
+        updateOutputProgress(index, `${angle.label} complete`, 1);
+        onOutputReady(index, image, workflowResult.prompts[0]);
     }
-    return {
-        images: result.images.map((src, index) => ({ src, seed: seed + index })),
-        finalPrompt: prompts.join('\n\n'),
-    };
+    return { images, finalPrompt: prompts.join('\n\n') };
 };
 
 export const generateComfyUIVideo = async (

@@ -106,6 +106,7 @@ const getCategoryIcon = (mediaType: LibraryItemType, className: string = "w-4 h-
     case 'banner': return <BannerIcon {...props} />;
     case 'album-cover': return <AlbumCoverIcon {...props} />;
     case 'clothes': return <TshirtIcon {...props} />;
+    case 'hair': return <CharacterIcon {...props} />;
     case 'prompt': return <DocumentTextIcon {...props} />;
     case 'extracted-frame': return <FilmIcon {...props} />;
     case 'object': return <CubeIcon {...props} />;
@@ -133,6 +134,7 @@ const FILTER_BUTTONS: { id: LibraryItemType; label: string; icon: React.ReactEle
   { id: 'banner', label: 'Banners', icon: <BannerIcon className="w-5 h-5" /> },
   { id: 'album-cover', label: 'Album Covers', icon: <AlbumCoverIcon className="w-5 h-5" /> },
   { id: 'clothes', label: 'Clothes', icon: <TshirtIcon className="w-5 h-5" /> },
+  { id: 'hair', label: 'Hair', icon: <CharacterIcon className="w-5 h-5" /> },
   { id: 'object', label: 'Objects', icon: <CubeIcon className="w-5 h-5" /> },
   { id: 'pose', label: 'Poses', icon: <PoseIcon className="w-5 h-5" /> },
   { id: 'font', label: 'Fonts', icon: <FontIcon className="w-5 h-5" /> },
@@ -178,7 +180,7 @@ const LoraDetail: React.FC<{ label: string; name?: string; strength?: number; en
 
 const renderOptionsDetails = (options?: GenerationOptions, mediaType?: LibraryItemType) => {
   if (!options) return <DetailItem label="Options" value="Not available" />;
-  const isImageType = mediaType === 'image' || mediaType === 'character' || mediaType === 'logo' || mediaType === 'banner' || mediaType === 'album-cover' || mediaType === 'clothes' || mediaType === 'object' || mediaType === 'extracted-frame' || mediaType === 'pose' || mediaType === 'font' || mediaType === 'group-fusion' || mediaType === 'swap-anything';
+  const isImageType = mediaType === 'image' || mediaType === 'character' || mediaType === 'logo' || mediaType === 'banner' || mediaType === 'album-cover' || mediaType === 'clothes' || mediaType === 'hair' || mediaType === 'object' || mediaType === 'extracted-frame' || mediaType === 'pose' || mediaType === 'font' || mediaType === 'group-fusion' || mediaType === 'swap-anything';
   const comfyPositivePrompt = options.comfyModelType === 'flux2-simple'
     ? options.comfyFlux2Prompt
     : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw'

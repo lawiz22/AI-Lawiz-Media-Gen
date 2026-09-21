@@ -1,13 +1,14 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
-import type { GeneratedClothing, GeneratedObject, GeneratedPose } from '../types';
+import type { GeneratedClothing, GeneratedHair, GeneratedObject, GeneratedPose } from '../types';
 import { DownloadIcon, SaveIcon, SpinnerIcon, CheckIcon, CloseIcon, CodeBracketIcon, CopyIcon, DocumentTextIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import { SendToLTXButton } from './SendToLTXButton';
 
 interface ExtractorResultsGridProps {
-  items: (GeneratedClothing | GeneratedObject | GeneratedPose)[];
-  onSave: (item: GeneratedClothing | GeneratedObject | GeneratedPose, index: number) => void;
+    items: (GeneratedClothing | GeneratedHair | GeneratedObject | GeneratedPose)[];
+    onSave: (item: GeneratedClothing | GeneratedHair | GeneratedObject | GeneratedPose, index: number) => void;
   title: string;
+    pendingItems?: Array<{ id: string; name: string; progress: number; message: string; error?: string }>;
 }
 
 const isClothing = (item: any): item is GeneratedClothing => 'itemName' in item;
@@ -24,7 +25,7 @@ const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
         .substring(0, maxLength);
 };
 
-export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ items, onSave, title }) => {
+export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ items, onSave, title, pendingItems = [] }) => {
     const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
     const [textViewer, setTextViewer] = useState<{ title: string; content: string } | null>(null);
     const [textCopyButton, setTextCopyButton] = useState('Copy');
@@ -100,7 +101,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
         });
     };
 
-    if (items.length === 0) {
+    if (items.length === 0 && pendingItems.length === 0) {
         return null;
     }
 
@@ -122,6 +123,27 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                 <h3 className="text-xl font-bold text-accent">{title}</h3>
                 {/* Responsive grid to prevent overlap */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full">
+                    {pendingItems.map(item => (
+                        <div key={item.id} className="relative aspect-square overflow-hidden rounded-lg border border-border-primary bg-bg-tertiary p-4 shadow-md">
+                            <div className="flex h-full flex-col items-center justify-center text-center">
+                                {item.error ? (
+                                    <>
+                                        <p className="text-sm font-bold text-danger">Generation failed</p>
+                                        <p className="mt-2 line-clamp-4 text-xs text-danger/80" title={item.error}>{item.error}</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <SpinnerIcon className="mb-3 h-8 w-8 animate-spin text-accent" />
+                                        <p className="max-w-full truncate text-sm font-bold text-text-primary" title={item.name}>{item.name}</p>
+                                        <div className="mt-3 h-1.5 w-3/4 overflow-hidden rounded-full bg-bg-primary" role="progressbar" aria-label={`${item.name} generation progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(item.progress * 100)}>
+                                            <div className="h-full bg-accent transition-all duration-300" style={{ width: `${Math.round(item.progress * 100)}%` }} />
+                                        </div>
+                                        <p className="mt-2 max-w-full truncate text-[11px] text-text-muted" title={item.message}>{item.message}</p>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    ))}
                     {items.map((item, index) => {
                         let name: string, image: string;
                         if (isClothing(item)) { 
