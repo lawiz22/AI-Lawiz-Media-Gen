@@ -15,9 +15,9 @@ const imageSourceToDataUrl = async (source: string): Promise<string> => {
 };
 
 const buildFlux2PastForwardPrompt = (prompt: string, allowAdditionalPeople: boolean): string => [
-        'Edit Picture 1 directly. Preserve the source face and identity exactly.',
+    'Edit Picture 1 directly. Preserve the source face and identity exactly, following the explicit source identity and face-surface requirements in the editing instructions.',
         prompt,
-        'Do not reconstruct, reinterpret, beautify, age, or replace the face.',
+        'FINAL SOURCE CHECK: Do not reconstruct, reinterpret, beautify, age, or replace the face. Preserve the exact source face and all explicitly locked identity details.',
         allowAdditionalPeople
             ? 'The source person must remain the clearly recognizable principal subject. Supporting people may appear naturally in the historical scene, but they must not resemble or duplicate the source person.'
             : 'Show only the source person and no additional people.',
@@ -41,6 +41,7 @@ export const generateComfyUIPastForwardImage = async (
         comfyFlux2EditReferenceDescriptions: [],
         comfyFlux2EditReferenceLibraryPrompts: [],
         comfyFlux2EditReinforceSourceIdentity: reinforceSourceIdentity,
+        comfyFlux2EditIdentityReferenceWeight: reinforceSourceIdentity ? (options.comfyFlux2EditIdentityReferenceWeight ?? 3) : 1,
         comfyFlux2EditRequirePhotorealism: requirePhotorealism,
         numImages: 1,
     }, updateProgress);

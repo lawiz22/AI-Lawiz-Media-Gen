@@ -1,7 +1,7 @@
 {
   "name": "lawiz's-media-generator-v-2",
   "private": true,
-  "version": "1.8.0",
+  "version": "1.85.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {

@@ -18,6 +18,8 @@ import { ImageUploader } from '../ImageUploader';
 import { LibraryPickerModal } from '../LibraryPickerModal';
 import { NumberSlider, SelectInput } from '../InputComponents';
 import { SendToLTXButton } from '../SendToLTXButton';
+import { CLOTHING_CATALOG, type ClothingAudience } from './clothingCatalog';
+import { HISTORICAL_CAMEO_CATALOG, type HistoricalCameo } from './historicalCameoCatalog';
 
 const DECADES = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s'];
 const LIBRARY_IMAGE_TYPES: LibraryItemType[] = ['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo'];
@@ -57,47 +59,159 @@ const HAIRSTYLE_CATALOG: Record<string, Record<'woman' | 'man', string[]>> = {
 const DEFAULT_HAIRSTYLE_SELECTIONS = (gender: 'woman' | 'man') => Object.fromEntries(
     DECADES.map(decade => [decade, HAIRSTYLE_CATALOG[decade][gender][0]]),
 );
-const FLUX_DECADE_REIMAGININGS: Record<string, Record<'woman' | 'man', string>> = {
+type LocationAudience = 'male' | 'female' | 'both';
+const LOCATION_CATALOG: Record<string, Record<LocationAudience, string[]>> = {
     '1950s': {
-        woman: 'a softly curled bob or pageboy with a fitted blouse, cardigan, or day dress, feminine styling, restrained 1950s grooming, and authentic black-and-white or early color film photography',
-        man: 'a neat masculine side-part or pompadour with a collared shirt and tailored menswear jacket, restrained 1950s grooming, and authentic black-and-white or early color film photography',
+        male: ['Barbershop', 'Diner', 'Bowling Alley', 'Gas Station', 'Baseball Stadium', 'Boxing Gym', 'Pool Hall', 'Garage', 'Military Base', 'Factory'],
+        female: ['Beauty Salon', 'Dress Shop', 'Department Store', 'Kitchen', 'Living Room', "Ladies' Tea Room", 'Sewing Room', 'Dance Studio', 'Garden', 'Office'],
+        both: ['Drive-In Theater', 'Shopping Street', 'Beach', 'Park', 'Train Station', 'School', 'Church', 'Cinema', 'Restaurant', 'Downtown Street'],
     },
     '1960s': {
-        woman: 'a polished bob, bouffant, or softly flipped hairstyle with a shift dress, feminine blouse, or fitted cardigan, feminine 1960s styling, and warm saturated film',
-        man: 'a clean masculine mod cut with a narrow-collar shirt or slim-cut menswear jacket, restrained 1960s grooming, and warm saturated film',
+        male: ['Barbershop', 'Garage', 'Record Store', 'University Campus', 'Coffeehouse', 'Motorcycle Workshop', 'Military Base', 'Factory', 'Pool Hall', 'Music Club'],
+        female: ['Beauty Salon', 'Fashion Boutique', 'Department Store', 'Makeup Studio', 'Office', 'Art School', 'Dance Studio', 'Mod Fashion Shop', 'Apartment', 'Flower Shop'],
+        both: ['Beatnik Cafe', 'Rock Concert Venue', 'Beach', 'Park', 'Cinema', 'Shopping Mall', 'University Campus', 'Airport', 'Restaurant', 'Downtown Street'],
     },
     '1970s': {
-        woman: 'feathered or softly layered hair with a feminine wide-collar blouse, knit top, or flowing earth-toned dress, feminine 1970s styling, and warm grainy film',
-        man: 'a masculine shag or feathered cut with a wide-collar menswear shirt or casual jacket, natural 1970s grooming, and warm grainy film',
+        male: ['Record Store', 'Garage', 'Pool Hall', 'Disco Entrance', 'Skate Park', 'Motorcycle Garage', 'Concert Backstage', 'Factory', 'Sports Bar', 'Apartment Loft'],
+        female: ['Beauty Salon', 'Fashion Boutique', 'Yoga Studio', 'Craft Shop', 'Dance Studio', "Women's Clothing Store", 'Bohemian Apartment', 'Office', 'Music Festival Tent', 'Health Food Store'],
+        both: ['Disco Club', 'Rock Concert', 'Music Festival', 'Beach', 'Shopping Mall', 'Coffeehouse', 'Park', 'Cinema', 'Roller Rink', 'Suburban Living Room'],
     },
     '1980s': {
-        woman: 'voluminous layered or curled hair with a feminine blouse, dress, or colorful jacket, period-appropriate feminine makeup, and punchy flash-lit 1980s analog photography',
-        man: 'a full masculine layered cut with a polo, denim, or statement menswear jacket, masculine 1980s grooming, and punchy flash-lit analog photography',
+        male: ['Arcade', 'Barbershop', 'Skate Park', 'Garage', 'Rock Concert Backstage', 'Gym', 'Video Store', 'Sports Stadium', 'Nightclub', 'Recording Studio'],
+        female: ['Beauty Salon', 'Fashion Boutique', 'Aerobics Studio', 'Shopping Mall', 'Office', 'Dance Studio', 'Makeup Counter', 'Bedroom', 'Video Store', 'Modeling Studio'],
+        both: ['Shopping Mall', 'Arcade', 'Nightclub', 'Beach', 'Roller Rink', 'Cinema', 'Fast-Food Restaurant', 'House Party', 'Concert Venue', 'Downtown Street'],
     },
     '1990s': {
-        woman: 'a layered bob, soft grunge cut, or natural shoulder-length style with a feminine casual top, cardigan, or relaxed jacket, feminine 1990s styling, and natural consumer-film color and grain',
-        man: 'a masculine textured crop or grunge-era layers with a T-shirt, overshirt, or casual menswear jacket, natural 1990s grooming, and consumer-film color and grain',
+        male: ['Skate Park', 'Barbershop', 'Record Store', 'Video Game Store', 'Garage', 'Basketball Court', 'Music Store', 'Internet Cafe', 'Concert Backstage', 'Basement Hangout'],
+        female: ['Beauty Salon', 'Shopping Mall', 'Fashion Boutique', 'Bedroom', 'Dance Studio', 'Coffeehouse', 'Makeup Store', 'Office', 'Thrift Store', 'Music Video Set'],
+        both: ['Shopping Mall', 'High School Hallway', 'Coffeehouse', 'Cinema', 'Arcade', 'House Party', 'Beach', 'Concert Venue', 'Skate Park', 'Fast-Food Restaurant'],
     },
     '2000s': {
-        woman: 'an early-2000s layered salon hairstyle with a fitted feminine top, cardigan, or casual jacket, feminine styling, and crisp early-digital-camera rendering',
-        man: 'a masculine textured crop or shag with a fitted shirt or layered menswear jacket, restrained masculine grooming, and crisp early-digital-camera rendering',
+        male: ['Barbershop', 'Gaming Store', 'Skate Park', 'Recording Studio', 'Gym', 'Garage', 'Internet Cafe', 'Music Festival', 'Basketball Court', 'Bedroom'],
+        female: ['Beauty Salon', 'Shopping Mall', 'Fashion Boutique', 'Bedroom', 'Dance Studio', 'Coffeehouse', 'Makeup Store', 'Nail Salon', 'Thrift Store', 'Photo Studio'],
+        both: ['Shopping Mall', 'High School Hallway', 'Coffeehouse', 'Cinema', 'Nightclub', 'House Party', 'Beach', 'Concert Venue', 'Fast-Food Restaurant', 'Downtown Street'],
+    },
+};
+const DEFAULT_LOCATION_SELECTIONS = (audience: LocationAudience) => Object.fromEntries(
+    DECADES.map(decade => [decade, LOCATION_CATALOG[decade][audience][0]]),
+);
+const DEFAULT_CLOTHING_SELECTIONS = (audience: ClothingAudience) => Object.fromEntries(
+    DECADES.map(decade => [decade, CLOTHING_CATALOG[decade][audience][0]]),
+);
+const PLAUSIBLE_HAIR_COLORS: Record<string, string[]> = {
+    '1950s': ['natural black', 'dark brown', 'chestnut brown', 'auburn', 'warm blonde', 'platinum blonde', 'natural gray'],
+    '1960s': ['natural black', 'dark brown', 'chestnut brown', 'auburn', 'honey blonde', 'platinum blonde', 'natural gray'],
+    '1970s': ['natural black', 'dark brown', 'chestnut brown', 'copper auburn', 'honey blonde', 'sun-lightened blonde', 'natural gray'],
+    '1980s': ['natural black', 'blue-black', 'dark brown', 'chestnut brown', 'copper red', 'golden blonde', 'platinum blonde'],
+    '1990s': ['natural black', 'dark brown', 'chestnut brown', 'auburn', 'golden blonde', 'platinum blonde', 'natural-looking frosted highlights'],
+    '2000s': ['natural black', 'dark brown', 'chestnut brown', 'copper auburn', 'golden blonde', 'platinum blonde', 'natural-looking chunky highlights'],
+};
+const PHOTO_TYPE_CATALOG: Record<string, string[]> = {
+    '1950s': [
+        'Black-and-white medium-format portrait, soft directional lighting, fine but visible silver-grain, high contrast, slightly faded paper print, small scratches and dust marks, imperfect darkroom exposure',
+        '35mm black-and-white family snapshot, direct flash, hard shadows, moderate film grain, slightly soft focus, aged print edges and small crease marks',
+        '1950s color 35mm Kodachrome street photograph, restrained saturated colors, warm reds, fine grain, subtle color fading, realistic sunlight, slight lens softness',
+        'Black-and-white documentary photograph, 35mm film, deep shadows, strong contrast, visible grain, minor scratches, dust spots, old newspaper-print texture',
+        'Medium-format black-and-white holiday photograph, gentle overexposure, soft highlights, fine grain, faded blacks, worn corners and light surface scratches',
+    ],
+    '1960s': [
+        '35mm color slide-film photograph, vivid but natural colors, fine grain, crisp daylight, slightly warm Kodachrome tones, minor color shift from aging',
+        'Black-and-white 35mm street photograph, high contrast, noticeable grain, sharp sunlight, deep blacks, small dust and scratch imperfections',
+        '1960s color instant photograph, slightly muted colors, soft focus, uneven exposure, visible chemical development marks and pale border',
+        '35mm fashion photograph, controlled flash, clean mid-century color palette, fine grain, slightly imperfect focus, subtle print fading and warm skin tones',
+        '35mm concert photograph, low available light, heavy film grain, motion blur, underexposed shadows, bright stage highlights',
+    ],
+    '1970s': [
+        '35mm color film snapshot, warm orange and yellow cast, visible medium grain, slightly faded colors, direct on-camera flash',
+        'Polaroid SX-70 instant photograph, square frame, soft focus, muted warm colors, mild exposure inconsistency, creamy highlights, visible white border',
+        '35mm disco photograph, direct flash, saturated reds and blues, moderate grain, slight motion blur, occasional lens flare',
+        'Black-and-white 35mm documentary photograph, gritty high grain, strong contrast, imperfect exposure, scratched negative, rough printed-paper texture',
+        '110 film vacation snapshot, small-format softness, strong color cast, noticeable grain, slightly blurred details, uneven flash, faded corners and light chemical stains',
+    ],
+    '1980s': [
+        'Polaroid instant snapshot, square format, faded pastel colors, soft focus, uneven chemical development, slight yellowing, worn white border and fingerprints',
+        '35mm color photograph with direct flash, cool highlights, moderate grain, hard shadows, slightly overexposed faces',
+        '35mm high-ISO concert photograph, heavy visible grain, strong motion blur, deep black shadows, colored stage lights, imperfect autofocus',
+        'Disposable-camera style 35mm photograph, harsh flash, saturated colors, red-eye, soft corners, slight overexposure and cheap-lab print texture',
+        'Medium-format color-film portrait, smooth skin, controlled flash, fine grain, mild color fading, slightly glossy print surface',
+    ],
+    '1990s': [
+        '35mm candid street photograph, natural daylight, moderate fine grain, realistic colors, slightly imperfect focus, minilab print texture',
+        'Disposable-camera party snapshot, direct flash, strong red-eye, harsh shadows, saturated colors, noticeable grain, soft details and accidental finger obstruction',
+        'Polaroid instant photograph, slightly faded colors, soft edges, mild chemical stains, white border, authentic bedroom-snapshot treatment',
+        '35mm skateboarding photograph, fast shutter, visible grain, slight motion blur, bright daylight, authentic amateur film processing',
+        'Early consumer digital-camera photograph, low resolution, visible pixelation, weak dynamic range, cool color cast, harsh built-in flash, red-eye and compression artifacts',
+    ],
+    '2000s': [
+        'Early digital compact-camera photograph, harsh built-in flash, cool white balance, low dynamic range, slight pixel noise, red-eye, overexposed skin and compressed JPEG artifacts',
+        '35mm color film photograph, fine grain, natural skin tones, slightly warm colors, minilab print border, mild fading and imperfect laboratory exposure',
+        'Early-2000s nightclub digital photograph, direct flash, blown highlights, motion blur, strong red-eye, visible sensor noise',
+        'Disposable-camera photograph, heavy flash, low detail, saturated colors, soft focus, rough drugstore print texture and faded edges',
+        'Early digital fashion photograph, low-resolution CCD look, slight green or magenta color cast, sharp flash highlights, moderate pixel noise',
+    ],
+};
+const SHOT_ANGLE_CATALOG = [
+    'Full-body shot at eye level',
+    'Three-quarter-body shot at eye level',
+    'Medium shot at eye level',
+    'Medium close-up at eye level',
+    'Tight close-up at eye level',
+    'Wide establishing shot',
+    'Low-angle full-body shot',
+    'Low-angle medium shot',
+    'High-angle three-quarter-body shot',
+    'Three-quarter profile medium shot',
+    'Side-profile full-body shot',
+    'Candid over-the-shoulder shot',
+];
+const DEFAULT_PHOTO_TYPE_SELECTIONS = () => Object.fromEntries(
+    DECADES.map(decade => [decade, PHOTO_TYPE_CATALOG[decade][0]]),
+);
+const DEFAULT_SHOT_ANGLE_SELECTIONS = () => Object.fromEntries(
+    DECADES.map(decade => [decade, SHOT_ANGLE_CATALOG[0]]),
+);
+const DEFAULT_HISTORICAL_CAMEO_SELECTIONS = () => Object.fromEntries(
+    DECADES.map(decade => [decade, HISTORICAL_CAMEO_CATALOG[decade][0].year]),
+);
+const getHistoricalCameo = (decade: string, year?: number): HistoricalCameo =>
+    HISTORICAL_CAMEO_CATALOG[decade].find(cameo => cameo.year === year) || HISTORICAL_CAMEO_CATALOG[decade][0];
+const buildHistoricalCameoPrompt = (cameo: HistoricalCameo) =>
+    `Insert the person from the source photo naturally into this specific ${cameo.year} historical event: ${cameo.event}. REQUIRED CAMEO ROLE: ${cameo.cameoIdea}. Recompose the entire image around that exact event and role: give the person a believable visible action, three-quarter or profile body position, event-appropriate expression, completely new period wardrobe, documentary camera angle, lighting, and scale. Preserve the person's recognizable facial identity, skin tone, and apparent age. The result must look like an authentic photograph taken during the event, not a centered portrait, selfie, modern portrait with a replaced background, or reenactment. The original shirt and source background must not remain visible. Include historically appropriate supporting people without duplicating the source person.`;
+const buildHistoricalCameoFluxPrompt = (cameo: HistoricalCameo) =>
+    `Reimagine the entire source photograph as a newly captured documentary photograph at this exact ${cameo.year} historical event: ${cameo.event}. The source person must participate naturally in this exact cameo role: ${cameo.cameoIdea}. Treat the selected event, year, venue, crowd, activity, and cameo role as mandatory; do not substitute a generic scene or another event. Replace the source room, shirt, clothing, pose, expression, crop, framing, camera angle, lighting, props, and composition. Show the subject actively performing the stated role in a waist-up, three-quarter, or wider environmental composition; do not make a centered front-facing head-and-shoulders portrait. Integrate the person at a believable scale and depth within the action, looking toward the task or another participant instead of staring into the camera. Preserve the person's recognizable face shape, eyes, nose, mouth, skin tone, and apparent age. Supporting people must be varied period-appropriate individuals and must not duplicate the source face. Match the event's documentary lens, film grain, color response, shadows, perspective, and ambient light across the entire image. Photorealistic historical documentary photograph, not a selfie, studio portrait, costume portrait, backdrop replacement, collage, or modern reenactment.`;
+const FLUX_DECADE_REIMAGININGS: Record<string, Record<'woman' | 'man', string>> = {
+    '1950s': {
+        woman: 'Choose a varied authentic feminine 1950s blouse, cardigan, day dress, accessories, grooming, location, and black-and-white or early color photographic treatment. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
+        man: 'Choose varied authentic 1950s masculine clothing such as a collared shirt or tailored jacket, plus period accessories, grooming, location, and black-and-white or early color photographic treatment. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
+    },
+    '1960s': {
+        woman: 'Choose a varied authentic feminine 1960s shift dress, blouse, cardigan, accessories, grooming, location, and warm saturated film treatment. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
+        man: 'Choose varied authentic 1960s masculine clothing such as a narrow-collar shirt or slim-cut jacket, plus period accessories, grooming, location, and warm saturated film treatment. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
+    },
+    '1970s': {
+        woman: 'Choose a varied authentic feminine 1970s wide-collar blouse, knit top, flowing earth-toned dress, accessories, grooming, location, and warm grainy film treatment. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
+        man: 'Choose varied authentic 1970s masculine clothing such as a wide-collar shirt or casual jacket, plus period accessories, grooming, location, and warm grainy film treatment. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
+    },
+    '1980s': {
+        woman: 'Choose a varied authentic feminine 1980s blouse, dress, colorful jacket, accessories, makeup, location, and punchy flash-lit analog photographic treatment. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
+        man: 'Choose varied authentic 1980s masculine clothing such as a polo, denim, or statement jacket, plus period accessories, grooming, location, and punchy flash-lit analog photographic treatment. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
+    },
+    '1990s': {
+        woman: 'Choose a varied authentic feminine 1990s casual top, cardigan, relaxed jacket, accessories, grooming, location, and natural consumer-film color and grain. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
+        man: 'Choose varied authentic 1990s masculine clothing such as a T-shirt, overshirt, or casual jacket, plus period accessories, grooming, location, and consumer-film color and grain. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
+    },
+    '2000s': {
+        woman: 'Choose a varied authentic early-2000s feminine top, cardigan, casual jacket, accessories, grooming, location, and crisp early-digital-camera treatment. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
+        man: 'Choose varied authentic early-2000s masculine clothing such as a fitted shirt or layered jacket, plus period accessories, grooming, location, and crisp early-digital-camera treatment. Do not choose or alter the hairstyle beyond the separate selected-hairstyle instruction',
     },
 };
 const QWEN_DECADE_REIMAGININGS: Record<string, Record<'woman' | 'man', string>> = {
-    '1950s': { woman: '1950s curled bob or pageboy, fitted feminine blouse, cardigan, or day dress, black-and-white or early color film', man: '1950s masculine side-part or pompadour, collared menswear shirt and tailored jacket, black-and-white or early color film' },
-    '1960s': { woman: '1960s polished bob, bouffant, or flipped hair, shift dress or feminine blouse, warm saturated film', man: '1960s masculine mod cut, narrow-collar menswear shirt or slim jacket, warm saturated film' },
-    '1970s': { woman: '1970s feathered or layered hair, feminine wide-collar blouse, knit top, or flowing dress, warm grainy film', man: '1970s masculine shag or feathered cut, wide-collar menswear shirt or casual jacket, warm grainy film' },
-    '1980s': { woman: '1980s voluminous curled or layered hair, colorful feminine blouse, dress, or jacket, bright flash-lit analog film', man: '1980s masculine layered haircut, polo, denim, or statement menswear jacket, bright flash-lit analog film' },
-    '1990s': { woman: '1990s layered bob or soft grunge hair, feminine casual top, cardigan, or relaxed jacket, natural consumer film', man: '1990s masculine textured crop or grunge layers, T-shirt, overshirt, or casual menswear jacket, natural consumer film' },
-    '2000s': { woman: 'early-2000s layered salon hair, fitted feminine top, cardigan, or casual jacket, crisp early-digital photography', man: 'early-2000s masculine textured crop or shag, fitted menswear shirt or layered jacket, crisp early-digital photography' },
-};
-const FLUX_DECADE_SCENE_REIMAGININGS: Record<string, string> = {
-    '1950s': 'Place the subject inside a bustling 1950s neighborhood diner, seated sideways on a chrome counter stool while turning naturally toward a server. Use an eye-level three-quarter side view and a medium-wide horizontal-feeling composition that clearly shows the counter, jukebox, tiled floor, booths, patrons, and street through the windows.',
-    '1960s': 'Place the subject browsing records in a colorful 1960s music shop, standing in profile while pulling a vinyl album from a waist-high bin and glancing toward a nearby listening booth. Photograph from a slightly low oblique angle in a three-quarter-body composition showing record racks, posters, other shoppers, ceiling fixtures, and storefront depth.',
-    '1970s': 'Place the subject at a relaxed 1970s lakeside gathering beside period cars, standing at a three-quarter angle while talking with another guest and holding a drink at waist level. Use a candid off-center medium-wide composition from shoulder height, with people, picnic furniture, shoreline, cars, trees, and layered activity visible across the frame.',
-    '1980s': 'Place the subject inside a lively 1980s video arcade, leaning into an arcade cabinet with one hand on the controls and looking toward the game screen rather than the camera. Shoot from a low diagonal angle in a dynamic three-quarter-body composition, showing rows of illuminated cabinets, patterned carpet, ceiling lights, players, reflections, and deep interior perspective.',
-    '1990s': 'Place the subject walking out of a busy 1990s independent video store while carrying two VHS cases and turning toward a friend beside the entrance. Use a slightly high candid street-photography angle and an asymmetrical full-to-three-quarter-body frame showing shelves, movie posters, checkout counter, pedestrians, parked period cars, and the surrounding storefront.',
-    '2000s': 'Place the subject at an early-2000s outdoor music festival, stepping through the venue while checking a compact digital camera and speaking to a companion. Use a wide three-quarter rear-side camera angle with the subject off-center, showing the stage, crowd, vendor tents, barriers, signage, and open sky as a coherent event environment.',
+    '1950s': { woman: 'a varied authentic feminine blouse, cardigan, or day dress, period accessories and location, black-and-white or early color film', man: 'varied authentic masculine clothing such as a collared shirt or tailored jacket, period accessories and location, black-and-white or early color film' },
+    '1960s': { woman: 'a varied authentic feminine shift dress, blouse, or fitted cardigan, period accessories and location, warm saturated film', man: 'varied authentic masculine clothing such as a narrow-collar shirt or slim jacket, period accessories and location, warm saturated film' },
+    '1970s': { woman: 'a varied authentic feminine wide-collar blouse, knit top, or flowing dress, period accessories and location, warm grainy film', man: 'varied authentic masculine clothing such as a wide-collar shirt or casual jacket, period accessories and location, warm grainy film' },
+    '1980s': { woman: 'a varied authentic feminine blouse, dress, or colorful jacket, period accessories, makeup and location, bright flash-lit analog film', man: 'varied authentic masculine clothing such as a polo, denim, or statement jacket, period accessories and location, bright flash-lit analog film' },
+    '1990s': { woman: 'a varied authentic feminine casual top, cardigan, or relaxed jacket, period accessories and location, natural consumer film', man: 'varied authentic masculine clothing such as a T-shirt, overshirt, or casual jacket, period accessories and location, natural consumer film' },
+    '2000s': { woman: 'a varied authentic feminine fitted top, cardigan, or casual jacket, period accessories and location, crisp early-digital photography', man: 'varied authentic masculine clothing such as a fitted shirt or layered jacket, period accessories and location, crisp early-digital photography' },
 };
 const SUPERHERO_COMIC_STYLES: Record<string, string> = {
     '1950s': 'a 1950s Golden Age comic cover with bold hand-drawn ink outlines, simple heroic anatomy, limited CMYK colors, aged paper, and visible halftone dots',
@@ -107,14 +221,6 @@ const SUPERHERO_COMIC_STYLES: Record<string, string> = {
     '1990s': 'a 1990s extreme-action comic cover with energetic angular linework, exaggerated perspective, dense cross-hatching, vivid colors, and explosive graphic composition',
     '2000s': 'a polished 2000s digital comic cover with crisp ink lines, cinematic panel composition, rich cel shading, controlled highlights, and modern printed-comic color',
 };
-const HISTORICAL_CAMEO_SCENES: Record<string, string> = {
-    '1950s': 'a live 1950s television studio broadcast, working as a floor manager beside a bulky studio camera while cueing the presenter, surrounded by hot stage lights, microphone booms, cables, technicians, and a painted set, wearing a tailored mid-century suit and photographed on grainy black-and-white press film',
-    '1960s': 'NASA Mission Control during the Apollo 11 Moon landing in July 1969, working as a mission support engineer at a telemetry console while conferring with nearby controllers, surrounded by headsets, status screens, binders, ashtrays, and period equipment, wearing an authentic white shirt, narrow tie, and identification badge, captured on warm documentary color film',
-    '1970s': 'a major 1970s anti-war peace march in Washington, D.C., walking among a dense crowd of demonstrators near the Washington Monument while holding a hand-painted PEACE NOW placard, wearing authentic denim and period clothing, captured as candid documentary photography',
-    '1980s': 'backstage at the 1985 Live Aid concert at Wembley Stadium, working as a sound engineer at a large analog mixing console while coordinating with stage crew as the brightly lit performance continues beyond the wings, wearing an authentic event credential, headset, and practical 1980s production clothing, photographed on high-speed color film',
-    '1990s': 'NASA mission operations during the 1990 deployment of the Hubble Space Telescope, working as a science-team specialist who points out telemetry on a CRT display while colleagues study orbital diagrams and printed data, wearing authentic early-1990s professional clothing and an identification badge, captured by a documentary news photographer',
-    '2000s': 'trackside at the Sydney 2000 Olympic Games, working as an accredited event photographer kneeling beside the athletics track with a period professional digital camera while competitors and officials move through the stadium behind, wearing an authentic photo vest and credential, captured as crisp early-digital sports journalism',
-};
 const REIMAGINE_SCENE_PROMPT = 'Create a completely new scene and composition that is not based on the source room, background, pose, crop, framing, or camera angle. Place the same recognizable subject in a different era-appropriate environment with a new natural pose, new body positioning, new camera viewpoint, new lighting, and new composition. Preserve only the subject identity and defining facial features from the source.';
 
 const THEMES: Record<string, { title: string, description: string, prompt: (decade: string) => string, fluxPrompt: (decade: string, reimagineScene?: boolean) => string }> = {
@@ -122,7 +228,7 @@ const THEMES: Record<string, { title: string, description: string, prompt: (deca
         title: 'Through the Decades',
         description: 'The original experience. See yourself reimagined in the style of past decades.',
         prompt: (decade: string) => `Reimagine the person in this photo in the style of the ${decade}. This includes clothing, hairstyle, photo quality, and the overall aesthetic of that decade. The output must be a photorealistic image showing the person clearly.`,
-        fluxPrompt: (decade: string, reimagineScene = false) => `Restyle the source person as the same individual photographed in the ${decade}. Preserve the exact recognizable facial identity, face shape, eyes, nose, mouth, jawline, skin tone, apparent age, and body proportions. ${reimagineScene ? `Preserve identity only, not composition. ${FLUX_DECADE_SCENE_REIMAGININGS[decade]} The stated activity, pose, body orientation, subject placement, viewpoint, and framing are mandatory. Do not reuse the source pose, front-facing alignment, horizon placement, or portrait framing. Use documentary deep focus with readable foreground, middle ground, and background detail. Keep the environment sharp and specific from edge to edge, approximately f/8. No shallow depth of field, portrait-mode blur, generic bokeh, empty backdrop, isolated headshot, or centered passport-style composition.` : 'Preserve the source pose, expression, camera angle, crop, subject placement, and general setting.'} Inspect the source eyes carefully. When Picture 1 has no eyewear, the result must show the same bare, fully visible, unobstructed eyes with no frames or lenses of any kind. Preserve eyewear only when visibly present in Picture 1. Preserve facial hair only when visibly present; otherwise keep the face clean-shaven. Change the hairstyle, wardrobe, grooming, lighting response, color treatment, film grain, and photographic medium enough to make the decade immediately clear. Adapt period hair and clothing naturally to the same subject rather than replacing them with a different person. ${reimagineScene ? 'Render the subject and environment as one candid photograph with consistent perspective, ambient light, film response, and natural interaction.' : 'Keep the existing background composition recognizable, applying only subtle decade-appropriate environmental and photographic details.'} Photorealistic authentic period portrait, not a face replacement, gender transformation, costume caricature, cross-gender styling, or newly invented subject.`,
+        fluxPrompt: (decade: string, reimagineScene = false) => `Restyle the source person as the same individual photographed in the ${decade}. Preserve the exact recognizable facial identity, face shape, eyes, nose, mouth, jawline, skin tone, apparent age, and body proportions. ${reimagineScene ? 'Preserve identity only, not composition. Use a new natural activity, pose, body orientation, subject placement, viewpoint, and framing appropriate to the selected location. Do not reuse the source pose, front-facing alignment, horizon placement, or portrait framing. Use documentary deep focus with readable foreground, middle ground, and background detail, approximately f/8. No shallow depth of field, portrait-mode blur, generic bokeh, empty backdrop, isolated headshot, or centered passport-style composition.' : 'Preserve the source expression, pose, camera angle, crop, and subject placement, but replace the background completely with the selected location.'} Preserve facial hair only when visibly present; otherwise keep the face clean-shaven. Change the hairstyle, wardrobe, grooming, lighting response, color treatment, film grain, and photographic medium enough to make the decade immediately clear. Adapt period hair and clothing naturally to the same subject rather than replacing them with a different person. Render the subject and selected environment as one photograph with consistent perspective, ambient light, shadows, and film response. Photorealistic authentic period photograph, not a face replacement, gender transformation, costume caricature, cross-gender styling, or newly invented subject.`,
     },
     'hairstyles': {
         title: 'Hairstyle Time Machine',
@@ -145,8 +251,8 @@ const THEMES: Record<string, { title: string, description: string, prompt: (deca
     'historical': {
         title: 'Historical Cameo',
         description: 'Place yourself in famous historical events or scenes.',
-        prompt: (decade: string) => `Insert the person from the source photo naturally into ${HISTORICAL_CAMEO_SCENES[decade]}. Recompose the entire image around that event: give the person a believable role, visible action, three-quarter or profile body position, event-appropriate expression, completely new period wardrobe, documentary camera angle, lighting, and scale. Preserve the person's recognizable facial identity, eyewear if present, facial hair if present, skin tone, and apparent age. The result must look like an authentic photograph taken during the event, not a centered portrait, selfie, modern portrait with a replaced background, or reenactment. The original shirt and source background must not remain visible. Include historically appropriate supporting people without duplicating the source person.`,
-        fluxPrompt: (decade: string) => `Reimagine the entire source photograph as a newly captured historical photograph showing the source person participating naturally in ${HISTORICAL_CAMEO_SCENES[decade]}. Replace the source room, shirt, clothing, pose, expression, crop, framing, camera angle, lighting, props, and composition. Show the subject actively performing the stated role in a waist-up, three-quarter, or wider environmental composition; do not make a centered front-facing head-and-shoulders portrait. Integrate the person at a believable scale and depth within the action, looking toward the task or another participant instead of staring into the camera. Preserve the person's recognizable face shape, eyes, nose, mouth, eyewear if present, facial hair if present, skin tone, and apparent age. Supporting people must be varied period-appropriate individuals and must not duplicate the source face. Match the event's documentary lens, film grain, color response, shadows, perspective, and ambient light across the entire image. Photorealistic historical documentary photograph, not a selfie, studio portrait, costume portrait, backdrop replacement, collage, or modern reenactment.`,
+        prompt: (decade: string) => buildHistoricalCameoPrompt(getHistoricalCameo(decade)),
+        fluxPrompt: (decade: string) => buildHistoricalCameoFluxPrompt(getHistoricalCameo(decade)),
     },
 };
 
@@ -178,20 +284,41 @@ const PastForwardPanel: React.FC = () => {
     const [isCreatingAlbum, setIsCreatingAlbum] = useState<boolean>(false);
     const [selectedTheme, setSelectedTheme] = useState<string>('decades');
     const [subjectGender, setSubjectGender] = useState<'woman' | 'man' | null>(null);
+    const [sourceWearsGlasses, setSourceWearsGlasses] = useState(false);
+    const [sourceHasFacialHair, setSourceHasFacialHair] = useState(false);
     const [selectedHairstyles, setSelectedHairstyles] = useState<Record<'woman' | 'man', Record<string, string>>>(() => ({
         woman: DEFAULT_HAIRSTYLE_SELECTIONS('woman'),
         man: DEFAULT_HAIRSTYLE_SELECTIONS('man'),
     }));
+    const [selectedLocations, setSelectedLocations] = useState<Record<LocationAudience, Record<string, string>>>(() => ({
+        male: DEFAULT_LOCATION_SELECTIONS('male'),
+        female: DEFAULT_LOCATION_SELECTIONS('female'),
+        both: DEFAULT_LOCATION_SELECTIONS('both'),
+    }));
+    const [selectedClothing, setSelectedClothing] = useState<Record<ClothingAudience, Record<string, string>>>(() => ({
+        male: DEFAULT_CLOTHING_SELECTIONS('male'),
+        female: DEFAULT_CLOTHING_SELECTIONS('female'),
+        both: DEFAULT_CLOTHING_SELECTIONS('both'),
+    }));
+    const [varyHairColor, setVaryHairColor] = useState(false);
+    const [selectedPhotoTypes, setSelectedPhotoTypes] = useState<Record<string, string>>(DEFAULT_PHOTO_TYPE_SELECTIONS);
+    const [selectedShotAngles, setSelectedShotAngles] = useState<Record<string, string>>(DEFAULT_SHOT_ANGLE_SELECTIONS);
+    const [selectedHistoricalCameos, setSelectedHistoricalCameos] = useState<Record<string, number>>(DEFAULT_HISTORICAL_CAMEO_SELECTIONS);
     const [reimagineScene, setReimagineScene] = useState(false);
     const [selectedDecades, setSelectedDecades] = useState<string[]>([...DECADES]);
     const [saveStatuses, setSaveStatuses] = useState<Record<string, 'idle' | 'saving' | 'saved'>>({});
     const [albumSaveStatus, setAlbumSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const provider = generationOptions.pastForwardProvider || 'comfyui';
-    const requiresSubjectGender = selectedTheme === 'superhero' || ((selectedTheme === 'decades' || selectedTheme === 'hairstyles') && provider !== 'mammouth');
+    const requiresSubjectGender = selectedTheme === 'historical' || selectedTheme === 'superhero' || (selectedTheme === 'hairstyles' && provider !== 'mammouth');
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [themesOpen, setThemesOpen] = useState(true);
     const [hairstylesOpen, setHairstylesOpen] = useState(true);
+    const [locationsOpen, setLocationsOpen] = useState(true);
+    const [clothingOpen, setClothingOpen] = useState(true);
+    const [photoTypesOpen, setPhotoTypesOpen] = useState(true);
+    const [shotAnglesOpen, setShotAnglesOpen] = useState(true);
+    const [historicalCameosOpen, setHistoricalCameosOpen] = useState(true);
     const [zoomedImage, setZoomedImage] = useState<{ url: string; decade: string } | null>(null);
     const [mammouthModels, setMammouthModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
     const [isLoadingMammouthModels, setIsLoadingMammouthModels] = useState(false);
@@ -270,24 +397,54 @@ const PastForwardPanel: React.FC = () => {
     const generatePastForwardImage = async (prompt: string, fluxPrompt: string, decade: string): Promise<string> => {
         if (!uploadedFile || !uploadedImageBase64) throw new Error('Select a source photo first.');
         if (requiresSubjectGender && !subjectGender) throw new Error('Select Woman or Man for the subject identity.');
-        const subjectIdentityPrompt = !requiresSubjectGender
+        const subjectIdentityPrompt = !subjectGender
             ? ''
             : subjectGender === 'woman'
                 ? selectedTheme === 'superhero'
                     ? 'Picture 1 contains one adult woman. The principal protagonist must be this same recognizable woman, with her female sex, feminine facial structure, anatomy, body proportions, hair, and gender presentation preserved. Depict one original comic-book heroine with a clearly feminine face, natural jawline, body shape, and silhouette. Give her an original asymmetric costume led by emerald, gold, ivory, magenta, silver, or black, with an abstract geometric non-letter emblem and powers unique to her. Inspect her eyes in Picture 1: if they are bare, keep both eyes bare, fully visible, and unobstructed without glasses, frames, lenses, goggles, mask, visor, or eye accessory.'
-                    : 'Picture 1 depicts a woman. Preserve her female sex and feminine gender presentation exactly. Keep the same recognizable woman, feminine facial structure, anatomy, body proportions, hairline, and styling. Never depict a man, male anatomy, a masculine face, a square masculine jaw, a male muscular torso, menswear, or masculine styling.'
+                    : 'Picture 1 contains one adult woman. The principal subject in the output must be this same recognizable woman. Preserve her female sex, feminine facial structure, natural jawline, anatomy, body proportions, hairline, and feminine gender presentation exactly in every scene.'
                 : selectedTheme === 'superhero'
                     ? 'The source subject is a man. Preserve his male sex and masculine gender presentation. Transform this same recognizable man into an original comic-book hero with masculine facial structure, anatomy, body proportions, hair, styling, and costume. Do not depict a woman or feminine anatomy.'
-                    : 'Picture 1 depicts a man. Preserve his male sex and masculine gender presentation exactly. Keep the same recognizable man, masculine facial structure, jawline, anatomy, body proportions, hairline, and grooming. Never depict a woman, feminine anatomy, feminine face, breasts, makeup, a dress, a skirt, a blouse, or feminine styling.';
-        const selectedStylePrompt = !subjectGender
-            ? ''
-            : selectedTheme === 'decades'
-                ? `Use only this selected identity styling instruction: ${FLUX_DECADE_REIMAGININGS[decade][subjectGender]}.`
-                : selectedTheme === 'hairstyles'
-                    ? `SELECTED HAIRSTYLE: ${selectedHairstyles[subjectGender][decade]}. Apply this one exact named hairstyle, interpreted authentically for the ${decade} and for a ${subjectGender}. Do not blend it with another hairstyle or keep the source haircut. Preserve the source person's natural hair color unless the selected hairstyle specifically requires a color treatment.`
-                    : '';
-        const finalPrompt = [selectedTheme === 'superhero' ? subjectIdentityPrompt : '', prompt, reimagineScene ? REIMAGINE_SCENE_PROMPT : ''].filter(Boolean).join(' ');
-        const finalFluxPrompt = [subjectIdentityPrompt, selectedStylePrompt, fluxPrompt, reimagineScene ? REIMAGINE_SCENE_PROMPT : ''].filter(Boolean).join(' ');
+                    : 'Picture 1 contains one adult man. The principal subject in the output must be this same recognizable man. Preserve his male sex, masculine facial structure, natural jawline, anatomy, body proportions, hairline, grooming, and masculine gender presentation exactly in every scene.';
+        const locationAudience: LocationAudience = subjectGender === 'woman' ? 'female' : subjectGender === 'man' ? 'male' : 'both';
+        const selectedLocation = selectedLocations[locationAudience][decade];
+        const selectedOutfit = selectedClothing[locationAudience][decade];
+        const selectedHistoricalCameo = getHistoricalCameo(decade, selectedHistoricalCameos[decade]);
+        const effectivePrompt = selectedTheme === 'historical' ? buildHistoricalCameoPrompt(selectedHistoricalCameo) : prompt;
+        const effectiveFluxPrompt = selectedTheme === 'historical' ? buildHistoricalCameoFluxPrompt(selectedHistoricalCameo) : fluxPrompt;
+        const eyewearPrompt = sourceWearsGlasses
+            ? 'SOURCE FACE ACCESSORY: Copy the exact physical prescription glasses from Picture 1 unchanged, including frame silhouette, lens shape and size, rim thickness, frame color and material, bridge shape and width, temples, fit, tilt, position on the nose, distance from the eyes, and lens reflections. Do not redesign, modernize, vintage-style, resize, recolor, remove, or replace this pair.'
+            : 'SOURCE FACE: Keep both eyes completely bare, clearly visible, and unobstructed. Keep the entire face and surrounding skin free of accessories.';
+        const facialHairPrompt = sourceHasFacialHair
+            ? 'SOURCE FACIAL-HAIR STATUS: PRESENT. Preserve the exact beard, moustache, goatee, or stubble visible in Picture 1, including its coverage, outline, length, density, texture, color, connections, and boundaries. A clean-shaven result is invalid.'
+            : 'SOURCE FACE SURFACE: Keep the upper lip, cheeks, chin, jaw, sideburn area, and neck as smooth continuous bare skin exactly matching Picture 1.';
+        const facialIdentityPrompt = `FINAL IDENTITY REQUIREMENT, OVERRIDING ALL STYLE, WARDROBE, ERA, LOCATION, EVENT, AND CAMERA INSTRUCTIONS: Copy the face from Picture 1 without redesigning it. Preserve the exact skull and face shape, forehead height, hairline, eyebrow shape and spacing, eye shape and spacing, eyelids, nose bridge and tip, nostril width, cheekbone structure, mouth width, lip shape, philtrum, jawline, chin, ears, skin texture, natural asymmetry, apparent age, and distinctive marks. Keep the original geometric distances and proportions between all facial landmarks. ${eyewearPrompt} ${facialHairPrompt} Do not beautify, smooth, idealize, masculinize, feminize, age, de-age, or substitute the face.`;
+        const selectedLocationPrompt = `FINAL LOCATION REQUIREMENT, OVERRIDING THE SOURCE BACKGROUND, PHOTO TYPE, SHOT, AND ALL EARLIER SCENE TEXT: The entire setting must be a clearly recognizable ${decade} ${selectedLocation}, never the room or environment visible in Picture 1 and never another venue. Replace 100 percent of the visible source background, including walls, floor, ceiling, windows, furniture, fixtures, equipment, objects, signs, reflections, and distant areas. Fill all visible background space with a coherent, period-correct ${selectedLocation}. Show multiple unmistakable visual identifiers of this exact place through its layout, architecture, furniture, equipment, objects, readable or recognizable signage, materials, lighting, and natural background activity. The subject must be physically inside and interacting naturally with this location, with matching perspective, scale, contact shadows, and ambient light. Even in a close shot, retain enough environmental detail to identify the ${selectedLocation}. A result that preserves the source room, uses a generic room, substitutes another venue, or only suggests the location through clothing is invalid.`;
+        const selectedClothingPrompt = `FINAL WARDROBE REQUIREMENT: Dress the subject in exactly this selected ${decade} outfit: ${selectedOutfit.replace(/sunglasses/gi, 'period-appropriate summer accessories')}. Replace all source clothing. Preserve the named garment types, silhouette, layers, fit, materials, and non-facial accessories. Clothing instructions never authorize adding or changing anything on the face. Do not substitute a different outfit or mix in clothing from another decade.`;
+        const selectedCameraPrompt = reimagineScene
+            ? `FINAL SHOT AND ANGLE REQUIREMENT: Compose exactly a ${selectedShotAngles[decade]}. This selection controls only subject distance, body coverage, camera height, viewpoint, angle, crop, and framing. It is mandatory. Build a genuinely new photograph rather than a background replacement. Change the source pose, gesture, head direction, torso orientation, body placement, camera distance, camera height, viewing angle, crop, framing, and composition. At least the subject's pose, body orientation, camera angle, and framing must all be visibly different from Picture 1. Do not preserve or closely imitate the source seated or standing posture, centered placement, eye-level viewpoint, head-and-shoulders crop, or background layout. Keep only identity, facial traits, explicitly selected face accessories, and facial hair from the source.`
+            : '';
+        const selectedPhotoStylePrompt = reimagineScene
+            ? `FINAL PHOTO TYPE REQUIREMENT: Render the output as a ${selectedPhotoTypes[decade]}. This selection controls only photographic medium, camera technology, film or sensor response, grain, color treatment, lighting character, exposure imperfections, print texture, and aging artifacts. Do not infer the shot size, crop, pose, or camera angle from this description; those are controlled exclusively by the separate Shot & Angle requirement. Do not use a clean modern digital look unless the selected type specifically describes one.`
+            : '';
+        const selectedHairColor = PLAUSIBLE_HAIR_COLORS[decade][Math.floor(Math.random() * PLAUSIBLE_HAIR_COLORS[decade].length)];
+        const hairColorPrompt = varyHairColor
+            ? `HAIR COLOR: Change the scalp hair to exactly ${selectedHairColor}, a historically plausible ${decade} color. Use a natural believable dye or highlight treatment for that era. No green, blue, purple, pink, rainbow, neon, or fantasy hair colors. Do not recolor the beard, moustache, eyebrows, or eyelashes.`
+            : 'HAIR COLOR LOCK: Preserve the exact natural scalp-hair color from Picture 1, including its highlights and gray distribution. Do not recolor the hair.';
+        const selectedStylePrompt = selectedTheme === 'decades'
+            ? [
+                subjectGender
+                ? `SELECTED HAIRSTYLE: ${selectedHairstyles[subjectGender][decade]}. Replace the source hairstyle completely with this one exact authentic ${decade} hairstyle for a ${subjectGender}. Reproduce its defining silhouette, hairline, part, length, volume, texture, strand direction, curls or waves, fringe or bangs, and styling construction. Do not blend it with another hairstyle or retain the source haircut. OTHER ERA STYLING: ${FLUX_DECADE_REIMAGININGS[decade][subjectGender]}.`
+                : `Choose an authentic ${decade} hairstyle, clothing, accessories, and grooming appropriate to the source subject without changing their gender presentation.`,
+                `SELECTED LOCATION: Place the subject clearly inside or immediately at a ${decade} ${selectedLocation}. Replace the source background with a complete, recognizable, era-authentic ${selectedLocation} environment containing appropriate architecture, furniture, objects, signage, materials, colors, and ambient lighting. The selected location is mandatory and must not be substituted with another place.`,
+            ].join(' ')
+            : subjectGender && selectedTheme === 'hairstyles'
+                ? `SELECTED HAIRSTYLE: ${selectedHairstyles[subjectGender][decade]}. Apply this one exact named hairstyle, interpreted authentically for the ${decade} and for a ${subjectGender}. Do not blend it with another hairstyle or keep the source haircut. Preserve the source person's natural hair color unless the selected hairstyle specifically requires a color treatment.`
+                : '';
+        const finalPrompt = [selectedTheme === 'superhero' ? subjectIdentityPrompt : '', effectivePrompt, reimagineScene && selectedTheme !== 'historical' ? REIMAGINE_SCENE_PROMPT : ''].filter(Boolean).join(' ');
+        const usesHairControls = selectedTheme === 'decades' || selectedTheme === 'hairstyles';
+        const usesIdentityControls = usesHairControls || selectedTheme === 'historical';
+        const finalFluxPrompt = [subjectIdentityPrompt, selectedStylePrompt, effectiveFluxPrompt, usesHairControls ? hairColorPrompt : '', selectedTheme === 'decades' ? selectedClothingPrompt : '', selectedTheme === 'decades' || selectedTheme === 'historical' ? selectedCameraPrompt : '', selectedTheme === 'decades' || selectedTheme === 'historical' ? selectedPhotoStylePrompt : '', reimagineScene && selectedTheme !== 'decades' && selectedTheme !== 'historical' ? REIMAGINE_SCENE_PROMPT : '', selectedTheme === 'historical' ? subjectIdentityPrompt : '', usesIdentityControls ? facialIdentityPrompt : '', selectedTheme === 'decades' ? selectedLocationPrompt : ''].filter(Boolean).join(' ');
         if (provider === 'mammouth') {
             setGenerationProgress(current => ({ ...current, [decade]: { value: 0.1, message: `Generating ${decade} with Mammouth...` } }));
             const mammouthPrompt = selectedTheme === 'historical' ? finalFluxPrompt : finalPrompt;
@@ -300,8 +457,10 @@ const PastForwardPanel: React.FC = () => {
         if (provider === 'qwen') {
             const qwenPrompt = selectedTheme === 'decades'
                 ? subjectGender === 'woman'
-                    ? `Edit Picture 1. The subject is a woman. Keep her female, feminine, and recognizable, with the same face, age, skin tone, and feminine body. Transform her into the ${decade}: ${QWEN_DECADE_REIMAGININGS[decade].woman}. No man, male anatomy, masculine face, menswear, or masculine styling. Replace all source hair and clothing. ${reimagineScene ? `${FLUX_DECADE_SCENE_REIMAGININGS[decade]} Use a new pose and framing.` : 'Keep the original pose, framing, and background.'} Photorealistic.`
-                    : `Edit Picture 1. The subject is a man. Keep him male, masculine, and recognizable, with the same face, age, skin tone, and masculine body. Transform him into the ${decade}: ${QWEN_DECADE_REIMAGININGS[decade].man}. No woman, female anatomy, feminine face, breasts, makeup, dress, skirt, blouse, or feminine styling. Replace all source hair and clothing. ${reimagineScene ? `${FLUX_DECADE_SCENE_REIMAGININGS[decade]} Use a new pose and framing.` : 'Keep the original pose, framing, and background.'} Photorealistic.`
+                    ? `Edit Picture 1. The subject is a woman. Keep her female, feminine, and recognizable, with the same exact face, age, skin tone, and feminine body. Replace her source hairstyle, clothing, and background. Give her one exact authentic ${decade} ${selectedHairstyles.woman[decade]}; reproduce that named hairstyle's defining construction without blending it with another cut. Preserve her natural hair color unless that style specifically requires color treatment. Freely choose varied era-appropriate clothing, accessories, and photographic treatment from: ${QWEN_DECADE_REIMAGININGS[decade].woman}. Place her clearly inside or immediately at a recognizable, fully detailed ${decade} ${selectedLocation}; this location is mandatory. No man, male anatomy, masculine face, menswear, or masculine styling. ${reimagineScene ? 'Use a completely new natural pose, camera angle, and framing.' : 'Keep the original pose and framing.'} Photorealistic.`
+                    : subjectGender === 'man'
+                        ? `Edit Picture 1. The subject is a man. Keep him male, masculine, and recognizable, with the same exact face, age, skin tone, and masculine body. Replace his source hairstyle, clothing, and background. Give him one exact authentic ${decade} ${selectedHairstyles.man[decade]}; reproduce that named hairstyle's defining construction without blending it with another cut. Preserve his natural hair color unless that style specifically requires color treatment. Freely choose varied era-appropriate clothing, accessories, and photographic treatment from: ${QWEN_DECADE_REIMAGININGS[decade].man}. Place him clearly inside or immediately at a recognizable, fully detailed ${decade} ${selectedLocation}; this location is mandatory. No woman, female anatomy, feminine face, breasts, makeup, dress, skirt, blouse, or feminine styling. ${reimagineScene ? 'Use a completely new natural pose, camera angle, and framing.' : 'Keep the original pose and framing.'} Photorealistic.`
+                        : `Edit Picture 1 while preserving the same recognizable subject, exact face, age, skin tone, anatomy, and gender presentation. Replace the source hairstyle, clothing, and background with authentic ${decade} styling. Choose varied period-appropriate hair, clothing, accessories, and photographic treatment. Place the subject clearly inside or immediately at a recognizable, fully detailed ${decade} ${selectedLocation}; this location is mandatory. ${reimagineScene ? 'Use a completely new natural pose, camera angle, and framing.' : 'Keep the original pose and framing.'} Photorealistic.`
                 : selectedTheme === 'hairstyles'
                     ? subjectGender === 'woman'
                         ? `Edit only the hair in Picture 1. The subject is a woman; keep her female, feminine, and recognizable. Replace the source hairstyle completely with one exact authentic ${decade} ${selectedHairstyles.woman[decade]}. Reproduce the defining silhouette, hairline, part, length, volume, texture, strand direction, curls or waves, bangs, and styling construction of that named hairstyle. Do not blend it with another hairstyle or retain the source haircut. Preserve her natural hair color unless the named style specifically requires a color treatment. Preserve her exact face, feminine features, body, skin, expression, existing eyewear state, clothing, pose, framing, lighting, and background pixel-faithfully. Photorealistic professional hair edit.`
@@ -311,19 +470,27 @@ const PastForwardPanel: React.FC = () => {
                         ? `Edit Picture 1. The subject is one adult woman. Keep her female, feminine, and recognizable. Transform this same woman into a completely original comic-book heroine in ${SUPERHERO_COMIC_STYLES[decade]}. Preserve her face, age, skin tone, natural jawline, and feminine body proportions. Create an asymmetric costume led by emerald, gold, ivory, magenta, silver, or black, with an abstract geometric non-letter emblem, original powers, action pose, and city cover unique to her. When Picture 1 has bare eyes, keep both eyes fully visible without glasses, frames, lenses, goggles, mask, visor, or eye accessory. Hand-drawn comic illustration only.`
                         : `Edit Picture 1. The subject is a man. Keep him male, masculine, and recognizable. Transform him into an original comic-book hero in ${SUPERHERO_COMIC_STYLES[decade]}. Preserve his face, age, skin tone, and masculine body proportions. Create a unique costume, emblem, powers, action pose, and city cover without copying an existing hero. Hand-drawn comic illustration only.`
                     : finalFluxPrompt;
+            const finalQwenPrompt = selectedTheme === 'decades'
+                ? `${qwenPrompt} ${hairColorPrompt} ${selectedClothingPrompt} ${selectedCameraPrompt} ${selectedPhotoStylePrompt} ${facialIdentityPrompt} ${selectedLocationPrompt}`
+                : selectedTheme === 'hairstyles'
+                    ? `${qwenPrompt} ${hairColorPrompt} ${facialIdentityPrompt}`
+                    : qwenPrompt;
             return generateQwenPastForwardImage(
                 uploadedFile,
-                qwenPrompt,
+                finalQwenPrompt,
                 generationOptions,
                 selectedTheme === 'historical',
                 (message, value) => setGenerationProgress(current => ({ ...current, [decade]: { value, message } })),
             );
         }
+        const fluxGenerationOptions = (reimagineScene && selectedTheme === 'decades') || selectedTheme === 'historical'
+            ? { ...generationOptions, comfyFlux2EditIdentityReferenceWeight: generationOptions.pastForwardReimagineIdentityWeight ?? 2 }
+            : generationOptions;
         return generateComfyUIPastForwardImage(
             uploadedFile,
             finalFluxPrompt,
-            generationOptions,
-            !reimagineScene && selectedTheme !== 'hairstyles' && selectedTheme !== 'fantasy' && selectedTheme !== 'superhero' && selectedTheme !== 'historical',
+            fluxGenerationOptions,
+            selectedTheme === 'decades' || selectedTheme === 'historical' || (!reimagineScene && selectedTheme !== 'hairstyles' && selectedTheme !== 'fantasy' && selectedTheme !== 'superhero'),
             selectedTheme !== 'superhero',
             selectedTheme === 'historical',
             (message, value) => setGenerationProgress(current => ({ ...current, [decade]: { value, message } })),
@@ -346,6 +513,67 @@ const PastForwardPanel: React.FC = () => {
             }));
             return { ...current, [subjectGender]: randomized };
         });
+        setSaveStatuses({});
+        setAlbumSaveStatus('idle');
+    };
+
+    const randomizeLocations = () => {
+        if (isGenerating) return;
+        const audience: LocationAudience = subjectGender === 'woman' ? 'female' : subjectGender === 'man' ? 'male' : 'both';
+        setSelectedLocations(current => {
+            const currentAudienceSelections = current[audience];
+            const randomized = Object.fromEntries(DECADES.map(decade => {
+                const alternatives = LOCATION_CATALOG[decade][audience].filter(location => location !== currentAudienceSelections[decade]);
+                return [decade, alternatives[Math.floor(Math.random() * alternatives.length)] || currentAudienceSelections[decade]];
+            }));
+            return { ...current, [audience]: randomized };
+        });
+        setSaveStatuses({});
+        setAlbumSaveStatus('idle');
+    };
+
+    const randomizeClothing = () => {
+        if (isGenerating) return;
+        const audience: ClothingAudience = subjectGender === 'woman' ? 'female' : subjectGender === 'man' ? 'male' : 'both';
+        setSelectedClothing(current => {
+            const currentAudienceSelections = current[audience];
+            const randomized = Object.fromEntries(DECADES.map(decade => {
+                const alternatives = CLOTHING_CATALOG[decade][audience].filter(outfit => outfit !== currentAudienceSelections[decade]);
+                return [decade, alternatives[Math.floor(Math.random() * alternatives.length)] || currentAudienceSelections[decade]];
+            }));
+            return { ...current, [audience]: randomized };
+        });
+        setSaveStatuses({});
+        setAlbumSaveStatus('idle');
+    };
+
+    const randomizePhotoTypes = () => {
+        if (isGenerating) return;
+        setSelectedPhotoTypes(current => Object.fromEntries(DECADES.map(decade => {
+            const alternatives = PHOTO_TYPE_CATALOG[decade].filter(style => style !== current[decade]);
+            return [decade, alternatives[Math.floor(Math.random() * alternatives.length)] || current[decade]];
+        })));
+        setSaveStatuses({});
+        setAlbumSaveStatus('idle');
+    };
+
+    const randomizeShotAngles = () => {
+        if (isGenerating) return;
+        setSelectedShotAngles(current => Object.fromEntries(DECADES.map(decade => {
+            const alternatives = SHOT_ANGLE_CATALOG.filter(angle => angle !== current[decade]);
+            return [decade, alternatives[Math.floor(Math.random() * alternatives.length)] || current[decade]];
+        })));
+        setSaveStatuses({});
+        setAlbumSaveStatus('idle');
+    };
+
+    const randomizeHistoricalCameos = () => {
+        if (isGenerating) return;
+        setSelectedHistoricalCameos(current => Object.fromEntries(DECADES.map(decade => {
+            const alternatives = HISTORICAL_CAMEO_CATALOG[decade].filter(cameo => cameo.year !== current[decade]);
+            const selected = alternatives[Math.floor(Math.random() * alternatives.length)] || getHistoricalCameo(decade, current[decade]);
+            return [decade, selected.year];
+        })));
         setSaveStatuses({});
         setAlbumSaveStatus('idle');
     };
@@ -607,6 +835,8 @@ const PastForwardPanel: React.FC = () => {
                                 <SelectInput label="VAE" value={generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors'} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditVae: event.target.value }))} options={withCurrent(generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors', vaes)} disabled={isGenerating} />
                                 <SelectInput label="Sampler" value={generationOptions.comfyFlux2EditSampler || 'euler'} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditSampler: event.target.value }))} options={withCurrent(generationOptions.comfyFlux2EditSampler || 'euler', samplers)} disabled={isGenerating} />
                                 <NumberSlider label={`Source Megapixels: ${generationOptions.comfyFlux2EditMegapixels ?? 1}`} value={generationOptions.comfyFlux2EditMegapixels ?? 1} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditMegapixels: Number(event.target.value) }))} min={0.25} max={4} step={0.25} disabled={isGenerating} allowDirectInput />
+                                <NumberSlider label={`Identity Reference Weight: ${generationOptions.comfyFlux2EditIdentityReferenceWeight ?? 3}`} value={generationOptions.comfyFlux2EditIdentityReferenceWeight ?? 3} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditIdentityReferenceWeight: Number(event.target.value) }))} min={1} max={4} step={1} disabled={isGenerating} allowDirectInput />
+                                <NumberSlider label={`Reimagine Identity Weight: ${generationOptions.pastForwardReimagineIdentityWeight ?? 2}`} value={generationOptions.pastForwardReimagineIdentityWeight ?? 2} onChange={(event) => dispatch(updateOptions({ pastForwardReimagineIdentityWeight: Number(event.target.value) }))} min={1} max={4} step={1} disabled={isGenerating} allowDirectInput />
                                 <NumberSlider label={`Steps: ${generationOptions.comfyFlux2EditSteps ?? 4}`} value={generationOptions.comfyFlux2EditSteps ?? 4} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditSteps: Number(event.target.value) }))} min={1} max={40} step={1} disabled={isGenerating} allowDirectInput />
                                 <NumberSlider label={`CFG: ${generationOptions.comfyFlux2EditCfg ?? 1}`} value={generationOptions.comfyFlux2EditCfg ?? 1} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditCfg: Number(event.target.value) }))} min={0.1} max={10} step={0.1} disabled={isGenerating} allowDirectInput />
                                 <label className="flex items-center gap-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={!!generationOptions.comfyFlux2EditUseCacheDit} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditUseCacheDit: event.target.checked }))} disabled={isGenerating} className="rounded text-accent focus:ring-accent" />Enable CacheDiT Accelerator</label>
@@ -684,13 +914,15 @@ const PastForwardPanel: React.FC = () => {
                             </div>}
                         </div>
 
-                        {requiresSubjectGender && <div>
-                            <label className="mb-2 block text-sm font-medium text-text-secondary">Subject Identity</label>
+                        {(requiresSubjectGender || (selectedTheme === 'decades' && provider !== 'mammouth')) && <div>
+                            <label className="mb-2 block text-sm font-medium text-text-secondary">
+                                Subject Identity{selectedTheme === 'decades' && !requiresSubjectGender ? ' (optional)' : ''}
+                            </label>
                             <div className="grid grid-cols-2 gap-2 rounded-md border border-border-primary bg-bg-tertiary p-1">
                                 {(['woman', 'man'] as const).map(gender => <button
                                     key={gender}
                                     type="button"
-                                    onClick={() => setSubjectGender(gender)}
+                                    onClick={() => setSubjectGender(current => selectedTheme === 'decades' && current === gender ? null : gender)}
                                     disabled={isGenerating}
                                     className={`rounded px-3 py-2 text-sm font-bold transition-colors ${subjectGender === gender ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}
                                 >
@@ -699,7 +931,30 @@ const PastForwardPanel: React.FC = () => {
                             </div>
                         </div>}
 
-                        {selectedTheme === 'hairstyles' && provider !== 'mammouth' && subjectGender && <div className="rounded-md border border-border-primary bg-bg-primary">
+                        {((selectedTheme === 'decades' && provider !== 'mammouth') || selectedTheme === 'historical') && <div className="grid gap-2 sm:grid-cols-2">
+                            <label className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition-colors ${sourceWearsGlasses ? 'border-accent bg-accent/10' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'hover:border-accent'}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={sourceWearsGlasses}
+                                    onChange={(event) => { setSourceWearsGlasses(event.target.checked); setSaveStatuses({}); setAlbumSaveStatus('idle'); }}
+                                    disabled={isGenerating}
+                                    className="rounded border-border-primary text-accent focus:ring-accent"
+                                />
+                                <span className="text-sm font-semibold text-text-secondary">Source wears glasses</span>
+                            </label>
+                            <label className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition-colors ${sourceHasFacialHair ? 'border-accent bg-accent/10' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'hover:border-accent'}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={sourceHasFacialHair}
+                                    onChange={(event) => { setSourceHasFacialHair(event.target.checked); setSaveStatuses({}); setAlbumSaveStatus('idle'); }}
+                                    disabled={isGenerating}
+                                    className="rounded border-border-primary text-accent focus:ring-accent"
+                                />
+                                <span className="text-sm font-semibold text-text-secondary">Source has beard or moustache</span>
+                            </label>
+                        </div>}
+
+                        {(selectedTheme === 'hairstyles' || selectedTheme === 'decades') && provider !== 'mammouth' && subjectGender && <div className="rounded-md border border-border-primary bg-bg-primary">
                             <div className="flex items-center gap-2 px-4 py-2">
                                 <button
                                     type="button"
@@ -723,6 +978,16 @@ const PastForwardPanel: React.FC = () => {
                                 </button>
                             </div>
                             {hairstylesOpen && <div id="past-forward-hairstyles" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
+                                <label className="mb-3 flex cursor-pointer items-center gap-2 rounded-md border border-border-primary bg-bg-primary px-3 py-2 text-xs font-semibold text-text-secondary">
+                                    <input
+                                        type="checkbox"
+                                        checked={varyHairColor}
+                                        onChange={(event) => { setVaryHairColor(event.target.checked); setSaveStatuses({}); setAlbumSaveStatus('idle'); }}
+                                        disabled={isGenerating}
+                                        className="rounded border-border-primary text-accent focus:ring-accent"
+                                    />
+                                    Vary hair color with era-plausible colors
+                                </label>
                                 {DECADES.map(decade => <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
                                     <span className="text-xs font-bold text-text-secondary">{decade}</span>
                                     <select
@@ -746,6 +1011,149 @@ const PastForwardPanel: React.FC = () => {
                             </div>}
                         </div>}
 
+                        {selectedTheme === 'historical' && <div className="rounded-md border border-border-primary bg-bg-primary">
+                            <div className="flex items-center gap-2 px-4 py-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setHistoricalCameosOpen(open => !open)}
+                                    className="flex min-w-0 flex-1 items-center justify-between py-1 text-left text-sm font-bold text-text-secondary hover:text-accent"
+                                    aria-expanded={historicalCameosOpen}
+                                    aria-controls="past-forward-historical-cameos"
+                                >
+                                    <span>Historical Event by Decade</span>
+                                    <span aria-hidden="true">{historicalCameosOpen ? '−' : '+'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={randomizeHistoricalCameos}
+                                    disabled={isGenerating}
+                                    title="Randomize all historical events"
+                                    aria-label="Randomize all historical events"
+                                    className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <DiceIcon className="h-4 w-4" />
+                                </button>
+                            </div>
+                            {historicalCameosOpen && <div id="past-forward-historical-cameos" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
+                                {DECADES.map(decade => <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                    <span className="text-xs font-bold text-text-secondary">{decade}</span>
+                                    <select
+                                        value={selectedHistoricalCameos[decade]}
+                                        onChange={(event) => {
+                                            setSelectedHistoricalCameos(current => ({ ...current, [decade]: Number(event.target.value) }));
+                                            setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
+                                            setAlbumSaveStatus('idle');
+                                        }}
+                                        disabled={isGenerating}
+                                        className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
+                                        aria-label={`${decade} historical event`}
+                                    >
+                                        {HISTORICAL_CAMEO_CATALOG[decade].map(cameo => <option key={cameo.year} value={cameo.year}>{cameo.year} · {cameo.event}</option>)}
+                                    </select>
+                                </label>)}
+                            </div>}
+                        </div>}
+
+                        {selectedTheme === 'decades' && provider !== 'mammouth' && <div className="rounded-md border border-border-primary bg-bg-primary">
+                            <div className="flex items-center gap-2 px-4 py-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setClothingOpen(open => !open)}
+                                    className="flex min-w-0 flex-1 items-center justify-between py-1 text-left text-sm font-bold text-text-secondary hover:text-accent"
+                                    aria-expanded={clothingOpen}
+                                    aria-controls="past-forward-clothing"
+                                >
+                                    <span>Clothing by Decade · {subjectGender === 'woman' ? 'Woman' : subjectGender === 'man' ? 'Man' : 'Both'}</span>
+                                    <span aria-hidden="true">{clothingOpen ? '−' : '+'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={randomizeClothing}
+                                    disabled={isGenerating}
+                                    title="Randomize all clothing"
+                                    aria-label="Randomize all clothing"
+                                    className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <DiceIcon className="h-4 w-4" />
+                                </button>
+                            </div>
+                            {clothingOpen && <div id="past-forward-clothing" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
+                                {DECADES.map(decade => {
+                                    const audience: ClothingAudience = subjectGender === 'woman' ? 'female' : subjectGender === 'man' ? 'male' : 'both';
+                                    return <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                        <span className="text-xs font-bold text-text-secondary">{decade}</span>
+                                        <select
+                                            value={selectedClothing[audience][decade]}
+                                            onChange={(event) => {
+                                                const outfit = event.target.value;
+                                                setSelectedClothing(current => ({
+                                                    ...current,
+                                                    [audience]: { ...current[audience], [decade]: outfit },
+                                                }));
+                                                setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
+                                                setAlbumSaveStatus('idle');
+                                            }}
+                                            disabled={isGenerating}
+                                            className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
+                                            aria-label={`${decade} ${audience} clothing`}
+                                        >
+                                            {CLOTHING_CATALOG[decade][audience].map(outfit => <option key={outfit} value={outfit}>{outfit}</option>)}
+                                        </select>
+                                    </label>;
+                                })}
+                            </div>}
+                        </div>}
+
+                        {selectedTheme === 'decades' && provider !== 'mammouth' && <div className="rounded-md border border-border-primary bg-bg-primary">
+                            <div className="flex items-center gap-2 px-4 py-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setLocationsOpen(open => !open)}
+                                    className="flex min-w-0 flex-1 items-center justify-between py-1 text-left text-sm font-bold text-text-secondary hover:text-accent"
+                                    aria-expanded={locationsOpen}
+                                    aria-controls="past-forward-locations"
+                                >
+                                    <span>Location by Decade · {subjectGender === 'woman' ? 'Woman' : subjectGender === 'man' ? 'Man' : 'Both'}</span>
+                                    <span aria-hidden="true">{locationsOpen ? '−' : '+'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={randomizeLocations}
+                                    disabled={isGenerating}
+                                    title="Randomize all locations"
+                                    aria-label="Randomize all locations"
+                                    className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <DiceIcon className="h-4 w-4" />
+                                </button>
+                            </div>
+                            {locationsOpen && <div id="past-forward-locations" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
+                                {DECADES.map(decade => {
+                                    const audience: LocationAudience = subjectGender === 'woman' ? 'female' : subjectGender === 'man' ? 'male' : 'both';
+                                    return <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                        <span className="text-xs font-bold text-text-secondary">{decade}</span>
+                                        <select
+                                            value={selectedLocations[audience][decade]}
+                                            onChange={(event) => {
+                                                const location = event.target.value;
+                                                setSelectedLocations(current => ({
+                                                    ...current,
+                                                    [audience]: { ...current[audience], [decade]: location },
+                                                }));
+                                                setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
+                                                setAlbumSaveStatus('idle');
+                                            }}
+                                            disabled={isGenerating}
+                                            className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
+                                            aria-label={`${decade} ${audience} location`}
+                                        >
+                                            {LOCATION_CATALOG[decade][audience].map(location => <option key={location} value={location}>{location}</option>)}
+                                        </select>
+                                    </label>;
+                                })}
+                            </div>}
+                        </div>}
+
                         <label className={`flex items-start gap-3 rounded-md border p-3 transition-colors ${reimagineScene ? 'border-accent bg-accent/10' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-accent'}`}>
                             <input type="checkbox" checked={reimagineScene} onChange={(event) => { setReimagineScene(event.target.checked); setAlbumSaveStatus('idle'); }} disabled={isGenerating} className="mt-0.5 rounded border-border-primary text-accent focus:ring-accent" />
                             <span>
@@ -753,6 +1161,94 @@ const PastForwardPanel: React.FC = () => {
                                 <span className="mt-1 block text-xs text-text-muted">Create a new background, pose, framing, camera angle, lighting, and composition.</span>
                             </span>
                         </label>
+
+                        {(selectedTheme === 'decades' || selectedTheme === 'historical') && provider !== 'mammouth' && reimagineScene && <>
+                            <div className="rounded-md border border-border-primary bg-bg-primary">
+                                <div className="flex items-center gap-2 px-4 py-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPhotoTypesOpen(open => !open)}
+                                        className="flex min-w-0 flex-1 items-center justify-between py-1 text-left text-sm font-bold text-text-secondary hover:text-accent"
+                                        aria-expanded={photoTypesOpen}
+                                        aria-controls="past-forward-photo-types"
+                                    >
+                                        <span>Photo Type by Decade</span>
+                                        <span aria-hidden="true">{photoTypesOpen ? '−' : '+'}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={randomizePhotoTypes}
+                                        disabled={isGenerating}
+                                        title="Randomize all photo types"
+                                        aria-label="Randomize all photo types"
+                                        className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <DiceIcon className="h-4 w-4" />
+                                    </button>
+                                </div>
+                                {photoTypesOpen && <div id="past-forward-photo-types" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
+                                    {DECADES.map(decade => <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                        <span className="text-xs font-bold text-text-secondary">{decade}</span>
+                                        <select
+                                            value={selectedPhotoTypes[decade]}
+                                            onChange={(event) => {
+                                                setSelectedPhotoTypes(current => ({ ...current, [decade]: event.target.value }));
+                                                setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
+                                                setAlbumSaveStatus('idle');
+                                            }}
+                                            disabled={isGenerating}
+                                            className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
+                                            aria-label={`${decade} photo type`}
+                                        >
+                                            {PHOTO_TYPE_CATALOG[decade].map(photoType => <option key={photoType} value={photoType}>{photoType}</option>)}
+                                        </select>
+                                    </label>)}
+                                </div>}
+                            </div>
+
+                            <div className="rounded-md border border-border-primary bg-bg-primary">
+                                <div className="flex items-center gap-2 px-4 py-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShotAnglesOpen(open => !open)}
+                                        className="flex min-w-0 flex-1 items-center justify-between py-1 text-left text-sm font-bold text-text-secondary hover:text-accent"
+                                        aria-expanded={shotAnglesOpen}
+                                        aria-controls="past-forward-shot-angles"
+                                    >
+                                        <span>Shot &amp; Angle by Decade</span>
+                                        <span aria-hidden="true">{shotAnglesOpen ? '−' : '+'}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={randomizeShotAngles}
+                                        disabled={isGenerating}
+                                        title="Randomize all shots and angles"
+                                        aria-label="Randomize all shots and angles"
+                                        className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <DiceIcon className="h-4 w-4" />
+                                    </button>
+                                </div>
+                                {shotAnglesOpen && <div id="past-forward-shot-angles" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
+                                    {DECADES.map(decade => <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                        <span className="text-xs font-bold text-text-secondary">{decade}</span>
+                                        <select
+                                            value={selectedShotAngles[decade]}
+                                            onChange={(event) => {
+                                                setSelectedShotAngles(current => ({ ...current, [decade]: event.target.value }));
+                                                setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
+                                                setAlbumSaveStatus('idle');
+                                            }}
+                                            disabled={isGenerating}
+                                            className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
+                                            aria-label={`${decade} shot and angle`}
+                                        >
+                                            {SHOT_ANGLE_CATALOG.map(shotAngle => <option key={shotAngle} value={shotAngle}>{shotAngle}</option>)}
+                                        </select>
+                                    </label>)}
+                                </div>}
+                            </div>
+                        </>}
 
                         <div>
                             <div className="mb-2 flex items-center justify-between gap-2">
@@ -928,7 +1424,7 @@ const PastForwardPanel: React.FC = () => {
                                                 >
                                                     <RefreshIcon className="w-5 h-5" />
                                                 </button>
-                                                <SendToLTXButton imageDataUrl={image.url} prompt={THEMES[selectedTheme].prompt(decade)} />
+                                                <SendToLTXButton imageDataUrl={image.url} prompt={selectedTheme === 'historical' ? buildHistoricalCameoPrompt(getHistoricalCameo(decade, selectedHistoricalCameos[decade])) : THEMES[selectedTheme].prompt(decade)} />
                                             </div>
                                         </>
                                     )}

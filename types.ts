@@ -195,6 +195,7 @@ export interface GenerationOptions {
   pastForwardQwenCfg?: number;
   pastForwardQwenSampler?: string;
   pastForwardQwenScheduler?: string;
+  pastForwardReimagineIdentityWeight?: number;
   photoFusionQwenSteps?: number;
   photoFusionQwenCfg?: number;
   photoFusionQwenSampler?: string;
@@ -288,6 +289,7 @@ export interface GenerationOptions {
   comfyFlux2EditReferenceDescriptions?: string[];
   comfyFlux2EditReferenceLibraryPrompts?: string[];
   comfyFlux2EditReinforceSourceIdentity?: boolean;
+  comfyFlux2EditIdentityReferenceWeight?: number;
   comfyFlux2EditRequirePhotorealism?: boolean;
   comfyFlux2EditUseCacheDit?: boolean;
   comfyFlux2EditCacheDitModelType?: string;

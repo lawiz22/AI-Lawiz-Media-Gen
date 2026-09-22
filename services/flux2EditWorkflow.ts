@@ -68,7 +68,10 @@ export const buildFlux2EditWorkflow = (
 
     let positive: [string, number] = ['prompt', 0];
     const allLatents: Array<[string, number]> = [['source_latent', 0]];
-    if (options.comfyFlux2EditReinforceSourceIdentity) allLatents.push(['source_latent', 0]);
+    if (options.comfyFlux2EditReinforceSourceIdentity) {
+        const identityReferenceWeight = Math.max(1, Math.min(4, Math.round(options.comfyFlux2EditIdentityReferenceWeight ?? 2)));
+        while (allLatents.length < identityReferenceWeight) allLatents.push(['source_latent', 0]);
+    }
     references.forEach((reference, index) => {
         const id = `reference_${index + 2}`;
         workflow[`${id}_source`] = { inputs: { image: reference.imageName }, class_type: 'LoadImage', _meta: { title: `Picture ${index + 2} - ${reference.role}` } };

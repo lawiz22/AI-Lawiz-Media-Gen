@@ -1,0 +1,70 @@
+export type ClothingAudience = 'male' | 'female' | 'both';
+
+export const CLOTHING_CATALOG: Record<string, Record<ClothingAudience, string[]>> = {
+    '1950s': {
+        male: [
+            'Leather Jacket with White T-Shirt and Jeans', 'Greaser Jacket with Cuffed Denim Jeans', 'Bowling Shirt with High-Waisted Trousers', 'Letterman Jacket with Denim Jeans', 'Polo Shirt with Pleated Trousers', 'Button-Up Shirt with Suspenders and Trousers', 'Western Shirt with Denim Jeans', 'Cardigan with Dress Shirt and Wool Trousers', 'Turtleneck Sweater with Tailored Trousers', 'Double-Breasted Suit with Skinny Tie', 'Wool Suit with Dress Shirt and Loafers', 'Denim Jacket with White T-Shirt and Work Pants', 'Leather Vest with Rolled-Up Shirt and Jeans', 'Trench Coat with Formal Suit', 'Pea Coat with Turtleneck and Trousers', 'Workwear Overalls with Plaid Shirt', 'Slick Suit with Narrow Tie', 'Hawaiian Shirt with High-Waisted Trousers', 'Ranch Jacket with Western Shirt and Boots', 'Raincoat with Dress Pants and Loafers',
+        ],
+        female: [
+            'Poodle Skirt with Fitted Sweater', 'Circle Skirt with Blouse and Cardigan', 'Pencil Skirt with Satin Blouse', 'Swing Dress with Cardigan', 'Polka Dot Dress with Ballet Flats', 'Shirtwaist Dress with Belt', 'Fit-and-Flare Dress with Pumps', 'Twin Set with Pencil Skirt', 'Capri Pants with Fitted Sweater', 'Pedal Pushers with Blouse', 'High-Waisted Shorts with Polo Shirt', 'Tailored Suit with Heels', 'Bolero Jacket with Full Skirt', 'Satin Blouse with Cigarette Pants', 'Fitted Sweater with Circle Skirt', 'Apron Dress with Blouse', 'Wool Coat with Fit-and-Flare Dress', 'Fur Stole with Evening Dress', 'Denim Shirt with High-Waisted Jeans', 'Trench Coat with Pencil Skirt',
+        ],
+        both: [
+            'Denim Jacket with White T-Shirt and Jeans', 'Leather Jacket with Casual Trousers', 'Cardigan with Button-Up Shirt and Trousers', 'Trench Coat with Formal Clothing', 'Wool Coat with Smart Casual Clothing', 'Polo Shirt with High-Waisted Trousers', 'Denim Shirt with Cuffed Jeans', 'Pea Coat with Turtleneck Sweater', 'Bowling Shirt with Denim Jeans', 'Sunglasses with Casual Summer Clothing', 'Letterman Jacket with T-Shirt and Jeans', 'Raincoat with Dress Pants', 'Western Shirt with Denim Jeans', 'Loafers with Tailored Trousers', 'Sneakers with Cuffed Jeans', 'Hawaiian Shirt with Casual Trousers', 'Workwear Overalls with Button-Up Shirt', 'Plaid Shirt with Denim Jacket', 'Wool Blazer with Dress Pants', 'Knit Sweater with High-Waisted Trousers',
+        ],
+    },
+    '1960s': {
+        male: [
+            'Mod Suit with Slim Tie', 'Slim-Fit Suit with Chelsea Boots', 'Turtleneck Sweater with Slim Trousers', 'Polo Neck Shirt with Corduroy Trousers', 'Military Jacket with Denim Jeans', 'Nehru Jacket with Tailored Trousers', 'Denim Jacket with White T-Shirt and Jeans', 'Parka with Slim Trousers', 'Pea Coat with Turtleneck Sweater', 'Paisley Shirt with Bell-Bottom Trousers', 'Striped Shirt with Slim Jeans', 'Leather Jacket with Chelsea Boots and Jeans', 'Corduroy Jacket with Turtleneck', 'Printed Shirt with High-Waisted Trousers', 'Skinny Tie with Button-Up Shirt and Trousers', 'Cropped Jacket with Slim Trousers', 'Knit Sweater with Corduroy Pants', 'Military Shirt with Cargo Trousers', 'Polo Shirt with Tailored Trousers', 'Long Coat with Mod Suit',
+        ],
+        female: [
+            'Mini Dress with Go-Go Boots', 'Mini Skirt with Peter Pan Collar Blouse', 'A-Line Dress with Mary Jane Shoes', 'Shift Dress with Patterned Tights', 'Color-Block Dress with Knee-High Boots', 'Bouffant Dress with Heels', 'Turtleneck Sweater with Mini Skirt', 'Cropped Jacket with High-Waisted Trousers', 'Vinyl Coat with Go-Go Boots', 'Capri Pants with Fitted Blouse', 'Bell-Bottom Trousers with Printed Shirt', 'Printed Pants with Turtleneck', 'Headband with Shift Dress', 'Patterned Tights with Mini Dress', 'Parka with Bell-Bottom Jeans', 'Denim Jacket with Mini Skirt', 'Satin Blouse with Slim Trousers', 'Mod Coat with A-Line Dress', 'Knee-High Boots with Short Skirt', 'Colorful Cardigan with Cigarette Pants',
+        ],
+        both: [
+            'Denim Jacket with Jeans and T-Shirt', 'Turtleneck Sweater with Slim Trousers', 'Parka with Bell-Bottom Jeans', 'Leather Jacket with Chelsea Boots', 'Corduroy Jacket with Denim Jeans', 'Printed Shirt with Flared Trousers', 'Military Jacket with Casual Trousers', 'Pea Coat with Turtleneck', 'Slim-Fit Blazer with Jeans', 'Polo Shirt with Tailored Trousers', 'Striped Shirt with Corduroy Pants', 'Long Coat with Mod Clothing', 'Vinyl Jacket with Knee-Length Boots', 'Denim Shirt with Bell-Bottom Jeans', 'Knit Sweater with High-Waisted Trousers', 'Raincoat with Slim Trousers', 'Chelsea Boots with Tailored Clothing', 'Sunglasses with Printed Shirt and Jeans', 'Cropped Jacket with High-Waisted Pants', 'Military Boots with Denim Clothing',
+        ],
+    },
+    '1970s': {
+        male: [
+            'Bell-Bottom Trousers with Open-Collar Shirt', 'Flared Jeans with Paisley Shirt', 'Disco Shirt with High-Waisted Trousers', 'Satin Shirt with Flared Pants', 'Leather Vest with Button-Up Shirt', 'Suede Jacket with Corduroy Trousers', 'Denim Jacket with Flared Jeans', 'Three-Piece Suit with Wide Lapels', 'Leisure Suit with Open-Collar Shirt', 'Turtleneck Sweater with Flared Trousers', 'Crochet Vest with Bell-Bottom Jeans', 'Military Jacket with Denim Jeans', 'Shearling Coat with Corduroy Pants', 'Printed Shirt with Platform Shoes', 'Halter-Style Shirt with High-Waisted Trousers', 'Leather Jacket with Flared Jeans', 'Fringe Vest with Button-Up Shirt', 'Disco Blazer with Satin Trousers', 'Bohemian Shirt with Suede Pants', 'Denim Shirt with Corduroy Trousers',
+        ],
+        female: [
+            'Maxi Dress with Platform Shoes', 'Wrap Dress with Knee-High Boots', 'Bohemian Dress with Fringe Vest', 'Halter Dress with Platform Sandals', 'Jumpsuit with Wide Legs', 'Bell-Bottom Jeans with Peasant Blouse', 'High-Waisted Jeans with Crochet Top', 'Hot Pants with Flared Sleeve Top', 'Suede Jacket with Printed Skirt', 'Crochet Top with Maxi Skirt', 'Flowy Blouse with Flared Trousers', 'Fur Vest with Bell-Bottom Jeans', 'Denim Jacket with Bohemian Dress', 'Kaftan with Platform Sandals', 'Printed Skirt with Fitted Blouse', 'Fringe Vest with Flared Jeans', 'Wrap Skirt with Peasant Blouse', 'Disco Jumpsuit with Platform Shoes', 'Shearling Coat with High-Waisted Jeans', 'Satin Blouse with Wide-Leg Trousers',
+        ],
+        both: [
+            'Flared Jeans with Printed Shirt', 'Denim Jacket with Bell-Bottom Trousers', 'Suede Jacket with Corduroy Pants', 'Platform Shoes with Disco Clothing', 'Turtleneck Sweater with Flared Trousers', 'Crochet Vest with Denim Jeans', 'Leather Vest with Bell-Bottom Jeans', 'Shearling Coat with High-Waisted Trousers', 'Paisley Shirt with Flared Pants', 'Fringe Vest with Denim Jeans', 'Bohemian Blouse with Maxi Skirt', 'Satin Shirt with Wide-Leg Trousers', 'Open-Collar Shirt with High-Waisted Pants', 'Denim Shirt with Corduroy Trousers', 'Printed Jumpsuit with Platform Shoes', 'Military Jacket with Flared Jeans', 'Wrap Top with High-Waisted Trousers', 'Disco Blazer with Flared Pants', 'Kaftan with Platform Sandals', 'Fur Vest with Denim Jeans',
+        ],
+    },
+    '1980s': {
+        male: [
+            'Power Suit with Silk Shirt', 'Double-Breasted Suit with Wide Tie', 'Oversized Blazer with Pleated Trousers', 'Denim Jacket with Acid-Wash Jeans', 'Leather Jacket with Black Jeans', 'Bomber Jacket with Graphic T-Shirt', 'Track Jacket with Jogger Pants', 'Windbreaker with High-Top Sneakers', 'Band T-Shirt with Ripped Jeans', 'Polo Shirt with High-Waisted Trousers', 'Sweatshirt with Acid-Wash Jeans', 'Tracksuit with Sneakers', 'Preppy Sweater with Chinos', 'Pastel Blazer with Pleated Trousers', 'Military Jacket with Cargo Pants', 'Tuxedo Jacket with Dress Pants', 'Denim Shirt with Stone-Wash Jeans', 'Leather Vest with Graphic T-Shirt', 'Neon T-Shirt with Parachute Pants', 'Long Coat with Power Suit',
+        ],
+        female: [
+            'Power Suit with Shoulder Pads', 'Oversized Blazer with Leggings', 'Acid-Wash Jacket with Mini Skirt', 'Bodycon Dress with Heels', 'Off-Shoulder Top with High-Waisted Jeans', 'Leg Warmers with Leotard', 'Aerobics Outfit with Headband', 'Neon T-Shirt with Stirrup Pants', 'Denim Jacket with Acid-Wash Jeans', 'Leather Jacket with Mini Skirt', 'Graphic Sweatshirt with Leggings', 'Tulle Skirt with Fitted Top', 'Jumpsuit with Shoulder Pads', 'Sequined Dress with Heels', 'Crop Top with High-Waisted Trousers', 'Puffy-Sleeve Blouse with Pencil Skirt', 'Polka-Dot Dress with White Sneakers', 'Bomber Jacket with Denim Jeans', 'Colorful Tracksuit with Sneakers', 'Long Coat with Leggings',
+        ],
+        both: [
+            'Denim Jacket with Acid-Wash Jeans', 'Leather Jacket with Black Jeans', 'Bomber Jacket with Graphic T-Shirt', 'Windbreaker with Track Pants', 'Tracksuit with High-Top Sneakers', 'Oversized Blazer with Trousers', 'Neon T-Shirt with Parachute Pants', 'Graphic Sweatshirt with Jeans', 'Band T-Shirt with Ripped Jeans', 'Military Jacket with Cargo Pants', 'Pastel Blazer with High-Waisted Trousers', 'Polo Shirt with Pleated Pants', 'Long Coat with Casual Clothing', 'Jumpsuit with Sneakers', 'Denim Shirt with Stone-Wash Jeans', 'Leather Vest with Graphic T-Shirt', 'Colorful Windbreaker with Joggers', 'Turtleneck Sweater with Power Trousers', 'Mesh Top with High-Waisted Pants', 'Sports Jacket with Athletic Pants',
+        ],
+    },
+    '1990s': {
+        male: [
+            'Flannel Shirt with Ripped Jeans', 'Graphic T-Shirt with Baggy Jeans', 'Leather Jacket with Distressed Denim', 'Denim Jacket with Cargo Pants', 'Track Jacket with Jogger Pants', 'Oversized Hoodie with Wide-Leg Jeans', 'Plaid Shirt with Carpenter Jeans', 'Bomber Jacket with Cargo Trousers', 'Frosted-Tip Look with Denim Jeans', 'Turtleneck Sweater with Loose Trousers', 'Puffer Jacket with Baggy Jeans', 'Varsity Jacket with Chinos', 'Band T-Shirt with Ripped Jeans', 'Windbreaker with Track Pants', 'Button-Up Shirt with Khaki Trousers', 'Military Jacket with Combat Pants', 'Long-Sleeve Shirt with Corduroy Pants', 'Denim Shirt with Bootcut Jeans', 'Hip-Hop Jersey with Baggy Jeans', 'Leather Vest with Cargo Pants',
+        ],
+        female: [
+            'Slip Dress with Platform Shoes', 'Crop Top with High-Waisted Jeans', 'Baby T-Shirt with Cargo Pants', 'Flannel Shirt with Ripped Jeans', 'Denim Jacket with Mini Skirt', 'Choker with Slip Dress', 'Tube Top with Wide-Leg Jeans', 'Track Jacket with Matching Pants', 'Graphic T-Shirt with Overalls', 'Cardigan with High-Waisted Trousers', 'Bodysuit with Bootcut Jeans', 'Pleated Skirt with Knee Socks', 'Velvet Dress with Platform Shoes', 'Leather Jacket with Mini Skirt', 'Halter Top with Low-Rise Jeans', 'Oversized Hoodie with Leggings', 'Cargo Pants with Fitted Tank Top', 'Baby Doll Dress with Platform Boots', 'Denim Overalls with Crop Top', 'Turtleneck Top with Long Skirt',
+        ],
+        both: [
+            'Flannel Shirt with Ripped Jeans', 'Denim Jacket with Baggy Jeans', 'Graphic T-Shirt with Cargo Pants', 'Leather Jacket with Distressed Denim', 'Track Jacket with Matching Pants', 'Oversized Hoodie with Wide-Leg Jeans', 'Bomber Jacket with Cargo Trousers', 'Windbreaker with Track Pants', 'Band T-Shirt with Ripped Jeans', 'Plaid Shirt with Carpenter Jeans', 'Puffer Jacket with Baggy Jeans', 'Varsity Jacket with Chinos', 'Denim Shirt with Bootcut Jeans', 'Military Jacket with Combat Pants', 'Long-Sleeve Shirt with Corduroy Pants', 'Jersey with Baggy Jeans', 'Turtleneck Sweater with Loose Trousers', 'Overalls with Graphic T-Shirt', 'Crop Top with Wide-Leg Jeans', 'Cardigan with High-Waisted Pants',
+        ],
+    },
+    '2000s': {
+        male: [
+            'Faux Hawk with Graphic T-Shirt and Jeans', 'Emo Fringe with Skinny Jeans', 'Polo Shirt with Bootcut Jeans', 'Oversized Hoodie with Baggy Jeans', 'Track Jacket with Cargo Pants', 'Denim Jacket with Distressed Jeans', 'Leather Jacket with Black Skinny Jeans', 'Band T-Shirt with Low-Rise Jeans', 'Frosted Tips with Puffer Jacket', 'Long-Sleeve Shirt with Cargo Trousers', 'Button-Up Shirt with Relaxed Jeans', 'Zip-Up Hoodie with Skate Shoes', 'Graphic Tank Top with Basketball Shorts', 'Varsity Jacket with Bootcut Jeans', 'Trucker Jacket with Denim Jeans', 'Windbreaker with Track Pants', 'Turtleneck Sweater with Slim Trousers', 'Military Jacket with Cargo Pants', 'Surfer Shirt with Board Shorts', 'Suit Jacket with Jeans',
+        ],
+        female: [
+            'Low-Rise Jeans with Crop Top', 'Velour Tracksuit with Tank Top', 'Baby Tee with Mini Skirt', 'Denim Jacket with Bootcut Jeans', 'Tube Top with Low-Rise Trousers', 'Halter Top with Cargo Pants', 'Graphic Tank Top with Denim Skirt', 'Bolero Jacket with Camisole', 'Sequined Top with Flared Jeans', 'Long Tunic with Leggings', 'Emo Top with Skinny Jeans', 'Hoodie with Mini Skirt', 'Butterfly Top with Low-Rise Jeans', 'Banded Tank Top with Cargo Pants', 'Denim Skirt with Knee-High Boots', 'Trucker Hat with Baby Tee and Jeans', 'Puffer Jacket with Low-Rise Jeans', 'Cardigan with Camisole and Bootcut Jeans', 'Halter Dress with Platform Sandals', 'Leather Jacket with Skinny Jeans',
+        ],
+        both: [
+            'Graphic T-Shirt with Baggy Jeans', 'Denim Jacket with Bootcut Jeans', 'Leather Jacket with Black Jeans', 'Track Jacket with Matching Pants', 'Oversized Hoodie with Cargo Pants', 'Puffer Jacket with Low-Rise Jeans', 'Band T-Shirt with Distressed Denim', 'Windbreaker with Track Pants', 'Varsity Jacket with Bootcut Jeans', 'Trucker Jacket with Denim Jeans', 'Graphic Tank Top with Cargo Shorts', 'Zip-Up Hoodie with Skate Shoes', 'Military Jacket with Cargo Pants', 'Button-Up Shirt with Relaxed Jeans', 'Suit Jacket with Designer Jeans', 'Turtleneck Sweater with Slim Trousers', 'Velour Tracksuit with Sneakers', 'Denim Shirt with Bootcut Jeans', 'Long-Sleeve Shirt with Baggy Jeans', 'Polo Shirt with Low-Rise Jeans',
+        ],
+    },
+};
