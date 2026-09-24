@@ -50,11 +50,15 @@ const StyliseAnythingPanel: React.FC<StyliseAnythingPanelProps> = ({ isComfyUICo
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
     const eraPresets = useMemo(() => PHOTOGRAPHIC_PRESETS.filter(item => item.era === selectedEra), [selectedEra]);
-    const models = getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name);
+    const models = useMemo(() => Array.from(new Set([
+        ...getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name).filter(model => /flux[-_ ]?2|klein/i.test(model)),
+        ...getOptions(comfyUIObjectInfo?.UNETLoader?.input?.required?.unet_name),
+    ])), [comfyUIObjectInfo]);
     const clips = getOptions(comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name);
     const vaes = getOptions(comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name);
     const samplers = getOptions(comfyUIObjectInfo?.KSamplerSelect?.input?.required?.sampler_name);
-    const missingNodes = !comfyUIObjectInfo ? [] : ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'].filter(node => !comfyUIObjectInfo[node]);
+    const selectedModelLoader = (advanced.comfyFlux2EditUnet || '').toLowerCase().endsWith('.gguf') ? 'UnetLoaderGGUF' : 'UNETLoader';
+    const missingNodes = !comfyUIObjectInfo ? [] : [selectedModelLoader, 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'].filter(node => !comfyUIObjectInfo[node]);
 
     const applyPreset = (nextPreset: PhotographicPreset) => {
         setSelectedPresetId(nextPreset.id);

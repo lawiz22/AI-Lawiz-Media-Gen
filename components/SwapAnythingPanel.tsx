@@ -132,7 +132,10 @@ const SwapAnythingPanel: React.FC<SwapAnythingPanelProps> = ({ isComfyUIConnecte
     const [error, setError] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-    const models = useMemo(() => getOptions(comfyUIObjectInfo?.UNETLoader?.input?.required?.unet_name).filter(model => /flux[-_ ]?2|klein/i.test(model)), [comfyUIObjectInfo]);
+    const models = useMemo(() => Array.from(new Set([
+        ...getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name).filter(model => /flux[-_ ]?2|klein/i.test(model)),
+        ...getOptions(comfyUIObjectInfo?.UNETLoader?.input?.required?.unet_name),
+    ])), [comfyUIObjectInfo]);
     const clips = useMemo(() => getOptions(comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name), [comfyUIObjectInfo]);
     const vaes = useMemo(() => getOptions(comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name), [comfyUIObjectInfo]);
     const samModels = useMemo(() => getOptions(comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name).filter(model => /sam3/i.test(model)), [comfyUIObjectInfo]);

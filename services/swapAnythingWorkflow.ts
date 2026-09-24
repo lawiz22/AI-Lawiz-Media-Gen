@@ -32,6 +32,9 @@ export const buildSwapAnythingWorkflow = (
 
     const editPrompt = options.prompt?.trim() ||
         `Replace only the ${destinationTarget} in Picture 1 with the ${donorTarget} extracted from Picture 2. Preserve every unmasked part of Picture 1, including its composition, background, lighting, perspective, and subject identity. Integrate the replacement naturally with clean boundaries, correct scale, and coherent anatomy. Do not add, duplicate, merge, or remove any other subject or object.`;
+    const modelLoader = options.unet.toLowerCase().endsWith('.gguf')
+        ? { inputs: { unet_name: options.unet }, class_type: 'UnetLoaderGGUF', _meta: { title: 'FLUX2 model (GGUF)' } }
+        : { inputs: { unet_name: options.unet, weight_dtype: 'default' }, class_type: 'UNETLoader', _meta: { title: 'FLUX2 model' } };
 
     const workflow: Record<string, any> = {
         destination: { inputs: { image: destinationImage }, class_type: 'LoadImage', _meta: { title: 'Picture 1 - Destination' } },
@@ -51,7 +54,7 @@ export const buildSwapAnythingWorkflow = (
         donor_scale: { inputs: { upscale_method: 'nearest-exact', megapixels: options.donorMegapixels, resolution_steps: 1, image: ['donor_rgb', 0] }, class_type: 'ImageScaleToTotalPixels', _meta: { title: 'Scale donor element' } },
         vae: { inputs: { vae_name: options.vae }, class_type: 'VAELoader', _meta: { title: 'FLUX2 VAE' } },
         clip: { inputs: { clip_name: options.clip, type: 'flux2', device: 'default' }, class_type: 'CLIPLoader', _meta: { title: 'FLUX2 CLIP' } },
-        model: { inputs: { unet_name: options.unet, weight_dtype: 'default' }, class_type: 'UNETLoader', _meta: { title: 'FLUX2 model' } },
+        model: modelLoader,
         destination_latent: { inputs: { pixels: ['destination_marked', 0], vae: ['vae', 0] }, class_type: 'VAEEncode', _meta: { title: 'Encode marked destination' } },
         donor_latent: { inputs: { pixels: ['donor_scale', 0], vae: ['vae', 0] }, class_type: 'VAEEncode', _meta: { title: 'Encode donor element' } },
         positive: { inputs: { text: editPrompt, clip: ['clip', 0] }, class_type: 'CLIPTextEncode', _meta: { title: 'Editing instructions' } },

@@ -1,5 +1,5 @@
 {
   "version": "1.88",
   "date": "2026-09-23T00:00:00Z",
-  "changes": "Magic Soup now accumulates numbered Main, Background, and Subject ingredients with distinct source colors. The Library adds richer search, filters, tags, safety labels, ratings, sorting, checked-item exports, and complete Library Folder synchronization. FLUX2 Image and Character workflows can select both GGUF and Safetensors diffusion models with the appropriate ComfyUI loader."
+  "changes": "Magic Soup now accumulates numbered Main, Background, and Subject ingredients with distinct source colors. The Library adds richer search, filters, tags, safety labels, ratings, sorting, checked-item exports, and complete Library Folder synchronization. FLUX2 Image, I2I Edit, Character, Swap Anything, and Stylise Anything workflows can select both GGUF and Safetensors diffusion models with the appropriate ComfyUI loader."
 }

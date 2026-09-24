@@ -854,10 +854,11 @@ export const generateComfyUISwapAnything = async (
 ): Promise<string> => {
     updateProgress('Checking Swap Anything nodes...', 0.02);
     const objectInfo = await getComfyUIObjectInfo();
+    const swapModelLoader = options.unet.toLowerCase().endsWith('.gguf') ? 'UnetLoaderGGUF' : 'UNETLoader';
     const requiredNodes = [
         'LoadImage', 'CheckpointLoaderSimple', 'CLIPTextEncode', 'SAM3_Detect', 'GrowMask', 'MaskToImage',
         'DrawMaskOnImage', 'Cut By Mask', 'Image to RGB [RvTools]', 'ImageScaleToTotalPixels',
-        'GetImageSize', 'VAELoader', 'CLIPLoader', 'UNETLoader', 'VAEEncode', 'ReferenceLatent',
+        'GetImageSize', 'VAELoader', 'CLIPLoader', swapModelLoader, 'VAEEncode', 'ReferenceLatent',
         'EmptyFlux2LatentImage', 'RandomNoise', 'KSamplerSelect', 'Flux2Scheduler', 'CFGGuider',
         'SamplerCustomAdvanced', 'VAEDecode', 'SaveImage',
     ];

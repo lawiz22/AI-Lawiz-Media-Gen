@@ -24,7 +24,7 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 - Magic Soup accumulates multiple numbered Main, Background, and Subject ingredients instead of replacing previous selections. Each ingredient keeps a distinct color through generation, saved thumbnails, and Library details, while Reset clears the complete recipe.
 - The Library provides full-text metadata search, provider and workflow filters, reusable tags, SFW/NSFW labels, one-to-five-star ratings, sorting, explicit page/all-results selection, checked-item exports, and confirmed batch actions.
 - Library Folder projects synchronize additions, metadata updates, ratings, tags, safety labels, deletions, and orphaned assets while displaying the pending change count.
-- FLUX2 Image, Edit, and Character workflows list compatible GGUF models plus every Safetensors diffusion model exposed by ComfyUI. The generated workflow automatically selects `UnetLoaderGGUF` or `UNETLoader` from the chosen file format.
+- FLUX2 Image, I2I Edit, Character, Swap Anything, and Stylise Anything workflows list compatible GGUF models plus every Safetensors diffusion model exposed by ComfyUI. The generated workflow automatically selects `UnetLoaderGGUF` or `UNETLoader` from the chosen file format.
 
 ## Features
 
