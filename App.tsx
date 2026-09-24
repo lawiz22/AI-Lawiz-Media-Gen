@@ -28,7 +28,7 @@ import {
 import {
     setActiveLogoThemeSubTab, resetLogoThemeState, updateLogoThemeState
 } from './store/logoThemeSlice';
-import { fetchLibrary, unloadLibrary } from './store/librarySlice';
+import { fetchLibrary } from './store/librarySlice';
 import { removeAllFiles, setUploadedFiles } from './store/groupPhotoFusionSlice';
 
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile, Provider } from './types';
@@ -482,12 +482,8 @@ const App: React.FC = () => {
     }, [dispatch, checkComfyUIConnection, checkOllamaConnection]);
 
     useEffect(() => {
-        if (activeTab === 'library') {
-            dispatch(fetchLibrary());
-        } else {
-            dispatch(unloadLibrary());
-        }
-    }, [activeTab, dispatch]);
+        dispatch(fetchLibrary());
+    }, [dispatch]);
 
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
@@ -1018,7 +1014,7 @@ const App: React.FC = () => {
             />
 
             {/* Main Content Area */}
-            <main className="flex-grow container mx-auto p-4 pt-6 flex flex-col relative">
+            <main className="flex-grow w-full mx-auto p-4 pt-6 flex flex-col relative">
                 {/* Global Error Display */}
                 {globalError && (
                     <ErrorModal
@@ -1099,7 +1095,7 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Content Views - Centered Wrapper */}
-                <div className="w-full max-w-7xl mx-auto border-t-2 border-accent pt-3" style={getTabAccentStyle(activeTab)}>
+                <div className={`w-full mx-auto border-t-2 border-accent pt-3 ${activeTab === 'library' ? 'max-w-none' : 'max-w-7xl'}`} style={getTabAccentStyle(activeTab)}>
                     {['ltx-director', 'tts', 'prompt-generator', 'video-utils', 'upscale'].includes(activeTab) || (activeTab === 'fun' && (activeFunSubTab === 'photo-fusion' || activeFunSubTab === 'past-forward' || activeFunSubTab === 'swap-anything' || activeFunSubTab === 'stylise-anything')) ? (
                         <div className="mb-3 flex justify-end">
                             <button type="button" onClick={handleActivePanelReset} className="flex items-center gap-2 rounded-md border border-danger/50 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white">
@@ -1146,6 +1142,7 @@ const App: React.FC = () => {
                             <ImageGeneratorHeader
                                 options={currentOptions}
                                 updateOptions={handleUpdateOptions}
+                                restoreOptions={handleSetOptions}
                                 switchComfyModel={handleSwitchComfyModel}
                                 generationMode={generationMode}
                                 setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
@@ -1611,6 +1608,16 @@ const App: React.FC = () => {
                                         videoDataUrl: item.mediaType === 'video' ? item.media : undefined,
                                         directorOptions: item.ltxDirectorOptions,
                                     }));
+                                } else if (item.mediaType === 'preset' && item.options) {
+                                    const isComfyI2I = item.options.provider === 'comfyui'
+                                        && ['qwen-edit', 'flux2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux'].includes(item.options.comfyModelType || '');
+                                    const isCloudI2I = item.options.provider !== 'comfyui' && item.options.geminiMode === 'i2i';
+                                    dispatch(setOptions(item.options));
+                                    dispatch(setGenerationMode(isComfyI2I || isCloudI2I ? 'i2i' : 't2i'));
+                                    dispatch(setSourceImage(null));
+                                    dispatch(setMaskImage(null));
+                                    dispatch(setElementImages([]));
+                                    dispatch(setActiveTab('image-generator'));
                                 } else if (item.mediaType === 'image' || item.mediaType === 'character') {
                                     if (item.options) {
                                         const isComfyI2I = item.options.provider === 'comfyui'

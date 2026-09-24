@@ -1,4 +1,4 @@
-import type { GenerationOptions } from "../types";
+import type { GenerationOptions, PromptSoupIngredient, PromptSoupPart } from "../types";
 import {
     COMFYUI_SD15_WORKFLOW_TEMPLATE,
     COMFYUI_WORKFLOW_TEMPLATE,
@@ -760,28 +760,27 @@ export const generateFlorence2Prompt = async (
 };
 
 export const generateMagicalPromptSoup = async (
-    fullPrompt: string,
-    bgPrompt: string,
-    subjectPrompt: string,
+    ingredients: PromptSoupIngredient[],
     modelType: ComfyPromptModelType,
     creativity: number
-): Promise<{ text: string; source: number }[]> => {
+): Promise<PromptSoupPart[]> => {
     let instruction = `You are a creative assistant for generating image prompts. Combine the following elements into a new, cohesive, and imaginative prompt suitable for a '${modelType}' model.
     
     Creativity Level: ${creativity} (0 is a simple combination, 1 is a wild, artistic reinterpretation).
 
     **Elements to combine:**`;
-    if (fullPrompt) instruction += `\n1. Full Scene Idea: "${fullPrompt}"`;
-    if (bgPrompt) instruction += `\n2. Background Idea: "${bgPrompt}"`;
-    if (subjectPrompt) instruction += `\n3. Subject Idea: "${subjectPrompt}"`;
+    for (const ingredient of ingredients) {
+        instruction += `\nSource ${ingredient.source} — ${ingredient.label}: "${ingredient.text}"`;
+    }
 
     instruction += `\n\nRequired final prompt format:\n${getPromptStyleInstruction(modelType)}`;
 
-    instruction += `\n\nYour task is to merge these ideas. You MUST respond with a valid JSON object containing a single key "prompt_parts", which is an array of objects. Each object in the array must have two keys: "text" (a small segment of the final prompt) and "source" (an integer: 0 for new/combined ideas, 1 for elements from the Full Scene, 2 for Background, 3 for Subject).
+    const sourceGuide = ingredients.map(ingredient => `${ingredient.source} for ${ingredient.label}`).join(', ');
+    instruction += `\n\nYour task is to merge these ideas. You MUST respond with a valid JSON object containing a single key "prompt_parts", which is an array of objects. Each object in the array must have two keys: "text" (a small segment of the final prompt) and "source" (an integer: 0 for new/combined ideas, or ${sourceGuide}).
     When all text values are joined in array order, the resulting prompt MUST satisfy the required final prompt format above. Preserve line breaks inside text values when the format requires labeled segments.
     
     Example response format:
-    { "prompt_parts": [ {"text": "A beautiful portrait of", "source": 1}, {"text": "an astronaut", "source": 3}, {"text": "on a neon-lit alien world", "source": 2}, {"text": "in a impressionistic style", "source": 0} ] }
+    { "prompt_parts": [ {"text": "A beautiful portrait of", "source": ${ingredients[0]?.source ?? 0}}, {"text": "an unexpected subject", "source": ${ingredients[1]?.source ?? ingredients[0]?.source ?? 0}}, {"text": "in an impressionistic style", "source": 0} ] }
     `;
     if (modelType === 'flux2-simple') {
         instruction += '\nFor FLUX2, prompt_parts MUST contain exactly five objects in this order: Subject, Setting, Details, Lighting, Atmosphere. Each text value must begin with its matching label and end with a newline.';
@@ -1909,7 +1908,11 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX2_SIMPLE_WORKFLOW_TEMPLATE));
             workflow["93"].inputs.text = options.comfyFlux2Prompt || '';
             workflow["86"].inputs.text = options.comfyFlux2NegativePrompt || '';
-            workflow["94"].inputs.unet_name = options.comfyFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf';
+            const flux2Model = options.comfyFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf';
+            workflow["94"].class_type = flux2Model.toLowerCase().endsWith('.gguf') ? 'UnetLoaderGGUF' : 'UNETLoader';
+            workflow["94"].inputs = flux2Model.toLowerCase().endsWith('.gguf')
+                ? { unet_name: flux2Model }
+                : { unet_name: flux2Model, weight_dtype: 'default' };
             workflow["91"].inputs.clip_name = options.comfyFlux2Clip || 'qwen3vl_4b_fp8_scaled.safetensors';
             workflow["92"].inputs.vae_name = options.comfyFlux2Vae || 'flux2-vae.safetensors';
 
@@ -2419,9 +2422,11 @@ export const generateComfyUICharacterAngles = async (
     if (options.comfyCharacterMode === 'flux2') {
         updateProgress('Checking FLUX2 Character nodes...', 0.02);
         const objectInfo = await getComfyUIObjectInfo();
+        const characterFlux2Model = options.comfyCharacterFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf';
+        const characterFlux2Loader = characterFlux2Model.toLowerCase().endsWith('.gguf') ? 'UnetLoaderGGUF' : 'UNETLoader';
         const requiredNodes = [
             'LoadImage', 'ImageScaleToTotalPixels', 'GetImageSize', 'VAELoader', 'CLIPLoader',
-            'UnetLoaderGGUF', 'VAEEncode', 'CLIPTextEncode', 'ConditioningZeroOut', 'ReferenceLatent',
+            characterFlux2Loader, 'VAEEncode', 'CLIPTextEncode', 'ConditioningZeroOut', 'ReferenceLatent',
             'EmptyFlux2LatentImage', 'RandomNoise', 'KSamplerSelect', 'Flux2Scheduler', 'CFGGuider',
             'SamplerCustomAdvanced', 'VAEDecode', 'SaveImage',
         ];

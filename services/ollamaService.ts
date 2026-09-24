@@ -1,3 +1,5 @@
+import type { PromptSoupIngredient, PromptSoupPart } from '../types';
+
 export const DEFAULT_OLLAMA_URL = 'http://127.0.0.1:11434';
 export const DEFAULT_OLLAMA_MODEL = 'huihui_ai/qwen3-vl-abliterated:8b';
 
@@ -310,16 +312,15 @@ export const identifyObjectsWithOllama = async (
 };
 
 export const generateOllamaPromptSoup = async (
-    fullPrompt: string,
-    backgroundPrompt: string,
-    subjectPrompt: string,
+    ingredients: PromptSoupIngredient[],
     modelType: string,
     creativity: number,
     url: string,
     model: string,
     onActivity?: OllamaActivityCallback,
     signal?: AbortSignal,
-): Promise<Array<{ text: string; source: number }>> => {
+): Promise<PromptSoupPart[]> => {
+    const allowedSources = [0, ...ingredients.map(ingredient => ingredient.source)];
     const promptPartsSchema = {
         type: 'object',
         properties: {
@@ -331,7 +332,7 @@ export const generateOllamaPromptSoup = async (
                     type: 'object',
                     properties: {
                         text: { type: 'string' },
-                        source: { type: 'integer', minimum: 0, maximum: 3 },
+                        source: { type: 'integer', enum: allowedSources },
                     },
                     required: ['text', 'source'],
                 },
@@ -344,7 +345,9 @@ export const generateOllamaPromptSoup = async (
         : creativity >= 0.5
             ? 'Transform and recombine the ingredients into a fresh scene with a new action, composition, atmosphere, and visual logic.'
             : 'Create a coherent new scene that stays recognizable but still integrates the ingredients rather than listing them.';
-    const text = await chatWithOllama(url, model, `You are an inventive art director creating one original image concept from three reference descriptions.
+    const references = ingredients.map(ingredient => `SOURCE ${ingredient.source} — ${ingredient.label.toUpperCase()}:\n${ingredient.text}`).join('\n\n');
+    const sourceGuide = ingredients.map(ingredient => `${ingredient.source} (${ingredient.label})`).join(', ');
+    const text = await chatWithOllama(url, model, `You are an inventive art director creating one original image concept from ${ingredients.length} reference description${ingredients.length === 1 ? '' : 's'}.
 
 CREATIVE INTENSITY: ${creativity} / 1. ${creativeDirection}
 
@@ -357,19 +360,12 @@ NON-NEGOTIABLE RULES:
 - Add meaningful new creative decisions proportional to the intensity: narrative event, pose/action, camera viewpoint, lighting, atmosphere, and surprising relationships.
 - Keep only details that support the new concept. Omit source trivia, prices, issue numbers, and incidental text unless transformed into an intentional visual device.
 
-REFERENCE 1 — OVERALL IMAGE:
-${fullPrompt || '(none)'}
-
-REFERENCE 2 — ENVIRONMENT:
-${backgroundPrompt || '(none)'}
-
-REFERENCE 3 — SUBJECT:
-${subjectPrompt || '(none)'}
+${references}
 
 FINAL OUTPUT STYLE:
 ${getStyleInstruction(modelType)}
 
-Return only valid JSON containing 2 to 8 short prompt_parts. Joined in order, their text must form the single final prompt, never the source material followed by a conclusion. Assign source 1, 2, or 3 only when a transformed segment is primarily inspired by that reference; assign source 0 to newly invented or inseparably fused material. Source attribution controls display color and does not permit copying.`, undefined, promptPartsSchema, 0.45 + creativity * 0.65, onActivity, signal);
+Return only valid JSON containing 2 to 8 short prompt_parts. Joined in order, their text must form the single final prompt, never the source material followed by a conclusion. Assign one of these source values only when a transformed segment is primarily inspired by that reference: ${sourceGuide}. Assign source 0 to newly invented or inseparably fused material. Source attribution controls display color and does not permit copying.`, undefined, promptPartsSchema, 0.45 + creativity * 0.65, onActivity, signal);
     try {
         const parsed = JSON.parse(text);
         if (!Array.isArray(parsed?.prompt_parts)) throw new Error('Missing prompt_parts');

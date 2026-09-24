@@ -49,6 +49,10 @@ export const buildFlux2EditWorkflow = (
     const megapixels = options.comfyFlux2EditMegapixels ?? 1;
     const seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
     const prompt = buildFlux2EditPrompt(options.comfyFlux2EditPrompt || options.comfyPrompt || '', references, options.comfyFlux2EditRequirePhotorealism !== false);
+    const modelName = options.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf';
+    const modelLoader = modelName.toLowerCase().endsWith('.gguf')
+        ? { inputs: { unet_name: modelName }, class_type: 'UnetLoaderGGUF', _meta: { title: 'FLUX2 Klein model (GGUF)' } }
+        : { inputs: { unet_name: modelName, weight_dtype: 'default' }, class_type: 'UNETLoader', _meta: { title: 'FLUX2 Klein model' } };
     const workflow: Record<string, any> = {
         source: { inputs: { image: sourceImageName }, class_type: 'LoadImage', _meta: { title: 'Picture 1 - Source' } },
         source_scale: { inputs: { upscale_method: 'nearest-exact', megapixels, resolution_steps: 1, image: ['source', 0] }, class_type: 'ImageScaleToTotalPixels', _meta: { title: 'Scale source image' } },
@@ -56,7 +60,7 @@ export const buildFlux2EditWorkflow = (
         source_latent: { inputs: { pixels: ['source_scale', 0], vae: ['vae', 0] }, class_type: 'VAEEncode', _meta: { title: 'Encode Picture 1' } },
         vae: { inputs: { vae_name: options.comfyFlux2EditVae || 'flux2-vae.safetensors' }, class_type: 'VAELoader', _meta: { title: 'FLUX2 VAE' } },
         clip: { inputs: { clip_name: options.comfyFlux2EditClip || 'qwen_3_4b.safetensors', type: 'flux2', device: 'default' }, class_type: 'CLIPLoader', _meta: { title: 'FLUX2 CLIP' } },
-        model: { inputs: { unet_name: options.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf' }, class_type: 'UnetLoaderGGUF', _meta: { title: 'FLUX2 Klein model' } },
+        model: modelLoader,
         prompt: { inputs: { text: prompt, clip: ['clip', 0] }, class_type: 'CLIPTextEncode', _meta: { title: 'Editing instructions' } },
         negative: { inputs: { conditioning: ['prompt', 0] }, class_type: 'ConditioningZeroOut', _meta: { title: 'Zero negative' } },
         negative_reference: { inputs: { conditioning: ['negative', 0], latent: ['source_latent', 0] }, class_type: 'ReferenceLatent', _meta: { title: 'Negative source reference' } },

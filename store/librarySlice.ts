@@ -14,9 +14,10 @@ export const fetchLibrary = createAsyncThunk('library/fetchLibrary', async (_, t
                 item.mediaType = 'swap-anything';
                 await idb.updateLibraryItem(item.id, { mediaType: 'swap-anything' });
             }
-            if (!item.ltxDirectorOptions || (item.thumbnail && item.thumbnail !== placeholder) || !item.media) continue;
+            if (!item.ltxDirectorOptions || (item.thumbnail && item.thumbnail !== placeholder) || (!item.media && !item.assetRefs?.media)) continue;
             try {
-                const thumbnail = await videoToThumbnail(item.media, 256);
+                const hydratedItem = await idb.hydrateLibraryItem(item);
+                const thumbnail = await videoToThumbnail(hydratedItem.media, 256);
                 item.thumbnail = thumbnail;
                 await idb.updateLibraryItem(item.id, { thumbnail });
             } catch (error) {
@@ -55,12 +56,33 @@ export const deleteFromLibrary = createAsyncThunk('library/deleteFromLibrary', a
     }
 });
 
+export const deleteManyFromLibrary = createAsyncThunk('library/deleteManyFromLibrary', async (ids: number[], thunkAPI) => {
+    try {
+        await libraryService.deleteLibraryItems(ids);
+        return ids;
+    } catch (err: any) {
+        return thunkAPI.rejectWithValue(err.message);
+    }
+});
+
 export const updateLibraryItem = createAsyncThunk(
     'library/updateLibraryItem',
     async ({ id, changes }: { id: number; changes: Partial<LibraryItem> }, thunkAPI) => {
         try {
             await libraryService.updateLibraryItem(id, changes);
             return { id, changes };
+        } catch (err: any) {
+            return thunkAPI.rejectWithValue(err.message);
+        }
+    },
+);
+
+export const updateLibraryItems = createAsyncThunk(
+    'library/updateLibraryItems',
+    async (updates: Array<{ id: number; changes: Partial<LibraryItem> }>, thunkAPI) => {
+        try {
+            await libraryService.updateLibraryItems(updates);
+            return updates;
         } catch (err: any) {
             return thunkAPI.rejectWithValue(err.message);
         }
@@ -126,6 +148,16 @@ const librarySlice = createSlice({
                 state.status = 'failed';
                 state.error = action.payload as string || 'Failed to delete item';
             })
+            .addCase(deleteManyFromLibrary.fulfilled, (state, action: PayloadAction<number[]>) => {
+                const deletedIds = new Set(action.payload);
+                state.items = state.items.filter(item => !deletedIds.has(item.id));
+                state.error = null;
+                state.status = 'succeeded';
+            })
+            .addCase(deleteManyFromLibrary.rejected, (state, action) => {
+                state.status = 'failed';
+                state.error = action.payload as string || 'Failed to delete selected categories';
+            })
             .addCase(updateLibraryItem.fulfilled, (state, action) => {
                 const item = state.items.find(candidate => candidate.id === action.payload.id);
                 if (item) Object.assign(item, action.payload.changes);
@@ -133,6 +165,17 @@ const librarySlice = createSlice({
             })
             .addCase(updateLibraryItem.rejected, (state, action) => {
                 state.error = action.payload as string || 'Failed to update library item';
+            })
+            .addCase(updateLibraryItems.fulfilled, (state, action) => {
+                const changesById = new Map(action.payload.map(update => [update.id, update.changes]));
+                for (const item of state.items) {
+                    const changes = changesById.get(item.id);
+                    if (changes) Object.assign(item, changes);
+                }
+                state.error = null;
+            })
+            .addCase(updateLibraryItems.rejected, (state, action) => {
+                state.error = action.payload as string || 'Failed to update Library items';
             })
             .addCase(clearLibraryItems.fulfilled, (state) => {
                 state.items = [];

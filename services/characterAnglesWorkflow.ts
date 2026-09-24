@@ -298,13 +298,17 @@ export const buildFlux2CharacterAnglesWorkflow = (
 
     const seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
     const megapixels = options.comfyCharacterFlux2Megapixels ?? 1;
+    const modelName = options.comfyCharacterFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf';
+    const modelLoader = modelName.toLowerCase().endsWith('.gguf')
+        ? { inputs: { unet_name: modelName }, class_type: 'UnetLoaderGGUF', _meta: { title: 'FLUX2 Character model (GGUF)' } }
+        : { inputs: { unet_name: modelName, weight_dtype: 'default' }, class_type: 'UNETLoader', _meta: { title: 'FLUX2 Character model' } };
     const workflow: Record<string, any> = {
         source: { inputs: { image: references.source }, class_type: 'LoadImage', _meta: { title: 'Picture 1 - Subject' } },
         source_scale: { inputs: { upscale_method: 'nearest-exact', megapixels, resolution_steps: 1, image: ['source', 0] }, class_type: 'ImageScaleToTotalPixels', _meta: { title: 'Scale subject reference' } },
         source_size: { inputs: { image: ['source_scale', 0] }, class_type: 'GetImageSize', _meta: { title: 'Subject output size' } },
         vae: { inputs: { vae_name: options.comfyCharacterFlux2Vae || 'flux2-vae.safetensors' }, class_type: 'VAELoader', _meta: { title: 'FLUX2 VAE' } },
         clip: { inputs: { clip_name: options.comfyCharacterFlux2Clip || 'qwen_3_4b.safetensors', type: 'flux2', device: 'default' }, class_type: 'CLIPLoader', _meta: { title: 'FLUX2 CLIP' } },
-        model: { inputs: { unet_name: options.comfyCharacterFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf' }, class_type: 'UnetLoaderGGUF', _meta: { title: 'FLUX2 Klein model' } },
+        model: modelLoader,
         source_latent: { inputs: { pixels: ['source_scale', 0], vae: ['vae', 0] }, class_type: 'VAEEncode', _meta: { title: 'Encode subject reference' } },
     };
 

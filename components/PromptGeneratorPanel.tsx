@@ -15,6 +15,7 @@ import { setActiveTab } from '../store/appSlice';
 import { createAccentStyle } from '../utils/accentTheme';
 import { getPromptDestinationOptions, PROMPT_T2I_WORKFLOWS } from '../utils/promptDestination';
 import { OllamaActivityPanel } from './OllamaActivityPanel';
+import { buildPromptSoupIngredients, getPromptSoupSourceClass, getPromptSoupSourceHex } from '../utils/promptSoup';
 
 
 type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'flux2-simple' | 'gemini' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
@@ -56,7 +57,6 @@ const createPromptThumbnail = (text: string, type: PromptCategory, modelType: Pr
         lines.push(cleanedText.substring(i, i + charsPerLine));
     }
 
-    const sourceColors: Record<number, string> = { 0: textColor, 1: '#22d3ee', 2: '#4ade80', 3: '#facc15' };
     const coloredLines: PromptSoupPart[][] = [];
     if (promptParts?.length) {
         let currentLine: PromptSoupPart[] = [];
@@ -78,7 +78,7 @@ const createPromptThumbnail = (text: string, type: PromptCategory, modelType: Pr
         if (currentLine.length > 0 && coloredLines.length < 6) coloredLines.push(currentLine);
     }
     const coloredText = coloredLines.length
-        ? coloredLines.map((line, index) => `<tspan x="15" dy="${index === 0 ? 0 : '1.4em'}">${line.map(part => `<tspan fill="${sourceColors[part.source] || textColor}">${part.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</tspan>`).join('')}</tspan>`).join('')
+        ? coloredLines.map((line, index) => `<tspan x="15" dy="${index === 0 ? 0 : '1.4em'}">${line.map(part => `<tspan fill="${getPromptSoupSourceHex(part.source, textColor)}">${part.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</tspan>`).join('')}</tspan>`).join('')
         : lines.slice(0, 6).map((line, index) => `<tspan x="15" dy="${index === 0 ? 0 : '1.4em'}">${line}</tspan>`).join('');
 
     const finalSvg = `
@@ -214,8 +214,18 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     const state = useSelector((state: RootState) => state.promptGen.promptGenState);
     const { 
         image, prompt, bgImage, bgPrompt, subjectImage, subjectPrompt, soupPrompt, soupHistory,
+        additionalSoupMainPrompts = [], additionalSoupBackgroundPrompts = [], additionalSoupSubjectPrompts = [],
         promptSaveStatus, bgPromptSaveStatus, subjectPromptSaveStatus, soupPromptSaveStatus,
     } = state;
+
+    const soupIngredients = useMemo(() => buildPromptSoupIngredients(
+        prompt,
+        additionalSoupMainPrompts,
+        bgPrompt,
+        additionalSoupBackgroundPrompts,
+        subjectPrompt,
+        additionalSoupSubjectPrompts,
+    ), [prompt, additionalSoupMainPrompts, bgPrompt, additionalSoupBackgroundPrompts, subjectPrompt, additionalSoupSubjectPrompts]);
 
     // --- Ephemeral state (not persisted) ---
     const [modelType, setModelType] = useState<PromptModelType>('sdxl');
@@ -264,6 +274,10 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     
     const [historyCopyStates, setHistoryCopyStates] = useState<Record<number, string>>({});
     const [soupPromptParts, setSoupPromptParts] = useState<PromptSoupPart[]>([]);
+
+    useEffect(() => {
+        if (!soupPrompt) setSoupPromptParts([]);
+    }, [soupPrompt]);
 
     
     // State for the new destination picker modal
@@ -468,7 +482,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     };
     
     const handleGenerateSoup = async () => {
-        if (!prompt && !bgPrompt && !subjectPrompt) {
+        if (soupIngredients.length === 0) {
             setSoupError("Generate at least one prompt above to create a soup!");
             return;
         }
@@ -478,8 +492,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         const controller = analysisProvider === 'ollama' ? startOllamaRequest() : null;
         try {
             const generatedParts = analysisProvider === 'ollama'
-                ? await generateOllamaPromptSoup(prompt, bgPrompt, subjectPrompt, soupModelType, soupCreativity, ollamaUrl, ollamaModel, setOllamaActivity, controller?.signal)
-                : await generateMagicalPromptSoup(prompt, bgPrompt, subjectPrompt, soupModelType, soupCreativity);
+                ? await generateOllamaPromptSoup(soupIngredients, soupModelType, soupCreativity, ollamaUrl, ollamaModel, setOllamaActivity, controller?.signal)
+                : await generateMagicalPromptSoup(soupIngredients, soupModelType, soupCreativity);
             const fullPromptString = generatedParts.map(p => p.text).join(' ');
             setSoupPromptParts(generatedParts);
             dispatch(updatePromptGenState({ 
@@ -516,16 +530,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             }, 2000);
         });
     };
-    
-    const getSourceColor = (source: number): string => {
-        switch (source) {
-            case 1: return 'text-accent';
-            case 2: return 'text-highlight-green';
-            case 3: return 'text-highlight-yellow';
-            default: return 'text-text-primary'; // Source 0 or unknown
-        }
-    };
-
     
     const renderPromptTypeButtons = (currentType: PromptModelType, setType: (type: PromptModelType) => void) => {
         const types: { id: PromptModelType; label: string }[] = [
@@ -787,13 +791,15 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                         <div className="space-y-6 bg-bg-tertiary p-6 rounded-lg border border-border-primary/50">
                             {renderAnalysisControls(soupModelType, setSoupModelType)}
-                            {(prompt || bgPrompt || subjectPrompt) && (
+                            {soupIngredients.length > 0 && (
                                 <div>
                                     <p className="mb-2 text-sm font-medium text-text-secondary">Soup Ingredients</p>
                                     <div className="space-y-2 rounded-md border border-border-primary bg-bg-primary p-3 text-xs">
-                                        {prompt && <p className="whitespace-pre-wrap text-accent"><span className="font-bold">Main:</span> {prompt}</p>}
-                                        {bgPrompt && <p className="whitespace-pre-wrap text-highlight-green"><span className="font-bold">Background:</span> {bgPrompt}</p>}
-                                        {subjectPrompt && <p className="whitespace-pre-wrap text-highlight-yellow"><span className="font-bold">Subject:</span> {subjectPrompt}</p>}
+                                        {soupIngredients.map(ingredient => (
+                                            <p key={ingredient.source} className={`whitespace-pre-wrap ${getPromptSoupSourceClass(ingredient.source)}`}>
+                                                <span className="font-bold">{ingredient.label}:</span> {ingredient.text}
+                                            </p>
+                                        ))}
                                     </div>
                                 </div>
                             )}
@@ -802,7 +808,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 <input type="range" min="0" max="1" step="0.1" value={soupCreativity} onChange={(e) => setSoupCreativity(parseFloat(e.target.value))} disabled={isSoupLoading} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" />
                                 <p className="text-xs text-text-muted mt-1">Higher values lead to more unexpected combinations.</p>
                             </div>
-                            <button onClick={handleGenerateSoup} disabled={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading || isOllamaUnavailable} style={(!prompt && !bgPrompt && !subjectPrompt) || isSoupLoading || isOllamaUnavailable ? {} : { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
+                            <button onClick={handleGenerateSoup} disabled={soupIngredients.length === 0 || isSoupLoading || isOllamaUnavailable} style={soupIngredients.length === 0 || isSoupLoading || isOllamaUnavailable ? {} : { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
                                 {isSoupLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}{isSoupLoading ? 'Stirring...' : 'Create Soup'}
                             </button>
                         </div>
@@ -810,7 +816,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             <div>
                                 <label htmlFor="generated-soup-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Soup Prompt</label>
                                 <div id="generated-soup-prompt" className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent min-h-[184px] whitespace-pre-wrap">
-                                    {soupPromptParts.length > 0 ? soupPromptParts.map((part, index) => <span key={index} className={getSourceColor(part.source)}>{part.text + ' '}</span>) : soupPrompt ? <span className="text-text-primary">{soupPrompt}</span> : <span className="text-text-muted">Your magical prompt soup will appear here...</span>}
+                                    {soupPromptParts.length > 0 ? soupPromptParts.map((part, index) => <span key={index} className={getPromptSoupSourceClass(part.source)}>{part.text + ' '}</span>) : soupPrompt ? <span className="text-text-primary">{soupPrompt}</span> : <span className="text-text-muted">Your magical prompt soup will appear here...</span>}
                                 </div>
                             </div>
                             {soupError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{soupError}</p></div>}
@@ -847,7 +853,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             )}
             
             <div className="mt-8 pt-4 border-t border-danger-bg">
-                <button onClick={onReset} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
+                <button onClick={() => { setSoupPromptParts([]); onReset(); }} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
                     <ResetIcon className="w-5 h-5" /> Reset All Prompt Tools
                 </button>
             </div>

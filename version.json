@@ -1,5 +1,5 @@
 {
-  "version": "1.85",
-  "date": "2026-09-22T00:00:00Z",
-  "changes": "Stylise Anything adds 120 editable photographic presets spanning the 1950s through the 2020s and powered by FLUX2 Edit. Historical Cameo now offers selectable annual events, randomized scenes, editable photographic treatment and stronger identity, gender, eyewear, and facial-hair preservation."
+  "version": "1.88",
+  "date": "2026-09-23T00:00:00Z",
+  "changes": "Magic Soup now accumulates numbered Main, Background, and Subject ingredients with distinct source colors. The Library adds richer search, filters, tags, safety labels, ratings, sorting, checked-item exports, and complete Library Folder synchronization. FLUX2 Image and Character workflows can select both GGUF and Safetensors diffusion models with the appropriate ComfyUI loader."
 }

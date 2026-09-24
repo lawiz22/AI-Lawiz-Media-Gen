@@ -573,6 +573,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
     const comfyUnets = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.UNETLoader?.input?.required?.unet_name), [comfyUIObjectInfo]);
 
+    const comfyFlux2Models = useMemo(() => Array.from(new Set([
+        ...comfyGgufModels.filter(model => /flux[-_ ]?2|klein/i.test(model)),
+        ...comfyUnets,
+    ])), [comfyGgufModels, comfyUnets]);
+
     const nunchakuModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.NunchakuFluxDiTLoader?.input?.required?.model_path), [comfyUIObjectInfo]);
 
     const nunchakuAttentions = useMemo(() => {
@@ -604,7 +609,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             candidates = comfyUnets.filter(model => /z[-_ ]?image|\bzit\b/i.test(model));
         } else if (modelType === 'flux2-simple' || modelType === 'flux2-edit') {
             field = modelType === 'flux2-edit' ? 'comfyFlux2EditUnet' : 'comfyFlux2Unet';
-            candidates = comfyGgufModels.filter(model => /flux[-_ ]?2|klein/i.test(model));
+            candidates = comfyFlux2Models;
         } else if (modelType === 'krea2-simple' || modelType === 'krea2-raw') {
             return;
         } else if (modelType === 'nunchaku-kontext-flux' || modelType === 'nunchaku-flux-image') {
@@ -649,7 +654,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         void applyModelDefaults();
         return () => { cancelled = true; };
-    }, [options.provider, options.comfyModelType, options.comfyModel, options.comfyQwenUnet, options.comfyQwenEditUnet, options.comfyZImageUnet, options.comfyFlux2Unet, options.comfyFlux2EditUnet, options.comfyKreaUnet, options.comfyNunchakuModel, options.comfyFluxKreaModel, options.comfyPromptExampleSource, updateOptions, comfyUIObjectInfo, filteredComfyModels, comfyGgufModels, comfyUnets, nunchakuModels]);
+    }, [options.provider, options.comfyModelType, options.comfyModel, options.comfyQwenUnet, options.comfyQwenEditUnet, options.comfyZImageUnet, options.comfyFlux2Unet, options.comfyFlux2EditUnet, options.comfyKreaUnet, options.comfyNunchakuModel, options.comfyFluxKreaModel, options.comfyPromptExampleSource, updateOptions, comfyUIObjectInfo, filteredComfyModels, comfyGgufModels, comfyUnets, comfyFlux2Models, nunchakuModels]);
 
 
     useEffect(() => {
@@ -1313,7 +1318,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             </OptionSection>}
 
             {characterAdvancedOpen && isFlux2Character && <OptionSection title="FLUX2 Models & Sampling">
-                <SelectInput label="Diffusion Model (GGUF)" value={options.comfyCharacterFlux2Unet || ''} onChange={handleOptionChange('comfyCharacterFlux2Unet')} options={selectOptions(options.comfyCharacterFlux2Unet || '', comfyGgufModels)} disabled={isDisabled} />
+                <SelectInput label="Diffusion Model (GGUF / Safetensors)" value={options.comfyCharacterFlux2Unet || ''} onChange={handleOptionChange('comfyCharacterFlux2Unet')} options={selectOptions(options.comfyCharacterFlux2Unet || '', comfyFlux2Models)} disabled={isDisabled} />
                 <SelectInput label="CLIP" value={options.comfyCharacterFlux2Clip || ''} onChange={handleOptionChange('comfyCharacterFlux2Clip')} options={selectOptions(options.comfyCharacterFlux2Clip || '', comfyClips)} disabled={isDisabled} />
                 <SelectInput label="VAE" value={options.comfyCharacterFlux2Vae || ''} onChange={handleOptionChange('comfyCharacterFlux2Vae')} options={selectOptions(options.comfyCharacterFlux2Vae || '', comfyVaes)} disabled={isDisabled} />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1453,11 +1458,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
                         {(modelType === 'flux2-simple' || modelType === 'flux2-edit') && <div className="space-y-4">
                             {modelType === 'flux2-edit' ? <>
-                                <SelectInput label="UNET Model (GGUF)" value={options.comfyFlux2EditUnet || ''} onChange={handleOptionChange('comfyFlux2EditUnet')} options={Array.from(new Set([options.comfyFlux2EditUnet, ...comfyGgufModels].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                                <SelectInput label="UNET Model (GGUF / Safetensors)" value={options.comfyFlux2EditUnet || ''} onChange={handleOptionChange('comfyFlux2EditUnet')} options={Array.from(new Set([options.comfyFlux2EditUnet, ...comfyFlux2Models].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                                 <SelectInput label="CLIP Model" value={options.comfyFlux2EditClip || ''} onChange={handleOptionChange('comfyFlux2EditClip')} options={Array.from(new Set([options.comfyFlux2EditClip, ...comfyClips].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                                 <SelectInput label="VAE Model" value={options.comfyFlux2EditVae || ''} onChange={handleOptionChange('comfyFlux2EditVae')} options={Array.from(new Set([options.comfyFlux2EditVae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                             </> : <>
-                            <SelectInput label="UNET Model (GGUF)" value={options.comfyFlux2Unet || ''} onChange={handleOptionChange('comfyFlux2Unet')} options={Array.from(new Set([options.comfyFlux2Unet, ...comfyGgufModels].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
+                            <SelectInput label="UNET Model (GGUF / Safetensors)" value={options.comfyFlux2Unet || ''} onChange={handleOptionChange('comfyFlux2Unet')} options={Array.from(new Set([options.comfyFlux2Unet, ...comfyFlux2Models].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                             <SelectInput label="CLIP Model" value={options.comfyFlux2Clip || ''} onChange={handleOptionChange('comfyFlux2Clip')} options={Array.from(new Set([options.comfyFlux2Clip, ...comfyClips].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                             <SelectInput label="VAE Model" value={options.comfyFlux2Vae || ''} onChange={handleOptionChange('comfyFlux2Vae')} options={Array.from(new Set([options.comfyFlux2Vae, ...comfyVaes].filter(Boolean) as string[])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                             </>}

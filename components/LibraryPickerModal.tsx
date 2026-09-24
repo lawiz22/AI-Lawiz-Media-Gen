@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { getLibraryItems } from '../services/libraryService';
+import { createLibraryAssetObjectUrl, getLibraryItems, hydrateLibraryItem } from '../services/libraryService';
 import type { LibraryItem, LibraryItemType } from '../types';
 import { normalizeAudioDataUrl } from '../utils/imageUtils';
 import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtIcon, DocumentTextIcon, FilmIcon, CubeIcon, CheckIcon, LogoIconSimple, CharacterIcon, PaletteIcon, BannerIcon, AlbumCoverIcon, PoseIcon, FontIcon, MicrophoneIcon, GroupPhotoFusionIcon, RefreshIcon } from './icons';
@@ -42,11 +42,15 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState<LibraryItem[]>([]);
+  const [isResolving, setIsResolving] = useState(false);
+  const [previewMedia, setPreviewMedia] = useState<Record<number, string>>({});
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setIsLoading(true);
       setSelectedItems([]); // Reset selection when opening
+      setErrorMessage('');
       getLibraryItems()
         .then(setItems)
         .catch(console.error)
@@ -76,7 +80,7 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
     return items.filter(item => activeFilters.includes(item.mediaType));
   }, [items, filter]);
 
-  const handleSelect = (item: LibraryItem) => {
+  const handleSelect = async (item: LibraryItem) => {
     if (multiSelect) {
       setSelectedItems(prev => {
         const isSelected = prev.some(selected => selected.id === item.id);
@@ -87,15 +91,33 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
         }
       });
     } else {
-      onSelectItem(item);
-      onClose();
+      setIsResolving(true);
+      setErrorMessage('');
+      try {
+        onSelectItem(await hydrateLibraryItem(item));
+        onClose();
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : 'Could not load the selected Library media.');
+      } finally {
+        setIsResolving(false);
+      }
     }
   };
   
-  const handleConfirmMultiSelect = () => {
+  const handleConfirmMultiSelect = async () => {
     if (multiSelect && onSelectMultiple) {
-      onSelectMultiple(selectedItems);
-      onClose();
+      setIsResolving(true);
+      setErrorMessage('');
+      try {
+        const hydratedItems: LibraryItem[] = [];
+        for (const item of selectedItems) hydratedItems.push(await hydrateLibraryItem(item));
+        onSelectMultiple(hydratedItems);
+        onClose();
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : 'Could not load the selected Library media.');
+      } finally {
+        setIsResolving(false);
+      }
     }
   };
 
@@ -110,6 +132,32 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
     const filters = Array.isArray(filter) ? filter : filter ? [filter] : [];
     return filters.length > 0 && filters.every(itemType => itemType === 'tts-reference' || itemType === 'audio-tts');
   }, [filter]);
+
+  useEffect(() => {
+    if (!isOpen || !isTtsPicker) return;
+    let cancelled = false;
+    const createdUrls: string[] = [];
+    const loadAudioPreviews = async () => {
+      const resolved: Record<number, string> = {};
+      for (const item of filteredItems) {
+        try {
+          if (item.assetRefs?.media) {
+            resolved[item.id] = await createLibraryAssetObjectUrl(item.assetRefs.media);
+            createdUrls.push(resolved[item.id]);
+          }
+          else if (item.media) resolved[item.id] = item.media;
+        } catch (error) {
+          console.warn(`Could not load Library audio preview ${item.id}.`, error);
+        }
+      }
+      if (!cancelled) setPreviewMedia(resolved);
+    };
+    void loadAudioPreviews();
+    return () => {
+      cancelled = true;
+      for (const url of createdUrls) URL.revokeObjectURL(url);
+    };
+  }, [filteredItems, isOpen, isTtsPicker]);
 
   if (!isOpen) return null;
 
@@ -135,6 +183,7 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
             <CloseIcon className="w-5 h-5" />
           </button>
         </div>
+        {errorMessage && <div role="alert" className="mb-4 rounded-md border border-danger/50 bg-danger-bg p-3 text-sm text-danger">{errorMessage}</div>}
 
         {/* Content Grid */}
         <div className="flex-grow overflow-y-auto pr-2 -mr-2">
@@ -174,7 +223,7 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
                         <div className="p-3">
                           <h4 className="truncate text-sm font-bold text-text-primary" title={item.name || undefined}>{item.name || (isReference ? 'Unnamed reference' : 'Unnamed result')}</h4>
                           {!isReference && item.ttsOptions?.referenceAudioName && <p className="mt-1 truncate text-xs text-text-muted">Voice: {item.ttsOptions.referenceAudioName}</p>}
-                          <audio controls preload="none" src={normalizeAudioDataUrl(item.media)} className="mt-3 h-9 w-full" onClick={event => event.stopPropagation()} />
+                          <audio controls preload="none" src={normalizeAudioDataUrl(previewMedia[item.id] || '')} className="mt-3 h-9 w-full" onClick={event => event.stopPropagation()} />
                           <button onClick={() => handleSelect(item)} className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-md bg-accent px-3 text-xs font-bold text-accent-text hover:bg-accent-hover">
                             <MicrophoneIcon className="h-4 w-4" />Use this voice
                           </button>
@@ -223,10 +272,10 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
           <div className="mt-4 pt-4 border-t border-border-primary flex-shrink-0 flex justify-end">
             <button
               onClick={handleConfirmMultiSelect}
-              disabled={selectedItems.length === 0}
+              disabled={selectedItems.length === 0 || isResolving}
               className="bg-accent text-accent-text font-bold py-2 px-6 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
-              Select {selectedItems.length > 0 ? `${selectedItems.length} Item(s)` : ''}
+              {isResolving ? 'Loading...' : `Select ${selectedItems.length > 0 ? `${selectedItems.length} Item(s)` : ''}`}
             </button>
           </div>
         )}

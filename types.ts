@@ -819,10 +819,21 @@ export interface IndexTtsGenerationInfo {
   }>;
 }
 
+export type LibraryAssetRole = 'media' | 'sourceImage' | 'startFrame' | 'endFrame' | 'skeletonImage' | `ltxSegmentSource:${number}`;
+
+export interface LibraryAssetRef {
+  id: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface LibraryItem {
   id: number; // Unique ID, typically a timestamp
   name?: string;
   mediaType: LibraryItemType;
+  safetyRating?: 'sfw' | 'nsfw';
+  tags?: string[];
+  rating?: 1 | 2 | 3 | 4 | 5;
   media: string; // data URL for image/video/clothes, prompt text, or JSON string for palette
   thumbnail: string; // data URL for a small thumbnail
   options?: GenerationOptions;
@@ -838,14 +849,20 @@ export interface LibraryItem {
   promptParts?: PromptSoupPart[];
   linkedResultId?: number;
   driveFileId?: string; // Google Drive file ID for the media
+  driveAssetFileIds?: Partial<Record<LibraryAssetRole, string>>;
   previewThumbnail?: string; // AI-generated visual thumbnail for prompts
   poseJson?: string; // For pose items, the ControlNet JSON as a string
   skeletonImage?: string; // For pose items, the data URL for the skeleton visualization
+  assetRefs?: Partial<Record<LibraryAssetRole, LibraryAssetRef>>;
 }
 
 export interface PromptSoupPart {
   text: string;
   source: number;
+}
+
+export interface PromptSoupIngredient extends PromptSoupPart {
+  label: string;
 }
 
 export interface VersionInfo {
@@ -902,10 +919,13 @@ export interface PromptGenState {
   promptSaveStatus: 'idle' | 'saving' | 'saved';
   bgImage: File | null;
   bgPrompt: string;
+  additionalSoupBackgroundPrompts: string[];
   bgPromptSaveStatus: 'idle' | 'saving' | 'saved';
   subjectImage: File | null;
   subjectPrompt: string;
+  additionalSoupSubjectPrompts: string[];
   subjectPromptSaveStatus: 'idle' | 'saving' | 'saved';
+  additionalSoupMainPrompts: string[];
   soupPrompt: string;
   soupPromptSaveStatus: 'idle' | 'saving' | 'saved';
   soupHistory: string[];

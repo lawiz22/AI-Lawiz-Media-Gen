@@ -4,7 +4,7 @@
 
 **A Windows creative workstation for cloud AI, Ollama, and local ComfyUI production.**
 
-[![Version](https://img.shields.io/badge/version-1.85.0-0ea5e9?style=for-the-badge)](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
+[![Version](https://img.shields.io/badge/version-1.88.0-0ea5e9?style=for-the-badge)](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vite.dev/)
@@ -18,6 +18,13 @@
 LAWIZ'S Media Generator combines image generation, character creation, video direction, speech synthesis, asset extraction, upscaling, and model management in one React/Electron desktop application. It can use hosted generation through Mammouth AI, local language and vision models through Ollama, or configurable workflows on a local ComfyUI server.
 
 > This repository contains the application and workflow definitions. AI checkpoints, LoRAs, ComfyUI, custom nodes, and third-party API access are not bundled.
+
+## Version 1.88 Highlights
+
+- Magic Soup accumulates multiple numbered Main, Background, and Subject ingredients instead of replacing previous selections. Each ingredient keeps a distinct color through generation, saved thumbnails, and Library details, while Reset clears the complete recipe.
+- The Library provides full-text metadata search, provider and workflow filters, reusable tags, SFW/NSFW labels, one-to-five-star ratings, sorting, explicit page/all-results selection, checked-item exports, and confirmed batch actions.
+- Library Folder projects synchronize additions, metadata updates, ratings, tags, safety labels, deletions, and orphaned assets while displaying the pending change count.
+- FLUX2 Image, Edit, and Character workflows list compatible GGUF models plus every Safetensors diffusion model exposed by ComfyUI. The generated workflow automatically selects `UnetLoaderGGUF` or `UNETLoader` from the chosen file format.
 
 ## Features
 
@@ -77,7 +84,7 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 
 - Prompt analysis through Mammouth AI, Ollama vision models, or ComfyUI Florence2.
 - Local Ollama background and subject extraction with selectable installed models.
-- Creative Magic Soup generation through Mammouth AI or Ollama, with adjustable creativity and source-color attribution.
+- Creative Magic Soup generation through Mammouth AI or Ollama, with adjustable creativity and color attribution for multiple numbered Main, Background, and Subject ingredients.
 - Clothes, subject, object, background, pose, mannequin, and font extraction.
 - MediaPipe pose detection with ControlNet-compatible output.
 - PastForward decade, hairstyle, fantasy, superhero, and historical transformations with local FLUX2 selected by default, local Qwen Edit, or Mammouth AI.
@@ -101,9 +108,21 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 
 ### Library
 
-- Persistent local media library backed by IndexedDB.
+- Persistent local media library backed by IndexedDB, with full-size media stored as separate Blobs and only lightweight metadata and thumbnails loaded into application state.
 - Save source media, results, prompts, seeds, and generation settings.
 - Search, filter, import, export, reuse, and send assets between tools.
+- Search across names, prompts, models, LoRAs, tags, and other textual metadata. Images and Characters expose dynamic Provider and Workflow subfilters.
+- Classify Library items as SFW, NSFW, or unrated and attach reusable custom tags. The collapsible Safety & Tags panel supports combining multiple tag buttons with search and requires matching items to contain every selected tag. Checkboxes can narrow bulk actions to selected matching items, with separate controls for the current page or every filtered result. Without a selection, actions update every matching item. The local first-pass detector uses explicit common terms and leaves ambiguous items unrated for manual review.
+- Rate Library items from one to five stars in the item detail modal and sort results by date, name, or rating in ascending or descending order. Ratings appear on cards only when set and are included in archives, Drive metadata, and Library Folder synchronization.
+- Export and restore the binary `.lawiz-library` backup format, which stores a manifest and original media assets without Base64 expansion.
+- Create a new archive or add the full Library/selected categories to an existing `.lawiz-library`; matching item IDs are replaced while other archived items are preserved.
+- Export either complete selected categories or exactly the individually checked Library items into a `.lawiz-library` archive.
+- Export every non-empty category to its own `LMG_<Category>_1.lawiz-library` file in one selected folder, creating missing archives and merging into matching existing files.
+- Use a **Library Folder** as an incremental project: `manifest.json` tracks the project while content-addressed media is organized in folders such as `Images/`, `Videos/`, `Prompts/`, and `Audio TTS/`. Files are written only when their SHA-256 content is new within that category. A full project update mirrors the local Library, including removing deleted entries and asset files that are no longer referenced.
+- The active Library Folder displays pending local additions, modifications, or deletions directly on the update button. Stored asset hashes let subsequent updates skip unchanged media instead of rescanning the complete project.
+- Open a Library Folder project to import every manifest-referenced item and media Blob into the local Library. The portable `.lawiz-library` archive format remains available separately.
+- Delete every item in the selected Library categories through a count-aware confirmation warning.
+- Import legacy JSON Library backups progressively; each item is migrated into Blob storage as it is read instead of loading the complete backup into memory.
 - Organize Photo Fusion, Swap Anything, and FLUX2 Edit assets in dedicated media categories.
 - Store named voice references and character photos for TTS and LTX reuse.
 - Optional Google Drive folder synchronization.
@@ -147,7 +166,7 @@ KREA2 Simple uses `Power Lora Loader (rgthree)` from rgthree-comfy with the KREA
 
 KREA2 RAW uses the supplied two-stage `ClownsharKSampler_Beta` graph with fixed sampler parameters, selectable KREA models and LoRAs, 29 source resolutions, and `1920x1088` as its default resolution.
 
-FLUX2 Simple uses ComfyUI-GGUF, `Power Lora Loader (rgthree)`, `Flux2Scheduler`, and `EmptyFlux2LatentImage` with the FLUX2 Klein GGUF diffusion model, FLUX2 CLIP encoder, FLUX2 VAE, and compatible LoRAs installed in their corresponding ComfyUI model folders. FLUX2 Edit and FLUX2 Photo Fusion additionally use `LoadImage`, `ImageScaleToTotalPixels`, `GetImageSize`, `VAEEncode`, and `ReferenceLatent` to encode the source and each independent reference. Character FLUX2 uses the same FLUX2 model stack with `ReferenceLatent` and two optional LoRAs. Pose references require `AIO_Preprocessor` from ComfyUI ControlNet Aux, while optional acceleration requires `CacheDiT_Model_Optimizer` from ComfyUI-CacheDiT.
+FLUX2 Simple supports GGUF and Safetensors diffusion models using `UnetLoaderGGUF` or `UNETLoader` automatically. It also uses `Power Lora Loader (rgthree)`, `Flux2Scheduler`, and `EmptyFlux2LatentImage` with a FLUX2 CLIP encoder, FLUX2 VAE, and compatible LoRAs installed in their corresponding ComfyUI model folders. FLUX2 Edit and FLUX2 Photo Fusion additionally use `LoadImage`, `ImageScaleToTotalPixels`, `GetImageSize`, `VAEEncode`, and `ReferenceLatent` to encode the source and each independent reference. Character FLUX2 supports the same GGUF/Safetensors selection with `ReferenceLatent` and two optional LoRAs. Pose references require `AIO_Preprocessor` from ComfyUI ControlNet Aux, while optional acceleration requires `CacheDiT_Model_Optimizer` from ComfyUI-CacheDiT.
 
 Photo Fusion maps the first portrait to Picture 1 and each remaining portrait to a distinct FLUX2 identity reference. An optional background is encoded as a separate background reference. Uploaded ComfyUI input names are made unique so same-named Library items cannot overwrite one another during parallel multi-image uploads.
 
@@ -312,7 +331,7 @@ The repository currently has no automated test script. Production validation the
 ## Repository
 
 - Source: [github.com/lawiz22/AI-Lawiz-Media-Gen](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
-- Current application version: `1.85.0`
+- Current application version: `1.88.0`
 - Default development port: `3000`
 - Default ComfyUI endpoint: `http://127.0.0.1:8188`
 - Default Ollama endpoint: `http://127.0.0.1:11434`
