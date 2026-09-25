@@ -6,6 +6,7 @@ import { addSessionTokenUsage } from '../../store/appSlice';
 import { updateOptions } from '../../store/generationSlice';
 import { generateMammouthImage } from '../../services/mammouthService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, getMammouthImageModels } from '../../services/mammouthService';
+import { DEFAULT_GEMINI_IMAGE_MODEL, GEMINI_IMAGE_MODELS, generatePortraits, getApiKey, getGeminiImageSizes, getGeminiModels, supportsGeminiThinkingLevel } from '../../services/geminiService';
 import { generateComfyUIPastForwardImage, generateQwenPastForwardImage } from '../../services/pastForwardService';
 import { createAlbumPage } from '../../utils/pastForwardAlbumUtils';
 import { dataUrlToThumbnail, fileToDataUrl, limitImageFileSize } from '../../utils/imageUtils';
@@ -309,7 +310,8 @@ const PastForwardPanel: React.FC = () => {
     const [saveStatuses, setSaveStatuses] = useState<Record<string, 'idle' | 'saving' | 'saved'>>({});
     const [albumSaveStatus, setAlbumSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const provider = generationOptions.pastForwardProvider || 'comfyui';
-    const requiresSubjectGender = selectedTheme === 'historical' || selectedTheme === 'superhero' || (selectedTheme === 'hairstyles' && provider !== 'mammouth');
+    const isCloudProvider = provider === 'gemini' || provider === 'mammouth';
+    const requiresSubjectGender = selectedTheme === 'historical' || selectedTheme === 'superhero' || (selectedTheme === 'hairstyles' && !isCloudProvider);
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [themesOpen, setThemesOpen] = useState(true);
@@ -322,6 +324,8 @@ const PastForwardPanel: React.FC = () => {
     const [zoomedImage, setZoomedImage] = useState<{ url: string; decade: string } | null>(null);
     const [mammouthModels, setMammouthModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
     const [isLoadingMammouthModels, setIsLoadingMammouthModels] = useState(false);
+    const [geminiModels, setGeminiModels] = useState<string[]>([...GEMINI_IMAGE_MODELS]);
+    const [isLoadingGeminiModels, setIsLoadingGeminiModels] = useState(false);
 
     const models = getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name);
     const qwenModels = getOptions(comfyUIObjectInfo?.UNETLoader?.input?.required?.unet_name);
@@ -333,7 +337,7 @@ const PastForwardPanel: React.FC = () => {
     const fluxRequiredNodes = ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'];
     const qwenRequiredNodes = ['UNETLoader', 'CLIPLoader', 'VAELoader', 'ModelSamplingAuraFlow', 'CFGNorm', 'TextEncodeQwenImageEditPlus', 'ImageScaleToTotalPixels'];
     const requiredNodes = provider === 'qwen' ? qwenRequiredNodes : fluxRequiredNodes;
-    const missingNodes = provider === 'mammouth' || !comfyUIObjectInfo ? [] : requiredNodes.filter(node => !comfyUIObjectInfo[node]);
+    const missingNodes = isCloudProvider || !comfyUIObjectInfo ? [] : requiredNodes.filter(node => !comfyUIObjectInfo[node]);
     if (provider === 'comfyui' && generationOptions.comfyFlux2EditUseCacheDit && comfyUIObjectInfo && !comfyUIObjectInfo.CacheDiT_Model_Optimizer) missingNodes.push('CacheDiT_Model_Optimizer');
 
     useEffect(() => {
@@ -342,6 +346,14 @@ const PastForwardPanel: React.FC = () => {
         getMammouthImageModels()
             .then(models => setMammouthModels(models.length > 0 ? models : [...MAMMOUTH_IMAGE_MODELS].sort()))
             .finally(() => setIsLoadingMammouthModels(false));
+    }, [provider]);
+
+    useEffect(() => {
+        if (provider !== 'gemini') return;
+        setIsLoadingGeminiModels(true);
+        getGeminiModels()
+            .then(models => setGeminiModels(Array.from(new Set([...GEMINI_IMAGE_MODELS, ...models]))))
+            .finally(() => setIsLoadingGeminiModels(false));
     }, [provider]);
 
     useEffect(() => {
@@ -445,11 +457,37 @@ const PastForwardPanel: React.FC = () => {
         const usesHairControls = selectedTheme === 'decades' || selectedTheme === 'hairstyles';
         const usesIdentityControls = usesHairControls || selectedTheme === 'historical';
         const finalFluxPrompt = [subjectIdentityPrompt, selectedStylePrompt, effectiveFluxPrompt, usesHairControls ? hairColorPrompt : '', selectedTheme === 'decades' ? selectedClothingPrompt : '', selectedTheme === 'decades' || selectedTheme === 'historical' ? selectedCameraPrompt : '', selectedTheme === 'decades' || selectedTheme === 'historical' ? selectedPhotoStylePrompt : '', reimagineScene && selectedTheme !== 'decades' && selectedTheme !== 'historical' ? REIMAGINE_SCENE_PROMPT : '', selectedTheme === 'historical' ? subjectIdentityPrompt : '', usesIdentityControls ? facialIdentityPrompt : '', selectedTheme === 'decades' ? selectedLocationPrompt : ''].filter(Boolean).join(' ');
-        if (provider === 'mammouth') {
-            setGenerationProgress(current => ({ ...current, [decade]: { value: 0.1, message: `Generating ${decade} with Mammouth...` } }));
-            const mammouthPrompt = selectedTheme === 'historical' ? finalFluxPrompt : finalPrompt;
-            const mammouthSource = await limitImageFileSize(uploadedFile);
-            const result = await generateMammouthImage(mammouthPrompt, [mammouthSource], '3:4', generationOptions.mammouthImageModel);
+        if (isCloudProvider) {
+            const cloudLabel = provider === 'gemini' ? 'Gemini' : 'Mammouth';
+            setGenerationProgress(current => ({ ...current, [decade]: { value: 0.1, message: `Generating ${decade} with ${cloudLabel}...` } }));
+            const cloudPrompt = selectedTheme === 'historical' ? finalFluxPrompt : finalPrompt;
+            const cloudSource = await limitImageFileSize(uploadedFile);
+            if (provider === 'gemini') {
+                const result = await generatePortraits(
+                    cloudSource,
+                    {
+                        ...generationOptions,
+                        provider: 'gemini',
+                        geminiMode: 'i2i',
+                        geminiI2iMode: 'general',
+                        geminiGeneralEditPrompt: cloudPrompt,
+                        aspectRatio: '3:4',
+                        numImages: 1,
+                    },
+                    (message, value) => setGenerationProgress(current => ({ ...current, [decade]: { value, message } })),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    [],
+                );
+                const image = result.images[0];
+                if (image?.usageMetadata) dispatch(addSessionTokenUsage(image.usageMetadata));
+                if (!image) throw new Error('Gemini completed without returning a Past Forward image.');
+                return image.src;
+            }
+            const result = await generateMammouthImage(cloudPrompt, [cloudSource], '3:4', generationOptions.mammouthImageModel);
             if (result.usageMetadata) dispatch(addSessionTokenUsage(result.usageMetadata));
             if (!result.images[0]) throw new Error('Mammouth completed without returning a Past Forward image.');
             return result.images[0];
@@ -753,8 +791,10 @@ const PastForwardPanel: React.FC = () => {
         }
     };
 
-    const providerReady = provider === 'mammouth'
-        ? !!isMammouthConnected
+    const providerReady = provider === 'gemini'
+        ? !!getApiKey()
+        : provider === 'mammouth'
+            ? !!isMammouthConnected
         : !!isComfyUIConnected && missingNodes.length === 0;
     const isReadyToGenerate = !!uploadedImageBase64 && !!uploadedFile && selectedDecades.length > 0 && providerReady && !isGenerating && (!requiresSubjectGender || !!subjectGender);
     const hasResults = selectedDecades.some(decade => generatedImages[decade]?.status === 'done');
@@ -783,7 +823,7 @@ const PastForwardPanel: React.FC = () => {
             pastForwardQwenSteps: steps,
         }));
     };
-    const providerLabel = provider === 'comfyui' ? 'FLUX2' : provider === 'qwen' ? 'QWEN-Edit' : 'Mammouth';
+    const providerLabel = provider === 'comfyui' ? 'FLUX2' : provider === 'qwen' ? 'QWEN-Edit' : provider === 'gemini' ? 'Gemini' : 'Mammouth';
 
     return (
         <div className="space-y-6">
@@ -795,8 +835,24 @@ const PastForwardPanel: React.FC = () => {
                 <div className="flex gap-1 rounded-md bg-bg-tertiary p-1">
                     <button type="button" onClick={() => dispatch(updateOptions({ pastForwardProvider: 'comfyui' }))} disabled={isGenerating} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'comfyui' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>FLUX2</button>
                     <button type="button" onClick={() => dispatch(updateOptions({ pastForwardProvider: 'qwen' }))} disabled={isGenerating} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'qwen' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>QWEN-Edit</button>
+                    <button type="button" onClick={() => dispatch(updateOptions({ pastForwardProvider: 'gemini' }))} disabled={isGenerating} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'gemini' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>Gemini</button>
                     <button type="button" onClick={() => dispatch(updateOptions({ pastForwardProvider: 'mammouth' }))} disabled={isGenerating} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'mammouth' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>Mammouth</button>
                 </div>
+                {provider === 'gemini' && <div className="grid min-w-[240px] flex-1 gap-2 sm:grid-cols-3">
+                    <div className="relative sm:col-span-2">
+                        <select value={generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL} onChange={(event) => dispatch(updateOptions({ geminiT2IModel: event.target.value }))} disabled={isGenerating || isLoadingGeminiModels} className="w-full rounded-md border border-border-primary bg-bg-tertiary p-2 pr-8 text-sm" aria-label="Gemini image model">
+                            {geminiModels.map(model => <option key={model} value={model}>{model}</option>)}
+                        </select>
+                        {isLoadingGeminiModels && <SpinnerIcon className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-text-muted" />}
+                    </div>
+                    <select value={generationOptions.geminiImageSize || '1K'} onChange={(event) => dispatch(updateOptions({ geminiImageSize: event.target.value as typeof generationOptions.geminiImageSize }))} disabled={isGenerating} className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" aria-label="Gemini image size">
+                        {getGeminiImageSizes(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL).map(size => <option key={size} value={size}>{size}</option>)}
+                    </select>
+                    {supportsGeminiThinkingLevel(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) && <select value={generationOptions.geminiThinkingLevel || 'minimal'} onChange={(event) => dispatch(updateOptions({ geminiThinkingLevel: event.target.value as typeof generationOptions.geminiThinkingLevel }))} disabled={isGenerating} className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm sm:col-span-3" aria-label="Gemini thinking level">
+                        <option value="minimal">Minimal thinking</option>
+                        <option value="high">High thinking</option>
+                    </select>}
+                </div>}
                 {provider === 'mammouth' && <div className="relative min-w-[240px] flex-1">
                     <select value={generationOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL} onChange={(event) => dispatch(updateOptions({ mammouthImageModel: event.target.value }))} disabled={isGenerating || isLoadingMammouthModels} className="w-full rounded-md border border-border-primary bg-bg-tertiary p-2 pr-8 text-sm" aria-label="Mammouth image model">
                         {mammouthModels.map(model => <option key={model} value={model}>{model}</option>)}
@@ -914,7 +970,7 @@ const PastForwardPanel: React.FC = () => {
                             </div>}
                         </div>
 
-                        {(requiresSubjectGender || (selectedTheme === 'decades' && provider !== 'mammouth')) && <div>
+                        {(requiresSubjectGender || (selectedTheme === 'decades' && !isCloudProvider)) && <div>
                             <label className="mb-2 block text-sm font-medium text-text-secondary">
                                 Subject Identity{selectedTheme === 'decades' && !requiresSubjectGender ? ' (optional)' : ''}
                             </label>
@@ -931,7 +987,7 @@ const PastForwardPanel: React.FC = () => {
                             </div>
                         </div>}
 
-                        {((selectedTheme === 'decades' && provider !== 'mammouth') || selectedTheme === 'historical') && <div className="grid gap-2 sm:grid-cols-2">
+                        {((selectedTheme === 'decades' && !isCloudProvider) || selectedTheme === 'historical') && <div className="grid gap-2 sm:grid-cols-2">
                             <label className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition-colors ${sourceWearsGlasses ? 'border-accent bg-accent/10' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'hover:border-accent'}`}>
                                 <input
                                     type="checkbox"
@@ -954,7 +1010,7 @@ const PastForwardPanel: React.FC = () => {
                             </label>
                         </div>}
 
-                        {(selectedTheme === 'hairstyles' || selectedTheme === 'decades') && provider !== 'mammouth' && subjectGender && <div className="rounded-md border border-border-primary bg-bg-primary">
+                        {(selectedTheme === 'hairstyles' || selectedTheme === 'decades') && !isCloudProvider && subjectGender && <div className="rounded-md border border-border-primary bg-bg-primary">
                             <div className="flex items-center gap-2 px-4 py-2">
                                 <button
                                     type="button"
@@ -1054,7 +1110,7 @@ const PastForwardPanel: React.FC = () => {
                             </div>}
                         </div>}
 
-                        {selectedTheme === 'decades' && provider !== 'mammouth' && <div className="rounded-md border border-border-primary bg-bg-primary">
+                        {selectedTheme === 'decades' && !isCloudProvider && <div className="rounded-md border border-border-primary bg-bg-primary">
                             <div className="flex items-center gap-2 px-4 py-2">
                                 <button
                                     type="button"
@@ -1104,7 +1160,7 @@ const PastForwardPanel: React.FC = () => {
                             </div>}
                         </div>}
 
-                        {selectedTheme === 'decades' && provider !== 'mammouth' && <div className="rounded-md border border-border-primary bg-bg-primary">
+                        {selectedTheme === 'decades' && !isCloudProvider && <div className="rounded-md border border-border-primary bg-bg-primary">
                             <div className="flex items-center gap-2 px-4 py-2">
                                 <button
                                     type="button"
@@ -1162,7 +1218,7 @@ const PastForwardPanel: React.FC = () => {
                             </span>
                         </label>
 
-                        {(selectedTheme === 'decades' || selectedTheme === 'historical') && provider !== 'mammouth' && reimagineScene && <>
+                        {(selectedTheme === 'decades' || selectedTheme === 'historical') && !isCloudProvider && reimagineScene && <>
                             <div className="rounded-md border border-border-primary bg-bg-primary">
                                 <div className="flex items-center gap-2 px-4 py-2">
                                     <button
@@ -1274,8 +1330,9 @@ const PastForwardPanel: React.FC = () => {
                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                     {provider === 'comfyui' && !isComfyUIConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect ComfyUI to use FLUX2 Past Forward.</p>}
                     {provider === 'qwen' && !isComfyUIConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect ComfyUI to use QWEN-Edit Past Forward.</p>}
+                    {provider === 'gemini' && !getApiKey() && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Configure Gemini to use Gemini Past Forward.</p>}
                     {provider === 'mammouth' && !isMammouthConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect Mammouth to use Mammouth Past Forward.</p>}
-                    {provider !== 'mammouth' && missingNodes.length > 0 && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Missing ComfyUI nodes: {missingNodes.join(', ')}</p>}
+                    {!isCloudProvider && missingNodes.length > 0 && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Missing ComfyUI nodes: {missingNodes.join(', ')}</p>}
                     <button 
                         onClick={handleGenerateClick}
                         disabled={!isReadyToGenerate}

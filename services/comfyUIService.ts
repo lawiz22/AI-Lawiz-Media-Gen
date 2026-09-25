@@ -22,6 +22,7 @@ import {
 } from "../constants";
 
 import { generateMammouthText } from './mammouthService';
+import { generateGeminiText } from './geminiService';
 import { LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './ltxDirectorWorkflow';
 import { createLtxDialogueInstruction, parseSpeakerTranscript } from '../utils/ttsTranscript';
 import { buildCharacterAnglesWorkflow, buildFlux2CharacterAnglesWorkflow, CHARACTER_ANGLES, getEnabledCharacterAngles } from './characterAnglesWorkflow';
@@ -623,28 +624,32 @@ Do not add any preamble, conclusion, markdown bullets, or extra sections.`;
     }
 };
 
-export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: ComfyPromptModelType): Promise<string> => {
+type CloudPromptProvider = 'gemini' | 'mammouth';
+
+const generateCloudPromptText = async (instruction: string, inputs: File[], provider: CloudPromptProvider): Promise<string> =>
+    provider === 'gemini'
+        ? generateGeminiText(instruction, inputs)
+        : (await generateMammouthText(instruction, inputs)).text;
+
+export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: ComfyPromptModelType, provider: CloudPromptProvider = 'mammouth'): Promise<string> => {
     const instruction = getPromptStyleInstruction(modelType) + ' Start the prompt directly without any preamble.';
-    const result = await generateMammouthText(instruction, [sourceImage]);
-    const text = result.text.trim().replace(/['"`]/g, '');
+    const text = (await generateCloudPromptText(instruction, [sourceImage], provider)).trim().replace(/['"`]/g, '');
     if (!text) throw new Error('AI failed to generate a prompt.');
     return text;
 };
 
-export const extractBackgroundPromptFromImage = async (sourceImage: File, modelType: ComfyPromptModelType): Promise<string> => {
+export const extractBackgroundPromptFromImage = async (sourceImage: File, modelType: ComfyPromptModelType, provider: CloudPromptProvider = 'mammouth'): Promise<string> => {
     const styleInstruction = getPromptStyleInstruction(modelType);
     const instruction = `Analyze ONLY the background of this image, ignoring any people or foreground subjects. Describe the environment in detail. ${styleInstruction}`;
-    const result = await generateMammouthText(instruction, [sourceImage]);
-    const text = result.text.trim().replace(/['"`]/g, '');
+    const text = (await generateCloudPromptText(instruction, [sourceImage], provider)).trim().replace(/['"`]/g, '');
     if (!text) throw new Error('AI failed to generate a background prompt.');
     return text;
 };
 
-export const extractSubjectPromptFromImage = async (sourceImage: File, modelType: ComfyPromptModelType): Promise<string> => {
+export const extractSubjectPromptFromImage = async (sourceImage: File, modelType: ComfyPromptModelType, provider: CloudPromptProvider = 'mammouth'): Promise<string> => {
     const styleInstruction = getPromptStyleInstruction(modelType);
     const instruction = `Analyze ONLY the main subject (person or object) of this image, ignoring the background. Describe the subject in detail, including appearance, clothing, and any defining features. ${styleInstruction}`;
-    const result = await generateMammouthText(instruction, [sourceImage]);
-    const text = result.text.trim().replace(/['"`]/g, '');
+    const text = (await generateCloudPromptText(instruction, [sourceImage], provider)).trim().replace(/['"`]/g, '');
     if (!text) throw new Error('AI failed to generate a subject prompt.');
     return text;
 };
@@ -762,7 +767,8 @@ export const generateFlorence2Prompt = async (
 export const generateMagicalPromptSoup = async (
     ingredients: PromptSoupIngredient[],
     modelType: ComfyPromptModelType,
-    creativity: number
+    creativity: number,
+    provider: CloudPromptProvider = 'mammouth',
 ): Promise<PromptSoupPart[]> => {
     let instruction = `You are a creative assistant for generating image prompts. Combine the following elements into a new, cohesive, and imaginative prompt suitable for a '${modelType}' model.
     
@@ -786,17 +792,17 @@ export const generateMagicalPromptSoup = async (
         instruction += '\nFor FLUX2, prompt_parts MUST contain exactly five objects in this order: Subject, Setting, Details, Lighting, Atmosphere. Each text value must begin with its matching label and end with a newline.';
     }
 
-    const result = await generateMammouthText(instruction);
+    const resultText = await generateCloudPromptText(instruction, [], provider);
 
     try {
-        const jsonText = result.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+        const jsonText = resultText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
         const parsed = JSON.parse(jsonText);
         if (parsed.prompt_parts && Array.isArray(parsed.prompt_parts)) {
             return parsed.prompt_parts;
         }
         throw new Error("Invalid JSON format from AI.");
     } catch (e) {
-        console.error("Failed to parse prompt soup from AI:", result.text, e);
+        console.error("Failed to parse prompt soup from AI:", resultText, e);
         throw new Error("AI returned an invalid response for the prompt soup.");
     }
 };

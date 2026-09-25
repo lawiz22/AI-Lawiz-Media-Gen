@@ -189,7 +189,7 @@ export type NunchakuAttention = 'nunchaku-fp16' | 'flash-attention2';
 
 export interface GenerationOptions {
   provider: Provider;
-  pastForwardProvider?: 'comfyui' | 'qwen' | 'mammouth';
+  pastForwardProvider?: 'comfyui' | 'qwen' | 'gemini' | 'mammouth';
   pastForwardQwenSteps?: number;
   pastForwardQwenCfg?: number;
   pastForwardQwenSampler?: string;

@@ -827,3 +827,22 @@ export const generatePromptFromImage = async (imageFile: File): Promise<string> 
     }
     throw new Error("Failed to generate prompt from image.");
 };
+
+export const generateGeminiText = async (prompt: string, inputs: File[] = []): Promise<string> => {
+    if (!currentApiKey) throw new Error('Gemini API key is not configured. Add it in Connection Settings.');
+    const parts: Part[] = [];
+    for (const input of inputs) parts.push(await fileToGenerativePart(input));
+    parts.push({ text: prompt });
+
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts },
+        config: { temperature: 0.3 },
+    });
+    const text = result.candidates?.[0]?.content?.parts
+        ?.map(part => part.text || '')
+        .join('')
+        .trim();
+    if (!text) throw new Error('Gemini returned no text response.');
+    return text;
+};
