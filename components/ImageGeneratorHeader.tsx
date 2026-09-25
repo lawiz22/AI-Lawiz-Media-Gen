@@ -160,6 +160,16 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
                     >
                         Mammouth
                     </button>
+                    <button
+                        onClick={() => updateOptions({ provider: 'gemini' })}
+                        disabled={isDisabled}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${options.provider === 'gemini'
+                            ? 'bg-accent text-accent-text shadow-sm'
+                            : 'text-text-secondary hover:text-text-primary hover:bg-bg-secondary'
+                            }`}
+                    >
+                        Gemini
+                    </button>
                 </div>
 
                 {/* Model Family (ComfyUI Only) */}

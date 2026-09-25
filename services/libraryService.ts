@@ -47,16 +47,17 @@ const getDriveSubfolder = (mediaType: LibraryItem['mediaType']) => {
     }
 };
 
-const uploadLibraryAssetsToDrive = async (item: LibraryItem) => {
+const uploadLibraryAssetsToDrive = async (item: LibraryItem, signal?: AbortSignal) => {
     if (!driveService) throw new Error('Google Drive is not configured.');
     const driveAssetFileIds: Partial<Record<LibraryAssetRole, string>> = { ...item.driveAssetFileIds };
-    const parentFolderId = await driveService.getOrCreateSubfolder(getDriveSubfolder(item.mediaType));
+    const parentFolderId = await driveService.getOrCreateSubfolder(getDriveSubfolder(item.mediaType), signal);
     for (const [role, ref] of Object.entries(item.assetRefs || {}) as [LibraryAssetRole, NonNullable<LibraryItem['assetRefs']>[LibraryAssetRole]][]) {
+        signal?.throwIfAborted();
         if (!ref || driveAssetFileIds[role]) continue;
         const blob = await idbService.getLibraryAssetBlob(ref);
         const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg').replace('x-wav', 'wav') || 'bin';
         const safeRole = role.replace(/[^a-zA-Z0-9_-]/g, '-');
-        driveAssetFileIds[role] = await driveService.uploadMediaFile(blob, `${item.mediaType}_${item.id}_${safeRole}.${extension}`, parentFolderId);
+        driveAssetFileIds[role] = await driveService.uploadMediaFile(blob, `${item.mediaType}_${item.id}_${safeRole}.${extension}`, parentFolderId, signal);
     }
     return driveAssetFileIds;
 };
@@ -65,23 +66,24 @@ export function setDriveService(service: typeof googleDriveService | null) {
     driveService = service;
 }
 
-export async function initializeDriveSync(onProgress: (message: string) => void) {
+export async function initializeDriveSync(onProgress: (message: string) => void, signal?: AbortSignal) {
     if (!driveService || !driveService.isConnected()) {
         throw new Error("Cannot initialize sync: not connected to Google Drive.");
     }
+    signal?.throwIfAborted();
 
     onProgress("Checking for existing library on Google Drive...");
     // Fix: Cast the return type to ensure `remoteIndex` is properly typed.
-    const { index: remoteIndex, fileId } = await driveService.getLibraryIndex() as { index: LibraryIndex; fileId: string | null };
+    const { index: remoteIndex, fileId } = await driveService.getLibraryIndex(signal) as { index: LibraryIndex; fileId: string | null };
 
     if (fileId === null) {
         onProgress("No library found on Drive. Creating from local items...");
-        await syncLibraryToDrive(onProgress);
+        await syncLibraryToDrive(onProgress, signal);
     } else {
         onProgress("Library found on Drive. Merging with local library...");
         // Fix: Passed the correct object structure to `syncLibraryFromDrive`.
-        await syncLibraryFromDrive(onProgress, { index: remoteIndex, fileId });
-        await syncLibraryToDrive(onProgress);
+        await syncLibraryFromDrive(onProgress, { index: remoteIndex, fileId }, signal);
+        await syncLibraryToDrive(onProgress, signal);
     }
 
     onProgress("Initial sync process complete.");
@@ -895,13 +897,14 @@ export const fetchLibrary = idbService.getLibraryItems;
 export const hydrateLibraryItem = idbService.hydrateLibraryItem;
 export const createLibraryAssetObjectUrl = idbService.createLibraryAssetObjectUrl;
 
-export const syncLibraryFromDrive = async (onProgress: (message: string) => void, remoteIndexData?: { index: LibraryIndex, fileId: string | null }): Promise<void> => {
+export const syncLibraryFromDrive = async (onProgress: (message: string) => void, remoteIndexData?: { index: LibraryIndex, fileId: string | null }, signal?: AbortSignal): Promise<void> => {
     if (!driveService || !driveService.isConnected()) {
         throw new Error("Not connected to Google Drive.");
     }
 
     onProgress("Fetching library index from Google Drive...");
-    const { index: remoteIndex } = remoteIndexData || await driveService.getLibraryIndex() as { index: LibraryIndex, fileId: string | null };
+    signal?.throwIfAborted();
+    const { index: remoteIndex } = remoteIndexData || await driveService.getLibraryIndex(signal) as { index: LibraryIndex, fileId: string | null };
 
     if (!remoteIndex || !remoteIndex.items) {
         onProgress("Remote library is empty or invalid.");
@@ -923,6 +926,7 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
 
     onProgress(`Downloading ${missingItems.length} new item(s)...`);
     for (let i = 0; i < missingItems.length; i++) {
+        signal?.throwIfAborted();
         const itemMetadata = missingItems[i];
         onProgress(`Processing "${itemMetadata.name || itemMetadata.mediaType}" (${i + 1}/${missingItems.length})...`);
         try {
@@ -935,7 +939,8 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
                 };
                 const blobs: Partial<Record<LibraryAssetRole, Blob>> = {};
                 for (const [role, fileId] of Object.entries(remoteAssetIds) as [LibraryAssetRole, string][]) {
-                    blobs[role] = await driveService.downloadMediaFile(fileId);
+                    signal?.throwIfAborted();
+                    blobs[role] = await driveService.downloadMediaFile(fileId, signal);
                 }
 
                 let thumbnail: string;
@@ -967,19 +972,21 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
                 await idbService.saveLibraryItemWithBlobs(newItem, blobs);
             }
         } catch (e) {
+            if (signal?.aborted) throw e;
             console.error(`Failed to download or save file for item ${itemMetadata.id}`, e);
         }
     }
 };
 
-export const syncLibraryToDrive = async (onProgress: (message: string) => void): Promise<void> => {
+export const syncLibraryToDrive = async (onProgress: (message: string) => void, signal?: AbortSignal): Promise<void> => {
     if (!driveService || !driveService.isConnected()) {
         throw new Error("Not connected to Google Drive.");
     }
 
     onProgress("Checking for local items to upload...");
     const localItems = await idbService.getLibraryItems();
-    const { index: remoteIndex, fileId: initialFileId } = await driveService.getLibraryIndex();
+    signal?.throwIfAborted();
+    const { index: remoteIndex, fileId: initialFileId } = await driveService.getLibraryIndex(signal);
 
     // An item needs to be synced to remote if it exists locally but not in the remote index.
     // This covers brand new items and items from a previously failed sync.
@@ -996,6 +1003,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
     const updatedIndex = { ...remoteIndex }; // Work on a copy
 
     for (let i = 0; i < itemsToSyncToRemote.length; i++) {
+        signal?.throwIfAborted();
         const item = itemsToSyncToRemote[i];
         const itemName = item.name || `${item.mediaType} #${item.id}`;
         onProgress(`Syncing "${itemName}" (${i + 1}/${itemsToSyncToRemote.length})...`);
@@ -1006,7 +1014,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
             let driveAssetFileIds = { ...item.driveAssetFileIds };
 
             if (!isTextBased) {
-                driveAssetFileIds = await uploadLibraryAssetsToDrive({ ...item, driveAssetFileIds });
+                driveAssetFileIds = await uploadLibraryAssetsToDrive({ ...item, driveAssetFileIds }, signal);
                 await idbService.updateLibraryItem(item.id, { driveFileId: driveAssetFileIds.media, driveAssetFileIds });
             }
 
@@ -1014,16 +1022,19 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
             updatedIndex.items[item.id] = { ...metadata, driveFileId: driveAssetFileIds.media, driveAssetFileIds };
 
         } catch (e: any) {
+            if (signal?.aborted) throw e;
             console.error(`Failed to sync item ${item.id} to Drive:`, e);
             uploadErrors.push(`- ${itemName}: ${e.message}`);
         }
     }
 
     if (indexNeedsUpdate) {
+        signal?.throwIfAborted();
         onProgress("Finalizing by updating library index file...");
         try {
-            await driveService.updateLibraryIndex(updatedIndex, initialFileId);
+            await driveService.updateLibraryIndex(updatedIndex, initialFileId, signal);
         } catch (e: any) {
+            if (signal?.aborted) throw e;
             uploadErrors.push(`- CRITICAL: Failed to update library.json. Error: ${e.message}`);
         }
     }
@@ -1039,6 +1050,14 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void):
 export const getLibraryItems = idbService.getLibraryItems;
 export const updateLibraryItem = idbService.updateLibraryItem;
 export const updateLibraryItems = idbService.updateLibraryItems;
+
+export const clearDriveFileReferences = async (): Promise<void> => {
+    const items = await idbService.getLibraryItems();
+    await idbService.updateLibraryItems(items.map(item => ({
+        id: item.id,
+        changes: { driveFileId: undefined, driveAssetFileIds: undefined },
+    })));
+};
 
 export const deleteLibraryItem = async (id: number): Promise<void> => {
     // This function now ONLY handles local deletion to ensure it is fast and reliable.

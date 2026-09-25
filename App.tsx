@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
 import {
     setCurrentUser, setTheme, setFontSize, setProjectName, setActiveTab, setIsComfyUIConnected, setIsMammouthConnected, setComfyUIObjectInfo, setVersionInfo,
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
-    openSettingsModal, closeSettingsModal, openVisualSettingsModal, closeVisualSettingsModal, closeAdminPanel,
+    openSettingsModal, closeSettingsModal, openVisualSettingsModal, closeVisualSettingsModal,
     openOAuthHelper, closeOAuthHelper, openComfyUIHelper, closeComfyUIHelper,
     setModalOpen, addSessionTokenUsage, resetSessionTokenUsage, queueLtxTransfer, clearLtxTransfer
 } from './store/appSlice';
@@ -34,7 +34,7 @@ import { removeAllFiles, setUploadedFiles } from './store/groupPhotoFusionSlice'
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile, Provider } from './types';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
-import { DEFAULT_GEMINI_IMAGE_MODEL, generatePortraits, generateCharacterNameForImage, updateGeminiApiKey, getApiKey, generatePromptFromImage } from './services/geminiService';
+import { DEFAULT_GEMINI_IMAGE_MODEL, generatePortraits, generateCharacterNameForImage, updateGeminiApiKey, getApiKey, generatePromptFromImage, getGeminiAspectRatios } from './services/geminiService';
 import { generateComfyUICharacterAngles, generateComfyUIPortraits, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution, generateComfyUIPromptFromSource } from './services/comfyUIService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, generateMammouthImages, getMammouthApiKey, testMammouthConnection, updateMammouthApiKey } from './services/mammouthService';
 import { buildCharacterAnglePrompts, CHARACTER_ANGLES, getEnabledCharacterAngles } from './services/characterAnglesWorkflow';
@@ -62,14 +62,16 @@ import { ErrorModal } from './components/ErrorModal';
 import { OAuthHelperModal } from './components/OAuthHelperModal';
 import { ComfyUIConnectionHelperModal } from './components/ComfyUIConnectionHelperModal';
 import { VisualSettingsModal } from './components/VisualSettingsModal';
-import { ImageGeneratorIcon, AdminIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon, MicrophoneIcon, EnhanceIcon, DownloadIcon, ResetIcon } from './components/icons';
+import { InstallationDashboardModal } from './components/InstallationDashboardModal';
+import { DriveFolderCreateModal } from './components/DriveFolderCreateModal';
+import { ImageGeneratorIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon, MicrophoneIcon, EnhanceIcon, DownloadIcon, ResetIcon } from './components/icons';
 import { ImageGeneratorHeader } from './components/ImageGeneratorHeader';
 import { ActionControlPanel } from './components/ActionControlPanel';
 import { CloudImageProviderBar } from './components/CloudImageProviderBar';
 import { SamplerSettingsPanel } from './components/SamplerSettingsPanel';
 import { LoraSettingsPanel } from './components/LoraSettingsPanel';
 import * as driveService from './services/googleDriveService';
-import { setDriveService, initializeDriveSync } from './services/libraryService';
+import { clearDriveFileReferences, setDriveService, syncLibraryFromDrive, syncLibraryToDrive } from './services/libraryService';
 import GroupPhotoFusionPanel from './components/groupPhotoFusion/GroupPhotoFusionPanel';
 import PastForwardPanel from './components/pastForward/PastForwardPanel';
 import SwapAnythingPanel from './components/SwapAnythingPanel';
@@ -113,6 +115,9 @@ const App: React.FC = () => {
     const [characterGenerationJobs, setCharacterGenerationJobs] = useState<Array<{ label: string; progress: number; message: string; status: 'pending' | 'done' | 'error'; src?: string }>>([]);
     const [upscaleSourceFile, setUpscaleSourceFile] = useState<File | null>(null);
     const [isUpscalePickerOpen, setIsUpscalePickerOpen] = useState(false);
+    const [isInstallationDashboardOpen, setIsInstallationDashboardOpen] = useState(false);
+    const [isDriveFolderCreateOpen, setIsDriveFolderCreateOpen] = useState(false);
+    const driveSyncControllerRef = useRef<AbortController | null>(null);
     const [activeFunSubTab, setActiveFunSubTab] = useState<'photo-fusion' | 'past-forward' | 'swap-anything' | 'stylise-anything'>('photo-fusion');
     const [panelResetVersions, setPanelResetVersions] = useState<Record<string, number>>({});
 
@@ -420,7 +425,10 @@ const App: React.FC = () => {
         }
 
         const savedUser = sessionStorage.getItem('currentUser');
-        if (savedUser) dispatch(setCurrentUser(JSON.parse(savedUser)));
+        if (savedUser) {
+            const user = JSON.parse(savedUser) as User;
+            dispatch(setCurrentUser({ username: user.username, role: 'admin' }));
+        }
 
         const savedFontSize = localStorage.getItem('fontSize');
         if (savedFontSize) dispatch(setFontSize(parseInt(savedFontSize)));
@@ -435,9 +443,10 @@ const App: React.FC = () => {
         checkOllamaConnection(localStorage.getItem('ollama_url') || DEFAULT_OLLAMA_URL);
 
         const savedClientId = localStorage.getItem('google_client_id') || '';
-        dispatch(setIsDriveConfigured(!!savedClientId));
+        const savedDriveApiKey = localStorage.getItem('google_drive_api_key') || '';
+        dispatch(setIsDriveConfigured(Boolean(savedClientId && savedDriveApiKey)));
 
-        if (savedClientId) {
+        if (savedClientId && savedDriveApiKey) {
             setDriveService(driveService);
             driveService.restoreConnection().then(connected => {
                 if (connected) {
@@ -513,7 +522,7 @@ const App: React.FC = () => {
     };
 
     const handleLogin = async (username: string, projectName: string): Promise<string | true> => {
-        dispatch(setCurrentUser({ username, role: 'user' }));
+        dispatch(setCurrentUser({ username, role: 'admin' }));
         dispatch(setProjectName(projectName));
         return true;
     };
@@ -746,12 +755,14 @@ const App: React.FC = () => {
         }
     };
 
-    const handleSaveSettings = async (comfyUIUrl: string, googleClientId: string, geminiApiKey?: string, mammouthApiKey?: string, ollamaUrl?: string, ollamaModel?: string) => {
+    const handleSaveSettings = async (comfyUIUrl: string, googleClientId: string, googleApiKey: string, geminiApiKey?: string, mammouthApiKey?: string, ollamaUrl?: string, ollamaModel?: string) => {
         localStorage.setItem('comfyui_url', comfyUIUrl);
         localStorage.setItem('google_client_id', googleClientId);
+        localStorage.setItem('google_drive_api_key', googleApiKey.trim());
+        driveService.resetGoogleDriveConfiguration();
         checkComfyUIConnection(comfyUIUrl);
-        dispatch(setIsDriveConfigured(!!googleClientId));
-        if (googleClientId) {
+        dispatch(setIsDriveConfigured(Boolean(googleClientId && googleApiKey.trim())));
+        if (googleClientId && googleApiKey.trim()) {
             setDriveService(driveService); // Re-initialize with new client ID
         } else {
             setDriveService(null);
@@ -841,20 +852,19 @@ const App: React.FC = () => {
     };
 
     const handleDriveConnect = async () => {
-        dispatch(setIsSyncing(true));
-        dispatch(setSyncMessage('Connecting to Google Drive...'));
         try {
             const folder = await driveService.connectAndPickFolder();
             if (folder) {
+                if (driveFolder && driveFolder.id !== folder.id) {
+                    await clearDriveFileReferences();
+                    dispatch(fetchLibrary());
+                }
                 dispatch(setDriveFolder(folder));
-                await initializeDriveSync((msg) => dispatch(setSyncMessage(msg)));
-                dispatch(fetchLibrary());
             }
         } catch (err: any) {
             console.error("Drive connection failed:", err);
             dispatch(setGlobalError({ title: "Google Drive Error", message: err.message }));
         } finally {
-            dispatch(setIsSyncing(false));
             dispatch(setSyncMessage(''));
         }
     };
@@ -864,19 +874,52 @@ const App: React.FC = () => {
         dispatch(setDriveFolder(null));
     };
 
-    const handleSyncWithDrive = async () => {
-        if (!driveFolder) return;
+    const handleCreateDriveFolder = async (name: string) => {
+        try {
+            const folder = await driveService.createFolder(name);
+            await clearDriveFileReferences();
+            driveService.setFolder(folder);
+            dispatch(setDriveFolder(folder));
+            dispatch(fetchLibrary());
+            dispatch(setSyncMessage(''));
+        } catch (err: any) {
+            console.error('Drive folder creation failed:', err);
+            dispatch(setGlobalError({ title: 'Google Drive Error', message: err.message }));
+            throw err;
+        }
+    };
+
+    const runDriveSync = async (direction: 'download' | 'backup') => {
+        if (!driveFolder || driveSyncControllerRef.current) return;
+        const controller = new AbortController();
+        driveSyncControllerRef.current = controller;
         dispatch(setIsSyncing(true));
         try {
-            await initializeDriveSync((msg) => dispatch(setSyncMessage(msg)));
+            const onProgress = (message: string) => dispatch(setSyncMessage(message));
+            if (direction === 'download') {
+                await syncLibraryFromDrive(onProgress, undefined, controller.signal);
+            } else {
+                await syncLibraryToDrive(onProgress, controller.signal);
+            }
             dispatch(fetchLibrary()); // Refresh UI
         } catch (err: any) {
-            console.error("Sync failed:", err);
-            dispatch(setGlobalError({ title: "Sync Error", message: err.message }));
+            if (controller.signal.aborted) {
+                dispatch(setSyncMessage(`${direction === 'download' ? 'Download' : 'Backup'} cancelled.`));
+            } else {
+                console.error(`Drive ${direction} failed:`, err);
+                dispatch(setGlobalError({ title: `Drive ${direction === 'download' ? 'Download' : 'Backup'} Error`, message: err.message }));
+            }
         } finally {
+            driveSyncControllerRef.current = null;
             dispatch(setIsSyncing(false));
-            dispatch(setSyncMessage(''));
         }
+    };
+
+    const handleDownloadFromDrive = () => runDriveSync('download');
+    const handleBackupToDrive = () => runDriveSync('backup');
+
+    const handleCancelDriveSync = () => {
+        driveSyncControllerRef.current?.abort();
     };
 
     const handleResetTokenUsage = () => {
@@ -896,6 +939,8 @@ const App: React.FC = () => {
     } else if (activeTab === 'character-generator') {
         activeModel = characterOptions.provider === 'mammouth'
             ? (characterOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
+            : characterOptions.provider === 'gemini'
+                ? (characterOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL)
             : characterOptions.provider === 'comfyui'
                 ? characterOptions.comfyCharacterMode === 'flux2'
                     ? 'FLUX2-Klein-Multi-Angle'
@@ -997,6 +1042,7 @@ const App: React.FC = () => {
                 projectName={projectName}
                 onProjectNameChange={handleProjectNameChange}
                 onOpenSettingsModal={() => dispatch(openSettingsModal())}
+                onOpenInstallationDashboard={() => setIsInstallationDashboardOpen(true)}
                 onOpenVisualSettings={() => dispatch(openVisualSettingsModal())}
                 onOpenComfyUIHelper={() => dispatch(openComfyUIHelper())}
                 isComfyUIConnected={isComfyUIConnected}
@@ -1004,7 +1050,10 @@ const App: React.FC = () => {
                 versionInfo={versionInfo}
                 driveFolder={driveFolder}
                 onDriveConnect={handleDriveConnect}
+                onCreateDriveFolder={() => setIsDriveFolderCreateOpen(true)}
                 onDriveDisconnect={handleDriveDisconnect}
+                onCancelDriveSync={handleCancelDriveSync}
+                isDriveSyncing={isSyncing}
                 isDriveConfigured={isDriveConfigured}
                 sessionTokenUsage={sessionTokenUsage}
                 onResetTokenUsage={handleResetTokenUsage}
@@ -1024,12 +1073,20 @@ const App: React.FC = () => {
                     />
                 )}
 
+                <DriveFolderCreateModal
+                    isOpen={isDriveFolderCreateOpen}
+                    parentName={driveFolder?.name || 'My Drive'}
+                    onClose={() => setIsDriveFolderCreateOpen(false)}
+                    onCreate={handleCreateDriveFolder}
+                />
+
                 {/* Helper Modals */}
                 <ConnectionSettingsModal
                     isOpen={isSettingsModalOpen}
                     onClose={() => dispatch(closeSettingsModal())}
                     initialComfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                     initialGoogleClientId={localStorage.getItem('google_client_id') || ''}
+                    initialGoogleApiKey={localStorage.getItem('google_drive_api_key') || ''}
                     initialGeminiApiKey={localGeminiKey}
                     initialMammouthApiKey={localMammouthKey}
                     initialOllamaUrl={localOllamaUrl}
@@ -1061,6 +1118,14 @@ const App: React.FC = () => {
                     setFontSize={(size) => dispatch(setFontSize(size))}
                 />
 
+                <InstallationDashboardModal
+                    isOpen={isInstallationDashboardOpen}
+                    onClose={() => setIsInstallationDashboardOpen(false)}
+                    geminiConfigured={Boolean(localGeminiKey)}
+                    mammouthKey={localMammouthKey}
+                    ollamaUrl={localOllamaUrl}
+                />
+
                 {/* Navigation Tabs */}
                 <div className="flex flex-nowrap justify-start xl:justify-center gap-0.5 mb-4 sticky top-0 z-[11] bg-bg-primary/95 backdrop-blur-md p-1 rounded-lg border border-border-primary shadow-sm mx-auto w-full max-w-7xl overflow-x-auto">
                     {[
@@ -1076,7 +1141,6 @@ const App: React.FC = () => {
                         { id: 'upscale', label: 'Upscale', icon: <EnhanceIcon className="w-4 h-4" />, activeClass: 'border-lime-400 bg-lime-400/15 text-lime-300 shadow-lime-500/20' },
                         { id: 'civitai', label: 'Models/LoRAs', icon: <DownloadIcon className="w-4 h-4" />, activeClass: 'border-teal-400 bg-teal-400/15 text-teal-300 shadow-teal-500/20' },
                         { id: 'library', label: 'Library', icon: <LibraryIcon className="w-4 h-4" />, activeClass: 'border-indigo-400 bg-indigo-400/15 text-indigo-300 shadow-indigo-500/20' },
-                        ...(currentUser.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: <AdminIcon className="w-4 h-4" />, activeClass: 'border-red-400 bg-red-400/15 text-red-300 shadow-red-500/20' }] : [])
                     ].map((tab) => (
                         <button
                             key={tab.id}
@@ -1383,6 +1447,23 @@ const App: React.FC = () => {
                                 >
                                     Mammouth
                                 </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const geminiModel = currentOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL;
+                                        const aspectRatio = getGeminiAspectRatios(geminiModel).includes(currentOptions.aspectRatio)
+                                            ? currentOptions.aspectRatio
+                                            : '1:1';
+                                        handleUpdateOptions({ provider: 'gemini', geminiMode: 'i2i', geminiI2iMode: 'character', aspectRatio });
+                                    }}
+                                    disabled={isLoading}
+                                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${currentOptions.provider === 'gemini'
+                                        ? 'bg-accent text-accent-text shadow-sm'
+                                        : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
+                                        } disabled:cursor-not-allowed disabled:opacity-50`}
+                                >
+                                    Gemini
+                                </button>
                             </div>
                             {currentOptions.provider === 'comfyui' && <div role="tablist" aria-label="ComfyUI character workflow" className="flex gap-1 rounded-lg bg-bg-tertiary p-1">
                                 <button
@@ -1681,14 +1762,14 @@ const App: React.FC = () => {
                                 // Add handling for other types if needed
                             }}
                             isDriveConnected={!!driveFolder}
-                            onSyncWithDrive={handleSyncWithDrive}
+                            onDownloadFromDrive={handleDownloadFromDrive}
+                            onBackupToDrive={handleBackupToDrive}
+                            onCancelDriveSync={handleCancelDriveSync}
                             isSyncing={isSyncing}
                             syncMessage={syncMessage}
                             isDriveConfigured={isDriveConfigured}
                         />
                     </React.Activity>
-
-                    {activeTab === 'admin' && currentUser.role === 'admin' && <div className="max-w-4xl mx-auto"><AdminIcon className="w-12 h-12 text-accent mx-auto mb-6" /><h2 className="text-2xl font-bold text-center mb-8">Admin Dashboard</h2></div>}
                 </div>
             </main>
 

@@ -36,6 +36,9 @@ const initialOptions: GenerationOptions = {
   photoStyle: 'professional photoshoot',
   eraStyle: 'a modern digital photograph',
   geminiMode: 't2i',
+  geminiT2IModel: 'gemini-3.1-flash-image',
+  geminiImageSize: '1K',
+  geminiThinkingLevel: 'minimal',
   mammouthImageModel: 'gemini-3.1-flash-image-preview',
   geminiI2iMode: 'general',
   geminiGeneralEditPrompt: '',
@@ -63,6 +66,10 @@ const initialOptions: GenerationOptions = {
   comfyFlux2EditReferenceRoles: ['outfit', 'background', 'pose'],
   comfyFlux2EditReferenceDescriptions: ['', '', ''],
   comfyFlux2EditReferenceLibraryPrompts: ['', '', ''],
+  comfyFlux2EditLora1Name: '',
+  comfyFlux2EditLora1Strength: 1,
+  comfyFlux2EditLora2Name: '',
+  comfyFlux2EditLora2Strength: 1,
   comfyFlux2EditUseCacheDit: false,
   comfyFlux2EditCacheDitModelType: 'Auto',
   comfyFlux2EditCacheDitWarmupSteps: 0,
@@ -432,6 +439,10 @@ const generationSlice = createSlice({
         comfyFlux2EditReferenceRoles: ['outfit', 'background', 'pose'],
         comfyFlux2EditReferenceDescriptions: ['', '', ''],
         comfyFlux2EditReferenceLibraryPrompts: ['', '', ''],
+        comfyFlux2EditLora1Name: '',
+        comfyFlux2EditLora1Strength: 1,
+        comfyFlux2EditLora2Name: '',
+        comfyFlux2EditLora2Strength: 1,
         comfyKreaPrompt: '',
         comfyKreaNegativePrompt: '',
         comfyPromptExampleSource: undefined,
@@ -542,6 +553,7 @@ export const selectIsReadyToGenerate = createSelector(
         if (activeOptions.comfyModelType === 'flux2-edit') {
           const usesPose = elementImages.some((_, index) => (activeOptions.comfyFlux2EditReferenceRoles?.[index] || ['outfit', 'background', 'pose'][index]) === 'pose');
           if (usesPose && !app.comfyUIObjectInfo?.AIO_Preprocessor) return false;
+          if ((activeOptions.comfyFlux2EditLora1Name?.trim() || activeOptions.comfyFlux2EditLora2Name?.trim()) && !app.comfyUIObjectInfo?.LoraLoaderModelOnly) return false;
           if (activeOptions.comfyFlux2EditUseCacheDit && !app.comfyUIObjectInfo?.CacheDiT_Model_Optimizer) return false;
         }
         return baseReady && !!sourceImage;

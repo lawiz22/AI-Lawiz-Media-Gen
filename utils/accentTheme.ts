@@ -23,5 +23,28 @@ export const TAB_ACCENT_STYLES: Record<string, CSSProperties> = {
     admin: createAccentStyle('#f87171', '#fca5a5', '#dc2626'),
 };
 
+export const LIBRARY_CATEGORY_ACCENT_STYLES: Record<string, CSSProperties> = {
+    image: TAB_ACCENT_STYLES['image-generator'],
+    character: TAB_ACCENT_STYLES['character-generator'],
+    'group-fusion': createAccentStyle('#fb7185', '#fda4af', '#e11d48'),
+    'swap-anything': createAccentStyle('#f59e0b', '#fbbf24', '#d97706'),
+    'past-forward-photo': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
+    video: TAB_ACCENT_STYLES['ltx-director'],
+    'audio-tts': TAB_ACCENT_STYLES.tts,
+    'tts-reference': TAB_ACCENT_STYLES.tts,
+    logo: TAB_ACCENT_STYLES['logo-theme-generator'],
+    banner: TAB_ACCENT_STYLES['logo-theme-generator'],
+    'album-cover': TAB_ACCENT_STYLES['logo-theme-generator'],
+    clothes: TAB_ACCENT_STYLES['extractor-tools'],
+    hair: TAB_ACCENT_STYLES['extractor-tools'],
+    object: TAB_ACCENT_STYLES['extractor-tools'],
+    pose: TAB_ACCENT_STYLES['extractor-tools'],
+    font: TAB_ACCENT_STYLES['extractor-tools'],
+    preset: TAB_ACCENT_STYLES.library,
+    prompt: TAB_ACCENT_STYLES['prompt-generator'],
+    'color-palette': TAB_ACCENT_STYLES['logo-theme-generator'],
+    'extracted-frame': TAB_ACCENT_STYLES['video-utils'],
+};
+
 export const getTabAccentStyle = (tabId: string): CSSProperties =>
     TAB_ACCENT_STYLES[tabId] || TAB_ACCENT_STYLES.admin;

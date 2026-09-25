@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Part, Type, Modality, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, Part, Type, Modality, GenerateContentResponse, ThinkingLevel } from "@google/genai";
 import type { GenerationOptions, IdentifiedClothing, IdentifiedObject, MannequinStyle, LogoThemeState, PaletteColor, ExtractorState } from '../types';
 import { fileToGenerativePart, fileToBase64, dataUrlToGenerativePart, createBlankImageFile, letterboxImage, dataUrlToFile, fileToDataUrl } from "../utils/imageUtils";
 import { cropImageToAspectRatio } from '../utils/imageProcessing';
@@ -13,6 +13,21 @@ export const GEMINI_IMAGE_MODELS = [
     'gemini-3-pro-image',
     'gemini-2.5-flash-image',
 ];
+
+const STANDARD_GEMINI_ASPECT_RATIOS = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'] as const;
+const EXTENDED_GEMINI_ASPECT_RATIOS = [...STANDARD_GEMINI_ASPECT_RATIOS, '1:4', '4:1', '1:8', '8:1'] as const;
+
+export const getGeminiAspectRatios = (model: string): readonly string[] =>
+    model === 'gemini-3.1-flash-image' ? EXTENDED_GEMINI_ASPECT_RATIOS : STANDARD_GEMINI_ASPECT_RATIOS;
+
+export const getGeminiImageSizes = (model: string): readonly GenerationOptions['geminiImageSize'][] => {
+    if (model === 'gemini-3.1-flash-lite-image' || model === 'gemini-2.5-flash-image') return ['1K'];
+    if (model === 'gemini-3.1-flash-image') return ['512', '1K', '2K', '4K'];
+    return ['1K', '2K', '4K'];
+};
+
+export const supportsGeminiThinkingLevel = (model: string): boolean =>
+    model === 'gemini-3.1-flash-image' || model === 'gemini-3.1-flash-lite-image';
 
 let currentApiKey = process.env.API_KEY || '';
 let ai = new GoogleGenAI({ apiKey: currentApiKey });
@@ -89,6 +104,42 @@ export const getGeminiModels = async (): Promise<string[]> => {
     }
 };
 
+export interface GeminiConnectionResult {
+    success: boolean;
+    message: string;
+    models: string[];
+}
+
+export const testGeminiConnection = async (): Promise<GeminiConnectionResult> => {
+    if (!currentApiKey) return { success: false, message: 'Gemini API key is not configured.', models: [] };
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${currentApiKey}`, {
+            signal: controller.signal,
+            cache: 'no-cache',
+        });
+        if (!response.ok) {
+            const payload = await response.json().catch(() => null);
+            const detail = payload?.error?.message || response.statusText;
+            return { success: false, message: `Gemini API returned ${response.status}: ${detail}`, models: [] };
+        }
+        const payload = await response.json();
+        const models = Array.isArray(payload?.models)
+            ? payload.models
+                .map((model: any) => String(model?.name || '').replace(/^models\//, ''))
+                .filter(Boolean)
+            : [];
+        return { success: true, message: `Connected. ${models.length} model${models.length === 1 ? '' : 's'} accessible.`, models };
+    } catch (error: any) {
+        const message = error?.name === 'AbortError' ? 'Gemini API request timed out.' : error?.message || 'Unable to reach Gemini API.';
+        return { success: false, message, models: [] };
+    } finally {
+        window.clearTimeout(timeoutId);
+    }
+};
+
 export const generatePortraits = async (
     sourceImage: File | null,
     options: GenerationOptions,
@@ -103,18 +154,26 @@ export const generatePortraits = async (
     updateProgress("Preparing generation...", 0.1);
 
     let model = options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL;
-
     // Common helper to execute single request
     const executeGeneration = async (modelToUse: string, requestParts: Part[], imageCount: number, retry = true): Promise<GenerateContentResponse> => {
         try {
+            const supportedRatios = getGeminiAspectRatios(modelToUse);
+            const aspectRatio = supportedRatios.includes(options.aspectRatio) ? options.aspectRatio : '1:1';
+            const supportedSizes = getGeminiImageSizes(modelToUse);
+            const imageSize = supportedSizes.includes(options.geminiImageSize) ? options.geminiImageSize : '1K';
+            const config = {
+                responseModalities: [Modality.IMAGE],
+                imageConfig: { aspectRatio, imageSize },
+                ...(supportsGeminiThinkingLevel(modelToUse) ? {
+                    thinkingConfig: {
+                        thinkingLevel: options.geminiThinkingLevel === 'high' ? ThinkingLevel.HIGH : ThinkingLevel.MINIMAL,
+                    },
+                } : {}),
+            };
             const response = await ai.models.generateContent({
                 model: modelToUse,
                 contents: { parts: requestParts },
-                config: {
-                    responseModalities: [Modality.IMAGE],
-                    numberOfGeneratedImages: imageCount,
-                    aspectRatio: options.aspectRatio,
-                },
+                config,
             });
             return response;
         } catch (error: any) {

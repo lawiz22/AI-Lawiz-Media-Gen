@@ -95,6 +95,22 @@ export const buildFlux2EditWorkflow = (
     });
 
     let model: [string, number] = ['model', 0];
+    for (let index = 1; index <= 2; index++) {
+        const name = options[`comfyFlux2EditLora${index}Name` as keyof GenerationOptions] as string | undefined;
+        if (!name?.trim() || name === 'None') continue;
+        const strength = options[`comfyFlux2EditLora${index}Strength` as keyof GenerationOptions] as number | undefined;
+        const nodeId = `lora_${index}`;
+        workflow[nodeId] = {
+            inputs: {
+                lora_name: name,
+                strength_model: strength ?? 1,
+                model,
+            },
+            class_type: 'LoraLoaderModelOnly',
+            _meta: { title: `FLUX2 Additional LoRA ${index}` },
+        };
+        model = [nodeId, 0];
+    }
     if (options.comfyFlux2EditUseCacheDit) {
         workflow.cache_dit = {
             inputs: {

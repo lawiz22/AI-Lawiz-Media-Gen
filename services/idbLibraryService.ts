@@ -25,7 +25,16 @@ interface MyDB extends DBSchema {
 
 const ASSET_FIELDS: LibraryAssetRole[] = ['media', 'sourceImage', 'startFrame', 'endFrame', 'skeletonImage'];
 const INLINE_MEDIA_TYPES = new Set(['prompt', 'color-palette', 'preset']);
+export const ALWAYS_SFW_LIBRARY_TYPES = new Set<LibraryItem['mediaType']>(['color-palette', 'font']);
 const objectUrlCache = new Map<string, string>();
+
+export const requiresSfwLibraryRating = (mediaType: LibraryItem['mediaType']): boolean =>
+  ALWAYS_SFW_LIBRARY_TYPES.has(mediaType);
+
+const enforceRequiredSafetyRating = (item: LibraryItem): LibraryItem =>
+  requiresSfwLibraryRating(item.mediaType) && item.safetyRating !== 'sfw'
+    ? { ...item, safetyRating: 'sfw' }
+    : item;
 
 const revokeCachedAssetUrl = (assetId: string) => {
   const objectUrl = objectUrlCache.get(assetId);
@@ -142,7 +151,7 @@ const migrateLegacyItems = async (db: IDBPDatabase<MyDB>): Promise<void> => {
 
 const saveExternalizedItem = async (db: IDBPDatabase<MyDB>, item: LibraryItem): Promise<LibraryItem> => {
   const existing = await db.get(STORE_NAME, item.id);
-  const { metadata, assets } = externalizeItem(item);
+  const { metadata, assets } = externalizeItem(enforceRequiredSafetyRating(item));
   const tx = db.transaction([STORE_NAME, ASSET_STORE_NAME], 'readwrite');
   for (const asset of assets) await tx.objectStore(ASSET_STORE_NAME).put(asset);
   await tx.objectStore(STORE_NAME).put(metadata);
@@ -164,7 +173,7 @@ export const saveLibraryItemWithBlobs = async (
 ): Promise<LibraryItem> => {
   const db = await getDb();
   const existing = await db.get(STORE_NAME, item.id);
-  const metadata: LibraryItem = { ...item, assetRefs: { ...item.assetRefs } };
+  const metadata: LibraryItem = { ...enforceRequiredSafetyRating(item), assetRefs: { ...item.assetRefs } };
   const records: LibraryAssetRecord[] = [];
   for (const [role, blob] of Object.entries(blobs) as [LibraryAssetRole, Blob][]) {
     if (!blob) continue;
@@ -253,7 +262,7 @@ export const updateLibraryItems = async (updates: Array<{ id: number; changes: P
   const store = tx.objectStore(STORE_NAME);
   for (const { id, changes } of updates) {
     const item = await store.get(id);
-    if (item) await store.put({ ...item, ...changes });
+    if (item) await store.put(enforceRequiredSafetyRating({ ...item, ...changes }));
   }
   await tx.done;
 };
@@ -262,7 +271,11 @@ export const getLibraryItems = async (): Promise<LibraryItem[]> => {
   const db = await getDb();
   await migrateLegacyItems(db);
   const items = await db.getAll(STORE_NAME);
-  return items.sort((a, b) => b.id - a.id); // Sort by most recent
+  const normalizedItems = items.map(enforceRequiredSafetyRating);
+  await Promise.all(normalizedItems
+    .filter((item, index) => item !== items[index])
+    .map(item => db.put(STORE_NAME, item)));
+  return normalizedItems.sort((a, b) => b.id - a.id); // Sort by most recent
 };
 
 export const getItemById = async (id: number): Promise<LibraryItem | undefined> => {

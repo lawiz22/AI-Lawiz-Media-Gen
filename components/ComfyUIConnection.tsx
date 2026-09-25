@@ -11,19 +11,21 @@ interface ConnectionSettingsModalProps {
   onClose: () => void;
   initialComfyUIUrl: string;
   initialGoogleClientId: string;
+  initialGoogleApiKey: string;
   initialGeminiApiKey?: string;
   initialMammouthApiKey?: string;
   initialOllamaUrl: string;
   initialOllamaModel: string;
-  onSave: (comfyUIUrl: string, googleClientId: string, geminiApiKey?: string, mammouthApiKey?: string, ollamaUrl?: string, ollamaModel?: string) => void;
+  onSave: (comfyUIUrl: string, googleClientId: string, googleApiKey: string, geminiApiKey?: string, mammouthApiKey?: string, ollamaUrl?: string, ollamaModel?: string) => void;
   onConnectionFail: (url: string) => void;
 }
 
 type ConnectionStatus = 'idle' | 'testing' | 'success' | 'failed';
 
-export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = ({ isOpen, onClose, initialComfyUIUrl, initialGoogleClientId, initialGeminiApiKey, initialMammouthApiKey, initialOllamaUrl, initialOllamaModel, onSave, onConnectionFail }) => {
+export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = ({ isOpen, onClose, initialComfyUIUrl, initialGoogleClientId, initialGoogleApiKey, initialGeminiApiKey, initialMammouthApiKey, initialOllamaUrl, initialOllamaModel, onSave, onConnectionFail }) => {
   const [comfyUrl, setComfyUrl] = useState<string>('');
   const [googleClientId, setGoogleClientId] = useState<string>('');
+  const [googleApiKey, setGoogleApiKey] = useState<string>('');
   const [geminiApiKey, setGeminiApiKey] = useState<string>('');
   const [mammouthApiKey, setMammouthApiKey] = useState<string>('');
   const [comfyStatus, setComfyStatus] = useState<ConnectionStatus>('idle');
@@ -40,6 +42,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     if (isOpen) {
       setComfyUrl(initialComfyUIUrl || 'http://127.0.0.1:8188');
       setGoogleClientId(initialGoogleClientId || '');
+      setGoogleApiKey(initialGoogleApiKey || '');
       setGeminiApiKey(initialGeminiApiKey || '');
       setMammouthApiKey(initialMammouthApiKey || '');
       setOllamaUrl(initialOllamaUrl || DEFAULT_OLLAMA_URL);
@@ -49,7 +52,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
       setMammouthStatus('idle');
       setOllamaStatus('idle');
     }
-  }, [initialComfyUIUrl, initialGoogleClientId, initialGeminiApiKey, initialMammouthApiKey, initialOllamaUrl, initialOllamaModel, isOpen]);
+  }, [initialComfyUIUrl, initialGoogleClientId, initialGoogleApiKey, initialGeminiApiKey, initialMammouthApiKey, initialOllamaUrl, initialOllamaModel, isOpen]);
 
   const handleTestConnection = async () => {
     setComfyStatus('testing');
@@ -66,7 +69,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
   };
 
   const handleSave = () => {
-    onSave(comfyUrl, googleClientId, geminiApiKey, mammouthApiKey, ollamaUrl, ollamaModel);
+    onSave(comfyUrl, googleClientId, googleApiKey, geminiApiKey, mammouthApiKey, ollamaUrl, ollamaModel);
     onClose();
   };
 
@@ -249,10 +252,21 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           <div>
             <h3 className="text-lg font-semibold text-text-primary mb-2">Google Drive Integration</h3>
             <p className="text-sm text-text-secondary mb-4">
-              Provide a Google Cloud OAuth Client ID to enable library syncing with Google Drive.
+              Provide credentials from the same Google Cloud project with Drive API and Picker API enabled.
             </p>
+            <label htmlFor="google-drive-api-key" className="block text-sm font-medium text-text-secondary">
+              Google Drive API Key
+            </label>
+            <input
+              type="password"
+              id="google-drive-api-key"
+              value={googleApiKey}
+              onChange={(e) => setGoogleApiKey(e.target.value)}
+              className="mt-1 mb-3 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent shadow-sm"
+              placeholder="AIzaSy..."
+            />
             <label htmlFor="google-client-id" className="block text-sm font-medium text-text-secondary">
-              Google Client ID
+              Google OAuth Client ID
             </label>
             <input
               type="text"

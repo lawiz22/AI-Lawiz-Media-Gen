@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Banner } from './Banner';
 // import { ThemeSwitcher } from './ThemeSwitcher'; // Removed in favor of VisualSettingsModal
 // FIX: Imported the missing PromptIcon component.
-import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, PencilIcon, ResetIcon, PromptIcon, QuestionMarkCircleIcon, SwatchIcon } from './icons';
+import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, FolderPlusIcon, PencilIcon, ResetIcon, PromptIcon, QuestionMarkCircleIcon, SwatchIcon, InfoIcon, CloseIcon } from './icons';
 import { Logo } from './Logo';
 import type { User, VersionInfo, DriveFolder, Provider } from '../types';
 import { getTabAccentStyle } from '../utils/accentTheme';
@@ -16,6 +16,7 @@ interface HeaderProps {
   onLogout: () => void;
   currentUser: User;
   onOpenSettingsModal: () => void;
+  onOpenInstallationDashboard: () => void;
   onOpenVisualSettings: () => void;
   onOpenComfyUIHelper: () => void;
   isComfyUIConnected: boolean | null;
@@ -23,7 +24,10 @@ interface HeaderProps {
   versionInfo: VersionInfo | null;
   driveFolder: DriveFolder | null;
   onDriveConnect: () => void;
+  onCreateDriveFolder: () => void;
   onDriveDisconnect: () => void;
+  onCancelDriveSync: () => void;
+  isDriveSyncing: boolean;
   isDriveConfigured: boolean;
   sessionTokenUsage: {
     promptTokenCount: number;
@@ -40,10 +44,11 @@ export const Header: React.FC<HeaderProps> = ({
   theme, setTheme, onLogout, currentUser,
   projectName, onProjectNameChange,
   onOpenSettingsModal,
+  onOpenInstallationDashboard,
   onOpenVisualSettings,
   onOpenComfyUIHelper,
   isComfyUIConnected, isOllamaConnected, versionInfo,
-  driveFolder, onDriveConnect, onDriveDisconnect,
+  driveFolder, onDriveConnect, onCreateDriveFolder, onDriveDisconnect, onCancelDriveSync, isDriveSyncing,
   isDriveConfigured,
   sessionTokenUsage,
   onResetTokenUsage,
@@ -70,17 +75,11 @@ export const Header: React.FC<HeaderProps> = ({
   }, [projectName, isEditingName]);
 
   const driveButtonTitle = driveFolder
-    ? `Connected to Drive folder: "${driveFolder.name}". Click to disconnect.`
-    : "Connect to Google Drive to sync your library.";
+    ? `Connected to Drive folder: "${driveFolder.name}". Click to choose another folder.`
+    : "Choose a Google Drive folder for library sync.";
 
   const handleDriveClick = () => {
-    if (driveFolder) {
-      if (window.confirm(`Are you sure you want to disconnect from the Google Drive folder "${driveFolder.name}"?`)) {
-        onDriveDisconnect();
-      }
-    } else {
-      onDriveConnect();
-    }
+    onDriveConnect();
   };
 
   const handleBeginEditing = () => {
@@ -162,7 +161,7 @@ export const Header: React.FC<HeaderProps> = ({
                   v{versionInfo.version}
                 </div>
               )}
-              <p className="text-xs text-text-secondary">{currentUser.role === 'admin' ? 'Administrator' : 'User'}</p>
+              <p className="text-xs text-text-secondary">Local Administrator</p>
             </div>
             <div className="mt-1 flex items-center justify-end gap-1">
               {isComfyUIConnected === null ? (
@@ -211,6 +210,14 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           {/* <ThemeSwitcher currentTheme={theme} setTheme={setTheme} /> */}
           <button
+            onClick={onOpenInstallationDashboard}
+            title="What's installed"
+            aria-label="Open installation and feature readiness dashboard"
+            className="p-1.5 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-accent transition-colors"
+          >
+            <InfoIcon className="w-5 h-5" />
+          </button>
+          <button
             onClick={onOpenVisualSettings}
             title="Visual Settings"
             className="p-1.5 rounded-full bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary transition-colors"
@@ -225,13 +232,14 @@ export const Header: React.FC<HeaderProps> = ({
             <WorkflowIcon className="w-5 h-5" />
           </button>
           {isDriveConfigured && (
-            <button
-              onClick={handleDriveClick}
-              title={driveButtonTitle}
-              className={`p-1.5 rounded-full transition-colors ${!!driveFolder ? 'bg-accent text-accent-text hover:bg-accent-hover' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary'}`}
-            >
-              <GoogleDriveIcon className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              {isDriveSyncing && <button onClick={onCancelDriveSync} title="Cancel Google Drive sync" className="rounded-full bg-danger-bg p-1.5 text-danger hover:bg-danger hover:text-white"><CloseIcon className="h-5 w-5" /></button>}
+              <button onClick={handleDriveClick} disabled={isDriveSyncing} title={driveButtonTitle} className={`p-1.5 rounded-full transition-colors disabled:opacity-50 ${!!driveFolder ? 'bg-accent text-accent-text hover:bg-accent-hover' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover hover:text-text-primary'}`}>
+                <GoogleDriveIcon className="w-5 h-5" />
+              </button>
+              {driveFolder && !isDriveSyncing && <button onClick={onCreateDriveFolder} title={`Create a subfolder in Drive folder: ${driveFolder.name}`} className="rounded-full bg-bg-tertiary p-1 text-text-muted hover:bg-bg-tertiary-hover hover:text-accent"><FolderPlusIcon className="h-4 w-4" /></button>}
+              {driveFolder && !isDriveSyncing && <button onClick={onDriveDisconnect} title={`Disconnect from Drive folder: ${driveFolder.name}`} className="rounded-full bg-bg-tertiary p-1 text-text-muted hover:text-danger"><CloseIcon className="h-4 w-4" /></button>}
+            </div>
           )}
           <button
             onClick={onLogout}

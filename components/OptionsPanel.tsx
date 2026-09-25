@@ -10,7 +10,7 @@ import {
     PRESET_POSES,
     MAX_IMAGES,
 } from '../constants';
-import { DEFAULT_GEMINI_IMAGE_MODEL, GEMINI_IMAGE_MODELS, generateBackgroundImagePreview, generateClothingPreview, generateMaskForImage, getGeminiModels } from '../services/geminiService';
+import { DEFAULT_GEMINI_IMAGE_MODEL, GEMINI_IMAGE_MODELS, generateBackgroundImagePreview, generateClothingPreview, generateMaskForImage, getGeminiAspectRatios, getGeminiImageSizes, getGeminiModels, supportsGeminiThinkingLevel } from '../services/geminiService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, generateFlux2ReferenceDescription, getMammouthImageModels } from '../services/mammouthService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
 import { saveToLibrary } from '../services/libraryService';
@@ -706,8 +706,12 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         if (field === 'geminiT2IModel') {
             const newModel = value as string;
+            const supportedSizes = getGeminiImageSizes(newModel);
+            const supportedRatios = getGeminiAspectRatios(newModel);
             updateOptions({
                 geminiT2IModel: newModel,
+                geminiImageSize: supportedSizes.includes(options.geminiImageSize) ? options.geminiImageSize : '1K',
+                aspectRatio: (supportedRatios.includes(options.aspectRatio) ? options.aspectRatio : '1:1') as GenerationOptions['aspectRatio'],
             });
             return;
         }
@@ -847,6 +851,34 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         return (
         <>
+            {!isMammouth && (
+                <OptionSection title="Gemini Image Settings">
+                    <SelectInput
+                        label="Generation Model"
+                        value={selectedModel}
+                        onChange={handleOptionChange('geminiT2IModel')}
+                        options={availableModels.map(model => ({ value: model, label: model }))}
+                        disabled={isDisabled || modelsLoading}
+                    />
+                    {modelsLoading && <p className="text-xs text-text-muted">Refreshing Gemini models...</p>}
+                    <SelectInput
+                        label="Image Size"
+                        value={options.geminiImageSize || '1K'}
+                        onChange={handleOptionChange('geminiImageSize')}
+                        options={getGeminiImageSizes(selectedModel).map(size => ({ value: size || '1K', label: size === '512' ? '512 px' : size || '1K' }))}
+                        disabled={isDisabled}
+                    />
+                    {supportsGeminiThinkingLevel(selectedModel) && (
+                        <SelectInput
+                            label="Thinking Level"
+                            value={options.geminiThinkingLevel || 'minimal'}
+                            onChange={handleOptionChange('geminiThinkingLevel')}
+                            options={[{ value: 'minimal', label: 'Minimal (faster)' }, { value: 'high', label: 'High (higher quality)' }]}
+                            disabled={isDisabled}
+                        />
+                    )}
+                </OptionSection>
+            )}
             {isMammouth && (
                 <OptionSection title="Mammouth Model">
                     <SelectInput
@@ -862,26 +894,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             {generationMode === 't2i' ? (
                 <OptionSection title="Prompt Options">
                     {/* ... T2I Options ... */}
-                    {!isMammouth && <div>
-                        <label className="block text-sm font-medium text-text-secondary">Generation Model</label>
-                        {/* We show the input always now, but with a spinner if loading */}
-                        <div className="relative">
-                            <input
-                                list={isMammouth ? 'mammouth-models-list' : 'gemini-models-list'}
-                                type="text"
-                                value={selectedModel}
-                                onChange={handleOptionChange(isMammouth ? 'mammouthImageModel' : 'geminiT2IModel')}
-                                placeholder="Select or type model name"
-                                disabled={isDisabled}
-                                className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent pr-8"
-                            />
-                            {modelsLoading && <div className="absolute right-2 top-1/2 transform -translate-y-1/2"><SpinnerIcon className="w-4 h-4 animate-spin text-text-muted" /></div>}
-                        </div>
-                        <datalist id={isMammouth ? 'mammouth-models-list' : 'gemini-models-list'}>
-                            {availableModels.map(m => <option key={m} value={m} />)}
-                        </datalist>
-                        <p className="text-xs text-text-muted mt-1">Type a custom model name if not listed.</p>
-                    </div>}
                     <TextInput
                         label="Prompt"
                         value={options.geminiPrompt || ''}
@@ -1531,6 +1543,20 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                     <NumberSlider label={`CFG: ${options.comfyFlux2EditCfg ?? 1}`} value={options.comfyFlux2EditCfg ?? 1} onChange={handleSliderChange('comfyFlux2EditCfg')} min={0.1} max={10} step={0.1} disabled={isDisabled} />
                                     <NumberSlider label={`Source Megapixels: ${options.comfyFlux2EditMegapixels ?? 1}`} value={options.comfyFlux2EditMegapixels ?? 1} onChange={handleSliderChange('comfyFlux2EditMegapixels')} min={0.25} max={4} step={0.25} disabled={isDisabled} />
                                 </div>
+                                <div className="space-y-3 border-t border-border-primary/50 pt-3">
+                                    <h5 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Additional LoRAs</h5>
+                                    {[1, 2].map(index => {
+                                        const nameField = `comfyFlux2EditLora${index}Name` as keyof GenerationOptions;
+                                        const strengthField = `comfyFlux2EditLora${index}Strength` as keyof GenerationOptions;
+                                        const selectedName = options[nameField] as string | undefined;
+                                        const strength = options[strengthField] as number | undefined;
+                                        return <div key={index} className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.65fr)]">
+                                            <SelectInput label={`Additional LoRA ${index}`} value={selectedName || ''} onChange={handleOptionChange(nameField)} options={Array.from(new Set(['', selectedName || '', ...comfyLoras])).map(value => ({ value, label: value || 'None' }))} disabled={isDisabled} />
+                                            <NumberSlider label={`Strength: ${strength ?? 1}`} value={strength ?? 1} onChange={handleSliderChange(strengthField)} min={-2} max={2} step={0.05} disabled={isDisabled || !selectedName} allowDirectInput />
+                                        </div>;
+                                    })}
+                                    {(options.comfyFlux2EditLora1Name || options.comfyFlux2EditLora2Name) && !comfyUIObjectInfo?.LoraLoaderModelOnly && <p className="text-xs text-warning">Additional LoRAs require LoraLoaderModelOnly in ComfyUI.</p>}
+                                </div>
                                 <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={!!options.comfyFlux2EditUseCacheDit} onChange={handleOptionChange('comfyFlux2EditUseCacheDit')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />Enable CacheDiT Accelerator</label>
                                 {options.comfyFlux2EditUseCacheDit && <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                     <SelectInput label="CacheDiT Model Type" value={options.comfyFlux2EditCacheDitModelType || 'Auto'} onChange={handleOptionChange('comfyFlux2EditCacheDitModelType')} options={cacheDitModelTypes.map(value => ({ value, label: value }))} disabled={isDisabled} />
@@ -1707,7 +1733,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     };
 
     const activeModelName = options.provider === 'gemini'
-        ? (generationMode === 't2i' ? (options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL)
+        ? (options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL)
         : options.provider === 'mammouth'
             ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
             : activeTab === 'character-generator'
@@ -1732,7 +1758,15 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         {!hideProviderSwitch && <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1"><button onClick={() => updateOptions({ provider: 'comfyui' })} disabled={isDisabled} className={`px-3 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>ComfyUI</button><button onClick={() => updateOptions({ provider: 'mammouth' })} disabled={isDisabled} className={`px-3 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'mammouth' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>Mammouth</button></div>}
                         {!(activeTab === 'character-generator' && options.provider === 'comfyui') && <NumberSlider label={`Number of Images: ${options.numImages}`} value={options.numImages} onChange={(e) => updateOptions({ numImages: parseInt(e.target.value, 10), poseSelection: options.poseSelection.slice(0, parseInt(e.target.value, 10)) })} min={1} max={MAX_IMAGES} step={1} disabled={isDisabled} />}
                         {!(options.provider === 'comfyui' && (options.comfyModelType === 'qwen-t2i-gguf' || options.comfyModelType === 'flux2-edit')) && (
-                            <SelectInput label="Aspect Ratio" value={options.aspectRatio} onChange={handleOptionChange('aspectRatio')} options={ASPECT_RATIO_OPTIONS} disabled={isDisabled} />
+                            <SelectInput
+                                label="Aspect Ratio"
+                                value={options.aspectRatio}
+                                onChange={handleOptionChange('aspectRatio')}
+                                options={activeTab === 'character-generator' && options.provider === 'gemini'
+                                    ? getGeminiAspectRatios(options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL).map(ratio => ({ value: ratio, label: ratio }))
+                                    : ASPECT_RATIO_OPTIONS}
+                                disabled={isDisabled}
+                            />
                         )}
                     </OptionSection>
                 )}

@@ -21,6 +21,8 @@ import { setActivePromptToolsSubTab, updatePromptGenState } from '../store/promp
 import { AudioPlayer } from './AudioPlayer';
 import { getPromptDestinationOptions, PROMPT_T2I_WORKFLOWS } from '../utils/promptDestination';
 import { LibraryPickerModal } from './LibraryPickerModal';
+import { requiresSfwLibraryRating } from '../services/idbLibraryService';
+import { LIBRARY_CATEGORY_ACCENT_STYLES } from '../utils/accentTheme';
 
 // --- Confirmation Modal Component (defined in-file to avoid adding new files) ---
 interface ConfirmationModalProps {
@@ -90,7 +92,9 @@ interface LibraryPanelProps {
   onLoadItem: (item: LibraryItem, options?: { importTtsCharacterPhotos: boolean }) => void;
   onUpscaleItem: (item: LibraryItem) => void;
   isDriveConnected: boolean;
-  onSyncWithDrive: () => void;
+  onDownloadFromDrive: () => void;
+  onBackupToDrive: () => void;
+  onCancelDriveSync: () => void;
   isSyncing: boolean;
   syncMessage: string;
   isDriveConfigured: boolean;
@@ -522,7 +526,7 @@ type SortDirection = 'asc' | 'desc';
 
 const NSFW_TEXT_PATTERN = /\b(?:nsfw|nude|nudity|naked|topless|explicit|porn|pornographic|sex|sexual|erotic|hentai|xxx|fetish|lingerie)\b/i;
 const SFW_TEXT_PATTERN = /\b(?:sfw|landscape|nature|architecture|cityscape|product|food|vehicle|animal|wildlife|logo|typography|abstract|still life|paysage|nature|architecture|produit|nourriture|vehicule|animal|logo|typographie|abstrait)\b/i;
-const TAGGABLE_MEDIA_TYPES = new Set<LibraryItemType>(['image', 'character', 'video', 'audio-tts', 'tts-reference', 'logo', 'banner', 'album-cover', 'clothes', 'hair', 'prompt', 'extracted-frame', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo', 'preset']);
+const TAGGABLE_MEDIA_TYPES = new Set<LibraryItemType>(['image', 'character', 'video', 'audio-tts', 'tts-reference', 'logo', 'banner', 'album-cover', 'clothes', 'hair', 'prompt', 'extracted-frame', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo', 'preset', 'color-palette', 'font']);
 
 const normalizeTag = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase().slice(0, 48);
 
@@ -584,7 +588,7 @@ const formatFileSize = (bytes: number) => {
   return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 };
 
-export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscaleItem, isDriveConnected, onSyncWithDrive, isSyncing, syncMessage, isDriveConfigured }) => {
+export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscaleItem, isDriveConnected, onDownloadFromDrive, onBackupToDrive, onCancelDriveSync, isSyncing, syncMessage, isDriveConfigured }) => {
   const dispatch: AppDispatch = useDispatch();
   const { items, status: libraryStatus, error: libraryError } = useSelector((state: RootState) => state.library);
   const projectName = useSelector((state: RootState) => state.app.projectName);
@@ -1007,6 +1011,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
   const filteredTaggableItems = useMemo(() => filteredItems.filter(item => TAGGABLE_MEDIA_TYPES.has(item.mediaType)), [filteredItems]);
   const selectedItems = useMemo(() => filteredTaggableItems.filter(item => selectedItemIds.has(item.id)), [filteredTaggableItems, selectedItemIds]);
   const actionTargetItems = selectedItems.length > 0 ? selectedItems : filteredTaggableItems;
+  const hasMutableSafetyTargets = actionTargetItems.some(item => !requiresSfwLibraryRating(item.mediaType));
 
   useEffect(() => {
     const filteredIds = new Set(filteredTaggableItems.map(item => item.id));
@@ -1064,6 +1069,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
   };
 
   const classifyVisibleItems = () => updateVisibleItems(item => {
+    if (requiresSfwLibraryRating(item.mediaType)) return item.safetyRating === 'sfw' ? null : { safetyRating: 'sfw' };
     if (item.safetyRating) return null;
     const searchableText = getLibrarySearchText(item);
     if (NSFW_TEXT_PATTERN.test(searchableText)) return { safetyRating: 'nsfw' };
@@ -1071,17 +1077,21 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
     return null;
   });
 
-  const setVisibleSafety = (safetyRating: LibraryItem['safetyRating']) => updateVisibleItems(() => ({ safetyRating }));
+  const setVisibleSafety = (safetyRating: LibraryItem['safetyRating']) => updateVisibleItems(item =>
+    requiresSfwLibraryRating(item.mediaType) && safetyRating !== 'sfw' ? null : { safetyRating });
 
   const confirmVisibleSafety = (safetyRating: LibraryItem['safetyRating']) => {
-    if (actionTargetCount === 0) return;
+    const safetyTargetCount = safetyRating === 'sfw'
+      ? actionTargetCount
+      : actionTargetItems.filter(item => !requiresSfwLibraryRating(item.mediaType)).length;
+    if (safetyTargetCount === 0) return;
     const actionLabel = safetyRating === 'sfw' ? 'Mark SFW' : safetyRating === 'nsfw' ? 'Mark NSFW' : 'Clear safety';
     const targetDescription = selectedItems.length > 0 ? 'selected' : 'matching';
     setConfirmModal({
       isOpen: true,
       title: actionLabel,
-      message: <p>Apply <strong className="text-text-primary">{actionLabel}</strong> to <strong className="text-text-primary">{actionTargetCount} {targetDescription} item(s)</strong>?</p>,
-      confirmText: `${actionLabel} (${actionTargetCount})`,
+      message: <p>Apply <strong className="text-text-primary">{actionLabel}</strong> to <strong className="text-text-primary">{safetyTargetCount} {targetDescription} item(s)</strong>?</p>,
+      confirmText: `${actionLabel} (${safetyTargetCount})`,
       onConfirm: async () => {
         setConfirmModal(previous => ({ ...previous, isOpen: false }));
         try {
@@ -1370,10 +1380,12 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {isDriveConfigured && (
-              <button onClick={onSyncWithDrive} disabled={!isDriveConnected || isSyncing || isImporting} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
-                {isSyncing ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GoogleDriveIcon className="w-5 h-5" />}
-                {isSyncing ? 'Syncing...' : 'Sync with Drive'}
-              </button>
+              isSyncing
+                ? <button onClick={onCancelDriveSync} className="flex items-center gap-2 rounded-lg border border-danger/50 bg-danger-bg px-4 py-2 font-semibold text-danger hover:bg-danger hover:text-white"><CloseIcon className="h-5 w-5" />Cancel sync</button>
+                : <div className="flex items-center gap-1 rounded-lg border border-border-primary bg-bg-primary p-1" role="group" aria-label="Google Drive synchronization">
+                    <button onClick={onDownloadFromDrive} disabled={!isDriveConnected || isImporting} title="Download missing items from Google Drive without uploading local items" className="flex items-center gap-2 rounded-md px-3 py-1.5 font-semibold text-text-secondary hover:bg-bg-tertiary-hover disabled:opacity-50"><DownloadIcon className="h-5 w-5" />Download</button>
+                    <button onClick={onBackupToDrive} disabled={!isDriveConnected || isImporting} title="Back up missing local items to Google Drive without downloading remote items" className="flex items-center gap-2 rounded-md bg-accent px-3 py-1.5 font-semibold text-accent-text hover:bg-accent-hover disabled:opacity-50"><UploadIconSimple className="h-5 w-5" />Backup</button>
+                  </div>
             )}
             <button onClick={handleImportClick} disabled={isImporting || isExporting || isSyncing} title="Import a .lawiz-library archive or legacy JSON backup" className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
               {isImporting ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <UploadIconSimple className="w-5 h-5" />}
@@ -1429,7 +1441,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               <p className="text-sm font-semibold text-text-secondary mr-2">Filter:</p>
               {FILTER_BUTTONS.map(({ id, label, icon }) => (
-                <button key={id} onClick={() => handleFilterClick(id)} title={label} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${filter.includes(id) ? 'bg-accent text-accent-text' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>
+                <button key={id} onClick={() => handleFilterClick(id)} title={label} style={LIBRARY_CATEGORY_ACCENT_STYLES[id]} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${filter.includes(id) ? 'bg-accent text-accent-text' : 'bg-bg-tertiary text-accent hover:bg-accent/15'}`}>
                   {icon}<span>{label}</span><span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] leading-none ${filter.includes(id) ? 'bg-black/25' : 'bg-bg-primary text-text-muted'}`}>{categoryItemCounts.get(id) || 0}</span>
                 </button>
               ))}
@@ -1502,8 +1514,8 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => confirmVisibleSafety('sfw')} disabled={isUpdatingTags || actionTargetCount === 0} className="h-8 rounded-md bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-500 disabled:opacity-50">Mark SFW</button>
-              <button type="button" onClick={() => confirmVisibleSafety('nsfw')} disabled={isUpdatingTags || actionTargetCount === 0} className="h-8 rounded-md bg-red-600 px-3 text-xs font-bold text-white hover:bg-red-500 disabled:opacity-50">Mark NSFW</button>
-              <button type="button" onClick={() => confirmVisibleSafety(undefined)} disabled={isUpdatingTags || actionTargetCount === 0} className="h-8 rounded-md border border-border-primary px-3 text-xs font-semibold text-text-secondary hover:bg-bg-tertiary disabled:opacity-50">Clear safety</button>
+              <button type="button" onClick={() => confirmVisibleSafety('nsfw')} disabled={isUpdatingTags || actionTargetCount === 0 || !hasMutableSafetyTargets} className="h-8 rounded-md bg-red-600 px-3 text-xs font-bold text-white hover:bg-red-500 disabled:opacity-50">Mark NSFW</button>
+              <button type="button" onClick={() => confirmVisibleSafety(undefined)} disabled={isUpdatingTags || actionTargetCount === 0 || !hasMutableSafetyTargets} className="h-8 rounded-md border border-border-primary px-3 text-xs font-semibold text-text-secondary hover:bg-bg-tertiary disabled:opacity-50">Clear safety</button>
               {availableTags.length > 0 && <select aria-label="Choose existing tag for bulk edit" value="" onChange={(event) => setBulkTag(event.target.value)} className="h-8 min-w-36 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs focus:border-accent focus:ring-accent">
                 <option value="">Existing tag...</option>
                 {availableTags.map(tag => <option key={tag} value={tag}>#{tag}</option>)}
@@ -1584,9 +1596,13 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                   </div>
                   {TAGGABLE_MEDIA_TYPES.has(selectedItemModal.mediaType) && <div className="space-y-3 rounded-md border border-border-primary bg-bg-primary p-3">
                     <div><h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">Safety</h4><div className="mt-2 flex flex-wrap gap-2">
-                      <button type="button" onClick={() => void updateSelectedItemMetadata({ safetyRating: 'sfw' })} className={`rounded-md px-3 py-1.5 text-xs font-bold ${selectedItemModal.safetyRating === 'sfw' ? 'bg-blue-600 text-white' : 'border border-blue-500 text-blue-400'}`}>SFW</button>
-                      <button type="button" onClick={() => void updateSelectedItemMetadata({ safetyRating: 'nsfw' })} className={`rounded-md px-3 py-1.5 text-xs font-bold ${selectedItemModal.safetyRating === 'nsfw' ? 'bg-red-600 text-white' : 'border border-red-500 text-red-400'}`}>NSFW</button>
-                      <button type="button" onClick={() => void updateSelectedItemMetadata({ safetyRating: undefined })} className="rounded-md border border-border-primary px-3 py-1.5 text-xs font-semibold text-text-secondary">Unrated</button>
+                      {requiresSfwLibraryRating(selectedItemModal.mediaType)
+                        ? <span className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white">SFW</span>
+                        : <>
+                          <button type="button" onClick={() => void updateSelectedItemMetadata({ safetyRating: 'sfw' })} className={`rounded-md px-3 py-1.5 text-xs font-bold ${selectedItemModal.safetyRating === 'sfw' ? 'bg-blue-600 text-white' : 'border border-blue-500 text-blue-400'}`}>SFW</button>
+                          <button type="button" onClick={() => void updateSelectedItemMetadata({ safetyRating: 'nsfw' })} className={`rounded-md px-3 py-1.5 text-xs font-bold ${selectedItemModal.safetyRating === 'nsfw' ? 'bg-red-600 text-white' : 'border border-red-500 text-red-400'}`}>NSFW</button>
+                          <button type="button" onClick={() => void updateSelectedItemMetadata({ safetyRating: undefined })} className="rounded-md border border-border-primary px-3 py-1.5 text-xs font-semibold text-text-secondary">Unrated</button>
+                        </>}
                     </div></div>
                     <div><h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">Custom Tags</h4><div className="mt-2 flex flex-wrap gap-1">{selectedItemModal.tags?.length ? selectedItemModal.tags.map(tag => <button key={tag} type="button" onClick={() => void removeSelectedItemTag(tag)} title={`Remove ${tag}`} className="rounded bg-bg-tertiary px-2 py-1 text-xs text-text-secondary hover:text-danger">#{tag} ×</button>) : <span className="text-xs text-text-muted">No custom tags</span>}</div><div className="mt-2 flex flex-wrap gap-2">{availableTags.some(tag => !selectedItemModal.tags?.includes(tag)) && <select aria-label="Choose existing tag for item" value="" onChange={(event) => setItemTag(event.target.value)} className="h-8 min-w-36 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs"><option value="">Existing tag...</option>{availableTags.filter(tag => !selectedItemModal.tags?.includes(tag)).map(tag => <option key={tag} value={tag}>#{tag}</option>)}</select>}<input aria-label="Item custom tag" value={itemTag} onChange={(event) => setItemTag(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void addSelectedItemTag(); }} placeholder="Add tag..." className="h-8 min-w-32 flex-1 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs" /><button type="button" onClick={() => void addSelectedItemTag()} disabled={!normalizeTag(itemTag)} className="rounded-md bg-accent px-3 text-xs font-bold text-accent-text disabled:opacity-50">Add</button></div></div>
                   </div>}

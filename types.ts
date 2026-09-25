@@ -165,14 +165,13 @@ declare global {
 
 export interface User {
   username: string;
-  role: 'admin' | 'user';
-  password?: string; // Only used for creation/local storage
+  role: 'admin';
 }
 
 export type PoseMode = 'random' | 'select' | 'prompt' | 'library';
 export type BackgroundMode = 'black' | 'white' | 'gray' | 'green screen' | 'natural studio' | 'original' | 'random' | 'prompt' | 'image';
 export type ClothingMode = 'original' | 'image' | 'prompt' | 'random';
-export type AspectRatio = '1:1' | '2:3' | '3:4' | '3:5' | '4:5' | '5:7' | '5:8' | '7:9' | '9:16' | '9:19' | '9:21' | '9:32' | '3:2' | '4:3' | '5:3' | '5:4' | '7:5' | '8:5' | '9:7' | '16:9' | '19:9' | '21:9' | '32:9';
+export type AspectRatio = '1:1' | '1:4' | '1:8' | '2:3' | '3:4' | '3:5' | '4:1' | '4:5' | '5:7' | '5:8' | '7:9' | '8:1' | '9:16' | '9:19' | '9:21' | '9:32' | '3:2' | '4:3' | '5:3' | '5:4' | '7:5' | '8:5' | '9:7' | '16:9' | '19:9' | '21:9' | '32:9';
 export type PhotoStyle = 'professional photoshoot' | '35mm analog' | 'polaroid' | 'candid' | 'smartphone';
 export type ImageStyle = 'photorealistic' | 'cartoon' | 'comic book style' | 'anime' | 'oil painting' | 'watercolor painting' | 'impressionism' | 'charcoal sketch' | 'cubism' | 'surrealism' | 'pixel art';
 export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | 'a 1970s film look' | 'a high-contrast film noir style photograph' | 'a classical Dutch Master painting' | 'a high-fashion Vogue magazine shot';
@@ -212,6 +211,8 @@ export interface GenerationOptions {
   geminiMode: GeminiMode;
   geminiPrompt?: string; // For t2i
   geminiT2IModel?: GeminiT2IModel;
+  geminiImageSize?: '512' | '1K' | '2K' | '4K';
+  geminiThinkingLevel?: 'minimal' | 'high';
   mammouthImageModel?: string;
   poseMode: PoseMode;
   poseSelection: string[];
@@ -291,6 +292,10 @@ export interface GenerationOptions {
   comfyFlux2EditReinforceSourceIdentity?: boolean;
   comfyFlux2EditIdentityReferenceWeight?: number;
   comfyFlux2EditRequirePhotorealism?: boolean;
+  comfyFlux2EditLora1Name?: string;
+  comfyFlux2EditLora1Strength?: number;
+  comfyFlux2EditLora2Name?: string;
+  comfyFlux2EditLora2Strength?: number;
   comfyFlux2EditUseCacheDit?: boolean;
   comfyFlux2EditCacheDitModelType?: string;
   comfyFlux2EditCacheDitWarmupSteps?: number;
@@ -1020,7 +1025,6 @@ export interface AppSliceState {
   // Modals & Panels
   isSettingsModalOpen: boolean;
   isVisualSettingsModalOpen: boolean;
-  isAdminPanelOpen: boolean;
   isComfyUIHelperOpen: boolean;
   isClothingPickerOpen: boolean;
   isBackgroundPickerOpen: boolean;

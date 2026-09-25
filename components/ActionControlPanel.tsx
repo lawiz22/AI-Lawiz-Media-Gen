@@ -2,7 +2,7 @@ import React from 'react';
 import { GenerationOptions } from '../types';
 import { ASPECT_RATIO_OPTIONS, FLUX2_RESOLUTION_OPTIONS, KREA2_RAW_RESOLUTION_OPTIONS, KREA2_RESOLUTION_OPTIONS, MAX_IMAGES } from '../constants';
 import { GenerateIcon, ResetIcon } from './icons';
-import { DEFAULT_GEMINI_IMAGE_MODEL } from '../services/geminiService';
+import { DEFAULT_GEMINI_IMAGE_MODEL, getGeminiAspectRatios } from '../services/geminiService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL } from '../services/mammouthService';
 
 interface ActionControlPanelProps {
@@ -24,8 +24,14 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
     isDisabled,
     updateOptions
 }) => {
+    const aspectRatioOptions = options.provider === 'gemini'
+        ? getGeminiAspectRatios(options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL).map(value => ({
+            value,
+            label: ASPECT_RATIO_OPTIONS.find(option => option.value === value)?.label || value,
+        }))
+        : ASPECT_RATIO_OPTIONS;
     const activeModelName = options.provider === 'gemini'
-        ? (generationMode === 't2i' ? (options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL)
+        ? (options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL)
         : options.provider === 'mammouth'
             ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
             : options.comfyCharacterMode === 'flux2'
@@ -58,19 +64,19 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                             <span className="w-8 text-right text-xs text-text-secondary">{(options.megapixel || 1).toFixed(1)}</span>
                         </div>
                     )}
-                    {options.comfyModelType === 'flux2-edit' ? (
+                    {options.provider === 'comfyui' && options.comfyModelType === 'flux2-edit' ? (
                         <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-text-secondary">Source MP:</label>
                             <input type="number" min={0.25} max={4} step={0.25} value={options.comfyFlux2EditMegapixels ?? 1} onChange={(event) => updateOptions({ comfyFlux2EditMegapixels: Number(event.target.value) })} disabled={isDisabled} className="w-16 rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-center text-xs focus:border-accent focus:ring-accent" />
                         </div>
-                    ) : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw' ? (
+                    ) : options.provider === 'comfyui' && (options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw') ? (
                         <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-text-secondary">Resolution:</label>
                             <select value={options.comfyKreaResolution || (options.comfyModelType === 'krea2-raw' ? '1920x1088' : '832x1216')} onChange={(event) => updateOptions({ comfyKreaResolution: event.target.value })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs focus:border-accent focus:ring-accent">
                                 {(options.comfyModelType === 'krea2-raw' ? KREA2_RAW_RESOLUTION_OPTIONS : KREA2_RESOLUTION_OPTIONS).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                             </select>
                         </div>
-                    ) : options.comfyModelType === 'flux2-simple' ? (
+                    ) : options.provider === 'comfyui' && options.comfyModelType === 'flux2-simple' ? (
                         <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-text-secondary">Resolution:</label>
                             <select value={options.comfyFlux2Resolution || '832x1216'} onChange={(event) => updateOptions({ comfyFlux2Resolution: event.target.value })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs focus:border-accent focus:ring-accent">
@@ -81,7 +87,7 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                         <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-text-secondary">Ratio:</label>
                             <select value={options.aspectRatio} onChange={(event) => updateOptions({ aspectRatio: event.target.value })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs focus:border-accent focus:ring-accent">
-                                {ASPECT_RATIO_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                {aspectRatioOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                             </select>
                         </div>
                     )}
