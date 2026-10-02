@@ -292,6 +292,7 @@ export interface GenerationOptions {
   comfyFlux2EditReinforceSourceIdentity?: boolean;
   comfyFlux2EditIdentityReferenceWeight?: number;
   comfyFlux2EditRequirePhotorealism?: boolean;
+  comfyFlux2EditPreserveSourceStyle?: boolean;
   comfyFlux2EditLora1Name?: string;
   comfyFlux2EditLora1Strength?: number;
   comfyFlux2EditLora2Name?: string;
@@ -659,8 +660,8 @@ export interface ExtractorState {
   // Clothes
   clothesSourceFile: File | null;
   clothesDetails: string;
-  clothesAnalysisProvider: 'mammouth' | 'ollama';
-  clothesGenerationProvider: 'flux2' | 'mammouth';
+  clothesAnalysisProvider: 'gemini' | 'mammouth' | 'ollama';
+  clothesGenerationProvider: 'flux2' | 'gemini' | 'mammouth';
   isIdentifying: boolean;
   identifiedItems: (IdentifiedClothing & { selected: boolean })[];
   isGenerating: boolean;
@@ -672,7 +673,7 @@ export interface ExtractorState {
   hairSourceFile: File | null;
   hairPersonCount: number;
   hairExactFidelity: boolean;
-  hairGenerationProvider: 'flux2' | 'mammouth';
+  hairGenerationProvider: 'flux2' | 'gemini' | 'mammouth';
   isGeneratingHair: boolean;
   generatedHair: GeneratedHair[];
   hairError: string | null;
@@ -680,8 +681,8 @@ export interface ExtractorState {
   objectSourceFile: File | null;
   objectHints: string;
   maxObjects: number;
-  objectAnalysisProvider: 'mammouth' | 'ollama';
-  objectGenerationProvider: 'flux2' | 'mammouth';
+  objectAnalysisProvider: 'gemini' | 'mammouth' | 'ollama';
+  objectGenerationProvider: 'flux2' | 'gemini' | 'mammouth';
   isIdentifyingObjects: boolean;
   identifiedObjects: (IdentifiedObject & { selected: boolean })[];
   isGeneratingObjects: boolean;
@@ -696,10 +697,11 @@ export interface ExtractorState {
   mannequinReferenceFile: File | null;
   poseOutputMode: PoseOutputMode;
   mannequinPromptHint: string;
-  poseGenerationProvider: 'flux2' | 'mammouth';
+  poseAnalysisProvider: 'gemini' | 'mammouth';
+  poseGenerationProvider: 'flux2' | 'gemini' | 'mammouth';
   // Font
   fontSourceFile: File | null;
-  fontGenerationProvider: 'flux2' | 'mammouth';
+  fontGenerationProvider: 'flux2' | 'gemini' | 'mammouth';
   fontUseSourceColors: boolean;
   fontFlux2Steps: number;
   fontFlux2Cfg: number;

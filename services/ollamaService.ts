@@ -110,7 +110,7 @@ export const testOllamaConnection = async (url: string): Promise<OllamaConnectio
     }
 };
 
-const chatWithOllama = async (url: string, model: string, content: string, image?: File, format?: object, temperature = 0.35, onActivity?: OllamaActivityCallback, signal?: AbortSignal): Promise<string> => {
+const chatWithOllama = async (url: string, model: string, content: string, image?: File, format?: object, temperature = 0.35, onActivity?: OllamaActivityCallback, signal?: AbortSignal, maxTokens = 2048): Promise<string> => {
     if (!model.trim()) throw new Error('Select an Ollama model.');
     onActivity?.({ phase: 'loading', thinking: '', response: '' });
     let images: string[] | undefined;
@@ -140,7 +140,7 @@ const chatWithOllama = async (url: string, model: string, content: string, image
             options: {
                 temperature,
                 num_ctx: image ? 16384 : 8192,
-                num_predict: image ? 2048 : 2048,
+                num_predict: maxTokens,
             },
         }),
     });
@@ -214,6 +214,10 @@ const getStyleInstruction = (modelType: string): string => {
     if (modelType === 'flux') return 'Return one detailed artistic and descriptive paragraph.';
     return 'Return one concise natural-language sentence.';
 };
+
+export const analyzeStructuredImageWithOllama = (
+    image: File, instruction: string, schema: object, url: string, model: string, signal?: AbortSignal,
+): Promise<string> => chatWithOllama(url, model, instruction, image, schema, 0.2, undefined, signal, 8192);
 
 export const generateOllamaPromptFromImage = async (
     sourceImage: File,

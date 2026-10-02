@@ -15,6 +15,7 @@ import { addSessionTokenUsage, setModalOpen } from '../../store/appSlice';
 import { Pose, UploadedFile, Quality, DebugInfo, GeneratedImage } from '../../groupPhotoFusion/types';
 import { POSES, PERSONAS } from '../../groupPhotoFusion/constants';
 import { generateComfyUIGroupPhoto, generateGroupPhoto, generateQwenGroupPhoto } from '../../services/groupPhotoFusionService';
+import { DEFAULT_GEMINI_IMAGE_MODEL, GEMINI_IMAGE_MODELS, getApiKey, getGeminiImageSizes, getGeminiModels, supportsGeminiThinkingLevel } from '../../services/geminiService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, getMammouthImageModels } from '../../services/mammouthService';
 import FileUpload from './FileUpload';
 import ImagePreview from './ImagePreview';
@@ -25,10 +26,11 @@ import { DownloadIcon, RefreshIcon, ZoomIcon, ZipIcon, SaveIcon, CheckIcon, Spin
 import DebugSection from './DebugSection';
 import { dataUrlToThumbnail, fileToDataUrl } from '../../utils/imageUtils';
 import { SendToLTXButton } from '../SendToLTXButton';
-import { CheckboxSlider, NumberSlider, SelectInput } from '../InputComponents';
+import { NumberSlider, SelectInput } from '../InputComponents';
 
 const getOptions = (input: any): string[] => Array.isArray(input?.[0]) ? input[0] : [];
 const withCurrent = (current: string, values: string[]) => Array.from(new Set([current, ...values].filter(Boolean))).map(value => ({ value, label: value }));
+const getImageExtension = (dataUrl: string) => dataUrl.startsWith('data:image/png') ? 'png' : dataUrl.startsWith('data:image/webp') ? 'webp' : 'jpg';
 const QWEN_LIGHTNING_PRESETS = {
   4: 'QWEN\\Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors',
   8: 'QWEN\\Qwen-Image-Lightning-8steps-V2.0.safetensors',
@@ -54,9 +56,18 @@ const GroupPhotoFusionPanel: React.FC = () => {
 
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [geminiModels, setGeminiModels] = useState<string[]>([...GEMINI_IMAGE_MODELS]);
   const [mammouthModels, setMammouthModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
   const [isLoadingMammouthModels, setIsLoadingMammouthModels] = useState(false);
-  const models = getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name);
+  const ggufModels = Array.from(new Set([
+    ...getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name),
+    ...getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.gguf_name),
+  ]));
+  const unetModels = getOptions(comfyUIObjectInfo?.UNETLoader?.input?.required?.unet_name);
+  const flux2Models = Array.from(new Set([
+    ...ggufModels.filter(model => /flux[-_ ]?2|klein/i.test(model)),
+    ...unetModels.filter(model => /flux[-_ ]?2|klein/i.test(model)),
+  ]));
   const qwenModels = getOptions(comfyUIObjectInfo?.UNETLoader?.input?.required?.unet_name);
   const clips = getOptions(comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name);
   const vaes = getOptions(comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name);
@@ -64,10 +75,12 @@ const GroupPhotoFusionPanel: React.FC = () => {
   const schedulers = getOptions(comfyUIObjectInfo?.KSampler?.input?.required?.scheduler);
   const qwenLoras = getOptions(comfyUIObjectInfo?.LoraLoaderModelOnly?.input?.required?.lora_name);
   const cacheDitModels = getOptions(comfyUIObjectInfo?.CacheDiT_Model_Optimizer?.input?.required?.model_type);
-  const fluxRequiredNodes = ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'];
+  const selectedFlux2Model = generationOptions.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf';
+  const fluxRequiredNodes = [selectedFlux2Model.toLowerCase().endsWith('.gguf') ? 'UnetLoaderGGUF' : 'UNETLoader', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'];
   const qwenRequiredNodes = ['UNETLoader', 'CLIPLoader', 'VAELoader', 'ModelSamplingAuraFlow', 'CFGNorm', 'TextEncodeQwenImageEditPlus', 'ImageScaleToTotalPixels'];
   const requiredNodes = provider === 'qwen' ? qwenRequiredNodes : fluxRequiredNodes;
-  const missingNodes = provider === 'mammouth' || !comfyUIObjectInfo ? [] : requiredNodes.filter(node => !comfyUIObjectInfo[node]);
+  const missingNodes = provider === 'gemini' || provider === 'mammouth' || !comfyUIObjectInfo ? [] : requiredNodes.filter(node => !comfyUIObjectInfo[node]);
+  if (provider === 'comfyui' && (generationOptions.comfyFlux2EditLora1Name?.trim() || generationOptions.comfyFlux2EditLora2Name?.trim()) && comfyUIObjectInfo && !comfyUIObjectInfo.LoraLoaderModelOnly) missingNodes.push('LoraLoaderModelOnly');
   if (provider === 'comfyui' && generationOptions.comfyFlux2EditUseCacheDit && comfyUIObjectInfo && !comfyUIObjectInfo.CacheDiT_Model_Optimizer) missingNodes.push('CacheDiT_Model_Optimizer');
 
   const updateFlux2Option = (updates: Partial<typeof generationOptions>) => dispatch(updateGenerationOptions(updates));
@@ -90,7 +103,17 @@ const GroupPhotoFusionPanel: React.FC = () => {
     });
   };
   const qwenInputLimitExceeded = provider === 'qwen' && uploadedFiles.length + (backgroundFile ? 1 : 0) > 3;
-  const providerLabel = provider === 'comfyui' ? 'FLUX2' : provider === 'qwen' ? 'QWEN-Edit' : 'Mammouth';
+  const providerLabel = provider === 'comfyui' ? 'FLUX2' : provider === 'qwen' ? 'QWEN-Edit' : provider === 'gemini' ? 'Gemini' : 'Mammouth';
+  const isProviderReady = provider === 'mammouth' ? isMammouthConnected : provider === 'gemini' ? !!getApiKey() : isComfyUIConnected && missingNodes.length === 0;
+
+  useEffect(() => {
+    if (provider !== 'gemini') return;
+    getGeminiModels().then(models => setGeminiModels(Array.from(new Set([
+      generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL,
+      ...models,
+      ...GEMINI_IMAGE_MODELS,
+    ]))));
+  }, [provider]);
 
   useEffect(() => {
     if (provider !== 'mammouth') return;
@@ -106,6 +129,26 @@ const GroupPhotoFusionPanel: React.FC = () => {
       return;
     }
     dispatch(setUploadedFiles(files));
+  };
+
+  const handleAddLocalFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const subjectLimit = provider === 'qwen' ? 3 - (backgroundFile ? 1 : 0) : 4;
+    const availableSlots = subjectLimit - uploadedFiles.length;
+    if (files.length > availableSlots) {
+      dispatch(setError(provider === 'qwen'
+        ? `Qwen Edit can add only ${Math.max(availableSlots, 0)} more subject photo${availableSlots === 1 ? '' : 's'} with the current inputs.`
+        : `You can add only ${Math.max(availableSlots, 0)} more subject photo${availableSlots === 1 ? '' : 's'}.`));
+      return;
+    }
+    const additions: UploadedFile[] = Array.from(files).map(file => ({
+      id: crypto.randomUUID(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+      personaId: 'default',
+    }));
+    dispatch(setError(null));
+    dispatch(setUploadedFiles([...uploadedFiles, ...additions]));
   };
 
   const handleBackgroundChange = (file: UploadedFile) => {
@@ -182,12 +225,12 @@ const GroupPhotoFusionPanel: React.FC = () => {
         const updateProgress = (message: string, value: number) => dispatch(updateGeneratedImage({ id, progress: value, progressMessage: message }));
         try {
           updateProgress('Starting generation...', 0.02);
-          const result = provider === 'mammouth'
+          const result = provider === 'gemini' || provider === 'mammouth'
             ? await generateGroupPhoto(
                 [...subjectFiles, ...(backgroundToUse ? [backgroundToUse.file] : [])],
                 prompt,
-                'mammouth',
-                generationOptions.mammouthImageModel,
+                provider,
+                generationOptions,
                 updateProgress,
               )
             : provider === 'qwen'
@@ -223,7 +266,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
                 );
           dispatch(updateGeneratedImage({
             id,
-            base64: `data:image/jpeg;base64,${result.imageBase64}`,
+            base64: `data:${result.imageMimeType || 'image/jpeg'};base64,${result.imageBase64}`,
             seed: result.seed,
             status: 'success',
             progress: 1,
@@ -240,6 +283,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
               quality,
               apiResponseText: result.responseText,
               generatedImageBase64: result.imageBase64,
+              generatedImageMimeType: result.imageMimeType,
             }));
           }
         } catch (generationError) {
@@ -275,14 +319,14 @@ const GroupPhotoFusionPanel: React.FC = () => {
     const updateProgress = (message: string, value: number) => dispatch(updateGeneratedImage({ id, progress: value, progressMessage: message }));
 
     try {
-        const result = provider === 'mammouth'
-          ? await generateGroupPhoto([...subjectFiles, ...(backgroundToUse ? [backgroundToUse.file] : [])], prompt, 'mammouth', generationOptions.mammouthImageModel, updateProgress)
+        const result = provider === 'gemini' || provider === 'mammouth'
+          ? await generateGroupPhoto([...subjectFiles, ...(backgroundToUse ? [backgroundToUse.file] : [])], prompt, provider, generationOptions, updateProgress)
           : provider === 'qwen'
             ? await generateQwenGroupPhoto(subjectFiles, backgroundToUse?.file || null, prompt, personaDescriptions, generationOptions, updateProgress)
           : await generateComfyUIGroupPhoto(subjectFiles, backgroundToUse?.file || null, prompt, personaDescriptions, generationOptions, updateProgress);
         dispatch(updateGeneratedImage({
             id,
-            base64: `data:image/jpeg;base64,${result.imageBase64}`,
+          base64: `data:${result.imageMimeType || 'image/jpeg'};base64,${result.imageBase64}`,
             seed: result.seed,
             status: 'success',
             progress: 1,
@@ -299,6 +343,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
                 quality,
                 apiResponseText: result.responseText,
                 generatedImageBase64: result.imageBase64,
+                generatedImageMimeType: result.imageMimeType,
             }));
         }
     } catch(err) {
@@ -323,7 +368,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
         successfulImages.forEach((image, index) => {
             if (image.base64) {
                 const base64Data = image.base64.split(',')[1];
-                zip.file(`fusion_${index + 1}.jpg`, base64Data, { base64: true });
+                zip.file(`fusion_${index + 1}.${getImageExtension(image.base64)}`, base64Data, { base64: true });
             }
         });
 
@@ -353,7 +398,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
             sourceImage: uploadedFiles[0] ? await fileToDataUrl(uploadedFiles[0].file) : undefined,
             options: {
               ...generationOptions,
-              provider: provider === 'mammouth' ? 'mammouth' : 'comfyui',
+              provider: provider === 'qwen' ? 'comfyui' : provider,
               ...(provider === 'comfyui' ? {
                 comfyModelType: 'flux2-edit' as const,
                 comfyFlux2EditPrompt: ltxPrompt,
@@ -436,7 +481,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
                         </button>
                         <a
                           href={image.base64}
-                          download={`group-fusion-${image.id.substring(0,4)}.jpg`}
+                          download={`group-fusion-${image.id.substring(0,4)}.${getImageExtension(image.base64)}`}
                           className="text-white rounded-full p-3 bg-black/50 hover:bg-black/80"
                           aria-label="Download image"
                         >
@@ -456,6 +501,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
                      {image.status === 'error' && (
                         <button 
                             onClick={() => handleRetry(image.id)}
+                          disabled={!isProviderReady}
                             className="text-white rounded-full p-3 bg-black/50 hover:bg-black/80"
                             aria-label="Retry generation"
                         >
@@ -492,7 +538,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
       const isBackgroundDisabled = selectedPose?.id === 'cinematic-portrait' || selectedPose?.id === 'professional-bw';
       return (
         <div className="w-full">
-          <ImagePreview files={uploadedFiles} onRemove={handleRemoveImage} onPersonaChange={handlePersonaChange} onCharacterNameChange={handleCharacterNameChange} onRemoveAll={handleRemoveAll} onOpenLibrary={handleOpenLibrary} />
+          <ImagePreview files={uploadedFiles} onRemove={handleRemoveImage} onPersonaChange={handlePersonaChange} onCharacterNameChange={handleCharacterNameChange} onRemoveAll={handleRemoveAll} onAddLocalFiles={handleAddLocalFiles} onOpenLibrary={handleOpenLibrary} />
           <div className="space-y-8 mt-8">
             <BackgroundUpload
               backgroundFile={backgroundFile}
@@ -513,7 +559,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
               </button>
               {advancedOpen && <div className="space-y-5 border-t border-border-primary p-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <SelectInput label="FLUX2 Model" value={generationOptions.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf'} onChange={(event) => updateFlux2Option({ comfyFlux2EditUnet: event.target.value })} options={withCurrent(generationOptions.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf', models)} disabled={isLoading} />
+                  <SelectInput label="FLUX2 Model (GGUF / Safetensors)" value={selectedFlux2Model} onChange={(event) => updateFlux2Option({ comfyFlux2EditUnet: event.target.value })} options={withCurrent(selectedFlux2Model, flux2Models)} disabled={isLoading} />
                   <SelectInput label="CLIP" value={generationOptions.comfyFlux2EditClip || 'qwen_3_4b.safetensors'} onChange={(event) => updateFlux2Option({ comfyFlux2EditClip: event.target.value })} options={withCurrent(generationOptions.comfyFlux2EditClip || 'qwen_3_4b.safetensors', clips)} disabled={isLoading} />
                   <SelectInput label="VAE" value={generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors'} onChange={(event) => updateFlux2Option({ comfyFlux2EditVae: event.target.value })} options={withCurrent(generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors', vaes)} disabled={isLoading} />
                   <SelectInput label="Sampler" value={generationOptions.comfyFlux2EditSampler || 'euler'} onChange={(event) => updateFlux2Option({ comfyFlux2EditSampler: event.target.value })} options={withCurrent(generationOptions.comfyFlux2EditSampler || 'euler', samplers)} disabled={isLoading} />
@@ -524,7 +570,24 @@ const GroupPhotoFusionPanel: React.FC = () => {
                   <SelectInput label="Seed Control" value={generationOptions.comfySeedControl || 'randomize'} onChange={(event) => updateFlux2Option({ comfySeedControl: event.target.value as NonNullable<typeof generationOptions.comfySeedControl> })} options={[{ value: 'randomize', label: 'Randomize' }, { value: 'fixed', label: 'Fixed' }, { value: 'increment', label: 'Increment' }, { value: 'decrement', label: 'Decrement' }]} disabled={isLoading} />
                   {(generationOptions.comfySeedControl === 'increment' || generationOptions.comfySeedControl === 'decrement') && <NumberSlider label={`Seed Step: ${generationOptions.comfySeedIncrement ?? 1}`} value={generationOptions.comfySeedIncrement ?? 1} onChange={(event) => updateFlux2Option({ comfySeedIncrement: Number(event.target.value) })} min={1} max={1000} step={1} disabled={isLoading} allowDirectInput />}
                 </div>
-                <CheckboxSlider label="Enable CacheDiT Accelerator" checked={!!generationOptions.comfyFlux2EditUseCacheDit} onChange={(event) => updateFlux2Option({ comfyFlux2EditUseCacheDit: event.target.checked })} disabled={isLoading} />
+                <div className="space-y-3 border-t border-border-primary/50 pt-4">
+                  <h5 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Additional LoRAs</h5>
+                  {([1, 2] as const).map(index => {
+                    const nameField = `comfyFlux2EditLora${index}Name` as const;
+                    const strengthField = `comfyFlux2EditLora${index}Strength` as const;
+                    const selectedName = generationOptions[nameField] || '';
+                    const strength = generationOptions[strengthField] ?? 1;
+                    return <div key={index} className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.65fr)]">
+                      <SelectInput label={`LoRA ${index}`} value={selectedName} onChange={(event) => updateFlux2Option({ [nameField]: event.target.value })} options={[{ value: '', label: 'None' }, ...withCurrent(selectedName, qwenLoras)]} disabled={isLoading} />
+                      <NumberSlider label={`LoRA ${index} Strength: ${strength}`} value={strength} onChange={(event) => updateFlux2Option({ [strengthField]: Number(event.target.value) })} min={-2} max={2} step={0.05} disabled={isLoading || !selectedName} allowDirectInput />
+                    </div>;
+                  })}
+                  {(generationOptions.comfyFlux2EditLora1Name || generationOptions.comfyFlux2EditLora2Name) && !comfyUIObjectInfo?.LoraLoaderModelOnly && <p className="text-xs text-warning">Additional LoRAs require LoraLoaderModelOnly in ComfyUI.</p>}
+                </div>
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-text-secondary">
+                  <input type="checkbox" checked={!!generationOptions.comfyFlux2EditUseCacheDit} onChange={(event) => updateFlux2Option({ comfyFlux2EditUseCacheDit: event.target.checked })} disabled={isLoading} className="rounded text-accent focus:ring-accent" />
+                  Enable CacheDiT Accelerator
+                </label>
                 {generationOptions.comfyFlux2EditUseCacheDit && <div className="grid gap-4 sm:grid-cols-3">
                   <SelectInput label="CacheDiT Model Type" value={generationOptions.comfyFlux2EditCacheDitModelType || 'Auto'} onChange={(event) => updateFlux2Option({ comfyFlux2EditCacheDitModelType: event.target.value })} options={withCurrent(generationOptions.comfyFlux2EditCacheDitModelType || 'Auto', cacheDitModels)} disabled={isLoading} />
                   <NumberSlider label={`Warmup: ${generationOptions.comfyFlux2EditCacheDitWarmupSteps ?? 0}`} value={generationOptions.comfyFlux2EditCacheDitWarmupSteps ?? 0} onChange={(event) => updateFlux2Option({ comfyFlux2EditCacheDitWarmupSteps: Number(event.target.value) })} min={0} max={20} step={1} disabled={isLoading} allowDirectInput />
@@ -585,12 +648,13 @@ const GroupPhotoFusionPanel: React.FC = () => {
           <div className="mt-8 text-center">
             {provider === 'comfyui' && !isComfyUIConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect ComfyUI to use FLUX2 Photo Fusion.</p>}
             {provider === 'qwen' && !isComfyUIConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect ComfyUI to use QWEN-Edit Photo Fusion.</p>}
+            {provider === 'gemini' && !getApiKey() && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Configure Gemini to use Gemini Photo Fusion.</p>}
             {provider === 'mammouth' && !isMammouthConnected && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Connect Mammouth to use Mammouth Photo Fusion.</p>}
-            {provider !== 'mammouth' && missingNodes.length > 0 && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Missing ComfyUI nodes: {missingNodes.join(', ')}</p>}
+            {provider !== 'gemini' && provider !== 'mammouth' && missingNodes.length > 0 && <p className="mb-3 rounded-md bg-danger-bg p-3 text-sm text-danger">Missing ComfyUI nodes: {missingNodes.join(', ')}</p>}
             {qwenInputLimitExceeded && <p className="mb-3 rounded-md bg-warning-bg p-3 text-sm text-warning">QWEN-Edit accepts at most 3 input images: use 2–3 people without a background, or 2 people with one background.</p>}
             <button
               onClick={handleGenerate}
-              disabled={isLoading || (provider === 'mammouth' ? !isMammouthConnected : !isComfyUIConnected || missingNodes.length > 0) || qwenInputLimitExceeded || !selectedPose || uploadedFiles.length < 2 || uploadedFiles.length > 4}
+              disabled={isLoading || !isProviderReady || qwenInputLimitExceeded || !selectedPose || uploadedFiles.length < 2 || uploadedFiles.length > 4}
               className="px-8 py-4 bg-accent text-accent-text font-bold rounded-lg shadow-lg hover:bg-accent-hover disabled:bg-accent/50 disabled:cursor-not-allowed transition-colors duration-300 transform hover:scale-105"
             >
               {isLoading ? 'Generating...' : `Fuse Photos with ${providerLabel}`}
@@ -610,8 +674,25 @@ const GroupPhotoFusionPanel: React.FC = () => {
           <div className="flex gap-1 rounded-md bg-bg-tertiary p-1">
             <button type="button" onClick={() => dispatch(setProvider('comfyui'))} disabled={isLoading} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'comfyui' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>FLUX2</button>
             <button type="button" onClick={() => dispatch(setProvider('qwen'))} disabled={isLoading} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'qwen' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>QWEN-Edit</button>
+            <button type="button" onClick={() => dispatch(setProvider('gemini'))} disabled={isLoading} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'gemini' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>Gemini</button>
             <button type="button" onClick={() => dispatch(setProvider('mammouth'))} disabled={isLoading} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'mammouth' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>Mammouth</button>
           </div>
+          {provider === 'gemini' && <div className="grid min-w-[240px] flex-1 gap-2 sm:grid-cols-3">
+            <select value={generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL} onChange={(event) => {
+              const model = event.target.value;
+              const sizes = getGeminiImageSizes(model);
+              updateFlux2Option({ geminiT2IModel: model, geminiImageSize: sizes.includes(generationOptions.geminiImageSize) ? generationOptions.geminiImageSize : '1K' });
+            }} disabled={isLoading} className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" aria-label="Gemini image model">
+              {geminiModels.map(model => <option key={model} value={model}>{model}</option>)}
+            </select>
+            <select value={generationOptions.geminiImageSize || '1K'} onChange={(event) => updateFlux2Option({ geminiImageSize: event.target.value as typeof generationOptions.geminiImageSize })} disabled={isLoading} className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" aria-label="Gemini image size">
+              {getGeminiImageSizes(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL).map(size => <option key={size} value={size}>{size}</option>)}
+            </select>
+            {supportsGeminiThinkingLevel(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) && <select value={generationOptions.geminiThinkingLevel || 'minimal'} onChange={(event) => updateFlux2Option({ geminiThinkingLevel: event.target.value as typeof generationOptions.geminiThinkingLevel })} disabled={isLoading} className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" aria-label="Gemini thinking level">
+              <option value="minimal">Minimal thinking</option>
+              <option value="high">High thinking</option>
+            </select>}
+          </div>}
           {provider === 'mammouth' && <div className="relative min-w-[240px] flex-1">
             <select value={generationOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL} onChange={(event) => updateFlux2Option({ mammouthImageModel: event.target.value })} disabled={isLoading || isLoadingMammouthModels} className="w-full rounded-md border border-border-primary bg-bg-tertiary p-2 pr-8 text-sm" aria-label="Mammouth image model">
               {mammouthModels.map(model => <option key={model} value={model}>{model}</option>)}

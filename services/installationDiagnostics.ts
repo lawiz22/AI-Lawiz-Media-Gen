@@ -224,30 +224,43 @@ const FEATURE_SPECS: FeatureSpec[] = [
     { group: 'Prompt', name: 'Extract Background', detail: 'Visual background analysis through Gemini, Mammouth or Ollama.', backends: ['gemini', 'mammouth', 'ollama'] },
     { group: 'Prompt', name: 'Subject / Object', detail: 'Visual subject analysis through Gemini, Mammouth or Ollama.', backends: ['gemini', 'mammouth', 'ollama'] },
     { group: 'Prompt', name: 'Magical Prompt Soup', detail: 'Prompt mixing through Gemini, Mammouth or Ollama.', backends: ['gemini', 'mammouth', 'ollama'] },
-    { group: 'Extractor', name: 'Clothes Analysis', detail: 'Identify garments through Mammouth or Ollama.', backends: ['mammouth', 'ollama'] },
-    { group: 'Extractor', name: 'Clothes Generation', detail: 'Lay out clothes through Mammouth or FLUX2.', paths: [
+    { group: 'Extractor', name: 'Clothes Analysis', detail: 'Identify garments through Gemini, Mammouth or Ollama.', backends: ['gemini', 'mammouth', 'ollama'] },
+    { group: 'Extractor', name: 'Clothes Generation', detail: 'Lay out clothes through Gemini, Mammouth or FLUX2.', paths: [
+        { label: 'Gemini path', backend: 'gemini' },
         { label: 'Mammouth path', backend: 'mammouth' },
         { label: 'FLUX2 path', backend: 'comfyui', nodes: ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'], models: [{ label: 'FLUX2 model', source: 'diffusionModels', pattern: /flux.?2|klein/i }] },
     ] },
-    { group: 'Extractor', name: 'Hair', detail: 'Generate isolated hair through Mammouth or FLUX2.', paths: [
+    { group: 'Extractor', name: 'Hair', detail: 'Generate isolated hair through Gemini, Mammouth or FLUX2.', paths: [
+        { label: 'Gemini path', backend: 'gemini' },
         { label: 'Mammouth path', backend: 'mammouth' },
         { label: 'FLUX2 path', backend: 'comfyui', nodes: ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'], models: [{ label: 'FLUX2 model', source: 'diffusionModels', pattern: /flux.?2|klein/i }] },
     ] },
-    { group: 'Extractor', name: 'Objects Analysis', detail: 'Identify objects through Mammouth or Ollama.', backends: ['mammouth', 'ollama'] },
-    { group: 'Extractor', name: 'Objects Generation', detail: 'Isolate objects through Mammouth or FLUX2.', paths: [
+    { group: 'Extractor', name: 'Objects Analysis', detail: 'Identify objects through Gemini, Mammouth or Ollama.', backends: ['gemini', 'mammouth', 'ollama'] },
+    { group: 'Extractor', name: 'Objects Generation', detail: 'Isolate objects through Gemini, Mammouth or FLUX2.', paths: [
+        { label: 'Gemini path', backend: 'gemini' },
         { label: 'Mammouth path', backend: 'mammouth' },
         { label: 'FLUX2 path', backend: 'comfyui', nodes: ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'], models: [{ label: 'FLUX2 model', source: 'diffusionModels', pattern: /flux.?2|klein/i }] },
     ] },
     { group: 'Extractor', name: 'Poses', detail: 'MediaPipe pose extraction in the browser.', local: 'browser' },
-    { group: 'Extractor', name: 'Pose Mannequin Generation', detail: 'Generate mannequin references through Mammouth or FLUX2.', paths: [
+    { group: 'Extractor', name: 'Pose Analysis', detail: 'Describe extracted poses through Gemini or Mammouth.', backends: ['gemini', 'mammouth'] },
+    { group: 'Extractor', name: 'Pose Mannequin Generation', detail: 'Generate mannequin references through Gemini, Mammouth or FLUX2.', paths: [
+        { label: 'Gemini path', backend: 'gemini' },
         { label: 'Mammouth path', backend: 'mammouth' },
         { label: 'FLUX2 path', backend: 'comfyui', nodes: ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'], models: [{ label: 'FLUX2 model', source: 'diffusionModels', pattern: /flux.?2|klein/i }] },
     ] },
-    { group: 'Extractor', name: 'Font', detail: 'Font chart generation through Mammouth or FLUX2.', paths: [
+    { group: 'Extractor', name: 'Font', detail: 'Font chart generation through Gemini, Mammouth or FLUX2.', paths: [
+        { label: 'Gemini path', backend: 'gemini' },
         { label: 'Mammouth path', backend: 'mammouth' },
         { label: 'FLUX2 path', backend: 'comfyui', nodes: ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'], models: [{ label: 'FLUX2 model', source: 'diffusionModels', pattern: /flux.?2|klein/i }] },
     ] },
+    { group: 'Scene Variation', name: 'Scene Analysis', detail: 'Explicit image analysis; Ollama requires a vision model.', paths: [
+        { label: 'Gemini analysis', backend: 'gemini' },
+        { label: 'Mammouth analysis', backend: 'mammouth' },
+        { label: 'Ollama vision analysis', backend: 'ollama' },
+    ] },
+    { group: 'Scene Variation', name: 'FLUX2 Variations', detail: 'Source-guided variations with optional LoRAs and CacheDiT. The panel validates the selected loader and models before generation.', backend: 'comfyui', nodes: ['LoadImage', 'CLIPLoader', 'VAELoader', 'CLIPTextEncode', 'ImageScaleToTotalPixels', 'GetImageSize', 'VAEEncode', 'ConditioningZeroOut', 'ReferenceLatent', 'EmptyFlux2LatentImage', 'RandomNoise', 'KSamplerSelect', 'Flux2Scheduler', 'CFGGuider', 'SamplerCustomAdvanced', 'VAEDecode', 'SaveImage'], models: [{ label: 'FLUX2 model', source: 'diffusionModels', pattern: /flux.?2|klein/i }, { label: 'FLUX2 VAE', source: 'vaes', pattern: /flux.?2/i }] },
     { group: 'Fun', name: 'Photo Fusion via Mammouth', detail: 'Cloud group photo fusion.', backend: 'mammouth' },
+    { group: 'Fun', name: 'Photo Fusion via Gemini', detail: 'Cloud group photo fusion.', backend: 'gemini' },
     { group: 'Fun', name: 'Photo Fusion via FLUX2', detail: 'Local multi-reference photo fusion.', backend: 'comfyui', nodes: ['ReferenceLatent', 'Flux2Scheduler'], models: [{ label: 'FLUX2 model', source: 'diffusionModels', pattern: /flux.?2|klein/i }] },
     { group: 'Fun', name: 'Photo Fusion via QWEN-Edit', detail: 'Local Qwen multi-person composition.', backend: 'comfyui', nodes: ['UNETLoader', 'CLIPLoader', 'VAELoader', 'ModelSamplingAuraFlow', 'CFGNorm', 'TextEncodeQwenImageEditPlus', 'ImageScaleToTotalPixels'], models: [{ label: 'Qwen Edit model', source: 'diffusionModels', pattern: /qwen.*edit|qwen_image_edit/i }] },
     { group: 'Fun', name: 'Past Forward via Mammouth', detail: 'Cloud past/future transformation.', backend: 'mammouth' },

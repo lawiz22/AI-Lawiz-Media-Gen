@@ -32,11 +32,14 @@ export const buildFlux2EditPrompt = (
     basePrompt: string,
     references: Flux2EditReference[],
     requirePhotorealism = true,
+    preserveSourceStyle = false,
 ): string => [
     'Synthesize one final coherent image using Picture 1 as the primary source. Preserve the main subject identity and defining features from Picture 1 unless explicitly instructed otherwise.',
     ...references.map((reference, index) => roleInstruction(reference, index + 2)),
     basePrompt.trim() ? `Additional editing instructions: ${basePrompt.trim()}` : '',
-    requirePhotorealism
+    preserveSourceStyle
+        ? 'Preserve the source visual medium and capture treatment exactly: grain, noise, softness, compression, color response, artifacts and rendering technique. Do not beautify, restore, sharpen, modernize or restyle the image. VHS stays VHS; illustration stays illustration. Change only explicitly enabled scene attributes.'
+        : requirePhotorealism
         ? 'Produce a photorealistic, anatomically coherent result with consistent perspective, scale, lighting, shadows, and color integration.'
         : 'Produce a polished, anatomically coherent result with consistent perspective, scale, lighting, shadows, and color integration in the requested non-photographic visual medium.',
 ].filter(Boolean).join(' ');
@@ -48,7 +51,7 @@ export const buildFlux2EditWorkflow = (
 ): { workflow: Record<string, any>; prompt: string; seed: number } => {
     const megapixels = options.comfyFlux2EditMegapixels ?? 1;
     const seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
-    const prompt = buildFlux2EditPrompt(options.comfyFlux2EditPrompt || options.comfyPrompt || '', references, options.comfyFlux2EditRequirePhotorealism !== false);
+    const prompt = buildFlux2EditPrompt(options.comfyFlux2EditPrompt || options.comfyPrompt || '', references, options.comfyFlux2EditRequirePhotorealism !== false, options.comfyFlux2EditPreserveSourceStyle === true);
     const modelName = options.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf';
     const modelLoader = modelName.toLowerCase().endsWith('.gguf')
         ? { inputs: { unet_name: modelName }, class_type: 'UnetLoaderGGUF', _meta: { title: 'FLUX2 Klein model (GGUF)' } }
@@ -133,4 +136,32 @@ export const buildFlux2EditWorkflow = (
     workflow.save = { inputs: { filename_prefix: 'FLUX2_Edit', images: ['decode', 0] }, class_type: 'SaveImage', _meta: { title: 'Save Image' } };
 
     return { workflow, prompt, seed };
+};
+
+export const buildMaskedFlux2EditWorkflow = (
+    sourceImageName: string, maskImageName: string, options: GenerationOptions,
+): { workflow: Record<string, any>; prompt: string; seed: number } => {
+    if (!maskImageName.trim()) throw new Error('A mask image is required.');
+    const result = buildFlux2EditWorkflow(sourceImageName, [], options);
+    const { workflow } = result;
+    workflow.source_scale.inputs.resolution_steps = 16;
+    workflow.edit_mask_image = { class_type: 'LoadImage', inputs: { image: maskImageName } };
+    workflow.edit_mask_scale = { class_type: 'ImageScale', inputs: {
+        image: ['edit_mask_image', 0], upscale_method: 'nearest-exact',
+        width: ['source_size', 0], height: ['source_size', 1], crop: 'disabled',
+    } };
+    workflow.edit_mask = { class_type: 'ImageToMask', inputs: { image: ['edit_mask_scale', 0], channel: 'red' } };
+    workflow.masked_latent = { class_type: 'SetLatentNoiseMask', inputs: { samples: ['source_latent', 0], mask: ['edit_mask', 0] } };
+    workflow.sample.inputs.latent_image = ['masked_latent', 0];
+    workflow.original_size = { class_type: 'GetImageSize', inputs: { image: ['source', 0] } };
+    workflow.output_mask = { class_type: 'ImageToMask', inputs: { image: ['edit_mask_image', 0], channel: 'red' } };
+    workflow.output_scale = { class_type: 'ImageScale', inputs: {
+        image: ['decode', 0], upscale_method: 'bicubic', width: ['original_size', 0], height: ['original_size', 1], crop: 'disabled',
+    } };
+    workflow.masked_composite = { class_type: 'ImageCompositeMasked', inputs: {
+        destination: ['source', 0], source: ['output_scale', 0], mask: ['output_mask', 0], x: 0, y: 0, resize_source: false,
+    } };
+    workflow.save.inputs.images = ['masked_composite', 0];
+    workflow.save.inputs.filename_prefix = 'Scene_Variation_Masked';
+    return result;
 };

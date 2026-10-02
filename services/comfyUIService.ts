@@ -27,7 +27,8 @@ import { LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './ltxDirectorWorkflow';
 import { createLtxDialogueInstruction, parseSpeakerTranscript } from '../utils/ttsTranscript';
 import { buildCharacterAnglesWorkflow, buildFlux2CharacterAnglesWorkflow, CHARACTER_ANGLES, getEnabledCharacterAngles } from './characterAnglesWorkflow';
 import { buildSwapAnythingWorkflow, type SwapAnythingOptions } from './swapAnythingWorkflow';
-import { buildFlux2EditWorkflow, type Flux2EditReference } from './flux2EditWorkflow';
+import { buildFlux2EditWorkflow, buildMaskedFlux2EditWorkflow, type Flux2EditReference } from './flux2EditWorkflow';
+import { buildSceneMaskWorkflow, sceneSegmentationErrors, type SceneSegmentationTarget } from './sceneMaskWorkflow';
 
 export const LTX_PROMPT_THEMES = [
     { value: 'surprise', label: 'Surprise Mix', direction: 'an unexpected but coherent visual treatment selected from cinema, daily life, documentary, social video, art, and commercial imagery' },
@@ -2317,6 +2318,35 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
     }
 
     return workflow;
+};
+
+export const generateComfyUISceneMasks = async (
+    source: File, checkpoint: string, targets: SceneSegmentationTarget[],
+    progress: (message: string, value: number) => void, stopped: () => boolean,
+): Promise<Array<{ id: string; raw: string; expanded: string }>> => {
+    const errors = sceneSegmentationErrors(await getComfyUIObjectInfo(), checkpoint);
+    if (errors.length) throw new Error(errors.join('\n'));
+    const upload = await uploadImage(source);
+    const results: Array<{ id: string; raw: string; expanded: string }> = [];
+    for (const target of targets) {
+        if (stopped()) throw new DOMException('Mask calculation stopped.', 'AbortError');
+        const graph = buildSceneMaskWorkflow(upload.name, checkpoint, target.prompt, target.padding);
+        const result = await executeWorkflow(graph, (text, value) => progress(`SAM3 ${target.id}: ${text}`, (results.length + value) / targets.length), true, 2, ['raw_save', 'save']);
+        if (stopped()) throw new DOMException('Mask calculation stopped.', 'AbortError');
+        if (result.images.length !== 2) throw new Error(`SAM3 could not isolate one subject for ${target.id} (${result.images.length} mask images returned; expected 2: raw and expanded). Refine this person's SAM description using visible hair/clothing cues and calculate again.`);
+        results.push({ id: target.id, raw: result.images[0], expanded: result.images[1] });
+    }
+    return results;
+};
+
+export const generateComfyUIMaskedEdit = async (
+    source: File, mask: File, options: GenerationOptions, progress: (message: string, value: number) => void,
+): Promise<{ src: string; prompt: string }> => {
+    const [sourceUpload, maskUpload] = await Promise.all([uploadImage(source), uploadImage(mask)]);
+    const { workflow, prompt } = buildMaskedFlux2EditWorkflow(sourceUpload.name, maskUpload.name, options);
+    const result = await executeWorkflow(workflow, progress, true);
+    if (!result.images[0]) throw new Error('Masked FLUX2 returned no image.');
+    return { src: result.images[0], prompt };
 };
 
 export const generateComfyUIPortraits = async (

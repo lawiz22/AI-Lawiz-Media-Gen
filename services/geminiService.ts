@@ -828,21 +828,50 @@ export const generatePromptFromImage = async (imageFile: File): Promise<string> 
     throw new Error("Failed to generate prompt from image.");
 };
 
-export const generateGeminiText = async (prompt: string, inputs: File[] = []): Promise<string> => {
+export const generateGeminiTextResult = async (
+    prompt: string,
+    inputs: File[] = [],
+    updateProgress: (message: string, value: number) => void = () => undefined,
+): Promise<{ text: string; usageMetadata?: any }> => {
     if (!currentApiKey) throw new Error('Gemini API key is not configured. Add it in Connection Settings.');
     const parts: Part[] = [];
     for (const input of inputs) parts.push(await fileToGenerativePart(input));
     parts.push({ text: prompt });
 
-    const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts },
-        config: { temperature: 0.3 },
-    });
+    const execute = async (retry = true): Promise<GenerateContentResponse> => {
+        try {
+            return await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: { parts },
+                config: { temperature: 0.3 },
+            });
+        } catch (error: any) {
+            const { message, status, retrySeconds, hasZeroFreeTierQuota } = getApiErrorDetails(error);
+            if (status === 429) {
+                if (hasZeroFreeTierQuota || !retry) throw createQuotaError('gemini-2.5-flash', retrySeconds, hasZeroFreeTierQuota);
+                const delaySeconds = Math.min(Math.max(retrySeconds || 5, 1), 60);
+                updateProgress(`Gemini rate limit reached. Retrying in ${Math.ceil(delaySeconds)} seconds...`, 0.5);
+                await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+                return execute(false);
+            }
+            if (retry && (status === 503 || message.includes('Failed to call the Gemini API'))) {
+                updateProgress('Gemini is temporarily unavailable. Retrying once...', 0.5);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                return execute(false);
+            }
+            if (status === 403) throw new Error("Access denied for 'gemini-2.5-flash'. Check the API key and billing configuration.");
+            throw error;
+        }
+    };
+
+    const result = await execute();
     const text = result.candidates?.[0]?.content?.parts
         ?.map(part => part.text || '')
         .join('')
         .trim();
     if (!text) throw new Error('Gemini returned no text response.');
-    return text;
+    return { text, usageMetadata: result.usageMetadata };
 };
+
+export const generateGeminiText = async (prompt: string, inputs: File[] = []): Promise<string> =>
+    (await generateGeminiTextResult(prompt, inputs)).text;

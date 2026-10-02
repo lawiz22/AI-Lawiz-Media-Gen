@@ -44,6 +44,7 @@ const initialExtractorState: ExtractorState = {
     mannequinReferenceFile: null,
     poseOutputMode: 'mannequin-image',
     mannequinPromptHint: 'a clean white articulated artist mannequin with visible joint construction and a matte studio finish',
+    poseAnalysisProvider: 'gemini',
     poseGenerationProvider: 'flux2',
     fontSourceFile: null,
     fontGenerationProvider: 'flux2',

@@ -37,8 +37,8 @@ const DebugSection: React.FC<DebugSectionProps> = ({ debugInfos }) => {
       
       <div className="space-y-12">
         {debugInfos.map((debugInfo, index) => {
-           const { prompt, subjects, background, quality, apiResponseText, generatedImageBase64 } = debugInfo;
-           const generatedImageUrl = `data:image/jpeg;base64,${generatedImageBase64}`;
+           const { prompt, subjects, background, quality, apiResponseText, generatedImageBase64, generatedImageMimeType } = debugInfo;
+           const generatedImageUrl = `data:${generatedImageMimeType || 'image/jpeg'};base64,${generatedImageBase64}`;
 
            return (
             <div key={index} className="border-t border-border-primary pt-8 first:border-t-0 first:pt-0">
@@ -63,7 +63,7 @@ const DebugSection: React.FC<DebugSectionProps> = ({ debugInfos }) => {
                                 <img src={generatedImageUrl} alt="Generated Output" className="w-full aspect-square object-cover rounded-md shadow-lg" />
                                 <div className="mt-2 text-xs text-left bg-bg-tertiary p-2 rounded-md">
                                     <p className="text-text-primary font-bold">Generated Image</p>
-                                    <p className="text-text-secondary">Format: JPEG</p>
+                                    <p className="text-text-secondary">Format: {(generatedImageMimeType?.split('/')[1] || 'jpeg').toUpperCase()}</p>
                                     <p className="text-text-secondary">Approx. Size: {formatBytes(generatedImageBase64.length * 3 / 4)}</p>
                                 </div>
                             </div>

@@ -15,8 +15,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, onOpenLibrary })
     setError(null);
     if (!files || files.length === 0) return;
 
-    if (files.length < 2 || files.length > 4) {
-      setError("Please upload between 2 and 4 subject photos.");
+    if (files.length > 4) {
+      setError("Please upload up to 4 subject photos.");
       return;
     }
 
@@ -81,7 +81,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, onOpenLibrary })
             Drag & drop subject photos here, or <span className="text-accent">click to select</span>
           </span>
           <p className="mt-1 text-xs text-text-muted">
-            Upload 2 to 4 subject photos (PNG, JPG, WEBP)
+            Upload 1 to 4 subject photos (PNG, JPG, WEBP)
           </p>
         </label>
       </div>

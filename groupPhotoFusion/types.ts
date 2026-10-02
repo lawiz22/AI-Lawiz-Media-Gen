@@ -17,6 +17,7 @@ export type Quality = 'Standard' | 'High' | 'Ultra High';
 
 export interface GeneratePhotoResult {
   imageBase64: string;
+  imageMimeType?: string;
   responseText: string;
   seed?: number;
   usageMetadata?: {
@@ -30,7 +31,7 @@ export interface Persona {
     id: string;
     name: string;
     description: string;
-    type: 'default' | 'male' | 'female';
+  type: 'expression';
 }
 
 export interface GeneratedImage {
@@ -51,4 +52,5 @@ export interface DebugInfo {
   quality: Quality;
   apiResponseText: string;
   generatedImageBase64: string;
+  generatedImageMimeType?: string;
 }

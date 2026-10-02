@@ -8,7 +8,7 @@ import { addSessionTokenUsage } from '../store/appSlice';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
 import { ExtractorResultsGrid } from './ExtractorResultsGrid';
-import { generatePoseDescription } from '../services/geminiService';
+import { generateGeminiTextResult, generatePortraits, getApiKey } from '../services/geminiService';
 import { generateMammouthImage, generateMammouthText } from '../services/mammouthService';
 import { generateComfyUIPortraits } from '../services/comfyUIService';
 import { identifyClothingWithOllama, identifyObjectsWithOllama, testOllamaConnection, type OllamaActivity } from '../services/ollamaService';
@@ -192,13 +192,37 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         if (usage) dispatch(addSessionTokenUsage(usage));
     };
 
+    const generateGeminiExtractorImage = async (
+        sourceFile: File,
+        prompt: string,
+        aspectRatio: string,
+        updateProgress: (message: string, value: number) => void = () => undefined,
+        referenceFiles: File[] = [],
+    ) => {
+        const isComposition = referenceFiles.length > 0;
+        const result = await generatePortraits(sourceFile, {
+            ...generationOptions,
+            provider: 'gemini',
+            geminiMode: 'i2i',
+            geminiI2iMode: isComposition ? 'compose' : 'general',
+            geminiGeneralEditPrompt: prompt,
+            geminiComposePrompt: prompt,
+            aspectRatio,
+            numImages: 1,
+        }, updateProgress, null, null, null, null, null, referenceFiles);
+        const image = result.images[0];
+        if (!image) throw new Error('Gemini returned no extractor image.');
+        recordUsage(image.usageMetadata);
+        return image.src;
+    };
+
     const parseJsonResponse = <T,>(text: string): T => JSON.parse(text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
 
     const {
         clothesSourceFile, clothesDetails, clothesAnalysisProvider, clothesGenerationProvider, isIdentifying, identifiedItems, isGenerating, generatedClothes, clothesError, generateFolded, excludeAccessories,
         hairSourceFile, hairPersonCount, hairExactFidelity, hairGenerationProvider, isGeneratingHair, generatedHair, hairError,
         objectSourceFile, objectHints, maxObjects, objectAnalysisProvider, objectGenerationProvider, isIdentifyingObjects, identifiedObjects, isGeneratingObjects, generatedObjects, objectError,
-        poseSourceFile, isGeneratingPoses, generatedPoses, poseError, mannequinReferenceFile, poseOutputMode, mannequinPromptHint, poseGenerationProvider,
+        poseSourceFile, isGeneratingPoses, generatedPoses, poseError, mannequinReferenceFile, poseOutputMode, mannequinPromptHint, poseAnalysisProvider = 'gemini', poseGenerationProvider,
         fontSourceFile, fontGenerationProvider = 'flux2', fontUseSourceColors = false, fontFlux2Steps = 8, fontFlux2Cfg = 1.1, fontFlux2Sampler = 'euler', isGeneratingFont, generatedFontChart, fontError
     } = state;
 
@@ -210,10 +234,14 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
             const mammouthResult = clothesAnalysisProvider === 'mammouth'
                 ? await generateMammouthText(CLOTHING_INVENTORY_PROMPT, [clothesSourceFile])
                 : null;
+            const geminiResult = clothesAnalysisProvider === 'gemini'
+                ? await generateGeminiTextResult(CLOTHING_INVENTORY_PROMPT, [clothesSourceFile])
+                : null;
             recordUsage(mammouthResult?.usageMetadata);
+            recordUsage(geminiResult?.usageMetadata);
             let items: IdentifiedClothing[];
-            if (mammouthResult) {
-                items = parseJsonResponse<IdentifiedClothing[]>(mammouthResult.text);
+            if (mammouthResult || geminiResult) {
+                items = parseJsonResponse<IdentifiedClothing[]>(mammouthResult?.text || geminiResult?.text || '[]');
             } else {
                 items = await identifyClothingWithOllama(clothesSourceFile, ollamaUrl, ollamaModel, setOllamaActivity, controller?.signal);
             }
@@ -259,10 +287,16 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                 const laidOutResult = clothesGenerationProvider === 'mammouth'
                     ? (updateGenerationJob(setClothesGenerationJobs, jobId, { progress: 0.15, message: `Generating ${item.itemName} with Mammouth...` }), await generateMammouthImage(`Generate a flat lay image of: ${item.description}. Plain white background.`, [], '1:1', generationOptions.mammouthImageModel))
                     : null;
+                const laidOutGemini = clothesGenerationProvider === 'gemini'
+                    ? await generateGeminiExtractorImage(clothesSourceFile!, laidOutPrompt, '1:1', (message, value) => updateGenerationJob(setClothesGenerationJobs, jobId, {
+                        progress: generateFolded ? 0.05 + value * 0.6 : 0.05 + value * 0.95,
+                        message,
+                    }))
+                    : null;
                 recordUsage(laidOutResult?.usageMetadata);
                 const laidOutImage = clothesGenerationProvider === 'flux2'
                     ? laidOutFlux2?.images[0]?.src
-                    : laidOutResult?.images[0];
+                    : clothesGenerationProvider === 'gemini' ? laidOutGemini : laidOutResult?.images[0];
                 if (!laidOutImage) throw new Error(`${clothesGenerationProvider} returned no clothing image.`);
                 let foldedImage: string | undefined;
                 if (generateFolded) {
@@ -275,10 +309,16 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
                     const foldedResult = clothesGenerationProvider === 'mammouth'
                         ? (updateGenerationJob(setClothesGenerationJobs, jobId, { progress: 0.7, message: `Generating folded ${item.itemName}...` }), await generateMammouthImage(`Generate a neatly folded image of: ${item.description}. Plain background.`, [], '1:1', generationOptions.mammouthImageModel))
                         : null;
+                    const foldedGemini = clothesGenerationProvider === 'gemini'
+                        ? await generateGeminiExtractorImage(clothesSourceFile!, foldedPrompt, '1:1', (message, value) => updateGenerationJob(setClothesGenerationJobs, jobId, {
+                            progress: 0.65 + value * 0.35,
+                            message: `Folded: ${message}`,
+                        }))
+                        : null;
                     recordUsage(foldedResult?.usageMetadata);
                     foldedImage = clothesGenerationProvider === 'flux2'
                         ? foldedFlux2?.images[0]?.src
-                        : foldedResult?.images[0];
+                        : clothesGenerationProvider === 'gemini' ? foldedGemini : foldedResult?.images[0];
                     if (!foldedImage) throw new Error(`${clothesGenerationProvider} returned no folded clothing image.`);
                 }
                 results.push({ itemName: item.itemName, laidOutImage, foldedImage, saved: 'idle' });
@@ -358,8 +398,11 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                 const mammouthResult = hairGenerationProvider === 'mammouth'
                     ? (updateGenerationJob(setHairGenerationJobs, jobId, { progress: 0.15, message: `Generating person ${personNumber} with Mammouth...` }), await generateMammouthImage(prompt, [hairSourceFile], '1:1', generationOptions.mammouthImageModel))
                     : null;
+                const geminiImage = hairGenerationProvider === 'gemini'
+                    ? await generateGeminiExtractorImage(hairSourceFile, prompt, '1:1', (message, value) => updateGenerationJob(setHairGenerationJobs, jobId, { progress: 0.05 + value * 0.95, message }))
+                    : null;
                 recordUsage(mammouthResult?.usageMetadata);
-                const image = hairGenerationProvider === 'flux2' ? flux2Result?.images[0]?.src : mammouthResult?.images[0];
+                const image = hairGenerationProvider === 'flux2' ? flux2Result?.images[0]?.src : hairGenerationProvider === 'gemini' ? geminiImage : mammouthResult?.images[0];
                 if (!image) throw new Error(`${hairGenerationProvider} returned no hair image.`);
                 results.push({ name: `Hair - Person ${personNumber}`, image, personIndex: personNumber, saved: 'idle' });
                 dispatch(updateExtractorState({ generatedHair: [...results] }));
@@ -402,9 +445,13 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
             const mammouthResult = objectAnalysisProvider === 'mammouth'
                 ? await generateMammouthText(prompt, [objectSourceFile])
                 : null;
+            const geminiResult = objectAnalysisProvider === 'gemini'
+                ? await generateGeminiTextResult(prompt, [objectSourceFile])
+                : null;
             recordUsage(mammouthResult?.usageMetadata);
-            const objects = mammouthResult
-                ? parseJsonResponse<IdentifiedObject[]>(mammouthResult.text).slice(0, maxObjects)
+            recordUsage(geminiResult?.usageMetadata);
+            const objects = mammouthResult || geminiResult
+                ? parseJsonResponse<IdentifiedObject[]>(mammouthResult?.text || geminiResult?.text || '[]').slice(0, maxObjects)
                 : await identifyObjectsWithOllama(objectSourceFile, maxObjects, objectHints, ollamaUrl, ollamaModel, setOllamaActivity, controller?.signal);
             dispatch(updateExtractorState({ 
                 identifiedObjects: objects.map(obj => ({ ...obj, selected: true })),
@@ -443,8 +490,11 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                 const mammouthResult = objectGenerationProvider === 'mammouth'
                     ? (updateGenerationJob(setObjectGenerationJobs, jobId, { progress: 0.15, message: `Generating ${obj.name} with Mammouth...` }), await generateMammouthImage(`Generate a high quality image of: ${obj.description}. Isolated on white background.`, [], '1:1', generationOptions.mammouthImageModel))
                     : null;
+                const geminiImage = objectGenerationProvider === 'gemini'
+                    ? await generateGeminiExtractorImage(objectSourceFile!, extractionPrompt, '1:1', (message, value) => updateGenerationJob(setObjectGenerationJobs, jobId, { progress: 0.05 + value * 0.95, message }))
+                    : null;
                 recordUsage(mammouthResult?.usageMetadata);
-                const image = objectGenerationProvider === 'flux2' ? flux2Result?.images[0]?.src : mammouthResult?.images[0];
+                const image = objectGenerationProvider === 'flux2' ? flux2Result?.images[0]?.src : objectGenerationProvider === 'gemini' ? geminiImage : mammouthResult?.images[0];
                 if (!image) throw new Error(`${objectGenerationProvider} returned no object image.`);
                 results.push({ name: obj.name, image, saved: 'idle' });
                 dispatch(updateExtractorState({ generatedObjects: [...results] }));
@@ -503,11 +553,15 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                  for (let i = 0; i < poseLandmarks.length; i++) {
                     const poseData = mediaPipeToOpenPose(poseLandmarks[i], handLandmarks, handedness, faceLandmarks[i], width, height);
                     const skeletonImage = renderPoseSkeleton(poseData);
-                    const mammouthResult = generationOptions.provider === 'mammouth'
+                    const mammouthResult = poseAnalysisProvider === 'mammouth'
                         ? await generateMammouthText('Describe the pose of the person in this image in detail for a text-to-image prompt.', [poseSourceFile])
                         : null;
+                    const geminiResult = poseAnalysisProvider === 'gemini'
+                        ? await generateGeminiTextResult('Describe the pose of the person in this image in detail for a text-to-image prompt.', [poseSourceFile])
+                        : null;
                     recordUsage(mammouthResult?.usageMetadata);
-                    const description = mammouthResult?.text || await generatePoseDescription(poseSourceFile, poseData);
+                    recordUsage(geminiResult?.usageMetadata);
+                    const description = mammouthResult?.text || geminiResult?.text || `Extracted pose ${i + 1}`;
     
                     allGeneratedPoses.push({
                         description, 
@@ -525,6 +579,11 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                     : `Replace the person in Picture 1 with ${requestedStyle}. Reproduce only the pose: match the body orientation, weight distribution, head angle, torso bend, shoulder and hip rotation, and the exact articulation and placement of every visible arm, hand, leg, and foot. Do not preserve the person's identity, face, hair, skin, clothing, accessories, or background. Render one complete, anatomically coherent mannequin from head to feet, centered on a clean neutral studio background, with no extra or missing limbs.`;
                 const mammouthResult = poseGenerationProvider === 'mammouth'
                     ? await generateMammouthImage(prompt, mannequinReferenceFile ? [mannequinReferenceFile, poseSourceFile] : [poseSourceFile], '3:4', generationOptions.mammouthImageModel)
+                    : null;
+                const geminiImage = poseGenerationProvider === 'gemini'
+                    ? mannequinReferenceFile
+                        ? await generateGeminiExtractorImage(mannequinReferenceFile, prompt, '3:4', () => undefined, [poseSourceFile])
+                        : await generateGeminiExtractorImage(poseSourceFile, prompt, '3:4')
                     : null;
                 recordUsage(mammouthResult?.usageMetadata);
                 let flux2PoseGuide: File | null = null;
@@ -548,7 +607,7 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                         numImages: 1,
                     }, () => undefined, mannequinReferenceFile ? [mannequinReferenceFile] : [])
                     : null;
-                const image = poseGenerationProvider === 'flux2' ? flux2Result?.images[0]?.src : mammouthResult?.images[0];
+                const image = poseGenerationProvider === 'flux2' ? flux2Result?.images[0]?.src : poseGenerationProvider === 'gemini' ? geminiImage : mammouthResult?.images[0];
                 if (!image) throw new Error(`${poseGenerationProvider} returned no mannequin image.`);
                 allGeneratedPoses.push({
                     description: "Mannequin Transfer",
@@ -605,6 +664,9 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
             const mammouthResult = fontGenerationProvider === 'mammouth'
                 ? await generateMammouthImage(mammouthFontPrompt, [fontSourceFile], '3:4', generationOptions.mammouthImageModel)
                 : null;
+            const geminiImage = fontGenerationProvider === 'gemini'
+                ? await generateGeminiExtractorImage(fontSourceFile, mammouthFontPrompt, '3:4')
+                : null;
             recordUsage(mammouthResult?.usageMetadata);
             const fontChartCanvas = fontGenerationProvider === 'flux2'
                 ? await createFontChartGuide(chartBackground, 'font-chart-guide.png')
@@ -627,7 +689,7 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                     numImages: 1,
                 }, () => undefined, [fontSourceFile])
                 : null;
-            const chartImage = fontGenerationProvider === 'flux2' ? flux2Result?.images[0]?.src : mammouthResult?.images[0];
+            const chartImage = fontGenerationProvider === 'flux2' ? flux2Result?.images[0]?.src : fontGenerationProvider === 'gemini' ? geminiImage : mammouthResult?.images[0];
             if (!chartImage) throw new Error(`${fontGenerationProvider} returned no font chart image.`);
             dispatch(updateExtractorState({ generatedFontChart: { src: chartImage, saved: 'idle' } }));
         } catch (err: any) {
@@ -692,13 +754,14 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                         <div className="space-y-3 rounded-lg border border-border-primary bg-bg-tertiary p-4">
                             <div>
                                 <span className="mb-2 block text-xs font-bold text-text-secondary">Image analysis</span>
-                                <div className="grid grid-cols-2 gap-1 rounded-lg bg-bg-primary p-1">
-                                    {(['mammouth', 'ollama'] as const).map(provider => <button key={provider} type="button" onClick={() => dispatch(updateExtractorState({ clothesAnalysisProvider: provider }))} className={`rounded-md px-2 py-2 text-xs font-bold capitalize ${clothesAnalysisProvider === provider ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary-hover'}`}>{provider}</button>)}
+                                <div className="grid grid-cols-3 gap-1 rounded-lg bg-bg-primary p-1">
+                                    {(['gemini', 'mammouth', 'ollama'] as const).map(provider => <button key={provider} type="button" onClick={() => dispatch(updateExtractorState({ clothesAnalysisProvider: provider }))} className={`rounded-md px-2 py-2 text-xs font-bold capitalize ${clothesAnalysisProvider === provider ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary-hover'}`}>{provider}</button>)}
                                 </div>
                                 {clothesAnalysisProvider === 'ollama' && renderOllamaControls()}
+                                {clothesAnalysisProvider === 'gemini' && !getApiKey() && <p className="mt-2 text-xs text-danger">Configure Gemini in Connection Settings.</p>}
                             </div>
                         </div>
-                        <button onClick={handleIdentifyClothing} disabled={!clothesSourceFile || isIdentifying || (clothesAnalysisProvider === 'ollama' && isOllamaConnected !== true)} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
+                        <button onClick={handleIdentifyClothing} disabled={!clothesSourceFile || isIdentifying || (clothesAnalysisProvider === 'ollama' && isOllamaConnected !== true) || (clothesAnalysisProvider === 'gemini' && !getApiKey())} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
                             {isIdentifying ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Analyzing...</> : 'Identify Clothing'}
                         </button>
                         
@@ -718,7 +781,7 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                                     </label>
                                 ))}
                                 <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer border-t border-border-primary pt-2"><input type="checkbox" checked={generateFolded} onChange={e => dispatch(updateExtractorState({ generateFolded: e.target.checked }))} className="rounded text-accent focus:ring-accent"/>Generate folded version</label>
-                                <button onClick={handleGenerateClothing} disabled={isGenerating} className="w-full flex items-center justify-center gap-2 bg-highlight-green text-white font-bold py-2 px-4 rounded-lg hover:opacity-90 transition-colors disabled:opacity-50">
+                                <button onClick={handleGenerateClothing} disabled={isGenerating || (clothesGenerationProvider === 'gemini' && !getApiKey())} className="w-full flex items-center justify-center gap-2 bg-highlight-green text-white font-bold py-2 px-4 rounded-lg hover:opacity-90 transition-colors disabled:opacity-50">
                                     {isGenerating ? <><SpinnerIcon className="w-4 h-4 animate-spin"/>Generating...</> : 'Generate Images'}
                                 </button>
                             </div>
@@ -750,7 +813,7 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                                 <span className="mt-1 block text-xs text-text-muted">Keep identical messiness, flyaways, asymmetry, texture and colors without grooming.</span>
                             </span>
                         </label>
-                        <button onClick={handleGenerateHair} disabled={!hairSourceFile || isGeneratingHair} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
+                        <button onClick={handleGenerateHair} disabled={!hairSourceFile || isGeneratingHair || (hairGenerationProvider === 'gemini' && !getApiKey())} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
                             {isGeneratingHair ? <><SpinnerIcon className="w-5 h-5 animate-spin" />Extracting hair...</> : 'Extract Hairstyles'}
                         </button>
                     </div>
@@ -769,14 +832,15 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                         <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Source Image" id="object-source" onImageUpload={file => { setObjectGenerationJobs([]); setOllamaActivity(null); dispatch(updateExtractorState({ objectSourceFile: file, identifiedObjects: [], generatedObjects: [] })); }} sourceFile={objectSourceFile} /></div><button onClick={onOpenLibraryForObjects} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
                         <div className="rounded-lg border border-border-primary bg-bg-tertiary p-4">
                             <span className="mb-2 block text-xs font-bold text-text-secondary">Image analysis</span>
-                            <div className="grid grid-cols-2 gap-1 rounded-lg bg-bg-primary p-1">
-                                {(['mammouth', 'ollama'] as const).map(provider => <button key={provider} type="button" onClick={() => dispatch(updateExtractorState({ objectAnalysisProvider: provider }))} className={`rounded-md px-2 py-2 text-xs font-bold capitalize ${objectAnalysisProvider === provider ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary-hover'}`}>{provider}</button>)}
+                            <div className="grid grid-cols-3 gap-1 rounded-lg bg-bg-primary p-1">
+                                {(['gemini', 'mammouth', 'ollama'] as const).map(provider => <button key={provider} type="button" onClick={() => dispatch(updateExtractorState({ objectAnalysisProvider: provider }))} className={`rounded-md px-2 py-2 text-xs font-bold capitalize ${objectAnalysisProvider === provider ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary-hover'}`}>{provider}</button>)}
                             </div>
                             {objectAnalysisProvider === 'ollama' && renderOllamaControls()}
+                            {objectAnalysisProvider === 'gemini' && !getApiKey() && <p className="mt-2 text-xs text-danger">Configure Gemini in Connection Settings.</p>}
                         </div>
                         <div><label className="block text-sm font-medium text-text-secondary mb-1">Focus/Hints (Optional)</label><input type="text" value={objectHints} onChange={e => dispatch(updateExtractorState({ objectHints: e.target.value }))} placeholder="e.g., furniture, electronics" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm"/></div>
                         <div><label className="block text-sm font-medium text-text-secondary mb-1">Max Objects: {maxObjects}</label><input type="range" min="1" max="10" value={maxObjects} onChange={e => dispatch(updateExtractorState({ maxObjects: Number(e.target.value) }))} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"/></div>
-                        <button onClick={handleIdentifyObjects} disabled={!objectSourceFile || isIdentifyingObjects || (objectAnalysisProvider === 'ollama' && isOllamaConnected !== true)} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
+                        <button onClick={handleIdentifyObjects} disabled={!objectSourceFile || isIdentifyingObjects || (objectAnalysisProvider === 'ollama' && isOllamaConnected !== true) || (objectAnalysisProvider === 'gemini' && !getApiKey())} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
                             {isIdentifyingObjects ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Scanning...</> : 'Identify Objects'}
                         </button>
 
@@ -795,7 +859,7 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                                         <div><span className="font-bold text-text-primary">{obj.name}</span><p className="text-xs text-text-muted truncate max-w-[200px]">{obj.description}</p></div>
                                     </label>
                                 ))}
-                                <button onClick={handleGenerateObjects} disabled={isGeneratingObjects} className="w-full flex items-center justify-center gap-2 bg-highlight-green text-white font-bold py-2 px-4 rounded-lg hover:opacity-90 transition-colors disabled:opacity-50">
+                                <button onClick={handleGenerateObjects} disabled={isGeneratingObjects || (objectGenerationProvider === 'gemini' && !getApiKey())} className="w-full flex items-center justify-center gap-2 bg-highlight-green text-white font-bold py-2 px-4 rounded-lg hover:opacity-90 transition-colors disabled:opacity-50">
                                     {isGeneratingObjects ? <><SpinnerIcon className="w-4 h-4 animate-spin"/>Generating...</> : 'Extract Objects'}
                                 </button>
                             </div>
@@ -821,6 +885,16 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                         </div>
 
                         <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Source Pose Image" id="pose-source" onImageUpload={file => dispatch(updateExtractorState({ poseSourceFile: file, generatedPoses: [] }))} sourceFile={poseSourceFile} /></div><button onClick={onOpenLibraryForPoses} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
+
+                        {poseOutputMode === 'controlnet-json' && (
+                            <div className="rounded-lg border border-border-primary bg-bg-tertiary p-4">
+                                <span className="mb-2 block text-xs font-bold text-text-secondary">Image analysis</span>
+                                <div className="grid grid-cols-2 gap-1 rounded-lg bg-bg-primary p-1">
+                                    {(['gemini', 'mammouth'] as const).map(provider => <button key={provider} type="button" onClick={() => dispatch(updateExtractorState({ poseAnalysisProvider: provider }))} className={`rounded-md px-2 py-2 text-xs font-bold capitalize ${poseAnalysisProvider === provider ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary-hover'}`}>{provider}</button>)}
+                                </div>
+                                {poseAnalysisProvider === 'gemini' && !getApiKey() && <p className="mt-2 text-xs text-danger">Configure Gemini in Connection Settings.</p>}
+                            </div>
+                        )}
                         
                         {poseOutputMode === 'mannequin-image' && (
                             <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary/50">
@@ -844,7 +918,7 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                             </div>
                         )}
 
-                        <button onClick={handleGeneratePoses} disabled={!poseSourceFile || isGeneratingPoses} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
+                        <button onClick={handleGeneratePoses} disabled={!poseSourceFile || isGeneratingPoses || (poseOutputMode === 'mannequin-image' && poseGenerationProvider === 'gemini' && !getApiKey()) || (poseOutputMode === 'controlnet-json' && poseAnalysisProvider === 'gemini' && !getApiKey())} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
                             {isGeneratingPoses ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : (poseOutputMode === 'controlnet-json' ? 'Extract JSON & Skeleton' : 'Generate Mannequin')}
                         </button>
                     </div>
@@ -888,7 +962,7 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                                 </div>
                             </div>
                         )}
-                        <button onClick={handleGenerateFont} disabled={!fontSourceFile || isGeneratingFont} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
+                        <button onClick={handleGenerateFont} disabled={!fontSourceFile || isGeneratingFont || (fontGenerationProvider === 'gemini' && !getApiKey())} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
                             {isGeneratingFont ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Generating...</> : 'Generate Font Chart'}
                         </button>
                     </div>

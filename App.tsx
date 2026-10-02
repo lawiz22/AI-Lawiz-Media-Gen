@@ -50,6 +50,7 @@ import { LibraryPanel } from './components/LibraryPanel';
 import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
 import { LTXDirectorPanel } from './components/LTXDirectorPanel';
+import SceneVariationPanel from './components/SceneVariationPanel';
 import { TtsPanel } from './components/TtsPanel';
 import { createLtxScenePrompt, formatIndexTtsTranscript } from './utils/ttsTranscript';
 import { UpscalePanel } from './components/UpscalePanel';
@@ -120,6 +121,7 @@ const App: React.FC = () => {
     const driveSyncControllerRef = useRef<AbortController | null>(null);
     const [activeFunSubTab, setActiveFunSubTab] = useState<'photo-fusion' | 'past-forward' | 'swap-anything' | 'stylise-anything'>('photo-fusion');
     const [panelResetVersions, setPanelResetVersions] = useState<Record<string, number>>({});
+    const [sceneVariationModel, setSceneVariationModel] = useState('');
 
     // --- App State (from appSlice) ---
     const {
@@ -946,6 +948,8 @@ const App: React.FC = () => {
                     ? 'FLUX2-Klein-Multi-Angle'
                     : 'Qwen-Edit-Multi-Angle'
                 : DEFAULT_GEMINI_IMAGE_MODEL;
+    } else if (activeTab === 'scene-variation') {
+        activeModel = `FLUX2 Edit: ${sceneVariationModel}`;
     } else if (activeTab === 'fun') {
         activeModel = activeFunSubTab === 'photo-fusion'
             ? groupPhotoFusionProvider === 'comfyui'
@@ -976,27 +980,30 @@ const App: React.FC = () => {
                 : activeExtractorSubTab === 'font'
                     ? extractorState.fontGenerationProvider || 'flux2'
                 : null;
-        if (extractorGenerationProvider === 'mammouth') activeModel = options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL;
+        if (extractorGenerationProvider === 'gemini') activeModel = options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL;
+        else if (extractorGenerationProvider === 'mammouth') activeModel = options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL;
         else if (extractorGenerationProvider === 'flux2') activeModel = `FLUX2 Edit · ${options.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf'}`;
-        else if (activeExtractorSubTab === 'poses') activeModel = 'MediaPipe + Gemini 2.5';
+        else if (activeExtractorSubTab === 'poses') activeModel = extractorState.poseAnalysisProvider === 'mammouth' ? 'MediaPipe + Mammouth' : 'MediaPipe + Gemini 2.5';
         else if (activeExtractorSubTab === 'font') activeModel = DEFAULT_GEMINI_IMAGE_MODEL;
         else activeModel = 'gemini-2.5-flash';
     } else if (activeTab === 'logo-theme-generator') {
         activeModel = options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     }
 
-    const activeProvider: Provider = activeTab === 'character-generator'
+    const activeProvider: Provider = activeTab === 'scene-variation' ? 'comfyui' : activeTab === 'character-generator'
         ? characterOptions.provider
         : activeTab === 'extractor-tools' && activeExtractorSubTab === 'clothes'
-            ? extractorState.clothesGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
+            ? extractorState.clothesGenerationProvider === 'gemini' ? 'gemini' : extractorState.clothesGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
         : activeTab === 'extractor-tools' && activeExtractorSubTab === 'objects'
-            ? extractorState.objectGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
+            ? extractorState.objectGenerationProvider === 'gemini' ? 'gemini' : extractorState.objectGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
         : activeTab === 'extractor-tools' && activeExtractorSubTab === 'hair'
-            ? extractorState.hairGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
+            ? extractorState.hairGenerationProvider === 'gemini' ? 'gemini' : extractorState.hairGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
         : activeTab === 'extractor-tools' && activeExtractorSubTab === 'poses' && extractorState.poseOutputMode === 'mannequin-image'
-            ? extractorState.poseGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
+            ? extractorState.poseGenerationProvider === 'gemini' ? 'gemini' : extractorState.poseGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
+        : activeTab === 'extractor-tools' && activeExtractorSubTab === 'poses'
+            ? extractorState.poseAnalysisProvider
         : activeTab === 'extractor-tools' && activeExtractorSubTab === 'font'
-            ? (extractorState.fontGenerationProvider || 'flux2') === 'mammouth' ? 'mammouth' : 'comfyui'
+            ? (extractorState.fontGenerationProvider || 'flux2') === 'gemini' ? 'gemini' : (extractorState.fontGenerationProvider || 'flux2') === 'mammouth' ? 'mammouth' : 'comfyui'
         : activeTab === 'fun' && activeFunSubTab === 'photo-fusion'
             ? groupPhotoFusionProvider === 'mammouth' ? 'mammouth' : 'comfyui'
         : activeTab === 'fun' && activeFunSubTab === 'past-forward'
@@ -1131,6 +1138,7 @@ const App: React.FC = () => {
                     {[
                         { id: 'image-generator', label: 'Image Gen', icon: <ImageGeneratorIcon className="w-4 h-4" />, activeClass: 'border-cyan-400 bg-cyan-400/15 text-cyan-300 shadow-cyan-500/20' },
                         { id: 'character-generator', label: 'Character', icon: <CharacterIcon className="w-4 h-4" />, activeClass: 'border-fuchsia-400 bg-fuchsia-400/15 text-fuchsia-300 shadow-fuchsia-500/20' },
+                        { id: 'scene-variation', label: 'Scene Variation', icon: <ImageGeneratorIcon className="w-4 h-4" />, activeClass: 'border-lime-300 bg-lime-300/15 text-lime-200 shadow-lime-400/20' },
                         { id: 'ltx-director', label: 'LTX Director', icon: <VideoIcon className="w-4 h-4" />, activeClass: 'border-amber-400 bg-amber-400/15 text-amber-300 shadow-amber-500/20' },
                         { id: 'tts', label: 'TTS', icon: <MicrophoneIcon className="w-4 h-4" />, activeClass: 'border-emerald-400 bg-emerald-400/15 text-emerald-300 shadow-emerald-500/20' },
                         { id: 'prompt-generator', label: 'Prompt', icon: <PromptIcon className="w-4 h-4" />, activeClass: 'border-violet-400 bg-violet-400/15 text-violet-300 shadow-violet-500/20' },
@@ -1167,7 +1175,7 @@ const App: React.FC = () => {
                             </button>
                         </div>
                     ) : null}
-                    {['extractor-tools', 'logo-theme-generator'].includes(activeTab) && (
+                    {['extractor-tools', 'logo-theme-generator'].includes(activeTab) && !(activeTab === 'extractor-tools' && activeExtractorSubTab === 'poses' && extractorState.poseOutputMode === 'controlnet-json') && (
                         <CloudImageProviderBar
                             options={options}
                             updateOptions={(updates) => dispatch(updateOptions(updates))}
@@ -1419,6 +1427,10 @@ const App: React.FC = () => {
                                 </div>
                             </div>
                         </>
+                    </React.Activity>
+
+                    <React.Activity mode={activeTab === 'scene-variation' ? 'visible' : 'hidden'}>
+                        <SceneVariationPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} onModelChange={setSceneVariationModel} />
                     </React.Activity>
 
                     <React.Activity mode={activeTab === 'character-generator' ? 'visible' : 'hidden'}>
