@@ -11,6 +11,102 @@ const load = async (name) => {
 const scene = await load('./sceneVariationService.ts');
 const flux = await load('./flux2EditWorkflow.ts');
 const segmentation = await load('./sceneMaskWorkflow.ts');
+const character = await load('./characterAnglesWorkflow.ts');
+test('camera-only uses the direct Character angle wording without pose commentary or long scene locks', () => {
+    const analysis = fixture();
+    analysis.cameraChoices[1].instruction = "Orbit 30 degrees to the left, viewing the subject more from the front-left, emphasizing the subject's left profile and the extended leg.";
+    const controls = scene.createSceneControls(analysis); controls.camera.enabled = true;
+    controls.camera.value = analysis.cameraChoices[1].instruction;
+    const [job] = scene.buildSceneJobs(analysis, controls, 'moderate', 1, settings);
+    assert.equal(job.targets[0].instruction, 'Camera angle: 30 degrees left.');
+    assert.equal(job.changes[0], 'camera: Camera angle: 30 degrees left.');
+    assert.match(job.prompt, /^Camera angle: 30 degrees left\./);
+    assert.match(job.prompt, /exact body poses/);
+    assert.match(job.prompt, /Move only the camera; do not turn or re-pose the subjects/);
+    assert.doesNotMatch(job.prompt, /extended leg|left profile|TARGET|UNCHANGED|LOCKED|joint angles|foreshortening|frozen scene/);
+    assert.ok(job.prompt.split(/\s+/).length < 100);
+    const sceneWorkflow = flux.buildFlux2EditWorkflow('source.png', [], job.options).workflow;
+    const encoded = sceneWorkflow.prompt.inputs.text;
+    assert.ok(encoded.includes(job.prompt));
+    assert.ok(encoded.split(/\s+/).length < 200);
+    const reference = character.buildFlux2CharacterAnglesWorkflow({ source: 'source.png' }, {
+        ...job.options, background: 'original', clothing: 'original',
+        comfyCharacterAngleSettings: Object.fromEntries(character.CHARACTER_ANGLES.map(({ id }) => [id, {
+            enabled: id === '45_left', angle: '30 degrees left', pose: character.CHARACTER_NONE_VALUE, expression: character.CHARACTER_NONE_VALUE,
+        }])),
+        comfyCharacterFlux2Unet: job.options.comfyFlux2EditUnet, comfyCharacterFlux2Clip: job.options.comfyFlux2EditClip,
+        comfyCharacterFlux2Vae: job.options.comfyFlux2EditVae, comfyCharacterFlux2Steps: job.options.comfyFlux2EditSteps,
+        comfyCharacterFlux2Cfg: job.options.comfyFlux2EditCfg, comfyCharacterFlux2Sampler: job.options.comfyFlux2EditSampler,
+        comfyCharacterFlux2Megapixels: job.options.comfyFlux2EditMegapixels,
+    }).workflow;
+    assert.ok(reference.output_0_prompt.inputs.text.includes(job.targets[0].instruction));
+    for (const node of ['model', 'clip', 'vae', 'source_scale', 'source_latent']) {
+        assert.deepEqual(sceneWorkflow[node].inputs, reference[node].inputs);
+    }
+    for (const node of ['noise', 'sampler_select', 'scheduler', 'latent']) assert.deepEqual(sceneWorkflow[node].inputs, reference[`output_0_${node}`].inputs);
+    assert.equal(sceneWorkflow.guider.inputs.cfg, reference.output_0_guider.inputs.cfg);
+    assert.deepEqual(sceneWorkflow.positive_reference_1.inputs.latent, reference.output_0_reference_1.inputs.latent);
+    assert.deepEqual(sceneWorkflow.negative_reference.inputs.latent, reference.output_0_negative_reference.inputs.latent);
+    controls.pose.enabled = true;
+    const [mixed] = scene.buildSceneJobs(analysis, controls, 'moderate', 1, settings);
+    assert.match(mixed.prompt, /TARGET person-1 pose/);
+    assert.match(mixed.prompt, /PEOPLE COUNT/);
+});
+test('camera choices have descriptive labels and Auto uses distinct final angles instead of duplicate high angles', () => {
+    const analysis = fixture();
+    analysis.cameraChoices = [
+        { label: 'moderate-1', instruction: 'Use a high-angle shot looking down at the person.', intensity: 'moderate' },
+        { label: 'moderate-2', instruction: 'Raise the camera, looking directly downwards at the person.', intensity: 'moderate' },
+    ];
+    const choices = scene.sceneChoices(analysis, 'camera', 'moderate');
+    assert.equal(choices.length, 5);
+    assert.equal(choices[0].label, 'high angle');
+    assert.ok(choices.every(choice => !/^moderate-\d+$/.test(choice.label)));
+    const controls = scene.createSceneControls(analysis);
+    controls.camera.enabled = true;
+    const jobs = scene.buildSceneJobs(analysis, controls, 'moderate', 5, settings, () => 0);
+    const instructions = jobs.map(job => job.targets[0].instruction);
+    assert.equal(new Set(instructions).size, 5);
+    for (const angle of ['high angle', '30 degrees left', '30 degrees right', '30 degrees above the source viewpoint', '30 degrees below the source viewpoint']) {
+        assert.ok(instructions.includes(`Camera angle: ${angle}.`));
+    }
+    for (const choice of choices) {
+        controls.camera.value = choice.instruction;
+        const fixed = scene.buildSceneJobs(analysis, controls, 'moderate', 2, settings);
+        assert.equal(fixed[0].targets[0].instruction, fixed[1].targets[0].instruction);
+    }
+    assert.deepEqual(scene.sceneChoices(analysis, 'camera', 'strong'), []);
+});
+
+test('Scene Variation defaults to Klein 9B and its paired CLIP while explicit model settings remain supported', () => {
+    const defaults = scene.defaultSceneSettings();
+    assert.equal(defaults.comfyFlux2EditUnet, 'flux2\\flux2Klein9BInt8_v10.safetensors');
+    assert.equal(defaults.comfyFlux2EditClip, 'qwen38BFluxKlein9BTE_38b.safetensors');
+    assert.equal(defaults.comfyFlux2EditVae, 'flux2-vae.safetensors');
+    const overridden = scene.defaultSceneSettings({ comfyFlux2EditUnet: 'custom.gguf', comfyFlux2EditClip: 'custom-clip.safetensors' });
+    assert.equal(overridden.comfyFlux2EditUnet, 'custom.gguf');
+    assert.equal(overridden.comfyFlux2EditClip, 'custom-clip.safetensors');
+});
+
+test('Scene Variation presets snapshot reusable settings without scene data or unrelated generation options', () => {
+    const input = { version: 1, settings: { ...scene.defaultSceneSettings(), comfySeed: 123, comfyFlux2EditSteps: 8, comfyFlux2EditUseCacheDit: true, comfyFlux2EditLora1Name: 'test.safetensors', comfyFlux2EditPrompt: 'private scene', geminiPrompt: 'unrelated' },
+        mode: 'masked', intensity: 'strong', count: 3, provider: 'ollama', ollamaModel: 'vision', samCheckpoint: 'sam3.1.safetensors', maskPadding: 64, poseMaskArea: 'movement',
+        source: 'private photo', masks: { person: 'mask' }, analysis: { subjects: ['someone'] }, controls: { pose: { value: 'private pose' } } };
+    const preset = scene.parseSceneVariationPreset(input);
+    assert.equal(preset.settings.comfySeed, 123);
+    assert.equal(preset.settings.comfyFlux2EditSteps, 8);
+    assert.equal(preset.settings.comfyFlux2EditLora1Name, 'test.safetensors');
+    assert.equal(preset.settings.comfyFlux2EditUseCacheDit, true);
+    assert.equal(preset.settings.comfyFlux2EditPrompt, undefined);
+    assert.equal(preset.settings.geminiPrompt, undefined);
+    for (const key of ['source', 'masks', 'analysis', 'controls']) assert.equal(preset[key], undefined);
+    input.settings.comfyFlux2EditSteps = 99;
+    assert.equal(preset.settings.comfyFlux2EditSteps, 8);
+    assert.deepEqual(scene.parseSceneVariationPreset(JSON.parse(JSON.stringify(preset))), preset);
+    for (const changes of [{ version: 2 }, { count: 9 }, { maskPadding: -1 }, { poseMaskArea: 'other' }, { intensity: 'unknown' }, { provider: 'unknown' }, { settings: { comfyFlux2EditSteps: '8' } }, { settings: { comfySeed: NaN } }]) {
+        assert.throws(() => scene.parseSceneVariationPreset({ ...preset, ...changes }), /preset/);
+    }
+});
 test('SAM3 receives a single category even when a description contains commas or detection-count syntax', () => {
     const description = 'a woman with short curly blonde hair wearing a purple and green patterned shirt, in the foreground left.';
     const graph = segmentation.buildSceneMaskWorkflow('source.png', 'sam3.safetensors', description);
@@ -160,7 +256,7 @@ test('masked readiness checks actual sockets and options without changing Global
     for (const node of Object.values(flux.buildMaskedFlux2EditWorkflow('source', 'mask', settings).workflow)) {
         info[node.class_type] = { input: { required: Object.fromEntries(Object.keys(node.inputs).map(key => [key, ['ANY']])) } };
     }
-    info.UnetLoaderGGUF.input.required.unet_name = [[settings.comfyFlux2EditUnet]];
+    info.UNETLoader.input.required.unet_name = [[settings.comfyFlux2EditUnet]];
     info.CLIPLoader.input.required.clip_name = [[settings.comfyFlux2EditClip]];
     info.VAELoader.input.required.vae_name = [[settings.comfyFlux2EditVae]];
     info.KSamplerSelect.input.required.sampler_name = [['euler']];
@@ -193,10 +289,12 @@ test('each enabled axis changes only itself and keeps disabled axes explicit', (
         const controls = scene.createSceneControls(fixture()); controls[axis].enabled = true;
         const [job] = scene.buildSceneJobs(fixture(), controls, 'moderate', 1, settings, () => 0);
         assert.ok(job.changes.every(change => change.includes(axis)));
-        assert.match(job.prompt, axis === 'camera' ? /LOCKED LOCATION: use Picture 1 itself/ : /LOCKED LOCATION: Courtyard/);
-        assert.match(job.prompt, axis === 'camera' ? /LOCKED STYLE: use Picture 1 itself/ : /LOCKED STYLE: VHS/);
+        assert.match(job.prompt, axis === 'camera' ? /same physical location/ : /LOCKED LOCATION: Courtyard/);
+        assert.match(job.prompt, axis === 'camera' ? /visual style/ : /LOCKED STYLE: VHS/);
         assert.equal(job.options.comfyFlux2EditPreserveSourceStyle, true);
-        for (const other of scene.SCENE_AXES.filter(value => value !== axis)) assert.ok(job.prompt.includes(`preserve the source ${other}`));
+        for (const other of scene.SCENE_AXES.filter(value => value !== axis)) {
+            assert.ok(job.prompt.includes(axis === 'camera' ? other === 'pose' ? 'exact body poses' : other === 'expression' ? 'expressions' : other : `preserve the source ${other}`));
+        }
     }
 });
 test('person controls, no face, no people, indoor and unknown are gated', () => {
@@ -236,6 +334,41 @@ test('pose and camera targets override source actions without locking background
     assert.match(job.prompt, /Keep person-2's face hidden or covered/);
     assert.match(job.prompt, /Apply this camera view and all TARGET edits together/);
 });
+test('legacy zoom and tiny camera moves become explicit angles without changing the pose', () => {
+    const analysis = fixture();
+    analysis.subjects = [analysis.subjects[0]];
+    analysis.cameraChoices = [
+        { label: 'Closer', intensity: 'subtle', instruction: 'Move the camera slightly closer to the subject, cropping slightly tighter while maintaining the current angle.' },
+        { label: 'Higher', intensity: 'subtle', instruction: 'Raise the camera height by a few inches, looking slightly down at the subject.' },
+    ];
+    const choices = scene.sceneChoices(analysis, 'camera', 'subtle');
+    assert.equal(choices.length, 4);
+    assert.ok(choices.every(choice => /15 degrees/.test(choice.instruction)));
+    const controls = scene.createSceneControls(analysis); controls.camera.enabled = true;
+    const jobs = scene.buildSceneJobs(analysis, controls, 'subtle', 4, settings, () => 0);
+    assert.equal(new Set(jobs.map(job => job.changes[0])).size, 4);
+    for (const job of jobs) {
+        const encoded = flux.buildFlux2EditWorkflow('source.png', [], job.options).workflow.prompt.inputs.text;
+        assert.doesNotMatch(encoded, /maintaining the current angle|slightly closer|few inches|TARGET person-1 pose/);
+        assert.match(encoded, /Camera angle: 15 degrees/);
+        assert.match(encoded, /exact body poses/);
+        assert.match(encoded, /do not turn or re-pose the subjects/);
+        assert.match(encoded, /same physical location/);
+        assert.match(encoded, /expressions/);
+        assert.equal(job.targets.length, 1);
+        assert.equal(job.targets[0].axis, 'camera');
+    }
+    controls.camera.value = analysis.cameraChoices[0].instruction;
+    assert.throws(() => scene.buildSceneJobs(analysis, controls, 'subtle', 1, settings), /valid camera variation/);
+    analysis.cameraChoices.push({ label: 'Low angle', intensity: 'subtle', instruction: 'Use a low-angle shot looking up at the person, not just a crop.' });
+    const expanded = scene.sceneChoices(analysis, 'camera', 'subtle');
+    assert.equal(expanded.length, 5);
+    assert.equal(expanded[0].instruction, analysis.cameraChoices[2].instruction);
+    assert.ok(expanded.every(choice => !/maintaining the current angle|few inches/.test(choice.instruction)));
+    analysis.cameraChoices = [];
+    assert.deepEqual(scene.sceneChoices(analysis, 'camera', 'subtle'), []);
+});
+
 test('camera prompt excludes unreliable scene inventory and reaches CLIP without changing model settings', () => {
     const analysis = fixture();
     analysis.subjects = [analysis.subjects[1]];
@@ -245,11 +378,12 @@ test('camera prompt excludes unreliable scene inventory and reaches CLIP without
     const instruction = 'Lower the camera to knee height, looking sharply upwards at the subject.';
     analysis.cameraChoices[1].instruction = instruction;
     const controls = scene.createSceneControls(analysis); controls.camera.enabled = true;
+    controls.camera.value = instruction;
     const [job] = scene.buildSceneJobs(analysis, controls, 'moderate', 1, { ...settings, comfySeed: 6779937593374 });
     const { workflow } = flux.buildFlux2EditWorkflow('source.png', [], job.options);
     const encoded = workflow.prompt.inputs.text;
     assert.doesNotMatch(encoded, /light-colored gloves|hanging from doorframe|Inventoried sharp/);
-    assert.equal(encoded.split(instruction).length - 1, 1);
+    assert.equal(encoded.split('Camera angle: low angle.').length - 1, 1);
     assert.ok(encoded.split(/\s+/).length < 600);
     assert.equal(workflow.noise.inputs.noise_seed, 6779937593374);
     assert.equal(workflow.scheduler.inputs.steps, settings.comfyFlux2EditSteps);
@@ -262,16 +396,14 @@ test('direct camera wording respects lighting switches, source subjects and no-a
     analysis.subjects = [analysis.subjects[1]];
     analysis.cameraChoices[1].instruction = 'Use a low-angle shot looking up at the person.';
     const controls = scene.createSceneControls(analysis); controls.camera.enabled = true;
+    controls.camera.value = analysis.cameraChoices[1].instruction;
     const promptFor = () => scene.buildSceneJobs(analysis, controls, 'moderate', 1, settings)[0].prompt;
     const cameraOnly = promptFor();
-    assert.match(cameraOnly, /^Take the person from the input image/);
-    assert.match(cameraOnly, /but change the camera angle: Use a low-angle shot looking up at the person/);
-    assert.match(cameraOnly, /Same lighting and color grading as the original/);
-    assert.match(cameraOnly, /UNCHANGED person-2 pose: preserve the source pose/);
+    assert.match(cameraOnly, /^Camera angle: low angle\./);
+    assert.match(cameraOnly, /Keep the same people, identities, outfits, expressions and exact body poses/);
+    assert.match(cameraOnly, /same physical location, objects, lighting, season and visual style/);
     assert.match(cameraOnly, /Keep person-2's face hidden or covered/);
-    assert.match(cameraOnly, /NO ADDED OBJECTS: Picture 1 is the authority/);
-    assert.match(cameraOnly, /Do not duplicate accessories or transfer them onto doors, walls or furniture/);
-    assert.match(cameraOnly, /Bare surfaces stay bare/);
+    assert.match(cameraOnly, /Keep exactly 1 people/);
     assert.doesNotMatch(cameraOnly, /sky|building tops|woman|imposing/);
     controls.lighting.enabled = true;
     assert.doesNotMatch(promptFor(), /Same lighting and color grading as the original/);
@@ -280,9 +412,12 @@ test('direct camera wording respects lighting switches, source subjects and no-a
     assert.doesNotMatch(promptFor(), /Take the person from the input image|but change the camera angle/);
     assert.match(promptFor(), /NO ADDED OBJECTS/);
     controls.camera.enabled = true;
+    controls.lighting.enabled = false;
     analysis.subjects = [];
     analysis.cameraChoices[1].instruction = 'Use a lower view of the courtyard.';
-    assert.match(promptFor(), /^Take the scene from the input image/);
+    controls.camera.value = analysis.cameraChoices[1].instruction;
+    assert.match(promptFor(), /^Use a lower view of the courtyard/);
+    assert.match(promptFor(), /Keep the scene unoccupied/);
 });
 test('wardrobe and exact population are locked in encoded camera and non-camera workflows', () => {
     for (const camera of [false, true]) {
@@ -295,6 +430,11 @@ test('wardrobe and exact population are locked in encoded camera and non-camera 
             if (count) controls.pose.enabled = true;
             const [job] = scene.buildSceneJobs(analysis, controls, 'moderate', 1, settings);
             const encoded = flux.buildFlux2EditWorkflow('original.png', [], job.options).workflow.prompt.inputs.text;
+            if (camera && count === 0) {
+                assert.match(encoded, /Keep the scene unoccupied; do not add people/);
+                assert.doesNotMatch(encoded, /TARGET person-\d/);
+                continue;
+            }
             assert.match(encoded, /Keep the original clothing unchanged/);
             assert.match(encoded, /Picture 1 is the sole wardrobe reference for each person/);
             assert.match(encoded, /prints and pattern layout, colors, cut, fabric, footwear and accessories on their original wearer/);
@@ -331,7 +471,7 @@ test('intensity, fixed choices, Auto variation and immutable snapshots', () => {
     assert.ok(jobs.every(job => job.seed === 42 && job.options.numImages === 1));
     const prompt = jobs[0].prompt; analysis.location = 'Changed'; controls.camera.enabled = false;
     assert.equal(jobs[0].prompt, prompt);
-    assert.match(prompt, /UNCHANGED season: preserve the source season/);
+    assert.match(prompt, /lighting, season and visual style/);
     assert.equal(scene.randomSceneChoice(choices('camera'), 'camera subtle', () => 0), 'camera moderate');
 });
 test('Auto exhausts distinct combinations before repeating and never changes manual choices', () => {
@@ -374,10 +514,12 @@ test('workflow preserves style and legacy behavior, chains LoRAs before CacheDiT
 test('readiness checks loader inventory and every generated node', () => {
     const { workflow } = flux.buildFlux2EditWorkflow('original.png', [], settings);
     const info = Object.fromEntries(Object.values(workflow).map(node => [node.class_type, { input: { required: {} } }]));
-    for (const [node, field, value] of [['UnetLoaderGGUF', 'unet_name', settings.comfyFlux2EditUnet], ['CLIPLoader', 'clip_name', settings.comfyFlux2EditClip],
+    for (const [node, field, value] of [['UNETLoader', 'unet_name', settings.comfyFlux2EditUnet], ['CLIPLoader', 'clip_name', settings.comfyFlux2EditClip],
         ['VAELoader', 'vae_name', settings.comfyFlux2EditVae], ['KSamplerSelect', 'sampler_name', settings.comfyFlux2EditSampler]]) info[node].input.required[field] = [[value]];
     assert.deepEqual(scene.sceneReadinessErrors(info, settings), []);
     assert.deepEqual(scene.sceneReadinessErrors(info, { ...settings, comfyFlux2EditLora1Name: 'None' }), []);
+    info.UnetLoaderGGUF = { input: { required: { unet_name: [['custom.gguf']] } } };
+    assert.deepEqual(scene.sceneReadinessErrors(info, { ...settings, comfyFlux2EditUnet: 'custom.gguf' }), []);
     info.KSamplerSelect.input.required.sampler_name = ['COMBO', { options: ['euler', 'heun'] }];
     assert.deepEqual(scene.sceneModelOptions(info, 'KSamplerSelect', 'sampler_name'), ['euler', 'heun']);
     assert.deepEqual(scene.sceneReadinessErrors(info, settings), []);

@@ -1684,7 +1684,19 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                     ))}
                     <DetailItem label="Audio" value={selectedItemModal.ltxDirectorOptions.audioName || 'None'} />
                   </div>}
-                  {!selectedItemModal.ttsOptions && (selectedItemModal.themeOptions ? renderThemeOptionsDetails(selectedItemModal.themeOptions) : renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType))}
+                  {selectedItemModal.sceneVariationPreset && <div className="space-y-2 border-t border-border-primary pt-3">
+                    <h4 className="text-sm font-semibold text-text-primary">Scene Variation Preset</h4>
+                    <DetailItem label="Mode" value={selectedItemModal.sceneVariationPreset.mode === 'masked' ? 'Masked by person' : 'Global'} />
+                    <DetailItem label="Amplitude" value={selectedItemModal.sceneVariationPreset.intensity} />
+                    <DetailItem label="Images" value={selectedItemModal.sceneVariationPreset.count} />
+                    <DetailItem label="Analysis provider" value={selectedItemModal.sceneVariationPreset.provider} />
+                    {selectedItemModal.sceneVariationPreset.provider === 'ollama' && <DetailItem label="Ollama model" value={selectedItemModal.sceneVariationPreset.ollamaModel} />}
+                    <DetailItem label="SAM3 checkpoint" value={selectedItemModal.sceneVariationPreset.samCheckpoint || 'Auto'} />
+                    <DetailItem label="Pose edit area" value={selectedItemModal.sceneVariationPreset.poseMaskArea === 'movement' ? 'Movement area' : 'Silhouette'} />
+                    <DetailItem label="Mask margin" value={`${selectedItemModal.sceneVariationPreset.maskPadding} px`} />
+                    <details><summary className="cursor-pointer text-xs text-text-secondary">FLUX2 settings</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-text-secondary">{JSON.stringify(selectedItemModal.sceneVariationPreset.settings, null, 2)}</pre></details>
+                  </div>}
+                  {!selectedItemModal.ttsOptions && !selectedItemModal.sceneVariationPreset && (selectedItemModal.themeOptions ? renderThemeOptionsDetails(selectedItemModal.themeOptions) : renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType))}
                   {selectedItemModal.mediaType === 'audio-tts' && selectedItemModal.indexTtsOptions?.characters.some((character) => character.thumbnail) && <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border-primary bg-bg-primary p-3">
                     <input type="checkbox" checked={importTtsCharacterPhotos} onChange={(event) => setImportTtsCharacterPhotos(event.target.checked)} className="mt-0.5 h-4 w-4 accent-accent" />
                     <span><span className="block text-sm font-bold text-text-primary">Import character photos into LTX</span><span className="mt-0.5 block text-xs text-text-muted">Assign each saved character photo to that character’s dialogue clips.</span></span>
@@ -1702,7 +1714,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                         {selectedItemModal.promptType === 'soup' && <button type="button" onClick={() => setSoupPromptToLink(selectedItemModal)} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-primary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"><PhotographIcon className="w-5 h-5" /> {selectedItemModal.linkedResultId ? 'Change Result' : 'Link Result'}</button>}
                       </>
                     ) : (
-                      <button onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> {selectedItemModal.ltxDirectorOptions ? 'Open in LTX Director' : selectedItemModal.mediaType === 'audio-tts' ? 'Use in LTX Video' : 'Load in Generator'}</button>
+                      <button onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> {selectedItemModal.sceneVariationPreset ? 'Open in Scene Variation' : selectedItemModal.ltxDirectorOptions ? 'Open in LTX Director' : selectedItemModal.mediaType === 'audio-tts' ? 'Use in LTX Video' : 'Load in Generator'}</button>
                     )}
                     <button onClick={() => handleDelete(selectedItemModal.id, selectedItemModal.name || `Item #${selectedItemModal.id}`)} disabled={deletingId === selectedItemModal.id} className="flex items-center justify-center gap-2 bg-danger-bg text-danger font-semibold py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">{deletingId === selectedItemModal.id ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <TrashIcon className="w-5 h-5" />}</button>
                   </div>

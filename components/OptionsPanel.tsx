@@ -25,6 +25,7 @@ import {
     CHARACTER_POSE_OPTIONS,
     CHARACTER_EXPRESSION_OPTIONS,
     DEFAULT_CHARACTER_ANGLE_SETTINGS,
+    createFlux2CharacterReferencePreset,
     getEnabledCharacterAngles,
 } from '../services/characterAnglesWorkflow';
 
@@ -1074,6 +1075,25 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
     const renderComfyCharacterOptions = () => {
         const selectOptions = (current: string, values: string[]) => Array.from(new Set([current, ...values].filter(Boolean))).map(value => ({ value, label: value }));
+        const setOutputPrompt = (angleId: string, prompt: string | undefined) => {
+            updateOptions({ comfyCharacterAngleSettings: {
+                ...options.comfyCharacterAngleSettings,
+                [angleId]: { ...DEFAULT_CHARACTER_ANGLE_SETTINGS[angleId], ...options.comfyCharacterAngleSettings?.[angleId], prompt },
+            } });
+        };
+        const loadFlux2AngleWorkflow = () => {
+            setCharacterPoseImage?.(null);
+            updateOptions(createFlux2CharacterReferencePreset());
+        };
+        const returnToStandardFlux2 = () => {
+            updateOptions({
+                comfyCharacterMode: 'flux2',
+                comfyCharacterAngleSettings: Object.fromEntries(CHARACTER_ANGLES.map(({ id }) => {
+                    const { prompt, ...settings } = { ...DEFAULT_CHARACTER_ANGLE_SETTINGS[id], ...options.comfyCharacterAngleSettings?.[id] };
+                    return [id, settings];
+                })),
+            });
+        };
         const updateAngleSetting = (angleId: string, field: 'angle' | 'pose' | 'expression', value: string) => {
             const currentSettings = options.comfyCharacterAngleSettings || {};
             const currentAngle = { ...DEFAULT_CHARACTER_ANGLE_SETTINGS[angleId], ...currentSettings[angleId] };
@@ -1115,7 +1135,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             const currentSettings = options.comfyCharacterAngleSettings || {};
             const randomValue = (values: string[]) => values[Math.floor(Math.random() * values.length)];
             updateOptions({
-                comfyCharacterAngleSettings: Object.fromEntries(CHARACTER_ANGLES.map(({ id }) => [id, {
+                comfyCharacterAngleSettings: Object.fromEntries(CHARACTER_ANGLES.map(({ id }) => [id, options.comfyCharacterMode === 'flux2' && currentSettings[id]?.prompt !== undefined ? currentSettings[id] : {
                     ...DEFAULT_CHARACTER_ANGLE_SETTINGS[id],
                     ...currentSettings[id],
                     angle: randomValue(CHARACTER_ANGLE_OPTIONS),
@@ -1146,11 +1166,21 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         return <>
             <OptionSection title="Automatic Multi-Angle Set">
+                {isFlux2Character && <label className="flex items-center gap-2 text-sm font-medium text-text-secondary" title="Replace background instructions with the original scene viewed from the requested angle. Background references are ignored while enabled; stored prompts remain unchanged.">
+                    <input type="checkbox" checked={!!options.comfyCharacterPreserveBackgroundPerspective} onChange={event => updateOptions({ comfyCharacterPreserveBackgroundPerspective: event.target.checked })} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />
+                    Preserve original background with new perspective
+                </label>}
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-text-secondary">
-                    <p>Choose a suggestion or type your own value. Leave a field empty to use Default (nothing).</p>
+                    {!(isFlux2Character && Object.values(options.comfyCharacterAngleSettings || {}).some(setting => setting.prompt !== undefined)) && <p>Choose a suggestion or type your own value. Leave a field empty to use Default (nothing).</p>}
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="shrink-0 font-semibold text-accent">{enabledOutputCount}/8 enabled</span>
-                        <button type="button" onClick={randomizeAllAngleSettings} disabled={isDisabled} className="inline-flex h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
+                        <button type="button" onClick={loadFlux2AngleWorkflow} disabled={isDisabled} title="Apply the supplied FLUX2 Klein workflow: replace output prompts and model/sampling settings, disable LoRAs and CacheDiT, and clear the pose reference. Close-up needs its placeholders filled." className="inline-flex min-h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 py-2 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
+                            <WorkflowIcon className="h-4 w-4 shrink-0" />Load FLUX2 angle workflow
+                        </button>
+                        {isFlux2Character && <button type="button" onClick={returnToStandardFlux2} disabled={isDisabled} title="Remove full workflow prompts from every output and return to angle, pose and expression controls. Keep model, sampling and output selections." className="inline-flex min-h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 py-2 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
+                            <ResetIcon className="h-4 w-4 shrink-0" />Return to standard FLUX2
+                        </button>}
+                        <button type="button" onClick={randomizeAllAngleSettings} disabled={isDisabled || (isFlux2Character && getEnabledCharacterAngles(options).every(({ id }) => options.comfyCharacterAngleSettings?.[id]?.prompt !== undefined))} className="inline-flex h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
                             <DiceIcon className="h-4 w-4" />Randomize all
                         </button>
                         <button type="button" onClick={toggleAllAngleOutputs} disabled={isDisabled} className="inline-flex h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
@@ -1162,17 +1192,18 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     {CHARACTER_ANGLES.map((angle, index) => {
                         const settings = { ...DEFAULT_CHARACTER_ANGLE_SETTINGS[angle.id], ...options.comfyCharacterAngleSettings?.[angle.id] };
                         const isOutputEnabled = settings.enabled !== false;
+                        const hasFullPrompt = isFlux2Character && settings.prompt !== undefined;
                         return <div key={angle.id} className={`min-h-64 rounded-md border bg-bg-primary p-5 transition-opacity ${isOutputEnabled ? 'border-border-primary' : 'border-border-primary/50 opacity-60'}`}>
                             <div className="mb-5 flex items-center justify-between gap-3">
                                 <div>
                                     <span className="text-base font-bold text-accent">Output {index + 1}</span>
-                                    <p className="mt-0.5 text-xs text-text-muted">JSON default</p>
+                                    <p className="mt-0.5 text-xs text-text-muted">{hasFullPrompt ? settings.angle : 'JSON default'}</p>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button
                                         type="button"
                                         onClick={() => randomizeAngleSetting(angle.id)}
-                                        disabled={isDisabled || !isOutputEnabled}
+                                        disabled={isDisabled || !isOutputEnabled || hasFullPrompt}
                                         title={`Randomize angle, pose and expression for Output ${index + 1}`}
                                         aria-label={`Randomize Output ${index + 1}`}
                                         className="flex h-9 w-9 items-center justify-center rounded-md border border-border-primary bg-bg-tertiary text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
@@ -1191,7 +1222,28 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                     </label>
                                 </div>
                             </div>
+                            {isFlux2Character && <label className="block text-sm font-medium text-text-secondary">Prompt mode for Output {index + 1}
+                                <select
+                                    value={hasFullPrompt ? 'full' : 'controls'}
+                                    onChange={event => setOutputPrompt(angle.id, event.target.value === 'full' ? '' : undefined)}
+                                    disabled={isDisabled || !isOutputEnabled}
+                                    className="mt-1 block w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm focus:ring-accent"
+                                >
+                                    <option value="controls">Angle / pose / expression</option>
+                                    <option value="full">Full workflow prompt</option>
+                                </select>
+                            </label>}
                             <div className="grid gap-4">
+                                {hasFullPrompt ? <label className="mt-3 text-xs font-semibold text-text-secondary">Full FLUX2 prompt
+                                    <textarea
+                                        aria-label={`Full FLUX2 prompt for Output ${index + 1}`}
+                                        value={settings.prompt}
+                                        onChange={event => setOutputPrompt(angle.id, event.target.value)}
+                                        rows={10}
+                                        disabled={isDisabled || !isOutputEnabled}
+                                        className="mt-1.5 block w-full min-w-0 resize-y rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm font-normal text-text-primary focus:border-accent focus:ring-accent"
+                                    />
+                                </label> : <>
                                 <label className="text-xs font-semibold text-text-secondary">Camera Angle
                                     <input
                                         type="text"
@@ -1225,6 +1277,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                         className="mt-1.5 block w-full rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm font-normal text-text-primary focus:border-accent focus:ring-accent"
                                     />
                                 </label>
+                                </>}
                             </div>
                         </div>;
                     })}

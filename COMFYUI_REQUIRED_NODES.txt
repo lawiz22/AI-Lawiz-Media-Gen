@@ -9,11 +9,12 @@ services/ltxDirectorWorkflow.ts, including dedicated feature workflow builders.
 SUMMARY
 -------
 
-Lawiz currently references 97 distinct ComfyUI node classes.
+The baseline audit above found 97 distinct ComfyUI node classes, before the
+LanPaint mode addition documented below.
 
 - 58 are included in a current ComfyUI installation (core + comfy_extras).
 - 39 are supplied by external custom-node packs.
-- The complete feature set uses 24 external repositories when the LTX Director
+- The audited feature set used 24 external repositories when the LTX Director
   compatibility dependency is included.
 
 IMPORTANT: update ComfyUI before installing custom nodes. Recent versions include
@@ -36,6 +37,45 @@ For manual installation, clone each repository into:
 Then follow that repository's installation instructions. Prefer Manager because
 packages such as Nunchaku, SeedVR2, Impact Pack and TTS Audio Suite require extra
 Python dependencies or installation scripts.
+
+
+SWAP A PERSON
+-------------
+
+The default Swap Anything (SAM3) mode in Fun > Swap a Person calls the same
+generation API and workflow as Swap Anything.
+It has no preliminary analysis or separate mask preparation. Both use native
+CheckpointLoaderSimple + CLIPTextEncode + SAM3_Detect with a SAM3.1 checkpoint,
+GrowMask, MaskToImage, DrawMaskOnImage (KJNodes), Cut By Mask and
+Image to RGB [RvTools], plus the standard FLUX2 reference/sampling nodes.
+The decoded image goes directly to SaveImage; no additional EmptyImage,
+ImageToMask, SetLatentNoiseMask or ImageCompositeMasked nodes are required by
+this panel. Other Lawiz workflows may still require them.
+
+Default models match Swap Anything: flux-2-klein-4b-fp8.safetensors,
+qwen_3_4b.safetensors, flux2-vae.safetensors and
+sam3.1_multiplex_fp16.safetensors. Another installed compatible FLUX2 pair can
+be selected. GGUF diffusion models additionally need UnetLoaderGGUF; optional
+LoRAs require LoraLoader.
+
+The separate LanPaint (Head Swap) mode uses LanPaint_KSampler from:
+  https://github.com/scraed/LanPaint
+Install LanPaint in ComfyUI, restart and reconnect. This mode does not use SAM3,
+KJNodes, Masquerade or RvTools. It uses current core FLUX2 reference/encoding
+nodes, FluxGuidance, ConditioningZeroOut, PrimitiveFloat, LoraLoaderModelOnly,
+ImageScaleToTotalPixels and ImageScale. Both references are scaled with Lanczos
+to 2 MP by default before VAE encoding; large destination photos do not enter
+the VAE at their original size. The resolution is configurable in the panel.
+CacheDiT_Model_Optimizer is enabled by default and requires ComfyUI-CacheDiT;
+disabling that option omits the node without affecting the original SAM3 mode.
+
+LanPaint mode default weights:
+  flux2\moodyDesireMixFlux2_v30_pruned_fp8.safetensors
+  qwen38BFluxKlein9BTE_38b.safetensors
+  flux2-vae.safetensors
+  FLUX2\bfs_head_v1_flux-klein_9b_step3500_rank128.safetensors
+The head-swap LoRA uses LoraLoaderModelOnly at strength 1. Models must already
+be installed; required nodes and model options are validated before uploads.
 
 
 COMPLETE INSTALL LIST - ALL LAWIZ FEATURES
@@ -179,6 +219,12 @@ Used by: extracting the selected donor element in Swap Anything.
 Repository: https://github.com/r-vage/ComfyUI-RvTools_v2
 Lawiz node: Image to RGB [RvTools]
 Used by: normalizing the extracted donor image in Swap Anything.
+
+[25] LanPaint
+Repository: https://github.com/scraed/LanPaint
+Lawiz node: LanPaint_KSampler
+Used by: the optional LanPaint (Head Swap) mode in Swap a Person.
+Install this package in ComfyUI, then restart and reconnect Lawiz.
 
 
 PACKAGES BY LAWIZ FEATURE

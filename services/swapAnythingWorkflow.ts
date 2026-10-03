@@ -21,6 +21,14 @@ export interface SwapAnythingOptions {
     lora2Strength: number;
 }
 
+export const defaultSwapAnythingOptions = (): SwapAnythingOptions => ({
+    destinationTarget: "the person's head, face, and hair", donorTarget: "the person's head, face, and hair", prompt: '',
+    unet: 'flux-2-klein-4b-fp8.safetensors', clip: 'qwen_3_4b.safetensors', vae: 'flux2-vae.safetensors',
+    samCheckpoint: 'sam3.1_multiplex_fp16.safetensors', megapixels: 1, donorMegapixels: 1.5,
+    samThreshold: 0.5, samRefineIterations: 2, maskGrow: 2, steps: 4, cfg: 1, sampler: 'ddim', seed: -1,
+    lora1Name: '', lora1Strength: 1, lora2Name: '', lora2Strength: 1,
+});
+
 export const buildSwapAnythingWorkflow = (
     destinationImage: string,
     donorImage: string,

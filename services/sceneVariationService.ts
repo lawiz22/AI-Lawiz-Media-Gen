@@ -40,7 +40,7 @@ export interface SceneJob {
     targets?: Array<{ personId?: string; axis: SceneAxis; instruction: string }>;
     maskedPasses?: SceneMaskedPass[];
 }
-export interface SceneMask { file: File; width: number; height: number; pixels: Uint8Array; preview: string; automaticKey?: string }
+export interface SceneMask { file: File; width: number; height: number; pixels: Uint8Array; preview: string; automaticKey?: string; warning?: string }
 export interface SceneMaskedPass { personId: string; mask: File; options: GenerationOptions }
 export const SCENE_AXES: SceneAxis[] = ['pose', 'expression', 'lighting', 'camera', 'season'];
 export const SCENE_INTENSITIES: SceneIntensity[] = ['subtle', 'moderate', 'strong'];
@@ -131,16 +131,18 @@ Describe the precise location and fixed architectural/object anchors and their s
 Keep clothing descriptions out of location, anchors and variation instructions as well. Each proposal must refer to its person ID and change only the selected attribute, never redesign, recolor, exchange or complete an outfit. Do not describe a desired outfit even when changing pose or viewing angle. Use the image itself for garment details. Background anchors must not recount people as additional scene objects.
 POSE DIVERSITY: for each person, aim for 4 subtle, 6 moderate and 8 strong pose proposals when the visible scene permits, at most 24 in total. These pose counts override the two-choice rule for other axes below. Each pose must include its final support posture in posture: standing, seated, kneeling, crouching, lying or other. Do not fill a level with hand/arm variations of the same kneeling or seated stance. For moderate and strong, distribute proposals across several feasible support postures and body orientations. The original support posture is NOT locked when pose varies. If a person is kneeling or seated on an accessible floor and standing is physically plausible in the established space, include at least one explicit fully standing proposal at both moderate and strong levels: both feet on that same floor, knees off the floor, torso upright. Include other compatible postures rather than always keeping them on their knees. Specify the final posture, not merely an attempt or intention to rise. For subtle, keep changes small but distinct. Keep the person in the same area, with the same clothing and objects; do not invent a seat or support, assume a hidden floor, relocate the person or change the camera to fit a pose. Return fewer proposals when the framing, space or visible constraints make these transitions implausible; explain the limitation in uncertainty. Keep pose instructions concise and structurally distinct, not paraphrases.
 Suggest concise context-specific variations, with two distinct choices per intensity subtle/moderate/strong for each applicable axis when feasible. Every proposal must create an observable change from this specific source within its framing, never an unchanged pose, invisible weight shift or vague intention. Subtle means a small but visible change. Moderate means an unmistakable change to visible limb placement, torso configuration or viewpoint. Strong means a substantial but physically plausible change while preserving the same scene. For pose proposals, specify a concrete target configuration for relevant visible joints and the direction of held objects; do not merely name a mood or an action. Do not propose changes only to knees or feet outside the frame. Poses must work with existing supports and props; no new furniture, objects, clothing or location. Expressions change only the face, not body pose. Camera proposals must specify a new position relative to the source and a viewing direction, with a visible perspective change: describe the camera height or lateral displacement and the resulting relative view of existing anchors. For moderate/strong, avoid vague words such as slightly; do not substitute cropping or zooming for moving the camera. Camera varies viewpoint only, never camera medium or style; avoid unseen reverse views. Lighting varies physical illumination only, never visual medium, film grain, expressions or color grading. Seasons vary only existing outdoor vegetation and surfaces, no geometry, wardrobe or time-of-day change. seasonChoices=[] unless outdoor. Empty proposals are valid when no safe visible change is possible. Each choice contains only its own axis instruction. All suggestions preserve identities, subject count, outfits, location, existing objects and visual style.`;
+    const cameraInstruction = `CAMERA ANGLES: this axis changes the viewing angle, not shot size. At EVERY intensity, including subtle, use a measurable orbit around the stationary subject/group or focal point, aimed back at that same point. Aim for about 15 degrees for subtle, 30 degrees for moderate and 45 degrees for strong, relative to the source camera. Specify left/right or above/below and the resulting view of the same subject. Keep similar subject size and lens, and preserve all body joint angles, support contacts and world-space orientation unless pose is separately enabled. Do not substitute zoom, tighter crop, moving closer/farther, a few inches of height, a pan/tilt from the same optical center, or maintaining the current angle. On a plain studio background, the subject's changed foreshortening and visible sides demonstrate the new angle; do not invent background landmarks. Avoid reverse views or impossible positions. Return no camera proposals if a new view cannot be supported by the source.`;
+    const analysisInstruction = `${instruction}\n${cameraInstruction}`;
     let response: { text: string; usageMetadata?: any };
     if (provider === 'ollama') {
         const { analyzeStructuredImageWithOllama } = await import('./ollamaService');
-        response = { text: await analyzeStructuredImageWithOllama(source, instruction, SCENE_ANALYSIS_SCHEMA, ollama.url, ollama.model, signal) };
+        response = { text: await analyzeStructuredImageWithOllama(source, analysisInstruction, SCENE_ANALYSIS_SCHEMA, ollama.url, ollama.model, signal) };
     } else if (provider === 'gemini') {
         const { generateGeminiTextResult } = await import('./geminiService');
-        response = await generateGeminiTextResult(instruction, [source]);
+        response = await generateGeminiTextResult(analysisInstruction, [source]);
     } else {
         const { generateMammouthText } = await import('./mammouthService');
-        response = await generateMammouthText(instruction, [source]);
+        response = await generateMammouthText(analysisInstruction, [source]);
     }
     if (response.usageMetadata) onUsage?.(response.usageMetadata);
     if (signal?.aborted) throw new DOMException('Analysis cancelled.', 'AbortError');
@@ -151,10 +153,46 @@ export const createSceneControls = (analysis?: SceneAnalysis): SceneControls => 
     ...SCENE_AXES.map(axis => [axis, { enabled: false, value: 'auto' }] as const),
     ...(analysis?.subjects || []).flatMap(subject => ['pose', 'expression'].map(axis => [`${axis}:${subject.id}`, { enabled: true, value: 'auto' }] as const)),
 ]);
+const sceneCameraChoices = (analysis: SceneAnalysis, intensity: SceneIntensity): SceneChoice[] => {
+    const choices = analysis.cameraChoices.filter(choice => choice.intensity === intensity);
+    const angular = choices.filter(choice => {
+        const instruction = choice.instruction;
+        const unchangedAngle = /\b(?:maintain\w*|keep\w*|preserv\w*)\s+(?:(?:the|its)\s+)?(?:current|same|original)\s+(?:camera\s+|viewing\s+)?angle\b/i.test(instruction);
+        const tinyMove = /\b(?:a few|a couple of)\s+(?:inches|centimeters|centimetres)\b/i.test(instruction);
+        const cropOrDistance = /\b(?:zoom\w*|crop\w*|closer|farther|further away|push[- ]?in|pull[- ]?back)\b/i.test(instruction);
+        const angleChange = /\b(?:orbit|azimuth|elevation|degrees?|low[- ]angle|high[- ]angle|looking\s+(?:up\w*|down\w*)|look\s+(?:up\w*|down\w*))\b/i.test(instruction);
+        return !unchangedAngle && !tinyMove && (!cropOrDistance || angleChange);
+    });
+    if (!choices.length) return [];
+    const named = angular.map(choice => {
+        const direct = sceneCameraOnlyInstruction(choice.instruction);
+        const label = direct.startsWith('Camera angle: ') ? direct.slice(14).replace(/\.$/, '')
+            : /^(subtle|moderate|strong)[\s_-]*\d+$/i.test(choice.label) ? choice.instruction.slice(0, 120) : choice.label;
+        return { ...choice, label };
+    });
+    if (named.length && named.every(choice => sceneCameraOnlyInstruction(choice.instruction) === choice.instruction)) return named;
+    const degrees = { subtle: 15, moderate: 30, strong: 45 }[intensity];
+    const focus = analysis.subjects.length === 1 ? 'person' : analysis.subjects.length ? 'group' : "scene's focal point";
+    const defaults = [
+        { label: `Orbit left ${degrees} degrees`, move: `Orbit the camera ${degrees} degrees to the left of the source viewpoint around the ${focus}, aiming back at the ${focus} from that new position` },
+        { label: `Orbit right ${degrees} degrees`, move: `Orbit the camera ${degrees} degrees to the right of the source viewpoint around the ${focus}, aiming back at the ${focus} from that new position` },
+        { label: `Higher angle ${degrees} degrees`, move: `Move the camera on an upward arc around the ${focus} to a viewpoint ${degrees} degrees above the source viewing direction, looking down toward the ${focus}` },
+        { label: `Lower angle ${degrees} degrees`, move: `Move the camera on a downward arc around the ${focus} to a viewpoint ${degrees} degrees below the source viewing direction, looking up toward the ${focus}` },
+    ].map(({ label, move }) => ({ label, intensity, instruction: `${move}. Keep a similar camera-to-subject distance, focal length and subject size; show the new perspective rather than a resized copy.` }));
+    const seen = new Set<string>();
+    return [...named, ...defaults].filter(choice => {
+        const instruction = sceneCameraOnlyInstruction(choice.instruction).toLowerCase();
+        if (seen.has(instruction)) return false;
+        seen.add(instruction);
+        return true;
+    });
+};
+
 export const sceneChoices = (analysis: SceneAnalysis, axis: SceneAxis, intensity: SceneIntensity, subject?: SceneSubject): SceneChoice[] => {
+    if (axis === 'camera') return sceneCameraChoices(analysis, intensity);
     const choices = axis === 'pose' ? subject?.poses || [] : axis === 'expression' ? (subject?.faceVisible ? subject.expressions : [])
         : axis === 'season' ? (analysis.environment === 'outdoor' ? analysis.seasonChoices : [])
-        : axis === 'camera' ? analysis.cameraChoices : analysis.lightingChoices;
+        : analysis.lightingChoices;
     return choices.filter(choice => choice.intensity === intensity);
 };
 export const randomSceneChoice = (choices: SceneChoice[], previous = '', random = Math.random): string => {
@@ -164,12 +202,60 @@ export const randomSceneChoice = (choices: SceneChoice[], previous = '', random 
 };
 
 export const defaultSceneSettings = (initial: Partial<GenerationOptions> = {}): Partial<GenerationOptions> => ({
-    comfyFlux2EditUnet: initial.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf',
-    comfyFlux2EditClip: initial.comfyFlux2EditClip || 'qwen_3_4b.safetensors', comfyFlux2EditVae: initial.comfyFlux2EditVae || 'flux2-vae.safetensors',
+    comfyFlux2EditUnet: initial.comfyFlux2EditUnet || 'flux2\\flux2Klein9BInt8_v10.safetensors',
+    comfyFlux2EditClip: initial.comfyFlux2EditClip || 'qwen38BFluxKlein9BTE_38b.safetensors', comfyFlux2EditVae: initial.comfyFlux2EditVae || 'flux2-vae.safetensors',
     comfyFlux2EditSteps: 4, comfyFlux2EditCfg: 1, comfyFlux2EditSampler: 'euler', comfyFlux2EditMegapixels: 1,
     comfyFlux2EditLora1Name: '', comfyFlux2EditLora1Strength: 1, comfyFlux2EditLora2Name: '', comfyFlux2EditLora2Strength: 1,
     comfyFlux2EditUseCacheDit: false, comfyFlux2EditCacheDitModelType: 'Auto', comfyFlux2EditCacheDitWarmupSteps: 0, comfyFlux2EditCacheDitSkipInterval: 0,
 });
+
+export interface SceneVariationPreset {
+    version: 1;
+    settings: Partial<GenerationOptions>;
+    mode: 'global' | 'masked';
+    intensity: SceneIntensity;
+    count: number;
+    provider: SceneProvider;
+    ollamaModel: string;
+    samCheckpoint: string;
+    maskPadding: number;
+    poseMaskArea: ScenePoseMaskArea;
+}
+
+export const parseSceneVariationPreset = (value: unknown): SceneVariationPreset => {
+    const invalid = () => { throw new Error('Invalid or unsupported Scene Variation preset.'); };
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid();
+    const preset = value as SceneVariationPreset;
+    if (preset.version !== 1 || !['global', 'masked'].includes(preset.mode)
+        || !SCENE_INTENSITIES.includes(preset.intensity) || !['gemini', 'mammouth', 'ollama'].includes(preset.provider)
+        || !['movement', 'silhouette'].includes(preset.poseMaskArea)
+        || !Number.isInteger(preset.count) || preset.count < 1 || preset.count > 8
+        || !Number.isInteger(preset.maskPadding) || preset.maskPadding < 0 || preset.maskPadding > 128
+        || typeof preset.ollamaModel !== 'string' || typeof preset.samCheckpoint !== 'string'
+        || !preset.settings || typeof preset.settings !== 'object' || Array.isArray(preset.settings)) return invalid();
+    const defaults = { ...defaultSceneSettings(), comfySeed: -1 };
+    const settings: Partial<GenerationOptions> = {};
+    for (const [key, fallback] of Object.entries(defaults)) {
+        const setting = preset.settings[key as keyof GenerationOptions];
+        if (setting === undefined) continue;
+        if (typeof setting !== typeof fallback || (typeof setting === 'number' && !Number.isFinite(setting))) return invalid();
+        Object.assign(settings, { [key]: setting });
+    }
+    return { version: 1, settings, mode: preset.mode, intensity: preset.intensity, count: preset.count,
+        provider: preset.provider, ollamaModel: preset.ollamaModel, samCheckpoint: preset.samCheckpoint,
+        maskPadding: preset.maskPadding, poseMaskArea: preset.poseMaskArea };
+};
+
+const sceneCameraOnlyInstruction = (instruction: string): string => {
+    const lateral = instruction.match(/(\d+(?:\.\d+)?)\s*(?:degrees?|\u00b0)\s*(?:to\s+)?(?:the\s+)?(left|right)\b/i);
+    if (lateral) return `Camera angle: ${lateral[1]} degrees ${lateral[2].toLowerCase()}.`;
+    const vertical = instruction.match(/(\d+(?:\.\d+)?)\s*(?:degrees?|\u00b0)\s*(above|below)\b/i);
+    if (vertical) return `Camera angle: ${vertical[1]} degrees ${vertical[2].toLowerCase()} the source viewpoint.`;
+    if (/\blow[- ]angle\b|\blook(?:ing)?\s+(?:(?:slightly|sharply|directly)\s+)?up(?:ward|wards)?\b/i.test(instruction)) return 'Camera angle: low angle.';
+    if (/\baerial\b|\bbird.s.eye\b/i.test(instruction)) return 'Camera angle: aerial view.';
+    if (/\bhigh[- ]angle\b|\blook(?:ing)?\s+(?:(?:slightly|sharply|directly)\s+)?down(?:ward|wards)?\b/i.test(instruction)) return 'Camera angle: high angle.';
+    return instruction;
+};
 
 export const buildSceneJobs = (
     analysis: SceneAnalysis, controls: SceneControls, intensity: SceneIntensity, count: number,
@@ -217,8 +303,8 @@ export const buildSceneJobs = (
         usedCombinations.add(combinationKey());
         const resolved = active.map((field, fieldIndex) => {
             const selected = availablePools[fieldIndex][selections[fieldIndex]];
-            const choice = selected.instruction;
-            previous[field.key] = choice;
+            const choice = field.axis === 'camera' && active.length === 1 ? sceneCameraOnlyInstruction(selected.instruction) : selected.instruction;
+            previous[field.key] = selected.instruction;
             if (field.axis === 'pose' && controls[field.key].value === 'auto') {
                 poseUses[fieldIndex].set(choice, (poseUses[fieldIndex].get(choice) || 0) + 1);
                 const posture = selected.posture || 'other';
@@ -235,6 +321,7 @@ export const buildSceneJobs = (
         const locked = fields.filter(field => !active.includes(field)).map(field => {
             const subject = analysis.subjects.find(item => field.key.endsWith(`:${item.id}`));
             const original = subject ? subject[field.axis as 'pose' | 'expression'] : analysis[field.axis as 'lighting' | 'camera' | 'season'];
+            if (cameraTarget && subject && field.axis === 'pose') return `UNCHANGED ${subject.id} pose: preserve the source pose in world space, including joint angles, support contacts, body orientation and gaze direction, not its 2D outline. Do not turn the person to face the new camera.`;
             return `UNCHANGED ${subject ? `${subject.id} ` : ''}${field.axis}: preserve the source ${field.axis}${cameraTarget ? '.' : ` (${original}).`}`;
         });
         const seed = settings.comfySeed === undefined ? Math.floor(random() * 1e15) : settings.comfySeed;
@@ -245,11 +332,21 @@ export const buildSceneJobs = (
                 : 'PEOPLE COUNT: zero people. Keep this scene unoccupied; do not add people, faces or human silhouettes.',
             'Keep the original clothing unchanged. Picture 1 is the sole wardrobe reference for each person. Preserve the exact same garments, prints and pattern layout, colors, cut, fabric, footwear and accessories on their original wearer; never redesign, substitute or swap outfits between people. Only natural folds, perspective and illumination may change with the requested edits.',
         ];
-        const prompt = (cameraTarget ? [
+        const cameraOnly = cameraTarget && active.length === 1;
+        const prompt = (cameraOnly ? [
+            cameraTarget.choice,
+            analysis.subjects.length
+                ? 'Use Picture 1 as the visual reference. Keep the same people, identities, outfits, expressions and exact body poses. Move only the camera; do not turn or re-pose the subjects.'
+                : 'Use Picture 1 as the visual reference. Move only the camera, keeping all existing objects in place.',
+            analysis.subjects.length ? `Keep exactly ${analysis.subjects.length} people.` : 'Keep the scene unoccupied; do not add people.',
+            ...analysis.subjects.filter(subject => !subject.faceVisible).map(subject => `Keep ${subject.id}'s face hidden or covered as in Picture 1.`),
+            'Keep the same physical location, objects, lighting, season and visual style. Preserve the original aspect ratio.',
+        ] : cameraTarget ? [
             analysis.subjects.length
                 ? `Take the ${analysis.subjects.length === 1 ? 'person' : 'people'} from the input image, Picture 1, keep their exact identity, visible facial features, hairstyle, outfit and accessories, but change the camera angle: ${cameraTarget.choice}`
                 : `Take the scene from the input image, Picture 1, keep its exact existing objects and surroundings, but change the camera angle: ${cameraTarget.choice}`,
-            'Move the viewpoint, not just the subject. Show the existing surroundings from that new angle; their perspective and screen positions must change, not merely the crop.',
+            'Move the camera to the specified new position, aimed at the same subject or scene focal point. The subject must show the corresponding new perspective, visible sides, foreshortening and occlusion, not just a different crop. A plain backdrop may stay plain; do not add objects to demonstrate a viewpoint change.',
+            ...(active.every(field => field.axis === 'camera') ? ['CAMERA-ONLY EDIT: photograph the same frozen scene from the new viewpoint. Do not rotate, re-pose or move the people or objects to simulate moving the camera. Their projected outlines and screen positions are allowed to change.'] : []),
             ...subjectLocks,
             ...targets.filter((_, targetIndex) => resolved[targetIndex].field.axis !== 'camera'),
             ...(active.some(field => field.axis === 'pose') ? ['Apply each TARGET pose with visibly different limb positions and held-object directions within the output framing.'] : []),
@@ -465,22 +562,76 @@ export const runSceneBatch = async <Result>(
     }
 };
 
-export const sceneAutomaticMaskTargets = (analysis: SceneAnalysis, controls: SceneControls, intensity: SceneIntensity, padding: number) => {
+export const sceneAutomaticMaskTargets = (analysis: SceneAnalysis, controls: SceneControls, intensity: SceneIntensity, padding: number, region: 'body' | 'head' | 'face' = 'body', partPrompts: Record<string, string> = {}) => {
     parseSceneAnalysis(JSON.stringify(analysis));
     const selected = analysis.subjects.flatMap(subject => {
         const pose = controls.pose?.enabled && controls[`pose:${subject.id}`]?.enabled && sceneChoices(analysis, 'pose', intensity, subject).length > 0;
         const expression = controls.expression?.enabled && controls[`expression:${subject.id}`]?.enabled && sceneChoices(analysis, 'expression', intensity, subject).length > 0;
-        return pose || expression ? [{ id: subject.id, faceOnly: !pose, description: subject.samDescription?.trim() || `person ${subject.description}` }] : [];
+        return pose || expression ? [{ id: subject.id, faceOnly: !pose || region !== 'body', description: subject.samDescription?.trim() || `person ${subject.description}` }] : [];
     });
     if (!selected.length) throw new Error('Enable at least one person pose or expression.');
     const targets = [
         ...analysis.subjects.map(subject => ({ id: `body:${subject.id}`, prompt: subject.samDescription?.trim() || `person ${subject.description}`, padding: selected.some(item => item.id === subject.id && !item.faceOnly) ? padding : 0 })),
-        ...selected.filter(item => item.faceOnly).map(item => ({ id: `face:${item.id}`, prompt: `face of the ${item.description}`, padding: 0 })),
+        ...selected.filter(item => item.faceOnly).flatMap(item => region === 'head'
+            ? ['hair', 'face'].map(part => ({ id: `${part}:${item.id}`, prompt: `${part} of the ${item.description}`, padding: 0 }))
+            : [{ id: `face:${item.id}`, prompt: `face of the ${item.description}`, padding: 0 }]),
+        ...selected.filter(() => region !== 'body').map(item => ({ id: `clothing:${item.id}`, prompt: `visible clothing worn by the ${item.description}`, padding: 0 })),
     ];
-    return { selected, targets };
+    return { selected, targets: targets.map(target => ({ ...target, prompt: partPrompts[target.id] ?? target.prompt })) };
 };
 
 export type ScenePoseMaskArea = 'silhouette' | 'movement';
+
+export const protectSceneClothing = (candidate: SceneMask, clothing: SceneMask): SceneMask => {
+    if (candidate.width !== clothing.width || candidate.height !== clothing.height || candidate.pixels.length !== clothing.pixels.length) throw new Error('SAM3 clothing mask dimensions mismatch.');
+    const pixels = candidate.pixels.map((value, index) => clothing.pixels[index] ? 0 : value);
+    if (!pixels.some(Boolean)) throw new Error('SAM3 clothing detection overlaps the entire face. Edit the separate Clothing SAM prompt (for example: purple shirt) and Face SAM prompt, then calculate again. No replacement mask was accepted.');
+    return { ...candidate, pixels };
+};
+
+export const combineSceneHeadMasks = (body: SceneMask, hair: SceneMask, face: SceneMask): SceneMask => {
+    if ([hair, face].some(mask => mask.width !== body.width || mask.height !== body.height || mask.pixels.length !== body.pixels.length)) throw new Error('SAM3 hair/face mask dimensions mismatch.');
+    const pixels = hair.pixels.map((value, index) => body.pixels[index] ? Math.max(value, face.pixels[index]) : 0);
+    let bodyCount = 0, headCount = 0, faceCount = 0;
+    let bodyTop = body.height, bodyBottom = -1, faceTop = body.height, faceBottom = -1;
+    body.pixels.forEach((value, index) => {
+        if (!value) return;
+        const row = Math.floor(index / body.width);
+        bodyCount++; bodyTop = Math.min(bodyTop, row); bodyBottom = Math.max(bodyBottom, row);
+        if (pixels[index]) headCount++;
+        if (face.pixels[index]) {
+            faceCount++; faceTop = Math.min(faceTop, row); faceBottom = Math.max(faceBottom, row);
+        }
+    });
+    if (!faceCount) throw new Error('SAM3 found no face inside the selected person. Refine the person description and calculate again.');
+    if (headCount >= bodyCount * 0.9 && bodyBottom - bodyTop + 1 > 2 * (faceBottom - faceTop + 1)) {
+        throw new Error('SAM3 hair/face detection includes almost the entire body. Refine the SAM description and calculate again; no rectangular replacement mask was created.');
+    }
+    return { ...hair, pixels };
+};
+
+export const growSceneMaskPixels = (mask: SceneMask, radius: number): Uint8Array => {
+    if (!Number.isInteger(radius) || radius < 0 || radius > 128) throw new Error('Mask margin must be an integer from 0 to 128 pixels.');
+    let pixels = mask.pixels.slice();
+    for (const vertical of [false, true]) {
+        const length = vertical ? mask.height : mask.width, lines = vertical ? mask.width : mask.height;
+        const output = new Uint8Array(pixels.length), queue = new Int32Array(length);
+        for (let line = 0; line < lines; line++) {
+            const offset = (position: number) => vertical ? position * mask.width + line : line * mask.width + position;
+            let first = 0, last = 0, next = 0;
+            for (let position = 0; position < length; position++) {
+                while (next < length && next <= position + radius) {
+                    while (last > first && pixels[offset(queue[last - 1])] <= pixels[offset(next)]) last--;
+                    queue[last++] = next++;
+                }
+                while (first < last && queue[first] < position - radius) first++;
+                output[offset(position)] = pixels[offset(queue[first])];
+            }
+        }
+        pixels = output;
+    }
+    return pixels;
+};
 
 const scenePoseMovementPixels = (body: SceneMask, candidate: SceneMask, intensity: SceneIntensity): Uint8Array => {
     const { width, height } = body;
@@ -543,8 +694,10 @@ export const generateAutomaticSceneMasks = async (
     source: File, analysis: SceneAnalysis, controls: SceneControls, intensity: SceneIntensity, checkpoint: string, padding: number,
     progress: (message: string, value: number) => void, stopped: () => boolean,
     poseArea: ScenePoseMaskArea = 'movement',
+    region: 'body' | 'head' | 'face' = 'body',
+    partPrompts: Record<string, string> = {},
 ): Promise<Record<string, SceneMask>> => {
-    const { selected, targets } = sceneAutomaticMaskTargets(analysis, controls, intensity, padding);
+    const { selected, targets } = sceneAutomaticMaskTargets(analysis, controls, intensity, padding, region, partPrompts);
     const bitmap = await createImageBitmap(source);
     const { width, height } = bitmap; bitmap.close();
     if (width * height > 16_000_000) throw new Error('Source exceeds the 16 megapixel mask limit.');
@@ -557,6 +710,8 @@ export const generateAutomaticSceneMasks = async (
     };
     const bodies: Record<string, SceneMask> = {};
     const candidates: Record<string, SceneMask> = {};
+    const hairMasks: Record<string, SceneMask> = {};
+    const clothingMasks: Record<string, SceneMask> = {};
     for (const result of generated) {
         if (stopped()) throw new DOMException('Mask calculation stopped.', 'AbortError');
         const [kind, id] = result.id.split(':');
@@ -564,9 +719,32 @@ export const generateAutomaticSceneMasks = async (
         if (kind === 'body') {
             bodies[id] = await load(result.raw);
             if (subject && !subject.faceOnly) candidates[id] = await load(result.expanded);
-        } else candidates[id] = await load(result.raw);
+        } else if (kind === 'hair') hairMasks[id] = await load(result.raw);
+        else if (kind === 'clothing') clothingMasks[id] = await load(result.raw);
+        else candidates[id] = await load(result.raw);
     }
     if (Object.keys(bodies).length !== analysis.subjects.length || selected.some(subject => !candidates[subject.id])) throw new Error('SAM3 returned incomplete person masks.');
+    if (region !== 'body') {
+        for (const subject of selected) {
+            if (!clothingMasks[subject.id]) throw new Error('SAM3 returned no clothing protection mask. Calculate the masks again.');
+            candidates[subject.id] = protectSceneClothing(candidates[subject.id], clothingMasks[subject.id]);
+            if (hairMasks[subject.id]) hairMasks[subject.id] = {
+                ...hairMasks[subject.id], pixels: hairMasks[subject.id].pixels.map((value, index) => clothingMasks[subject.id].pixels[index] ? 0 : value),
+            };
+        }
+    }
+    if (region === 'head') {
+        for (const subject of selected) {
+            if (!hairMasks[subject.id]) throw new Error('SAM3 returned no hair mask. Calculate the masks again.');
+            candidates[subject.id] = combineSceneHeadMasks(bodies[subject.id], hairMasks[subject.id], candidates[subject.id]);
+        }
+    }
+    if (region !== 'body' && padding) {
+        for (const candidate of Object.values(candidates)) candidate.pixels = growSceneMaskPixels(candidate, padding);
+    }
+    if (region !== 'body') {
+        for (const subject of selected) candidates[subject.id] = protectSceneClothing(candidates[subject.id], clothingMasks[subject.id]);
+    }
     const isolated = isolateAutomaticSceneMasks(bodies, candidates, selected.filter(item => item.faceOnly).map(item => item.id), poseArea, intensity);
     const masks: Record<string, SceneMask> = {};
     for (const [id, pixels] of Object.entries(isolated)) {
@@ -578,6 +756,7 @@ export const generateAutomaticSceneMasks = async (
         context.putImageData(image, 0, 0);
         const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Unable to encode SAM3 mask.')), 'image/png'));
         masks[id] = await readSceneMask(new File([blob], `sam3-${id}.png`, { type: 'image/png' }), source);
+        if (candidates[id].warning) masks[id].warning = candidates[id].warning;
     }
     validateSceneMasks(selected.map(item => item.id), masks);
     return masks;

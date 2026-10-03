@@ -4,7 +4,7 @@ import type { AppDispatch } from '../store/store';
 import type { LibraryItem, LibraryItemType } from '../types';
 import { addToLibrary } from '../store/librarySlice';
 import { generateComfyUISwapAnything } from '../services/comfyUIService';
-import type { SwapAnythingOptions } from '../services/swapAnythingWorkflow';
+import { defaultSwapAnythingOptions, type SwapAnythingOptions } from '../services/swapAnythingWorkflow';
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { ImageUploader } from './ImageUploader';
 import { LibraryPickerModal } from './LibraryPickerModal';
@@ -95,28 +95,7 @@ const SWAP_PRESETS: SwapPreset[] = [
 const getOptions = (input: any): string[] => Array.isArray(input?.[0]) ? input[0] : [];
 const withCurrent = (current: string, values: string[]) => Array.from(new Set([current, ...values].filter(Boolean))).map(value => ({ value, label: value }));
 
-const DEFAULT_OPTIONS: SwapAnythingOptions = {
-    destinationTarget: "the person's head, face, and hair",
-    donorTarget: "the person's head, face, and hair",
-    prompt: '',
-    unet: 'flux-2-klein-4b-fp8.safetensors',
-    clip: 'qwen_3_4b.safetensors',
-    vae: 'flux2-vae.safetensors',
-    samCheckpoint: 'sam3.1_multiplex_fp16.safetensors',
-    megapixels: 1,
-    donorMegapixels: 1.5,
-    samThreshold: 0.5,
-    samRefineIterations: 2,
-    maskGrow: 2,
-    steps: 4,
-    cfg: 1,
-    sampler: 'ddim',
-    seed: -1,
-    lora1Name: '',
-    lora1Strength: 1,
-    lora2Name: '',
-    lora2Strength: 1,
-};
+const DEFAULT_OPTIONS = defaultSwapAnythingOptions();
 
 const SwapAnythingPanel: React.FC<SwapAnythingPanelProps> = ({ isComfyUIConnected, comfyUIObjectInfo }) => {
     const dispatch: AppDispatch = useDispatch();

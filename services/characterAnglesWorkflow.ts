@@ -38,7 +38,97 @@ export const DEFAULT_CHARACTER_ANGLE_SETTINGS: Record<string, { enabled: boolean
 
 export const getEnabledCharacterAngles = (options: GenerationOptions) => CHARACTER_ANGLES.filter(({ id }) =>
     options.comfyCharacterAngleSettings?.[id]?.enabled !== false
-);
+).map(angle => ({ ...angle, label: options.comfyCharacterMode === 'flux2' && options.comfyCharacterAngleSettings?.[angle.id]?.prompt?.trim()
+    ? options.comfyCharacterAngleSettings[angle.id].angle || angle.label : angle.label }));
+
+const FLUX2_REFERENCE_SUBJECT = 'The subject may be a person, character, vehicle, prop, object, creature, or architectural element.';
+const FLUX2_REFERENCE_DETAILS = 'Preserve the exact identity, proportions, shape, silhouette, materials, colors, clothing or surface details, markings, texture, wear, accessories, and design language from the input image.';
+const FLUX2_REFERENCE_VIEWS = [
+    {
+        angle: 'front three-quarter view',
+        prompt: [
+            'Using the input image as the strict visual reference, create a 45-degree front three-quarter view of the same subject.',
+            FLUX2_REFERENCE_SUBJECT, FLUX2_REFERENCE_DETAILS,
+            'Preserve the same expression, pose, posture, stance, gesture, object position, and overall attitude from the input image. The subject must remain in the same moment, only viewed from a front three-quarter angle.',
+            'Camera angle: front three-quarter view, approximately 45 degrees, eye-level.\nLighting: soft diffused lighting, gentle highlights on visible edges.\nBackground: plain background for easy compositing.\nCamera/lens: 50mm lens, natural perspective, realistic depth.\nComposition: full subject visible, centered, with clear readable front and side depth.',
+            'Photorealistic, same subject, same pose, same expression, same design, only the viewing angle changes.',
+        ].join('\n\n'),
+    },
+    {
+        angle: 'side profile view',
+        prompt: [
+            'Using the input image as the strict visual reference, create a pure side profile view of the same subject.',
+            FLUX2_REFERENCE_SUBJECT, FLUX2_REFERENCE_DETAILS,
+            'Preserve the same expression, pose, posture, stance, gesture, object position, and overall attitude from the input image. The subject should not be redesigned or repositioned. It should look like the same subject frozen in the same moment, now seen from the side.',
+            'Camera angle: direct side profile view, eye-level, clean perspective.\nLighting: soft diffused lighting, mild rim definition along the edges.\nBackground: plain neutral background for easy compositing.\nCamera/lens: 70mm lens, low distortion, compressed realistic perspective.\nComposition: full subject visible, centered, side silhouette clearly readable.',
+            'Photorealistic, accurate side geometry, same subject, same pose, same expression, no redesign.',
+        ].join('\n\n'),
+    },
+    {
+        angle: 'rear view',
+        prompt: [
+            'Using the input image as the strict visual reference, create a rear view of the same subject.',
+            FLUX2_REFERENCE_SUBJECT, FLUX2_REFERENCE_DETAILS,
+            'Preserve the same pose, posture, stance, gesture, object position, and overall attitude from the input image. Infer the rear logically from the visible design while keeping the subject consistent. The subject should feel like the same person or object frozen in the same moment, now seen from behind.',
+            'Camera angle: straight-on rear view, eye-level, centered perspective.\nLighting: soft diffused lighting, clear rear contours and edge definition.\nBackground: plain neutral background for easy compositing.\nCamera/lens: 50mm lens, natural realistic perspective.\nComposition: full subject visible, centered, enough empty space around it.',
+            'Photorealistic, same subject, same pose, same proportions, believable rear details, no redesign.',
+        ].join('\n\n'),
+    },
+    {
+        angle: 'rear three-quarter view',
+        prompt: [
+            'Using the input image as the strict visual reference, create a 45-degree rear three-quarter view of the same subject.',
+            FLUX2_REFERENCE_SUBJECT, FLUX2_REFERENCE_DETAILS,
+            'Preserve the same pose, posture, stance, gesture, object position, and overall attitude from the input image. Infer hidden rear-side details logically from the visible design, keeping the same subject consistent.',
+            'Camera angle: rear three-quarter view, approximately 45 degrees, eye-level.\nLighting: soft diffused lighting, gentle edge highlights.\nBackground: plain neutral background for easy compositing.\nCamera/lens: 50mm to 70mm lens, natural realistic perspective.\nComposition: full subject visible, centered, rear and side forms clearly readable.',
+            'Photorealistic, same subject, same pose, same expression where visible, same design, only the camera angle changes.',
+        ].join('\n\n'),
+    },
+    {
+        angle: 'high-angle view',
+        prompt: [
+            'Using the input image as the strict visual reference, create a high-angle view of the same subject.',
+            FLUX2_REFERENCE_SUBJECT, FLUX2_REFERENCE_DETAILS,
+            'Preserve the same expression, pose, posture, stance, gesture, object position, and overall attitude from the input image. The subject should remain frozen in the same moment, only viewed from above.',
+            'Camera angle: high-angle view from above, approximately 60 to 75 degrees downward.\nLighting: soft diffused overhead lighting, readable top-plane details.\nBackground: plain neutral background for easy compositing.\nCamera/lens: 35mm to 50mm lens, controlled perspective, realistic scale.\nComposition: full subject visible, centered, top surfaces clearly shown.',
+            'Photorealistic, same subject, same pose, same expression, consistent geometry, no redesign.',
+        ].join('\n\n'),
+    },
+    {
+        angle: 'low-angle view',
+        prompt: [
+            'Using the input image as the strict visual reference, create a low-angle view of the same subject.',
+            FLUX2_REFERENCE_SUBJECT, FLUX2_REFERENCE_DETAILS,
+            'Preserve the same expression, pose, posture, stance, gesture, object position, and overall attitude from the input image. The subject should feel like the same moment captured from a lower camera position.',
+            'Camera angle: low-angle view from below eye level, looking slightly upward.\nLighting: soft diffused lighting, consistent with the input image.\nBackground: plain neutral background for easy compositing.\nCamera/lens: 35mm to 50mm lens, controlled perspective, no extreme distortion.\nComposition: full subject visible, centered, strong readable silhouette.',
+            'Photorealistic, same subject, same pose, same expression, same design, only the camera position changes.',
+        ].join('\n\n'),
+    },
+    {
+        angle: 'close-up detail view',
+        prompt: [
+            'Using the input image as the strict visual reference, create a close-up detail view of the same subject.',
+            FLUX2_REFERENCE_SUBJECT,
+            'Preserve the exact identity, materials, colors, clothing or surface details, markings, texture, wear, accessories, and design language from the input image.',
+            'Preserve the same expression, pose, posture, gesture, object position, and overall attitude from the input image. The close-up should feel like the same moment, with the camera moved closer.',
+            'Camera angle: [front close-up / side close-up / three-quarter close-up].\nLighting: soft diffused lighting, consistent with the input image.\nBackground: plain neutral background or softly blurred matching background.\nCamera/lens: 85mm lens, shallow depth of field, realistic perspective.\nComposition: focus on [FACE / HANDS / WHEELS / SURFACE DETAIL / PROP DETAIL / TEXTURE AREA].',
+            'Photorealistic, same subject, same moment, same pose and expression, only closer framing.',
+        ].join('\n\n'),
+    },
+];
+
+export const createFlux2CharacterReferencePreset = (): Partial<GenerationOptions> => ({
+    provider: 'comfyui', comfyCharacterMode: 'flux2',
+    comfyCharacterFlux2Unet: 'flux2\\flux2Klein9BInt8_v10.safetensors', comfyCharacterFlux2Clip: 'qwen38BFluxKlein9BTE_38b.safetensors',
+    comfyCharacterFlux2Vae: 'flux2-vae.safetensors', comfyCharacterFlux2Steps: 4, comfyCharacterFlux2Cfg: 1,
+    comfyCharacterFlux2Sampler: 'euler', comfyCharacterFlux2Megapixels: 1,
+    comfyCharacterFlux2UseLoras: false, comfyCharacterFlux2UseCacheDit: false,
+    clothing: 'original', background: 'original', customClothingPrompt: '', customBackground: '',
+    comfyCharacterAngleSettings: Object.fromEntries(CHARACTER_ANGLES.map(({ id }, index) => [id, {
+        enabled: index < 6, angle: FLUX2_REFERENCE_VIEWS[index]?.angle || CHARACTER_NONE_VALUE,
+        pose: CHARACTER_NONE_VALUE, expression: CHARACTER_NONE_VALUE, prompt: FLUX2_REFERENCE_VIEWS[index]?.prompt,
+    }])),
+});
 
 const getCharacterInstructionValue = (value: string): string => {
     const trimmedValue = value.trim();
@@ -249,11 +339,29 @@ interface Flux2CharacterReferences {
     pose?: string;
 }
 
+const CHARACTER_BACKGROUND_PERSPECTIVE = 'Background: Preserve the original background with a new perspective matching the requested camera angle. Keep the same physical location and existing objects.';
+
 const buildFlux2CharacterPrompt = (
     options: GenerationOptions,
     angleId: string,
     references: Flux2CharacterReferences,
 ): string => {
+    const prompt = options.comfyCharacterAngleSettings?.[angleId]?.prompt;
+    if (prompt !== undefined) {
+        if (!prompt.trim()) throw new Error('Enter a full FLUX2 prompt or switch this output to angle controls.');
+        if (/\[(?:front close-up|FACE)\s*\//.test(prompt)) {
+            throw new Error('Replace the bracketed close-up angle and detail placeholders before generating.');
+        }
+        if (!options.comfyCharacterPreserveBackgroundPerspective) return prompt;
+        const backgroundClause = /\bBackground:[^\r\n]*|\b(?:Preserve|Keep) the (?:exact|original) background(?: unchanged)?\.?/gi;
+        let replaced = false;
+        const updated = prompt.replace(backgroundClause, () => {
+            if (replaced) return '';
+            replaced = true;
+            return CHARACTER_BACKGROUND_PERSPECTIVE;
+        });
+        return replaced ? updated : `${prompt}\n\n${CHARACTER_BACKGROUND_PERSPECTIVE}`;
+    }
     const angleSettings = {
         ...DEFAULT_CHARACTER_ANGLE_SETTINGS[angleId],
         ...options.comfyCharacterAngleSettings?.[angleId],
@@ -271,7 +379,9 @@ const buildFlux2CharacterPrompt = (
             : options.customClothingPrompt?.trim()
                 ? `Dress the subject in ${options.customClothingPrompt.trim()}.`
                 : 'Keep the original clothing unchanged.',
-        references.background
+        options.comfyCharacterPreserveBackgroundPerspective
+            ? CHARACTER_BACKGROUND_PERSPECTIVE
+            : references.background
             ? 'Place the subject in the background reference while matching its perspective, scale, lighting, and color.'
             : options.customBackground?.trim()
                 ? `Use this background: ${options.customBackground.trim()}.`
@@ -298,7 +408,7 @@ export const buildFlux2CharacterAnglesWorkflow = (
 
     const seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
     const megapixels = options.comfyCharacterFlux2Megapixels ?? 1;
-    const modelName = options.comfyCharacterFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf';
+    const modelName = options.comfyCharacterFlux2Unet || 'flux2\\flux2Klein9BInt8_v10.safetensors';
     const modelLoader = modelName.toLowerCase().endsWith('.gguf')
         ? { inputs: { unet_name: modelName }, class_type: 'UnetLoaderGGUF', _meta: { title: 'FLUX2 Character model (GGUF)' } }
         : { inputs: { unet_name: modelName, weight_dtype: 'default' }, class_type: 'UNETLoader', _meta: { title: 'FLUX2 Character model' } };
@@ -307,7 +417,7 @@ export const buildFlux2CharacterAnglesWorkflow = (
         source_scale: { inputs: { upscale_method: 'nearest-exact', megapixels, resolution_steps: 1, image: ['source', 0] }, class_type: 'ImageScaleToTotalPixels', _meta: { title: 'Scale subject reference' } },
         source_size: { inputs: { image: ['source_scale', 0] }, class_type: 'GetImageSize', _meta: { title: 'Subject output size' } },
         vae: { inputs: { vae_name: options.comfyCharacterFlux2Vae || 'flux2-vae.safetensors' }, class_type: 'VAELoader', _meta: { title: 'FLUX2 VAE' } },
-        clip: { inputs: { clip_name: options.comfyCharacterFlux2Clip || 'qwen_3_4b.safetensors', type: 'flux2', device: 'default' }, class_type: 'CLIPLoader', _meta: { title: 'FLUX2 CLIP' } },
+        clip: { inputs: { clip_name: options.comfyCharacterFlux2Clip || 'qwen38BFluxKlein9BTE_38b.safetensors', type: 'flux2', device: 'default' }, class_type: 'CLIPLoader', _meta: { title: 'FLUX2 CLIP' } },
         model: modelLoader,
         source_latent: { inputs: { pixels: ['source_scale', 0], vae: ['vae', 0] }, class_type: 'VAEEncode', _meta: { title: 'Encode subject reference' } },
     };
@@ -354,7 +464,7 @@ export const buildFlux2CharacterAnglesWorkflow = (
     };
 
     if (references.clothing) addImageReference('clothing', references.clothing, 'Picture 2 - Clothing');
-    if (references.background) addImageReference('background', references.background, 'Picture 3 - Background');
+    if (references.background && !options.comfyCharacterPreserveBackgroundPerspective) addImageReference('background', references.background, 'Picture 3 - Background');
     if (references.pose) {
         workflow.pose_source = { inputs: { image: references.pose }, class_type: 'LoadImage', _meta: { title: 'Picture 4 - Pose' } };
         workflow.pose_dw = { inputs: { preprocessor: 'DWPreprocessor', resolution: 1024, image: ['pose_source', 0] }, class_type: 'AIO_Preprocessor', _meta: { title: 'DWPose structure' } };

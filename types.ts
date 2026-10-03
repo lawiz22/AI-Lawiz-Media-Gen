@@ -389,6 +389,7 @@ export interface GenerationOptions {
 
   // Character multi-angle Qwen Edit workflow
   comfyCharacterMode?: 'qwen' | 'flux2';
+  comfyCharacterPreserveBackgroundPerspective?: boolean;
   comfyCharacterFlux2Unet?: string;
   comfyCharacterFlux2Clip?: string;
   comfyCharacterFlux2Vae?: string;
@@ -427,6 +428,7 @@ export interface GenerationOptions {
     angle: string;
     pose: string;
     expression: string;
+    prompt?: string;
   }>;
 
   // Z-Image
@@ -846,6 +848,8 @@ export interface LibraryItem {
   options?: GenerationOptions;
   themeOptions?: ThemeGenerationInfo;
   ltxDirectorOptions?: LtxDirectorGenerationInfo;
+  sceneVariationPreset?: import('./services/sceneVariationService').SceneVariationPreset;
+  lanPaintPersonSettings?: import('./services/swapPersonWorkflow').LanPaintPersonOptions;
   ttsOptions?: TtsGenerationInfo;
   indexTtsOptions?: IndexTtsGenerationInfo;
   sourceImage?: string; // data URL for image/video generations

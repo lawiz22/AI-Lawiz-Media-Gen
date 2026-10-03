@@ -76,6 +76,7 @@ import { clearDriveFileReferences, setDriveService, syncLibraryFromDrive, syncLi
 import GroupPhotoFusionPanel from './components/groupPhotoFusion/GroupPhotoFusionPanel';
 import PastForwardPanel from './components/pastForward/PastForwardPanel';
 import SwapAnythingPanel from './components/SwapAnythingPanel';
+import SwapPersonPanel from './components/SwapPersonPanel';
 import StyliseAnythingPanel from './components/StyliseAnythingPanel';
 import { PERSONAS } from './groupPhotoFusion/constants';
 import { createAccentStyle, getTabAccentStyle } from './utils/accentTheme';
@@ -84,6 +85,7 @@ const FUN_ACCENT_STYLES = {
     'photo-fusion': createAccentStyle('#fb7185', '#fda4af', '#e11d48'),
     'past-forward': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
     'swap-anything': createAccentStyle('#f59e0b', '#fbbf24', '#d97706'),
+    'swap-person': createAccentStyle('#fb7185', '#fda4af', '#e11d48'),
     'stylise-anything': createAccentStyle('#34d399', '#6ee7b7', '#059669'),
 };
 
@@ -119,9 +121,10 @@ const App: React.FC = () => {
     const [isInstallationDashboardOpen, setIsInstallationDashboardOpen] = useState(false);
     const [isDriveFolderCreateOpen, setIsDriveFolderCreateOpen] = useState(false);
     const driveSyncControllerRef = useRef<AbortController | null>(null);
-    const [activeFunSubTab, setActiveFunSubTab] = useState<'photo-fusion' | 'past-forward' | 'swap-anything' | 'stylise-anything'>('photo-fusion');
+    const [activeFunSubTab, setActiveFunSubTab] = useState<'photo-fusion' | 'past-forward' | 'swap-anything' | 'swap-person' | 'stylise-anything'>('photo-fusion');
     const [panelResetVersions, setPanelResetVersions] = useState<Record<string, number>>({});
     const [sceneVariationModel, setSceneVariationModel] = useState('');
+    const [sceneVariationPreset, setSceneVariationPreset] = useState<LibraryItem | null>(null);
 
     // --- App State (from appSlice) ---
     const {
@@ -965,6 +968,8 @@ const App: React.FC = () => {
                     : `FLUX2 Edit · ${options.comfyFlux2EditUnet || 'Default UNet'}`
             : activeFunSubTab === 'swap-anything'
                 ? 'ComfyUI · FLUX2 Swap Anything'
+            : activeFunSubTab === 'swap-person'
+                ? 'ComfyUI · FLUX2 Swap a Person'
             : activeFunSubTab === 'stylise-anything'
                 ? `FLUX2 Edit · ${options.comfyFlux2EditUnet || 'Default UNet'}`
             : options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
@@ -1008,7 +1013,7 @@ const App: React.FC = () => {
             ? groupPhotoFusionProvider === 'mammouth' ? 'mammouth' : 'comfyui'
         : activeTab === 'fun' && activeFunSubTab === 'past-forward'
             ? options.pastForwardProvider === 'mammouth' ? 'mammouth' : 'comfyui'
-        : activeTab === 'fun' && activeFunSubTab === 'swap-anything'
+        : activeTab === 'fun' && (activeFunSubTab === 'swap-anything' || activeFunSubTab === 'swap-person')
             ? 'comfyui'
         : activeTab === 'fun' && activeFunSubTab === 'stylise-anything'
             ? 'comfyui'
@@ -1430,7 +1435,7 @@ const App: React.FC = () => {
                     </React.Activity>
 
                     <React.Activity mode={activeTab === 'scene-variation' ? 'visible' : 'hidden'}>
-                        <SceneVariationPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} onModelChange={setSceneVariationModel} />
+                        <SceneVariationPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} onModelChange={setSceneVariationModel} pendingPreset={sceneVariationPreset} onPresetLoaded={() => setSceneVariationPreset(null)} />
                     </React.Activity>
 
                     <React.Activity mode={activeTab === 'character-generator' ? 'visible' : 'hidden'}>
@@ -1589,13 +1594,15 @@ const App: React.FC = () => {
                         </>
                     </React.Activity>
 
-                    {activeTab === 'fun' && <div className="mb-4 flex justify-center"><div className="inline-flex flex-wrap rounded-md border border-rose-400/40 bg-bg-secondary p-1 shadow-sm"><button type="button" onClick={() => setActiveFunSubTab('photo-fusion')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'photo-fusion' ? 'bg-rose-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-rose-300'}`}><GroupPhotoFusionIcon className="h-4 w-4" />Photo Fusion</button><button type="button" onClick={() => setActiveFunSubTab('past-forward')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'past-forward' ? 'bg-cyan-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-cyan-300'}`}><PastForwardIcon className="h-4 w-4" />Past Forward</button><button type="button" onClick={() => setActiveFunSubTab('swap-anything')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'swap-anything' ? 'bg-amber-500 text-black' : 'text-text-secondary hover:bg-bg-tertiary hover:text-amber-300'}`}><EnhanceIcon className="h-4 w-4" />Swap Anything</button><button type="button" onClick={() => setActiveFunSubTab('stylise-anything')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'stylise-anything' ? 'bg-emerald-500 text-black' : 'text-text-secondary hover:bg-bg-tertiary hover:text-emerald-300'}`}><SwatchIcon className="h-4 w-4" />Stylise Anything</button></div></div>}
+                    {activeTab === 'fun' && <div className="mb-4 flex justify-center"><div className="inline-flex flex-wrap rounded-md border border-rose-400/40 bg-bg-secondary p-1 shadow-sm"><button type="button" onClick={() => setActiveFunSubTab('photo-fusion')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'photo-fusion' ? 'bg-rose-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-rose-300'}`}><GroupPhotoFusionIcon className="h-4 w-4" />Photo Fusion</button><button type="button" onClick={() => setActiveFunSubTab('past-forward')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'past-forward' ? 'bg-cyan-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-cyan-300'}`}><PastForwardIcon className="h-4 w-4" />Past Forward</button><button type="button" onClick={() => setActiveFunSubTab('swap-anything')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'swap-anything' ? 'bg-amber-500 text-black' : 'text-text-secondary hover:bg-bg-tertiary hover:text-amber-300'}`}><EnhanceIcon className="h-4 w-4" />Swap Anything</button><button type="button" onClick={() => setActiveFunSubTab('swap-person')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'swap-person' ? 'bg-rose-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-rose-300'}`}><GroupPhotoFusionIcon className="h-4 w-4" />Swap a Person</button><button type="button" onClick={() => setActiveFunSubTab('stylise-anything')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'stylise-anything' ? 'bg-emerald-500 text-black' : 'text-text-secondary hover:bg-bg-tertiary hover:text-emerald-300'}`}><SwatchIcon className="h-4 w-4" />Stylise Anything</button></div></div>}
 
                     <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'past-forward' ? 'visible' : 'hidden'}><div key={`past-forward-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['past-forward']}><PastForwardPanel /></div></React.Activity>
 
                     <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'photo-fusion' ? 'visible' : 'hidden'}><div key={`photo-fusion-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['photo-fusion']}><GroupPhotoFusionPanel /></div></React.Activity>
 
                     <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'swap-anything' ? 'visible' : 'hidden'}><div key={`swap-anything-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['swap-anything']}><SwapAnythingPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} /></div></React.Activity>
+
+                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'swap-person' ? 'visible' : 'hidden'}><div key={`swap-person-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['swap-person']}><SwapPersonPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} /></div></React.Activity>
 
                     <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'stylise-anything' ? 'visible' : 'hidden'}><div key={`stylise-anything-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['stylise-anything']}><StyliseAnythingPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} /></div></React.Activity>
 
@@ -1695,7 +1702,10 @@ const App: React.FC = () => {
                             onUpscaleItem={(item) => handleSendToUpscale(item.media, item.name ? `${item.name}.png` : undefined)}
                             onLoadItem={(item, loadOptions) => {
                                 // Logic to load item back into generator state
-                                if (item.ltxDirectorOptions) {
+                                if (item.mediaType === 'preset' && item.sceneVariationPreset) {
+                                    setSceneVariationPreset(item);
+                                    dispatch(setActiveTab('scene-variation'));
+                                } else if (item.ltxDirectorOptions) {
                                     dispatch(queueLtxTransfer({
                                         imageDataUrl: item.sourceImage || item.startFrame,
                                         videoDataUrl: item.mediaType === 'video' ? item.media : undefined,

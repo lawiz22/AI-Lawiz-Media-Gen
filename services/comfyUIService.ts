@@ -881,6 +881,53 @@ export const generateComfyUISwapAnything = async (
     return result.images[0];
 };
 
+export const generateComfyUILanPaintPerson = async (
+    destination: File, donor: File, options: import('./swapPersonWorkflow').LanPaintPersonOptions,
+    progress: (message: string, value: number) => void,
+): Promise<string> => {
+    const { buildLanPaintPersonWorkflow, validateLanPaintPersonWorkflow } = await import('./swapPersonWorkflow');
+    const seed = options.seed === -1 ? Math.floor(Math.random() * 1e15) : options.seed;
+    const settings = { ...options, seed };
+    const preview = buildLanPaintPersonWorkflow('destination.png', 'donor.png', settings);
+    progress('Checking LanPaint, CacheDiT and models...', 0.02);
+    validateLanPaintPersonWorkflow(preview, await getComfyUIObjectInfo());
+    progress(`Uploading references for Lanczos resizing to ${settings.megapixels} MP...`, 0.05);
+    const [destinationUpload, donorUpload] = await Promise.all([uploadImage(destination), uploadImage(donor)]);
+    const workflow = buildLanPaintPersonWorkflow(destinationUpload.name, donorUpload.name, settings);
+    const result = await executeWorkflow(workflow, progress, true, 1, ['9']);
+    if (!result.images[0]) throw new Error('ComfyUI returned no LanPaint person swap image.');
+    return result.images[0];
+};
+
+export const generateComfyUISwapPerson = async (
+    destination: File, donor: File, destinationMask: File, donorMask: File,
+    options: import('./swapPersonWorkflow').SwapPersonOptions,
+    progress: (message: string, value: number) => void,
+): Promise<{ src: string; prompt: string; seed: number }> => {
+    const { buildSwapPersonWorkflow } = await import('./swapPersonWorkflow');
+    const { readSceneMask, sceneModelOptions } = await import('./sceneVariationService');
+    await Promise.all([readSceneMask(destinationMask, destination), readSceneMask(donorMask, donor)]);
+    const seed = options.seed === -1 ? Math.floor(Math.random() * 1e15) : options.seed;
+    const settings = { ...options, seed };
+    const preview = buildSwapPersonWorkflow('destination.png', 'donor.png', 'destination-mask.png', 'donor-mask.png', settings).workflow;
+    progress('Checking person swap models and nodes...', 0.02);
+    const info = await getComfyUIObjectInfo();
+    const missing = [...new Set(Object.values(preview).map(node => node.class_type as string))].filter(name => !info[name]);
+    if (missing.length) throw new Error(`Swap a Person requires missing ComfyUI nodes: ${missing.join(', ')}.`);
+    for (const node of Object.values(preview)) {
+        for (const key of ['unet_name', 'clip_name', 'vae_name', 'sampler_name', 'lora_name']) {
+            const value = node.inputs[key];
+            if (typeof value === 'string' && !sceneModelOptions(info, node.class_type, key).includes(value)) throw new Error(`Unavailable ${key}: ${value}`);
+        }
+    }
+    progress('Uploading person references and verified masks...', 0.05);
+    const files = await Promise.all([destination, donor, destinationMask, donorMask].map(uploadImage));
+    const { workflow, prompt } = buildSwapPersonWorkflow(files[0].name, files[1].name, files[2].name, files[3].name, settings);
+    const result = await executeWorkflow(workflow, progress, true, 1, ['save']);
+    if (!result.images[0]) throw new Error('ComfyUI returned no person swap image.');
+    return { src: result.images[0], prompt, seed };
+};
+
 const uploadImage = async (file: File): Promise<{ name: string; subfolder: string; type: string }> => {
     const url = getComfyUIUrl();
     if (!url) throw new Error('ComfyUI URL not set');
@@ -2457,9 +2504,10 @@ export const generateComfyUICharacterAngles = async (
     onOutputReady: (index: number, image: { src: string; seed: number }, prompt: string) => void = () => undefined,
 ): Promise<{ images: { src: string; seed: number }[]; finalPrompt: string }> => {
     if (options.comfyCharacterMode === 'flux2') {
+        buildFlux2CharacterAnglesWorkflow({ source: sourceImage.name }, options);
         updateProgress('Checking FLUX2 Character nodes...', 0.02);
         const objectInfo = await getComfyUIObjectInfo();
-        const characterFlux2Model = options.comfyCharacterFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf';
+        const characterFlux2Model = options.comfyCharacterFlux2Unet || 'flux2\\flux2Klein9BInt8_v10.safetensors';
         const characterFlux2Loader = characterFlux2Model.toLowerCase().endsWith('.gguf') ? 'UnetLoaderGGUF' : 'UNETLoader';
         const requiredNodes = [
             'LoadImage', 'ImageScaleToTotalPixels', 'GetImageSize', 'VAELoader', 'CLIPLoader',
@@ -2481,7 +2529,7 @@ export const generateComfyUICharacterAngles = async (
     if (options.comfyCharacterMode === 'flux2') {
         const optionalFiles = [
             options.clothing === 'image' ? clothingImage : null,
-            options.background === 'image' ? backgroundImage : null,
+            options.background === 'image' && !options.comfyCharacterPreserveBackgroundPerspective ? backgroundImage : null,
             poseImage,
         ];
         uploadedReferences = await Promise.all(optionalFiles.map(file => file ? uploadImage(file) : null));

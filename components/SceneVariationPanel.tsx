@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../store/store';
 import type { GenerationOptions, LibraryItem } from '../types';
 import { addSessionTokenUsage } from '../store/appSlice';
-import { addToLibrary } from '../store/librarySlice';
+import { addToLibrary, deleteFromLibrary } from '../store/librarySlice';
 import { fileToDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL } from '../services/ollamaService';
 import { getApiKey } from '../services/geminiService';
@@ -14,16 +14,18 @@ import {
     type SceneAnalysis, type SceneAxis, type SceneChoice, type SceneControl, type SceneControls,
     type SceneIntensity, type SceneJob, type SceneProvider, type SceneSubject,
     buildMaskedSceneJobs, readSceneMask, sceneMaskedReadinessErrors, validateSceneMasks, type SceneMask,
-    generateAutomaticSceneMasks, type ScenePoseMaskArea,
+    generateAutomaticSceneMasks, type ScenePoseMaskArea, parseSceneVariationPreset,
 } from '../services/sceneVariationService';
 import { sceneSegmentationErrors } from '../services/sceneMaskWorkflow';
 import { ImageUploader } from './ImageUploader';
 import { LibraryPickerModal } from './LibraryPickerModal';
+import { PresetSaveModal } from './PresetSaveModal';
+import { ConfirmationModal } from './ConfirmationModal';
 import { NumberSlider } from './InputComponents';
 import { SendToLTXButton } from './SendToLTXButton';
-import { CheckIcon, CloseIcon, DiceIcon, DownloadIcon, GenerateIcon, LibraryIcon, RefreshIcon, SaveIcon, SpinnerIcon, ZoomIcon } from './icons';
+import { CheckIcon, CloseIcon, DiceIcon, DownloadIcon, GenerateIcon, LibraryIcon, RefreshIcon, SaveIcon, SpinnerIcon, TrashIcon, ZoomIcon } from './icons';
 
-interface Props { isComfyUIConnected: boolean | null; comfyUIObjectInfo: any; onModelChange: (model: string) => void }
+interface Props { isComfyUIConnected: boolean | null; comfyUIObjectInfo: any; onModelChange: (model: string) => void; pendingPreset?: LibraryItem | null; onPresetLoaded?: () => void }
 interface Result extends SceneJob {
     status: 'pending' | 'running' | 'done' | 'error' | 'stopped';
     src?: string;
@@ -53,11 +55,17 @@ const ChoiceControl: React.FC<{ label: string; control: SceneControl; choices: S
     </div>
 );
 
-const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjectInfo, onModelChange }) => {
+const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjectInfo, onModelChange, pendingPreset, onPresetLoaded }) => {
     const dispatch: AppDispatch = useDispatch();
-    const initialOptions = useSelector((state: RootState) => state.generation.options);
     const otherGenerationBusy = useSelector((state: RootState) => state.generation.isLoading);
-    const [initialSettings] = useState(() => defaultSceneSettings(initialOptions));
+    const libraryItems = useSelector((state: RootState) => state.library.items);
+    const presets = libraryItems.filter(item => item.mediaType === 'preset' && item.sceneVariationPreset);
+    const [selectedPresetId, setSelectedPresetId] = useState('');
+    const [presetSaveOpen, setPresetSaveOpen] = useState(false);
+    const [presetDeleteOpen, setPresetDeleteOpen] = useState(false);
+    const [presetBusy, setPresetBusy] = useState(false);
+    const presetOperation = useRef(false);
+    const [initialSettings] = useState(() => defaultSceneSettings());
     const [settings, setSettings] = useState(initialSettings);
     const [source, setSource] = useState<File | null>(null);
     const [sourcePreview, setSourcePreview] = useState('');
@@ -91,7 +99,7 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
     const generationRunning = useRef(false);
     const sourceRequest = useRef(0);
     const busy = generating || sourceLoading || maskLoading || segmenting;
-    const locked = busy || analyzing;
+    const locked = busy || analyzing || presetBusy;
     const modelName = settings.comfyFlux2EditUnet || '';
     const effectiveControls = mode === 'global' ? controls : { ...controls,
         camera: { ...controls.camera, enabled: false }, lighting: { ...controls.lighting, enabled: false }, season: { ...controls.season, enabled: false } };
@@ -120,6 +128,45 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
         analysisAbort.current?.abort();
         analysisAbort.current = null;
         setAnalyzing(false);
+    };
+    const loadPreset = (item: LibraryItem) => {
+        if (locked || otherGenerationBusy || generationRunning.current) return;
+        try {
+            const preset = parseSceneVariationPreset(item.sceneVariationPreset);
+            invalidateAnalysis();
+            setSettings({ ...defaultSceneSettings(), ...preset.settings });
+            setMode(preset.mode); setIntensity(preset.intensity); setCount(preset.count);
+            setProvider(preset.provider); setOllamaModel(preset.ollamaModel);
+            setSamCheckpoint(preset.samCheckpoint); setMaskPadding(preset.maskPadding); setPoseMaskArea(preset.poseMaskArea);
+            setControls(createSceneControls(analysis || undefined));
+            setSelectedPresetId(String(item.id)); setError(''); setMessage('Scene Variation preset loaded.');
+        } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load preset.'); }
+    };
+    useEffect(() => {
+        if (!pendingPreset || locked || otherGenerationBusy) return;
+        loadPreset(pendingPreset);
+        onPresetLoaded?.();
+    }, [pendingPreset, locked, otherGenerationBusy]);
+    const savePreset = async (name: string) => {
+        if (locked || otherGenerationBusy || presetOperation.current) return;
+        presetOperation.current = true; setPresetBusy(true); setError('');
+        try {
+            const preset = parseSceneVariationPreset({ version: 1, settings, mode, intensity, count, provider, ollamaModel,
+                samCheckpoint: selectedSam, maskPadding, poseMaskArea });
+            const item = await dispatch(addToLibrary({ mediaType: 'preset', name: `SCENE-VARIATION_FLUX2_Param_${name}`,
+                media: '', thumbnail: '', tags: ['scene-variation'], sceneVariationPreset: preset })).unwrap();
+            setSelectedPresetId(String(item.id)); setMessage('Scene Variation preset saved to Library.');
+        } catch (reason) { setError(typeof reason === 'string' ? reason : reason instanceof Error ? reason.message : 'Unable to save preset.'); }
+        finally { presetOperation.current = false; setPresetBusy(false); }
+    };
+    const deletePreset = async () => {
+        if (locked || otherGenerationBusy || presetOperation.current || !selectedPresetId) return;
+        presetOperation.current = true; setPresetBusy(true); setError('');
+        try {
+            await dispatch(deleteFromLibrary(Number(selectedPresetId))).unwrap();
+            setSelectedPresetId(''); setMessage('Scene Variation preset deleted.');
+        } catch (reason) { setError(typeof reason === 'string' ? reason : reason instanceof Error ? reason.message : 'Unable to delete preset.'); }
+        finally { presetOperation.current = false; setPresetBusy(false); }
     };
     const changeSource = async (file: File | null) => {
         if (generationRunning.current) return;
@@ -284,7 +331,8 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
         } catch (reason) { patchResult(result.id, { saved: 'idle' }); setError(reason instanceof Error ? reason.message : 'Save failed.'); }
     };
     const reset = () => {
-        if (generationRunning.current) return;
+        if (generationRunning.current || presetOperation.current) return;
+        setSelectedPresetId(''); setPresetSaveOpen(false); setPresetDeleteOpen(false);
         invalidateAnalysis(); sourceRequest.current++;
         setMode('global');
         setSamCheckpoint(''); setMaskPadding(32); setPoseMaskArea('movement');
@@ -310,7 +358,16 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
     return <section aria-label="Scene Variation" className="min-w-0 space-y-5">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border-primary pb-3">
             <div className="flex items-center gap-3"><h2 className="text-xl font-bold text-accent">Scene Variation</h2><span className="text-xs font-semibold text-text-muted">FLUX2</span></div>
-            <button type="button" className={buttonClass} onClick={reset} disabled={generating || segmenting}><RefreshIcon className="h-4 w-4" />Reset</button>
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+                <select aria-label="Scene Variation preset" className={`${inputClass} !mt-0 !w-auto max-w-full sm:max-w-64`} value={presets.some(item => String(item.id) === selectedPresetId) ? selectedPresetId : ''} disabled={locked || otherGenerationBusy}
+                    onChange={event => { const item = presets.find(candidate => String(candidate.id) === event.target.value); if (item) loadPreset(item); else setSelectedPresetId(''); }}>
+                    <option value="">Load Preset...</option>
+                    {presets.map(item => <option key={item.id} value={item.id}>{item.name?.replace('SCENE-VARIATION_FLUX2_Param_', '') || `Preset ${item.id}`}</option>)}
+                </select>
+                <button type="button" className={buttonClass} title="Save Scene Variation preset" aria-label="Save Scene Variation preset" disabled={locked || otherGenerationBusy} onClick={() => setPresetSaveOpen(true)}>{presetBusy ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <SaveIcon className="h-4 w-4" />}</button>
+                {presets.some(item => String(item.id) === selectedPresetId) && <button type="button" className={buttonClass} title="Delete Scene Variation preset" aria-label="Delete Scene Variation preset" disabled={locked || otherGenerationBusy} onClick={() => setPresetDeleteOpen(true)}><TrashIcon className="h-4 w-4" /></button>}
+                <button type="button" className={buttonClass} onClick={reset} disabled={generating || segmenting || presetBusy}><RefreshIcon className="h-4 w-4" />Reset</button>
+            </div>
         </header>
         <div role="radiogroup" aria-label="Editing mode" className="flex flex-wrap gap-2">
             {(['global', 'masked'] as const).map(value => <label key={value} className={`${buttonClass} ${mode === value ? '!border-accent !text-accent' : ''}`} title={value === 'global' ? 'Whole-scene FLUX2 editing' : 'Pose and expression only. Camera, lighting and season remain in Global mode.'}>
@@ -453,6 +510,8 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
             </article>)}</div>
         </section>}
         <LibraryPickerModal isOpen={libraryOpen} onClose={() => setLibraryOpen(false)} onSelectItem={selectLibrary} filter={['image', 'character', 'extracted-frame', 'group-fusion', 'swap-anything', 'past-forward-photo']} />
+        <PresetSaveModal isOpen={presetSaveOpen} onClose={() => setPresetSaveOpen(false)} onSave={name => { void savePreset(name); }} />
+        <ConfirmationModal isOpen={presetDeleteOpen} onClose={() => setPresetDeleteOpen(false)} onConfirm={() => { void deletePreset(); }} title="Delete Preset" message={`Delete "${presets.find(item => String(item.id) === selectedPresetId)?.name || 'Scene Variation preset'}" from the Library?`} confirmLabel="Delete" isDanger />
         {zoom && <div role="dialog" aria-modal="true" aria-label="Scene image preview" className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setZoom(null)}><button type="button" autoFocus className="absolute right-4 top-4 rounded-md bg-black p-3 text-white" aria-label="Close scene image preview" onClick={() => setZoom(null)}><CloseIcon className="h-6 w-6" /></button><img src={zoom} alt="Scene preview" className="max-h-[90vh] max-w-full object-contain" onClick={event => event.stopPropagation()} /></div>}
     </section>;
 };
