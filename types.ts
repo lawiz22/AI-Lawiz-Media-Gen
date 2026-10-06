@@ -178,7 +178,7 @@ export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | '
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = string;
-export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'flux2-edit' | 'krea2-simple' | 'krea2-raw';
+export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'qwen21-t2i' | 'qwen21-turbo' | 'qwen21-remove-background' | 'qwen21-i2i-consistency' | 'qwen21-i2i-turbo' | 'qwen21-i2i-multi' | 'qwen21-character-scene' | 'z-image' | 'flux2-simple' | 'flux2-edit' | 'krea2-simple' | 'krea2-raw';
 export type Flux2ReferenceRole = 'identity' | 'outfit' | 'background' | 'pose' | 'style' | 'custom';
 export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui' | 'mammouth';
@@ -189,6 +189,13 @@ export type NunchakuAttention = 'nunchaku-fp16' | 'flash-attention2';
 
 export interface GenerationOptions {
   provider: Provider;
+  comfyQwen21T2i?: import('./services/qwen21Workflow').Qwen21Settings;
+  comfyQwen21Turbo?: import('./services/qwen21Workflow').Qwen21Settings;
+  comfyQwen21RemoveBackground?: import('./services/qwen21Workflow').Qwen21RemoveBackgroundOptions;
+  comfyQwen21EditConsistency?: import('./services/qwen21Workflow').Qwen21EditOptions;
+  comfyQwen21EditTurbo?: import('./services/qwen21Workflow').Qwen21EditOptions;
+  comfyQwen21Multi?: import('./services/qwen21Workflow').Qwen21MultiOptions;
+  comfyCharacterScene?: import('./services/qwen21CharacterSceneWorkflow').CharacterSceneOptions;
   pastForwardProvider?: 'comfyui' | 'qwen' | 'gemini' | 'mammouth';
   pastForwardQwenSteps?: number;
   pastForwardQwenCfg?: number;
@@ -388,7 +395,10 @@ export interface GenerationOptions {
   comfyQwenEditLora5Strength?: number;
 
   // Character multi-angle Qwen Edit workflow
-  comfyCharacterMode?: 'qwen' | 'flux2';
+  comfyCharacterMode?: 'qwen' | 'flux2' | 'qwen21' | 'qwen21-create';
+  comfyQwen21Create?: import('./services/qwen21Workflow').Qwen21MultiOptions;
+  comfyQwen21CreateTurbo?: boolean;
+  qwen21CharacterSheet?: import('./services/qwen21Workflow').Qwen21CharacterSheetOptions;
   comfyCharacterPreserveBackgroundPerspective?: boolean;
   comfyCharacterFlux2Unet?: string;
   comfyCharacterFlux2Clip?: string;
@@ -828,7 +838,7 @@ export interface IndexTtsGenerationInfo {
   }>;
 }
 
-export type LibraryAssetRole = 'media' | 'sourceImage' | 'startFrame' | 'endFrame' | 'skeletonImage' | `ltxSegmentSource:${number}`;
+export type LibraryAssetRole = 'media' | 'sourceImage' | 'startFrame' | 'endFrame' | 'skeletonImage' | 'characterSceneImage' | `ltxSegmentSource:${number}` | `qwen21MultiSource:${number}`;
 
 export interface LibraryAssetRef {
   id: string;
@@ -850,9 +860,13 @@ export interface LibraryItem {
   ltxDirectorOptions?: LtxDirectorGenerationInfo;
   sceneVariationPreset?: import('./services/sceneVariationService').SceneVariationPreset;
   lanPaintPersonSettings?: import('./services/swapPersonWorkflow').LanPaintPersonOptions;
+  outpaintSettings?: import('./services/qwen21Workflow').Qwen21OutpaintOptions;
+  characterSheetView?: { index: number; cuts: number[]; x: number; y: number; width: number; height: number };
   ttsOptions?: TtsGenerationInfo;
   indexTtsOptions?: IndexTtsGenerationInfo;
   sourceImage?: string; // data URL for image/video generations
+  qwen21MultiSources?: string[];
+  characterSceneImage?: string;
   startFrame?: string; // data URL for video generations
   endFrame?: string; // data URL for video generations
   promptType?: PromptCategory;
@@ -1110,6 +1124,7 @@ export interface GenerationSliceState {
       images: {
         src: string;
         saved: 'idle' | 'saving' | 'saved';
+        before?: string;
         usageMetadata?: {
           promptTokenCount: number;
           candidatesTokenCount: number;

@@ -1,6 +1,7 @@
 import React, { ChangeEvent, useMemo, useState } from 'react';
 import { GenerationOptions } from '../types';
 import { NumberSlider, SelectInput, CheckboxSlider } from './InputComponents';
+import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
 
 interface LoraSettingsPanelProps {
     options: GenerationOptions;
@@ -96,7 +97,8 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
         return [{ value: '', label: 'None' }, ...values.map(lora => ({ value: lora, label: lora }))];
     }, [filteredLoras, loraSlotCount, options]);
 
-    if (options.comfyModelType !== 'sd1.5' && options.comfyModelType !== 'sdxl' && options.comfyModelType !== 'flux' && options.comfyModelType !== 'qwen-t2i-gguf' && options.comfyModelType !== 'qwen-edit' && options.comfyModelType !== 'z-image' && options.comfyModelType !== 'flux2-simple' && options.comfyModelType !== 'krea2-simple' && options.comfyModelType !== 'krea2-raw') {
+    const isQwen21 = options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo';
+    if (!isQwen21 && options.comfyModelType !== 'sd1.5' && options.comfyModelType !== 'sdxl' && options.comfyModelType !== 'flux' && options.comfyModelType !== 'qwen-t2i-gguf' && options.comfyModelType !== 'qwen-edit' && options.comfyModelType !== 'z-image' && options.comfyModelType !== 'flux2-simple' && options.comfyModelType !== 'krea2-simple' && options.comfyModelType !== 'krea2-raw') {
         return null;
     }
 
@@ -111,7 +113,9 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
     let prefix = 'comfySd15';
     let title = 'LoRA Settings (SD 1.5)';
 
-    if (isSdxl) {
+    if (isQwen21) {
+        title = `LoRA Settings (Qwen 2.1 ${options.comfyModelType === 'qwen21-turbo' ? 'Turbo' : 'T2I'})`;
+    } else if (isSdxl) {
         prefix = 'comfySdxl';
         title = 'LoRA Settings (SDXL)';
     } else if (isFlux) {
@@ -147,6 +151,8 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
             </button>
 
             {isOpen && <div className="mt-4 space-y-4">
+            {isQwen21 ? <Qwen21SettingsPanel section="loras" options={options} updateOptions={updateOptions} disabled={isDisabled}
+                objectInfo={{ LoraLoaderModelOnly: { input: { required: { lora_name: [availableLoras] } } } }} /> : <>
             <div className="flex items-center gap-2">
                 <input
                     type="checkbox"
@@ -191,6 +197,7 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
                     })}
                 </div>
             )}
+            </>}
             </div>}
         </div>
     );

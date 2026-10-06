@@ -11,6 +11,7 @@ export const TAB_ACCENT_STYLES: Record<string, CSSProperties> = {
     'image-generator': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
     'character-generator': createAccentStyle('#e879f9', '#f0abfc', '#c026d3'),
     'scene-variation': createAccentStyle('#bef264', '#d9f99d', '#84cc16'),
+    outpaint: createAccentStyle('#f66744', '#ff957b', '#df4e2c'),
     'ltx-director': createAccentStyle('#fbbf24', '#fcd34d', '#d97706'),
     tts: createAccentStyle('#34d399', '#6ee7b7', '#059669'),
     'prompt-generator': createAccentStyle('#a78bfa', '#c4b5fd', '#7c3aed'),

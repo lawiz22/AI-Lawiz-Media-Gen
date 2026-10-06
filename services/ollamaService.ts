@@ -110,12 +110,12 @@ export const testOllamaConnection = async (url: string): Promise<OllamaConnectio
     }
 };
 
-const chatWithOllama = async (url: string, model: string, content: string, image?: File, format?: object, temperature = 0.35, onActivity?: OllamaActivityCallback, signal?: AbortSignal, maxTokens = 2048): Promise<string> => {
+const chatWithOllama = async (url: string, model: string, content: string, image?: File, format?: object, temperature = 0.35, onActivity?: OllamaActivityCallback, signal?: AbortSignal, maxTokens = 2048, referenceImages: File[] = []): Promise<string> => {
     if (!model.trim()) throw new Error('Select an Ollama model.');
     onActivity?.({ phase: 'loading', thinking: '', response: '' });
     let images: string[] | undefined;
     try {
-        images = image ? [await fileToOllamaImage(image)] : undefined;
+        images = image ? await Promise.all([image, ...referenceImages].map(fileToOllamaImage)) : undefined;
     } catch (error) {
         onActivity?.({ phase: 'failed', thinking: '', response: '' });
         throw error;
@@ -216,8 +216,8 @@ const getStyleInstruction = (modelType: string): string => {
 };
 
 export const analyzeStructuredImageWithOllama = (
-    image: File, instruction: string, schema: object, url: string, model: string, signal?: AbortSignal,
-): Promise<string> => chatWithOllama(url, model, instruction, image, schema, 0.2, undefined, signal, 8192);
+    image: File, instruction: string, schema: object, url: string, model: string, signal?: AbortSignal, referenceImages: File[] = [],
+): Promise<string> => chatWithOllama(url, model, instruction, image, schema, 0.2, undefined, signal, 8192, referenceImages);
 
 export const generateOllamaPromptFromImage = async (
     sourceImage: File,

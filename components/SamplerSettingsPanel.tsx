@@ -1,6 +1,7 @@
 import React, { ChangeEvent, useMemo, useState } from 'react';
 import { GenerationOptions } from '../types';
 import { NumberSlider, SelectInput, TextInput } from './InputComponents';
+import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
 
 interface SamplerSettingsPanelProps {
     options: GenerationOptions;
@@ -40,12 +41,13 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
     }, [comfyUIObjectInfo]);
 
     const modelType = options.comfyModelType;
-    const supportedModels = ['sdxl', 'sd1.5', 'flux', 'qwen-t2i-gguf', 'qwen-edit', 'z-image', 'flux2-simple', 'krea2-simple', 'krea2-raw'];
+    const supportedModels = ['sdxl', 'sd1.5', 'flux', 'qwen-t2i-gguf', 'qwen-edit', 'qwen21-t2i', 'qwen21-turbo', 'z-image', 'flux2-simple', 'krea2-simple', 'krea2-raw'];
     if (!modelType || !supportedModels.includes(modelType)) return null;
 
     const samplerOptions = Array.from(new Set([options.comfySampler, ...comfySamplers].filter(Boolean) as string[]));
     const schedulerOptions = Array.from(new Set([options.comfyScheduler, ...comfySchedulers].filter(Boolean) as string[]));
     const isKreaRaw = modelType === 'krea2-raw';
+    const isQwen21 = modelType === 'qwen21-t2i' || modelType === 'qwen21-turbo';
 
     return (
         <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
@@ -60,6 +62,7 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
             </button>
 
             {isOpen && <div className="mt-4 space-y-4">
+                {isQwen21 ? <Qwen21SettingsPanel section="sampler" options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} /> : <>
                 {isKreaRaw ? (
                     <p className="text-xs text-text-secondary">RAW sampler stages use the fixed settings from the source workflow.</p>
                 ) : <>
@@ -84,6 +87,7 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
                     </div>
                     {options.comfySeedControl === 'increment' && <NumberSlider label={`Increment By: ${options.comfySeedIncrement || 1}`} value={options.comfySeedIncrement || 1} onChange={handleSliderChange('comfySeedIncrement')} min={1} max={100} step={1} disabled={isDisabled} />}
                 </div>
+                </>}
             </div>}
         </div>
     );

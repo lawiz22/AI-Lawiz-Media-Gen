@@ -7,6 +7,40 @@ const source = readFileSync(new URL('./characterAnglesWorkflow.ts', import.meta.
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
 const character = await import(`data:text/javascript;base64,${Buffer.from(compiled.outputText).toString('base64')}`);
 
+test('Qwen 2.1 Create Character injects eight controlled prompts with up to four ordered image references', () => {
+    const options = { comfyCharacterMode: 'qwen21-create', clothing: 'image', background: 'image' };
+    const prompts = character.buildQwen21CharacterAnglePrompts(options, { source: 'source', clothing: 'outfit', background: 'room', pose: 'pose' });
+    assert.equal(prompts.length, 8);
+    for (const prompt of prompts) {
+        for (let index = 1; index <= 4; index++) assert.ok(prompt.includes(`<image${index}>`));
+        assert.ok(!prompt.includes('DWPose')); assert.ok(!prompt.includes('Picture 1')); assert.ok(prompt.includes('one person only'));
+        assert.ok(prompt.includes('clothing reference <image2>')); assert.ok(prompt.includes('background reference <image3>'));
+        assert.ok(prompt.includes('body pose from <image4>') || prompt.includes('instead of copying the pose reference <image4>')); assert.ok(prompt.includes('seamlessly'));
+    }
+    assert.ok(prompts[0].includes('Camera angle: close-up')); assert.ok(prompts[7].includes('Camera angle: 90 degrees left'));
+    const filtered = { ...options, comfyCharacterAngleSettings: Object.fromEntries(character.CHARACTER_ANGLES.map(({id}, index) => [id, { enabled: index === 2, angle: 'back view', pose: 'sitting', expression: 'happy', prompt: 'Stale FLUX override' }])) };
+    const selected = character.buildQwen21CharacterAnglePrompts(filtered, { source: 'source', pose: 'pose' });
+    assert.equal(selected.length, 1); assert.ok(selected[0].includes('Camera angle: back view'));assert.ok(selected[0].includes('Pose: sitting'));assert.ok(selected[0].includes('Facial expression: happy'));assert.ok(selected[0].includes('instead of copying the pose reference <image2>'));assert.ok(!selected[0].includes('body pose from'));assert.ok(!selected[0].includes('<image3>'));assert.ok(!selected[0].includes('Stale FLUX override'));
+    assert.equal(new Set(prompts).size,8);assert.ok(prompts[4].startsWith('Edit <image1>'));assert.ok(prompts[4].includes('Camera angle: aerial view'));assert.ok(!prompts[4].includes('strict visual reference'));assert.ok(!prompts[4].includes('one complete body'));
+    const preserve=character.buildQwen21CharacterAnglePrompts({...filtered,comfyCharacterPreserveBackgroundPerspective:true},{source:'source'});
+    assert.ok(preserve[0].includes('new perspective matching the requested camera angle'));assert.ok(preserve[0].includes('do not retain the original camera view'));
+    assert.equal(character.buildQwen21CharacterAnglePrompts({ ...options, comfyCharacterAngleSettings: Object.fromEntries(character.CHARACTER_ANGLES.map(({id}) => [id, {enabled:false}])) }, {source:'source'}).length, 0);
+});
+
+test('Qwen Create Character green screen overrides stale custom and preserve-background settings in every output', () => {
+    const options = { background: 'green screen', customBackground: 'a furnished office', comfyCharacterPreserveBackgroundPerspective: true };
+    const prompts = character.buildQwen21CharacterAnglePrompts(options, { source: 'source', background: 'room' });
+    assert.equal(prompts.length, 8);
+    for (const prompt of prompts) {
+        assert.match(prompt, /solid, uniform chroma-key green \(#00FF00\)/);
+        assert.match(prompt, /Remove all scenery, furniture, objects and floor details/);
+        assert.doesNotMatch(prompt, /furnished office|Preserve the original background|background reference|Blend the person/);
+    }
+    const white = character.buildQwen21CharacterAnglePrompts({ background: 'white', customBackground: 'a furnished office' }, { source: 'source' });
+    assert.match(white[0], /Use a white background/);
+    assert.doesNotMatch(white[0], /furnished office/);
+});
+
 test('FLUX2 Character sends an explicit workflow prompt unchanged through the reference graph', () => {
     const prompt = 'Using the input image as the strict visual reference, create a 45-degree front three-quarter view of the same subject.\n\nPreserve the same pose and expression.\n\nCamera angle: front three-quarter view, approximately 45 degrees, eye-level.';
     const options = {

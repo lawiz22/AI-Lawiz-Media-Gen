@@ -4,6 +4,7 @@ import { ASPECT_RATIO_OPTIONS, FLUX2_RESOLUTION_OPTIONS, KREA2_RAW_RESOLUTION_OP
 import { GenerateIcon, ResetIcon } from './icons';
 import { DEFAULT_GEMINI_IMAGE_MODEL, getGeminiAspectRatios } from '../services/geminiService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL } from '../services/mammouthService';
+import { defaultQwen21Settings, QWEN21_SIZES, qwen21Dimensions } from '../services/qwen21Workflow';
 
 interface ActionControlPanelProps {
     options: GenerationOptions;
@@ -24,6 +25,9 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
     isDisabled,
     updateOptions
 }) => {
+    const qwen21Mode = options.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
+    const qwen21Key = qwen21Mode === 'turbo' ? 'comfyQwen21Turbo' : 'comfyQwen21T2i';
+    const qwen21Settings = options[qwen21Key] || defaultQwen21Settings(qwen21Mode);
     const aspectRatioOptions = options.provider === 'gemini'
         ? getGeminiAspectRatios(options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL).map(value => ({
             value,
@@ -81,6 +85,18 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                             <label className="text-xs font-medium text-text-secondary">Resolution:</label>
                             <select value={options.comfyFlux2Resolution || '832x1216'} onChange={(event) => updateOptions({ comfyFlux2Resolution: event.target.value })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs focus:border-accent focus:ring-accent">
                                 {FLUX2_RESOLUTION_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            </select>
+                        </div>
+                    ) : options.provider === 'comfyui' && (options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo') ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <select aria-label="Quick Orientation" value={qwen21Settings.orientation} onChange={event => updateOptions({ [qwen21Key]: { ...qwen21Settings, orientation: event.target.value as 'landscape' | 'portrait' } })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs">
+                                <option value="landscape">Landscape</option><option value="portrait">Portrait</option>
+                            </select>
+                            <select aria-label="Quick Size" value={String(qwen21Settings.sizeIndex)} onChange={event => updateOptions({ [qwen21Key]: { ...qwen21Settings, sizeIndex: Number(event.target.value) } })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs">
+                                {QWEN21_SIZES[qwen21Mode].map((_, sizeIndex) => {
+                                    const { width, height } = qwen21Dimensions(qwen21Mode, { ...qwen21Settings, sizeIndex });
+                                    return <option key={sizeIndex} value={String(sizeIndex)}>{width} x {height}</option>;
+                                })}
                             </select>
                         </div>
                     ) : (

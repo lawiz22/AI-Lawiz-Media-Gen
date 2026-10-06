@@ -9,7 +9,7 @@ import type { AppDispatch, RootState } from '../store/store';
 import { addToLibrary, deleteFromLibrary } from '../store/librarySlice';
 
 type GenerationMode = 't2i' | 'i2i';
-type ModelFamilyId = 'sd15' | 'sdxl' | 'flux' | 'qwen' | 'z-image' | 'flux2' | 'krea2';
+type ModelFamilyId = 'sd15' | 'sdxl' | 'flux' | 'qwen' | 'qwen21' | 'z-image' | 'flux2' | 'krea2';
 
 interface ModelFamily {
     id: ModelFamilyId;
@@ -22,6 +22,7 @@ const MODEL_FAMILIES: ModelFamily[] = [
     { id: 'sdxl', label: 'SDXL', workflows: { t2i: 'sdxl' } },
     { id: 'flux', label: 'FLUX', workflows: { t2i: 'flux' } },
     { id: 'qwen', label: 'QWEN', workflows: { t2i: 'qwen-t2i-gguf', i2i: 'qwen-edit' } },
+    { id: 'qwen21', label: 'QWEN 2.1', workflows: { t2i: 'qwen21-t2i', i2i: 'qwen21-remove-background' } },
     { id: 'z-image', label: 'Z-Image', workflows: { t2i: 'z-image' } },
     { id: 'flux2', label: 'FLUX2', workflows: { t2i: 'flux2-simple', i2i: 'flux2-edit' } },
     { id: 'krea2', label: 'KREA2', workflows: { t2i: 'krea2-simple' } },
@@ -56,21 +57,20 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
     const activeModelFamily = MODEL_FAMILIES.find(family =>
         Object.values(family.workflows).includes(options.comfyModelType as ComfyModelType)
         || (family.id === 'krea2' && options.comfyModelType === 'krea2-raw')
+        || (family.id === 'qwen21' && ['qwen21-turbo', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(options.comfyModelType || ''))
     ) || MODEL_FAMILIES[1];
     const availableGenerationModes = (['t2i', 'i2i'] as const).filter(mode => activeModelFamily.workflows[mode]);
+    const workflowTabs: { label: string; model: ComfyModelType; mode: GenerationMode }[] = activeModelFamily.id === 'qwen21'
+        ? [{ label: 'T2I', model: 'qwen21-t2i', mode: 't2i' }, { label: 'T2I (Turbo)', model: 'qwen21-turbo', mode: 't2i' }, { label: 'I2I Multi Images', model: 'qwen21-i2i-multi', mode: 'i2i' }, { label: 'I2I Consistency', model: 'qwen21-i2i-consistency', mode: 'i2i' }, { label: 'I2I Turbo', model: 'qwen21-i2i-turbo', mode: 'i2i' }, { label: 'Remove Background', model: 'qwen21-remove-background', mode: 'i2i' }]
+        : activeModelFamily.id === 'krea2'
+            ? [{ label: 'SIMPLE KREA', model: 'krea2-simple', mode: 't2i' }, { label: 'KREA2 RAW', model: 'krea2-raw', mode: 't2i' }]
+            : availableGenerationModes.map(mode => ({ label: activeModelFamily.id === 'flux2' ? mode === 't2i' ? 'FLUX2 SIMPLE' : 'FLUX2 Edit' : mode.toUpperCase(), model: activeModelFamily.workflows[mode]!, mode }));
 
     const selectModelFamily = (family: ModelFamily) => {
         const nextMode = family.workflows[generationMode] ? generationMode : 't2i';
         const workflow = family.workflows[nextMode];
         if (!workflow) return;
         setGenerationMode(nextMode);
-        switchComfyModel(workflow);
-    };
-
-    const selectGenerationMode = (mode: GenerationMode) => {
-        const workflow = activeModelFamily.workflows[mode];
-        if (!workflow) return;
-        setGenerationMode(mode);
         switchComfyModel(workflow);
     };
 
@@ -107,7 +107,7 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
         if (preset && preset.options) {
             restoreOptions(preset.options);
             const isComfyI2I = preset.options.provider === 'comfyui'
-                && ['qwen-edit', 'flux2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux'].includes(preset.options.comfyModelType || '');
+                && ['qwen-edit', 'flux2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux', 'qwen21-remove-background', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(preset.options.comfyModelType || '');
             const isCloudI2I = preset.options.provider !== 'comfyui' && preset.options.geminiMode === 'i2i';
             setGenerationMode(isComfyI2I || isCloudI2I ? 'i2i' : 't2i');
             setSelectedPresetId(presetId);
@@ -135,6 +135,7 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
     }, [selectedPresetId, presets, currentModelPrefix]);
 
     return (
+        <>
         <div className="bg-bg-secondary p-2 rounded-xl shadow-sm border border-border-primary mb-4 flex flex-wrap items-center justify-between gap-4">
             {/* Left Side: Provider & ComfyUI Workflow */}
             <div className="flex min-w-0 flex-wrap items-center gap-4">
@@ -200,12 +201,12 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
                     </div>
                 )}
 
-                <div className="bg-bg-tertiary p-1 rounded-lg flex gap-1" aria-label="Generation mode">
-                    {(options.provider === 'comfyui' ? availableGenerationModes : (['t2i', 'i2i'] as const)).map(mode => (
+                {options.provider !== 'comfyui' && <div className="bg-bg-tertiary p-1 rounded-lg flex gap-1" aria-label="Generation mode">
+                    {(['t2i', 'i2i'] as const).map(mode => (
                         <button
                             key={mode}
                             type="button"
-                            onClick={() => options.provider === 'comfyui' ? selectGenerationMode(mode) : setGenerationMode(mode)}
+                            onClick={() => setGenerationMode(mode)}
                             disabled={isDisabled}
                             aria-pressed={generationMode === mode}
                             className={`px-3 py-1.5 text-xs font-bold uppercase rounded-md transition-colors ${generationMode === mode
@@ -216,40 +217,7 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
                             {mode}
                         </button>
                     ))}
-                    {options.provider === 'comfyui' && activeModelFamily.id === 'krea2' && (
-                        <>
-                        <button
-                            type="button"
-                            onClick={() => switchComfyModel('krea2-simple')}
-                            disabled={isDisabled}
-                            aria-pressed={options.comfyModelType === 'krea2-simple'}
-                            className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${options.comfyModelType === 'krea2-simple' ? 'bg-accent text-accent-text shadow-sm' : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'}`}
-                        >
-                            SIMPLE KREA
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => switchComfyModel('krea2-raw')}
-                            disabled={isDisabled}
-                            aria-pressed={options.comfyModelType === 'krea2-raw'}
-                            className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${options.comfyModelType === 'krea2-raw' ? 'bg-accent text-accent-text shadow-sm' : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'}`}
-                        >
-                            KREA2 RAW
-                        </button>
-                        </>
-                    )}
-                    {options.provider === 'comfyui' && activeModelFamily.id === 'flux2' && generationMode === 't2i' && (
-                        <button
-                            type="button"
-                            onClick={() => switchComfyModel('flux2-simple')}
-                            disabled={isDisabled}
-                            aria-pressed={options.comfyModelType === 'flux2-simple'}
-                            className="rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-accent-text shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            FLUX2 SIMPLE
-                        </button>
-                    )}
-                </div>
+                </div>}
 
                 {/* Preset Manager (ComfyUI Only) */}
                 {options.provider === 'comfyui' && <div className="flex items-center gap-1 bg-bg-tertiary p-1 rounded-md border border-border-primary/50">
@@ -313,5 +281,21 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
                 isDanger
             />
         </div>
+        {options.provider === 'comfyui' && <div role="tablist" aria-label="ComfyUI workflow" className="mb-5 flex min-w-0 overflow-x-auto border-b border-border-primary" onKeyDown={event => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="tab"]:not(:disabled)'));
+            const current = tabs.indexOf(event.target as HTMLButtonElement);
+            if (current < 0) return;
+            event.preventDefault();
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+            tabs[next].focus(); tabs[next].click();
+        }}>
+            {workflowTabs.map(tab => <button key={tab.model} type="button" role="tab" aria-selected={options.comfyModelType === tab.model} tabIndex={options.comfyModelType === tab.model ? 0 : -1} disabled={isDisabled}
+                onClick={() => { setGenerationMode(tab.mode); switchComfyModel(tab.model); }}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50 ${options.comfyModelType === tab.model ? 'border-accent text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+                {tab.label}
+            </button>)}
+        </div>}
+        </>
     );
 };

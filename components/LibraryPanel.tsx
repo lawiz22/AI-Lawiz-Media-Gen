@@ -1686,15 +1686,18 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                   </div>}
                   {selectedItemModal.sceneVariationPreset && <div className="space-y-2 border-t border-border-primary pt-3">
                     <h4 className="text-sm font-semibold text-text-primary">Scene Variation Preset</h4>
+                    <DetailItem label="Engine" value={selectedItemModal.sceneVariationPreset.settings.comfyModelType === 'qwen21-i2i-multi' ? 'Qwen 2.1' : 'FLUX2'} />
                     <DetailItem label="Mode" value={selectedItemModal.sceneVariationPreset.mode === 'masked' ? 'Masked by person' : 'Global'} />
                     <DetailItem label="Amplitude" value={selectedItemModal.sceneVariationPreset.intensity} />
                     <DetailItem label="Images" value={selectedItemModal.sceneVariationPreset.count} />
                     <DetailItem label="Analysis provider" value={selectedItemModal.sceneVariationPreset.provider} />
                     {selectedItemModal.sceneVariationPreset.provider === 'ollama' && <DetailItem label="Ollama model" value={selectedItemModal.sceneVariationPreset.ollamaModel} />}
+                    {selectedItemModal.sceneVariationPreset.settings.comfyModelType !== 'qwen21-i2i-multi' && <>
                     <DetailItem label="SAM3 checkpoint" value={selectedItemModal.sceneVariationPreset.samCheckpoint || 'Auto'} />
                     <DetailItem label="Pose edit area" value={selectedItemModal.sceneVariationPreset.poseMaskArea === 'movement' ? 'Movement area' : 'Silhouette'} />
                     <DetailItem label="Mask margin" value={`${selectedItemModal.sceneVariationPreset.maskPadding} px`} />
-                    <details><summary className="cursor-pointer text-xs text-text-secondary">FLUX2 settings</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-text-secondary">{JSON.stringify(selectedItemModal.sceneVariationPreset.settings, null, 2)}</pre></details>
+                    </>}
+                    <details><summary className="cursor-pointer text-xs text-text-secondary">{selectedItemModal.sceneVariationPreset.settings.comfyModelType === 'qwen21-i2i-multi' ? 'Qwen 2.1 settings' : 'FLUX2 settings'}</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-text-secondary">{JSON.stringify(selectedItemModal.sceneVariationPreset.settings, null, 2)}</pre></details>
                   </div>}
                   {!selectedItemModal.ttsOptions && !selectedItemModal.sceneVariationPreset && (selectedItemModal.themeOptions ? renderThemeOptionsDetails(selectedItemModal.themeOptions) : renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType))}
                   {selectedItemModal.mediaType === 'audio-tts' && selectedItemModal.indexTtsOptions?.characters.some((character) => character.thumbnail) && <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border-primary bg-bg-primary p-3">

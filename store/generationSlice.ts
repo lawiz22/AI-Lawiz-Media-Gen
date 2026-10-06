@@ -3,6 +3,7 @@ import { createSlice, createSelector, PayloadAction } from '@reduxjs/toolkit';
 import type { ComfyModelType, GenerationSliceState, GenerationOptions } from '../types';
 import type { RootState } from './store';
 import { getEnabledCharacterAngles } from '../services/characterAnglesWorkflow';
+import { defaultQwen21Settings } from '../services/qwen21Workflow';
 
 const KREA_TURBO_LORA_FIELDS = [
   'comfyKreaLora1Name',
@@ -48,6 +49,8 @@ const initialOptions: GenerationOptions = {
   geminiComposePrompt: '',
   comfyModelType: 'krea2-simple',
   comfyPrompt: '',
+  comfyQwen21T2i: defaultQwen21Settings('t2i'),
+  comfyQwen21Turbo: defaultQwen21Settings('turbo'),
   comfyNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed, disfigured',
   comfySteps: 10,
   comfyCfg: 1,
@@ -309,6 +312,11 @@ const generationSlice = createSlice({
     },
     updateOptions: (state, action: PayloadAction<Partial<GenerationOptions>>) => {
       state.options = { ...state.options, ...action.payload };
+      if (action.payload.comfyPrompt !== undefined && (state.options.comfyModelType === 'qwen21-t2i' || state.options.comfyModelType === 'qwen21-turbo')) {
+        const mode = state.options.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
+        const key = mode === 'turbo' ? 'comfyQwen21Turbo' : 'comfyQwen21T2i';
+        state.options[key] = { ...(state.options[key] || defaultQwen21Settings(mode)), prompt: action.payload.comfyPrompt };
+      }
       if (action.payload.comfyKreaUnet && /krea2[_ .-]?turbo/i.test(action.payload.comfyKreaUnet)) {
         for (const field of KREA_TURBO_LORA_FIELDS) {
           if (/krea2[_ .-]?turbo/i.test(state.options[field] || '')) state.options[field] = '';
@@ -329,6 +337,11 @@ const generationSlice = createSlice({
       const nextOptions: GenerationOptions = savedOptions
         ? { ...savedOptions, ...sharedPrompts, ...action.payload, provider: 'comfyui', comfyModelType: action.payload.comfyModelType }
         : { ...state.options, ...sharedPrompts, ...action.payload, provider: 'comfyui' };
+      if (action.payload.comfyModelType === 'qwen21-t2i' || action.payload.comfyModelType === 'qwen21-turbo') {
+        const mode = action.payload.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
+        const key = mode === 'turbo' ? 'comfyQwen21Turbo' : 'comfyQwen21T2i';
+        nextOptions[key] = { ...(nextOptions[key] || defaultQwen21Settings(mode)), ...(action.payload.comfyPrompt !== undefined ? { prompt: action.payload.comfyPrompt } : {}) };
+      }
       if (!savedOptions && (action.payload.comfyModelType === 'krea2-simple' || action.payload.comfyModelType === 'krea2-raw')) {
         nextOptions.comfyKreaPrompt = action.payload.comfyKreaPrompt ?? action.payload.comfyPrompt ?? state.options.comfyPrompt ?? '';
         nextOptions.comfyKreaNegativePrompt = action.payload.comfyKreaNegativePrompt ?? action.payload.comfyNegativePrompt ?? state.options.comfyNegativePrompt ?? '';
@@ -383,12 +396,12 @@ const generationSlice = createSlice({
       state.progressMessage = action.payload.message;
       state.progressValue = action.payload.value;
     },
-    setGeneratedImages: (state, action: PayloadAction<{ tabId: string; images: { src: string, seed?: number, usageMetadata?: any }[] }>) => {
+    setGeneratedImages: (state, action: PayloadAction<{ tabId: string; images: { src: string, seed?: number, usageMetadata?: any, before?: string }[] }>) => {
       const { tabId, images } = action.payload;
       if (!state.generatedContent[tabId]) {
         state.generatedContent[tabId] = { images: [], lastUsedPrompt: null };
       }
-      state.generatedContent[tabId].images = images.map(({ src, seed, usageMetadata }) => ({ src, seed, saved: 'idle', usageMetadata }));
+      state.generatedContent[tabId].images = images.map(({ src, seed, usageMetadata, before }) => ({ src, seed, saved: 'idle', usageMetadata, before }));
     },
     setImageSaveStatus: (state, action: PayloadAction<{ tabId: string; index: number; status: 'idle' | 'saving' | 'saved' }>) => {
       const { tabId, index, status } = action.payload;
@@ -433,6 +446,8 @@ const generationSlice = createSlice({
 
       const resetDefaults: Partial<GenerationOptions> = {
         geminiPrompt: '',
+        comfyQwen21T2i: defaultQwen21Settings('t2i'),
+        comfyQwen21Turbo: defaultQwen21Settings('turbo'),
         comfyPrompt: '',
         comfyFlux2Prompt: '',
         comfyFlux2NegativePrompt: '',
@@ -542,6 +557,10 @@ export const selectIsReadyToGenerate = createSelector(
         return !!isComfyUIConnected && !!sourceImage && getEnabledCharacterAngles(activeOptions).length > 0;
       }
       const isI2IMode = generationMode === 'i2i';
+      if (activeOptions.comfyModelType === 'qwen21-t2i' || activeOptions.comfyModelType === 'qwen21-turbo') {
+        const settings = activeOptions.comfyModelType === 'qwen21-t2i' ? activeOptions.comfyQwen21T2i : activeOptions.comfyQwen21Turbo;
+        return !!isComfyUIConnected && !!settings?.prompt.trim();
+      }
       const activePrompt = activeOptions.comfyModelType === 'krea2-simple' || activeOptions.comfyModelType === 'krea2-raw'
         ? activeOptions.comfyKreaPrompt
         : activeOptions.comfyModelType === 'flux2-simple'

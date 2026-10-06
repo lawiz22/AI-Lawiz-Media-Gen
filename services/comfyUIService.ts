@@ -1,4 +1,4 @@
-import type { GenerationOptions, PromptSoupIngredient, PromptSoupPart } from "../types";
+import type { ComfyModelType, GenerationOptions, PromptSoupIngredient, PromptSoupPart } from "../types";
 import {
     COMFYUI_SD15_WORKFLOW_TEMPLATE,
     COMFYUI_WORKFLOW_TEMPLATE,
@@ -25,10 +25,17 @@ import { generateMammouthText } from './mammouthService';
 import { generateGeminiText } from './geminiService';
 import { LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './ltxDirectorWorkflow';
 import { createLtxDialogueInstruction, parseSpeakerTranscript } from '../utils/ttsTranscript';
-import { buildCharacterAnglesWorkflow, buildFlux2CharacterAnglesWorkflow, CHARACTER_ANGLES, getEnabledCharacterAngles } from './characterAnglesWorkflow';
+import { buildCharacterAnglesWorkflow, buildFlux2CharacterAnglesWorkflow, buildQwen21CharacterAnglePrompts, CHARACTER_ANGLES, getEnabledCharacterAngles } from './characterAnglesWorkflow';
 import { buildSwapAnythingWorkflow, type SwapAnythingOptions } from './swapAnythingWorkflow';
 import { buildFlux2EditWorkflow, buildMaskedFlux2EditWorkflow, type Flux2EditReference } from './flux2EditWorkflow';
 import { buildSceneMaskWorkflow, sceneSegmentationErrors, type SceneSegmentationTarget } from './sceneMaskWorkflow';
+import { buildQwen21Workflow, defaultQwen21Settings, setQwen21WorkflowSeed, validateQwen21Readiness } from './qwen21Workflow';
+import { buildQwen21OutpaintWorkflow, qwen21OutpaintPrompt, validateQwen21OutpaintReadiness, type Qwen21OutpaintOptions } from './qwen21Workflow';
+import { buildQwen21CharacterSheetWorkflow, qwen21CharacterPrompt, validateQwen21CharacterReadiness, type Qwen21CharacterSheetOptions } from './qwen21Workflow';
+import { buildQwen21RemoveBackgroundWorkflow, defaultQwen21RemoveBackgroundOptions, validateQwen21RemoveBackgroundReadiness, type Qwen21RemoveBackgroundOptions } from './qwen21Workflow';
+import { buildQwen21EditWorkflow, defaultQwen21EditOptions, validateQwen21EditReadiness, type Qwen21EditOptions, type Qwen21EditMode } from './qwen21Workflow';
+import { buildQwen21MultiWorkflow, buildQwen21CreateCharacterWorkflow, defaultQwen21MultiOptions, qwen21MultiPrompt, validateQwen21MultiReadiness, validateQwen21CreateCharacterReadiness, type Qwen21MultiOptions } from './qwen21Workflow';
+import { buildCharacterSceneWorkflow, characterScenePrompt, validateCharacterSceneReadiness, type CharacterSceneOptions } from './qwen21CharacterSceneWorkflow';
 
 export const LTX_PROMPT_THEMES = [
     { value: 'surprise', label: 'Surprise Mix', direction: 'an unexpected but coherent visual treatment selected from cinema, daily life, documentary, social video, art, and commercial imagery' },
@@ -297,7 +304,7 @@ export const cancelComfyUIExecution = async (): Promise<void> => {
 
         currentExecution.reject(new Error('Operation was cancelled by the user.'));
 
-        if (currentExecution.ws.readyState === WebSocket.OPEN) {
+        if (currentExecution.ws.readyState === WebSocket.OPEN || currentExecution.ws.readyState === WebSocket.CONNECTING) {
             currentExecution.ws.close();
         }
     } catch (e) {
@@ -590,7 +597,7 @@ export const generateIndexTts = async (
 };
 
 // --- Mammouth-based Prompt Generation ---
-type ComfyPromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'gemini' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'z-image' | 'flux2-simple' | 'flux2-edit' | 'krea2-simple' | 'krea2-raw';
+type ComfyPromptModelType = ComfyModelType | 'gemini';
 
 const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
     switch (modelType) {
@@ -601,6 +608,8 @@ const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
         case 'nunchaku-flux-image':
         case 'flux-krea':
         case 'qwen-t2i-gguf':
+        case 'qwen21-t2i':
+        case 'qwen21-turbo':
         case 'z-image':
         case 'krea2-simple':
         case 'krea2-raw':
@@ -879,6 +888,118 @@ export const generateComfyUISwapAnything = async (
     const result = await executeWorkflow(workflow, updateProgress, true, 1, ['save']);
     if (!result.images[0]) throw new Error('ComfyUI completed without returning a Swap Anything image.');
     return result.images[0];
+};
+
+export const generateComfyUIQwen21Multi = async (
+    sources: File[], options: Qwen21MultiOptions, progress: (message: string, value: number) => void, signal?: AbortSignal, turbo = false,
+): Promise<{ src: string; prompt: string; seed: number }> => {
+    signal?.throwIfAborted();
+    const settings = { ...options, prompt: qwen21MultiPrompt(options), seed: options.seed === -1 ? Math.floor(Math.random() * 1e15) : options.seed };
+    progress('Checking Qwen 2.1 multi-image nodes and models...', 0.02);
+    const buildWorkflow = (images: string[]) => buildQwen21CreateCharacterWorkflow(images, settings, turbo);
+    validateQwen21CreateCharacterReadiness(buildWorkflow(sources.map(file => file.name)), await getComfyUIObjectInfo());
+    signal?.throwIfAborted();
+    const names: string[] = [];
+    for (const [index, source] of sources.entries()) {
+        progress(`Uploading reference ${index + 1} of ${sources.length}...`, 0.05);
+        signal?.throwIfAborted();
+        names.push((await uploadImage(source)).name);
+    }
+    signal?.throwIfAborted();
+    const result = await executeWorkflow(buildWorkflow(names), progress, true, 1, ['13']);
+    signal?.throwIfAborted();
+    if (!result.images[0]) throw new Error('ComfyUI returned no multi-image result.');
+    return { src: result.images[0], prompt: settings.prompt, seed: settings.seed };
+};
+
+export const generateComfyUIQwen21Edit = async (
+    source: File, options: Qwen21EditOptions, mode: Qwen21EditMode, progress: (message: string, value: number) => void, signal?: AbortSignal,
+): Promise<{ src: string; before: string; prompt: string; seed: number }> => {
+    signal?.throwIfAborted();
+    const settings = { ...options, seed: options.seed === -1 ? Math.floor(Math.random() * 1e15) : options.seed };
+    const graph = buildQwen21EditWorkflow(source.name, settings, mode);
+    progress('Checking Qwen 2.1 edit nodes, models and LoRA...', 0.02);
+    validateQwen21EditReadiness(graph, await getComfyUIObjectInfo());
+    signal?.throwIfAborted();
+    progress('Uploading original image...', 0.05);
+    const uploaded = await uploadImage(source);
+    signal?.throwIfAborted();
+    const result = await executeWorkflow(buildQwen21EditWorkflow(uploaded.name, settings, mode), progress, true, 3, ['12', '13']);
+    signal?.throwIfAborted();
+    if (!result.images[0] || !result.images[1]) throw new Error('ComfyUI returned no edited image or comparison reference.');
+    return { src: result.images[0], before: result.images[1], prompt: settings.prompt, seed: settings.seed };
+};
+
+export const generateComfyUICharacterScene = async (
+    scene: File, character: File, options: CharacterSceneOptions, progress: (message: string, value: number) => void, signal?: AbortSignal,
+): Promise<{ src: string; before: string; prompt: string; seed: number }> => {
+    signal?.throwIfAborted();
+    const settings = { ...options, prompt: characterScenePrompt(options, options.analysis || null), seed: options.seed === -1 ? Math.floor(Math.random() * 1e15) : options.seed };
+    progress('Checking Character in a Scene nodes, models and LoRAs...', 0.02);
+    validateCharacterSceneReadiness(buildCharacterSceneWorkflow(scene.name, character.name, settings), await getComfyUIObjectInfo());
+    signal?.throwIfAborted();
+    const uploadedScene = await uploadImage(scene); signal?.throwIfAborted();
+    const uploadedCharacter = await uploadImage(character); signal?.throwIfAborted();
+    const result = await executeWorkflow(buildCharacterSceneWorkflow(uploadedScene.name, uploadedCharacter.name, settings), progress, true, 3, ['13', '14']);
+    signal?.throwIfAborted();
+    if (!result.images[0] || !result.images[1]) throw new Error('ComfyUI returned no scene result or native comparison reference.');
+    return { src: result.images[0], before: result.images[1], prompt: settings.prompt, seed: settings.seed };
+};
+
+export const generateComfyUIRemoveBackground = async (
+    source: File, options: Qwen21RemoveBackgroundOptions, progress: (message: string, value: number) => void, signal?: AbortSignal,
+): Promise<{ src: string; before: string; prompt: string; seed: number }> => {
+    signal?.throwIfAborted();
+    const settings = { ...options, seed: options.seed === -1 ? Math.floor(Math.random() * 1e15) : options.seed };
+    const graph = buildQwen21RemoveBackgroundWorkflow(source.name, settings);
+    progress('Checking Qwen 2.1 Remove Background nodes and models...', 0.02);
+    validateQwen21RemoveBackgroundReadiness(graph, await getComfyUIObjectInfo());
+    signal?.throwIfAborted();
+    progress('Uploading original image...', 0.05);
+    const uploaded = await uploadImage(source);
+    signal?.throwIfAborted();
+    const result = await executeWorkflow(buildQwen21RemoveBackgroundWorkflow(uploaded.name, settings), progress, true, 3, ['12', '13']);
+    signal?.throwIfAborted();
+    if (!result.images[0] || !result.images[1]) throw new Error('ComfyUI returned no cut-out or comparison reference.');
+    return { src: result.images[0], before: result.images[1], prompt: settings.prompt, seed: settings.seed };
+};
+
+export const generateComfyUICharacterSheet = async (
+    source: File, options: Qwen21CharacterSheetOptions, progress: (message: string, value: number) => void, signal?: AbortSignal,
+): Promise<{ src: string; prompt: string; seed: number }> => {
+    signal?.throwIfAborted();
+    const settings = { ...options, seed: options.seed === -1 ? Math.floor(Math.random() * 1e15) : options.seed };
+    const graph = buildQwen21CharacterSheetWorkflow(source.name, settings);
+    progress('Checking Qwen 2.1 Character Sheet nodes and models...', 0.02);
+    validateQwen21CharacterReadiness(graph, await getComfyUIObjectInfo());
+    signal?.throwIfAborted();
+    progress('Uploading character reference...', 0.05);
+    const uploaded = await uploadImage(source);
+    signal?.throwIfAborted();
+    const result = await executeWorkflow(buildQwen21CharacterSheetWorkflow(uploaded.name, settings), progress, true, 1, ['13']);
+    signal?.throwIfAborted();
+    if (!result.images[0]) throw new Error('ComfyUI returned no Character Sheet.');
+    return { src: result.images[0], prompt: qwen21CharacterPrompt(settings), seed: settings.seed };
+};
+
+export const generateComfyUIOutpaint = async (
+    source: File, options: Qwen21OutpaintOptions, progress: (message: string, value: number) => void,
+    signal?: AbortSignal,
+): Promise<{ src: string; prompt: string; seed: number }> => {
+    signal?.throwIfAborted();
+    const settings = { ...options, seed: options.seed === -1 ? Math.floor(Math.random() * 1e15) : options.seed };
+    const preview = buildQwen21OutpaintWorkflow(source.name, settings);
+    progress('Checking Qwen 2.1 Outpaint nodes and models...', 0.02);
+    validateQwen21OutpaintReadiness(preview, await getComfyUIObjectInfo());
+    signal?.throwIfAborted();
+    progress('Uploading original image...', 0.05);
+    const uploaded = await uploadImage(source);
+    signal?.throwIfAborted();
+    const workflow = buildQwen21OutpaintWorkflow(uploaded.name, settings);
+    const result = await executeWorkflow(workflow, progress, true, 1, ['12']);
+    signal?.throwIfAborted();
+    if (!result.images[0]) throw new Error('ComfyUI returned no stitched outpaint image.');
+    return { src: result.images[0], prompt: qwen21OutpaintPrompt(settings), seed: settings.seed };
 };
 
 export const generateComfyUILanPaintPerson = async (
@@ -1457,6 +1578,46 @@ const uploadImageToComfyUI = async (file: File): Promise<string> => {
 };
 
 const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null, referenceImages: File[] = []): Promise<any> => {
+    if (options.comfyModelType === 'qwen21-character-scene') {
+        if (!sourceFile || referenceImages.length !== 1 || !options.comfyCharacterScene) throw new Error('Choose exactly one scene and one character.');
+        const settings = options.comfyCharacterScene;
+        const resolved = { ...settings, prompt: characterScenePrompt(settings, settings.analysis || null), seed: settings.seed === -1 ? Math.floor(Math.random() * 1e15) : settings.seed };
+        validateCharacterSceneReadiness(buildCharacterSceneWorkflow(sourceFile.name, referenceImages[0].name, resolved), await getComfyUIObjectInfo());
+        return buildCharacterSceneWorkflow((await uploadImage(sourceFile)).name, (await uploadImage(referenceImages[0])).name, resolved);
+    }
+    if (options.comfyModelType === 'qwen21-i2i-multi') {
+        if (!sourceFile) throw new Error('Choose a multi-image reference.');
+        const settings = options.comfyQwen21Multi || defaultQwen21MultiOptions();
+        const sources = [sourceFile, ...referenceImages];
+        const resolved = { ...settings, prompt: qwen21MultiPrompt(settings), seed: settings.seed === -1 ? Math.floor(Math.random() * 1e15) : settings.seed };
+        validateQwen21MultiReadiness(buildQwen21MultiWorkflow(sources.map(file => file.name), resolved), await getComfyUIObjectInfo());
+        const names: string[] = [];
+        for (const source of sources) names.push((await uploadImage(source)).name);
+        return buildQwen21MultiWorkflow(names, resolved);
+    }
+    if (options.comfyModelType === 'qwen21-i2i-consistency' || options.comfyModelType === 'qwen21-i2i-turbo') {
+        if (!sourceFile) throw new Error('Choose a Qwen 2.1 edit source image.');
+        const mode = options.comfyModelType === 'qwen21-i2i-turbo' ? 'turbo' : 'consistency';
+        const settings = (mode === 'turbo' ? options.comfyQwen21EditTurbo : options.comfyQwen21EditConsistency) || defaultQwen21EditOptions(mode);
+        const resolved = { ...settings, seed: settings.seed === -1 ? Math.floor(Math.random() * 1e15) : settings.seed };
+        validateQwen21EditReadiness(buildQwen21EditWorkflow(sourceFile.name, resolved, mode), await getComfyUIObjectInfo());
+        const uploaded = await uploadImage(sourceFile);
+        return buildQwen21EditWorkflow(uploaded.name, resolved, mode);
+    }
+    if (options.comfyModelType === 'qwen21-remove-background') {
+        if (!sourceFile) throw new Error('Choose a Remove Background source image.');
+        const settings = options.comfyQwen21RemoveBackground || defaultQwen21RemoveBackgroundOptions();
+        const resolved = { ...settings, seed: settings.seed === -1 ? Math.floor(Math.random() * 1e15) : settings.seed };
+        const graph = buildQwen21RemoveBackgroundWorkflow(sourceFile.name, resolved);
+        validateQwen21RemoveBackgroundReadiness(graph, await getComfyUIObjectInfo());
+        const uploaded = await uploadImage(sourceFile);
+        return buildQwen21RemoveBackgroundWorkflow(uploaded.name, resolved);
+    }
+    if (options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo') {
+        const mode = options.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
+        const settings = (mode === 'turbo' ? options.comfyQwen21Turbo : options.comfyQwen21T2i) || defaultQwen21Settings(mode);
+        return buildQwen21Workflow(mode, settings, options.comfySeed ?? Math.floor(Math.random() * 1e15));
+    }
     let workflow;
 
     const findNodeKey = (wf: any, identifier: string, by: 'title' | 'class_type' | 'key') => {
@@ -2406,8 +2567,12 @@ export const generateComfyUIPortraits = async (
 ): Promise<{ images: { src: string, seed: number }[]; finalPrompt: string }> => {
     const allImages: { src: string, seed: number }[] = [];
     const baseWorkflow = await buildWorkflow(options, sourceImage, referenceImages);
+    const isQwen21 = options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo';
+    if (isQwen21) {
+        validateQwen21Readiness(baseWorkflow, await getComfyUIObjectInfo());
+    }
 
-    const isLongJob = ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'flux2-simple', 'flux2-edit', 'krea2-simple', 'krea2-raw'].includes(options.comfyModelType!);
+    const isLongJob = isQwen21 || ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'flux2-simple', 'flux2-edit', 'krea2-simple', 'krea2-raw'].includes(options.comfyModelType!);
     const numImages = options.comfyModelType === 'face-detailer-sd1.5' ? 1 : options.numImages;
 
     let currentSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
@@ -2419,7 +2584,13 @@ export const generateComfyUIPortraits = async (
         const seedForThisImage = currentSeed;
 
         const samplerKey = Object.keys(currentWorkflow).find(k => currentWorkflow[k].class_type === 'KSampler');
-        if (samplerKey) {
+        if (isQwen21) {
+            setQwen21WorkflowSeed(currentWorkflow, seedForThisImage);
+            const increment = options.comfySeedIncrement || 1;
+            if (options.comfySeedControl === 'increment') currentSeed += increment;
+            else if (options.comfySeedControl === 'decrement') currentSeed = Math.max(0, currentSeed - increment);
+            else if (options.comfySeedControl !== 'fixed') currentSeed = Math.floor(Math.random() * 1e15);
+        } else if (samplerKey) {
             currentWorkflow[samplerKey].inputs.seed = seedForThisImage;
 
             const seedControl = options.comfyModelType === 'sd1.5' ? (options.comfySeedControl || 'randomize') : 'randomize';
@@ -2466,7 +2637,7 @@ export const generateComfyUIPortraits = async (
 
         try {
             updateOutputProgress(i, `Starting image ${i + 1}...`, 0.02);
-            const result = await executeWorkflow(currentWorkflow, progressWrapper, isLongJob);
+            const result = await executeWorkflow(currentWorkflow, progressWrapper, isLongJob, 1, isQwen21 ? ['11'] : undefined);
             result.images.forEach(img => {
                 const image = { src: img, seed: seedForThisImage };
                 const outputIndex = allImages.length;
@@ -2483,7 +2654,9 @@ export const generateComfyUIPortraits = async (
     // RE-WRITING THE FUNCTION CONTENT FOR REPLACEMENT
     // I will capture the seed used before modifying it for the next iteration.
 
-    const finalPrompt = options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw'
+    const finalPrompt = isQwen21
+        ? (options.comfyModelType === 'qwen21-turbo' ? options.comfyQwen21Turbo?.prompt : options.comfyQwen21T2i?.prompt)
+        : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw'
         ? options.comfyKreaPrompt
         : options.comfyModelType === 'flux2-simple'
             ? options.comfyFlux2Prompt
@@ -2502,11 +2675,48 @@ export const generateComfyUICharacterAngles = async (
     poseImage?: File | null,
     updateOutputProgress: (index: number, message: string, value: number) => void = () => undefined,
     onOutputReady: (index: number, image: { src: string; seed: number }, prompt: string) => void = () => undefined,
+    signal?: AbortSignal,
 ): Promise<{ images: { src: string; seed: number }[]; finalPrompt: string }> => {
+    signal?.throwIfAborted();
+    if (options.comfyCharacterMode === 'qwen21-create') {
+        if (!sourceImage) throw new Error('Choose a character source image.');
+        if (options.clothing === 'image' && !clothingImage) throw new Error('Choose the clothing reference image.');
+        if (options.background === 'image' && !options.comfyCharacterPreserveBackgroundPerspective && !backgroundImage) throw new Error('Choose the background reference image.');
+        const files = [sourceImage, options.clothing === 'image' ? clothingImage : null,
+            options.background === 'image' && !options.comfyCharacterPreserveBackgroundPerspective ? backgroundImage : null, poseImage];
+        const references = { source: 'source', clothing: files[1] ? 'clothing' : undefined, background: files[2] ? 'background' : undefined, pose: files[3] ? 'pose' : undefined };
+        const prompts = buildQwen21CharacterAnglePrompts(options, references);
+        if (!prompts.length) throw new Error('Enable at least one character output before generating.');
+        const settings = options.comfyQwen21Create || defaultQwen21MultiOptions();
+        const requestedSeed = options.comfySeed ?? settings.seed;
+        const seed = requestedSeed === -1 ? Math.floor(Math.random() * 1e15) : requestedSeed;
+        if (!Number.isSafeInteger(seed) || seed < 0 || !Number.isSafeInteger(seed + prompts.length - 1)) throw new Error('Invalid character seed.');
+        const activeFiles = files.filter((file): file is File => !!file);
+        const singleSettings = { ...settings, seed, referenceCount: activeFiles.length, prompt: prompts[0] };
+        const turbo = !!options.comfyQwen21CreateTurbo;
+        updateProgress('Checking Qwen 2.1 Create Character nodes...', 0.02);
+        validateQwen21CreateCharacterReadiness(buildQwen21CreateCharacterWorkflow(activeFiles.map(file => file.name), singleSettings, turbo), await getComfyUIObjectInfo());
+        signal?.throwIfAborted();
+        const uploaded: string[] = [];
+        for (const file of activeFiles) { signal?.throwIfAborted(); uploaded.push((await uploadImage(file)).name); signal?.throwIfAborted(); }
+        const images: { src: string; seed: number }[] = [];
+        for (const [index, prompt] of prompts.entries()) {
+            signal?.throwIfAborted();
+            const workflow = buildQwen21CreateCharacterWorkflow(uploaded, { ...singleSettings, prompt, seed: seed + index }, turbo);
+            const outputProgress = (message: string, value: number) => { updateOutputProgress(index, message, value); updateProgress(`Output ${index + 1}: ${message}`, (index + value) / prompts.length); };
+            const result = await executeWorkflow(workflow, outputProgress, true, 1, ['13']);
+            signal?.throwIfAborted();
+            if (!result.images[0]) throw new Error(`Qwen 2.1 returned no image for Output ${index + 1}.`);
+            const image = { src: result.images[0], seed: seed + index };
+            images.push(image); updateOutputProgress(index, 'Complete', 1); onOutputReady(index, image, prompt);
+        }
+        return { images, finalPrompt: prompts.join('\n\n') };
+    }
     if (options.comfyCharacterMode === 'flux2') {
         buildFlux2CharacterAnglesWorkflow({ source: sourceImage.name }, options);
         updateProgress('Checking FLUX2 Character nodes...', 0.02);
         const objectInfo = await getComfyUIObjectInfo();
+        signal?.throwIfAborted();
         const characterFlux2Model = options.comfyCharacterFlux2Unet || 'flux2\\flux2Klein9BInt8_v10.safetensors';
         const characterFlux2Loader = characterFlux2Model.toLowerCase().endsWith('.gguf') ? 'UnetLoaderGGUF' : 'UNETLoader';
         const requiredNodes = [
@@ -2524,7 +2734,9 @@ export const generateComfyUICharacterAngles = async (
         }
     }
     updateProgress('Uploading character source...', 0.05);
+    signal?.throwIfAborted();
     const uploadedImage = await uploadImage(sourceImage);
+    signal?.throwIfAborted();
     let uploadedReferences: ({ name: string } | null)[] = [];
     if (options.comfyCharacterMode === 'flux2') {
         const optionalFiles = [
@@ -2533,6 +2745,7 @@ export const generateComfyUICharacterAngles = async (
             poseImage,
         ];
         uploadedReferences = await Promise.all(optionalFiles.map(file => file ? uploadImage(file) : null));
+        signal?.throwIfAborted();
     }
 
     const enabledAngles = getEnabledCharacterAngles(options);
@@ -2540,6 +2753,7 @@ export const generateComfyUICharacterAngles = async (
     const images: { src: string; seed: number }[] = [];
     const prompts: string[] = [];
     for (const [index, angle] of enabledAngles.entries()) {
+        signal?.throwIfAborted();
         const angleSettings = Object.fromEntries(CHARACTER_ANGLES.map(({ id }) => [id, {
             ...options.comfyCharacterAngleSettings?.[id],
             enabled: id === angle.id,
@@ -2566,6 +2780,7 @@ export const generateComfyUICharacterAngles = async (
         };
         updateOutputProgress(index, `Starting ${angle.label}...`, 0.02);
         const result = await executeWorkflow(workflowResult.workflow, outputProgress, true, 1, ['save_0']);
+        signal?.throwIfAborted();
         const src = result.images[0];
         if (!src) throw new Error(`ComfyUI returned no image for ${angle.label}.`);
         const image = { src, seed: baseSeed + index };

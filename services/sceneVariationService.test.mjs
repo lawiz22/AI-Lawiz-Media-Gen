@@ -5,30 +5,73 @@ import ts from 'typescript';
 
 const load = async (name) => {
     const source = readFileSync(new URL(name, import.meta.url), 'utf8');
-    const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
+    let { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
+    if (name === './sceneVariationService.ts') {
+        const qwen = ts.transpileModule(readFileSync(new URL('./qwen21Workflow.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+        outputText = outputText.replace(/from ['"]\.\/qwen21Workflow['"]/g, `from 'data:text/javascript;base64,${Buffer.from(qwen).toString('base64')}'`);
+    }
     return import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 };
 const scene = await load('./sceneVariationService.ts');
 const flux = await load('./flux2EditWorkflow.ts');
 const segmentation = await load('./sceneMaskWorkflow.ts');
 const character = await load('./characterAnglesWorkflow.ts');
+test('Qwen 2.1 Scene Global jobs use one scene reference and reject every masked path', async () => {
+    const qwen = await load('./qwen21Workflow.ts');
+    const analysis = fixture(); const controls = scene.createSceneControls(analysis); controls.pose.enabled = true;
+    const settings = { ...scene.defaultSceneSettings(), comfyModelType: 'qwen21-i2i-multi', comfyQwen21Multi: qwen.defaultQwen21MultiOptions(), comfySeed: 100 };
+    const jobs = scene.buildSceneJobs(analysis, controls, 'moderate', 3, settings);
+    assert.deepEqual(jobs.map(job => job.seed), [100, 100, 100]);
+    for (const job of jobs) {
+        assert.equal(job.options.comfyModelType, 'qwen21-i2i-multi'); assert.match(job.prompt, /<image1>/); assert.doesNotMatch(job.prompt, /Picture 1/);
+        assert.equal(job.options.comfyQwen21Multi.prompt, job.prompt); assert.equal(job.options.comfyQwen21Multi.manualPrompt, true); assert.equal(job.options.comfyQwen21Multi.referenceCount, 1);
+        assert.equal(job.options.comfyQwen21Multi.preserveSourceAspectRatio, true);
+        assert.equal(job.options.comfyQwen21CreateTurbo, true);
+        const graph = qwen.buildQwen21CreateCharacterWorkflow(['scene.png'], job.options.comfyQwen21Multi, true);
+        assert.equal(JSON.parse(graph['8'].inputs.PromptState).text, job.prompt); assert.deepEqual(graph['10'].inputs['images.image_1'], ['5', 0]); assert.equal(graph['10'].inputs['images.image_2'], undefined);
+        assert.deepEqual(graph['33'].inputs.latent_image, ['18', 0]);
+    }
+    assert.deepEqual(scene.sceneMaskedReadinessErrors({}, settings), ['Qwen 2.1 Scene Variation supports Global mode only.']);
+    assert.throws(() => scene.buildMaskedSceneJobs(analysis, controls, 'moderate', 1, settings, {}), /Global mode only/);
+    assert.ok(scene.sceneReadinessErrors({}, settings)[0].includes('missing nodes'));
+});
+test('Qwen Scene presets retain reusable native settings but not reference analysis or prompts', async () => {
+    const qwen = await load('./qwen21Workflow.ts');
+    const input = { version: 1, mode: 'global', intensity: 'moderate', count: 3, provider: 'mammouth', ollamaModel: '', samCheckpoint: '', maskPadding: 32, poseMaskArea: 'movement',
+        settings: { ...scene.defaultSceneSettings(), comfyModelType: 'qwen21-i2i-multi', comfyQwen21Multi: { ...qwen.defaultQwen21MultiOptions(), sizeIndex: 1, orientation: 'landscape', steps: 12, negativePrompt: 'No duplicate people', prompt: 'Private image description', instruction: 'Private edit', references: [{ description: 'Private reference' }], loras: [{ name: 'scene.safetensors', enabled: true, modelStrength: 0.7, clipStrength: 0.8 }, ...qwen.defaultQwen21MultiOptions().loras.slice(1)] } } };
+    const preset = scene.parseSceneVariationPreset(input);
+    assert.equal(preset.settings.comfyModelType, 'qwen21-i2i-multi'); assert.equal(preset.settings.comfyQwen21Multi.steps, 12); assert.equal(preset.settings.comfyQwen21Multi.sizeIndex, 1);
+    assert.equal(preset.settings.comfyQwen21Multi.prompt, ''); assert.equal(preset.settings.comfyQwen21Multi.instruction, ''); assert.ok(preset.settings.comfyQwen21Multi.references.every(reference => !reference.description));
+    assert.equal(preset.settings.comfyQwen21Multi.loras[0].modelStrength, 0.7); assert.equal(preset.settings.comfyQwen21Multi.negativePrompt, 'No duplicate people');
+    assert.deepEqual(scene.parseSceneVariationPreset(JSON.parse(JSON.stringify(preset))), preset);
+    assert.equal(preset.settings.comfyQwen21CreateTurbo, true);
+    const graph = qwen.buildQwen21CreateCharacterWorkflow(['scene.png'], { ...preset.settings.comfyQwen21Multi, prompt: 'Preflight only', preserveSourceAspectRatio: true }, true);
+    const info = Object.fromEntries(Object.values(graph).map(node => [node.class_type, { input: { required: Object.fromEntries(Object.entries(node.inputs).map(([key, value]) => [key, [[value]]])) } }]));
+    info.LoraLoader = { input: { required: { lora_name: [['scene.safetensors', qwen.defaultQwen21EditOptions('turbo').lora.name]] } } };
+    assert.deepEqual(scene.sceneReadinessErrors(info, preset.settings), []);
+    assert.equal(preset.settings.comfyQwen21Multi.prompt, '');
+    assert.throws(() => scene.parseSceneVariationPreset({ ...input, mode: 'masked' }), /preset/);
+    assert.throws(() => scene.parseSceneVariationPreset({ ...input, settings: { ...input.settings, comfyQwen21Multi: { ...input.settings.comfyQwen21Multi, steps: '12' } } }), /preset/);
+    input.settings.comfyQwen21Multi.loras[0].name = 'Changed after save'; assert.equal(preset.settings.comfyQwen21Multi.loras[0].name, 'scene.safetensors');
+});
+
 test('camera-only uses the direct Character angle wording without pose commentary or long scene locks', () => {
     const analysis = fixture();
     analysis.cameraChoices[1].instruction = "Orbit 30 degrees to the left, viewing the subject more from the front-left, emphasizing the subject's left profile and the extended leg.";
     const controls = scene.createSceneControls(analysis); controls.camera.enabled = true;
     controls.camera.value = analysis.cameraChoices[1].instruction;
     const [job] = scene.buildSceneJobs(analysis, controls, 'moderate', 1, settings);
-    assert.equal(job.targets[0].instruction, 'Camera angle: 30 degrees left.');
-    assert.equal(job.changes[0], 'camera: Camera angle: 30 degrees left.');
+    assert.match(job.targets[0].instruction, /^Camera angle: 30 degrees left\./);
+    assert.match(job.changes[0], /^camera: Camera angle: 30 degrees left\./);
     assert.match(job.prompt, /^Camera angle: 30 degrees left\./);
     assert.match(job.prompt, /exact body poses/);
     assert.match(job.prompt, /Move only the camera; do not turn or re-pose the subjects/);
     assert.doesNotMatch(job.prompt, /extended leg|left profile|TARGET|UNCHANGED|LOCKED|joint angles|foreshortening|frozen scene/);
-    assert.ok(job.prompt.split(/\s+/).length < 100);
+    assert.ok(job.prompt.split(/\s+/).length < 180);
     const sceneWorkflow = flux.buildFlux2EditWorkflow('source.png', [], job.options).workflow;
     const encoded = sceneWorkflow.prompt.inputs.text;
     assert.ok(encoded.includes(job.prompt));
-    assert.ok(encoded.split(/\s+/).length < 200);
+    assert.ok(encoded.split(/\s+/).length < 280);
     const reference = character.buildFlux2CharacterAnglesWorkflow({ source: 'source.png' }, {
         ...job.options, background: 'original', clothing: 'original',
         comfyCharacterAngleSettings: Object.fromEntries(character.CHARACTER_ANGLES.map(({ id }) => [id, {
@@ -39,7 +82,7 @@ test('camera-only uses the direct Character angle wording without pose commentar
         comfyCharacterFlux2Cfg: job.options.comfyFlux2EditCfg, comfyCharacterFlux2Sampler: job.options.comfyFlux2EditSampler,
         comfyCharacterFlux2Megapixels: job.options.comfyFlux2EditMegapixels,
     }).workflow;
-    assert.ok(reference.output_0_prompt.inputs.text.includes(job.targets[0].instruction));
+    assert.ok(reference.output_0_prompt.inputs.text.includes('Camera angle: 30 degrees left.'));
     for (const node of ['model', 'clip', 'vae', 'source_scale', 'source_latent']) {
         assert.deepEqual(sceneWorkflow[node].inputs, reference[node].inputs);
     }
@@ -68,7 +111,7 @@ test('camera choices have descriptive labels and Auto uses distinct final angles
     const instructions = jobs.map(job => job.targets[0].instruction);
     assert.equal(new Set(instructions).size, 5);
     for (const angle of ['high angle', '30 degrees left', '30 degrees right', '30 degrees above the source viewpoint', '30 degrees below the source viewpoint']) {
-        assert.ok(instructions.includes(`Camera angle: ${angle}.`));
+        assert.ok(instructions.some(instruction => instruction.startsWith(`Camera angle: ${angle}.`)));
     }
     for (const choice of choices) {
         controls.camera.value = choice.instruction;
@@ -76,6 +119,29 @@ test('camera choices have descriptive labels and Auto uses distinct final angles
         assert.equal(fixed[0].targets[0].instruction, fixed[1].targets[0].instruction);
     }
     assert.deepEqual(scene.sceneChoices(analysis, 'camera', 'strong'), []);
+});
+
+test('Qwen camera-only keeps wider framing and directional reveal requirements', async () => {
+    const qwen = await load('./qwen21Workflow.ts');
+    const analysis = fixture();
+    const instruction = 'Move the camera significantly to the right (approx. 45 degrees), providing a wider view that includes more of the sofa and background to the left of person-1.';
+    analysis.cameraChoices = [{ label: 'Wider right orbit', instruction, intensity: 'strong' }];
+    const controls = scene.createSceneControls(analysis);
+    controls.camera.enabled = true;
+    controls.camera.value = instruction;
+    const qwenSettings = { ...settings, comfyModelType: 'qwen21-i2i-multi', comfyQwen21Multi: qwen.defaultQwen21MultiOptions() };
+    const [job] = scene.buildSceneJobs(analysis, controls, 'strong', 1, qwenSettings);
+    assert.match(job.prompt, /^Edit <image1> to show the same people and scene from a different view\. Camera angle: 45 degrees right\./);
+    assert.match(job.prompt, /Change the camera viewpoint and framing to the requested view; do not retain the original camera view/);
+    assert.match(job.prompt, /Composition: use a wider view/);
+    assert.match(job.prompt, /existing scene to the left of person-1/);
+    assert.match(job.prompt, /adapt their perspective to the requested view instead of copying the original composition/);
+    assert.match(job.prompt, /original body poses/);
+    assert.match(job.prompt, /exactly 2 people only, without duplicates/);
+    assert.match(job.prompt, /<image1>/);
+    assert.doesNotMatch(job.prompt, /Picture 1/);
+    const graph = qwen.buildQwen21MultiWorkflow(['scene.png'], job.options.comfyQwen21Multi);
+    assert.equal(JSON.parse(graph['8'].inputs.PromptState).text, job.prompt);
 });
 
 test('Scene Variation defaults to Klein 9B and its paired CLIP while explicit model settings remain supported', () => {

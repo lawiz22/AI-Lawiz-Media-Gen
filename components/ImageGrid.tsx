@@ -45,11 +45,27 @@ const sanitizeForFilename = (text: string, maxLength: number = 40): string => {
 };
 
 
+const QwenEditComparison: React.FC<{ before: string; after: string; index: number }> = ({ before, after, index }) => {
+  const [compare, setCompare] = useState(true);
+  const [position, setPosition] = useState(50);
+  return <div>
+    <div className="relative overflow-hidden">
+      <img src={after} alt={`Generated Content ${index + 1}`} className="block w-full max-h-[72vh] object-contain" />
+      {compare && <><img src={before} alt={`Qwen edit source ${index + 1}`} className="absolute inset-0 h-full w-full object-contain" style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }} /><div className="pointer-events-none absolute inset-y-0 w-px bg-accent" style={{ left: `${position}%` }} /></>}
+    </div>
+    <div className="relative z-20 space-y-2 bg-bg-tertiary p-3">
+      <label className="flex items-center gap-2 text-xs text-text-secondary"><input type="checkbox" checked={compare} onChange={event => setCompare(event.target.checked)} />Compare before / after</label>
+      {compare && <><div className="flex justify-between text-xs text-text-secondary"><span>Before</span><span>After</span></div><input aria-label={`Before / after comparison ${index + 1}`} type="range" min={0} max={100} value={position} onChange={event => setPosition(Number(event.target.value))} className="w-full accent-accent" /></>}
+    </div>
+  </div>;
+};
+
 interface ImageGridProps {
   images: {
     src: string;
     saved: 'idle' | 'saving' | 'saved';
     seed?: number;
+    before?: string;
     usageMetadata?: {
       promptTokenCount: number;
       candidatesTokenCount: number;
@@ -147,7 +163,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
 
       let optionsToSave: Partial<GenerationOptions>;
       let itemName: string | undefined;
-      let sourceImageToSave: File | null = sourceImage;
+      let sourceImageToSave: File | null = images[index].before ? await dataUrlToFile(images[index].before!, 'qwen-edit-source.png') : sourceImage;
 
       const isGeminiT2I = options.provider === 'gemini' && options.geminiMode === 't2i';
       const isMammouthT2I = options.provider === 'mammouth' && options.geminiMode === 't2i';
@@ -391,7 +407,9 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                   <div className="mt-2 flex w-full max-w-xs justify-between gap-3 text-xs text-text-muted"><span className="truncate" title={generationJob.message}>{generationJob.message}</span><span>{Math.round(generationJob.progress * 100)}%</span></div>
                 </div>}
                 {generationJob?.status === 'error' && <div className="flex min-h-64 flex-col items-center justify-center p-6 text-center"><p className="font-bold text-danger">{characterOutputLabel} failed</p><p className="mt-2 text-xs text-danger/80">{generationJob.message}</p></div>}
-                {finalSrc && generationJob?.status !== 'pending' && generationJob?.status !== 'error' && <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="block w-full max-h-[72vh] object-contain" />}
+                {finalSrc && generationJob?.status !== 'pending' && generationJob?.status !== 'error' && (activeTab !== 'character-generator' && image?.before
+                  ? <QwenEditComparison key={finalSrc} before={image.before} after={finalSrc} index={index} />
+                  : <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="block w-full max-h-[72vh] object-contain" />)}
                 {activeTab === 'character-generator' && (characterAngle || generationJob) && (
                   <div className="absolute left-2 top-2 rounded-md bg-black/70 px-2 py-1 text-xs font-bold text-white shadow-lg">
                     {characterOutputLabel}

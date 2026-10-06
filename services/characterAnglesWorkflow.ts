@@ -399,6 +399,27 @@ const buildFlux2CharacterPrompt = (
     return instructions.filter(Boolean).join(' ');
 };
 
+export const buildQwen21CharacterAnglePrompts = (options: GenerationOptions, references: Flux2CharacterReferences): string[] => {
+    const names = [references.source, references.clothing, references.background, references.pose].filter(Boolean);
+    const tag = (name: string) => `<image${names.indexOf(name) + 1}>`;
+    return getEnabledCharacterAngles(options).map(({ id }) => {
+        const settings = { ...DEFAULT_CHARACTER_ANGLE_SETTINGS[id], ...options.comfyCharacterAngleSettings?.[id] };
+        const angle = getCharacterInstructionValue(settings.angle);
+        const pose = getCharacterInstructionValue(settings.pose);
+        const expression = getCharacterInstructionValue(settings.expression);
+        return [
+            angle ? `Edit <image1> to show the same person from a different view. Camera angle: ${angle}. Change the camera viewpoint and framing to the requested view; do not retain the original camera view.` : 'Edit the person from <image1>.',
+            pose ? `Pose: ${pose}. Change the body pose to this requested pose.${references.pose ? ` Use this requested pose instead of copying the pose reference ${tag(references.pose)}.` : ''}` : references.pose ? `Use only the body pose from ${tag(references.pose)}, not its identity or clothing.` : 'Keep the original body pose.',
+            expression ? `Facial expression: ${expression}. Apply this expression.` : 'Keep the original facial expression.',
+            'Keep the same face, hair, age, body proportions and identity from <image1>. Show one person only, without duplicates.',
+            references.clothing ? `Use the clothing reference ${tag(references.clothing)} for the outfit, not the reference wearer.` : options.customClothingPrompt?.trim() ? `Dress the person in ${options.customClothingPrompt.trim()}.` : 'Keep the original clothing unchanged.',
+            options.background === 'green screen' ? 'Background: Replace the entire original background with a solid, uniform chroma-key green (#00FF00) backdrop. Remove all scenery, furniture, objects and floor details. No gradients, texture or shadows on the green background. Keep only the person and their clothing; do not turn the person green.' : options.comfyCharacterPreserveBackgroundPerspective ? CHARACTER_BACKGROUND_PERSPECTIVE : references.background ? `Use the background reference ${tag(references.background)} as the location.` : (options.background === 'prompt' || options.background === 'random') && options.customBackground?.trim() ? `Use this background: ${options.customBackground.trim()}.` : options.background === 'original' || options.background === 'image' || !options.background ? 'Keep the same physical location and existing objects; adapt their perspective to the requested view instead of copying the original composition.' : `Use a ${options.background} background.`,
+            'Match the original visual style and lighting. Make the requested changes while preserving the person identity.',
+            references.background && options.background !== 'green screen' && !options.comfyCharacterPreserveBackgroundPerspective ? `Blend the person into the background image ${tag(references.background)} seamlessly.` : '',
+        ].filter(Boolean).join('\n');
+    });
+};
+
 export const buildFlux2CharacterAnglesWorkflow = (
     references: Flux2CharacterReferences,
     options: GenerationOptions,

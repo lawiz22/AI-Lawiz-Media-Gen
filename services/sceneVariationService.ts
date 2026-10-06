@@ -1,4 +1,5 @@
 import type { GenerationOptions } from '../types';
+import { buildQwen21CreateCharacterWorkflow, defaultQwen21MultiOptions, validateQwen21CreateCharacterReadiness } from './qwen21Workflow';
 
 export type SceneProvider = 'gemini' | 'mammouth' | 'ollama';
 export type SceneIntensity = 'subtle' | 'moderate' | 'strong';
@@ -166,8 +167,8 @@ const sceneCameraChoices = (analysis: SceneAnalysis, intensity: SceneIntensity):
     if (!choices.length) return [];
     const named = angular.map(choice => {
         const direct = sceneCameraOnlyInstruction(choice.instruction);
-        const label = direct.startsWith('Camera angle: ') ? direct.slice(14).replace(/\.$/, '')
-            : /^(subtle|moderate|strong)[\s_-]*\d+$/i.test(choice.label) ? choice.instruction.slice(0, 120) : choice.label;
+        const label = direct.match(/^Camera angle:\s*([^.]+)\./)?.[1]
+            || (/^(subtle|moderate|strong)[\s_-]*\d+$/i.test(choice.label) ? choice.instruction.slice(0, 120) : choice.label);
         return { ...choice, label };
     });
     if (named.length && named.every(choice => sceneCameraOnlyInstruction(choice.instruction) === choice.instruction)) return named;
@@ -202,6 +203,8 @@ export const randomSceneChoice = (choices: SceneChoice[], previous = '', random 
 };
 
 export const defaultSceneSettings = (initial: Partial<GenerationOptions> = {}): Partial<GenerationOptions> => ({
+    comfyModelType: initial.comfyModelType === 'qwen21-i2i-multi' ? 'qwen21-i2i-multi' : 'flux2-edit',
+    comfyQwen21CreateTurbo: initial.comfyQwen21CreateTurbo ?? true,
     comfyFlux2EditUnet: initial.comfyFlux2EditUnet || 'flux2\\flux2Klein9BInt8_v10.safetensors',
     comfyFlux2EditClip: initial.comfyFlux2EditClip || 'qwen38BFluxKlein9BTE_38b.safetensors', comfyFlux2EditVae: initial.comfyFlux2EditVae || 'flux2-vae.safetensors',
     comfyFlux2EditSteps: 4, comfyFlux2EditCfg: 1, comfyFlux2EditSampler: 'euler', comfyFlux2EditMegapixels: 1,
@@ -241,6 +244,28 @@ export const parseSceneVariationPreset = (value: unknown): SceneVariationPreset 
         if (typeof setting !== typeof fallback || (typeof setting === 'number' && !Number.isFinite(setting))) return invalid();
         Object.assign(settings, { [key]: setting });
     }
+    if (settings.comfyModelType !== undefined && !['flux2-edit', 'qwen21-i2i-multi'].includes(settings.comfyModelType)) return invalid();
+    if (settings.comfyModelType === 'qwen21-i2i-multi' && preset.mode !== 'global') return invalid();
+    if (preset.settings.comfyQwen21Multi !== undefined) {
+        const raw = preset.settings.comfyQwen21Multi;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return invalid();
+        const qwen = defaultQwen21MultiOptions();
+        for (const key of ['unet', 'clip', 'vae', 'weightDtype', 'clipDevice', 'cacheDevice', 'cacheDtype', 'attention', 'sampler', 'scheduler', 'steps', 'cfg', 'denoise', 'referenceResolution', 'sizeIndex', 'orientation', 'negativePrompt'] as const) {
+            const value = raw[key];
+            if (value === undefined) continue;
+            if (typeof value !== typeof qwen[key] || (typeof value === 'number' && !Number.isFinite(value))) return invalid();
+            Object.assign(qwen, { [key]: value });
+        }
+        if (raw.loras !== undefined) {
+            if (!Array.isArray(raw.loras) || raw.loras.length !== 4) return invalid();
+            qwen.loras = raw.loras.map(lora => {
+                if (!lora || typeof lora.name !== 'string' || typeof lora.enabled !== 'boolean' || !Number.isFinite(lora.modelStrength) || !Number.isFinite(lora.clipStrength)) return invalid();
+                return { name: lora.name, enabled: lora.enabled, modelStrength: lora.modelStrength, clipStrength: lora.clipStrength };
+            });
+        }
+        qwen.prompt = ''; qwen.instruction = ''; qwen.manualPrompt = true; qwen.referenceCount = 1;
+        settings.comfyQwen21Multi = qwen;
+    }
     return { version: 1, settings, mode: preset.mode, intensity: preset.intensity, count: preset.count,
         provider: preset.provider, ollamaModel: preset.ollamaModel, samCheckpoint: preset.samCheckpoint,
         maskPadding: preset.maskPadding, poseMaskArea: preset.poseMaskArea };
@@ -248,7 +273,18 @@ export const parseSceneVariationPreset = (value: unknown): SceneVariationPreset 
 
 const sceneCameraOnlyInstruction = (instruction: string): string => {
     const lateral = instruction.match(/(\d+(?:\.\d+)?)\s*(?:degrees?|\u00b0)\s*(?:to\s+)?(?:the\s+)?(left|right)\b/i);
-    if (lateral) return `Camera angle: ${lateral[1]} degrees ${lateral[2].toLowerCase()}.`;
+    const directionFirst = instruction.match(/\b(left|right)\b[\s\S]{0,50}?(\d+(?:\.\d+)?)\s*(?:degrees?|\u00b0)/i);
+    if (lateral || directionFirst) {
+        const degrees = lateral?.[1] || directionFirst![2];
+        const direction = (lateral?.[2] || directionFirst![1]).toLowerCase();
+        const wider = /\bwider\s+(?:view|framing|shot)\b/i.test(instruction);
+        const revealedSide = instruction.match(/\b(?:to|on)\s+the\s+(left|right)\s+of\s+(person-\d+|the\s+(?:person|subject|group))\b/i);
+        return [
+            `Camera angle: ${degrees} degrees ${direction}.`,
+            ...(wider ? ['Composition: use a wider view and include more of the existing scene around the subjects.'] : []),
+            ...(revealedSide ? [`Include more of the existing scene to the ${revealedSide[1].toLowerCase()} of ${revealedSide[2].toLowerCase().replace(/\s+/g, ' ')}.`] : []),
+        ].join(' ');
+    }
     const vertical = instruction.match(/(\d+(?:\.\d+)?)\s*(?:degrees?|\u00b0)\s*(above|below)\b/i);
     if (vertical) return `Camera angle: ${vertical[1]} degrees ${vertical[2].toLowerCase()} the source viewpoint.`;
     if (/\blow[- ]angle\b|\blook(?:ing)?\s+(?:(?:slightly|sharply|directly)\s+)?up(?:ward|wards)?\b/i.test(instruction)) return 'Camera angle: low angle.';
@@ -333,7 +369,19 @@ export const buildSceneJobs = (
             'Keep the original clothing unchanged. Picture 1 is the sole wardrobe reference for each person. Preserve the exact same garments, prints and pattern layout, colors, cut, fabric, footwear and accessories on their original wearer; never redesign, substitute or swap outfits between people. Only natural folds, perspective and illumination may change with the requested edits.',
         ];
         const cameraOnly = cameraTarget && active.length === 1;
-        const prompt = (cameraOnly ? [
+        const isQwen = settings.comfyModelType === 'qwen21-i2i-multi';
+        const qwenCameraSubject = analysis.subjects.length ? `same ${analysis.subjects.length === 1 ? 'person' : 'people'} and scene` : 'same scene';
+        const prompt = (cameraOnly && isQwen ? [
+            `Edit <image1> to show the ${qwenCameraSubject} from a different view. ${cameraTarget.choice} Change the camera viewpoint and framing to the requested view; do not retain the original camera view.`,
+            analysis.subjects.length
+                ? 'Keep the same faces, hair, ages, body proportions, identities, outfits, expressions and original body poses from <image1>. Do not turn or re-pose the people.'
+                : 'Keep every existing object in its original world-space position.',
+            analysis.subjects.length ? `Show exactly ${analysis.subjects.length} people only, without duplicates.` : 'Keep the scene unoccupied; do not add people.',
+            ...analysis.subjects.filter(subject => !subject.faceVisible).map(subject => `Keep ${subject.id}'s face hidden or covered as in <image1>.`),
+            'Keep the same physical location and existing objects; adapt their perspective to the requested view instead of copying the original composition.',
+            'Match the original visual style and lighting. Make the requested camera change while preserving the people and scene.',
+            'Preserve the original aspect ratio.',
+        ] : cameraOnly ? [
             cameraTarget.choice,
             analysis.subjects.length
                 ? 'Use Picture 1 as the visual reference. Keep the same people, identities, outfits, expressions and exact body poses. Move only the camera; do not turn or re-pose the subjects.'
@@ -379,10 +427,12 @@ export const buildSceneJobs = (
             'Change only the TARGET attributes. Identity, physical-location and visual-medium preservation do not require keeping a pose or camera projection that a TARGET explicitly replaces. Do not invent supports, props, unseen rooms or a reverse-view environment. Keep the source aspect ratio.',
             'FINAL IMAGE REQUIREMENT: visibly realize all TARGET edits simultaneously while preserving every UNCHANGED attribute. A near-copy that omits a requested pose or camera transformation is not the requested result.',
         ]).join('\n');
-        const options = { ...settings, provider: 'comfyui', comfyModelType: 'flux2-edit', numImages: 1, comfySeed: seed,
+        const finalPrompt = isQwen ? prompt.replaceAll('Picture 1', '<image1>') : prompt;
+        const options = { ...settings, provider: 'comfyui', comfyModelType: isQwen ? 'qwen21-i2i-multi' : 'flux2-edit', numImages: 1, comfySeed: seed,
             comfyFlux2EditPrompt: prompt, comfyPrompt: '', comfyFlux2EditPreserveSourceStyle: true,
+            ...(isQwen ? { comfyQwen21Multi: { ...(settings.comfyQwen21Multi || defaultQwen21MultiOptions()), prompt: finalPrompt, manualPrompt: true, referenceCount: 1, preserveSourceAspectRatio: true, seed } } : {}),
             comfyFlux2EditReferenceRoles: [], comfyFlux2EditReferenceDescriptions: [], comfyFlux2EditReinforceSourceIdentity: false } as GenerationOptions;
-        return { id: `scene-${index}-${seed}`, seed, prompt, changes, options,
+        return { id: `scene-${index}-${seed}`, seed, prompt: finalPrompt, changes, options,
             targets: resolved.map(({ field, choice }) => ({ personId: field.key.split(':')[1], axis: field.axis, instruction: choice })) };
     });
 };
@@ -394,6 +444,15 @@ export const sceneModelOptions = (info: any, node: string, input: string): strin
 };
 export const sceneReadinessErrors = (info: any, settings: Partial<GenerationOptions>): string[] => {
     if (!info) return ['Connect ComfyUI and load its model inventory.'];
+    if (settings.comfyModelType === 'qwen21-i2i-multi') {
+        try {
+            const turbo = settings.comfyQwen21CreateTurbo !== false;
+            const workflow = buildQwen21CreateCharacterWorkflow(['scene.png'], { ...(settings.comfyQwen21Multi || defaultQwen21MultiOptions()), prompt: 'Edit the scene from <image1>.', referenceCount: 1, preserveSourceAspectRatio: true }, turbo);
+            validateQwen21CreateCharacterReadiness(workflow, info);
+            return [];
+        }
+        catch (reason) { return [reason instanceof Error ? reason.message : 'Invalid Qwen 2.1 workflow.']; }
+    }
     const loader = settings.comfyFlux2EditUnet?.toLowerCase().endsWith('.gguf') ? 'UnetLoaderGGUF' : 'UNETLoader';
     const nodes = [loader, 'LoadImage', 'ImageScaleToTotalPixels', 'GetImageSize', 'VAEEncode', 'VAELoader', 'CLIPLoader', 'CLIPTextEncode', 'ConditioningZeroOut', 'ReferenceLatent', 'EmptyFlux2LatentImage', 'RandomNoise', 'KSamplerSelect', 'Flux2Scheduler', 'CFGGuider', 'SamplerCustomAdvanced', 'VAEDecode', 'SaveImage'];
     const loras = [settings.comfyFlux2EditLora1Name, settings.comfyFlux2EditLora2Name].filter(name => name?.trim() && name !== 'None');
@@ -412,10 +471,15 @@ export const sceneReadinessErrors = (info: any, settings: Partial<GenerationOpti
 };
 
 export const generateSceneVariation = async (source: File, job: SceneJob, progress: (message: string, value: number) => void) => {
-    const { generateComfyUIPortraits, generateComfyUIMaskedEdit, getComfyUIObjectInfo } = await import('./comfyUIService');
+    const { generateComfyUIPortraits, generateComfyUIMaskedEdit, generateComfyUIQwen21Multi, getComfyUIObjectInfo } = await import('./comfyUIService');
     const info = await getComfyUIObjectInfo();
     const errors = job.maskedPasses ? sceneMaskedReadinessErrors(info, job.options) : sceneReadinessErrors(info, job.options);
     if (errors.length) throw new Error(errors.join('\n'));
+    if (job.options.comfyModelType === 'qwen21-i2i-multi') {
+        const settings = { ...(job.options.comfyQwen21Multi || defaultQwen21MultiOptions()), prompt: job.prompt, manualPrompt: true, referenceCount: 1, preserveSourceAspectRatio: true, seed: job.seed };
+        const result = await generateComfyUIQwen21Multi([source], settings, progress, undefined, job.options.comfyQwen21CreateTurbo !== false);
+        return { src: result.src, seed: job.seed, prompt: result.prompt };
+    }
     if (job.maskedPasses) {
         const passes = job.maskedPasses;
         const result = await runMaskedScenePasses(source, passes, async (current, pass, index) => {
@@ -494,6 +558,7 @@ export const validateSceneMasks = (ids: string[], masks: Record<string, SceneMas
 };
 
 export const sceneMaskedReadinessErrors = (info: any, settings: Partial<GenerationOptions>): string[] => {
+    if (settings.comfyModelType === 'qwen21-i2i-multi') return ['Qwen 2.1 Scene Variation supports Global mode only.'];
     const errors = sceneReadinessErrors(info, settings);
     for (const [node, inputs] of Object.entries({
         ImageScale: ['image', 'width', 'height', 'upscale_method', 'crop'], ImageToMask: ['image', 'channel'],
@@ -513,6 +578,7 @@ export const buildMaskedSceneJobs = (
     analysis: SceneAnalysis, controls: SceneControls, intensity: SceneIntensity, count: number,
     settings: Partial<GenerationOptions>, masks: Record<string, SceneMask>, random = Math.random,
 ): SceneJob[] => {
+    if (settings.comfyModelType === 'qwen21-i2i-multi') throw new Error('Qwen 2.1 Scene Variation supports Global mode only.');
     if (['camera', 'lighting', 'season'].some(axis => controls[axis]?.enabled)) throw new Error('Camera, lighting and season require Global mode.');
     const jobs = buildSceneJobs(analysis, controls, intensity, count, settings, random);
     const ids = analysis.subjects.filter(subject => jobs[0].targets?.some(target => target.personId === subject.id)).map(subject => subject.id);

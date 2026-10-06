@@ -10,7 +10,7 @@ SUMMARY
 -------
 
 The baseline audit above found 97 distinct ComfyUI node classes, before the
-LanPaint mode addition documented below.
+LanPaint and Qwen Image 2.1 additions documented below.
 
 - 58 are included in a current ComfyUI installation (core + comfy_extras).
 - 39 are supplied by external custom-node packs.
@@ -38,6 +38,182 @@ Then follow that repository's installation instructions. Prefer Manager because
 packages such as Nunchaku, SeedVR2, Impact Pack and TTS Audio Suite require extra
 Python dependencies or installation scripts.
 
+
+QWEN IMAGE 2.1 - IMAGE GENERATOR
+------------------------------
+Modes: T2I (Low VRAM source graph) and T2I (Turbo source graph).
+
+Update ComfyUI for native TextEncodeQwenImage21 and ModelAttentionBackend.
+Install/update the Pixaroma custom-node package (search Pixaroma in Manager),
+restart ComfyUI, and reconnect. Required Pixaroma nodes:
+  PixaromaSizes, PixaromaPrompt, PixaromaSeed,
+  PixaromaLoraLoader, PixaromaPreview
+
+Shared native nodes: UNETLoader, CLIPLoader, VAELoader, EmptyLatentImage,
+TextEncodeQwenImage21, ModelAttentionBackend, VAEDecode.
+T2I additionally requires KSampler.
+Turbo additionally requires ModelSamplingFlux, RandomNoise, KSamplerSelect,
+BasicScheduler, ExtendIntermediateSigmas, BasicGuider, SamplerCustomAdvanced.
+
+Default weights:
+  models/diffusion_models/qwen_image_2.1_int8_convrot.safetensors
+  models/text_encoders/qwen3vl_8b_int8_convrot.safetensors
+  models/vae/qwen_image_2.1_vae_bf16.safetensors
+
+Turbo source LoRAs (both enabled, six total slots per mode):
+  QWEN\Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors (1)
+  qwen21\mvc5000_qwen21.safetensors (0.8)
+Normal source LoRA (disabled):
+  qwen21\p_qwen_image_2.1_8step_v0.1.safetensors
+
+Turbo preserves BasicScheduler=6 plus ExtendIntermediateSigmas=3, as exported.
+The supplied notes' four-step description is not used to alter the graph.
+The application validates node/model/active-LoRA availability before queueing;
+it never automatically downloads weights or installs nodes. Review the exact
+Qwen 2.1, Viggle and any additional LoRA licenses before commercial use.
+
+QWEN IMAGE 2.1 - MULTI IMAGE EDIT
+-------------------------------
+Image Generation > ComfyUI > QWEN 2.1 > I2I Multi Images.
+Same UNET, CLIP and VAE as Qwen 2.1 T2I. Required native nodes:
+UNETLoader, CLIPLoader, VAELoader, TextEncodeQwenImage21,
+EmptyLatentImage, KSampler, VAEDecode, ModelAttentionBackend,
+QwenImage21Cache. Required Pixaroma nodes: PixaromaLoadImageMini,
+PixaromaPrompt, PixaromaSeed, PixaromaSizes, PixaromaPreview,
+PixaromaRunTimer; optional LoRAs also require PixaromaLoraLoader
+and a LoraLoader/LoraLoaderModelOnly catalog.
+TextEncodeQwenImage21 must support dynamic images.image_1 through
+images.image_4 (COMFY_AUTOGROW_V3 image_1..image_4 is accepted).
+One to four references; independent canvas using nine supplied sizes.
+Defaults: encoder resolution 1024, Euler/simple, 25 steps, CFG 1,
+denoise 1. No native Compare or reference-resize node is added.
+Four optional LoRAs before cache/attention, disabled by default.
+Reference analysis: Gemini/Mammouth API key or installed Ollama
+vision model. No prompt/tag metadata lookup or automatic downloads.
+
+QWEN IMAGE 2.1 - SCENE VARIATION GLOBAL
+--------------------------------------
+Scene Variation > Qwen 2.1 > Global only. Same required nodes, models,
+cache/attention and optional LoRAs as Multi Image Edit above, with exactly
+one source scene connected as images.image_1. Native KSampler at 25 steps,
+CFG 1, Euler/simple, denoise 1 and encoder resolution 1024 by default.
+Nine explicit canvas sizes and portrait/landscape orientation.
+Mammouth analysis is the new/reset default; analysis runs only on Analyze.
+No SAM, latent noise mask or masked compositing path is used for Qwen.
+
+QWEN IMAGE 2.1 - CREATE CHARACTER TURBO
+-------------------------------------
+Character > ComfyUI > QWEN 2.1 > Create Character > Turbo (Viggle).
+Off by default. Uses the Multi Image Edit references, models and canvas.
+Replaces KSampler with ModelSamplingFlux, RandomNoise, KSamplerSelect,
+BasicScheduler, ExtendIntermediateSigmas, BasicGuider and
+SamplerCustomAdvanced. Also requires PixaromaLoraLoader and the LoRA:
+QWEN\Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors
+Mandatory LoRA strength 1; Euler/simple; BasicScheduler 4 steps,
+denoise 1; sigma subdivisions 3, start -1, end 0.95, linear spacing;
+ModelSamplingFlux max_shift 0.69, base_shift 0.5, output canvas dimensions.
+Eight independent prompts; up to four ordered references. Normal settings
+remain unchanged. Node choices and the LoRA are checked before upload.
+
+QWEN IMAGE 2.1 - CHARACTER IN A SCENE
+-----------------------------------
+Scene Variation > Character in a Scene (Insert / Replace).
+Same UNET, CLIP and VAE weights as Qwen 2.1 T2I above.
+Native nodes: UNETLoader, CLIPLoader, VAELoader, QwenImage21Cache,
+TextEncodeQwenImage21, ModelAttentionBackend, KSampler, VAEDecode,
+EmptyLatentImage, ImageScaleToTotalPixels, GetImageSize, ComfyMathExpression.
+Pixaroma nodes: PixaromaLoadImageMini, PixaromaPrompt, PixaromaSeed,
+PixaromaSizes, PixaromaResizeCrop, PixaromaLoraLoader, PixaromaPreview,
+PixaromaCompare, PixaromaRunTimer.
+TextEncodeQwenImage21 must accept dynamic images.image_1/image_2.
+Scene is image1; incoming character is image2. Native scene resize and
+independent nine-size output latent are retained; no SAM/mask is added.
+Enabled default file in models/loras:
+  qwen21\Fusion_2000.safetensors (model/CLIP strengths 0.9)
+Exactly one optional additional LoRA; LoraLoader/LoraLoaderModelOnly
+catalog required to validate enabled files before uploads.
+Defaults: 1152x864 landscape, encoder resolution 0, character 1 MP,
+nearest-exact scene resize, resolution steps 32, 25 steps, CFG 1,
+Euler/simple, denoise 1, cache auto/default, kitchen attention.
+Gemini/Mammouth API key or installed multi-image Ollama vision model
+required for analysis. Review detected targets before replacement.
+No automatic downloads, installation or pixel-exact preservation guarantee.
+
+QWEN IMAGE 2.1 - SINGLE IMAGE EDIT
+--------------------------------
+Image Generation > ComfyUI > QWEN 2.1 > I2I Consistency / I2I Turbo.
+Same native/Pixaroma nodes and UNET/CLIP/VAE as Remove Background below,
+plus PixaromaLoraLoader and a LoRA catalog (LoraLoader/LoraLoaderModelOnly).
+Consistency: QWEN\qwen-image-2.1-consistency.safetensors, strength 1,
+25-step KSampler, CFG 1, Euler/simple, denoise 1.
+Turbo: QWEN\Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors,
+strength 1, ModelSamplingFlux (0.69/0.5), RandomNoise, KSamplerSelect,
+BasicScheduler (4 steps), ExtendIntermediateSigmas (3 subdivisions,
+start -1/end 0.95/linear), BasicGuider, SamplerCustomAdvanced.
+One input only. Encoder latent; native aligned comparison on by default.
+Both modes support four optional additional LoRAs (five including the primary).
+Each slot has independent enable/model/CLIP strengths; active files must be installed.
+Low VRAM attachment instead loads qwen21\lenovo_qwen21.safetensors;
+it is not LoRA-free and has no separate API-level offloading changes.
+Use 1 MP and disable/replace the Consistency LoRA if desired; no VRAM guarantee.
+No automatic downloads. Check model/LoRA licenses before commercial use.
+
+QWEN IMAGE 2.1 - REMOVE BACKGROUND
+--------------------------------
+Image Generation > ComfyUI > QWEN 2.1 > Remove Background.
+Same default UNET, CLIP and VAE weights as Qwen Image 2.1 T2I above.
+Required Pixaroma nodes: PixaromaLoadImageMini, PixaromaDropdown,
+PixaromaPrompt, PixaromaSeed, PixaromaResizeCrop, PixaromaPreview,
+PixaromaCompare, PixaromaRunTimer.
+Native nodes: UNETLoader, CLIPLoader, VAELoader, QwenImage21Cache,
+TextEncodeQwenImage21, ModelAttentionBackend, KSampler, VAEDecode,
+ImageScaleToTotalPixels, GetImageSize.
+Default prompt: Remove the background, and output a PNG image
+Default output: 1 binary MP, nearest-exact, resolution steps 32.
+Encoder resolution 0; KSampler uses encoder latent output directly.
+Cache auto/default, kitchen attention, 25 steps, CFG 1, Euler/simple,
+denoise 1. No LoRA, alpha split or additional empty latent node added.
+Comparison uses the actual native resized reference. PNG alpha is preserved
+in download and Library saving. No automatic node/model installations.
+
+QWEN IMAGE 2.1 - CHARACTER SHEET
+------------------------------
+Character > ComfyUI > QWEN 2.1 > Character Sheet.
+Same default UNET, CLIP and VAE weights as Qwen Image 2.1 T2I above.
+Required Pixaroma nodes:
+  PixaromaLoadImageMini, PixaromaSeed, PixaromaSizes, PixaromaResizeCrop,
+  PixaromaTextJoinFour, PixaromaPreview, PixaromaRunTimer
+Also requires UNETLoader, CLIPLoader, VAELoader, QwenImage21Cache,
+TextEncodeQwenImage21, ModelAttentionBackend, KSampler, VAEDecode,
+ImageScaleToTotalPixels, GetImageSize, EmptyLatentImage, ComfyMathExpression.
+No LoRA loader, extra generation nodes or server-side crop nodes are added.
+Reference-size math and sheet latent remain separate as in the supplied JSON.
+Defaults: output 1920x1088, seven source sizes, encoder resolution 0,
+nearest-exact reference resize, resolution steps 32, 25 sampling steps,
+CFG 1, Euler/simple, denoise 1, cache auto/default, kitchen attention.
+Four editable prompt blocks are joined with newlines and empty blocks skipped.
+Optional separate PNG view saving uses adjustable client-side column crops,
+preserving alpha, without changing the ComfyUI generation graph.
+All dependencies are checked before upload; nothing is installed automatically.
+
+QWEN IMAGE 2.1 - OUTPAINT
+-----------------------
+Main tab OUTPAINT uses the supplied Qwen Image 2.1 Outpaint execution graph.
+Same UNET, CLIP and VAE weights as Qwen Image 2.1 T2I above.
+Required additional Pixaroma nodes:
+  PixaromaLoadImageMini, PixaromaOutpaint, PixaromaOutpaintStitch,
+  PixaromaCompare, PixaromaRunTimer
+Also requires PixaromaPrompt, PixaromaSeed, PixaromaLoraLoader, PixaromaPreview.
+Additional native nodes: QwenImage21Cache, SplitImageWithAlpha, ImageScale,
+GetImageSize, KSampler. TextEncodeQwenImage21 uses resolution 0 and its latent
+output directly. ModelAttentionBackend uses comfy kitchen attention.
+Enabled source LoRA in models/loras:
+  QWEN\qwen-image-2.1-outpaint-v2.safetensors (model/CLIP strengths 1)
+One optional extra LoRA slot. Default cache auto/default, 25 steps, CFG 1,
+Euler/simple, denoise 1, Stitch feather 32, color match 100, gray #808080,
+16:9 centered extension, 2 binary MP, snap 32. No SetLatentNoiseMask added.
+Nodes, selected weights/LoRAs and cache/sampling enums are checked before
+uploading or queueing. No automatic model downloads or node installations.
 
 SWAP A PERSON
 -------------

@@ -23,7 +23,7 @@ interface MyDB extends DBSchema {
   };
 }
 
-const ASSET_FIELDS: LibraryAssetRole[] = ['media', 'sourceImage', 'startFrame', 'endFrame', 'skeletonImage'];
+const ASSET_FIELDS: LibraryAssetRole[] = ['media', 'sourceImage', 'startFrame', 'endFrame', 'skeletonImage', 'characterSceneImage'];
 const INLINE_MEDIA_TYPES = new Set(['prompt', 'color-palette', 'preset']);
 export const ALWAYS_SFW_LIBRARY_TYPES = new Set<LibraryItem['mediaType']>(['color-palette', 'font']);
 const objectUrlCache = new Map<string, string>();
@@ -68,6 +68,7 @@ const externalizeItem = (item: LibraryItem): { metadata: LibraryItem; assets: Li
   const metadata: LibraryItem = {
     ...item,
     assetRefs: { ...item.assetRefs },
+    qwen21MultiSources: item.qwen21MultiSources?.slice(),
     ltxDirectorOptions: item.ltxDirectorOptions ? {
       ...item.ltxDirectorOptions,
       segments: item.ltxDirectorOptions.segments.map(segment => ({ ...segment })),
@@ -95,6 +96,16 @@ const externalizeItem = (item: LibraryItem): { metadata: LibraryItem; assets: Li
     assets.push(asset);
     metadata.assetRefs![role] = { id, mimeType: asset.mimeType, size: asset.size };
     segment.sourceImage = '';
+  }
+  for (const [index, source] of (metadata.qwen21MultiSources || []).entries()) {
+    if (!source.startsWith('data:')) continue;
+    const role = `qwen21MultiSource:${index}` as const;
+    const blob = dataUrlToBlob(source);
+    const id = createAssetId(metadata.id, role);
+    const asset: LibraryAssetRecord = { id, blob, mimeType: blob.type || 'application/octet-stream', size: blob.size };
+    assets.push(asset);
+    metadata.assetRefs![role] = { id, mimeType: asset.mimeType, size: asset.size };
+    metadata.qwen21MultiSources![index] = '';
   }
   if (Object.keys(metadata.assetRefs || {}).length === 0) delete metadata.assetRefs;
   return { metadata, assets };
@@ -173,7 +184,7 @@ export const saveLibraryItemWithBlobs = async (
 ): Promise<LibraryItem> => {
   const db = await getDb();
   const existing = await db.get(STORE_NAME, item.id);
-  const metadata: LibraryItem = { ...enforceRequiredSafetyRating(item), assetRefs: { ...item.assetRefs } };
+  const metadata: LibraryItem = { ...enforceRequiredSafetyRating(item), assetRefs: { ...item.assetRefs }, qwen21MultiSources: item.qwen21MultiSources?.slice() };
   const records: LibraryAssetRecord[] = [];
   for (const [role, blob] of Object.entries(blobs) as [LibraryAssetRole, Blob][]) {
     if (!blob) continue;
@@ -181,7 +192,9 @@ export const saveLibraryItemWithBlobs = async (
     const record: LibraryAssetRecord = { id, blob, mimeType: blob.type || 'application/octet-stream', size: blob.size, sha256: hashes[role] };
     records.push(record);
     metadata.assetRefs![role] = { id, mimeType: record.mimeType, size: record.size };
-    if (role.startsWith('ltxSegmentSource:')) {
+    if (role.startsWith('qwen21MultiSource:')) {
+      if (metadata.qwen21MultiSources) metadata.qwen21MultiSources[Number(role.split(':')[1])] = '';
+    } else if (role.startsWith('ltxSegmentSource:')) {
       const segmentIndex = Number(role.split(':')[1]);
       if (metadata.ltxDirectorOptions?.segments[segmentIndex]) metadata.ltxDirectorOptions.segments[segmentIndex].sourceImage = '';
     } else {
@@ -288,6 +301,7 @@ export const hydrateLibraryItem = async (item: LibraryItem): Promise<LibraryItem
   const db = await getDb();
   const hydrated: LibraryItem = {
     ...item,
+    qwen21MultiSources: item.qwen21MultiSources?.slice(),
     ltxDirectorOptions: item.ltxDirectorOptions ? {
       ...item.ltxDirectorOptions,
       segments: item.ltxDirectorOptions.segments.map(segment => ({ ...segment })),
@@ -301,7 +315,9 @@ export const hydrateLibraryItem = async (item: LibraryItem): Promise<LibraryItem
       objectUrl = URL.createObjectURL(asset.blob);
       objectUrlCache.set(ref.id, objectUrl);
     }
-    if (role.startsWith('ltxSegmentSource:')) {
+    if (role.startsWith('qwen21MultiSource:')) {
+      if (hydrated.qwen21MultiSources) hydrated.qwen21MultiSources[Number(role.split(':')[1])] = objectUrl;
+    } else if (role.startsWith('ltxSegmentSource:')) {
       const segmentIndex = Number(role.split(':')[1]);
       if (hydrated.ltxDirectorOptions?.segments[segmentIndex]) hydrated.ltxDirectorOptions.segments[segmentIndex].sourceImage = objectUrl;
     } else {
