@@ -15,6 +15,20 @@ export interface OpenRouterModel {
     inputModalities?: string[];
 }
 
+export const getOpenRouterInputModalities = (model: OpenRouterModel): readonly string[] =>
+    model.inputModalities ?? (model.supportsImages ? ['text', 'image'] : ['text']);
+
+export const filterOpenRouterModels = (
+    models: readonly OpenRouterModel[], requiredInputs: readonly string[] = [], query = '',
+): OpenRouterModel[] => {
+    const search = query.trim().toLowerCase();
+    return models.filter(model => {
+        const inputs = getOpenRouterInputModalities(model);
+        return requiredInputs.every(kind => inputs.includes(kind))
+            && (!search || `${model.name} ${model.id} ${inputs.join(' ')}`.toLowerCase().includes(search));
+    });
+};
+
 let settings: OpenRouterSettings = { apiKey: '', model: DEFAULT_OPENROUTER_MODEL };
 export const updateOpenRouterSettings = (next: OpenRouterSettings) => {
     settings = { apiKey: next.apiKey.trim(), model: next.model.trim() || DEFAULT_OPENROUTER_MODEL };
@@ -67,16 +81,17 @@ export const getOpenRouterModels = async (signal?: AbortSignal): Promise<OpenRou
     return models.sort((a, b) => a.name.localeCompare(b.name));
 };
 
-export const testOpenRouterConnection = async (apiKey: string, model: string): Promise<{ success: boolean; message: string }> => {
+export const testOpenRouterConnection = async (apiKey: string, model: string, signal?: AbortSignal): Promise<{ success: boolean; message: string; models?: OpenRouterModel[] }> => {
     try {
-        const payload = await request('/key', { headers: headers(apiKey) });
+        const payload = await request('/key', { headers: headers(apiKey), signal });
         if (!record(payload) || !record(payload.data)) throw new Error('OpenRouter returned an invalid key verification response.');
-        const models = await getOpenRouterModels();
+        const models = await getOpenRouterModels(signal);
         const selected = models.find(item => item.id === model);
         if (!selected) throw new Error(`Model "${model}" is not available in the OpenRouter catalog.`);
         return {
             success: true,
             message: `API key verified. ${selected.name} supports ${selected.supportsImages ? 'text and image analysis' : 'text only (Magic Soup); choose a vision model for image analysis'}. No paid generation was performed; generation still requires sufficient credits and model access.`,
+            models,
         };
     } catch (cause) {
         return { success: false, message: cause instanceof Error ? cause.message : String(cause) };
@@ -90,12 +105,12 @@ export const generateOpenRouterText = async (instruction: string, inputs: File[]
     if (!instruction.trim()) throw new Error('An instruction is required for OpenRouter.');
     const models = await getOpenRouterModels();
     const selected = models.find(item => item.id === model);
-    if (!selected) throw new Error(`OpenRouter model "${model}" is unavailable. Select another model in Connection Settings.`);
+    if (!selected) throw new Error(`OpenRouter model "${model}" is unavailable. Select another available model.`);
     const requestContent: Array<Record<string, unknown>> = [{ type: 'text', text: instruction }];
     for (const file of inputs) {
         const modality = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : '';
         if (!modality) throw new Error(`Unsupported reference type: ${file.type}.`);
-        if (!(selected.inputModalities || (selected.supportsImages ? ['text', 'image'] : ['text'])).includes(modality)) {
+        if (!getOpenRouterInputModalities(selected).includes(modality)) {
             throw new Error(`OpenRouter model "${model}" does not support ${modality === 'image' ? 'images' : modality} references. Choose a compatible model.`);
         }
         if (modality === 'image') requestContent.push({ type: 'image_url', image_url: { url: await fileToResizedDataUrl(file, 1536) } });

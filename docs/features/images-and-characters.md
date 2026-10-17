@@ -7,6 +7,8 @@ Choose an image family, edit references or generate character views. Each workfl
 ## On this page
 
 - [Image and character workflows](#image-and-character-workflows)
+- [Shared Character controls](#shared-character-controls)
+- [Comparing Character results](#comparing-character-results)
 - [Qwen Image 2.1 T2I and Turbo](#qwen-image-21-t2i-and-turbo)
 - [Qwen 2.1 multi-image edit](#qwen-21-multi-image-edit)
 - [Qwen 2.1 single-image edit](#qwen-21-single-image-edit)
@@ -35,7 +37,31 @@ Choose an image family, edit references or generate character views. Each workfl
 - **Cancel Generation** remains visible during progressive ComfyUI Character generation (FLUX2, Qwen and Qwen 2.1 Create Character). It interrupts the active ComfyUI job and prevents remaining outputs from starting, including cancellation during source uploads or preparation. Completed images remain available; cancellation does not open a generation-error modal.
 - **Character > QWEN 2.1 > Create Character** uses direct Qwen edit prompts for eight independently enabled views: requested camera/framing changes come first, followed by pose/expression and concise identity preservation. It does not reuse the long FLUX2 prompt or its saved full-prompt overrides. An explicit output pose takes priority over a pose-reference image; otherwise the reference supplies the pose. The original-background instructions retain the physical location while allowing its projection to change with the camera. Source, clothing, background and pose references are encoded separately in their actual order. **Output Size** and **Orientation** control the independent empty latent; the unrelated general Aspect Ratio selector is hidden. Submitted eight-view graphs and real ComfyUI history have been checked for prompt/encoder/sampler links, not for visual angle compliance. Start a new generation to use updated prompts; existing results and their recorded final prompt stay unchanged.
 - **Turbo (Viggle)** in Create Character is off by default. Enabling it switches the full sampling graph to the native Viggle I2I Turbo chain: mandatory Viggle LoRA, ModelSamplingFlux, BasicScheduler at 4 steps, ExtendIntermediateSigmas with 3 subdivisions, BasicGuider and SamplerCustomAdvanced. It keeps the eight output prompts, up to four ordered references and independent output canvas; it is not a LoRA-only modification of KSampler. Turbo sampling values are fixed while enabled, and disabling it restores the unchanged normal settings. Required nodes and the Viggle LoRA are checked before upload. The toggle is unavailable during generation; Cancel Generation still works.
-- ComfyUI Character's eight output controls are in the wide right column above Generate. Each output can be expanded/collapsed; **Collapse all outputs** / **Expand all outputs** keeps saved values and enabled selections unchanged. Camera, pose and expression fields share a row on desktop and stack on mobile. Background and reference controls remain on the left. In Qwen Create Character, **Green Screen** explicitly requests replacement of the entire scenery with uniform chroma-key green, overriding stale custom/background-preservation settings. Selecting a background clears the preservation checkbox; Green Screen disables it. This instruction is verified in all eight normal/Turbo queue prompts, not in a new GPU render.
+- ComfyUI Character's eight output controls are in the wide right column below Generate. Each output can be expanded/collapsed; **Collapse all outputs** / **Expand all outputs** keeps saved values and enabled selections unchanged. Camera, pose and expression fields share a row on desktop and stack on mobile. Background and reference controls remain on the left. In Qwen Create Character, **Green Screen** explicitly requests replacement of the entire scenery with uniform chroma-key green, overriding stale custom/background-preservation settings. Selecting a background clears the preservation checkbox; Green Screen disables it. This instruction is verified in all eight normal/Turbo queue prompts, not in a new GPU render.
+
+## Shared Character controls
+
+**Character > Gemini**, **Character > Mammouth** and ComfyUI's multi-angle workflows share the same eight output slots. Gemini and Mammouth use the structured controls and identity/reference instructions from **Qwen 2.1 > Create Character**, not saved FLUX2 full-prompt overrides.
+
+- Enable individual outputs, select/deselect all, randomize each output or the complete set, and expand/collapse the cards. The enabled slots determine the number of generated images, replacing the old cloud image-count/pose-list controls.
+- Click the **Automatic Multi-Angle Set** accordion header (**Hide slots / Show slots**) to hide or reveal all eight cards without changing their values, enabled selections or individual expansion states. The toolbar remains accessible. **Expand all outputs** still expands the individual cards and also reopens the whole group when hidden.
+- Each slot has **Camera Angle**, **Pose** and **Facial Expression**. Their dropdowns always expose every preset, even when a value is already selected; use **Custom...** to type arbitrary instructions without losing that ability. **Default (nothing)** and **None (same as photo)** remain available.
+- The wide output column uses this order for all three providers: **Generate / Reset**, **Generated Content**, **Cancel Generation** (ComfyUI, while generating), then the **Automatic Multi-Angle Set** accordion and all eight slots at the bottom. Camera/pose/expression controls share a row on desktop and stack on mobile.
+- Background and clothing controls support original content, prompts or reference images. Only active references are uploaded. **Green Screen** overrides stale background/preservation settings; **Preserve original background with new perspective** ignores a stored background reference.
+- An optional pose reference can be uploaded or selected from the Library. An explicit per-slot pose takes priority; otherwise the reference supplies the pose. Identity, clothing, background and pose images are attached separately, in that order with absent roles omitted.
+- Gemini and Mammouth submit one sequential request per enabled output, including all eight when selected. Results appear progressively. A failed request stops the remaining outputs and surfaces the error while retaining completed images.
+- Cloud providers retain their own model/aspect-ratio controls and Gemini's supported image sizes/thinking settings. ComfyUI-only sampling, LoRA, Turbo and model-loader controls are not displayed as unsupported cloud features.
+
+Regression checks: `node --test components/InputComponents.test.mjs services/cloudCharacterService.test.mjs services/characterAnglesWorkflow.test.mjs services/characterResults.test.mjs`. These checks use mocked providers and do not establish live model image quality or identity fidelity.
+
+## Comparing Character results
+
+Character keeps separate result sets for Gemini and Mammouth image models and for each ComfyUI multi-angle workflow/diffusion model. Qwen 2.1 Create Character's normal and Turbo modes have independent results.
+
+- Switch providers, workflows or models with the existing selectors to compare their latest results. An unused selection starts empty; returning to a generated selection restores its images, output labels, final prompt, generation time and Library save indicators without generating again.
+- A new generation replaces only the selected result set. Completed images remain available if later outputs fail or generation is cancelled.
+- Library saves use the selected batch's original generation settings, identity reference and character name, even after the controls or source image have changed. ComfyUI images retain their individual seeds.
+- Results stay available during the current app session. **Reset** clears generated results; save the versions you want to keep to the **Library** before resetting or closing the app.
 
 ## Qwen Image 2.1 T2I and Turbo
 

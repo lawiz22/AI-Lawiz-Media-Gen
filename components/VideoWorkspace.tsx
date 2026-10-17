@@ -8,7 +8,7 @@ import {
     loadVideoPromptDraft, saveVideoPromptDraft, referenceToken, validateVideoPromptOutput, validateVideoReferences,
     captureVideoPromptInputs, type ReferenceKind, type VideoPromptDraft, type VideoPromptInputs, type VideoPromptProvider, type VideoReference, type VideoTemplate, type VideoWorkflow,
 } from '../services/videoPromptService';
-import { DEFAULT_OPENROUTER_MODEL, getOpenRouterModels, type OpenRouterModel } from '../services/openRouterService';
+import { DEFAULT_OPENROUTER_MODEL, filterOpenRouterModels, getOpenRouterInputModalities, getOpenRouterModels, type OpenRouterModel } from '../services/openRouterService';
 import { VideoReferenceEditor, useMediaURL } from './VideoReferenceEditor';
 import { buildVideoPromptLibraryItem, restoreVideoPromptLibraryItem } from '../services/videoPromptLibrary';
 import { MinimaxH3Panel } from './MinimaxH3Panel';
@@ -93,6 +93,8 @@ export const VideoWorkspace: React.FC<{
     const [models, setModels] = useState<OpenRouterModel[]>([]);
     const [loadingModels, setLoadingModels] = useState(false);
     const [modelError, setModelError] = useState('');
+    const [modelSearch, setModelSearch] = useState('');
+    const [modelRefresh, setModelRefresh] = useState(0);
     const [selectedWorkflow, setSelectedWorkflow] = useState<VideoWorkflow>('reference');
     const [editOutput, setEditOutput] = useState(false);
     const [librarySaving, setLibrarySaving] = useState(false);
@@ -113,6 +115,17 @@ export const VideoWorkspace: React.FC<{
             setStorageError(`Could not restore the video workspace: ${cause instanceof Error ? cause.message : String(cause)}. Reload to retry; saving is disabled to protect the existing draft.`);
         });
     }, []);
+    useEffect(() => {
+        if (!ready || draft.provider !== 'openrouter') return;
+        const controller = new AbortController();
+        setModelError(''); setLoadingModels(true);
+        getOpenRouterModels(controller.signal).then(value => {
+            if (!controller.signal.aborted) setModels(value);
+        }).catch(cause => {
+            if (!controller.signal.aborted) setModelError(cause instanceof Error ? cause.message : String(cause));
+        }).finally(() => { if (!controller.signal.aborted) setLoadingModels(false); });
+        return () => controller.abort();
+    }, [ready, draft.provider, modelRefresh]);
     useEffect(() => {
         if (!ready) return;
         setSaved(false);
@@ -212,12 +225,6 @@ export const VideoWorkspace: React.FC<{
             setNotice('Prompt and edited references transferred to the Minimax H3 workflow draft.');
         } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     };
-    const refreshModels = async () => {
-        setModelError(''); setLoadingModels(true);
-        try { setModels(await getOpenRouterModels()); }
-        catch (cause) { setModelError(cause instanceof Error ? cause.message : String(cause)); }
-        finally { setLoadingModels(false); }
-    };
     const copy = async (text: string) => {
         setError('');
         try { await navigator.clipboard.writeText(text); setNotice('Prompt copied.'); }
@@ -231,6 +238,11 @@ export const VideoWorkspace: React.FC<{
     const activeMinimax = draft.minimaxDrafts[selectedWorkflow];
     const count = (kind: ReferenceKind) => draft.references.filter(ref => ref.kind === kind).length;
     const selectedModel = models.find(model => model.id === draft.models.openrouter);
+    const requiredInputs = [...new Set<ReferenceKind>(draft.references.map((reference: VideoReference) => reference.kind))];
+    const compatibleModels = filterOpenRouterModels(models, requiredInputs);
+    const filteredModels = filterOpenRouterModels(compatibleModels, [], modelSearch);
+    const unsupportedInputs = selectedModel ? requiredInputs.filter(kind => !getOpenRouterInputModalities(selectedModel).includes(kind)) : [];
+    const openRouterModelBlocked = draft.provider === 'openrouter' && (loadingModels || !selectedModel || unsupportedInputs.length > 0);
 
     return <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -270,15 +282,27 @@ export const VideoWorkspace: React.FC<{
                                 <label className="space-y-1 text-sm">Provider<select className={input} value={draft.provider} onChange={event => update({ provider: event.target.value as VideoPromptProvider })}>
                                     <option value="openrouter">OpenRouter</option><option value="gemini">Gemini</option><option value="mammouth">Mammouth</option>
                                 </select></label>
-                                <label className="space-y-1 text-sm">Model ID<input className={input} list={`video-${draft.provider}-models`} value={draft.models[draft.provider]} onChange={event => update({ models: { ...draft.models, [draft.provider]: event.target.value } })} placeholder="Provider model ID" /></label>
+                                {draft.provider === 'openrouter' ? <div className="min-w-0 space-y-2">
+                                    <label className="block space-y-1 text-sm">Search OpenRouter models<input type="search" className={input} value={modelSearch} onChange={event => setModelSearch(event.target.value)} placeholder="Name, model ID or input type (video, audio...)" /></label>
+                                    <label className="block space-y-1 text-sm">Model<select aria-label="OpenRouter model" aria-describedby="video-openrouter-model-help" className={input} disabled={loadingModels} value={draft.models.openrouter} onChange={event => update({ models: { ...draft.models, openrouter: event.target.value } })}>
+                                        {!filteredModels.some(model => model.id === draft.models.openrouter) && <option value={draft.models.openrouter} disabled={models.length > 0 && (!selectedModel || unsupportedInputs.length > 0)}>
+                                            {selectedModel ? `${selectedModel.name} [${getOpenRouterInputModalities(selectedModel).join(' + ')}] (${selectedModel.id})` : draft.models.openrouter || 'Select a model'} {models.length && !selectedModel ? '(unavailable)' : '(current selection)'}
+                                        </option>}
+                                        {filteredModels.map(model => <option key={model.id} value={model.id}>{model.name} [{getOpenRouterInputModalities(model).join(' + ')}] ({model.id})</option>)}
+                                    </select></label>
+                                </div> : <label className="space-y-1 text-sm">Model ID<input className={input} list={`video-${draft.provider}-models`} value={draft.models[draft.provider]} onChange={event => update({ models: { ...draft.models, [draft.provider]: event.target.value } })} placeholder="Provider model ID" /></label>}
                             </div>
-                            <datalist id="video-openrouter-models"><option value={DEFAULT_OPENROUTER_MODEL} />{models.map(model => <option key={model.id} value={model.id}>{model.name} · {model.inputModalities?.join(', ')}</option>)}</datalist>
                             <datalist id="video-gemini-models"><option value="gemini-2.5-flash" /><option value="gemini-2.5-pro" /></datalist>
                             <datalist id="video-mammouth-models"><option value="gemini-2.5-flash" /><option value="gemini-2.5-pro" /></datalist>
                             <div className="space-y-2 text-xs text-text-secondary">
-                                <p>Uses API keys from Connection Settings. Model IDs are editable; availability and access depend on your account.</p>
-                                {draft.provider === 'openrouter' && <><button type="button" disabled={loadingModels} onClick={refreshModels} className={`${button} !py-1 !text-xs`}>{loadingModels ? 'Loading...' : 'Load OpenRouter models'}</button>
-                                    {selectedModel && <p>Supported inputs: {selectedModel.inputModalities?.join(', ')}</p>}
+                                <p>Uses API keys from Connection Settings. Gemini/Mammouth model IDs are editable; availability and access depend on your account.</p>
+                                {draft.provider === 'openrouter' && <><button type="button" disabled={loadingModels} onClick={() => setModelRefresh(current => current + 1)} className={`${button} !py-1 !text-xs`}>{loadingModels ? 'Loading...' : 'Refresh OpenRouter models'}</button>
+                                    <p id="video-openrouter-model-help">Models load automatically. Only models supporting every attached reference type are listed. Search by name, ID or input type without erasing your selection.</p>
+                                    {models.length > 0 && <p role="status">{filteredModels.length} matching models; {compatibleModels.length} of {models.length} support the required input types.</p>}
+                                    {selectedModel && <p>Supported inputs: {getOpenRouterInputModalities(selectedModel).join(', ')}</p>}
+                                    {unsupportedInputs.length > 0 && <p role="alert" className="text-amber-300">Selected model cannot read {unsupportedInputs.join(' + ')} references. Choose a compatible model from the list; your selection will not be changed automatically.</p>}
+                                    {!loadingModels && models.length > 0 && !selectedModel && <p role="alert" className="text-amber-300">The selected model is not in the current catalog. Choose an available OpenRouter model.</p>}
+                                    {models.length > 0 && filteredModels.length === 0 && <p role="status">No matching models. Clear the search, adjust the references or choose another provider.</p>}
                                     {modelError && <p role="alert" className="text-red-400">{modelError}</p>}
                                     <p>Video/audio require a compatible model. Audio: WAV or MP3.</p></>}
                                 {draft.provider === 'gemini' && <p>Images, video and audio are sent as native media to Gemini.</p>}
@@ -328,7 +352,7 @@ export const VideoWorkspace: React.FC<{
                                 : <div className="rounded-xl border border-dashed border-border-primary p-5 text-center text-xs text-text-secondary">Drop {kind} files here or use Add {kind}.</div>}
                         </div>)}
                         <p className="text-xs text-text-secondary">Generation sends your idea, selected template, reference notes and edited media to the chosen provider. Maximum 18 MB total media per request; originals stay local. Provider usage may be billed.</p>
-                        <button type="button" className={`${button} w-full border-accent bg-accent/15 !py-3 text-accent`} disabled={!ready || busy || librarySaving || !draft.idea.trim()} onClick={generate}>{busy ? 'Composing and saving your video prompt...' : 'Generate video prompt'}</button>
+                        <button type="button" className={`${button} w-full border-accent bg-accent/15 !py-3 text-accent`} disabled={!ready || busy || librarySaving || !draft.idea.trim() || openRouterModelBlocked} onClick={generate}>{busy ? 'Composing and saving your video prompt...' : 'Generate video prompt'}</button>
                         <p className="text-xs text-text-secondary">Successful generations are automatically saved to Library &gt; Prompts with the exact generation setup and all references.</p>
                     </section>
                 </div>

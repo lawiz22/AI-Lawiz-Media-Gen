@@ -102,6 +102,36 @@ test('OpenRouter credentials, catalog, vision and response validation', async t 
         globalThis.fetch = async () => json({ data: [] });
         await assert.rejects(api.getOpenRouterModels(), /compatible text models/);
     });
+    await t.test('model selection filters all reference types and searches beyond the currently selected Grok model', async () => {
+        const mediaModels = [
+            { id: 'x-ai/grok-4.7', name: 'Grok 4.7', architecture: { input_modalities: ['text', 'image', 'file'], output_modalities: ['text'] } },
+            { id: 'google/gemini-2.5-flash', name: 'Google: Gemini 2.5 Flash', architecture: { input_modalities: ['text', 'image', 'video', 'audio'], output_modalities: ['text'] } },
+            { id: 'google/gemini-2.5-pro', name: 'Google: Gemini 2.5 Pro', architecture: { input_modalities: ['text', 'image', 'video', 'audio'], output_modalities: ['text'] } },
+            { id: 'video/reader', name: 'Video reader', architecture: { input_modalities: ['text', 'video'], output_modalities: ['text'] } },
+            model('text/model', false),
+        ];
+        globalThis.fetch = async () => json({ data: mediaModels });
+        const models = await api.getOpenRouterModels();
+        assert.equal(models.length, 5);
+        assert.deepEqual(api.getOpenRouterInputModalities(models.find(item => item.id === 'google/gemini-2.5-flash')), ['text', 'image', 'video', 'audio']);
+        const ids = values => values.map(value => value.id).sort();
+        assert.deepEqual(ids(api.filterOpenRouterModels(models, ['video'])), ['google/gemini-2.5-flash', 'google/gemini-2.5-pro', 'video/reader']);
+        assert.deepEqual(ids(api.filterOpenRouterModels(models, ['image', 'video', 'audio'])), ['google/gemini-2.5-flash', 'google/gemini-2.5-pro']);
+        assert.deepEqual(ids(api.filterOpenRouterModels(models, [], ' VIDEO ')), ['google/gemini-2.5-flash', 'google/gemini-2.5-pro', 'video/reader']);
+        assert.deepEqual(ids(api.filterOpenRouterModels(models, ['video'], 'google/')), ['google/gemini-2.5-flash', 'google/gemini-2.5-pro']);
+        assert.deepEqual(ids(api.filterOpenRouterModels(models, ['video'], 'Gemini 2.5 Flash')), ['google/gemini-2.5-flash']);
+        assert.deepEqual(api.filterOpenRouterModels(models, ['video'], 'Grok'), []);
+        assert.deepEqual(api.filterOpenRouterModels(models, [], 'missing model'), []);
+        assert.equal(api.filterOpenRouterModels(models).length, models.length);
+        assert.equal(api.getOpenRouterSettings().model, 'x-ai/grok-4.7');
+        assert.equal(models.length, 5, 'Filtering must not mutate the loaded catalog');
+        const legacyVision = { id: 'legacy/vision', name: 'Legacy vision', supportsImages: true };
+        const legacyText = { id: 'legacy/text', name: 'Legacy text', supportsImages: false };
+        assert.deepEqual(api.getOpenRouterInputModalities(legacyVision), ['text', 'image']);
+        assert.deepEqual(api.getOpenRouterInputModalities(legacyText), ['text']);
+        assert.deepEqual(api.filterOpenRouterModels([legacyVision, legacyText], ['image']), [legacyVision]);
+        assert.deepEqual(api.filterOpenRouterModels([legacyVision, legacyText], ['video']), []);
+    });
     await t.test('Test checks authenticated /key and catalog without a paid completion', async () => {
         const calls = [];
         globalThis.fetch = async (url, init) => {

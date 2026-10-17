@@ -80,6 +80,7 @@ interface ImageGridProps {
   sourceImage: File | null;
   characterName?: string;
   activeTab: string;
+  contentKey?: string;
   generationTime?: number | null;
   generationJobs?: Array<{
     label: string;
@@ -90,7 +91,7 @@ interface ImageGridProps {
   }>;
 }
 
-export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSendToCharacter, onSendToUpscale, lastUsedPrompt, options, sourceImage, characterName, activeTab, generationTime, generationJobs = [] }) => {
+export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSendToCharacter, onSendToUpscale, lastUsedPrompt, options, sourceImage, characterName, activeTab, contentKey = activeTab, generationTime, generationJobs = [] }) => {
   const dispatch: AppDispatch = useDispatch();
   const [enhancedImages, setEnhancedImages] = useState<Record<number, string>>({});
   const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
@@ -145,7 +146,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
         dispatch(addSessionTokenUsage(usageMetadata));
       }
       setEnhancedImages(prev => ({ ...prev, [index]: enhancedSrc }));
-      dispatch(setImageSaveStatus({ tabId: activeTab, index, status: 'idle' }));
+      dispatch(setImageSaveStatus({ tabId: contentKey, index, status: 'idle' }));
     } catch (err: any) {
       console.error("Enhancement failed:", err);
       setErrorIndex(prev => ({ ...prev, [index]: err.message || 'Failed to enhance image.' }));
@@ -155,7 +156,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
   };
 
   const handleSaveToLibrary = async (imageSrc: string, index: number) => {
-    dispatch(setImageSaveStatus({ tabId: activeTab, index, status: 'saving' }));
+    dispatch(setImageSaveStatus({ tabId: contentKey, index, status: 'saving' }));
     try {
       const isEnhanced = !!enhancedImages[index];
       const { width, height } = await getImageDimensionsFromDataUrl(imageSrc);
@@ -194,7 +195,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
           itemName = `${characterName || 'Character'}: ${description}`;
         }
 
-        if (isGeminiT2I || isMammouthT2I || isComfyT2I) {
+        if (!isCharacter && (isGeminiT2I || isMammouthT2I || isComfyT2I)) {
           sourceImageToSave = null;
         }
 
@@ -216,10 +217,10 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
       };
 
       await dispatch(addToLibrary(item)).unwrap();
-      dispatch(setImageSaveStatus({ tabId: activeTab, index, status: 'saved' }));
+      dispatch(setImageSaveStatus({ tabId: contentKey, index, status: 'saved' }));
     } catch (err: any) {
       console.error("Failed to save to library:", err);
-      dispatch(setImageSaveStatus({ tabId: activeTab, index, status: 'idle' }));
+      dispatch(setImageSaveStatus({ tabId: contentKey, index, status: 'idle' }));
     }
   };
 

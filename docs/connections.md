@@ -10,6 +10,9 @@ Configure provider access and local servers. Provider tests, catalog refreshes a
 - [OpenRouter](#openrouter)
 - [Ollama](#ollama)
 - [ComfyUI](#comfyui)
+- [Installation overview](#installation-overview)
+  - [ComfyUI node checks](#comfyui-node-checks)
+  - [ComfyUI model inventory](#comfyui-model-inventory)
 - [Live system indicators](#live-system-indicators)
 - [Screenshots](#screenshots)
 - [Related guides](#related-guides)
@@ -37,7 +40,7 @@ In Electron, API keys are persisted through `electron-store`. Do not commit API 
 - **Test** verifies the key through `/api/v1/key` and checks the selected model in the catalog. It performs no paid generation and does not guarantee sufficient credits or account access for a subsequent generation. **Save and Close** persists the key/model through Electron's existing local settings store (or browser local storage in web mode). Clearing the key removes it from web storage and disables authenticated requests. Restart Electron after this update to activate the new settings IPC.
 - Select **OpenRouter** as the Analysis Provider in **Prompt from Image**, **Extract Background**, **Subject / Object**, or **Magical Prompt Soup**, or use it in **Video > Video Prompt Generator**. Existing prompt-tool formats, history, copy, Library saving and destination actions remain available. OpenRouter rewrites prompts; it is not an image/video rendering provider here.
 - Image tools require a vision model. Images are resized to a maximum dimension of 1536 pixels before being sent; selected images and prompt/Soup text are sent to OpenRouter and its downstream model provider on generation. Catalog refresh sends no source images or prompts. Missing keys, unsupported models, API errors, empty output and truncated responses are surfaced explicitly.
-- Regression checks: `node --test services/openRouterService.test.mjs electron/openRouterSettings.test.cjs`.
+- Regression checks: `node --test services/installationDiagnostics.test.mjs services/openRouterService.test.mjs electron/openRouterSettings.test.cjs`.
 
 ## Ollama
 
@@ -82,6 +85,32 @@ FLUX2 and KREA2 diffusion models are indexed directly from `ComfyUI/models/diffu
 In Photo Fusion, choose **FLUX2**, **QWEN-Edit**, or **Mammouth** from the engine control. FLUX2 and Qwen Edit run locally through the configured ComfyUI endpoint and expose their own advanced model and sampling settings. Mammouth sends each subject as a distinct multimodal input and exposes the hosted image-model selector instead.
 
 Model-specific metadata is stored beside the model where applicable. Keep these sidecars with the model when moving files outside the application's organizer.
+
+## Installation overview
+
+Open **What's installed** to review backend connectivity, feature readiness, ComfyUI nodes and models. The **Overview** tab summarizes what is ready and what needs attention, with installation details for ComfyUI, Manager, Python, PyTorch and the compute device.
+
+![What's installed overview showing backend connections including OpenRouter, feature readiness, required ComfyUI nodes and installation details](./screenshots/16-installation-overview.png)
+
+The counts, connection states and versions shown are an example from one installation, not fixed requirements. Use the other tabs to inspect **Features**, **ComfyUI Nodes** and **Models**.
+
+OpenRouter appears alongside the other backends with its connection status, compatible text-model count and selected model's text/vision capability. Refresh verifies the configured key and model catalog without a paid generation. A text-only OpenRouter model can make **Magical Prompt Soup** and text-only **Video Prompt Generator** requests available, but it does not satisfy the image-analysis requirements. Video/audio reference support is checked when generating with the selected model.
+
+### ComfyUI node checks
+
+In **What's installed > ComfyUI Nodes**, inspect the diagnostic's node inventory grouped by core nodes and custom-node packs. Expand a group to see individual node names and availability, use **Search nodes...** to filter by name or pack, or enable **Problems only** to focus on missing nodes.
+
+![ComfyUI Nodes tab showing node-pack availability counts, individual node checks, search and the Problems only filter](./screenshots/17-comfyui-nodes.png)
+
+The counts reflect the nodes checked on this installation, not a guarantee that every workflow has compatible models or can run successfully. Consult the [required-node list](../COMFYUI_REQUIRED_NODES.txt) for workflow dependencies.
+
+### ComfyUI model inventory
+
+In **What's installed > Models**, review the model filenames reported by the connected ComfyUI server, grouped into checkpoints, diffusion/UNET models, text encoders, VAEs, LoRAs and upscaler categories. Expand a category to inspect its entries; the category header shows its count.
+
+![What's installed Models tab showing ComfyUI checkpoint filenames, diffusion and UNET models, text encoders, VAEs and LoRAs](./screenshots/18-comfyui-model-inventory.png)
+
+This is a diagnostic inventory, not the [Models/LoRAs library](features/models-and-loras.md) used for metadata, previews and organization. Listed files and counts reflect this server's installation; their presence alone does not guarantee compatibility with a selected workflow.
 
 ## Live system indicators
 

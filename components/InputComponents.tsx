@@ -1,4 +1,51 @@
-import React, { ChangeEvent, useEffect, useState } from 'react';
+import React, { ChangeEvent, useEffect, useId, useState } from 'react';
+
+export const PresetTextInput: React.FC<{
+    label: string;
+    ariaLabel: string;
+    value: string;
+    options: readonly string[];
+    onChange: (value: string) => void;
+    disabled?: boolean;
+}> = ({ label, ariaLabel, value, options, onChange, disabled }) => {
+    const id = useId();
+    const [customValue, setCustomValue] = useState<string | undefined>();
+    const isCustom = customValue === value || (value !== '' && !options.includes(value));
+
+    return <div className="min-w-0">
+        <label htmlFor={id} className="block text-xs font-semibold text-text-secondary">{label}</label>
+        <select
+            id={id}
+            aria-label={ariaLabel}
+            value={isCustom ? '__custom__' : value}
+            onChange={event => {
+                if (event.target.value === '__custom__') setCustomValue(value);
+                else {
+                    setCustomValue(undefined);
+                    onChange(event.target.value);
+                }
+            }}
+            disabled={disabled}
+            className="mt-1.5 block w-full min-w-0 rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm text-text-primary focus:border-accent focus:ring-accent disabled:opacity-50"
+        >
+            <option value="">Default (nothing)</option>
+            {options.map(option => <option key={option} value={option}>{option}</option>)}
+            <option value="__custom__">Custom...</option>
+        </select>
+        {isCustom && <input
+            type="text"
+            aria-label={`Custom ${ariaLabel}`}
+            value={value}
+            onChange={event => {
+                setCustomValue(event.target.value);
+                onChange(event.target.value);
+            }}
+            placeholder={`Enter a custom ${label.toLowerCase()}`}
+            disabled={disabled}
+            className="mt-2 block w-full min-w-0 rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm text-text-primary focus:border-accent focus:ring-accent disabled:opacity-50"
+        />}
+    </div>;
+};
 
 export const EditableNumberInput: React.FC<{
     value: number;

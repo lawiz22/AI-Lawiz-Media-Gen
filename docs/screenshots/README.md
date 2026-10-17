@@ -2,7 +2,7 @@
 
 [Documentation index](../README.md) | [Project overview](../../README.md)
 
-This is the shared image directory for all guides. No screenshots are bundled yet; the entries below are planned capture slots. Files are not required until their Markdown image is activated.
+This is the shared image directory for all guides. Linked filenames below are available screenshots; unlinked filenames are planned capture slots. Files are not required until their Markdown image is activated.
 
 ## On this page
 
@@ -22,7 +22,7 @@ This is the shared image directory for all guides. No screenshots are bundled ye
 
 ## Capture index
 
-| Planned filename | Capture | Owning guide |
+| Filename | Capture | Owning guide |
 | --- | --- | --- |
 | `01-image-generator.png` | Image Generator: provider, workflow controls and result | [Open guide](../features/images-and-characters.md) |
 | `02-prompt-providers.png` | Prompt provider and selectable model controls | [Open guide](../connections.md) |
@@ -39,6 +39,9 @@ This is the shared image directory for all guides. No screenshots are bundled ye
 | `13-system-indicators.png` | Desktop CPU, RAM, GPU, VRAM and temperature gauges | [Open guide](../connections.md) |
 | `14-scene-variation.png` | Reviewed scene analysis and person mask previews | [Open guide](../features/scene-variation.md) |
 | `15-swap-person.png` | Destination, donor, selected workflow and result | [Open guide](../features/swap-and-fusion.md) |
+| [`16-installation-overview.png`](16-installation-overview.png) | What's installed: backend connections including OpenRouter, feature/node readiness and ComfyUI installation details | [Open guide](../connections.md#installation-overview) |
+| [`17-comfyui-nodes.png`](17-comfyui-nodes.png) | What's installed: ComfyUI node packs, individual availability checks, search and Problems only filter | [Open guide](../connections.md#comfyui-node-checks) |
+| [`18-comfyui-model-inventory.png`](18-comfyui-model-inventory.png) | What's installed: ComfyUI model filenames and category counts for checkpoints, diffusion/UNET models, encoders, VAEs and LoRAs | [Open guide](../connections.md#comfyui-model-inventory) |
 
 ## Add a screenshot
 
@@ -47,6 +50,8 @@ This is the shared image directory for all guides. No screenshots are bundled ye
 3. Remove only the surrounding `<!--` and `-->` to display the image.
 4. Keep useful alt text describing what the capture demonstrates.
 5. Preview the Markdown and confirm the relative path works on GitHub.
+
+For an unplanned capture, add a new index row and place its image in the relevant guide section. Once an image is available, link its filename in this index.
 
 For example, from a feature guide:
 

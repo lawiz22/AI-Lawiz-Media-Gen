@@ -1,5 +1,8 @@
 import type { GenerationOptions } from '../types';
 
+export const DEFAULT_CHARACTER_UNET = 'qwen_image_edit_2509_fp8_e4m3fn.safetensors';
+export const DEFAULT_CHARACTER_FLUX2_UNET = 'flux2\\flux2Klein9BInt8_v10.safetensors';
+
 export const CHARACTER_ANGLES = [
     { id: 'close_up', label: 'Close-up', instruction: 'Turn the camera to a close-up view.' },
     { id: 'wide_shot', label: 'Wide shot', instruction: 'Turn the camera to a wide-angle full-body view.' },
@@ -119,7 +122,7 @@ const FLUX2_REFERENCE_VIEWS = [
 
 export const createFlux2CharacterReferencePreset = (): Partial<GenerationOptions> => ({
     provider: 'comfyui', comfyCharacterMode: 'flux2',
-    comfyCharacterFlux2Unet: 'flux2\\flux2Klein9BInt8_v10.safetensors', comfyCharacterFlux2Clip: 'qwen38BFluxKlein9BTE_38b.safetensors',
+    comfyCharacterFlux2Unet: DEFAULT_CHARACTER_FLUX2_UNET, comfyCharacterFlux2Clip: 'qwen38BFluxKlein9BTE_38b.safetensors',
     comfyCharacterFlux2Vae: 'flux2-vae.safetensors', comfyCharacterFlux2Steps: 4, comfyCharacterFlux2Cfg: 1,
     comfyCharacterFlux2Sampler: 'euler', comfyCharacterFlux2Megapixels: 1,
     comfyCharacterFlux2UseLoras: false, comfyCharacterFlux2UseCacheDit: false,
@@ -215,7 +218,7 @@ export const buildCharacterAnglesWorkflow = (
             _meta: { title: 'Character CLIP' },
         },
         'unet': {
-            inputs: { unet_name: options.comfyCharacterUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors', weight_dtype: 'default' },
+            inputs: { unet_name: options.comfyCharacterUnet || DEFAULT_CHARACTER_UNET, weight_dtype: 'default' },
             class_type: 'UNETLoader',
             _meta: { title: 'Character diffusion model' },
         },
@@ -429,7 +432,7 @@ export const buildFlux2CharacterAnglesWorkflow = (
 
     const seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
     const megapixels = options.comfyCharacterFlux2Megapixels ?? 1;
-    const modelName = options.comfyCharacterFlux2Unet || 'flux2\\flux2Klein9BInt8_v10.safetensors';
+    const modelName = options.comfyCharacterFlux2Unet || DEFAULT_CHARACTER_FLUX2_UNET;
     const modelLoader = modelName.toLowerCase().endsWith('.gguf')
         ? { inputs: { unet_name: modelName }, class_type: 'UnetLoaderGGUF', _meta: { title: 'FLUX2 Character model (GGUF)' } }
         : { inputs: { unet_name: modelName, weight_dtype: 'default' }, class_type: 'UNETLoader', _meta: { title: 'FLUX2 Character model' } };

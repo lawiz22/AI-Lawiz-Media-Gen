@@ -524,6 +524,7 @@ export const selectIsReadyToGenerate = createSelector(
 
     if (activeOptions.provider === 'gemini' || activeOptions.provider === 'mammouth') {
       if (activeOptions.provider === 'mammouth' && !app.isMammouthConnected) return false;
+      if (activeTab === 'character-generator') return !!sourceImage && getEnabledCharacterAngles(activeOptions).length > 0;
       if (activeOptions.geminiMode === 't2i') return !!activeOptions.geminiPrompt?.trim();
 
       // I2I modes
@@ -543,11 +544,6 @@ export const selectIsReadyToGenerate = createSelector(
         if (activeOptions.geminiI2iMode === 'compose') {
           return !!sourceImage && elementImages.length > 0 && !!activeOptions.geminiComposePrompt?.trim();
         }
-      } else if (activeTab === 'character-generator') {
-        if (activeOptions.poseMode === 'library') {
-          return !!sourceImage && !!activeOptions.poseLibraryItems && activeOptions.poseLibraryItems.length > 0;
-        }
-        return !!sourceImage;
       }
     } else if (activeOptions.provider === 'comfyui') {
       if (activeTab === 'character-generator') {

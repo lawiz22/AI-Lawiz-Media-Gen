@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, ChangeEvent, useRef } from 'react';
+import React, { useState, useEffect, useMemo, ChangeEvent, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
 // Fix: Import `NunchakuAttention` type to be used for casting.
 import type { Flux2ReferenceRole, GenerationOptions, NunchakuAttention, ImageStyle } from '../types';
@@ -21,7 +21,7 @@ import { ImageUploader } from './ImageUploader';
 import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
 import { defaultQwen21MultiOptions, defaultQwen21EditOptions, getQwen21Choices, QWEN21_MULTI_SIZES } from '../services/qwen21Workflow';
 import { dataUrlToFile, fileToDataUrl, dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
-import { SelectInput, TextInput, NumberSlider, CheckboxSlider } from './InputComponents';
+import { SelectInput, TextInput, NumberSlider, CheckboxSlider, PresetTextInput } from './InputComponents';
 import {
     CHARACTER_ANGLES,
     CHARACTER_ANGLE_OPTIONS,
@@ -310,6 +310,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     characterOutputsContainer,
 }) => {
     const [collapsedCharacterOutputs, setCollapsedCharacterOutputs] = useState<string[]>([]);
+    const [characterOutputsOpen, setCharacterOutputsOpen] = useState(true);
+    const characterOutputsId = useId();
     const [isPreviewingBg, setIsPreviewingBg] = useState(false);
     const [bgPreviewError, setBgPreviewError] = useState<string | null>(null);
     const [isPreviewingClothing, setIsPreviewingClothing] = useState(false);
@@ -912,7 +914,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 </OptionSection>
             ) : ( // --- I2I Mode ---
                 <>
-                    {activeTab === 'image-generator' ? (
+                    {activeTab === 'character-generator' ? renderCharacterOptions() : activeTab === 'image-generator' ? (
                         // --- IMAGE GENERATOR I2I ---
                         <>
                             <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-3 gap-1">
@@ -1079,7 +1081,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         );
     };
 
-    const renderComfyCharacterOptions = () => {
+    const renderCharacterOptions = () => {
         const selectOptions = (current: string, values: string[]) => Array.from(new Set([current, ...values].filter(Boolean))).map(value => ({ value, label: value }));
         const setOutputPrompt = (angleId: string, prompt: string | undefined) => {
             updateOptions({ comfyCharacterAngleSettings: {
@@ -1141,7 +1143,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             const currentSettings = options.comfyCharacterAngleSettings || {};
             const randomValue = (values: string[]) => values[Math.floor(Math.random() * values.length)];
             updateOptions({
-                comfyCharacterAngleSettings: Object.fromEntries(CHARACTER_ANGLES.map(({ id }) => [id, options.comfyCharacterMode === 'flux2' && currentSettings[id]?.prompt !== undefined ? currentSettings[id] : {
+                comfyCharacterAngleSettings: Object.fromEntries(CHARACTER_ANGLES.map(({ id }) => [id, isFlux2Character && currentSettings[id]?.prompt !== undefined ? currentSettings[id] : {
                     ...DEFAULT_CHARACTER_ANGLE_SETTINGS[id],
                     ...currentSettings[id],
                     angle: randomValue(CHARACTER_ANGLE_OPTIONS),
@@ -1161,9 +1163,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 }])),
             });
         };
-        const isFlux2Character = options.comfyCharacterMode === 'flux2';
-        const isQwen21Character = options.comfyCharacterMode === 'qwen21-create';
-        const supportsReferences = isFlux2Character || isQwen21Character;
+        const isCloudCharacter = options.provider !== 'comfyui';
+        const isFlux2Character = !isCloudCharacter && options.comfyCharacterMode === 'flux2';
+        const isQwen21Character = !isCloudCharacter && options.comfyCharacterMode === 'qwen21-create';
+        const supportsReferences = isCloudCharacter || isFlux2Character || isQwen21Character;
         const qwenSettings = options.comfyQwen21Create || defaultQwen21MultiOptions();
         const isQwen21Turbo = !!options.comfyQwen21CreateTurbo;
         const qwenTurboSampling = defaultQwen21EditOptions('turbo');
@@ -1178,14 +1181,26 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         ];
 
         const outputControls = (
-            <OptionSection title="Automatic Multi-Angle Set">
+            <div className="space-y-4">
+                <h3 className="border-b-2 border-accent/30 pb-2">
+                    <button type="button" aria-label={`${characterOutputsOpen ? 'Collapse' : 'Expand'} character slots`} aria-expanded={characterOutputsOpen} aria-controls={characterOutputsId} onClick={() => setCharacterOutputsOpen(open => !open)} className="flex w-full items-center gap-2 text-left text-accent">
+                        <ChevronRightIcon className={`h-5 w-5 shrink-0 transition-transform ${characterOutputsOpen ? 'rotate-90' : ''}`} />
+                        <span className="min-w-0 flex-1 text-lg font-bold uppercase tracking-wider">Automatic Multi-Angle Set</span>
+                        <span className="shrink-0 text-xs font-semibold">{characterOutputsOpen ? 'Hide slots' : 'Show slots'}</span>
+                    </button>
+                </h3>
+                <div className="space-y-4 pt-2">
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-text-secondary">
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="shrink-0 font-semibold text-accent">{enabledOutputCount}/8 enabled</span>
-                        <button type="button" onClick={() => setCollapsedCharacterOutputs(collapsedCharacterOutputs.length === CHARACTER_ANGLES.length ? [] : CHARACTER_ANGLES.map(({ id }) => id))} className="inline-flex h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent">
+                        <button type="button" onClick={() => {
+                            const expandAll = collapsedCharacterOutputs.length === CHARACTER_ANGLES.length;
+                            setCollapsedCharacterOutputs(expandAll ? [] : CHARACTER_ANGLES.map(({ id }) => id));
+                            if (expandAll) setCharacterOutputsOpen(true);
+                        }} className="inline-flex h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent">
                             <ChevronRightIcon className={`h-4 w-4 ${collapsedCharacterOutputs.length === CHARACTER_ANGLES.length ? '' : 'rotate-90'}`} />{collapsedCharacterOutputs.length === CHARACTER_ANGLES.length ? 'Expand all outputs' : 'Collapse all outputs'}
                         </button>
-                        {!isQwen21Character && <button type="button" onClick={loadFlux2AngleWorkflow} disabled={isDisabled} title="Apply the supplied FLUX2 Klein workflow: replace output prompts and model/sampling settings, disable LoRAs and CacheDiT, and clear the pose reference. Close-up needs its placeholders filled." className="inline-flex min-h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 py-2 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
+                        {!isCloudCharacter && !isQwen21Character && <button type="button" onClick={loadFlux2AngleWorkflow} disabled={isDisabled} title="Apply the supplied FLUX2 Klein workflow: replace output prompts and model/sampling settings, disable LoRAs and CacheDiT, and clear the pose reference. Close-up needs its placeholders filled." className="inline-flex min-h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 py-2 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
                             <WorkflowIcon className="h-4 w-4 shrink-0" />Load FLUX2 angle workflow
                         </button>}
                         {isFlux2Character && <button type="button" onClick={returnToStandardFlux2} disabled={isDisabled} title="Remove full workflow prompts from every output and return to angle, pose and expression controls. Keep model, sampling and output selections." className="inline-flex min-h-9 items-center gap-2 rounded-md border border-border-primary bg-bg-tertiary px-3 py-2 text-xs font-bold text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
@@ -1199,7 +1214,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         </button>
                     </div>
                 </div>
-                <div className="space-y-3">
+                <div id={characterOutputsId} hidden={!characterOutputsOpen} className="space-y-3">
                     {CHARACTER_ANGLES.map((angle, index) => {
                         const settings = { ...DEFAULT_CHARACTER_ANGLE_SETTINGS[angle.id], ...options.comfyCharacterAngleSettings?.[angle.id] };
                         const isOutputEnabled = settings.enabled !== false;
@@ -1257,55 +1272,17 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                                         className="mt-1.5 block w-full min-w-0 resize-y rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm font-normal text-text-primary focus:border-accent focus:ring-accent"
                                     />
                                 </label> : <>
-                                <label className="text-xs font-semibold text-text-secondary">Camera Angle
-                                    <input
-                                        type="text"
-                                        list="character-angle-suggestions"
-                                        value={settings.angle}
-                                        onChange={(event) => updateAngleSetting(angle.id, 'angle', event.target.value)}
-                                        placeholder="Default (nothing)"
-                                        disabled={isDisabled || !isOutputEnabled}
-                                        className="mt-1.5 block w-full rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm font-normal text-text-primary focus:border-accent focus:ring-accent"
-                                    />
-                                </label>
-                                <label className="text-xs font-semibold text-text-secondary">Pose
-                                    <input
-                                        type="text"
-                                        list="character-pose-suggestions"
-                                        value={settings.pose}
-                                        onChange={(event) => updateAngleSetting(angle.id, 'pose', event.target.value)}
-                                        placeholder="Default (nothing)"
-                                        disabled={isDisabled || !isOutputEnabled}
-                                        className="mt-1.5 block w-full rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm font-normal text-text-primary focus:border-accent focus:ring-accent"
-                                    />
-                                </label>
-                                <label className="text-xs font-semibold text-text-secondary">Facial Expression
-                                    <input
-                                        type="text"
-                                        list="character-expression-suggestions"
-                                        value={settings.expression}
-                                        onChange={(event) => updateAngleSetting(angle.id, 'expression', event.target.value)}
-                                        placeholder="Default (nothing)"
-                                        disabled={isDisabled || !isOutputEnabled}
-                                        className="mt-1.5 block w-full rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm font-normal text-text-primary focus:border-accent focus:ring-accent"
-                                    />
-                                </label>
+                                <PresetTextInput label="Camera Angle" ariaLabel={`Camera Angle for Output ${index + 1}`} value={settings.angle} options={CHARACTER_ANGLE_OPTIONS} onChange={value => updateAngleSetting(angle.id, 'angle', value)} disabled={isDisabled || !isOutputEnabled} />
+                                <PresetTextInput label="Pose" ariaLabel={`Pose for Output ${index + 1}`} value={settings.pose} options={CHARACTER_POSE_OPTIONS} onChange={value => updateAngleSetting(angle.id, 'pose', value)} disabled={isDisabled || !isOutputEnabled} />
+                                <PresetTextInput label="Facial Expression" ariaLabel={`Facial Expression for Output ${index + 1}`} value={settings.expression} options={CHARACTER_EXPRESSION_OPTIONS} onChange={value => updateAngleSetting(angle.id, 'expression', value)} disabled={isDisabled || !isOutputEnabled} />
                                 </>}
                             </div>
                             </div>
                         </div>;
                     })}
                 </div>
-                <datalist id="character-angle-suggestions">
-                    {CHARACTER_ANGLE_OPTIONS.map(value => <option key={value} value={value} />)}
-                </datalist>
-                <datalist id="character-pose-suggestions">
-                    {CHARACTER_POSE_OPTIONS.map(value => <option key={value} value={value} />)}
-                </datalist>
-                <datalist id="character-expression-suggestions">
-                    {CHARACTER_EXPRESSION_OPTIONS.map(value => <option key={value} value={value} />)}
-                </datalist>
-            </OptionSection>
+                </div>
+            </div>
         );
 
         return <>
@@ -1348,9 +1325,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 </div>}
             </OptionSection>}
 
-            <button onClick={() => setCharacterAdvancedOpen(open => !open)} className={`w-full rounded-md border px-4 py-2 text-sm font-bold transition-colors ${characterAdvancedOpen ? 'border-accent bg-accent/10 text-accent' : 'border-border-primary bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
+            {!isCloudCharacter && <button onClick={() => setCharacterAdvancedOpen(open => !open)} className={`w-full rounded-md border px-4 py-2 text-sm font-bold transition-colors ${characterAdvancedOpen ? 'border-accent bg-accent/10 text-accent' : 'border-border-primary bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
                 Advanced {characterAdvancedOpen ? '−' : '+'}
-            </button>
+            </button>}
 
             {characterAdvancedOpen && !supportsReferences && <OptionSection title="Qwen Edit Models & LoRAs">
                 <SelectInput label="Diffusion Model (UNET)" value={options.comfyCharacterUnet || ''} onChange={handleOptionChange('comfyCharacterUnet')} options={selectOptions(options.comfyCharacterUnet || '', comfyUnets)} disabled={isDisabled} />
@@ -1459,7 +1436,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     };
 
     const renderComfyUIOptions = () => {
-        if (activeTab === 'character-generator') return renderComfyCharacterOptions();
+        if (activeTab === 'character-generator') return renderCharacterOptions();
         const modelType = options.comfyModelType || 'sdxl';
         if (modelType === 'qwen21-t2i' || modelType === 'qwen21-turbo') {
             return <Qwen21SettingsPanel options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} />;
@@ -1844,7 +1821,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 {!hideGeneralSettings && (
                     <OptionSection title="General Settings">
                         {!hideProviderSwitch && <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1"><button onClick={() => updateOptions({ provider: 'comfyui' })} disabled={isDisabled} className={`px-3 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'comfyui' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>ComfyUI</button><button onClick={() => updateOptions({ provider: 'mammouth' })} disabled={isDisabled} className={`px-3 py-2 text-sm font-bold rounded-full transition-colors ${options.provider === 'mammouth' ? 'bg-accent text-accent-text shadow-md' : 'hover:bg-bg-secondary'}`}>Mammouth</button></div>}
-                        {!(activeTab === 'character-generator' && options.provider === 'comfyui') && <NumberSlider label={`Number of Images: ${options.numImages}`} value={options.numImages} onChange={(e) => updateOptions({ numImages: parseInt(e.target.value, 10), poseSelection: options.poseSelection.slice(0, parseInt(e.target.value, 10)) })} min={1} max={MAX_IMAGES} step={1} disabled={isDisabled} />}
+                        {activeTab !== 'character-generator' && <NumberSlider label={`Number of Images: ${options.numImages}`} value={options.numImages} onChange={(e) => updateOptions({ numImages: parseInt(e.target.value, 10), poseSelection: options.poseSelection.slice(0, parseInt(e.target.value, 10)) })} min={1} max={MAX_IMAGES} step={1} disabled={isDisabled} />}
                         {!(options.provider === 'comfyui' && ((activeTab === 'character-generator' && options.comfyCharacterMode === 'qwen21-create') || options.comfyModelType === 'qwen-t2i-gguf' || options.comfyModelType === 'flux2-edit' || options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo')) && (
                             <SelectInput
                                 label="Aspect Ratio"

@@ -39,7 +39,9 @@ import { generateComfyUICharacterAngles, generateComfyUIPortraits, exportComfyUI
 import { CloseIcon as CancelCharacterIcon } from './components/icons';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, generateMammouthImages, getMammouthApiKey, testMammouthConnection, updateMammouthApiKey } from './services/mammouthService';
 import { DEFAULT_OPENROUTER_MODEL, updateOpenRouterSettings, type OpenRouterSettings } from './services/openRouterService';
-import { buildCharacterAnglePrompts, CHARACTER_ANGLES, getEnabledCharacterAngles } from './services/characterAnglesWorkflow';
+import { CHARACTER_ANGLES, getEnabledCharacterAngles } from './services/characterAnglesWorkflow';
+import { generateCloudCharacterAngles } from './services/cloudCharacterService';
+import { createCharacterResultSnapshot, getCharacterResultKey, type CharacterResultSnapshot } from './services/characterResults';
 import { Login } from './components/Login';
 import { Header } from './components/Header';
 import { ImageUploader } from './components/ImageUploader';
@@ -125,7 +127,8 @@ const App: React.FC = () => {
     const [isGeneratingRefinePrompt, setIsGeneratingRefinePrompt] = useState(false);
     const [generationTimes, setGenerationTimes] = useState<Record<string, number | null>>({});
     const [imageGenerationJobs, setImageGenerationJobs] = useState<Array<{ label: string; progress: number; message: string; status: 'pending' | 'done' | 'error'; src?: string }>>([]);
-    const [characterGenerationJobs, setCharacterGenerationJobs] = useState<Array<{ label: string; progress: number; message: string; status: 'pending' | 'done' | 'error'; src?: string }>>([]);
+    const [characterGenerationJobsByKey, setCharacterGenerationJobsByKey] = useState<Record<string, Array<{ label: string; progress: number; message: string; status: 'pending' | 'done' | 'error'; src?: string }>>>({});
+    const [characterResultSnapshots, setCharacterResultSnapshots] = useState<Record<string, CharacterResultSnapshot>>({});
     const [characterOutputsContainer, setCharacterOutputsContainer] = useState<HTMLDivElement | null>(null);
     const [upscaleSourceFile, setUpscaleSourceFile] = useState<File | null>(null);
     const [isUpscalePickerOpen, setIsUpscalePickerOpen] = useState(false);
@@ -191,7 +194,11 @@ const App: React.FC = () => {
     const imageGeneratorContentKey = options.provider === 'comfyui'
         ? `image-generator:${options.comfyModelType || 'sdxl'}`
         : 'image-generator';
-    const activeGenerationContentKey = activeTab === 'image-generator' ? imageGeneratorContentKey : activeTab;
+    const characterGeneratorContentKey = getCharacterResultKey(characterOptions);
+    const characterGenerationJobs = characterGenerationJobsByKey[characterGeneratorContentKey] || [];
+    const characterResultSnapshot = characterResultSnapshots[characterGeneratorContentKey];
+    const activeGenerationContentKey = activeTab === 'image-generator' ? imageGeneratorContentKey
+        : activeTab === 'character-generator' ? characterGeneratorContentKey : activeTab;
 
     // --- Memoized Handlers for Redux ---
     const handleSetOptions = useCallback((newOptions: GenerationOptions) => {
@@ -586,6 +593,9 @@ const App: React.FC = () => {
 
     const handleReset = () => {
         dispatch(resetGenerationState());
+        setCharacterGenerationJobsByKey({});
+        setCharacterResultSnapshots({});
+        setGenerationTimes({});
     };
 
     const handlePromptGenReset = useCallback(() => {
@@ -617,13 +627,19 @@ const App: React.FC = () => {
         await cancelComfyUIExecution();
     };
     const handleGenerate = async () => {
+        const setCharacterGenerationJobs = (update: React.SetStateAction<(typeof characterGenerationJobsByKey)[string]>) => {
+            setCharacterGenerationJobsByKey(current => ({
+                ...current,
+                [activeGenerationContentKey]: typeof update === 'function' ? update(current[activeGenerationContentKey] || []) : update,
+            }));
+        };
         const characterCancellation = activeTab === 'character-generator' && currentOptions.provider === 'comfyui' ? new AbortController() : null;
         characterGenerationControllerRef.current = characterCancellation;
         setCharacterCancelling(false);
         const startTime = performance.now();
         setGenerationTimes(prev => ({ ...prev, [activeGenerationContentKey]: null }));
 
-        const supportsProgressiveCharacter = activeTab === 'character-generator' && (currentOptions.provider === 'comfyui' || currentOptions.provider === 'mammouth');
+        const supportsProgressiveCharacter = activeTab === 'character-generator';
         const enabledCharacterAngles = supportsProgressiveCharacter ? getEnabledCharacterAngles(characterOptions) : [];
         if (supportsProgressiveCharacter) {
             setCharacterGenerationJobs(enabledCharacterAngles.map((angle, index) => {
@@ -635,8 +651,6 @@ const App: React.FC = () => {
                     status: 'pending' as const,
                 };
             }));
-        } else {
-            setCharacterGenerationJobs([]);
         }
 
         const supportsProgressiveImageGeneration = activeTab === 'image-generator' && currentOptions.provider === 'comfyui';
@@ -665,58 +679,35 @@ const App: React.FC = () => {
         };
 
         try {
+            if (supportsProgressiveCharacter) {
+                const snapshot = createCharacterResultSnapshot(characterOptions, sourceImage, shouldGenerateCharacterName ? '' : characterName);
+                setCharacterResultSnapshots(current => ({ ...current, [activeGenerationContentKey]: snapshot }));
+            }
             let result: { images: { src: string; usageMetadata?: any }[], finalPrompt: string | null };
 
-            if (currentOptions.provider === 'gemini') {
-                // We now pass the tab-specific options directly
-                // FORCE character mode for character tab to ensure robustness against state drift
-                const optionsToUse = activeTab === 'character-generator'
-                    ? { ...characterOptions, geminiGeneralEditPrompt: '', geminiI2iMode: 'character' as const, geminiMode: 'i2i' as const }
-                    : options;
-
+            if (activeTab === 'character-generator' && (currentOptions.provider === 'gemini' || currentOptions.provider === 'mammouth')) {
+                const completedImages: Awaited<ReturnType<typeof generateCloudCharacterAngles>>['images'] = [];
+                const completedPrompts: string[] = [];
+                result = await generateCloudCharacterAngles(
+                    sourceImage, characterOptions, localUpdateProgress, clothingImage, backgroundImage, characterPoseImage,
+                    (index, message, value) => setCharacterGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: value, message } : job)),
+                    (index, image, prompt) => {
+                        completedImages.push(image);
+                        completedPrompts.push(prompt);
+                        setCharacterGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: 1, message: `${job.label} complete`, status: 'done', src: image.src } : job));
+                        dispatch(setGeneratedImages({ tabId: activeGenerationContentKey, images: [...completedImages] }));
+                        dispatch(setLastUsedPrompt({ tabId: activeGenerationContentKey, prompt: completedPrompts.join('\n\n') }));
+                    },
+                );
+            } else if (currentOptions.provider === 'gemini') {
                 result = await generatePortraits(
-                    sourceImage, optionsToUse, localUpdateProgress, clothingImage, backgroundImage,
+                    sourceImage, options, localUpdateProgress, clothingImage, backgroundImage,
                     previewedBackgroundImage, previewedClothingImage, maskImage, elementImages
                 );
             } else if (currentOptions.provider === 'mammouth') {
-                const optionsToUse = activeTab === 'character-generator'
-                    ? { ...characterOptions, geminiGeneralEditPrompt: '', geminiI2iMode: 'character' as const, geminiMode: 'i2i' as const }
-                    : options;
-                if (activeTab === 'character-generator') {
-                    if (enabledCharacterAngles.length === 0) throw new Error('Enable at least one character output before generating.');
-                    const prompts = buildCharacterAnglePrompts(characterOptions);
-                    const completedImages: { src: string; usageMetadata?: any }[] = [];
-                    for (let index = 0; index < enabledCharacterAngles.length; index += 1) {
-                        const angle = enabledCharacterAngles[index];
-                        const angleLabel = characterOptions.comfyCharacterAngleSettings?.[angle.id]?.angle?.trim() || angle.label;
-                        const updateOutputProgress = (message: string, value: number) => {
-                            setCharacterGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: value, message } : job));
-                            localUpdateProgress(`${angleLabel}: ${message}`, (index + value) / enabledCharacterAngles.length);
-                        };
-                        try {
-                            updateOutputProgress(`Starting ${angleLabel}...`, 0.02);
-                            const angleResult = await generateMammouthImages(sourceImage, {
-                                ...optionsToUse,
-                                numImages: 1,
-                                poseMode: 'prompt',
-                                poseSelection: [prompts[index]],
-                            }, updateOutputProgress, clothingImage, backgroundImage, maskImage, elementImages);
-                            const image = angleResult.images[0];
-                            if (!image) throw new Error(`Mammouth returned no image for ${angleLabel}.`);
-                            completedImages.push(image);
-                            setCharacterGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: 1, message: `${angleLabel} complete`, status: 'done', src: image.src } : job));
-                            dispatch(setGeneratedImages({ tabId: activeGenerationContentKey, images: [...completedImages] }));
-                        } catch (outputError) {
-                            setCharacterGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: 1, message: outputError instanceof Error ? outputError.message : 'Generation failed', status: 'error' } : job));
-                            throw outputError;
-                        }
-                    }
-                    result = { images: completedImages, finalPrompt: prompts.join('\n\n') };
-                } else {
-                    result = await generateMammouthImages(
-                        sourceImage, optionsToUse, localUpdateProgress, clothingImage, backgroundImage, maskImage, elementImages
-                    );
-                }
+                result = await generateMammouthImages(
+                    sourceImage, options, localUpdateProgress, clothingImage, backgroundImage, maskImage, elementImages
+                );
             } else if (currentOptions.provider === 'comfyui') {
                 const comparisonSource = sourceImage && activeTab !== 'character-generator' && options.comfyModelType === 'qwen-edit' ? await fileToDataUrl(sourceImage) : undefined;
                 const progressiveImages: { src: string; seed: number }[] = [];
@@ -725,12 +716,12 @@ const App: React.FC = () => {
                         sourceImage!, characterOptions, localUpdateProgress, clothingImage, backgroundImage, characterPoseImage,
                         (index, message, value) => setCharacterGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: value, message } : job)),
                         (index, image) => {
-                            setCharacterGenerationJobs(current => {
-                                const next = current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: 1, message: `${job.label} complete`, status: 'done' as const, src: image.src } : job);
-                                const completed = next.filter(job => job.status === 'done' && job.src).map(job => ({ src: job.src!, before: comparisonSource }));
-                                dispatch(setGeneratedImages({ tabId: activeGenerationContentKey, images: completed }));
-                                return next;
-                            });
+                            progressiveImages[index] = image;
+                            setCharacterGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: 1, message: `${job.label} complete`, status: 'done', src: image.src } : job));
+                            dispatch(setGeneratedImages({
+                                tabId: activeGenerationContentKey,
+                                images: progressiveImages.filter((item): item is { src: string; seed: number } => !!item),
+                            }));
                         },
                         characterCancellation?.signal,
                     )
@@ -785,6 +776,10 @@ const App: React.FC = () => {
                     try {
                         const { name, usageMetadata } = await generateCharacterNameForImage(result.images[0].src);
                         dispatch(setCharacterName(name));
+                        setCharacterResultSnapshots(current => ({
+                            ...current,
+                            [activeGenerationContentKey]: { ...current[activeGenerationContentKey], characterName: name },
+                        }));
                         if (usageMetadata) {
                             dispatch(addSessionTokenUsage(usageMetadata));
                         }
@@ -1677,7 +1672,6 @@ const App: React.FC = () => {
                                 />
                             </div>
                             <div className="lg:col-span-2 min-w-0 space-y-8">
-                                {characterOptions.provider === 'comfyui' && <div ref={setCharacterOutputsContainer} data-character-outputs="true" className="min-w-0" />}
                                 <ActionControlPanel
                                     options={currentOptions}
                                     generationMode="i2i"
@@ -1686,24 +1680,27 @@ const App: React.FC = () => {
                                     isReady={isReadyToGenerate}
                                     isDisabled={isLoading}
                                 />
-                                {isLoading && currentOptions.provider === 'comfyui' && <div className="flex justify-end"><button type="button" onClick={handleCancelCharacterGeneration} disabled={isCharacterCancelling} className="inline-flex items-center justify-center gap-2 rounded-md border border-danger bg-danger-bg px-4 py-2 text-sm font-semibold text-danger hover:bg-danger hover:text-white disabled:opacity-50"><CancelCharacterIcon className="h-4 w-4" />{isCharacterCancelling ? 'Cancelling...' : 'Cancel Generation'}</button></div>}
                                 {isLoading && characterGenerationJobs.length === 0 ? (
                                     <Loader message={progressMessage} progress={progressValue} />
                                 ) : (
                                     <ImageGrid
-                                        images={generatedContent['character-generator']?.images || []}
+                                        key={characterGeneratorContentKey}
+                                        contentKey={characterGeneratorContentKey}
+                                        images={generatedContent[characterGeneratorContentKey]?.images || []}
                                         generationJobs={characterGenerationJobs}
                                         onSendToI2I={handleSendToI2I}
                                         onSendToCharacter={handleSendToCharacter}
                                         onSendToUpscale={handleSendToUpscale}
-                                        lastUsedPrompt={generatedContent['character-generator']?.lastUsedPrompt}
-                                        options={currentOptions}
-                                        sourceImage={sourceImage}
-                                        characterName={characterName}
-                                        activeTab={activeTab}
-                                        generationTime={generationTimes[activeTab]}
+                                        lastUsedPrompt={generatedContent[characterGeneratorContentKey]?.lastUsedPrompt}
+                                        options={characterResultSnapshot?.options ?? characterOptions}
+                                        sourceImage={characterResultSnapshot ? characterResultSnapshot.sourceImage : sourceImage}
+                                        characterName={characterResultSnapshot ? characterResultSnapshot.characterName : characterName}
+                                        activeTab="character-generator"
+                                        generationTime={generationTimes[characterGeneratorContentKey]}
                                     />
                                 )}
+                                {isLoading && currentOptions.provider === 'comfyui' && <div className="flex justify-end"><button type="button" onClick={handleCancelCharacterGeneration} disabled={isCharacterCancelling} className="inline-flex items-center justify-center gap-2 rounded-md border border-danger bg-danger-bg px-4 py-2 text-sm font-semibold text-danger hover:bg-danger hover:text-white disabled:opacity-50"><CancelCharacterIcon className="h-4 w-4" />{isCharacterCancelling ? 'Cancelling...' : 'Cancel Generation'}</button></div>}
+                                <div ref={setCharacterOutputsContainer} data-character-outputs="true" className="min-w-0" />
                             </div>
                         </div>
                         </React.Activity>
@@ -1949,7 +1946,7 @@ const App: React.FC = () => {
                 isOpen={isPosePickerOpen}
                 onClose={() => dispatch(setModalOpen({ modal: 'isPosePickerOpen', isOpen: false }))}
                 onSelectItem={async (item) => {
-                    if (characterOptions.comfyCharacterMode === 'flux2' || characterOptions.comfyCharacterMode === 'qwen21-create') {
+                    if (characterOptions.provider !== 'comfyui' || characterOptions.comfyCharacterMode === 'flux2' || characterOptions.comfyCharacterMode === 'qwen21-create') {
                         const response = await fetch(item.media);
                         const blob = await response.blob();
                         dispatch(setCharacterPoseImage(new File([blob], 'pose_ref.jpg', { type: blob.type })));
@@ -1961,9 +1958,9 @@ const App: React.FC = () => {
                     }));
                 }}
                 filter="pose"
-                multiSelect={characterOptions.comfyCharacterMode !== 'flux2' && characterOptions.comfyCharacterMode !== 'qwen21-create'}
+                multiSelect={characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode !== 'flux2' && characterOptions.comfyCharacterMode !== 'qwen21-create'}
                 onSelectMultiple={(items) => {
-                    if (characterOptions.comfyCharacterMode === 'flux2' || characterOptions.comfyCharacterMode === 'qwen21-create') return;
+                    if (characterOptions.provider !== 'comfyui' || characterOptions.comfyCharacterMode === 'flux2' || characterOptions.comfyCharacterMode === 'qwen21-create') return;
                     dispatch(updateCharacterOptions({
                         poseLibraryItems: items,
                         poseMode: 'library'

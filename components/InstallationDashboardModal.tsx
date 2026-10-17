@@ -17,6 +17,7 @@ const PROVIDER_LOGOS: Record<string, string> = {
     gemini: 'https://mammouth.ai/logos/gemini.svg',
     comfyui: 'https://www.comfy.org/favicon.ico',
     mammouth: 'https://mammouth.ai/logos/mammouth-ai-logo.svg',
+    openrouter: 'https://openrouter.ai/favicon.ico',
     drive: 'https://fonts.gstatic.com/s/i/productlogos/drive_2020q4/v8/web-96dp/logo_drive_2020q4_color_2x_web_96dp.png',
 };
 
