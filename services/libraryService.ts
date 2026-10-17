@@ -89,7 +89,7 @@ export async function initializeDriveSync(onProgress: (message: string) => void,
     onProgress("Initial sync process complete.");
 }
 
-export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<LibraryItem> => {
+export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>, blobs?: Partial<Record<LibraryAssetRole, Blob>>): Promise<LibraryItem> => {
     const itemToSave = { ...item };
 
     // If a name is missing for an image, video, or character, try to generate one.
@@ -127,13 +127,18 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>): Promise<Libr
         }
     }
 
-    const newItem = await idbService.saveToLibrary(itemToSave);
+    const newItem = await idbService.saveToLibrary(itemToSave, false, blobs);
 
     if (driveService?.isConnected()) {
         try {
             const { index, fileId: indexFileId } = await driveService.getLibraryIndex();
 
             if (newItem.mediaType === 'prompt' || newItem.mediaType === 'color-palette' || newItem.mediaType === 'preset') {
+                const driveAssetFileIds = newItem.videoPromptOptions ? await uploadLibraryAssetsToDrive(newItem) : newItem.driveAssetFileIds;
+                if (newItem.videoPromptOptions) {
+                    await idbService.updateLibraryItem(newItem.id, { driveAssetFileIds });
+                    newItem.driveAssetFileIds = driveAssetFileIds;
+                }
                 index.items[newItem.id] = withoutLocalAssetRefs(newItem);
                 await driveService.updateLibraryIndex(index, indexFileId);
                 return newItem;
@@ -930,7 +935,16 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
         const itemMetadata = missingItems[i];
         onProgress(`Processing "${itemMetadata.name || itemMetadata.mediaType}" (${i + 1}/${missingItems.length})...`);
         try {
-            if (itemMetadata.mediaType === 'prompt' || itemMetadata.mediaType === 'color-palette' || itemMetadata.mediaType === 'preset') {
+            if (itemMetadata.videoPromptOptions && itemMetadata.driveAssetFileIds) {
+                const blobs: Partial<Record<LibraryAssetRole, Blob>> = {};
+                for (const [role, fileId] of Object.entries(itemMetadata.driveAssetFileIds) as [LibraryAssetRole, string][]) {
+                    signal?.throwIfAborted();
+                    blobs[role] = await driveService.downloadMediaFile(fileId, signal);
+                }
+                const newItem = { ...itemMetadata } as LibraryItem;
+                delete newItem.assetRefs;
+                await idbService.saveLibraryItemWithBlobs(newItem, blobs);
+            } else if (itemMetadata.mediaType === 'prompt' || itemMetadata.mediaType === 'color-palette' || itemMetadata.mediaType === 'preset') {
                 await idbService.saveToLibrary(itemMetadata as LibraryItem, true);
             } else if (itemMetadata.driveAssetFileIds || itemMetadata.driveFileId) {
                 const remoteAssetIds: Partial<Record<LibraryAssetRole, string>> = {
@@ -1013,7 +1027,7 @@ export const syncLibraryToDrive = async (onProgress: (message: string) => void, 
             const isTextBased = ['prompt', 'color-palette'].includes(item.mediaType);
             let driveAssetFileIds = { ...item.driveAssetFileIds };
 
-            if (!isTextBased) {
+            if (!isTextBased || item.videoPromptOptions) {
                 driveAssetFileIds = await uploadLibraryAssetsToDrive({ ...item, driveAssetFileIds }, signal);
                 await idbService.updateLibraryItem(item.id, { driveFileId: driveAssetFileIds.media, driveAssetFileIds });
             }

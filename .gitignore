@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 \[full_path_of_file_1\]
 \[full_path_of_file_2\]
+.build-check/assets/ffmpeg-core-CI9Irx9p.js
+.build-check/assets/index-HSehdobX.js
+.build-check/assets/worker-DYSz7Krg.js
+.build-check/assets/index-BzA1SrlF.js
+.build-check/assets/ffmpeg-core-CgUfceKH.wasm

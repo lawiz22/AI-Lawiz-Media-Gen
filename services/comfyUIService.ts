@@ -22,8 +22,10 @@ import {
 } from "../constants";
 
 import { generateMammouthText } from './mammouthService';
+import { generateOpenRouterText } from './openRouterService';
+import { getSeedVr2Models, selectSeedVr2Model } from '../utils/seedVr2Models';
 import { generateGeminiText } from './geminiService';
-import { LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './ltxDirectorWorkflow';
+import { buildLtxDirectorModelNodes, LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './ltxDirectorWorkflow';
 import { createLtxDialogueInstruction, parseSpeakerTranscript } from '../utils/ttsTranscript';
 import { buildCharacterAnglesWorkflow, buildFlux2CharacterAnglesWorkflow, buildQwen21CharacterAnglePrompts, CHARACTER_ANGLES, getEnabledCharacterAngles } from './characterAnglesWorkflow';
 import { buildSwapAnythingWorkflow, type SwapAnythingOptions } from './swapAnythingWorkflow';
@@ -634,12 +636,14 @@ Do not add any preamble, conclusion, markdown bullets, or extra sections.`;
     }
 };
 
-type CloudPromptProvider = 'gemini' | 'mammouth';
+type CloudPromptProvider = 'gemini' | 'mammouth' | 'openrouter';
 
 const generateCloudPromptText = async (instruction: string, inputs: File[], provider: CloudPromptProvider): Promise<string> =>
     provider === 'gemini'
         ? generateGeminiText(instruction, inputs)
-        : (await generateMammouthText(instruction, inputs)).text;
+        : provider === 'openrouter'
+            ? generateOpenRouterText(instruction, inputs)
+            : (await generateMammouthText(instruction, inputs)).text;
 
 export const generateComfyUIPromptFromSource = async (sourceImage: File, modelType: ComfyPromptModelType, provider: CloudPromptProvider = 'mammouth'): Promise<string> => {
     const instruction = getPromptStyleInstruction(modelType) + ' Start the prompt directly without any preamble.';
@@ -808,6 +812,21 @@ export const generateMagicalPromptSoup = async (
         const jsonText = resultText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
         const parsed = JSON.parse(jsonText);
         if (parsed.prompt_parts && Array.isArray(parsed.prompt_parts)) {
+            if (provider === 'openrouter') {
+                const sources = new Set([0, ...ingredients.map(ingredient => ingredient.source)]);
+                if (!parsed.prompt_parts.length || !parsed.prompt_parts.every((part: unknown) =>
+                    typeof part === 'object' && part !== null && 'text' in part && typeof part.text === 'string' && part.text.trim()
+                    && 'source' in part && typeof part.source === 'number' && Number.isInteger(part.source) && sources.has(part.source))) {
+                    throw new Error('OpenRouter returned invalid or unknown prompt source segments.');
+                }
+                if (modelType === 'flux2-simple') {
+                    const labels = ['Subject:', 'Setting:', 'Details:', 'Lighting:', 'Atmosphere:'];
+                    if (parsed.prompt_parts.length !== 5 || !parsed.prompt_parts.every((part: PromptSoupPart, index: number) =>
+                        part.text.startsWith(labels[index]) && part.text.endsWith('\n'))) {
+                        throw new Error('OpenRouter returned an invalid five-segment FLUX2 prompt.');
+                    }
+                }
+            }
             return parsed.prompt_parts;
         }
         throw new Error("Invalid JSON format from AI.");
@@ -1334,13 +1353,19 @@ export const generateSeedVr2Upscale = async (
     if (missingNodes.length > 0) {
         throw new Error(`SeedVR2 custom nodes are not installed or loaded: ${missingNodes.join(', ')}.`);
     }
+    const { ditModels, vaeModels } = getSeedVr2Models(objectInfo);
+    const ditModel = selectSeedVr2Model(ditModels, options.ditModel);
+    const vaeModel = selectSeedVr2Model(vaeModels, options.vaeModel);
+    if (!ditModel || !vaeModel) {
+        throw new Error(`No SeedVR2 ${!ditModel ? 'DiT' : 'VAE'} models are available in ComfyUI.`);
+    }
     const hasEasyCleanup = Boolean(objectInfo['easy cleanGpuUsed'] && objectInfo['easy clearCacheAll']);
     updateProgress('Uploading source image...', 0.05);
     const uploadedImage = await uploadImage(sourceImage);
     const workflow: Record<string, any> = {
         '20': {
             inputs: {
-                model: options.ditModel,
+                model: ditModel,
                 device: options.ditDevice,
                 blocks_to_swap: options.blocksToSwap,
                 swap_io_components: options.swapIoComponents,
@@ -1358,7 +1383,7 @@ export const generateSeedVr2Upscale = async (
         },
         '29': {
             inputs: {
-                model: options.vaeModel,
+                model: vaeModel,
                 device: options.vaeDevice,
                 encode_tiled: options.vaeEncodeTiled,
                 encode_tile_size: options.vaeEncodeTileSize,
@@ -3030,6 +3055,9 @@ export const generateLtxDirectorVideo = async (
     updateProgress: (message: string, value: number) => void,
 ): Promise<string> => {
     const workflow = JSON.parse(JSON.stringify(LTX_DIRECTOR_WORKFLOW_TEMPLATE));
+    const modelNodes = buildLtxDirectorModelNodes(options, await getComfyUIObjectInfo());
+    workflow['77'] = modelNodes.model;
+    workflow['84'] = modelNodes.clip;
     const timelineSegments = [];
     const segmentLengths = [];
     const firstImage = segments.find(segment => segment.image)?.image;
@@ -3102,18 +3130,6 @@ export const generateLtxDirectorVideo = async (
     });
     workflow['28'].inputs.noise_seed = options.seed ?? Math.floor(Math.random() * 1e15);
     workflow['79'].inputs.preview_rate = options.frameRate;
-    if (options.modelVersion === '2.5') {
-        workflow['77'] = {
-            inputs: { unet_name: options.checkpoint },
-            class_type: 'UnetLoaderGGUF',
-        };
-        workflow['84'] = {
-            inputs: { clip_name: options.textEncoder, type: 'ltxv', device: 'default' },
-            class_type: 'CLIPLoader',
-        };
-    } else {
-        workflow['77'].inputs.ckpt_name = options.checkpoint;
-    }
     workflow['3'].inputs.vae_name = options.videoVae;
     workflow['4'].inputs.vae_name = options.audioVae;
     workflow['57'].inputs.model_name = options.latentUpscaler;

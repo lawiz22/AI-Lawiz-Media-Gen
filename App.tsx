@@ -38,6 +38,7 @@ import { DEFAULT_GEMINI_IMAGE_MODEL, generatePortraits, generateCharacterNameFor
 import { generateComfyUICharacterAngles, generateComfyUIPortraits, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution, generateComfyUIPromptFromSource } from './services/comfyUIService';
 import { CloseIcon as CancelCharacterIcon } from './components/icons';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, generateMammouthImages, getMammouthApiKey, testMammouthConnection, updateMammouthApiKey } from './services/mammouthService';
+import { DEFAULT_OPENROUTER_MODEL, updateOpenRouterSettings, type OpenRouterSettings } from './services/openRouterService';
 import { buildCharacterAnglePrompts, CHARACTER_ANGLES, getEnabledCharacterAngles } from './services/characterAnglesWorkflow';
 import { Login } from './components/Login';
 import { Header } from './components/Header';
@@ -51,6 +52,7 @@ import { LibraryPanel } from './components/LibraryPanel';
 import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
 import { LTXDirectorPanel } from './components/LTXDirectorPanel';
+import { VideoWorkspace } from './components/VideoWorkspace';
 import SceneVariationPanel from './components/SceneVariationWorkspace';
 import OutpaintPanel from './components/OutpaintPanel';
 import Qwen21CharacterSheetPanel from './components/Qwen21CharacterSheetPanel';
@@ -114,6 +116,9 @@ const App: React.FC = () => {
     const [comfyUrlForHelper, setComfyUrlForHelper] = useState('');
     const [localGeminiKey, setLocalGeminiKey] = useState('');
     const [localMammouthKey, setLocalMammouthKey] = useState('');
+    const [localOpenRouterSettings, setLocalOpenRouterSettings] = useState<OpenRouterSettings>({ apiKey: '', model: DEFAULT_OPENROUTER_MODEL });
+    const [videoPromptToLoad, setVideoPromptToLoad] = useState<LibraryItem | null>(null);
+    const handleVideoPromptLoaded = useCallback(() => setVideoPromptToLoad(null), []);
     const [localOllamaUrl, setLocalOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || DEFAULT_OLLAMA_URL);
     const [localOllamaModel, setLocalOllamaModel] = useState(() => localStorage.getItem('ollama_model') || DEFAULT_OLLAMA_MODEL);
     const [isOllamaConnected, setIsOllamaConnected] = useState<boolean | null>(null);
@@ -504,6 +509,32 @@ const App: React.FC = () => {
     }, [dispatch, checkComfyUIConnection, checkOllamaConnection]);
 
     useEffect(() => {
+        let disposed = false;
+        const load = async () => {
+            try {
+                let next: OpenRouterSettings;
+                if (window.electron) {
+                    if (!window.electron.getOpenRouterSettings) throw new Error('Restart Electron to load OpenRouter settings.');
+                    next = await window.electron.getOpenRouterSettings();
+                } else {
+                    next = {
+                        apiKey: localStorage.getItem('openrouter_api_key') || '',
+                        model: localStorage.getItem('openrouter_model') || DEFAULT_OPENROUTER_MODEL,
+                    };
+                }
+                if (disposed) return;
+                updateOpenRouterSettings(next);
+                setLocalOpenRouterSettings(next);
+            } catch (cause) {
+                console.error('Could not load OpenRouter settings:', cause);
+                if (!disposed) dispatch(setGlobalError({ title: 'OpenRouter Settings Error', message: cause instanceof Error ? cause.message : String(cause) }));
+            }
+        };
+        void load();
+        return () => { disposed = true; };
+    }, [dispatch]);
+
+    useEffect(() => {
         dispatch(fetchLibrary());
     }, [dispatch]);
 
@@ -786,7 +817,21 @@ const App: React.FC = () => {
         }
     };
 
-    const handleSaveSettings = async (comfyUIUrl: string, googleClientId: string, googleApiKey: string, geminiApiKey?: string, mammouthApiKey?: string, ollamaUrl?: string, ollamaModel?: string) => {
+    const handleSaveSettings = async (comfyUIUrl: string, googleClientId: string, googleApiKey: string, geminiApiKey?: string, mammouthApiKey?: string, ollamaUrl?: string, ollamaModel?: string, openRouterSettings?: OpenRouterSettings) => {
+        if (openRouterSettings) {
+            const next = { apiKey: openRouterSettings.apiKey.trim(), model: openRouterSettings.model.trim() || DEFAULT_OPENROUTER_MODEL };
+            if (window.electron) {
+                if (!window.electron.setOpenRouterSettings) throw new Error('Restart Electron to enable OpenRouter settings.');
+                const saved = await window.electron.setOpenRouterSettings(next);
+                if (!saved) throw new Error('OpenRouter settings could not be saved.');
+            } else {
+                if (next.apiKey) localStorage.setItem('openrouter_api_key', next.apiKey);
+                else localStorage.removeItem('openrouter_api_key');
+                localStorage.setItem('openrouter_model', next.model);
+            }
+            updateOpenRouterSettings(next);
+            setLocalOpenRouterSettings(next);
+        }
         localStorage.setItem('comfyui_url', comfyUIUrl);
         localStorage.setItem('google_client_id', googleClientId);
         localStorage.setItem('google_drive_api_key', googleApiKey.trim());
@@ -1129,6 +1174,7 @@ const App: React.FC = () => {
                     initialGoogleApiKey={localStorage.getItem('google_drive_api_key') || ''}
                     initialGeminiApiKey={localGeminiKey}
                     initialMammouthApiKey={localMammouthKey}
+                    initialOpenRouterSettings={localOpenRouterSettings}
                     initialOllamaUrl={localOllamaUrl}
                     initialOllamaModel={localOllamaModel}
                     onSave={handleSaveSettings}
@@ -1173,7 +1219,7 @@ const App: React.FC = () => {
                         { id: 'character-generator', label: 'Character', icon: <CharacterIcon className="w-4 h-4" />, activeClass: 'border-fuchsia-400 bg-fuchsia-400/15 text-fuchsia-300 shadow-fuchsia-500/20' },
                         { id: 'scene-variation', label: 'Scene Variation', icon: <ImageGeneratorIcon className="w-4 h-4" />, activeClass: 'border-lime-300 bg-lime-300/15 text-lime-200 shadow-lime-400/20' },
                         { id: 'outpaint', label: 'OUTPAINT', icon: <EnhanceIcon className="w-4 h-4" />, activeClass: 'border-orange-400 bg-orange-400/15 text-orange-300 shadow-orange-500/20' },
-                        { id: 'ltx-director', label: 'LTX Director', icon: <VideoIcon className="w-4 h-4" />, activeClass: 'border-amber-400 bg-amber-400/15 text-amber-300 shadow-amber-500/20' },
+                        { id: 'video', label: 'Video', icon: <VideoIcon className="w-4 h-4" />, activeClass: 'border-amber-400 bg-amber-400/15 text-amber-300 shadow-amber-500/20' },
                         { id: 'tts', label: 'TTS', icon: <MicrophoneIcon className="w-4 h-4" />, activeClass: 'border-emerald-400 bg-emerald-400/15 text-emerald-300 shadow-emerald-500/20' },
                         { id: 'prompt-generator', label: 'Prompt', icon: <PromptIcon className="w-4 h-4" />, activeClass: 'border-violet-400 bg-violet-400/15 text-violet-300 shadow-violet-500/20' },
                         { id: 'extractor-tools', label: 'Extractor', icon: <ExtractorIcon className="w-4 h-4" />, activeClass: 'border-orange-400 bg-orange-400/15 text-orange-300 shadow-orange-500/20' },
@@ -1189,7 +1235,7 @@ const App: React.FC = () => {
                             onClick={() => handleTabChange(tab.id)}
                             aria-label={tab.label}
                             title={tab.label}
-                            className={`flex items-center gap-1 border px-2 py-1 rounded-md font-medium transition-all duration-200 text-[10px] md:text-xs whitespace-nowrap ${activeTab === tab.id
+                            className={`flex items-center gap-1 border px-2 py-1 rounded-md font-medium transition-all duration-200 text-[10px] md:text-xs whitespace-nowrap ${activeTab === tab.id || (tab.id === 'video' && activeTab === 'ltx-director')
                                 ? `${tab.activeClass} shadow-sm`
                                 : 'border-transparent bg-transparent text-text-secondary hover:border-border-primary hover:bg-bg-tertiary hover:text-text-primary'
                                 }`}
@@ -1736,17 +1782,27 @@ const App: React.FC = () => {
                             onOpenLibrary={() => dispatch(setModalOpen({ modal: 'isColorImagePickerOpen', isOpen: true }))}
                             onOpenVideoLibrary={() => dispatch(setModalOpen({ modal: 'isVideoUtilsPickerOpen', isOpen: true }))}
                             activeSubTab={activeVideoUtilsSubTab}
-                            setActiveSubTab={(id) => dispatch(setActiveVideoUtilsSubTab(id as any))}
+                            setActiveSubTab={(id) => dispatch(setActiveVideoUtilsSubTab(id))}
                             onReset={handleVideoUtilsReset}
                             onOpenLibraryForResizeCrop={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: true }))}
                         />
                     </React.Activity>
 
-                    <React.Activity mode={activeTab === 'ltx-director' ? 'visible' : 'hidden'}>
-                        <LTXDirectorPanel
+                    <React.Activity mode={activeTab === 'video' || activeTab === 'ltx-director' ? 'visible' : 'hidden'}>
+                        <VideoWorkspace
+                            libraryItem={videoPromptToLoad}
+                            onLibraryItemLoaded={handleVideoPromptLoaded}
+                            openDirector={activeTab === 'ltx-director'}
+                            onLeaveDirector={() => dispatch(setActiveTab('video'))}
+                            onResetDirector={() => {
+                                dispatch(clearLtxTransfer());
+                                setPanelResetVersions(current => ({ ...current, 'ltx-director': (current['ltx-director'] || 0) + 1 }));
+                            }}
+                            director={<LTXDirectorPanel
                             key={`ltx-${panelResetVersions['ltx-director'] || 0}`}
                             isComfyUIConnected={isComfyUIConnected}
                             comfyUIObjectInfo={comfyUIObjectInfo}
+                            />}
                         />
                     </React.Activity>
 
@@ -1772,7 +1828,10 @@ const App: React.FC = () => {
                             onUpscaleItem={(item) => handleSendToUpscale(item.media, item.name ? `${item.name}.png` : undefined)}
                             onLoadItem={(item, loadOptions) => {
                                 // Logic to load item back into generator state
-                                if (item.mediaType === 'preset' && item.sceneVariationPreset) {
+                                if (item.videoPromptOptions) {
+                                    setVideoPromptToLoad(item);
+                                    dispatch(setActiveTab('video'));
+                                } else if (item.mediaType === 'preset' && item.sceneVariationPreset) {
                                     setSceneVariationPreset(item);
                                     dispatch(setActiveTab('scene-variation'));
                                 } else if (item.ltxDirectorOptions) {

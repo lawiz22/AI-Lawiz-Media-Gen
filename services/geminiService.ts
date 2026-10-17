@@ -832,6 +832,7 @@ export const generateGeminiTextResult = async (
     prompt: string,
     inputs: File[] = [],
     updateProgress: (message: string, value: number) => void = () => undefined,
+    model = 'gemini-2.5-flash',
 ): Promise<{ text: string; usageMetadata?: any }> => {
     if (!currentApiKey) throw new Error('Gemini API key is not configured. Add it in Connection Settings.');
     const parts: Part[] = [];
@@ -841,14 +842,14 @@ export const generateGeminiTextResult = async (
     const execute = async (retry = true): Promise<GenerateContentResponse> => {
         try {
             return await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model,
                 contents: { parts },
                 config: { temperature: 0.3 },
             });
         } catch (error: any) {
             const { message, status, retrySeconds, hasZeroFreeTierQuota } = getApiErrorDetails(error);
             if (status === 429) {
-                if (hasZeroFreeTierQuota || !retry) throw createQuotaError('gemini-2.5-flash', retrySeconds, hasZeroFreeTierQuota);
+                if (hasZeroFreeTierQuota || !retry) throw createQuotaError(model, retrySeconds, hasZeroFreeTierQuota);
                 const delaySeconds = Math.min(Math.max(retrySeconds || 5, 1), 60);
                 updateProgress(`Gemini rate limit reached. Retrying in ${Math.ceil(delaySeconds)} seconds...`, 0.5);
                 await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
@@ -859,12 +860,15 @@ export const generateGeminiTextResult = async (
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 return execute(false);
             }
-            if (status === 403) throw new Error("Access denied for 'gemini-2.5-flash'. Check the API key and billing configuration.");
+            if (status === 403) throw new Error(`Access denied for '${model}'. Check the API key and billing configuration.`);
             throw error;
         }
     };
 
     const result = await execute();
+    if (result.candidates?.[0]?.finishReason && result.candidates[0].finishReason !== 'STOP') {
+        throw new Error(`Gemini did not complete the response (${result.candidates[0].finishReason}).`);
+    }
     const text = result.candidates?.[0]?.content?.parts
         ?.map(part => part.text || '')
         .join('')

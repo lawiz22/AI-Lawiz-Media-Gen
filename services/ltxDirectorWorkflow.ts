@@ -1,3 +1,70 @@
+interface LtxLoaderInfo {
+  input?: { required?: Record<string, unknown> };
+}
+
+type LtxObjectInfo = Record<string, LtxLoaderInfo>;
+
+const getChoices = (info: LtxObjectInfo | null | undefined, loader: string, input: string): string[] => {
+  const widget = info?.[loader]?.input?.required?.[input];
+  if (!Array.isArray(widget) || !Array.isArray(widget[0])) return [];
+  return widget[0].filter((value): value is string => typeof value === 'string' && value.length > 0);
+};
+
+export const getLtxDirectorModelLists = (info: LtxObjectInfo | null | undefined) => ({
+  checkpoints: Array.from(new Set([
+    ...getChoices(info, 'CheckpointLoaderSimple', 'ckpt_name'),
+    ...getChoices(info, 'UNETLoader', 'unet_name'),
+    ...getChoices(info, 'UnetLoaderGGUF', 'unet_name'),
+  ])),
+  textEncoders: Array.from(new Set([
+    ...getChoices(info, 'CLIPLoader', 'clip_name'),
+    ...getChoices(info, 'DualCLIPLoader', 'clip_name1'),
+    ...getChoices(info, 'DualCLIPLoader', 'clip_name2'),
+    ...getChoices(info, 'CLIPLoaderGGUF', 'clip_name'),
+    ...getChoices(info, 'DualCLIPLoaderGGUF', 'clip_name1'),
+    ...getChoices(info, 'DualCLIPLoaderGGUF', 'clip_name2'),
+  ])),
+});
+
+export const splitLtxTextEncoders = (textEncoder: string): [string, string] => {
+  const parts = textEncoder.split(' + ');
+  if (parts.length !== 2 || parts.some(part => !part.trim())) {
+    throw new Error('LTX 2.3 requires a text encoder and a text projection. Select both models.');
+  }
+  return [parts[0], parts[1]];
+};
+
+export const buildLtxDirectorModelNodes = (
+  options: { modelVersion: '2.3' | '2.5'; checkpoint: string; textEncoder: string },
+  info: LtxObjectInfo,
+) => {
+  const isGguf = (name: string) => name.toLowerCase().endsWith('.gguf');
+  const checkpointAvailable = getChoices(info, 'CheckpointLoaderSimple', 'ckpt_name').includes(options.checkpoint);
+  const diffusionAvailable = getChoices(info, 'UNETLoader', 'unet_name').includes(options.checkpoint);
+  const useCheckpoint = !isGguf(options.checkpoint) && (options.modelVersion === '2.3'
+    ? checkpointAvailable || !diffusionAvailable
+    : checkpointAvailable && !diffusionAvailable);
+  const model = useCheckpoint
+    ? { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: options.checkpoint } }
+    : isGguf(options.checkpoint)
+      ? { class_type: 'UnetLoaderGGUF', inputs: { unet_name: options.checkpoint } }
+      : { class_type: 'UNETLoader', inputs: { unet_name: options.checkpoint, weight_dtype: 'default' } };
+  const encoders = options.modelVersion === '2.3' ? splitLtxTextEncoders(options.textEncoder) : [options.textEncoder];
+  const ggufClip = encoders.some(isGguf);
+  const clip = options.modelVersion === '2.3'
+    ? {
+      class_type: ggufClip ? 'DualCLIPLoaderGGUF' : 'DualCLIPLoader',
+      inputs: { clip_name1: encoders[0], clip_name2: encoders[1], type: 'ltxv', ...(!ggufClip ? { device: 'default' } : {}) },
+    }
+    : {
+      class_type: ggufClip ? 'CLIPLoaderGGUF' : 'CLIPLoader',
+      inputs: { clip_name: options.textEncoder, type: 'ltxv', ...(!ggufClip ? { device: 'default' } : {}) },
+    };
+  const missingNodes = [model.class_type, clip.class_type].filter(name => !info[name]);
+  if (missingNodes.length) throw new Error(`Missing ComfyUI nodes for LTX Director: ${missingNodes.join(', ')}. Install the required nodes and restart ComfyUI.`);
+  return { model, clip };
+};
+
 export const LTX_DIRECTOR_WORKFLOW_TEMPLATE: Record<string, any> = {
   "3": { inputs: { vae_name: "LTX23_video_vae_bf16.safetensors", device: "main_device", weight_dtype: "bf16" }, class_type: "VAELoaderKJ" },
   "4": { inputs: { vae_name: "LTX23_audio_vae_bf16.safetensors", device: "main_device", weight_dtype: "bf16" }, class_type: "VAELoaderKJ" },

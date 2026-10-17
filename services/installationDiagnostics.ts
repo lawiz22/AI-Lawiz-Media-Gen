@@ -2,6 +2,7 @@ import { testGeminiConnection } from './geminiService';
 import { isConnected as isGoogleDriveConnected } from './googleDriveService';
 import { testMammouthConnection } from './mammouthService';
 import { testOllamaConnection } from './ollamaService';
+import { getSeedVr2Models } from '../utils/seedVr2Models';
 
 export type DiagnosticStatus = 'ready' | 'warning' | 'missing';
 
@@ -110,8 +111,7 @@ const getChoices = (value: any): string[] => {
 const unique = (...lists: string[][]): string[] => Array.from(new Set(lists.flat())).sort((a, b) => a.localeCompare(b));
 
 const buildInventory = (objectInfo: Record<string, any>): ComfyModelInventory => {
-    const seedVrDitModels = getChoices(objectInfo.SeedVR2LoadDiTModel?.input?.required?.model);
-    const seedVrVaeModels = getChoices(objectInfo.SeedVR2LoadVAEModel?.input?.required?.model);
+    const { ditModels: seedVrDitModels, vaeModels: seedVrVaeModels } = getSeedVr2Models(objectInfo);
     return {
     checkpoints: getChoices(objectInfo.CheckpointLoaderSimple?.input?.required?.ckpt_name),
     diffusionModels: unique(

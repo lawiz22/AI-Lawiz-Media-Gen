@@ -190,13 +190,19 @@ const getLibraryVisualMedia = (item: LibraryItem | null): LibraryVisualMedia[] =
   add(item.endFrame, 'End Frame');
   add(item.skeletonImage, 'Skeleton');
   item.ltxDirectorOptions?.segments.forEach((segment, index) => add(segment.sourceImage, `Clip ${index + 1} Source`));
+  item.videoPromptOptions?.references.forEach(ref => {
+    const token = `<${ref.kind === 'image' ? 'Picture' : ref.kind === 'video' ? 'Video' : 'Audio'} ${ref.slot}>`;
+    if (ref.kind === 'audio') return;
+    add(ref.file.data, `${token} - used reference`, ref.kind);
+    if (ref.original) add(ref.original.data, `${token} - original`, ref.kind);
+  });
   return media;
 };
 
 const downloadLibraryItem = (item: LibraryItem) => {
   const inlineMimeType = item.media.match(/^data:([^;,]+)/)?.[1];
   const mimeType = item.assetRefs?.media?.mimeType || inlineMimeType || '';
-  const extension = MIME_EXTENSIONS[mimeType] || (item.mediaType === 'video' ? 'mp4' : item.mediaType === 'audio-tts' || item.mediaType === 'tts-reference' ? 'wav' : 'png');
+  const extension = item.minimaxH3Options?.filename.match(/\.([a-z0-9]+)$/i)?.[1] || MIME_EXTENSIONS[mimeType] || (item.mediaType === 'video' ? 'mp4' : item.mediaType === 'audio-tts' || item.mediaType === 'tts-reference' ? 'wav' : 'png');
   const safeName = (item.name || `${item.mediaType}-${item.id}`)
     .replace(/\.[a-z0-9]{2,5}$/i, '')
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
@@ -1276,7 +1282,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
               <div className="flex-shrink-0 text-text-secondary">{getCategoryIcon(item.mediaType, "w-5 h-5")}</div>
               <div className="min-w-0 flex-grow"><p className="truncate text-sm font-medium text-text-primary">{item.name}</p><div className="mt-0.5 flex flex-wrap items-center gap-1"><span className="text-xs text-text-muted">Created: {new Date(item.id).toLocaleDateString()}</span>{getValidRating(item.rating) && <RatingStars rating={item.rating} />}{item.safetyRating && <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase text-white ${item.safetyRating === 'nsfw' ? 'bg-red-600' : 'bg-blue-600'}`}>{item.safetyRating}</span>}{item.tags?.map(tag => <span key={tag} className="rounded bg-bg-primary px-1.5 py-0.5 text-[10px] text-text-secondary">#{tag}</span>)}</div></div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button disabled={isResolvingItem} onClick={(e) => { e.stopPropagation(); if (item.mediaType === 'prompt') { setPromptToUse(item); setPickerOpen(true); } else { void resolveAndUseItem(item, onLoadItem); } }} title={item.mediaType === 'prompt' ? 'Use Prompt' : 'Load in Generator'} className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent disabled:opacity-50">{item.mediaType === 'prompt' ? <SendIcon className="w-4 h-4" /> : <LoadIcon className="w-4 h-4" />}</button>
+                {!item.minimaxH3Options && <button disabled={isResolvingItem} onClick={(e) => { e.stopPropagation(); if (item.mediaType === 'prompt' && !item.videoPromptOptions) { setPromptToUse(item); setPickerOpen(true); } else { void resolveAndUseItem(item, onLoadItem); } }} title={item.videoPromptOptions ? 'Open in Video Prompt Generator' : item.mediaType === 'prompt' ? 'Use Prompt' : 'Load in Generator'} className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent disabled:opacity-50">{item.mediaType === 'prompt' ? <SendIcon className="w-4 h-4" /> : <LoadIcon className="w-4 h-4" />}</button>}
                 <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name || `Item #${item.id}`); }} disabled={deletingId === item.id} title="Delete Item" className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-danger">{deletingId === item.id ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : <TrashIcon className="w-4 h-4" />}</button>
               </div>
             </div>
@@ -1699,7 +1705,39 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                     </>}
                     <details><summary className="cursor-pointer text-xs text-text-secondary">{selectedItemModal.sceneVariationPreset.settings.comfyModelType === 'qwen21-i2i-multi' ? 'Qwen 2.1 settings' : 'FLUX2 settings'}</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-text-secondary">{JSON.stringify(selectedItemModal.sceneVariationPreset.settings, null, 2)}</pre></details>
                   </div>}
-                  {!selectedItemModal.ttsOptions && !selectedItemModal.sceneVariationPreset && (selectedItemModal.themeOptions ? renderThemeOptionsDetails(selectedItemModal.themeOptions) : renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType))}
+                  {!selectedItemModal.ttsOptions && !selectedItemModal.sceneVariationPreset && !selectedItemModal.minimaxH3Options && (selectedItemModal.themeOptions ? renderThemeOptionsDetails(selectedItemModal.themeOptions) : renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType))}
+                  {selectedItemModal.minimaxH3Options && <div className="space-y-3 rounded-lg border border-border-primary p-3">
+                    <h3 className="font-semibold text-accent">MiniMax H3 REF2V generation</h3>
+                    <DetailItem label={selectedItemModal.minimaxH3Options.promptIsFinal ? 'Executed prompt' : 'Submitted prompt (server rewrite not returned)'} value={selectedItemModal.minimaxH3Options.prompt} />
+                    <DetailItem label="Seed" value={selectedItemModal.minimaxH3Options.seed} />
+                    <DetailItem label="Model" value={selectedItemModal.minimaxH3Options.options.model} isCode />
+                    <DetailItem label="Aspect ratio" value={selectedItemModal.minimaxH3Options.options.aspect} />
+                    <DetailItem label="Target duration" value={`${selectedItemModal.minimaxH3Options.options.duration}s`} />
+                    <DetailItem label="Output FPS" value={selectedItemModal.minimaxH3Options.options.frameRate} />
+                    <DetailItem label="Output format" value={selectedItemModal.minimaxH3Options.options.format} />
+                    <DetailItem label="Original filename" value={selectedItemModal.minimaxH3Options.filename} />
+                    <details><summary className="cursor-pointer text-sm text-text-secondary">Exact generation settings</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(selectedItemModal.minimaxH3Options.options, null, 2)}</pre></details>
+                    <details><summary className="cursor-pointer text-sm text-text-secondary">Executed API workflow</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(selectedItemModal.minimaxH3Options.workflow, null, 2)}</pre></details>
+                  </div>}
+                  {selectedItemModal.videoPromptOptions && <div className="space-y-3 rounded-lg border border-border-primary p-3">
+                    <h3 className="font-semibold text-accent">Video Prompt Generator setup</h3>
+                    <DetailItem label="Original idea" value={selectedItemModal.videoPromptOptions.idea} />
+                    <DetailItem label="Provider" value={selectedItemModal.videoPromptOptions.provider} />
+                    <DetailItem label="Model" value={selectedItemModal.videoPromptOptions.models[selectedItemModal.videoPromptOptions.provider]} />
+                    <DetailItem label="Aspect ratio" value={selectedItemModal.videoPromptOptions.aspect} />
+                    <DetailItem label="Duration" value={`${selectedItemModal.videoPromptOptions.duration}s`} />
+                    <DetailItem label="Canvas" value={selectedItemModal.videoPromptOptions.template} />
+                    <DetailItem label="Workflow" value={selectedItemModal.videoPromptOptions.workflow} />
+                    <DetailItem label="Settings source" value={selectedItemModal.videoPromptOptions.provenance === 'generation' ? 'Exact generation snapshot' : 'Current setup (older prompt)'} />
+                    {selectedItemModal.videoPromptOptions.references.map(ref => <div key={ref.id} className="space-y-2 border-t border-border-primary pt-2">
+                      <p className="text-sm font-semibold">{ref.kind === 'image' ? 'Picture' : ref.kind === 'video' ? 'Video' : 'Audio'} {ref.slot} · {ref.file.name}</p>
+                      {ref.note && <p className="text-xs text-text-secondary">Role: {ref.note}</p>}
+                      {ref.original && <p className="text-xs text-text-secondary">Original: {ref.original.name}</p>}
+                      {ref.kind === 'audio' && <><audio src={ref.file.data} controls className="w-full" />{ref.original && <audio src={ref.original.data} controls className="w-full" />}</>}
+                    </div>)}
+                    <details><summary className="cursor-pointer text-sm text-text-secondary">Exact instruction sent to the model</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{selectedItemModal.videoPromptOptions.instruction}</pre></details>
+                    <details><summary className="cursor-pointer text-sm text-text-secondary">Saved editable canvases and model selections</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify({ models: selectedItemModal.videoPromptOptions.models, templates: selectedItemModal.videoPromptOptions.templates }, null, 2)}</pre></details>
+                  </div>}
                   {selectedItemModal.mediaType === 'audio-tts' && selectedItemModal.indexTtsOptions?.characters.some((character) => character.thumbnail) && <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border-primary bg-bg-primary p-3">
                     <input type="checkbox" checked={importTtsCharacterPhotos} onChange={(event) => setImportTtsCharacterPhotos(event.target.checked)} className="mt-0.5 h-4 w-4 accent-accent" />
                     <span><span className="block text-sm font-bold text-text-primary">Import character photos into LTX</span><span className="mt-0.5 block text-xs text-text-muted">Assign each saved character photo to that character’s dialogue clips.</span></span>
@@ -1711,12 +1749,14 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                     {!NON_DOWNLOADABLE_MEDIA_TYPES.has(selectedItemModal.mediaType) && selectedItemModal.media && (
                       <button type="button" onClick={() => downloadLibraryItem(selectedItemModal)} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-primary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"><DownloadIcon className="w-5 h-5" /> Download</button>
                     )}
-                    {selectedItemModal.mediaType === 'prompt' ? (
+                    {selectedItemModal.videoPromptOptions ? (
+                      <button type="button" onClick={() => { onLoadItem(selectedItemModal); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> Open in Video Prompt Generator</button>
+                    ) : selectedItemModal.mediaType === 'prompt' ? (
                       <>
                         <button onClick={() => { setPromptToUse(selectedItemModal); setPickerOpen(true); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><SendIcon className="w-5 h-5" /> Use</button>
                         {selectedItemModal.promptType === 'soup' && <button type="button" onClick={() => setSoupPromptToLink(selectedItemModal)} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-primary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"><PhotographIcon className="w-5 h-5" /> {selectedItemModal.linkedResultId ? 'Change Result' : 'Link Result'}</button>}
                       </>
-                    ) : (
+                    ) : selectedItemModal.minimaxH3Options ? null : (
                       <button onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> {selectedItemModal.sceneVariationPreset ? 'Open in Scene Variation' : selectedItemModal.ltxDirectorOptions ? 'Open in LTX Director' : selectedItemModal.mediaType === 'audio-tts' ? 'Use in LTX Video' : 'Load in Generator'}</button>
                     )}
                     <button onClick={() => handleDelete(selectedItemModal.id, selectedItemModal.name || `Item #${selectedItemModal.id}`)} disabled={deletingId === selectedItemModal.id} className="flex items-center justify-center gap-2 bg-danger-bg text-danger font-semibold py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">{deletingId === selectedItemModal.id ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <TrashIcon className="w-5 h-5" />}</button>

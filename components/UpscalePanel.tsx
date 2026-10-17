@@ -4,6 +4,7 @@ import type { AppDispatch } from '../store/store';
 import { addToLibrary } from '../store/librarySlice';
 import { generateSeedVr2Upscale, type SeedVr2UpscaleOptions } from '../services/comfyUIService';
 import { dataUrlToThumbnail } from '../utils/imageUtils';
+import { getSeedVr2Models, selectSeedVr2Model } from '../utils/seedVr2Models';
 import { CheckIcon, DownloadIcon, GenerateIcon, LibraryIcon, SaveIcon, SpinnerIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { ZImageCreativeUpscalePanel } from './ZImageCreativeUpscalePanel';
@@ -17,8 +18,8 @@ interface UpscalePanelProps {
 }
 
 const DEFAULT_OPTIONS: SeedVr2UpscaleOptions = {
-    ditModel: 'seedvr2_ema_7b_fp16.safetensors',
-    vaeModel: 'ema_vae_fp16.safetensors',
+    ditModel: '',
+    vaeModel: '',
     resolution: 2180,
     ditDevice: 'cuda:0',
     blocksToSwap: 36,
@@ -47,8 +48,6 @@ const DEFAULT_OPTIONS: SeedVr2UpscaleOptions = {
     enableDebug: false,
 };
 
-const getChoices = (widget: any): string[] => Array.isArray(widget?.[0]) ? widget[0] : [];
-
 export const UpscalePanel: React.FC<UpscalePanelProps> = ({ sourceFile, setSourceFile, onOpenLibrary, isComfyUIConnected, comfyUIObjectInfo }) => {
     const dispatch: AppDispatch = useDispatch();
     const [options, setOptions] = useState(DEFAULT_OPTIONS);
@@ -64,14 +63,19 @@ export const UpscalePanel: React.FC<UpscalePanelProps> = ({ sourceFile, setSourc
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const [comparePosition, setComparePosition] = useState(50);
 
-    const ditModels = useMemo(() => Array.from(new Set([
-        options.ditModel,
-        ...getChoices(comfyUIObjectInfo?.SeedVR2LoadDiTModel?.input?.required?.model),
-    ].filter(Boolean))), [comfyUIObjectInfo, options.ditModel]);
-    const vaeModels = useMemo(() => Array.from(new Set([
-        options.vaeModel,
-        ...getChoices(comfyUIObjectInfo?.SeedVR2LoadVAEModel?.input?.required?.model),
-    ].filter(Boolean))), [comfyUIObjectInfo, options.vaeModel]);
+    const { ditModels, vaeModels } = useMemo(() => getSeedVr2Models(comfyUIObjectInfo), [comfyUIObjectInfo]);
+
+    useEffect(() => {
+        setOptions((current) => {
+            const ditModel = selectSeedVr2Model(ditModels, current.ditModel);
+            const vaeModel = selectSeedVr2Model(vaeModels, current.vaeModel);
+            return ditModel === current.ditModel && vaeModel === current.vaeModel
+                ? current
+                : { ...current, ditModel, vaeModel };
+        });
+    }, [ditModels, vaeModels]);
+
+    const modelsAvailable = ditModels.length > 0 && vaeModels.length > 0;
 
     useEffect(() => {
         if (!sourceFile) {
@@ -103,7 +107,7 @@ export const UpscalePanel: React.FC<UpscalePanelProps> = ({ sourceFile, setSourc
     };
 
     const generate = async () => {
-        if (!sourceFile || !isComfyUIConnected || isGenerating) return;
+        if (!sourceFile || !isComfyUIConnected || !modelsAvailable || isGenerating) return;
         setIsGenerating(true);
         setResultUrl('');
         setError('');
@@ -184,8 +188,9 @@ export const UpscalePanel: React.FC<UpscalePanelProps> = ({ sourceFile, setSourc
                     <div className="flex min-w-0 items-end gap-2"><div className="min-w-0 flex-1"><ImageUploader id="seedvr2-source" label="Source Image" onImageUpload={setSourceFile} sourceFile={sourceFile} /></div><button onClick={onOpenLibrary} title="Choose from Library" className="mb-1 shrink-0 rounded-md border border-border-primary bg-bg-tertiary p-3 text-text-secondary hover:text-accent"><LibraryIcon className="h-5 w-5" /></button></div>
                     <label className="block text-sm font-semibold text-text-secondary">Maximum output side: {options.resolution}px<input type="range" min="512" max="2180" step="2" value={options.resolution} onChange={(event) => updateOption('resolution', Number(event.target.value))} className="mt-2 w-full accent-accent" /></label>
                     <div className="rounded-md border border-border-primary bg-bg-primary p-3 text-xs text-text-muted">{sourceSize ? `Source ${sourceSize.width}×${sourceSize.height} → target ${outputSize?.width}×${outputSize?.height}` : 'Output preserves the original aspect ratio.'}<br />SeedVR2 is capped at 2180 px on the longest side.</div>
-                    <button onClick={generate} disabled={!sourceFile || !isComfyUIConnected || isGenerating} className="flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-3 font-bold text-accent-text disabled:cursor-not-allowed disabled:opacity-40">{isGenerating ? <SpinnerIcon className="h-5 w-5 animate-spin" /> : <GenerateIcon className="h-5 w-5" />}{isGenerating ? 'Upscaling...' : 'Upscale with SeedVR2'}</button>
+                    <button onClick={generate} disabled={!sourceFile || !isComfyUIConnected || !modelsAvailable || isGenerating} className="flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-3 font-bold text-accent-text disabled:cursor-not-allowed disabled:opacity-40">{isGenerating ? <SpinnerIcon className="h-5 w-5 animate-spin" /> : <GenerateIcon className="h-5 w-5" />}{isGenerating ? 'Upscaling...' : 'Upscale with SeedVR2'}</button>
                     {!isComfyUIConnected && <p className="text-xs text-danger">Connect ComfyUI to run SeedVR2.</p>}
+                    {isComfyUIConnected && !modelsAvailable && <p className="text-xs text-danger">{comfyUIObjectInfo ? `No SeedVR2 ${!ditModels.length ? 'DiT' : 'VAE'} models available. Check the installed SeedVR2 nodes and models, then reconnect ComfyUI.` : 'Loading SeedVR2 model lists from ComfyUI...'}</p>}
                     {isGenerating && <div><div className="mb-1 flex justify-between text-xs text-text-muted"><span>{progressMessage}</span><span>{Math.round(progress * 100)}%</span></div><div className="h-1 overflow-hidden rounded bg-bg-tertiary"><div className="h-full bg-accent" style={{ width: `${progress * 100}%` }} /></div></div>}
                     {error && <p className="rounded bg-danger-bg p-3 text-sm text-danger">{error}</p>}
                 </div>

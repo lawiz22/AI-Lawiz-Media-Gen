@@ -2,9 +2,23 @@
 import type { fileURLToPath } from "url";
 
 
+export interface SystemMetrics {
+  cpuPercent: number | null;
+  ramPercent: number | null;
+  gpuPercent: number | null;
+  vramPercent: number | null;
+  gpuTemperatureC: number | null;
+  gpuName: string | null;
+  sampledAt: number;
+  errors: string[];
+}
+
 declare global {
   interface Window {
     electron?: {
+      getOpenRouterSettings: () => Promise<import('./services/openRouterService').OpenRouterSettings>;
+      setOpenRouterSettings: (settings: import('./services/openRouterService').OpenRouterSettings) => Promise<boolean>;
+      getSystemMetrics: () => Promise<SystemMetrics>;
       getApiKey: () => Promise<string>;
       setApiKey: (key: string) => Promise<boolean>;
       getMammouthApiKey: () => Promise<string>;
@@ -838,12 +852,36 @@ export interface IndexTtsGenerationInfo {
   }>;
 }
 
-export type LibraryAssetRole = 'media' | 'sourceImage' | 'startFrame' | 'endFrame' | 'skeletonImage' | 'characterSceneImage' | `ltxSegmentSource:${number}` | `qwen21MultiSource:${number}`;
+export type LibraryAssetRole = 'media' | 'sourceImage' | 'startFrame' | 'endFrame' | 'skeletonImage' | 'characterSceneImage' | `ltxSegmentSource:${number}` | `qwen21MultiSource:${number}` | `videoPromptReference:${number}` | `videoPromptOriginal:${number}`;
+
+export interface VideoPromptLibraryFile {
+  name: string;
+  type: string;
+  lastModified: number;
+  data: string;
+}
+
+export interface VideoPromptLibraryOptions extends Omit<import('./services/videoPromptService').VideoPromptInputs, 'references'> {
+  version: 1;
+  savedAt: string;
+  provenance: 'generation' | 'current-setup';
+  instruction: string;
+  references: Array<Omit<import('./services/videoPromptService').VideoReference, 'file' | 'original'> & {
+    file: VideoPromptLibraryFile;
+    original?: VideoPromptLibraryFile;
+  }>;
+}
 
 export interface LibraryAssetRef {
   id: string;
   mimeType: string;
   size: number;
+}
+
+export interface MinimaxH3LibraryOptions extends Omit<import('./services/minimaxH3Service').H3GenerationResult, 'videoUrl'> {
+  version: 1;
+  savedAt: string;
+  filename: string;
 }
 
 export interface LibraryItem {
@@ -858,6 +896,8 @@ export interface LibraryItem {
   options?: GenerationOptions;
   themeOptions?: ThemeGenerationInfo;
   ltxDirectorOptions?: LtxDirectorGenerationInfo;
+  videoPromptOptions?: VideoPromptLibraryOptions;
+  minimaxH3Options?: MinimaxH3LibraryOptions;
   sceneVariationPreset?: import('./services/sceneVariationService').SceneVariationPreset;
   lanPaintPersonSettings?: import('./services/swapPersonWorkflow').LanPaintPersonOptions;
   outpaintSettings?: import('./services/qwen21Workflow').Qwen21OutpaintOptions;
@@ -1145,7 +1185,8 @@ export interface VideoSliceState {
 
   // Video Utilities
   videoUtilsState: VideoUtilsState;
-  activeVideoUtilsSubTab: 'frames' | 'colors' | 'resize-crop';
+  activeVideoUtilsSubTab: 'frames' | 'clips' | 'reference-maker' | 'colors' | 'resize-crop' | 'voice-recorder';
+  referenceMakerResetVersion: number;
 }
 
 export interface LibrarySliceState {

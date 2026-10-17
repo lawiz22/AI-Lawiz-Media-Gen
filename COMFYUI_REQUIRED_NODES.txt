@@ -39,6 +39,39 @@ packages such as Nunchaku, SeedVR2, Impact Pack and TTS Audio Suite require extr
 Python dependencies or installation scripts.
 
 
+MINIMAX H3 - REF2V VIDEO WORKSPACE
+---------------------------------
+Video > Minimax H3 > Reference to video executes the supplied 00-rEF2V
+graph, not a first/last-frame interpolation graph. Other H3 slots are
+reserved for future workflows.
+
+Update ComfyUI for MiniMaxH3ReferenceToVideo, ComfyMathExpression,
+ResolutionSelector, PrimitiveFloat, UNETLoader, CLIPLoader, VAELoader,
+VAEDecode, VAEDecodeAudio, BasicGuider, RandomNoise, KSamplerSelect,
+SamplerCustomAdvanced, BetaSamplingScheduler and ExtendIntermediateSigmas.
+Install/update:
+  comfyui-minimaxrefpack: MiniMaxH3ReferencePack and its probe/upload routes
+  ComfyUI-VideoHelperSuite: VHS_VideoCombine and its FFmpeg format presets
+  ComfyUI-KJNodes: ModelPreviewOverrideKJ (optional live preview)
+  rgthree-comfy: Power Lora Loader (rgthree) (enabled LoRAs only),
+                Display Any (rgthree) (optional prompt display)
+
+Source defaults:
+  models/diffusion_models/h3ErosMax_beta5_fp8.safetensors
+  models/text_encoders/minimaxH3_h3Comfy_nvfp4.safetensors
+  models/vae/minimax_h3_video_vae_fp16.safetensors
+  models/vae/minimax_h3_audio_vae_fp32.safetensors
+  KJ tiny preview VAE: taeh3.safetensors (select from installed KJ catalog)
+Six optional LoRA slots; all disabled initially. Model/LoRA filenames
+are configurable and verified against the live server before uploads.
+Preview uses client-targeted kj_preview_override WebSocket events and
+can be disabled entirely. Optional nodes are required only when active.
+ReferencePack defaults to no extra LLM call. Hosted rewriting requires
+OPENROUTER_API_KEY or LLM_KEY in the ComfyUI server environment; no API
+key is embedded in the application's submitted/exported H3 workflows.
+The app never installs custom nodes or downloads weights automatically.
+Review selected weights/LoRA licenses before commercial use.
+
 QWEN IMAGE 2.1 - IMAGE GENERATOR
 ------------------------------
 Modes: T2I (Low VRAM source graph) and T2I (Turbo source graph).

@@ -1,6 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
+    getOpenRouterSettings: () => ipcRenderer.invoke('get-openrouter-settings'),
+    setOpenRouterSettings: (settings) => ipcRenderer.invoke('set-openrouter-settings', settings),
+    getSystemMetrics: () => ipcRenderer.invoke('get-system-metrics'),
     getApiKey: () => ipcRenderer.invoke('get-api-key'),
     setApiKey: (key) => ipcRenderer.invoke('set-api-key', key),
     getMammouthApiKey: () => ipcRenderer.invoke('get-mammouth-api-key'),

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
+const { createSystemMetricsMonitor } = require('./systemMetrics.cjs');
 
 
 const isDev = !app.isPackaged;
@@ -846,6 +847,22 @@ app.on('window-all-closed', () => {
 });
 
 // IPC Handlers
+ipcMain.handle('get-openrouter-settings', () => ({
+    apiKey: store.get('openrouter_api_key', ''),
+    model: store.get('openrouter_model', 'x-ai/grok-4.7'),
+}));
+
+ipcMain.handle('set-openrouter-settings', (_event, settings) => {
+    if (!settings || typeof settings.apiKey !== 'string' || typeof settings.model !== 'string' || !settings.model.trim()) {
+        throw new Error('Invalid OpenRouter settings.');
+    }
+    store.set({ openrouter_api_key: settings.apiKey.trim(), openrouter_model: settings.model.trim() });
+    return true;
+});
+
+const systemMetricsMonitor = createSystemMetricsMonitor();
+ipcMain.handle('get-system-metrics', () => systemMetricsMonitor.getSnapshot());
+
 ipcMain.handle('get-api-key', () => {
     return store.get('gemini_api_key');
 });
@@ -2137,4 +2154,3 @@ ipcMain.handle('cancel-civitai-download', (event, downloadId) => {
     controller.abort();
     return true;
 });
-

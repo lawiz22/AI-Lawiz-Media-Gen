@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Banner } from './Banner';
+import { SystemMetricsIndicators } from './SystemMetricsIndicators';
 // import { ThemeSwitcher } from './ThemeSwitcher'; // Removed in favor of VisualSettingsModal
 // FIX: Imported the missing PromptIcon component.
 import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, FolderPlusIcon, PencilIcon, ResetIcon, PromptIcon, QuestionMarkCircleIcon, SwatchIcon, InfoIcon, CloseIcon } from './icons';
@@ -104,7 +105,8 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="bg-bg-secondary/50 backdrop-blur-sm p-3 shadow-lg sticky top-0 z-10 border-b border-border-primary" style={getTabAccentStyle(activeTab)}>
-      <div className="container mx-auto flex items-center justify-between gap-4">
+      <div className="container mx-auto flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col gap-3">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 flex-shrink-0">
             <Logo />
@@ -126,6 +128,8 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
           )}
+        </div>
+        <SystemMetricsIndicators />
         </div>
         <div className="flex items-center gap-2 md:gap-4">
           <div className="text-right hidden sm:block">

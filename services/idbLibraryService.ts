@@ -1,5 +1,6 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import type { LibraryAssetRef, LibraryAssetRole, LibraryItem } from '../types';
+import { cloneVideoPromptLibraryOptions, setVideoPromptLibraryAsset } from './videoPromptLibrary';
 
 const DB_NAME = 'ai-media-generator-library';
 const DB_VERSION = 2;
@@ -69,6 +70,7 @@ const externalizeItem = (item: LibraryItem): { metadata: LibraryItem; assets: Li
     ...item,
     assetRefs: { ...item.assetRefs },
     qwen21MultiSources: item.qwen21MultiSources?.slice(),
+    videoPromptOptions: cloneVideoPromptLibraryOptions(item.videoPromptOptions),
     ltxDirectorOptions: item.ltxDirectorOptions ? {
       ...item.ltxDirectorOptions,
       segments: item.ltxDirectorOptions.segments.map(segment => ({ ...segment })),
@@ -106,6 +108,18 @@ const externalizeItem = (item: LibraryItem): { metadata: LibraryItem; assets: Li
     assets.push(asset);
     metadata.assetRefs![role] = { id, mimeType: asset.mimeType, size: asset.size };
     metadata.qwen21MultiSources![index] = '';
+  }
+  for (const [index, ref] of (metadata.videoPromptOptions?.references || []).entries()) {
+    for (const [prefix, file] of [['videoPromptReference', ref.file], ['videoPromptOriginal', ref.original]] as const) {
+      if (!file?.data.startsWith('data:')) continue;
+      const role = `${prefix}:${index}` as const;
+      const blob = dataUrlToBlob(file.data);
+      const id = createAssetId(metadata.id, role);
+      const asset: LibraryAssetRecord = { id, blob, mimeType: blob.type || file.type, size: blob.size };
+      assets.push(asset);
+      metadata.assetRefs![role] = { id, mimeType: asset.mimeType, size: asset.size };
+      setVideoPromptLibraryAsset(metadata, role, '');
+    }
   }
   if (Object.keys(metadata.assetRefs || {}).length === 0) delete metadata.assetRefs;
   return { metadata, assets };
@@ -184,7 +198,7 @@ export const saveLibraryItemWithBlobs = async (
 ): Promise<LibraryItem> => {
   const db = await getDb();
   const existing = await db.get(STORE_NAME, item.id);
-  const metadata: LibraryItem = { ...enforceRequiredSafetyRating(item), assetRefs: { ...item.assetRefs }, qwen21MultiSources: item.qwen21MultiSources?.slice() };
+  const metadata: LibraryItem = { ...enforceRequiredSafetyRating(item), assetRefs: { ...item.assetRefs }, qwen21MultiSources: item.qwen21MultiSources?.slice(), videoPromptOptions: cloneVideoPromptLibraryOptions(item.videoPromptOptions) };
   const records: LibraryAssetRecord[] = [];
   for (const [role, blob] of Object.entries(blobs) as [LibraryAssetRole, Blob][]) {
     if (!blob) continue;
@@ -192,7 +206,9 @@ export const saveLibraryItemWithBlobs = async (
     const record: LibraryAssetRecord = { id, blob, mimeType: blob.type || 'application/octet-stream', size: blob.size, sha256: hashes[role] };
     records.push(record);
     metadata.assetRefs![role] = { id, mimeType: record.mimeType, size: record.size };
-    if (role.startsWith('qwen21MultiSource:')) {
+    if (role.startsWith('videoPromptReference:') || role.startsWith('videoPromptOriginal:')) {
+      setVideoPromptLibraryAsset(metadata, role, '');
+    } else if (role.startsWith('qwen21MultiSource:')) {
       if (metadata.qwen21MultiSources) metadata.qwen21MultiSources[Number(role.split(':')[1])] = '';
     } else if (role.startsWith('ltxSegmentSource:')) {
       const segmentIndex = Number(role.split(':')[1]);
@@ -239,7 +255,7 @@ export const saveLibraryAssetHash = async (ref: LibraryAssetRef, sha256: string)
 export const createLibraryAssetObjectUrl = async (ref: LibraryAssetRef): Promise<string> =>
   URL.createObjectURL(await getLibraryAssetBlob(ref));
 
-export const saveToLibrary = async (item: Omit<LibraryItem, 'id'> | LibraryItem, useExistingId = false): Promise<LibraryItem> => {
+export const saveToLibrary = async (item: Omit<LibraryItem, 'id'> | LibraryItem, useExistingId = false, blobs?: Partial<Record<LibraryAssetRole, Blob>>): Promise<LibraryItem> => {
   const db = await getDb();
   let newItem: LibraryItem;
   if (useExistingId && 'id' in item) {
@@ -250,7 +266,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'> | LibraryItem,
       id: Date.now(),
     };
   }
-  return saveExternalizedItem(db, newItem);
+  return blobs ? saveLibraryItemWithBlobs(newItem, blobs) : saveExternalizedItem(db, newItem);
 };
 
 export const updateLibraryItem = async (id: number, propsToUpdate: Partial<LibraryItem>): Promise<void> => {
@@ -302,6 +318,7 @@ export const hydrateLibraryItem = async (item: LibraryItem): Promise<LibraryItem
   const hydrated: LibraryItem = {
     ...item,
     qwen21MultiSources: item.qwen21MultiSources?.slice(),
+    videoPromptOptions: cloneVideoPromptLibraryOptions(item.videoPromptOptions),
     ltxDirectorOptions: item.ltxDirectorOptions ? {
       ...item.ltxDirectorOptions,
       segments: item.ltxDirectorOptions.segments.map(segment => ({ ...segment })),
@@ -315,7 +332,9 @@ export const hydrateLibraryItem = async (item: LibraryItem): Promise<LibraryItem
       objectUrl = URL.createObjectURL(asset.blob);
       objectUrlCache.set(ref.id, objectUrl);
     }
-    if (role.startsWith('qwen21MultiSource:')) {
+    if (role.startsWith('videoPromptReference:') || role.startsWith('videoPromptOriginal:')) {
+      setVideoPromptLibraryAsset(hydrated, role, objectUrl);
+    } else if (role.startsWith('qwen21MultiSource:')) {
       if (hydrated.qwen21MultiSources) hydrated.qwen21MultiSources[Number(role.split(':')[1])] = objectUrl;
     } else if (role.startsWith('ltxSegmentSource:')) {
       const segmentIndex = Number(role.split(':')[1]);

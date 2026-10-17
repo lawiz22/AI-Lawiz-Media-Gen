@@ -12,6 +12,7 @@ import { LibraryPickerModal } from './LibraryPickerModal';
 import { EditableNumberInput } from './InputComponents';
 import { PresetSaveModal } from './PresetSaveModal';
 import { findInventoryModel } from '../services/civitaiService';
+import { getLtxDirectorModelLists, splitLtxTextEncoders } from '../services/ltxDirectorWorkflow';
 
 interface LTXDirectorPanelProps {
     isComfyUIConnected: boolean | null;
@@ -182,7 +183,6 @@ const getAudioDuration = (file: File): Promise<number> => new Promise((resolve) 
 const DEFAULT_LORAS = LTX_MODEL_PROFILES['2.3'].loras;
 
 const getModelList = (widgetInfo: any): string[] => Array.isArray(widgetInfo?.[0]) ? widgetInfo[0] : [];
-const isLtxLora = (model: string) => /^(?:(?:models[\\/])?loras[\\/])?ltx2?[\\/]/i.test(model.replace(/^[/\\]+/, ''));
 const appendMissingTriggerWords = (prompt: string, triggerWords: string[] = []) => {
     const trimmedPrompt = prompt.trim();
     const normalizedPrompt = trimmedPrompt.toLowerCase();
@@ -267,16 +267,18 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
     const canSplitAtPlayhead = Boolean(selectedSegment
         && playheadSeconds - selectedStart >= MIN_AUDIO_CLIP_DURATION
         && selectedStart + selectedSegment.durationSeconds - playheadSeconds >= MIN_AUDIO_CLIP_DURATION);
-    const checkpoints = useMemo(() => {
-        const models = modelVersion === '2.5'
-            ? getModelList(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name)
-            : getModelList(comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name);
-        return Array.from(new Set([checkpoint, LTX_MODEL_PROFILES[modelVersion].checkpoint, ...models].filter(Boolean)));
-    }, [checkpoint, comfyUIObjectInfo, modelVersion]);
+    const modelLists = useMemo(() => getLtxDirectorModelLists(comfyUIObjectInfo), [comfyUIObjectInfo]);
+    const checkpoints = useMemo(() => Array.from(new Set([
+        checkpoint, LTX_MODEL_PROFILES[modelVersion].checkpoint, ...modelLists.checkpoints,
+    ].filter(Boolean))), [checkpoint, modelLists, modelVersion]);
+    const dualTextEncoders = modelVersion === '2.3' ? splitLtxTextEncoders(textEncoder) : null;
     const textEncoderModels = useMemo(() => {
-        const models = getModelList(comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name);
-        return Array.from(new Set([textEncoder, ...models].filter(Boolean)));
-    }, [comfyUIObjectInfo, textEncoder]);
+        const selected = modelVersion === '2.3' ? splitLtxTextEncoders(textEncoder) : [textEncoder];
+        const defaults = modelVersion === '2.3'
+            ? splitLtxTextEncoders(LTX_MODEL_PROFILES[modelVersion].textEncoder)
+            : [LTX_MODEL_PROFILES[modelVersion].textEncoder];
+        return Array.from(new Set([...selected, ...defaults, ...modelLists.textEncoders].filter(Boolean)));
+    }, [modelLists, modelVersion, textEncoder]);
     const vaeModels = useMemo(() => {
         const models = getModelList(comfyUIObjectInfo?.VAELoaderKJ?.input?.required?.vae_name);
         return Array.from(new Set([videoVae, audioVae, ...models].filter(Boolean)));
@@ -291,7 +293,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
             ...loras.map((lora) => lora.name).filter(Boolean),
             ...DEFAULT_LORAS.map((lora) => lora.name).filter(Boolean),
             ...models,
-        ].filter(isLtxLora))).sort((left, right) => left.localeCompare(right));
+        ].filter(Boolean))).sort((left, right) => left.localeCompare(right));
     }, [comfyUIObjectInfo, loras]);
 
     const selectedLoraKey = loras.filter((lora) => lora.enabled && lora.name).map((lora) => lora.name).join('\u0000');
@@ -1049,7 +1051,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
             {advancedOpen && <div className="border-b border-zinc-700 bg-[#191a1e] p-4">
                 <div className="grid gap-4 lg:grid-cols-[1.3fr_2fr]">
                     <div className="grid content-start gap-3">
-                    <label className="text-xs font-semibold text-zinc-400">{modelVersion === '2.5' ? 'DIFFUSION MODEL · GGUF' : 'LTX CHECKPOINT'}
+                    <label className="text-xs font-semibold text-zinc-400">LTX MODEL · SAFETENSORS / GGUF
                         <select value={checkpoint} onChange={(event) => setCheckpoint(event.target.value)} className="mt-2 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
                             {checkpoints.map((model) => <option key={model} value={model}>{model}</option>)}
                         </select>
@@ -1058,7 +1060,15 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                         <select value={textEncoder} onChange={(event) => setTextEncoder(event.target.value)} className="mt-2 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
                             {textEncoderModels.map((model) => <option key={model} value={model}>{model}</option>)}
                         </select>
-                    </label> : <div className="rounded-md border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400"><span className="font-semibold">TEXT ENCODERS · DUAL CLIP</span><p className="mt-1 break-all text-zinc-300">{textEncoder}</p></div>}
+                    </label> : dualTextEncoders?.map((encoder, index) => <label key={index} className="text-xs font-semibold text-zinc-400">{index === 0 ? 'TEXT ENCODER · DUAL CLIP 1' : 'TEXT PROJECTION · DUAL CLIP 2'}
+                        <select value={encoder} onChange={(event) => {
+                            const nextEncoders = [...dualTextEncoders];
+                            nextEncoders[index] = event.target.value;
+                            setTextEncoder(nextEncoders.join(' + '));
+                        }} className="mt-2 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                            {textEncoderModels.map((model) => <option key={model} value={model}>{model}</option>)}
+                        </select>
+                    </label>)}
                     <label className="text-xs font-semibold text-zinc-400">VIDEO VAE
                         <select value={videoVae} onChange={(event) => setVideoVae(event.target.value)} className="mt-2 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">{vaeModels.map((model) => <option key={model} value={model}>{model}</option>)}</select>
                     </label>

@@ -13,6 +13,7 @@ export const TAB_ACCENT_STYLES: Record<string, CSSProperties> = {
     'scene-variation': createAccentStyle('#bef264', '#d9f99d', '#84cc16'),
     outpaint: createAccentStyle('#f66744', '#ff957b', '#df4e2c'),
     'ltx-director': createAccentStyle('#fbbf24', '#fcd34d', '#d97706'),
+    video: createAccentStyle('#fbbf24', '#fcd34d', '#d97706'),
     tts: createAccentStyle('#34d399', '#6ee7b7', '#059669'),
     'prompt-generator': createAccentStyle('#a78bfa', '#c4b5fd', '#7c3aed'),
     'extractor-tools': createAccentStyle('#fb923c', '#fdba74', '#ea580c'),

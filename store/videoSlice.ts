@@ -39,6 +39,7 @@ const initialState: VideoSliceState = {
   generationOptionsForSave: null,
   videoUtilsState: initialVideoUtilsState,
   activeVideoUtilsSubTab: 'frames',
+  referenceMakerResetVersion: 0,
 };
 
 const videoSlice = createSlice({
@@ -91,7 +92,7 @@ const videoSlice = createSlice({
             ...action.payload,
         };
     },
-    setActiveVideoUtilsSubTab: (state, action: PayloadAction<'frames' | 'colors' | 'resize-crop' | 'voice-recorder'>) => {
+    setActiveVideoUtilsSubTab: (state, action: PayloadAction<VideoSliceState['activeVideoUtilsSubTab']>) => {
       state.activeVideoUtilsSubTab = action.payload;
     },
     resetVideoGenerationState: (state) => {
@@ -102,6 +103,7 @@ const videoSlice = createSlice({
     },
     resetVideoUtilsState: (state) => {
       state.videoUtilsState = initialVideoUtilsState;
+      state.referenceMakerResetVersion++;
     },
     setFrameSaveStatus: (state, action: PayloadAction<'idle' | 'saving' | 'saved'>) => {
         state.videoUtilsState.extractedFrameSaveStatus = action.payload;

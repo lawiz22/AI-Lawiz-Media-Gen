@@ -1,4 +1,4 @@
-import React, { useState, useRef, ChangeEvent, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useRef, ChangeEvent, useMemo, useEffect, useCallback, useId } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../store/store';
 import ReactCrop, { centerCrop, makeAspectCrop, Crop, PixelCrop, PercentCrop } from 'react-image-crop';
@@ -8,13 +8,17 @@ import { setFrameSaveStatus, setPaletteSaveStatus, updateVideoUtilsState, update
 import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, ResetIcon, CropIcon, ResizeIcon, ImageIcon } from './icons';
 import { dataUrlToFile, dataUrlToThumbnail, createPaletteThumbnail, fileToResizedDataUrl, fileToDataUrl } from '../utils/imageUtils';
 import { resizeImageFile, cropImageFile } from '../utils/imageProcessing';
-import type { LibraryItem, VideoUtilsState, PaletteColor, ColorPickerState, ResizeCropState } from '../types';
+import type { LibraryItem, VideoUtilsState, PaletteColor, ColorPickerState, ResizeCropState, VideoSliceState } from '../types';
 import { ImageUploader } from './ImageUploader';
 import { createAccentStyle } from '../utils/accentTheme';
 import { VoiceRecorderPanel } from './VoiceRecorderPanel';
+import { VideoClipExtractor } from './VideoClipExtractor';
+import { ReferenceMakerPanel } from './ReferenceMakerPanel';
 
 const VIDEO_UTILS_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     frames: createAccentStyle('#38bdf8', '#7dd3fc', '#0284c7'),
+    clips: createAccentStyle('#38bdf8', '#7dd3fc', '#0284c7'),
+    'reference-maker': createAccentStyle('#c084fc', '#d8b4fe', '#9333ea'),
     colors: createAccentStyle('#4ade80', '#86efac', '#16a34a'),
     'resize-crop': createAccentStyle('#facc15', '#fde047', '#ca8a04'),
     'voice-recorder': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
@@ -160,18 +164,20 @@ const quantizeImage = (file: File, colorCount: number): Promise<string[]> => {
     });
 };
 
-const VideoUploader: React.FC<{ onVideoUpload: (file: File | null) => void; sourceFile: File | null; }> = ({ onVideoUpload, sourceFile }) => {
+const VideoUploader: React.FC<{ onVideoUpload: (file: File | null) => void; sourceFile: File | null; disabled?: boolean; }> = ({ onVideoUpload, sourceFile, disabled = false }) => {
     const [isDragging, setIsDragging] = useState<boolean>(false);
+    const inputId = useId();
     const fileName = sourceFile?.name || '';
 
     const handleFileChange = useCallback((file: File | null) => {
+        if (disabled) return;
         if (file && file.type.startsWith('video/')) {
             onVideoUpload(file);
         } else {
             onVideoUpload(null);
             if (file) alert("Please upload a valid video file.");
         }
-    }, [onVideoUpload]);
+    }, [onVideoUpload, disabled]);
 
     const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         handleFileChange(e.target.files ? e.target.files[0] : null);
@@ -187,9 +193,9 @@ const VideoUploader: React.FC<{ onVideoUpload: (file: File | null) => void; sour
 
     return (
         <div>
-            <label htmlFor="video-upload-input" className="block text-sm font-medium text-text-secondary mb-2">Upload Video</label>
+            <label htmlFor={inputId} className="block text-sm font-medium text-text-secondary mb-2">Upload Video</label>
             <label
-                htmlFor="video-upload-input"
+                htmlFor={inputId}
                 className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg transition-colors duration-200 ${isDragging ? 'border-accent bg-bg-tertiary' : 'border-border-primary bg-bg-tertiary/50 hover:bg-bg-tertiary cursor-pointer'}`}
                 onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
             >
@@ -198,7 +204,7 @@ const VideoUploader: React.FC<{ onVideoUpload: (file: File | null) => void; sour
                     <p className="mb-2 text-sm"><span className="font-semibold text-accent">Click to upload</span> or drag and drop</p>
                     <p className="text-xs">MP4, MOV, WEBM</p>
                 </div>
-                <input id="video-upload-input" type="file" className="hidden" accept="video/*" onChange={onFileChange} />
+                <input id={inputId} type="file" className="hidden" accept="video/*" onChange={onFileChange} disabled={disabled} />
             </label>
             {fileName && <p className="text-xs text-text-muted mt-1 truncate">File: {fileName}</p>}
         </div>
@@ -206,18 +212,18 @@ const VideoUploader: React.FC<{ onVideoUpload: (file: File | null) => void; sour
 };
 
 interface SubTab {
-  id: string;
+  id: VideoSliceState['activeVideoUtilsSubTab'];
   label: string;
 }
 
 interface SubTabsProps {
   tabs: SubTab[];
-  activeTab: string;
-  onTabClick: (id: string) => void;
+  activeTab: VideoSliceState['activeVideoUtilsSubTab'];
+  onTabClick: (id: VideoSliceState['activeVideoUtilsSubTab']) => void;
 }
 
 const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
-    <div className="flex items-center border-b-2 border-border-primary mb-8 -mt-2">
+    <div className="flex flex-wrap items-center border-b-2 border-border-primary mb-8 -mt-2">
         {tabs.map(tab => (
             <button
                 key={tab.id}
@@ -240,8 +246,8 @@ interface VideoUtilsPanelProps {
     setEndFrame: (file: File | null) => Promise<void>;
     onOpenLibrary: () => void;
     onOpenVideoLibrary: () => void;
-    activeSubTab: string;
-    setActiveSubTab: (tabId: string) => void;
+    activeSubTab: VideoSliceState['activeVideoUtilsSubTab'];
+    setActiveSubTab: (tabId: VideoSliceState['activeVideoUtilsSubTab']) => void;
     onReset: () => void;
     onOpenLibraryForResizeCrop: () => void;
 }
@@ -250,7 +256,7 @@ const ResizeCropTool: React.FC<{
     resizeCrop: ResizeCropState;
     onOpenLibrary: () => void;
 }> = ({ resizeCrop, onOpenLibrary }) => {
-    const dispatch = useDispatch();
+    const dispatch = useDispatch<AppDispatch>();
     const [crop, setCrop] = useState<Crop>();
     const imgRef = useRef<HTMLImageElement>(null);
 
@@ -447,8 +453,9 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     onOpenLibraryForResizeCrop,
 }) => {
     // ... existing frame extractor and color picker logic will remain the same ...
-    const dispatch = useDispatch();
+    const dispatch = useDispatch<AppDispatch>();
     const videoUtilsState = useSelector((state: RootState) => state.video.videoUtilsState);
+    const referenceMakerResetVersion = useSelector((state: RootState) => state.video.referenceMakerResetVersion);
     const { videoFile, extractedFrame, colorPicker, extractedFrameSaveStatus, resizeCrop } = videoUtilsState;
 
     // --- State Setters ---
@@ -697,8 +704,10 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
         }
     };
 
-    const subTabs = [
+    const subTabs: SubTab[] = [
         { id: 'frames', label: 'Frame Extractor' },
+        { id: 'clips', label: 'Video Extractor' },
+        { id: 'reference-maker', label: 'Reference Maker' },
         { id: 'colors', label: 'Color Palette Extractor' },
         { id: 'resize-crop', label: 'Resize & Crop' },
         { id: 'voice-recorder', label: 'Voice Recorder' },
@@ -707,6 +716,13 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     return (
         <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto" style={VIDEO_UTILS_ACCENT_STYLES[activeSubTab] || VIDEO_UTILS_ACCENT_STYLES.frames}>
              <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
+            <div className={activeSubTab === 'reference-maker' ? 'block' : 'hidden'}>
+                <ReferenceMakerPanel key={referenceMakerResetVersion} />
+            </div>
+            <div className={activeSubTab === 'clips' ? 'block' : 'hidden'}>
+                <VideoClipExtractor videoFile={videoFile} onOpenLibrary={onOpenVideoLibrary}
+                    renderUploader={disabled => <VideoUploader onVideoUpload={setVideoFile} sourceFile={videoFile} disabled={disabled} />} />
+            </div>
             {/* --- Frame Extractor --- */}
             <div className={activeSubTab === 'frames' ? 'block' : 'hidden'}>
                 <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">

@@ -15,12 +15,13 @@ import { setActiveTab } from '../store/appSlice';
 import { createAccentStyle } from '../utils/accentTheme';
 import { getPromptDestinationOptions, PROMPT_T2I_WORKFLOWS } from '../utils/promptDestination';
 import { OllamaActivityPanel } from './OllamaActivityPanel';
+import { getOpenRouterSettings } from '../services/openRouterService';
 import { buildPromptSoupIngredients, getPromptSoupSourceClass, getPromptSoupSourceHex } from '../utils/promptSoup';
 
 
 type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'flux2-simple' | 'gemini' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
 type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
-type AnalysisProvider = 'gemini' | 'mammouth' | 'ollama' | 'comfyui';
+type AnalysisProvider = 'gemini' | 'mammouth' | 'openrouter' | 'ollama' | 'comfyui';
 
 const getComfyChoices = (input: any): string[] => {
     const choices = Array.isArray(input?.[0]) ? input[0] : [];
@@ -423,7 +424,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         try {
             const generatedPrompt = analysisProvider === 'ollama'
                 ? await generateOllamaPromptFromImage(bgImage, 'background', bgModelType, ollamaUrl, ollamaModel, setOllamaActivity, controller?.signal)
-                : await extractBackgroundPromptFromImage(bgImage, bgModelType, analysisProvider === 'gemini' ? 'gemini' : 'mammouth');
+                : await extractBackgroundPromptFromImage(bgImage, bgModelType, analysisProvider === 'gemini' || analysisProvider === 'openrouter' ? analysisProvider : 'mammouth');
             dispatch(updatePromptGenState({ bgPrompt: generatedPrompt }));
         } catch (err: any) {
             setBgError(err?.name === 'AbortError' ? 'Ollama request stopped.' : err.message || 'An unknown error occurred.');
@@ -458,7 +459,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         try {
             const generatedPrompt = analysisProvider === 'ollama'
                 ? await generateOllamaPromptFromImage(subjectImage, 'subject', subjectModelType, ollamaUrl, ollamaModel, setOllamaActivity, controller?.signal)
-                : await extractSubjectPromptFromImage(subjectImage, subjectModelType, analysisProvider === 'gemini' ? 'gemini' : 'mammouth');
+                : await extractSubjectPromptFromImage(subjectImage, subjectModelType, analysisProvider === 'gemini' || analysisProvider === 'openrouter' ? analysisProvider : 'mammouth');
             dispatch(updatePromptGenState({ subjectPrompt: generatedPrompt }));
         } catch (err: any) {
             setSubjectError(err?.name === 'AbortError' ? 'Ollama request stopped.' : err.message || 'An unknown error occurred.');
@@ -493,7 +494,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         try {
             const generatedParts = analysisProvider === 'ollama'
                 ? await generateOllamaPromptSoup(soupIngredients, soupModelType, soupCreativity, ollamaUrl, ollamaModel, setOllamaActivity, controller?.signal)
-                : await generateMagicalPromptSoup(soupIngredients, soupModelType, soupCreativity, analysisProvider === 'gemini' ? 'gemini' : 'mammouth');
+                : await generateMagicalPromptSoup(soupIngredients, soupModelType, soupCreativity, analysisProvider === 'gemini' || analysisProvider === 'openrouter' ? analysisProvider : 'mammouth');
             const fullPromptString = generatedParts.map(p => p.text).join(' ');
             setSoupPromptParts(generatedParts);
             dispatch(updatePromptGenState({ 
@@ -575,13 +576,14 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         const providers: { id: AnalysisProvider; label: string }[] = [
             { id: 'gemini', label: 'Gemini' },
             { id: 'mammouth', label: 'Mammouth AI' },
+            { id: 'openrouter', label: 'OpenRouter' },
             { id: 'ollama', label: 'Ollama' },
             ...(activeSubTab === 'from-image' ? [{ id: 'comfyui' as AnalysisProvider, label: 'Florence2' }] : []),
         ];
         return (
             <div className="mb-4 flex flex-col gap-2 border border-border-primary bg-bg-primary/50 p-3 sm:flex-row sm:items-center">
                 <span className="shrink-0 text-sm font-semibold text-text-secondary">Analysis Provider</span>
-                <div className={`grid flex-1 ${providers.length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'} rounded-md border border-border-primary bg-bg-primary p-1`}>
+                <div className="flex flex-1 flex-wrap rounded-md border border-border-primary bg-bg-primary p-1">
                     {providers.map(provider => (
                         <button key={provider.id} type="button" onClick={() => setAnalysisProvider(provider.id)} className={`rounded px-3 py-2 text-sm font-semibold transition-colors ${analysisProvider === provider.id ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary-hover'}`}>
                             {provider.label}
@@ -594,10 +596,13 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
 
     const renderAnalysisControls = (currentType: PromptModelType, setType: (type: PromptModelType) => void, allowFlorence = false) => (
         <div className="space-y-4">
-            {analysisProvider === 'gemini' || analysisProvider === 'mammouth' ? (
+            {analysisProvider === 'gemini' || analysisProvider === 'mammouth' || analysisProvider === 'openrouter' ? (
                 <div>
                     <label className="mb-2 block text-sm font-medium text-text-secondary">Prompt Type</label>
                     {renderPromptTypeButtons(currentType, setType)}
+                    {analysisProvider === 'openrouter' && <p className={`mt-2 text-xs ${getOpenRouterSettings().apiKey ? 'text-text-secondary' : 'text-danger'}`}>
+                        {getOpenRouterSettings().apiKey ? `OpenRouter model: ${getOpenRouterSettings().model}. Change the default in Connection Settings.` : 'Configure your OpenRouter API key in Connection Settings.'}
+                    </p>}
                 </div>
             ) : analysisProvider === 'ollama' ? renderOllamaControls(currentType, setType) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

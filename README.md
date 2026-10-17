@@ -15,18 +15,54 @@
 
 </div>
 
-LAWIZ'S Media Generator combines image generation, character creation, video direction, speech synthesis, asset extraction, upscaling, and model management in one React/Electron desktop application. It can use hosted generation through Mammouth AI, local language and vision models through Ollama, or configurable workflows on a local ComfyUI server.
+LAWIZ'S Media Generator combines image generation, character creation, video direction, speech synthesis, asset extraction, upscaling, and model management in one React/Electron desktop application. It connects to hosted providers including Mammouth AI, Gemini and OpenRouter, local language and vision models through Ollama, and configurable workflows on a local ComfyUI server.
 
 > This repository contains the application and workflow definitions. AI checkpoints, LoRAs, ComfyUI, custom nodes, and third-party API access are not bundled.
 
 ## Version 1.88 Highlights
 
+- The **Video** workspace groups **Video Prompt Generator**, **LTX Director** and **Minimax H3**. Multimodal prompt generation supports editable templates, colored reference tokens, image/video crop and resize, and a choice of OpenRouter, Gemini or Mammouth subject to each provider's media support.
+- Generated video prompts automatically save to **Library > Prompts** with the generation-time settings and original/edited reference files, and can be restored into the prompt generator.
+- The first **MiniMax H3 REF2V** workflow is connected to ComfyUI and the prompt generator, with six optional LoRAs, optional live KJ previews, configurable output/audio settings and targeted cancellation. Additional H3 workflow slots remain prepared for future graphs.
+- **Save to Library** on H3 results stores the original output binary, thumbnail, actual seed, prompt, render settings and executed workflow. Saved videos remain playable without ComfyUI and are included in Library backups.
 - Magic Soup accumulates multiple numbered Main, Background, and Subject ingredients instead of replacing previous selections. Each ingredient keeps a distinct color through generation, saved thumbnails, and Library details, while Reset clears the complete recipe.
 - The Library provides full-text metadata search, provider and workflow filters, reusable tags, SFW/NSFW labels, one-to-five-star ratings, sorting, explicit page/all-results selection, checked-item exports, and confirmed batch actions.
 - Library Folder projects synchronize additions, metadata updates, ratings, tags, safety labels, deletions, and orphaned assets while displaying the pending change count.
 - FLUX2 Image, I2I Edit, Character, Swap Anything, and Stylise Anything workflows list compatible GGUF models plus every Safetensors diffusion model exposed by ComfyUI. The generated workflow automatically selects `UnetLoaderGGUF` or `UNETLoader` from the chosen file format.
 
 ## Features
+
+### Video Workspace
+
+- **Video** contains **Video Prompt Generator** (first subtab), **LTX Director**, and **Minimax H3**. Existing Library, TTS and model transfers still open LTX Director inside this workspace.
+- The dedicated prompt generator accepts up to **4 pictures, 2 videos and 2 audio files**, with previews, stable numbered/color-coded reference tokens, per-reference roles and click-to-insert tokens. Images and videos have free/preset-ratio crop and pixel resizing; video editing also trims and exports a real local H.264 MP4 with audio using the existing FFmpeg encoder. Restore Original undoes edits.
+- Choose OpenRouter (Grok 4.7 by default, with a live catalog and editable model ID), Gemini or Mammouth, using the existing Connection Settings keys. Gemini receives native images/video/audio; OpenRouter checks each modality against the model catalog (audio must be WAV/MP3). Mammouth currently accepts image references only in this integration and explicitly rejects video/audio rather than silently omitting them. Generation sends the idea, template, notes and edited files to the selected provider; provider billing/access applies. Requests are limited to 18 MB total media before base64 encoding.
+- **Templates** edits and saves the generation and character-replacement canvases locally. Generation returns `integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`; replacement returns `subject_definitions`, `summary`, `retention_analysis`, `detailed_description`, `overall_soundscape`, `non_diegetic_music`. Keep these field names/order when customizing templates. Malformed, empty or incomplete responses are reported, not accepted as successful prompts.
+- Output can be edited, previewed with colored Picture/Video/Audio/Subject tokens, copied or exported as text. **Send to Minimax H3 draft** transfers the prompt, edited media, target aspect and duration into one of four independent workflow slots. **Reference to video** executes the supplied `00-rEF2V` MiniMax H3 workflow through ComfyUI; Text to video, Character replacement and Audio-driven video remain preparation slots for future graphs.
+- Each successful video prompt generation automatically saves a **Library > Prompts** item containing the output, exact generation-time idea/provider/model, aspect ratio, duration, workflow, editable canvases, full instruction, stable reference numbers/roles, and original plus edited images/videos/audio. Later changes to the composer do not change that saved snapshot. **Save to Library** also saves edited output as a new item or retries a failed save; prompts created before this feature save the current setup and are labeled accordingly.
+- Library details preview the saved reference media and show all settings. **Open in Video Prompt Generator** restores the complete setup without replacing your independent Minimax workflow drafts. Reference binaries use the existing Library asset store and are included in Library ZIP export/import, Library Folder projects and Google Drive synchronization; no API keys are included.
+- The workspace, editable canvases, H3 settings and workflow drafts (including original and edited files) persist in browser/Electron IndexedDB, not in the cloud or source tree; storage failures are shown explicitly. No new prompt-generator-to-LTX link is enabled yet.
+- **H3 REF2V** retains the supplied model/CLIP/dual-VAE choices, resolution selector, duration/frame expression, `seeds_2` sampler, Beta scheduler, intermediate sigma extension, ReferencePack and VHS output controls. Six independently enabled LoRA slots preserve the source strengths; all start disabled. Optional patched-CLIP conditioning is off, matching the source graph. Refresh loads installed model/LoRA lists and format-specific encoder widgets; **Check workflow** validates active nodes/models/options without uploading or queueing a job. Active settings are checked again before generation.
+- H3's native reference capacity is **9 pictures / 3 videos / 3 standalone audio files**; the linked prompt generator retains its 4 / 2 / 2 limit. Each reference can be disabled, and each video soundtrack can be excluded independently. Edited files are uploaded once without reapplying crops/trims. Sparse reference tokens are compacted by kind; available video soundtracks consume Audio labels before standalone audio. The server probe verifies silent videos before final audio numbering. Prompts mentioning missing/disabled references fail explicitly.
+- Native H3 sampling is 24 fps, with frame counts rounded using the source expression to `5 mod 17`; the UI shows effective frames/duration and binary-megapixel resolution. Canvas dimensions must be divisible by 32. ReferencePack supports at most 60 seconds, not a promise of model quality/VRAM availability; native H3 describes a trained range of about 124–362 frames. Output FPS is independently configurable. All-frame previews are limited to 1024 frames; select fewer preview frames or disable preview for longer clips.
+- **Live preview** is available through KJ's client-targeted WebSocket API (JPEG, animated WebP or MP4), with independent preview resolution, quality, frame count, FPS, tiny/full VAE and audio controls. It is optional and can add decoding/VRAM cost. Sampling, preview, source soundtracks, conditioning VAEs, output audio, sigma extension, prompt display, LoRA chain and output-saving controls are independently adjustable where applicable. Disabling a branch removes/bypasses its nodes, rather than only hiding UI. Normal tab changes do not cancel a running H3 job. **Cancel** uses ComfyUI's atomic per-job `/api/jobs/{id}/cancel` endpoint, never a global interrupt; an older server without it reports a cancellation error and must be managed in ComfyUI. Closing/reloading the application does not stop an already submitted server job or resume its monitor.
+- Generation uploads enabled references to the configured ComfyUI server, displays the completed output and offers the exact executed API graph/prompt. Saved output remains on ComfyUI; disabling Save output uses its temporary folder. Browser playback depends on the selected output codec; image-sequence outputs remain in the server output folder. By default ReferencePack's provider is **none**, using the dedicated generator's prompt unchanged except reference-token remapping. Optional server-side rewriting uses a local endpoint or `OPENROUTER_API_KEY` / `LLM_KEY` from the **ComfyUI server environment**, never a copied/embedded workflow key. Hosted rewriting may incur an additional charge.
+- **Save to Library** under the last completed H3 output copies the original result into **Library > Videos** (or Images for GIF/WebP/PNG output), with a thumbnail, actual seed, prompt, exact render settings and executed API graph. It stores a local binary asset, not the temporary ComfyUI URL, so playback/download and Library ZIP/Folder/Drive backups do not depend on the server file remaining available. Settings edited after the render do not change the saved result. Failed saves remain retryable; unavailable thumbnail codecs are explicitly reported and use a placeholder without discarding the original output. Library details expose the H3 settings/workflow; saving a result does not create a runnable input-reference snapshot. Image-sequence formats save only the file returned by ComfyUI, not the whole server-side sequence.
+- Regression checks: `node --test services/minimaxH3Workflow.test.mjs services/minimaxH3Service.test.mjs services/minimaxH3Library.test.mjs services/videoPromptService.test.mjs services/videoPromptLibrary.test.mjs services/videoPromptDrive.test.mjs services/openRouterService.test.mjs services/videoClipService.test.mjs`.
+
+### Live System Indicators
+
+- The top header displays CPU, RAM, GPU, VRAM and Temp gauges, refreshed approximately every second while the app is visible. CPU is total system utilization between samples; RAM is physical memory in use, not only the app's memory.
+- GPU and VRAM are usage percentages for NVIDIA GPU 0; Temp is that GPU's temperature in degrees Celsius (its bar uses a 0-100 C visual scale). These three sensors use the installed NVIDIA driver's `nvidia-smi`, without requiring ComfyUI. On other GPUs or unavailable sensors, gauges show **N/A** with the reason in a tooltip, not fabricated values.
+- Hardware access requires the Electron desktop app. The web-only app shows **N/A**. Restart Electron after installing an update that adds the sensor IPC bridge.
+
+### OpenRouter (Prompt Tools)
+
+- Configure **Connection Settings > OpenRouter API** with your own API key and default model. **Grok 4.7** (`x-ai/grok-4.7`) is preselected. The model selector loads the live OpenRouter catalog and identifies **Text + Vision** versus **Text only** models; Refresh reloads the catalog without changing your selection.
+- **Test** verifies the key through `/api/v1/key` and checks the selected model in the catalog. It performs no paid generation and does not guarantee sufficient credits or account access for a subsequent generation. **Save and Close** persists the key/model through Electron's existing local settings store (or browser local storage in web mode). Clearing the key removes it from web storage and disables authenticated requests. Restart Electron after this update to activate the new settings IPC.
+- Select **OpenRouter** as the Analysis Provider in **Prompt from Image**, **Extract Background**, **Subject / Object**, or **Magical Prompt Soup**, or use it in **Video > Video Prompt Generator**. Existing prompt-tool formats, history, copy, Library saving and destination actions remain available. OpenRouter rewrites prompts; it is not an image/video rendering provider here.
+- Image tools require a vision model. Images are resized to a maximum dimension of 1536 pixels before being sent; selected images and prompt/Soup text are sent to OpenRouter and its downstream model provider on generation. Catalog refresh sends no source images or prompts. Missing keys, unsupported models, API errors, empty output and truncated responses are surfaced explicitly.
+- Regression checks: `node --test services/openRouterService.test.mjs electron/openRouterSettings.test.cjs`.
 
 ### Image and Character Generation
 
@@ -149,6 +185,7 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 - Import Advanced TTS dialogue as speaker-aware clips with optional per-character reference photos.
 - Add generated speech context and control frame rate and guidance.
 - Configure the LTX checkpoint and up to three LoRAs.
+- Model lists are not filtered by LTX version, filename, or extension. Select checkpoints or diffusion models in Safetensors/GGUF format; Director chooses the corresponding ComfyUI loader. Select both the text encoder and text projection for LTX 2.3, or the single encoder for LTX 2.5. Encoder choices and model selections are retained in saved projects and Library presets. Unfiltered choices still require models compatible with the selected LTX version.
 - Reduce final decode VRAM usage with tiled VAE decoding and an adjustable tile size.
 - Accelerate both LTX profiles with optional CacheDiT settings shared across LTX 2.3 and LTX 2.5.
 - Generate the final video through ComfyUI and download the result.
@@ -178,8 +215,12 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 - Every Stylise Anything preset field remains editable, including its name, photo type, camera type, film or media, visual style, and additional instructions. Source composition can be preserved or freely restyled, with advanced FLUX2 model and sampling controls available in the same panel.
 - Logo, banner, album-cover, and theme generation.
 - Video frame extraction, palette extraction, image resize, and crop tools.
+- **Tools > Reference Maker** composes 1 to 9 photos into a reference sheet locally, without AI, API access or ComfyUI. Add multiple files or select Library images, then choose each photo's original/fixed aspect ratio or **Free crop**, move/resize its crop, duplicate, remove or reorder it. The live preview redraws on the next animation frame, without an Apply/Generate step. Auto columns create a 2-by-2 sheet for four images or a 3-by-3 sheet for nine images; choose 1 to 9 columns manually, a background color, scaled spacing and a maximum output resolution of 0.5/1/2/4/8 MP. Each row shares a photo height, preserving the selected crop ratios without stretching or additional cropping; incomplete rows are centered. Dimensions are capped at 8192 pixels. **Download PNG** exports the currently previewed sheet; **Save to Library** stores it as a reusable image in the gallery. Reference Maker's own reset, Tools reset and the active-panel reset all clear its photos and settings. Work in progress survives tool switches but is not persisted across app restarts. Regression checks: `node --test utils/referenceSheet.test.mjs`.
+- **Tools > Video Extractor** uses the Frame Extractor-style preview, timeline, editable FPS and frame stepping to select start/end boundaries (in seconds or with **Set start/end here**). Export locally to a real H.264/AAC MP4, preserving source audio when present, or toggle **Reduce resolution (50%)** to halve both dimensions. Download any extracted clip; **Save to Library** is available only when the verified output duration is strictly less than 5 minutes (300 seconds). Variable-frame-rate sources use time-based boundaries. The bundled single-thread FFmpeg WebAssembly encoder requires no ComfyUI server or media upload; large files consume browser memory and can be cancelled. FFmpeg core is distributed under GPL-2.0-or-later.
+- Video Extractor probes small portions at both ends of the selected source before loading the encoder, then mounts it read-only through FFmpeg WORKERFS. FFmpeg reads only the requested portions instead of copying the entire source into browser/WASM memory, including for sources larger than 2 GB. Encoded output still uses memory. Read failures identify whether the source video or a bundled encoder asset is inaccessible. If the source becomes unreadable after selection, select it again; if necessary, copy it to a new local file and select the copy.
 - Record a selected microphone, computer output audio, or both; export WAV audio and save it with an optional photo as a reusable voice reference.
 - SeedVR2 and Z-Image creative upscaling workflows.
+- SeedVR2 lists all DiT and VAE models reported by the connected ComfyUI server and selects the first available model by default. Choose another model in **Advanced**; a valid selection is preserved when the lists refresh. Removed models fall back to the first available model, and upscaling is blocked with a message if either list is empty.
 
 ### Library
 
@@ -313,7 +354,7 @@ Qwen Edit Photo Fusion maps each input image to exactly one person and uses the 
 
 The standard Flux workflow automatically enables `Flux\flux-turbo.safetensors` at strength `1`. The legacy Qwen T2I GGUF workflow always uses 4 steps and CFG `1`, including when Library metadata contains different recommended values; this does not apply to Qwen Image 2.1.
 
-LTX Director requires the latest WhatDreamsCost LTX Director, ComfyUI-LTXVideo, and ComfyUI-KJNodes packages. LTX 2.5 also uses ComfyUI-GGUF. CacheDiT acceleration requires [ComfyUI-CacheDiT](https://github.com/Jasonzzt/ComfyUI-CacheDiT), which exposes `CacheDiT_LTX2_Optimizer`; restart ComfyUI after installing or updating it so the node appears in `/object_info`.
+LTX Director requires the latest WhatDreamsCost LTX Director, ComfyUI-LTXVideo, and ComfyUI-KJNodes packages. GGUF models and text encoders additionally require ComfyUI-GGUF. CacheDiT acceleration requires [ComfyUI-CacheDiT](https://github.com/Jasonzzt/ComfyUI-CacheDiT), which exposes `CacheDiT_LTX2_Optimizer`; restart ComfyUI after installing or updating it so the node appears in `/object_info`.
 
 ## Setup
 
@@ -439,14 +480,24 @@ constants.ts      Embedded ComfyUI workflow templates
 
 ## Production Build
 
-Create the optimized renderer and Windows Electron package:
+Create the optimized renderer and Windows x64 NSIS installer:
 
 ```powershell
 npm ci
-npm run electron:build
+@'
+const { spawnSync } = require('node:child_process');
+const build = spawnSync('npm run electron:build -- --win nsis --x64 --publish never', {
+  shell: true,
+  stdio: 'inherit',
+  env: { ...process.env, GEMINI_API_KEY: '', API_KEY: '' },
+});
+process.exit(build.status === null ? 1 : build.status);
+'@ | node
 ```
 
-`electron:build` runs `vite build` first and then `electron-builder`. On Windows, it generates the NSIS setup `.exe` in `dist`, alongside the packaged application under `dist/win-unpacked`. Run the setup `.exe` to install the desktop app; ComfyUI, Ollama and their models remain separate installations.
+`electron:build` runs `vite build` first and then `electron-builder`. It generates the NSIS setup `.exe` in `dist`, alongside the packaged application under `dist/win-unpacked`. `--publish never` prevents release uploads. The empty environment overrides keep local `.env.local` Gemini credentials out of the renderer bundle; configure provider keys in the installed application's Connection Settings instead. Run the setup `.exe` to install the desktop app; ComfyUI, Ollama and their models remain separate installations. Build artifacts in `dist` are ignored by Git and are not included in a normal source commit.
+
+Without a configured code-signing certificate, the generated installer is unsigned and Windows may show a SmartScreen warning.
 
 Allow several GB of free space on both the output and Windows temporary-file drives. NSIS's `error creating mmap` can indicate a full disk even when RAM is available. Do not use an installer left by a failed build; a partially written `.exe` may still exist.
 
@@ -455,6 +506,7 @@ Recommended pre-commit checks:
 ```powershell
 npm audit --omit=dev
 node --test services/sceneVariationService.test.mjs
+node --test services/minimaxH3Workflow.test.mjs services/minimaxH3Service.test.mjs services/minimaxH3Library.test.mjs services/videoPromptService.test.mjs services/videoPromptLibrary.test.mjs services/videoPromptDrive.test.mjs services/openRouterService.test.mjs services/videoClipService.test.mjs services/ltxDirectorWorkflow.test.mjs
 npm run build
 git diff --check
 ```

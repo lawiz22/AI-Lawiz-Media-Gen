@@ -1,6 +1,6 @@
 
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import type { LibraryItem, LibrarySliceState } from '../types';
+import type { LibraryItem, LibrarySliceState, LibraryAssetRole } from '../types';
 import * as idb from '../services/idbLibraryService';
 import * as libraryService from '../services/libraryService';
 import { createVideoPlaceholderThumbnail, videoToThumbnail } from '../utils/imageUtils';
@@ -30,9 +30,10 @@ export const fetchLibrary = createAsyncThunk('library/fetchLibrary', async (_, t
     }
 });
 
-export const addToLibrary = createAsyncThunk('library/addToLibrary', async (item: Omit<LibraryItem, 'id'>, thunkAPI) => {
+export const addToLibrary = createAsyncThunk('library/addToLibrary', async (item: Omit<LibraryItem, 'id'> & { assetBlobs?: Partial<Record<LibraryAssetRole, Blob>> }, thunkAPI) => {
     try {
-        const newItem = await libraryService.saveToLibrary(item); 
+        const { assetBlobs, ...metadata } = item;
+        const newItem = await libraryService.saveToLibrary(metadata, assetBlobs);
         return newItem;
     } catch (err: any) {
         return thunkAPI.rejectWithValue(err.message);

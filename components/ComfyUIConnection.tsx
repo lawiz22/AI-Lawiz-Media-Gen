@@ -5,6 +5,8 @@ import { checkConnection } from '../services/comfyUIService';
 import { testMammouthConnection } from '../services/mammouthService';
 import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, testOllamaConnection } from '../services/ollamaService';
 import { CloseIcon, SpinnerIcon } from './icons';
+import { OpenRouterSettings } from './OpenRouterSettings';
+import { DEFAULT_OPENROUTER_MODEL, type OpenRouterSettings as OpenRouterConfig } from '../services/openRouterService';
 
 interface ConnectionSettingsModalProps {
   isOpen: boolean;
@@ -14,15 +16,19 @@ interface ConnectionSettingsModalProps {
   initialGoogleApiKey: string;
   initialGeminiApiKey?: string;
   initialMammouthApiKey?: string;
+  initialOpenRouterSettings: OpenRouterConfig;
   initialOllamaUrl: string;
   initialOllamaModel: string;
-  onSave: (comfyUIUrl: string, googleClientId: string, googleApiKey: string, geminiApiKey?: string, mammouthApiKey?: string, ollamaUrl?: string, ollamaModel?: string) => void;
+  onSave: (comfyUIUrl: string, googleClientId: string, googleApiKey: string, geminiApiKey?: string, mammouthApiKey?: string, ollamaUrl?: string, ollamaModel?: string, openRouterSettings?: OpenRouterConfig) => Promise<void>;
   onConnectionFail: (url: string) => void;
 }
 
 type ConnectionStatus = 'idle' | 'testing' | 'success' | 'failed';
 
-export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = ({ isOpen, onClose, initialComfyUIUrl, initialGoogleClientId, initialGoogleApiKey, initialGeminiApiKey, initialMammouthApiKey, initialOllamaUrl, initialOllamaModel, onSave, onConnectionFail }) => {
+export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = ({ isOpen, onClose, initialComfyUIUrl, initialGoogleClientId, initialGoogleApiKey, initialGeminiApiKey, initialMammouthApiKey, initialOpenRouterSettings, initialOllamaUrl, initialOllamaModel, onSave, onConnectionFail }) => {
+  const [openRouterSettings, setOpenRouterSettings] = useState<OpenRouterConfig>({ apiKey: '', model: DEFAULT_OPENROUTER_MODEL });
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [comfyUrl, setComfyUrl] = useState<string>('');
   const [googleClientId, setGoogleClientId] = useState<string>('');
   const [googleApiKey, setGoogleApiKey] = useState<string>('');
@@ -40,6 +46,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
 
   useEffect(() => {
     if (isOpen) {
+      setOpenRouterSettings(initialOpenRouterSettings);
+      setSaveError(null);
       setComfyUrl(initialComfyUIUrl || 'http://127.0.0.1:8188');
       setGoogleClientId(initialGoogleClientId || '');
       setGoogleApiKey(initialGoogleApiKey || '');
@@ -52,7 +60,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
       setMammouthStatus('idle');
       setOllamaStatus('idle');
     }
-  }, [initialComfyUIUrl, initialGoogleClientId, initialGoogleApiKey, initialGeminiApiKey, initialMammouthApiKey, initialOllamaUrl, initialOllamaModel, isOpen]);
+  }, [initialComfyUIUrl, initialGoogleClientId, initialGoogleApiKey, initialGeminiApiKey, initialMammouthApiKey, initialOpenRouterSettings, initialOllamaUrl, initialOllamaModel, isOpen]);
 
   const handleTestConnection = async () => {
     setComfyStatus('testing');
@@ -68,9 +76,18 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     }
   };
 
-  const handleSave = () => {
-    onSave(comfyUrl, googleClientId, googleApiKey, geminiApiKey, mammouthApiKey, ollamaUrl, ollamaModel);
-    onClose();
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await onSave(comfyUrl, googleClientId, googleApiKey, geminiApiKey, mammouthApiKey, ollamaUrl, ollamaModel, openRouterSettings);
+      onClose();
+    } catch (cause) {
+      console.error('Could not save connection settings:', cause);
+      setSaveError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleTestMammouth = async () => {
@@ -141,7 +158,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           </button>
         </div>
 
-        <div className="space-y-6">
+        <fieldset className="space-y-6" disabled={isSaving}>
           {/* ComfyUI Section */}
           <div>
             <h3 className="text-lg font-semibold text-text-primary mb-2">ComfyUI Server</h3>
@@ -248,6 +265,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
             )}
           </div>
 
+          <OpenRouterSettings value={openRouterSettings} onChange={setOpenRouterSettings} />
+
           {/* Google Drive Section */}
           <div>
             <h3 className="text-lg font-semibold text-text-primary mb-2">Google Drive Integration</h3>
@@ -282,13 +301,15 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           <div className="pt-2">
             <button
               onClick={handleSave}
+              disabled={isSaving}
               style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
               className="w-full font-bold py-3 px-4 rounded-lg transition-colors duration-200"
             >
-              Save and Close
+              {isSaving ? 'Saving...' : 'Save and Close'}
             </button>
+            {saveError && <p role="alert" className="mt-2 text-sm text-danger">{saveError}</p>}
           </div>
-        </div>
+        </fieldset>
       </div>
     </div>
   );

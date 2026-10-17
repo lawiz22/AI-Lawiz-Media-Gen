@@ -210,6 +210,8 @@ export const generateMammouthText = async (
         throw new Error(`Mammouth API error (${response.status}): ${await readError(response)}`);
     }
     const payload = await response.json();
+    const finishReason = payload?.choices?.[0]?.finish_reason;
+    if (finishReason && finishReason !== 'stop') throw new Error(`Mammouth did not complete the response (${finishReason}).`);
     const rawContent = payload?.choices?.[0]?.message?.content;
     const text = typeof rawContent === 'string'
         ? rawContent
