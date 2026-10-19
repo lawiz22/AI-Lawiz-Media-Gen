@@ -2,6 +2,8 @@ import React, { ChangeEvent, useMemo, useState } from 'react';
 import { GenerationOptions } from '../types';
 import { NumberSlider, SelectInput, CheckboxSlider } from './InputComponents';
 import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
+import { MossSettingsPanel } from './MossSettingsPanel';
+import { Krea2EditSettingsPanel } from './Krea2EditSettingsPanel';
 
 interface LoraSettingsPanelProps {
     options: GenerationOptions;
@@ -98,6 +100,14 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
     }, [filteredLoras, loraSlotCount, options]);
 
     const isQwen21 = options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo';
+    if (options.comfyModelType === 'krea2-edit') return <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
+        <button type="button" onClick={() => setIsOpen(open => !open)} aria-expanded={isOpen} className="flex w-full justify-between border-b border-accent/30 pb-2 font-bold uppercase text-accent">LoRA Settings (KREA2 Edit)<span>{isOpen ? '-' : '+'}</span></button>
+        {isOpen && <div className="mt-4"><Krea2EditSettingsPanel section="loras" options={options} updateOptions={updateOptions} availableLoras={availableLoras} disabled={isDisabled} /></div>}
+    </div>;
+    if (options.comfyModelType === 'moss-image') return <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
+        <button type="button" onClick={() => setIsOpen(open => !open)} aria-expanded={isOpen} className="flex w-full justify-between border-b border-accent/30 pb-2 font-bold uppercase text-accent">LoRA Settings (MOSS)<span>{isOpen ? '-' : '+'}</span></button>
+        {isOpen && <div className="mt-4"><MossSettingsPanel section="loras" options={options} updateOptions={updateOptions} availableLoras={availableLoras} disabled={isDisabled} /></div>}
+    </div>;
     if (!isQwen21 && options.comfyModelType !== 'sd1.5' && options.comfyModelType !== 'sdxl' && options.comfyModelType !== 'flux' && options.comfyModelType !== 'qwen-t2i-gguf' && options.comfyModelType !== 'qwen-edit' && options.comfyModelType !== 'z-image' && options.comfyModelType !== 'flux2-simple' && options.comfyModelType !== 'krea2-simple' && options.comfyModelType !== 'krea2-raw') {
         return null;
     }

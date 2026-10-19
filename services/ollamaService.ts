@@ -207,6 +207,10 @@ const chatWithOllama = async (url: string, model: string, content: string, image
     return text;
 };
 
+export const generateOllamaImagePrompt = (
+    image: File, instruction: string, url: string, model: string, signal?: AbortSignal,
+): Promise<string> => chatWithOllama(url, model, instruction, image, undefined, 0.35, undefined, signal);
+
 const getStyleInstruction = (modelType: string): string => {
     if (modelType === 'sd1.5') return 'Return only a simple comma-separated keyword list.';
     if (modelType === 'gemini') return 'Return one exhaustive natural-language image description with rich visual detail.';

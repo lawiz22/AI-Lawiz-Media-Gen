@@ -25,6 +25,7 @@ import { generateMammouthText } from './mammouthService';
 import { generateOpenRouterText } from './openRouterService';
 import { getSeedVr2Models, selectSeedVr2Model } from '../utils/seedVr2Models';
 import { generateGeminiText } from './geminiService';
+import { getImagePromptStyleInstruction as getPromptStyleInstruction } from '../utils/imagePromptStyle';
 import { buildLtxDirectorModelNodes, LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './ltxDirectorWorkflow';
 import { createLtxDialogueInstruction, parseSpeakerTranscript } from '../utils/ttsTranscript';
 import { buildCharacterAnglesWorkflow, buildFlux2CharacterAnglesWorkflow, buildQwen21CharacterAnglePrompts, CHARACTER_ANGLES, getEnabledCharacterAngles } from './characterAnglesWorkflow';
@@ -32,6 +33,9 @@ import { buildSwapAnythingWorkflow, type SwapAnythingOptions } from './swapAnyth
 import { buildFlux2EditWorkflow, buildMaskedFlux2EditWorkflow, type Flux2EditReference } from './flux2EditWorkflow';
 import { buildSceneMaskWorkflow, sceneSegmentationErrors, type SceneSegmentationTarget } from './sceneMaskWorkflow';
 import { buildQwen21Workflow, defaultQwen21Settings, setQwen21WorkflowSeed, validateQwen21Readiness } from './qwen21Workflow';
+import { buildMossWorkflow, defaultMossSettings, mossPreviewBlob, validateMossReadiness } from './mossWorkflow';
+import { buildKrea2EditWorkflow, defaultKrea2EditSettings, validateKrea2EditReadiness } from './krea2EditWorkflow';
+import { getImageDimensionsFromFile } from '../utils/imageUtils';
 import { buildQwen21OutpaintWorkflow, qwen21OutpaintPrompt, validateQwen21OutpaintReadiness, type Qwen21OutpaintOptions } from './qwen21Workflow';
 import { buildQwen21CharacterSheetWorkflow, qwen21CharacterPrompt, validateQwen21CharacterReadiness, type Qwen21CharacterSheetOptions } from './qwen21Workflow';
 import { buildQwen21RemoveBackgroundWorkflow, defaultQwen21RemoveBackgroundOptions, validateQwen21RemoveBackgroundReadiness, type Qwen21RemoveBackgroundOptions } from './qwen21Workflow';
@@ -601,41 +605,6 @@ export const generateIndexTts = async (
 // --- Mammouth-based Prompt Generation ---
 type ComfyPromptModelType = ComfyModelType | 'gemini';
 
-const getPromptStyleInstruction = (modelType: ComfyPromptModelType): string => {
-    switch (modelType) {
-        case 'sd1.5':
-        case 'face-detailer-sd1.5':
-            return 'Your response MUST be a very simple, comma-separated list of keywords. Do not use sentences.';
-        case 'flux':
-        case 'nunchaku-flux-image':
-        case 'flux-krea':
-        case 'qwen-t2i-gguf':
-        case 'qwen21-t2i':
-        case 'qwen21-turbo':
-        case 'z-image':
-        case 'krea2-simple':
-        case 'krea2-raw':
-            return 'Your response MUST be a single, detailed, artistic, and descriptive paragraph. Use rich vocabulary.';
-        case 'flux2-simple':
-            return `Your response MUST follow this exact five-segment FLUX.2 [klein] structure, with one labeled line per segment:
-Subject: identify the main subject precisely.
-Setting: describe where the scene takes place and the spatial composition.
-Details: specify concrete visual features, materials, clothing, textures, objects, and actions.
-Lighting: explain the light sources, direction, quality, color, shadows, and reflections.
-Atmosphere: describe the mood, emotional tone, weather, depth, and overall visual feeling.
-Do not add any preamble, conclusion, markdown bullets, or extra sections.`;
-        case 'gemini':
-            return 'Write an exceptionally long and exhaustive narrative image description of approximately 600 to 900 words. Use flowing natural-language prose and complete sentences. Describe composition, subjects, identities, expressions, poses, clothing, materials, environment, foreground, background, spatial relationships, lighting, color, textures, camera perspective, lens behavior, atmosphere, mood, and every meaningful visible detail. Remain faithful to the source or supplied ideas, avoid repetition, and do not use headings, lists, preambles, or conclusions.';
-        case 'wan2.2':
-        case 'sdxl':
-        case 'qwen-edit':
-        case 'flux2-edit':
-        case 'nunchaku-kontext-flux': // I2I prompt is often best as a sentence
-        default:
-            return 'Your response MUST be a single, concise, natural language sentence.';
-    }
-};
-
 type CloudPromptProvider = 'gemini' | 'mammouth' | 'openrouter';
 
 const generateCloudPromptText = async (instruction: string, inputs: File[], provider: CloudPromptProvider): Promise<string> =>
@@ -1138,6 +1107,7 @@ const executeWorkflow = async (
     expectedImageCount: number = 1,
     imageNodeOrder?: string[],
     onNodeOutput?: (nodeId: string, output: any) => void,
+    onPreview?: (image: Blob) => void,
 ): Promise<{ images: string[], videoUrl: string | null, audioUrl: string | null }> => {
     const url = getComfyUIUrl();
     if (!url) throw new Error("ComfyUI URL not set");
@@ -1148,6 +1118,7 @@ const executeWorkflow = async (
     return new Promise((resolve, reject) => {
         onProgress("Connecting to ComfyUI...", 0.1);
         const ws = new WebSocket(wsUrl);
+        if (onPreview) ws.binaryType = 'arraybuffer';
         currentExecution = { clientId, ws, reject };
 
         const cleanup = () => {
@@ -1170,6 +1141,11 @@ const executeWorkflow = async (
         };
 
         ws.onmessage = async (event) => {
+            if (onPreview && event.data instanceof ArrayBuffer) {
+                const preview = mossPreviewBlob(event.data);
+                if (preview) onPreview(preview);
+                return;
+            }
             if (typeof event.data !== 'string') return;
             const data = JSON.parse(event.data);
 
@@ -1276,6 +1252,7 @@ const executeWorkflow = async (
                             onProgress(`Generated ${imageOutputs.length}/${expectedImageCount} images...`, 0.95);
                             break;
                         }
+                        if (onPreview) cleanup();
                         resolve({ images: imageOutputs, videoUrl, audioUrl });
                     } catch (err) {
                         reject(err);
@@ -1603,6 +1580,37 @@ const uploadImageToComfyUI = async (file: File): Promise<string> => {
 };
 
 const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null, referenceImages: File[] = []): Promise<any> => {
+    if (options.comfyModelType === 'krea2-edit') {
+        const settings = options.comfyKrea2Edit || defaultKrea2EditSettings();
+        const sources = settings.secondImage ? [sourceFile, referenceImages[0]] : [sourceFile];
+        const files: File[] = [];
+        for (const source of sources) {
+            if (!source || !source.size || !source.type.startsWith('image/')) throw new Error('Choose valid KREA2 edit images; image 2 is required only when enabled.');
+            await getImageDimensionsFromFile(source).catch(cause => { throw new Error(`Could not decode KREA2 edit image "${source.name}". Choose a valid image.`, { cause }); });
+            files.push(source);
+        }
+        const seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+        const info = await getComfyUIObjectInfo();
+        const graph = buildKrea2EditWorkflow(settings, seed, files[0].name, files[1]?.name, info);
+        validateKrea2EditReadiness(graph, info);
+        const uploaded: string[] = [];
+        for (const source of files) {
+            const result = await uploadImage(source);
+            uploaded.push(result.subfolder ? `${result.subfolder}/${result.name}` : result.name);
+        }
+        return buildKrea2EditWorkflow(settings, seed, uploaded[0], uploaded[1], info);
+    }
+    if (options.comfyModelType === 'moss-image') {
+        const settings = options.comfyMoss || defaultMossSettings();
+        const seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+        if (!settings.refineImage) return buildMossWorkflow(settings, options.comfyPrompt || '', seed);
+        if (!sourceFile || !sourceFile.type.startsWith('image/')) throw new Error('Choose a source image to refine with MOSS.');
+        const dimensions = await getImageDimensionsFromFile(sourceFile).catch(cause => { throw new Error('Could not decode the MOSS source image. Choose a valid PNG, JPG or WEBP image.', { cause }); });
+        const source = { name: sourceFile.name, ...dimensions };
+        validateMossReadiness(buildMossWorkflow(settings, options.comfyPrompt || '', seed, source), await getComfyUIObjectInfo());
+        const uploaded = await uploadImage(sourceFile);
+        return buildMossWorkflow(settings, options.comfyPrompt || '', seed, { ...source, name: uploaded.subfolder ? `${uploaded.subfolder}/${uploaded.name}` : uploaded.name });
+    }
     if (options.comfyModelType === 'qwen21-character-scene') {
         if (!sourceFile || referenceImages.length !== 1 || !options.comfyCharacterScene) throw new Error('Choose exactly one scene and one character.');
         const settings = options.comfyCharacterScene;
@@ -2589,15 +2597,20 @@ export const generateComfyUIPortraits = async (
     referenceImages: File[] = [],
     onImageReady: (index: number, image: { src: string; seed: number }) => void = () => undefined,
     updateOutputProgress: (index: number, message: string, value: number) => void = () => undefined,
+    onPreview?: (image: Blob | null) => void,
 ): Promise<{ images: { src: string, seed: number }[]; finalPrompt: string }> => {
     const allImages: { src: string, seed: number }[] = [];
     const baseWorkflow = await buildWorkflow(options, sourceImage, referenceImages);
     const isQwen21 = options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo';
+    const isMoss = options.comfyModelType === 'moss-image';
+    const isKreaEdit = options.comfyModelType === 'krea2-edit';
+    if (isMoss) validateMossReadiness(baseWorkflow, await getComfyUIObjectInfo());
+    const batchSize = isMoss ? (options.comfyMoss || defaultMossSettings()).batchSize : isKreaEdit ? (options.comfyKrea2Edit || defaultKrea2EditSettings()).batchSize : 1;
     if (isQwen21) {
         validateQwen21Readiness(baseWorkflow, await getComfyUIObjectInfo());
     }
 
-    const isLongJob = isQwen21 || ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'flux2-simple', 'flux2-edit', 'krea2-simple', 'krea2-raw'].includes(options.comfyModelType!);
+    const isLongJob = isMoss || isQwen21 || isKreaEdit || ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'flux2-simple', 'flux2-edit', 'krea2-simple', 'krea2-raw'].includes(options.comfyModelType!);
     const numImages = options.comfyModelType === 'face-detailer-sd1.5' ? 1 : options.numImages;
 
     let currentSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
@@ -2608,7 +2621,7 @@ export const generateComfyUIPortraits = async (
         // Capture the seed used for this iteration before it gets updated for the next one
         const seedForThisImage = currentSeed;
 
-        const samplerKey = Object.keys(currentWorkflow).find(k => currentWorkflow[k].class_type === 'KSampler');
+        const samplerKey = Object.keys(currentWorkflow).find(k => currentWorkflow[k].class_type === 'KSampler' || (isMoss && currentWorkflow[k].class_type === 'KSampler (Efficient)'));
         if (isQwen21) {
             setQwen21WorkflowSeed(currentWorkflow, seedForThisImage);
             const increment = options.comfySeedIncrement || 1;
@@ -2618,7 +2631,7 @@ export const generateComfyUIPortraits = async (
         } else if (samplerKey) {
             currentWorkflow[samplerKey].inputs.seed = seedForThisImage;
 
-            const seedControl = options.comfyModelType === 'sd1.5' ? (options.comfySeedControl || 'randomize') : 'randomize';
+            const seedControl = options.comfyModelType === 'sd1.5' || isMoss || isKreaEdit ? (options.comfySeedControl || 'randomize') : 'randomize';
             const seedIncrement = options.comfySeedIncrement || 1;
 
             switch (seedControl) {
@@ -2626,7 +2639,7 @@ export const generateComfyUIPortraits = async (
                     currentSeed += seedIncrement;
                     break;
                 case 'decrement':
-                    currentSeed -= seedIncrement;
+                    currentSeed = isMoss || isKreaEdit ? Math.max(0, currentSeed - seedIncrement) : currentSeed - seedIncrement;
                     break;
                 case 'randomize':
                     currentSeed = Math.floor(Math.random() * 1e15);
@@ -2657,12 +2670,18 @@ export const generateComfyUIPortraits = async (
         const progressWrapper = (message: string, value: number) => {
             const overallProgress = (i + value) / numImages;
             updateProgress(`Image ${i + 1}/${numImages}: ${message}`, overallProgress);
-            updateOutputProgress(i, message, value);
+            for (let batchIndex = 0; batchIndex < batchSize; batchIndex++) updateOutputProgress(i * batchSize + batchIndex, message, value);
         };
 
         try {
-            updateOutputProgress(i, `Starting image ${i + 1}...`, 0.02);
-            const result = await executeWorkflow(currentWorkflow, progressWrapper, isLongJob, 1, isQwen21 ? ['11'] : undefined);
+            if (isMoss || isKreaEdit) {
+                onPreview?.(null);
+                if (!Number.isSafeInteger(seedForThisImage) || seedForThisImage < 0) throw new Error(`${isKreaEdit ? 'KREA2 edit' : 'MOSS'} seed is outside the safe integer range.`);
+            }
+            for (let batchIndex = 0; batchIndex < batchSize; batchIndex++) updateOutputProgress(i * batchSize + batchIndex, `Starting image ${i + 1}...`, 0.02);
+            const result = await executeWorkflow(currentWorkflow, progressWrapper, isLongJob, batchSize, isKreaEdit ? ['29'] : isMoss ? ['10'] : isQwen21 ? ['11'] : undefined, undefined, isMoss ? onPreview : undefined);
+            if (isKreaEdit && result.images.length !== batchSize) throw new Error(`KREA2 edit returned ${result.images.length}/${batchSize} saved images.`);
+            if (isMoss && result.images.length !== batchSize) throw new Error(`MOSS returned ${result.images.length}/${batchSize} saved images.`);
             result.images.forEach(img => {
                 const image = { src: img, seed: seedForThisImage };
                 const outputIndex = allImages.length;
@@ -2679,7 +2698,8 @@ export const generateComfyUIPortraits = async (
     // RE-WRITING THE FUNCTION CONTENT FOR REPLACEMENT
     // I will capture the seed used before modifying it for the next iteration.
 
-    const finalPrompt = isQwen21
+    const finalPrompt = isKreaEdit ? options.comfyKrea2Edit?.prompt
+        : isQwen21
         ? (options.comfyModelType === 'qwen21-turbo' ? options.comfyQwen21Turbo?.prompt : options.comfyQwen21T2i?.prompt)
         : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw'
         ? options.comfyKreaPrompt

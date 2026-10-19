@@ -1,4 +1,30 @@
 import type { ComfyModelType, GenerationOptions } from '../types';
+import { defaultQwen21Settings } from '../services/qwen21Workflow';
+import { defaultKrea2EditSettings } from '../services/krea2EditWorkflow';
+
+export const getImagePromptOnlyUpdate = (prompt: string, options: GenerationOptions, mode: 't2i' | 'i2i'): Partial<GenerationOptions> => {
+  if (!prompt.trim()) throw new Error('The selected Library prompt is empty.');
+  if (options.provider !== 'comfyui') {
+    if (mode === 't2i') return { geminiPrompt: prompt };
+    if (options.geminiI2iMode === 'compose') return { geminiComposePrompt: prompt };
+    if (options.geminiI2iMode === 'inpaint') {
+      if (options.geminiInpaintTask === 'custom') return { geminiInpaintCustomPrompt: prompt };
+      if (options.geminiInpaintTask === 'replace' || options.geminiInpaintTask === 'changeColor') return { geminiInpaintTargetPrompt: prompt };
+      throw new Error('Choose a Custom Prompt, Replace or Change Color task before importing an inpainting prompt.');
+    }
+    return { geminiGeneralEditPrompt: prompt };
+  }
+  if (options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw') return { comfyKreaPrompt: prompt };
+  if (options.comfyModelType === 'krea2-edit') return { comfyKrea2Edit: { ...(options.comfyKrea2Edit || defaultKrea2EditSettings()), prompt } };
+  if (options.comfyModelType === 'flux2-simple') return { comfyFlux2Prompt: prompt };
+  if (options.comfyModelType === 'flux2-edit') return { comfyFlux2EditPrompt: prompt };
+  if (options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo') {
+    const mode = options.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
+    const key = mode === 'turbo' ? 'comfyQwen21Turbo' : 'comfyQwen21T2i';
+    return { [key]: { ...(options[key] || defaultQwen21Settings(mode)), prompt } };
+  }
+  return { comfyPrompt: prompt };
+};
 
 export const PROMPT_T2I_WORKFLOWS: Array<{ id: ComfyModelType; label: string }> = [
   { id: 'sd1.5', label: 'SD 1.5' },

@@ -46,6 +46,7 @@ import { Login } from './components/Login';
 import { Header } from './components/Header';
 import { ImageUploader } from './components/ImageUploader';
 import { OptionsPanel } from './components/OptionsPanel';
+import { MossGenerationPreview } from './components/MossSettingsPanel';
 import { ImageGrid } from './components/ImageGrid';
 import { Loader } from './components/Loader';
 import { ConnectionSettingsModal } from './components/ComfyUIConnection';
@@ -191,6 +192,7 @@ const App: React.FC = () => {
     const currentOptions = activeTab === 'character-generator' ? characterOptions : options;
     const handleSheetSourceChange = useCallback((file: File | null) => { dispatch(setSourceImage(file)); }, [dispatch]);
     const qwen21MultiRef = React.useRef<Qwen21MultiHandle>(null);
+    const [mossPreview, setMossPreview] = useState<Blob | null>(null);
     const imageGeneratorContentKey = options.provider === 'comfyui'
         ? `image-generator:${options.comfyModelType || 'sdxl'}`
         : 'image-generator';
@@ -626,6 +628,15 @@ const App: React.FC = () => {
         cancellation.abort(new Error('Operation was cancelled by the user.'));
         await cancelComfyUIExecution();
     };
+    const handleExportImageWorkflow = async (exportOptions: GenerationOptions) => {
+        try {
+            await exportComfyUIWorkflow(exportOptions, sourceImage, elementImages.slice(0, exportOptions.comfyModelType === 'flux2-edit' ? 3 : 2));
+        } catch (failure) {
+            console.error('Could not export the image workflow:', failure);
+            dispatch(setGlobalError({ title: 'Workflow Export Failed', message: failure instanceof Error ? failure.message : 'Could not export the image workflow.' }));
+        }
+    };
+
     const handleGenerate = async () => {
         const setCharacterGenerationJobs = (update: React.SetStateAction<(typeof characterGenerationJobsByKey)[string]>) => {
             setCharacterGenerationJobsByKey(current => ({
@@ -654,7 +665,9 @@ const App: React.FC = () => {
         }
 
         const supportsProgressiveImageGeneration = activeTab === 'image-generator' && currentOptions.provider === 'comfyui';
-        const imageOutputCount = currentOptions.comfyModelType === 'face-detailer-sd1.5' ? 1 : currentOptions.numImages;
+        const imageOutputCount = currentOptions.comfyModelType === 'face-detailer-sd1.5' ? 1
+            : currentOptions.numImages * (currentOptions.comfyModelType === 'moss-image' ? currentOptions.comfyMoss?.batchSize ?? 1 : currentOptions.comfyModelType === 'krea2-edit' ? currentOptions.comfyKrea2Edit?.batchSize ?? 1 : 1);
+        setMossPreview(null);
         if (supportsProgressiveImageGeneration) {
             setImageGenerationJobs(Array.from({ length: imageOutputCount }, (_, index) => ({
                 label: `Image ${index + 1}`,
@@ -709,7 +722,7 @@ const App: React.FC = () => {
                     sourceImage, options, localUpdateProgress, clothingImage, backgroundImage, maskImage, elementImages
                 );
             } else if (currentOptions.provider === 'comfyui') {
-                const comparisonSource = sourceImage && activeTab !== 'character-generator' && options.comfyModelType === 'qwen-edit' ? await fileToDataUrl(sourceImage) : undefined;
+                const comparisonSource = sourceImage && activeTab !== 'character-generator' && (options.comfyModelType === 'qwen-edit' || options.comfyModelType === 'krea2-edit' || (options.comfyModelType === 'moss-image' && options.comfyMoss?.refineImage)) ? await fileToDataUrl(sourceImage) : undefined;
                 const progressiveImages: { src: string; seed: number }[] = [];
                 const comfyResult = activeTab === 'character-generator'
                     ? await generateComfyUICharacterAngles(
@@ -747,6 +760,7 @@ const App: React.FC = () => {
                         activeTab === 'image-generator' ? (index, message, value) => {
                             setImageGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: value, message } : job));
                         } : undefined,
+                        activeTab === 'image-generator' && options.comfyModelType === 'moss-image' ? setMossPreview : undefined,
                     );
                 result = {
                     images: comfyResult.images.map(img => ({ src: img.src, seed: img.seed, usageMetadata: undefined, before: comparisonSource })),
@@ -804,6 +818,7 @@ const App: React.FC = () => {
                 dispatch(setGlobalError({ title: "Generation Error", message: err.message || 'An unknown error occurred during generation.' }));
             }
         } finally {
+            setMossPreview(null);
             if (characterCancellation && characterGenerationControllerRef.current === characterCancellation) {
                 characterGenerationControllerRef.current = null;
                 setCharacterCancelling(false);
@@ -1300,7 +1315,7 @@ const App: React.FC = () => {
                                     const optionsToExport = lastImage && lastImage.seed !== undefined
                                         ? { ...currentOptions, comfySeed: lastImage.seed }
                                         : currentOptions;
-                                    exportComfyUIWorkflow(optionsToExport, sourceImage, elementImages.slice(0, optionsToExport.comfyModelType === 'flux2-edit' ? 3 : 2));
+                                    void handleExportImageWorkflow(optionsToExport);
                                 }}
                                 isDisabled={isLoading}
                             />
@@ -1319,13 +1334,14 @@ const App: React.FC = () => {
                             <React.Activity mode={options.provider === 'comfyui' && ['qwen21-remove-background', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(options.comfyModelType || '') ? 'hidden' : 'visible'}>
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                                 <div className="lg:col-span-1 space-y-8">
-                                    {!(currentOptions.provider === 'comfyui'
+                                    {!(currentOptions.provider === 'comfyui' && currentOptions.comfyModelType === 'krea2-edit') && !(currentOptions.provider === 'comfyui'
                                         && generationMode === 't2i'
                                         && (currentOptions.comfyModelType === 'flux2-simple'
                                             || currentOptions.comfyModelType === 'krea2-simple'
                                             || currentOptions.comfyModelType === 'krea2-raw'
                                             || currentOptions.comfyModelType === 'qwen21-t2i'
-                                            || currentOptions.comfyModelType === 'qwen21-turbo')) && (
+                                            || currentOptions.comfyModelType === 'qwen21-turbo'
+                                            || currentOptions.comfyModelType === 'moss-image')) && (
                                     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                         <div className="mb-4 flex flex-wrap items-center gap-3">
                                             <h2 className="text-xl font-bold text-accent">
@@ -1455,13 +1471,15 @@ const App: React.FC = () => {
                                                 setIsGeneratingRefinePrompt(false);
                                             }
                                         }}
-                                        onExportWorkflow={() => exportComfyUIWorkflow(options, sourceImage, elementImages.slice(0, options.comfyModelType === 'flux2-edit' ? 3 : 2))}
+                                        onExportWorkflow={() => { void handleExportImageWorkflow(options); }}
                                         isDisabled={isLoading}
                                         isReady={isReadyToGenerate}
                                         isGeneratingPrompt={isGeneratingRefinePrompt}
                                         comfyUIObjectInfo={comfyUIObjectInfo}
                                         comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
                                         sourceImage={sourceImage}
+                                        onSourceImageChange={handleSheetSourceChange}
+                                        onOpenSourceLibrary={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: true }))}
                                         activeTab={activeTab}
                                         maskImage={maskImage}
                                         setMaskImage={(file) => dispatch(setMaskImage(file))}
@@ -1482,6 +1500,7 @@ const App: React.FC = () => {
                                         isDisabled={isLoading}
                                         updateOptions={handleUpdateOptions}
                                     />
+                                    {isLoading && currentOptions.comfyModelType === 'moss-image' && mossPreview && <MossGenerationPreview image={mossPreview} />}
                                     {isLoading && imageGenerationJobs.length === 0 ? (
                                         <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />
                                     ) : (
@@ -1839,7 +1858,7 @@ const App: React.FC = () => {
                                     }));
                                 } else if (item.mediaType === 'preset' && item.options) {
                                     const isComfyI2I = item.options.provider === 'comfyui'
-                                        && ['qwen-edit', 'flux2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux'].includes(item.options.comfyModelType || '');
+                                        && ['qwen-edit', 'flux2-edit', 'krea2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux'].includes(item.options.comfyModelType || '');
                                     const isCloudI2I = item.options.provider !== 'comfyui' && item.options.geminiMode === 'i2i';
                                     dispatch(setOptions(item.options));
                                     dispatch(setGenerationMode(isComfyI2I || isCloudI2I ? 'i2i' : 't2i'));
@@ -1850,7 +1869,7 @@ const App: React.FC = () => {
                                 } else if (item.mediaType === 'image' || item.mediaType === 'character') {
                                     if (item.options) {
                                         const isComfyI2I = item.options.provider === 'comfyui'
-                                            && ['qwen-edit', 'flux2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux'].includes(item.options.comfyModelType || '');
+                                            && ['qwen-edit', 'flux2-edit', 'krea2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux'].includes(item.options.comfyModelType || '');
                                         const isCloudI2I = item.options.provider !== 'comfyui' && item.options.geminiMode === 'i2i';
                                         const restoredMode = isComfyI2I || isCloudI2I ? 'i2i' : 't2i';
                                         dispatch(setGenerationMode(restoredMode));
@@ -1969,7 +1988,13 @@ const App: React.FC = () => {
             />
             {/* ... Other pickers ... */}
             <LibraryPickerModal isOpen={isCharacterSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "char_source.jpg", { type: b.type }))); }} filter={['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo']} />
-            <LibraryPickerModal isOpen={isRefineSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "refine_source.jpg", { type: b.type }))); }} filter={options.comfyModelType === 'flux2-edit' ? ['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo'] : 'image'} />
+            <LibraryPickerModal isOpen={isRefineSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => {
+                const response = await fetch(item.media);
+                if (!response.ok) throw new Error('Could not load the Library source image.');
+                const blob = await response.blob();
+                if (!blob.type.startsWith('image/')) throw new Error('Choose a Library image to use as the source.');
+                dispatch(setSourceImage(new File([blob], 'refine_source.png', { type: blob.type })));
+            }} filter={options.comfyModelType === 'flux2-edit' || options.comfyModelType === 'moss-image' ? ['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo'] : 'image'} />
             <LibraryPickerModal isOpen={isMaskPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setMaskImage(new File([b], "mask.png", { type: b.type }))); }} filter="image" />
             <LibraryPickerModal isOpen={isElementPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); const maxReferences = options.comfyModelType === 'flux2-edit' ? 3 : 2; dispatch(setElementImages([...elementImages, new File([b], `element_${Date.now()}.jpg`, { type: b.type })].slice(0, maxReferences))); if (options.comfyModelType === 'flux2-edit' && elementImages.length < 3) { const roles = [...(options.comfyFlux2EditReferenceRoles || ['outfit', 'background', 'pose'])]; const libraryPrompts = [...(options.comfyFlux2EditReferenceLibraryPrompts || [])]; roles[elementImages.length] = item.mediaType === 'clothes' ? 'outfit' : item.mediaType === 'pose' ? 'pose' : roles[elementImages.length] || 'custom'; libraryPrompts[elementImages.length] = getLibraryReferencePrompt(item); dispatch(updateOptions({ comfyFlux2EditReferenceRoles: roles, comfyFlux2EditReferenceLibraryPrompts: libraryPrompts })); } }} filter={['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo']} />
             <LibraryPickerModal isOpen={isPromptGenImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ image: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />

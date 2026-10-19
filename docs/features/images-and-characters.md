@@ -7,6 +7,9 @@ Choose an image family, edit references or generate character views. Each workfl
 ## On this page
 
 - [Image and character workflows](#image-and-character-workflows)
+- [Importing Library prompts](#importing-library-prompts)
+- [Generating a prompt from an image](#generating-a-prompt-from-an-image)
+- [KREA2 Identity and General Edit](#krea2-identity-and-general-edit)
 - [Shared Character controls](#shared-character-controls)
 - [Comparing Character results](#comparing-character-results)
 - [Qwen Image 2.1 T2I and Turbo](#qwen-image-21-t2i-and-turbo)
@@ -38,6 +41,36 @@ Choose an image family, edit references or generate character views. Each workfl
 - **Character > QWEN 2.1 > Create Character** uses direct Qwen edit prompts for eight independently enabled views: requested camera/framing changes come first, followed by pose/expression and concise identity preservation. It does not reuse the long FLUX2 prompt or its saved full-prompt overrides. An explicit output pose takes priority over a pose-reference image; otherwise the reference supplies the pose. The original-background instructions retain the physical location while allowing its projection to change with the camera. Source, clothing, background and pose references are encoded separately in their actual order. **Output Size** and **Orientation** control the independent empty latent; the unrelated general Aspect Ratio selector is hidden. Submitted eight-view graphs and real ComfyUI history have been checked for prompt/encoder/sampler links, not for visual angle compliance. Start a new generation to use updated prompts; existing results and their recorded final prompt stay unchanged.
 - **Turbo (Viggle)** in Create Character is off by default. Enabling it switches the full sampling graph to the native Viggle I2I Turbo chain: mandatory Viggle LoRA, ModelSamplingFlux, BasicScheduler at 4 steps, ExtendIntermediateSigmas with 3 subdivisions, BasicGuider and SamplerCustomAdvanced. It keeps the eight output prompts, up to four ordered references and independent output canvas; it is not a LoRA-only modification of KSampler. Turbo sampling values are fixed while enabled, and disabling it restores the unchanged normal settings. Required nodes and the Viggle LoRA are checked before upload. The toggle is unavailable during generation; Cancel Generation still works.
 - ComfyUI Character's eight output controls are in the wide right column below Generate. Each output can be expanded/collapsed; **Collapse all outputs** / **Expand all outputs** keeps saved values and enabled selections unchanged. Camera, pose and expression fields share a row on desktop and stack on mobile. Background and reference controls remain on the left. In Qwen Create Character, **Green Screen** explicitly requests replacement of the entire scenery with uniform chroma-key green, overriding stale custom/background-preservation settings. Selecting a background clears the preservation checkbox; Green Screen disables it. This instruction is verified in all eight normal/Turbo queue prompts, not in a new GPU render.
+
+## KREA2 Identity and General Edit
+
+**KREA2 > I2I Edit / Identity** adds one/two-image V2 editing without changing the existing Simple/RAW T2I workflows. Switch **General Edit / Identity**, upload or choose each image from the Library, and use independent reference placement/boost controls. Image 2 is off by default and is completely excluded while disabled.
+
+Use the example selector and editable builder fields for season/background changes, removals, recoloring, lighting, objects, sign text, clothes, flat lays, restyling and identity replacement. The positive prompt fills progressively as fields change and can also be edited directly or imported from the Library. Two-reference examples require explicitly enabling image 2. Specify full-body/crop details, concrete garments and what should disappear, and the areas illuminated by each light.
+
+Up to four ordinary model-only LoRAs are wired separately. The task switch selects the matching Identity/General V2 LoRA; choose full/r128/r64 weights. Use one task LoRA at 1.0. **Turbo** applies 8 steps/CFG 1; **Raw - removals** applies 20 steps/CFG 3. Output controls stay at or below 2 MP. See [workflow requirements, defaults and license notes](../reference/comfyui-workflows.md#krea2-identity-and-general-edit-v2).
+
+## Importing Library prompts
+
+In the **Image Generation** tab, **Import Library Prompt** opens a searchable text list of saved image prompts for every ComfyUI, Gemini and Mammouth model. Hover a row or focus it with the keyboard to preview its linked result, source image or generated preview thumbnail. An entry without an associated image remains selectable. Video prompts and generation presets are excluded.
+
+Clicking a row replaces only the active positive prompt (or active cloud edit instruction). It does not load the entry's model, LoRAs, sampler, negative prompt, seed or other settings, and it preserves the saved text's formatting. Qwen 2.1 multi-image editing requires **Manual prompt** to be enabled first, so importing does not change that setting. Its manual textarea shows the stored text verbatim; the existing background-blending instruction is still added at generation when a background reference is active. Cloud inpainting's **Remove Area** task has no editable prompt; select Custom Prompt, Replace or Change Color before importing.
+
+MOSS offers **Portrait / Landscape / Square** and valid resolution presets up to **1280 px per side**, replacing the separate width/height sliders. Its default is 1280 x 848; the other source workflow values are unchanged.
+
+In MOSS options, enable **Refine Image (Image-to-Image)** to upload/drag a source or select it from the Library. **Refine denoise** controls how strongly it changes (0-1, default 0.5). The source is VAE-encoded instead of using an empty latent. Refinement preserves source proportions rather than using the T2I canvas, reducing only when needed to stay within 1280 px and aligning down to 16 pixels. The exact resulting size is displayed. Disabling refinement restores the unchanged T2I size and denoise; its uploaded source is not used.
+
+## Generating a prompt from an image
+
+In **MOSS > Refine Image**, upload or select a source image, then click **Generate Prompt from Image**. The reusable dialog previews that image and offers **SD 1.5**, **SDXL**, **Z-Image**, **Qwen 2.1** and **MOSS** prompt formats independently of the current image-generation model.
+
+Choose **OpenRouter**, **Gemini**, **Mammouth** or **Local (Ollama)** and an analysis model. Cloud services reuse keys from **Connection Settings**. Ollama starts with the configured local URL/model and requires a vision-capable model, such as Qwen VL, Gemma 3 or LLaVA; a text-only Llama model cannot analyze a photo. **Load available models** retrieves OpenRouter vision models or installed Ollama models without running paid analysis.
+
+**Generate Prompt** sends the image only to the selected analysis service. Cloud provider charges may apply. The result is an editable English positive prompt, not recovery of the exact original prompt. **Copy Prompt** copies it; **Use as Positive Prompt** replaces only MOSS's positive prompt, retaining the source, negative prompt, model, seed, LoRAs, sampler and denoise. Nothing is applied automatically. Closing cancels an active Ollama request; an already-started cloud request may continue at the provider, but its result is not applied.
+
+The shared `ImagePromptButton` and `ImagePromptModal` accept a source `File`, a default format and an optional prompt callback, so other image surfaces can reuse the same dialog without importing MOSS settings.
+
+Regression checks: `node --test services/imagePromptService.test.mjs services/openRouterService.test.mjs`. Provider calls are mocked; these tests do not establish live vision-model accuracy.
 
 ## Shared Character controls
 

@@ -5,6 +5,7 @@ import { GenerateIcon, ResetIcon } from './icons';
 import { DEFAULT_GEMINI_IMAGE_MODEL, getGeminiAspectRatios } from '../services/geminiService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL } from '../services/mammouthService';
 import { defaultQwen21Settings, QWEN21_SIZES, qwen21Dimensions } from '../services/qwen21Workflow';
+import { defaultMossSettings } from '../services/mossWorkflow';
 
 interface ActionControlPanelProps {
     options: GenerationOptions;
@@ -28,6 +29,7 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
     const qwen21Mode = options.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
     const qwen21Key = qwen21Mode === 'turbo' ? 'comfyQwen21Turbo' : 'comfyQwen21T2i';
     const qwen21Settings = options[qwen21Key] || defaultQwen21Settings(qwen21Mode);
+    const moss = options.comfyMoss || defaultMossSettings();
     const aspectRatioOptions = options.provider === 'gemini'
         ? getGeminiAspectRatios(options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL).map(value => ({
             value,
@@ -50,6 +52,10 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                         ? 'FLUX2 Simple'
                     : options.comfyModelType === 'flux2-edit'
                         ? 'FLUX2 Multi-Reference Edit'
+                    : options.comfyModelType === 'moss-image'
+                        ? 'MOSS Image 1.0'
+                    : options.comfyModelType === 'krea2-edit'
+                        ? `KREA2 ${options.comfyKrea2Edit?.task === 'identity' ? 'Identity' : 'General Edit'} V2`
                     : (options.comfyModelType || 'sdxl');
 
     return (
@@ -68,7 +74,11 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                             <span className="w-8 text-right text-xs text-text-secondary">{(options.megapixel || 1).toFixed(1)}</span>
                         </div>
                     )}
-                    {options.provider === 'comfyui' && options.comfyModelType === 'flux2-edit' ? (
+                    {options.provider === 'comfyui' && options.comfyModelType === 'krea2-edit' ? (
+                        <span className="text-xs text-text-secondary">Edit | {options.comfyKrea2Edit?.aspect || '3:4'} | {options.comfyKrea2Edit?.megapixels ?? 1} MP | Batch: {options.comfyKrea2Edit?.batchSize ?? 1} | Total: {options.numImages * (options.comfyKrea2Edit?.batchSize ?? 1)} images</span>
+                    ) : options.provider === 'comfyui' && options.comfyModelType === 'moss-image' ? (
+                        <span className="text-xs text-text-secondary">{moss.refineImage ? 'Refine: source proportions, max 1280 px' : `Resolution: ${moss.width} x ${moss.height}`} | Batch: {moss.batchSize} | Total: {options.numImages * moss.batchSize} images</span>
+                    ) : options.provider === 'comfyui' && options.comfyModelType === 'flux2-edit' ? (
                         <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-text-secondary">Source MP:</label>
                             <input type="number" min={0.25} max={4} step={0.25} value={options.comfyFlux2EditMegapixels ?? 1} onChange={(event) => updateOptions({ comfyFlux2EditMegapixels: Number(event.target.value) })} disabled={isDisabled} className="w-16 rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-center text-xs focus:border-accent focus:ring-accent" />

@@ -4,6 +4,8 @@ import type { ComfyModelType, GenerationSliceState, GenerationOptions } from '..
 import type { RootState } from './store';
 import { getEnabledCharacterAngles } from '../services/characterAnglesWorkflow';
 import { defaultQwen21Settings } from '../services/qwen21Workflow';
+import { defaultMossSettings } from '../services/mossWorkflow';
+import { defaultKrea2EditSettings } from '../services/krea2EditWorkflow';
 
 const KREA_TURBO_LORA_FIELDS = [
   'comfyKreaLora1Name',
@@ -49,6 +51,8 @@ const initialOptions: GenerationOptions = {
   geminiComposePrompt: '',
   comfyModelType: 'krea2-simple',
   comfyPrompt: '',
+  comfyMoss: defaultMossSettings(),
+  comfyKrea2Edit: defaultKrea2EditSettings(),
   comfyQwen21T2i: defaultQwen21Settings('t2i'),
   comfyQwen21Turbo: defaultQwen21Settings('turbo'),
   comfyNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed, disfigured',
@@ -337,6 +341,9 @@ const generationSlice = createSlice({
       const nextOptions: GenerationOptions = savedOptions
         ? { ...savedOptions, ...sharedPrompts, ...action.payload, provider: 'comfyui', comfyModelType: action.payload.comfyModelType }
         : { ...state.options, ...sharedPrompts, ...action.payload, provider: 'comfyui' };
+      if (action.payload.comfyModelType === 'moss-image') {
+        nextOptions.comfyMoss = action.payload.comfyMoss ?? nextOptions.comfyMoss ?? defaultMossSettings();
+      }
       if (action.payload.comfyModelType === 'qwen21-t2i' || action.payload.comfyModelType === 'qwen21-turbo') {
         const mode = action.payload.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
         const key = mode === 'turbo' ? 'comfyQwen21Turbo' : 'comfyQwen21T2i';
@@ -553,6 +560,12 @@ export const selectIsReadyToGenerate = createSelector(
         return !!isComfyUIConnected && !!sourceImage && getEnabledCharacterAngles(activeOptions).length > 0;
       }
       const isI2IMode = generationMode === 'i2i';
+      if (activeOptions.comfyModelType === 'krea2-edit') {
+        const settings = activeOptions.comfyKrea2Edit || defaultKrea2EditSettings();
+        return !!isComfyUIConnected && !!sourceImage && !!settings.prompt.trim()
+          && (!settings.secondImage || !!elementImages[0])
+          && (settings.secondImage || !/\bimage\s*2\b/i.test(settings.prompt));
+      }
       if (activeOptions.comfyModelType === 'qwen21-t2i' || activeOptions.comfyModelType === 'qwen21-turbo') {
         const settings = activeOptions.comfyModelType === 'qwen21-t2i' ? activeOptions.comfyQwen21T2i : activeOptions.comfyQwen21Turbo;
         return !!isComfyUIConnected && !!settings?.prompt.trim();
@@ -565,6 +578,7 @@ export const selectIsReadyToGenerate = createSelector(
             ? activeOptions.comfyFlux2EditPrompt || activeOptions.comfyFlux2EditReferenceDescriptions?.find(description => description.trim())
           : activeOptions.comfyPrompt;
       const baseReady = !!isComfyUIConnected && !!activePrompt?.trim();
+      if (activeOptions.comfyModelType === 'moss-image' && activeOptions.comfyMoss?.refineImage) return baseReady && !!sourceImage;
       if (isI2IMode) {
         if (activeOptions.comfyModelType === 'flux2-edit') {
           const usesPose = elementImages.some((_, index) => (activeOptions.comfyFlux2EditReferenceRoles?.[index] || ['outfit', 'background', 'pose'][index]) === 'pose');

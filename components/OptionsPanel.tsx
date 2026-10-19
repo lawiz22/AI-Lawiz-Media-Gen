@@ -19,6 +19,10 @@ import { findInventoryModel, getRecommendedSettingUpdates } from '../services/ci
 import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon, LibraryIcon, SaveIcon, CheckIcon, DiceIcon, ChevronRightIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
+import { MossSettingsPanel } from './MossSettingsPanel';
+import { Krea2EditSettingsPanel } from './Krea2EditSettingsPanel';
+import { LibraryPromptButton } from './LibraryPromptButton';
+import { getImagePromptOnlyUpdate } from '../utils/promptDestination';
 import { defaultQwen21MultiOptions, defaultQwen21EditOptions, getQwen21Choices, QWEN21_MULTI_SIZES } from '../services/qwen21Workflow';
 import { dataUrlToFile, fileToDataUrl, dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 import { SelectInput, TextInput, NumberSlider, CheckboxSlider, PresetTextInput } from './InputComponents';
@@ -54,6 +58,8 @@ interface OptionsPanelProps {
     comfyUIObjectInfo: any | null;
     comfyUIUrl: string;
     sourceImage: File | null;
+    onSourceImageChange?: (file: File | null) => void;
+    onOpenSourceLibrary?: () => void;
     hideProviderSwitch?: boolean;
     hideGeminiModeSwitch?: boolean;
     hideGenerationModeSwitch?: boolean;
@@ -295,7 +301,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     previewedClothingImage, setPreviewedClothingImage,
     onGenerate, onReset, onGeneratePrompt, onExportWorkflow, onOpenPosePicker,
     isDisabled, isReady, isGeneratingPrompt,
-    comfyUIObjectInfo, comfyUIUrl, sourceImage,
+    comfyUIObjectInfo, comfyUIUrl, sourceImage, onSourceImageChange, onOpenSourceLibrary,
     hideProviderSwitch = false, hideGeminiModeSwitch = false, hideGenerationModeSwitch = false,
     title = "Configure Options",
     activeTab,
@@ -671,7 +677,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         let optionsChanged = false;
 
         if (newOptions.provider === 'comfyui' && activeTab !== 'character-generator') {
-            const isI2IModel = ['qwen-edit', 'flux2-edit', 'face-detailer-sd1.5'].includes(newOptions.comfyModelType!);
+            const isI2IModel = ['qwen-edit', 'flux2-edit', 'krea2-edit', 'face-detailer-sd1.5'].includes(newOptions.comfyModelType!);
             if (generationMode === 'i2i' && !isI2IModel) {
                 optionsChanged = true;
                 newOptions.comfyModelType = 'qwen-edit';
@@ -1438,6 +1444,14 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const renderComfyUIOptions = () => {
         if (activeTab === 'character-generator') return renderCharacterOptions();
         const modelType = options.comfyModelType || 'sdxl';
+        if (modelType === 'krea2-edit') {
+            return <Krea2EditSettingsPanel options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled}
+                sourceFile={sourceImage} secondFile={elementImages?.[0]} onSourceChange={onSourceImageChange}
+                onSecondChange={setElementImages ? file => setElementImages(file ? [file] : []) : undefined} />;
+        }
+        if (modelType === 'moss-image') {
+            return <MossSettingsPanel options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} sourceFile={sourceImage} onSourceFileChange={onSourceImageChange} onOpenSourceLibrary={onOpenSourceLibrary} />;
+        }
         if (modelType === 'qwen21-t2i' || modelType === 'qwen21-turbo') {
             return <Qwen21SettingsPanel options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} />;
         }
@@ -1810,6 +1824,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-4">
                 <h2 className="text-xl font-bold">{title}</h2>
                 <div className="flex items-center gap-2">
+                    {activeTab === 'image-generator' && <LibraryPromptButton disabled={isDisabled} onSelectPrompt={prompt => updateOptions(getImagePromptOnlyUpdate(prompt, options, generationMode))} />}
                     {!hideGenerationModeSwitch && !hideGeneralSettings && <div className="bg-bg-tertiary p-1 rounded-full grid grid-cols-2 gap-1 text-sm">
                         <button onClick={() => handleGenerationModeChange('t2i')} disabled={isDisabled} className={`px-3 py-1 rounded-full font-semibold transition-colors ${generationMode === 't2i' ? 'bg-accent text-accent-text' : 'hover:bg-bg-secondary'}`}>T2I</button>
                         <button onClick={() => handleGenerationModeChange('i2i')} disabled={isDisabled} className={`px-3 py-1 rounded-full font-semibold transition-colors ${generationMode === 'i2i' ? 'bg-accent text-accent-text' : 'hover:bg-bg-secondary'}`}>I2I</button>

@@ -23,14 +23,27 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 
 | Workspace | What you can do | Guide |
 | --- | --- | --- |
-| Images and characters | Generate/edit images, create character views, use Qwen 2.1 and Outpaint | [Images and characters](docs/features/images-and-characters.md) |
+| Images and characters | Generate/refine with MOSS, use KREA2 Edit/Identity, Qwen 2.1 and Outpaint, and compare multi-angle characters | [Images and characters](docs/features/images-and-characters.md) |
 | Scene and identity editing | Vary scenes, edit selected people, swap identities and fuse portraits | [Scene Variation](docs/features/scene-variation.md) / [Swap and Fusion](docs/features/swap-and-fusion.md) |
 | Video | Write multimodal prompts, render MiniMax H3 REF2V videos and direct LTX timelines | [Video prompts](docs/features/video-prompt-generator.md) / [H3](docs/features/minimax-h3.md) / [LTX](docs/features/ltx-and-audio.md) |
-| Creative tools | Analyze prompts, create Magic Soup, transform styles, crop references, extract clips and record audio | [Creative tools](docs/features/creative-tools.md) |
+| Creative tools | Generate prompts from images, create Magic Soup, transform styles, crop references, extract clips and record audio | [Creative tools](docs/features/creative-tools.md) / [Image-to-prompt](docs/features/images-and-characters.md#generating-a-prompt-from-an-image) |
 | Models and LoRAs | Scan local models, retrieve metadata and organize your ComfyUI inventory | [Models and LoRAs](docs/features/models-and-loras.md) |
-| Library | Save media and exact generation settings, search/tag/rate assets and back up projects | [Library and backups](docs/features/library.md) |
+| Library | Save media and exact generation settings, import saved image prompts without changing settings, search/tag/rate assets and back up projects | [Library and backups](docs/features/library.md) / [Prompt import](docs/features/images-and-characters.md#importing-library-prompts) |
+| Installation diagnostics | Check backend connections, feature readiness, required nodes and the connected ComfyUI model inventory | [What's installed](docs/connections.md#installation-overview) |
 
 ## What's new in 1.88
+
+### Latest image and workflow additions
+
+- **[MOSS Image 1.0](docs/reference/comfyui-workflows.md#moss-image-10)**: local text-to-image generation with portrait, landscape and square presets up to 1280 px per side. **Refine Image (Image-to-Image)** accepts an upload or Library source, preserves its proportions and exposes a separate refinement denoise control.
+- **[Generate Prompt from Image](docs/features/images-and-characters.md#generating-a-prompt-from-an-image)** in MOSS refinement: analyze the source with OpenRouter, Gemini, Mammouth or a local Ollama vision model. Choose SD 1.5, SDXL, Z-Image, Qwen 2.1 or MOSS prompt formatting, then edit, copy or explicitly apply the result without replacing other generation settings.
+- **[KREA2 I2I Edit / Identity](docs/features/images-and-characters.md#krea2-identity-and-general-edit)**: General Edit and Identity V2 workflows with one or two references, an editable example-driven prompt builder, independent reference placement/boost controls, optional LoRAs and Turbo/Raw presets. Requires ComfyUI-Krea2Edit v2.0.0+ and compatible weights.
+- **[Import Library Prompt](docs/features/images-and-characters.md#importing-library-prompts)**: search saved image prompts and preview their associated images in Image Generation. Import only the active positive prompt or cloud edit instruction, keeping models, LoRAs, seeds and sampling settings unchanged.
+- **[Shared Character controls](docs/features/images-and-characters.md#shared-character-controls)**: eight independently enabled camera/pose/expression slots across Gemini, Mammouth and ComfyUI multi-angle workflows, with clothing/background/pose references and progressive results. [Compare saved-in-session result sets](docs/features/images-and-characters.md#comparing-character-results) by provider, workflow and model without generating again; ComfyUI generation can be cancelled while retaining completed outputs.
+- **Expanded Qwen 2.1 editing**: [multi-image composition](docs/features/images-and-characters.md#qwen-21-multi-image-edit) with up to four role-based references and explicit analysis, [Consistency/Turbo single-image editing](docs/features/images-and-characters.md#qwen-21-single-image-edit) with extra LoRA slots, and [background removal](docs/features/images-and-characters.md#qwen-21-remove-background) with alpha-preserving PNG download and Library saving.
+- **[What's installed](docs/connections.md#installation-overview)**: inspect service connectivity and feature readiness, search required ComfyUI nodes by name or pack, filter problems and browse the server's model inventory. Inventory presence is not a guarantee of workflow compatibility.
+
+### Video and Library highlights
 
 - A unified **Video** workspace with **Video Prompt Generator**, **LTX Director** and **Minimax H3**.
 - Editable multimodal prompt templates, image/video crop and resize, colored references and automatic prompt snapshots in the Library.

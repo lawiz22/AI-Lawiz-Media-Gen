@@ -2,6 +2,8 @@ import React, { ChangeEvent, useMemo, useState } from 'react';
 import { GenerationOptions } from '../types';
 import { NumberSlider, SelectInput, TextInput } from './InputComponents';
 import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
+import { MossSettingsPanel } from './MossSettingsPanel';
+import { Krea2EditSettingsPanel } from './Krea2EditSettingsPanel';
 
 interface SamplerSettingsPanelProps {
     options: GenerationOptions;
@@ -41,6 +43,14 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
     }, [comfyUIObjectInfo]);
 
     const modelType = options.comfyModelType;
+    if (modelType === 'krea2-edit') return <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
+        <button type="button" onClick={() => setIsOpen(open => !open)} aria-expanded={isOpen} className="flex w-full justify-between border-b border-accent/30 pb-2 font-bold uppercase text-accent">Sampler Settings (KREA2 Edit)<span>{isOpen ? '-' : '+'}</span></button>
+        {isOpen && <div className="mt-4"><Krea2EditSettingsPanel section="sampler" options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} /></div>}
+    </div>;
+    if (modelType === 'moss-image') return <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
+        <button type="button" onClick={() => setIsOpen(open => !open)} aria-expanded={isOpen} className="flex w-full justify-between border-b border-accent/30 pb-2 font-bold uppercase text-accent">Sampler Settings (MOSS)<span>{isOpen ? '-' : '+'}</span></button>
+        {isOpen && <div className="mt-4"><MossSettingsPanel section="sampler" options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} /></div>}
+    </div>;
     const supportedModels = ['sdxl', 'sd1.5', 'flux', 'qwen-t2i-gguf', 'qwen-edit', 'qwen21-t2i', 'qwen21-turbo', 'z-image', 'flux2-simple', 'krea2-simple', 'krea2-raw'];
     if (!modelType || !supportedModels.includes(modelType)) return null;
 

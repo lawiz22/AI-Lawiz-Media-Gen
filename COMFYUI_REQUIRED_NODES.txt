@@ -39,6 +39,56 @@ packages such as Nunchaku, SeedVR2, Impact Pack and TTS Audio Suite require extr
 Python dependencies or installation scripts.
 
 
+KREA2 IDENTITY / GENERAL EDIT V2 - IMAGE GENERATOR
+------------------------------------------------
+Image Generation > ComfyUI > KREA2 > I2I Edit / Identity.
+Install/update https://github.com/lbouaraba/comfyui-krea2edit (v2.0.0+),
+then restart ComfyUI. Both Krea2EditModelPatch and Krea2EditGroundedEncode
+are mandatory; stock CLIPTextEncode cannot replace image conditioning.
+The patch must expose ref_position, ref_position_a and target_latent.
+Native nodes: UNETLoader, CLIPLoader (type=krea2), VAELoader, LoadImage,
+VAEEncode, EmptySD3LatentImage, LoraLoaderModelOnly, KSampler,
+VAEDecode and SaveImage. No Power LoRA or ResolutionSelector is needed.
+Models: krea2_turbo_fp8_scaled.safetensors or krea2_raw_fp8_scaled.safetensors,
+qwen3vl_4b_fp8_scaled.safetensors, qwen_image_vae.safetensors.
+Task LoRAs, normally under models/loras/KREA:
+  krea2_general_edit_v2.safetensors (or _r128 / _r64)
+  krea2_identity_edit_v2.safetensors (or _r128 / _r64)
+Use one task LoRA at 1.0; deliberately combining both needs lower strengths
+(start around 0.6 each). Up to four separate model-only LoRAs are supported.
+Defaults: General Edit, r64, Turbo, 8 steps, CFG 1, ref_boost 4,
+grounding_px 768, image 2 disabled. Identity uses ref_boost 2.
+For removals use Raw / 20 steps / CFG 3. Output is capped at 2 MP.
+See the upstream model license for non-commercial/commercial restrictions.
+
+
+MOSS IMAGE 1.0 - IMAGE GENERATOR
+------------------------------
+Image Generation > ComfyUI > MOSS > T2I uses the supplied MOSS graph.
+Update ComfyUI for CLIPLoader type=moss_image, EmptyFlux2LatentImage,
+SkipLayerGuidanceDiTSimple, UNETLoader, VAELoader, CLIPTextEncode,
+VAEDecode and SaveImage.
+Install/update Efficiency Nodes for KSampler (Efficient) and rgthree-comfy
+for Power Lora Loader (rgthree). The source Efficient sampler must expose
+seeds_2 and beta57; the app checks the live server catalog before queueing.
+Default weights:
+  models/diffusion_models/mossImageINT8INT6_mossImageINT8.safetensors
+  models/text_encoders/qwen3.5_9b_int8_convrot.safetensors
+  models/vae/flux2-vae.safetensors
+Source LoRAs, under models/loras/moss:
+  lora_latest_8step_moss.safetensors (disabled, 0.7)
+  MOSS_Image_SFT_8_steps_dmd_v0.1.safetensors (enabled, 1)
+  Kodachrome1970s_000002000.safetensors (enabled, 1)
+  grainscape_moss.safetensors (disabled, 1)
+Preview is optional and requires standard ComfyUI binary JPEG/PNG frames.
+All source controls are editable; LoRA slots can be added or removed.
+Optional Refine Image replaces EmptyFlux2LatentImage with LoadImage,
+ImageScale (bicubic, no crop) and VAEEncode using the selected MOSS VAE.
+RepeatLatentBatch is additionally required for refine batches above one.
+Source dimensions are reduced only when above 1280 px, then rounded down
+to multiples of 16. Refine denoise defaults to 0.5 and is independent of T2I.
+No weights or custom nodes are installed automatically.
+
 MINIMAX H3 - REF2V VIDEO WORKSPACE
 ---------------------------------
 Video > Minimax H3 > Reference to video executes the supplied 00-rEF2V

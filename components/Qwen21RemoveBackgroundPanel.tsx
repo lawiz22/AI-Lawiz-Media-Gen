@@ -11,6 +11,7 @@ import type { Qwen21RemoveBackgroundOptions, Qwen21EditOptions, Qwen21EditMode, 
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { ImageUploader } from './ImageUploader';
 import { LibraryPickerModal } from './LibraryPickerModal';
+import { LibraryPromptButton } from './LibraryPromptButton';
 import { NumberSlider } from './InputComponents';
 import { SendToLTXButton } from './SendToLTXButton';
 import { CheckIcon, CloseIcon, DownloadIcon, GenerateIcon, LibraryIcon, ResetIcon, SaveIcon, SpinnerIcon } from './icons';
@@ -143,6 +144,7 @@ const Qwen21RemoveBackgroundPanel: React.FC<Props> = ({ options, updateOptions, 
                 </Fold>
             </div>
             <div className="min-w-0 space-y-4">
+                <LibraryPromptButton disabled={locked} onSelectPrompt={prompt => update({ prompt })} />
                 <label className="block text-sm text-text-secondary">{title} Prompt<textarea aria-label={`${title} Prompt`} className={inputClass} rows={4} value={settings.prompt} disabled={locked} onChange={event => update({ prompt: event.target.value })} /></label>
                 <div className="flex flex-wrap justify-end gap-2">{running && <button type="button" className={buttonClass} onClick={stop} disabled={stopping}><CloseIcon className="h-4 w-4" />{stopping ? 'Stopping...' : 'Stop'}</button>}<button type="button" className={`${buttonClass} !border-accent bg-accent !text-accent-text`} onClick={generate} disabled={!canGenerate}>{running ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <GenerateIcon className="h-4 w-4" />}{running ? editMode ? 'Editing...' : 'Removing...' : editMode ? 'Generate' : 'Remove Background'}</button></div>
                 {running && <div role="status" className="space-y-2"><p className="text-xs text-text-secondary">{message}</p><progress aria-label={`${title} progress`} value={progress} max={1} className="w-full accent-accent" /></div>}

@@ -12,6 +12,7 @@ import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL } from '../services/ollamaServ
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { ImageUploader } from './ImageUploader';
 import { LibraryPickerModal } from './LibraryPickerModal';
+import { LibraryPromptButton } from './LibraryPromptButton';
 import { NumberSlider } from './InputComponents';
 import { SendToLTXButton } from './SendToLTXButton';
 import { CheckIcon, CloseIcon, DownloadIcon, GenerateIcon, LibraryIcon, RefreshIcon, ResetIcon, SaveIcon, SpinnerIcon, TrashIcon, WorkflowIcon } from './icons';
@@ -186,7 +187,9 @@ const Qwen21MultiPanel: React.FC<Props> = ({ options, updateOptions, isComfyUICo
             <div className="min-w-0 space-y-4">
                 <label className="block text-sm text-text-secondary">Scene / composition<textarea aria-label="Scene composition" className={input} rows={3} disabled={locked} value={settings.instruction} onChange={event => update({ instruction: event.target.value })} /></label>
                 <label className="flex items-center gap-2 text-sm text-text-secondary"><input aria-label="Manual prompt" type="checkbox" disabled={locked} checked={settings.manualPrompt} onChange={event => update({ manualPrompt: event.target.checked, prompt: resolvedPrompt })} />Manual prompt</label>
-                <label className="block text-sm text-text-secondary">Qwen 2.1 Prompt<textarea aria-label="Qwen 2.1 Multi Prompt" className={input} rows={8} readOnly={!settings.manualPrompt} disabled={locked} value={resolvedPrompt} onChange={event => update({ prompt: event.target.value })} /></label>
+                <LibraryPromptButton disabled={locked || !settings.manualPrompt} title={settings.manualPrompt ? undefined : 'Enable Manual prompt to import text without changing settings'} onSelectPrompt={prompt => update({ prompt })} />
+                <label className="block text-sm text-text-secondary">Qwen 2.1 Prompt<textarea aria-label="Qwen 2.1 Multi Prompt" className={input} rows={8} readOnly={!settings.manualPrompt} disabled={locked} value={settings.manualPrompt ? settings.prompt : resolvedPrompt} onChange={event => update({ prompt: event.target.value })} /></label>
+                {settings.manualPrompt && settings.references.slice(1, settings.referenceCount).some(reference => reference.role === 'background') && <p className="text-xs text-text-secondary">The workflow still adds its background-blending instruction when generating. Your manual prompt text is kept unchanged.</p>}
                 <div className="flex flex-wrap justify-end gap-2"><button type="button" aria-label="Export multi-image workflow" title="Export multi-image workflow" className={button} disabled={!ready} onClick={() => { void exportWorkflow(); }}><WorkflowIcon className="h-4 w-4" /></button>{running && <button type="button" className={button} disabled={stopping} onClick={stop}><CloseIcon className="h-4 w-4" />{stopping ? 'Stopping...' : 'Stop'}</button>}<button type="button" className={`${button} !border-accent bg-accent !text-accent-text`} disabled={!ready} onClick={generate}>{running ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <GenerateIcon className="h-4 w-4" />}{running ? 'Generating...' : 'Generate'}</button></div>
                 {running && <div role="status"><p className="text-xs text-text-secondary">{message}</p><progress aria-label="Multi Images progress" max={1} value={progress} className="w-full accent-accent" /></div>}
                 {result && <div className="space-y-3 border-t border-border-primary pt-4">

@@ -9,7 +9,7 @@ import type { AppDispatch, RootState } from '../store/store';
 import { addToLibrary, deleteFromLibrary } from '../store/librarySlice';
 
 type GenerationMode = 't2i' | 'i2i';
-type ModelFamilyId = 'sd15' | 'sdxl' | 'flux' | 'qwen' | 'qwen21' | 'z-image' | 'flux2' | 'krea2';
+type ModelFamilyId = 'sd15' | 'sdxl' | 'flux' | 'qwen' | 'qwen21' | 'z-image' | 'flux2' | 'krea2' | 'moss';
 
 interface ModelFamily {
     id: ModelFamilyId;
@@ -25,7 +25,8 @@ const MODEL_FAMILIES: ModelFamily[] = [
     { id: 'qwen21', label: 'QWEN 2.1', workflows: { t2i: 'qwen21-t2i', i2i: 'qwen21-remove-background' } },
     { id: 'z-image', label: 'Z-Image', workflows: { t2i: 'z-image' } },
     { id: 'flux2', label: 'FLUX2', workflows: { t2i: 'flux2-simple', i2i: 'flux2-edit' } },
-    { id: 'krea2', label: 'KREA2', workflows: { t2i: 'krea2-simple' } },
+    { id: 'krea2', label: 'KREA2', workflows: { t2i: 'krea2-simple', i2i: 'krea2-edit' } },
+    { id: 'moss', label: 'MOSS', workflows: { t2i: 'moss-image' } },
 ];
 
 interface ImageGeneratorHeaderProps {
@@ -63,7 +64,7 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
     const workflowTabs: { label: string; model: ComfyModelType; mode: GenerationMode }[] = activeModelFamily.id === 'qwen21'
         ? [{ label: 'T2I', model: 'qwen21-t2i', mode: 't2i' }, { label: 'T2I (Turbo)', model: 'qwen21-turbo', mode: 't2i' }, { label: 'I2I Multi Images', model: 'qwen21-i2i-multi', mode: 'i2i' }, { label: 'I2I Consistency', model: 'qwen21-i2i-consistency', mode: 'i2i' }, { label: 'I2I Turbo', model: 'qwen21-i2i-turbo', mode: 'i2i' }, { label: 'Remove Background', model: 'qwen21-remove-background', mode: 'i2i' }]
         : activeModelFamily.id === 'krea2'
-            ? [{ label: 'SIMPLE KREA', model: 'krea2-simple', mode: 't2i' }, { label: 'KREA2 RAW', model: 'krea2-raw', mode: 't2i' }]
+            ? [{ label: 'SIMPLE KREA', model: 'krea2-simple', mode: 't2i' }, { label: 'KREA2 RAW', model: 'krea2-raw', mode: 't2i' }, { label: 'I2I Edit / Identity', model: 'krea2-edit', mode: 'i2i' }]
             : availableGenerationModes.map(mode => ({ label: activeModelFamily.id === 'flux2' ? mode === 't2i' ? 'FLUX2 SIMPLE' : 'FLUX2 Edit' : mode.toUpperCase(), model: activeModelFamily.workflows[mode]!, mode }));
 
     const selectModelFamily = (family: ModelFamily) => {
@@ -107,7 +108,7 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
         if (preset && preset.options) {
             restoreOptions(preset.options);
             const isComfyI2I = preset.options.provider === 'comfyui'
-                && ['qwen-edit', 'flux2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux', 'qwen21-remove-background', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(preset.options.comfyModelType || '');
+                && ['qwen-edit', 'flux2-edit', 'krea2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux', 'qwen21-remove-background', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(preset.options.comfyModelType || '');
             const isCloudI2I = preset.options.provider !== 'comfyui' && preset.options.geminiMode === 'i2i';
             setGenerationMode(isComfyI2I || isCloudI2I ? 'i2i' : 't2i');
             setSelectedPresetId(presetId);

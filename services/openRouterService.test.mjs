@@ -23,6 +23,8 @@ const helperSource = tree.statements.filter(statement => ts.isVariableStatement(
     && statement.declarationList.declarations.some(declaration => selectedHelpers.has(declaration.name.getText(tree))))
     .map(statement => statement.getText(tree)).join('\n');
 const bridgeSource = `
+${readFileSync(new URL('../utils/imagePromptStyle.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '')}
+const getPromptStyleInstruction = getImagePromptStyleInstruction;
 const calls = [];
 let forcedResponse = null;
 export const setForcedResponse = value => { forcedResponse = value; };

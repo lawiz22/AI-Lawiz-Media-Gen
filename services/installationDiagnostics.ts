@@ -73,10 +73,12 @@ const NATIVE_NODES = [
     'MaskToImage', 'ModelSamplingAuraFlow', 'ModelSamplingFlux', 'ModelSamplingSD3', 'PreviewImage', 'RandomNoise',
     'ReferenceLatent', 'SAM3_Detect', 'SamplerCustomAdvanced', 'SaveAudio', 'SaveImage', 'SaveVideo', 'GrowMask',
     'TextEncodeQwenImageEditPlus', 'UNETLoader', 'UpscaleModelLoader', 'VAEDecode', 'VAEEncode', 'VAELoader',
-    'WanFirstLastFrameToVideo', 'WanImageToVideo',
+    'WanFirstLastFrameToVideo', 'WanImageToVideo', 'SkipLayerGuidanceDiTSimple', 'ImageScale', 'RepeatLatentBatch',
 ] as const;
 
 const CUSTOM_NODE_PACKS: Record<string, readonly string[]> = {
+    'ComfyUI-Krea2Edit v2.0.0+': ['Krea2EditModelPatch', 'Krea2EditGroundedEncode'],
+    'Efficiency Nodes': ['KSampler (Efficient)'],
     'ComfyUI-GGUF': ['CLIPLoaderGGUF', 'DualCLIPLoaderGGUF', 'UnetLoaderGGUF'],
     'ComfyUI-MultiGPU': ['CLIPLoaderMultiGPU'],
     'ComfyUI-SeedVR2 Video Upscaler': ['SeedVR2LoadDiTModel', 'SeedVR2LoadVAEModel', 'SeedVR2VideoUpscaler'],
@@ -206,9 +208,14 @@ const FEATURE_SPECS: FeatureSpec[] = [
     { group: 'Image Generation', name: 'Qwen Image T2I', detail: 'Qwen Image GGUF text-to-image.', backend: 'comfyui', nodes: ['UnetLoaderGGUF', 'CLIPLoaderGGUF', 'FluxResolutionNode'], models: [{ label: 'Qwen Image model', source: 'diffusionModels', pattern: /qwen.?image/i }] },
     { group: 'Image Generation', name: 'Qwen Image Edit', detail: 'Qwen reference-image editing.', backend: 'comfyui', nodes: ['TextEncodeQwenImageEditPlus'], models: [{ label: 'Qwen Edit model', source: 'diffusionModels', pattern: /qwen.*edit|qwen_image_edit/i }] },
     { group: 'Image Generation', name: 'Z-Image', detail: 'Z-Image generation with optional CacheDiT.', backend: 'comfyui', nodes: ['ModelSamplingAuraFlow'], models: [{ label: 'Z-Image model', source: 'diffusionModels', pattern: /z.?image|z_image/i }] },
+    { group: 'Image Generation', name: 'MOSS Image 1.0', detail: 'Source MOSS workflow with SLG, rgthree LoRAs and Efficient sampler. Preview depends on the server.', backend: 'comfyui', nodes: ['UNETLoader', 'CLIPLoader', 'VAELoader', 'CLIPTextEncode', 'EmptyFlux2LatentImage', 'SkipLayerGuidanceDiTSimple', 'Power Lora Loader (rgthree)', 'KSampler (Efficient)', 'VAEDecode', 'SaveImage'], models: [{ label: 'MOSS diffusion model', source: 'diffusionModels', pattern: /moss/i }, { label: 'MOSS Qwen 3.5 encoder', source: 'textEncoders', pattern: /qwen.?3[._]?5/i }, { label: 'FLUX2 VAE', source: 'vaes', pattern: /flux.?2/i }] },
+    { group: 'Image Generation', name: 'MOSS Image Refine', detail: 'Optional image-to-image source latent, source-ratio resize up to 1280 px, denoise and repeated latent batches.', backend: 'comfyui', nodes: ['LoadImage', 'ImageScale', 'VAEEncode', 'RepeatLatentBatch', 'UNETLoader', 'CLIPLoader', 'VAELoader', 'CLIPTextEncode', 'SkipLayerGuidanceDiTSimple', 'Power Lora Loader (rgthree)', 'KSampler (Efficient)', 'VAEDecode', 'SaveImage'], models: [{ label: 'MOSS diffusion model', source: 'diffusionModels', pattern: /moss/i }, { label: 'MOSS Qwen 3.5 encoder', source: 'textEncoders', pattern: /qwen.?3[._]?5/i }, { label: 'FLUX2 VAE', source: 'vaes', pattern: /flux.?2/i }] },
     { group: 'Image Generation', name: 'FLUX2 T2I', detail: 'FLUX2 simple text-to-image.', backend: 'comfyui', nodes: ['EmptyFlux2LatentImage', 'Flux2Scheduler', 'ReferenceLatent'], models: [{ label: 'FLUX2 model', source: 'diffusionModels', pattern: /flux.?2|klein/i }] },
     { group: 'Image Generation', name: 'FLUX2 Edit', detail: 'FLUX2 multi-reference editing and optional DWPose.', backend: 'comfyui', nodes: ['EmptyFlux2LatentImage', 'Flux2Scheduler', 'ReferenceLatent'], models: [{ label: 'FLUX2 model', source: 'diffusionModels', pattern: /flux.?2|klein/i }] },
     { group: 'Image Generation', name: 'KREA2 Simple / RAW', detail: 'KREA2 generation variants.', backend: 'comfyui', nodes: ['Power Lora Loader (rgthree)'], models: [{ label: 'KREA2 model', source: 'diffusionModels', pattern: /krea.?2/i }] },
+    { group: 'Image Generation', name: 'KREA2 Identity / General Edit V2', detail: 'ComfyUI-Krea2Edit v2.0.0+, grounded positive/negative image conditioning, per-reference placement and up to four separate model-only LoRAs. No Power LoRA.', backend: 'comfyui',
+        nodes: ['Krea2EditModelPatch', 'Krea2EditGroundedEncode', 'UNETLoader', 'CLIPLoader', 'VAELoader', 'LoadImage', 'VAEEncode', 'EmptySD3LatentImage', 'LoraLoaderModelOnly', 'KSampler', 'VAEDecode', 'SaveImage'],
+        models: [{ label: 'KREA2 model', source: 'diffusionModels', pattern: /krea.?2/i }, { label: 'Qwen3-VL encoder', source: 'textEncoders', pattern: /qwen.?3.?vl/i }, { label: 'Qwen Image VAE', source: 'vaes', pattern: /qwen.?image.*vae/i }, { label: 'Identity or General Edit V2 LoRA (full/r128/r64)', source: 'loras', pattern: /krea2_(?:identity|general)_edit_v2/i }] },
     { group: 'Character', name: 'Character via Gemini', detail: 'Multi-output cloud character generation.', backend: 'gemini' },
     { group: 'Character', name: 'Character via Mammouth', detail: 'Multi-angle cloud character generation.', backend: 'mammouth' },
     { group: 'Character', name: 'Qwen Character Angles', detail: 'Qwen multi-angle workflow.', backend: 'comfyui', nodes: ['SimpleReadableMetadataSG', 'TextEncodeQwenImageEditPlus'], models: [{ label: 'Qwen Edit model', source: 'diffusionModels', pattern: /qwen.*edit|qwen_image_edit/i }] },

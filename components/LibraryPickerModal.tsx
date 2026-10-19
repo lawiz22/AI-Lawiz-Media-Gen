@@ -7,7 +7,7 @@ import { CloseIcon, SpinnerIcon, LibraryIcon, VideoIcon, PhotographIcon, TshirtI
 interface LibraryPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectItem: (item: LibraryItem) => void;
+  onSelectItem: (item: LibraryItem) => void | Promise<void>;
   filter: LibraryItemType | LibraryItemType[] | null;
   multiSelect?: boolean;
   onSelectMultiple?: (items: LibraryItem[]) => void;
@@ -94,7 +94,7 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
       setIsResolving(true);
       setErrorMessage('');
       try {
-        onSelectItem(await hydrateLibraryItem(item));
+        await onSelectItem(await hydrateLibraryItem(item));
         onClose();
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : 'Could not load the selected Library media.');
