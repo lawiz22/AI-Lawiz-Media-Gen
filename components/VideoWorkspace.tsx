@@ -12,6 +12,7 @@ import { DEFAULT_OPENROUTER_MODEL, filterOpenRouterModels, getOpenRouterInputMod
 import { VideoReferenceEditor, useMediaURL } from './VideoReferenceEditor';
 import { buildVideoPromptLibraryItem, restoreVideoPromptLibraryItem } from '../services/videoPromptLibrary';
 import { MinimaxH3Panel } from './MinimaxH3Panel';
+import { CharacterSwapPanel } from './CharacterSwapPanel';
 import { defaultMinimaxH3Options, h3AspectFromPrompt } from '../services/minimaxH3Workflow';
 
 const button = 'inline-flex items-center justify-center gap-2 rounded-lg border border-border-primary px-3 py-2 text-sm font-medium transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-40';
@@ -80,7 +81,8 @@ export const VideoWorkspace: React.FC<{
     onLibraryItemLoaded: () => void;
 }> = ({ director, openDirector, onLeaveDirector, onResetDirector, libraryItem, onLibraryItemLoaded }) => {
     const dispatch: AppDispatch = useDispatch();
-    const [tab, setTab] = useState<'prompt' | 'ltx' | 'minimax'>('prompt');
+    const [tab, setTab] = useState<'prompt' | 'ltx' | 'minimax' | 'character-swap'>('prompt');
+    const [swapOpened, setSwapOpened] = useState(false);
     const [draft, setDraft] = useState<VideoPromptDraft>(initialDraft);
     const [ready, setReady] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -160,7 +162,7 @@ export const VideoWorkspace: React.FC<{
     }, [libraryItem, ready, busy, librarySaving, onLibraryItemLoaded]);
 
     const update = (patch: Partial<VideoPromptDraft>) => setDraft(current => ({ ...current, ...patch }));
-    const chooseTab = (next: typeof tab) => { setTab(next); if (next !== 'ltx' && openDirector) onLeaveDirector(); };
+    const chooseTab = (next: typeof tab) => { setTab(next); if (next === 'character-swap') setSwapOpened(true); if (next !== 'ltx' && openDirector) onLeaveDirector(); };
     const changeReference = (id: string, patch: Partial<VideoReference>) => setDraft(current => ({
         ...current, references: current.references.map(ref => ref.id === id ? { ...ref, ...patch } : ref),
     }));
@@ -247,7 +249,7 @@ export const VideoWorkspace: React.FC<{
     return <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <nav className="flex flex-wrap gap-2" aria-label="Video tools">
-                {([{ id: 'prompt', label: 'Video Prompt Generator' }, { id: 'ltx', label: 'LTX Director' }, { id: 'minimax', label: 'Minimax H3' }] as const).map(item =>
+                {([{ id: 'prompt', label: 'Video Prompt Generator' }, { id: 'ltx', label: 'LTX Director' }, { id: 'minimax', label: 'Minimax H3' }, { id: 'character-swap', label: 'Character Swap H3' }] as const).map(item =>
                     <button key={item.id} type="button" onClick={() => chooseTab(item.id)} aria-pressed={tab === item.id} className={`${button} ${tab === item.id ? 'border-accent bg-accent/15 text-accent' : 'text-text-secondary'}`}>{item.label}</button>)}
             </nav>
             <span role="status" className="text-xs text-text-secondary">{!ready ? 'Loading saved workspace...' : saved ? 'Saved locally · media included' : 'Saving workspace...'}</span>
@@ -258,6 +260,7 @@ export const VideoWorkspace: React.FC<{
         {error && <p role="alert" className="rounded-xl border border-red-400/40 bg-red-400/10 p-3 text-sm text-red-300">{error}</p>}
         {notice && <p role="status" className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 p-3 text-sm text-emerald-300">{notice}</p>}
 
+        <div hidden={tab !== 'character-swap'}>{swapOpened && <CharacterSwapPanel />}</div>
         <React.Activity mode={tab === 'ltx' ? 'visible' : 'hidden'}>
             {!openDirector && <div className="mb-3 flex justify-end"><button type="button" className={`${button} text-red-300`} onClick={onResetDirector}>Reset LTX Director</button></div>}
             {director}

@@ -60,8 +60,11 @@ These are different kinds of saved item:
 | --- | --- | --- |
 | Video Prompt Generator prompt | Generated text, prompt-generation settings, editable templates, original and edited references | Restore the complete [prompt-generation setup](video-prompt-generator.md#library-snapshots-and-restoration) |
 | MiniMax H3 rendered result | Original result binary, thumbnail, actual seed, prompt, render settings and executed graph | Play/download the saved result and inspect [H3 render metadata](minimax-h3.md#save-rendered-output-to-library); not a runnable reference-input snapshot |
+| Character Swap H3 result/comparison | Original video binary, thumbnail, shot plan and submitted workflow/settings when available | Play/download independently of ComfyUI and inspect [Character Swap provenance](character-swap-h3.md#before--after-and-exports); partial assemblies and unavailable historical settings are labelled explicitly |
 
 The rendered H3 file is stored locally rather than as a temporary server URL. For image-sequence formats, only the returned file is saved, not the complete server-side sequence.
+
+Character Swap H3 can also import Library videos as sources and Library images as global or selected-shot references. Its intermediate shot cache remains on ComfyUI and is not included in Library backups. See [Library imports](character-swap-h3.md#import-from-library) for source-reset behavior and reference-slot selection.
 
 ## Screenshots
 

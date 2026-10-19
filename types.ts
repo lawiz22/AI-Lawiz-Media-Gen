@@ -886,6 +886,18 @@ export interface MinimaxH3LibraryOptions extends Omit<import('./services/minimax
   filename: string;
 }
 
+export interface CharacterSwapLibraryOptions {
+  version: 1;
+  savedAt: string;
+  filename: string;
+  output: 'result' | 'comparison';
+  plan: Record<string, unknown>;
+  planIsExecutionSnapshot: boolean;
+  settings?: import('./services/characterSwapWorkflow').CharacterSwapSettings;
+  workflow?: import('./services/minimaxH3Workflow').H3Workflow;
+  promptId?: string;
+}
+
 export interface LibraryItem {
   id: number; // Unique ID, typically a timestamp
   name?: string;
@@ -900,6 +912,7 @@ export interface LibraryItem {
   ltxDirectorOptions?: LtxDirectorGenerationInfo;
   videoPromptOptions?: VideoPromptLibraryOptions;
   minimaxH3Options?: MinimaxH3LibraryOptions;
+  characterSwapOptions?: CharacterSwapLibraryOptions;
   sceneVariationPreset?: import('./services/sceneVariationService').SceneVariationPreset;
   lanPaintPersonSettings?: import('./services/swapPersonWorkflow').LanPaintPersonOptions;
   outpaintSettings?: import('./services/qwen21Workflow').Qwen21OutpaintOptions;

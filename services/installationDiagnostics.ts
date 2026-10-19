@@ -77,6 +77,7 @@ const NATIVE_NODES = [
 ] as const;
 
 const CUSTOM_NODE_PACKS: Record<string, readonly string[]> = {
+    'BFSNodes': ['BFSShotPlanner', 'BFSShotUnpack', 'BFSShotRepack', 'BFSShotH3ConditioningSimple', 'BFSShotJoin'],
     'ComfyUI-Krea2Edit v2.0.0+': ['Krea2EditModelPatch', 'Krea2EditGroundedEncode'],
     'Efficiency Nodes': ['KSampler (Efficient)'],
     'ComfyUI-GGUF': ['CLIPLoaderGGUF', 'DualCLIPLoaderGGUF', 'UnetLoaderGGUF'],
@@ -271,6 +272,7 @@ const FEATURE_SPECS: FeatureSpec[] = [
         { label: 'Ollama vision analysis', backend: 'ollama' },
     ] },
     { group: 'Scene Variation', name: 'FLUX2 Variations', detail: 'Source-guided variations with optional LoRAs and CacheDiT. The panel validates the selected loader and models before generation.', backend: 'comfyui', nodes: ['LoadImage', 'CLIPLoader', 'VAELoader', 'CLIPTextEncode', 'ImageScaleToTotalPixels', 'GetImageSize', 'VAEEncode', 'ConditioningZeroOut', 'ReferenceLatent', 'EmptyFlux2LatentImage', 'RandomNoise', 'KSamplerSelect', 'Flux2Scheduler', 'CFGGuider', 'SamplerCustomAdvanced', 'VAEDecode', 'SaveImage'], models: [{ label: 'FLUX2 model', source: 'diffusionModels', pattern: /flux.?2|klein/i }, { label: 'FLUX2 VAE', source: 'vaes', pattern: /flux.?2/i }] },
+    { group: 'Video', name: 'Character Swap H3', detail: 'Native BFS Shot Planner, sequential persistent shots and memory history. Optional masks, reference background removal and second pass have additional requirements checked in the workspace.', backend: 'comfyui', nodes: ['BFSShotPlanner', 'BFSShotUnpack', 'BFSShotRepack', 'BFSShotH3ConditioningSimple', 'BFSShotJoin', 'UNETLoader', 'CLIPLoader', 'VAELoader', 'SamplerCustomAdvanced', 'VAEDecode'], models: [{ label: 'H3 diffusion model', source: 'diffusionModels', pattern: /h3|minimax/i }, { label: 'Character-swap LoRA', source: 'loras', pattern: /character.swap/i }] },
     { group: 'Fun', name: 'Photo Fusion via Mammouth', detail: 'Cloud group photo fusion.', backend: 'mammouth' },
     { group: 'Fun', name: 'Photo Fusion via Gemini', detail: 'Cloud group photo fusion.', backend: 'gemini' },
     { group: 'Fun', name: 'Photo Fusion via FLUX2', detail: 'Local multi-reference photo fusion.', backend: 'comfyui', nodes: ['ReferenceLatent', 'Flux2Scheduler'], models: [{ label: 'FLUX2 model', source: 'diffusionModels', pattern: /flux.?2|klein/i }] },

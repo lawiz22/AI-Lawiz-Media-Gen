@@ -7,21 +7,16 @@ const OUTPUT_MIME_TYPES: Record<string, string> = {
     gif: 'image/gif', webp: 'image/webp', png: 'image/png',
 };
 
-export const buildMinimaxH3LibraryItem = async (
-    result: H3GenerationResult,
-): Promise<{ item: Omit<LibraryItem, 'id'> & { assetBlobs: Partial<Record<LibraryAssetRole, Blob>> }; warning?: string }> => {
-    const snapshot = structuredClone({
-        version: 1 as const, savedAt: new Date().toISOString(),
-        promptId: result.promptId, prompt: result.prompt, promptIsFinal: result.promptIsFinal,
-        seed: result.seed, options: result.options, workflow: result.workflow,
-        filename: new URL(result.videoUrl).searchParams.get('filename') || '',
-    });
-    const response = await fetch(result.videoUrl, { signal: AbortSignal.timeout(120000) });
+export const readRenderedLibraryMedia = async (videoUrl: string): Promise<{
+    blob: Blob; mediaType: 'video' | 'image'; thumbnail: string; warning?: string;
+}> => {
+    const filename = new URL(videoUrl).searchParams.get('filename') || '';
+    const response = await fetch(videoUrl, { signal: AbortSignal.timeout(120000) });
     if (!response.ok) throw new Error(`Could not read the H3 output (${response.status}). Check that its ComfyUI output file still exists.`);
     const downloaded = await response.blob();
     if (!downloaded.size) throw new Error('The H3 output file is empty. Nothing was saved.');
     const reportedType = downloaded.type.split(';')[0].trim().toLowerCase();
-    const extension = snapshot.filename.split('.').pop()?.toLowerCase() || '';
+    const extension = filename.split('.').pop()?.toLowerCase() || '';
     const mimeType = !reportedType || reportedType === 'application/octet-stream' ? OUTPUT_MIME_TYPES[extension] : reportedType;
     if (!mimeType || (!mimeType.startsWith('video/') && !mimeType.startsWith('image/'))) throw new Error(`The server did not return a video or image output (${reportedType || 'unknown type'}). Nothing was saved.`);
     const mediaType = mimeType.startsWith('image/') ? 'image' : 'video';
@@ -40,6 +35,19 @@ export const buildMinimaxH3LibraryItem = async (
         thumbnail = createVideoPlaceholderThumbnail();
         warning = 'A thumbnail could not be extracted for this codec. The original output file was saved with a placeholder.';
     }
+    return { blob, mediaType, thumbnail, warning };
+};
+
+export const buildMinimaxH3LibraryItem = async (
+    result: H3GenerationResult,
+): Promise<{ item: Omit<LibraryItem, 'id'> & { assetBlobs: Partial<Record<LibraryAssetRole, Blob>> }; warning?: string }> => {
+    const snapshot = structuredClone({
+        version: 1 as const, savedAt: new Date().toISOString(),
+        promptId: result.promptId, prompt: result.prompt, promptIsFinal: result.promptIsFinal,
+        seed: result.seed, options: result.options, workflow: result.workflow,
+        filename: new URL(result.videoUrl).searchParams.get('filename') || '',
+    });
+    const { blob, mediaType, thumbnail, warning } = await readRenderedLibraryMedia(result.videoUrl);
     const title = snapshot.prompt.replace(/^[a-z_]+:\s*/, '').replace(/\s+/g, ' ').trim().slice(0, 80) || snapshot.promptId;
     return {
         item: {

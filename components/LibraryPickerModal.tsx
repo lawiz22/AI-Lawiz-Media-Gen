@@ -53,7 +53,10 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
       setErrorMessage('');
       getLibraryItems()
         .then(setItems)
-        .catch(console.error)
+        .catch(cause => {
+          console.error('Could not load Library items.', cause);
+          setErrorMessage(`Could not load Library items. ${cause instanceof Error ? cause.message : String(cause)}`);
+        })
         .finally(() => setIsLoading(false));
     }
   }, [isOpen]);

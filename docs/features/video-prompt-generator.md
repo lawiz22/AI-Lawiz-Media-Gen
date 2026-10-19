@@ -17,7 +17,7 @@ Create a production prompt from your idea and edited references, save its comple
 
 ## Video workspace
 
-- **Video** contains **Video Prompt Generator** (first subtab), **LTX Director**, and **Minimax H3**. Existing Library, TTS and model transfers still open LTX Director inside this workspace.
+- **Video** contains **Video Prompt Generator** (first subtab), **LTX Director**, **Minimax H3**, and the independent [Character Swap H3 Shot Planner](character-swap-h3.md). Existing Library, TTS and model transfers still open LTX Director inside this workspace.
 
 ## References and media editing
 

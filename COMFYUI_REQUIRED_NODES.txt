@@ -122,6 +122,25 @@ key is embedded in the application's submitted/exported H3 workflows.
 The app never installs custom nodes or downloads weights automatically.
 Review selected weights/LoRA licenses before commercial use.
 
+MINIMAX H3 - CHARACTER SWAP SHOT PLANNER
+---------------------------------------
+Video > Character Swap H3 is separate from REF2V. Requires BFSNodes:
+BFSShotPlanner, BFSShotUnpack, BFSShotRepack, BFSShotH3ConditioningSimple,
+BFSShotJoin, the native web/js Shot Planner modules, and /bfs/shotloop APIs.
+Display Any (rgthree) receives the final file path and triggers the join
+without a VHS re-encode.
+The UI is loaded from the user's ComfyUI installation, not bundled here.
+Source defaults use the H3 character-swap and ref2v turbo LoRAs, native H3
+model/encoders/VAEs, MiniMaxH3SigmaShift and ModelAttentionBackend.
+BiRefNetRMBG and ResizeImageMaskNode are required when reference background
+removal is enabled. The second pass is optional and OFF by default; its
+MMH3LatentUpscaleWithModelParams, MMH3UltimateUpscale, learned latent
+upscaler weights and upscale LoRA are required only when enabled.
+Use Check workflow to validate the exact active node/model requirements.
+Keep output/bfs_shotloop and input media for resume after failures.
+Memory history is GPU-based, not a promise that every model/plan fits.
+See docs/features/character-swap-h3.md for recovery and cache sharing.
+
 QWEN IMAGE 2.1 - IMAGE GENERATOR
 ------------------------------
 Modes: T2I (Low VRAM source graph) and T2I (Turbo source graph).

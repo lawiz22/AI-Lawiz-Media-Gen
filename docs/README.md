@@ -21,6 +21,7 @@ The README is the short introduction. This index is the entry point for setup, w
 | Local inventory | [Models and LoRAs](features/models-and-loras.md) | Scanning, metadata, organization and workflow selection |
 | Video prompts | [Video Prompt Generator](features/video-prompt-generator.md) | Media editing, providers, templates, H3 transfer and prompt snapshots |
 | H3 rendering | [MiniMax H3 REF2V](features/minimax-h3.md) | References, LoRAs, timing, previews, cancellation and rendered-result saving |
+| H3 character swap | [Character Swap H3](features/character-swap-h3.md) | Native BFS Shot Planner, memory history, live progress, persistent shots, resume, partial assembly, comparison, Library imports/saves and user-confirmed multi-shot rendering |
 | Timelines and speech | [LTX Director and audio](features/ltx-and-audio.md) | LTX profiles, clips, soundtracks, TTS and voice reuse |
 | Saved assets | [Library and backups](features/library.md) | Search, tags, ratings, archives, Folder projects, Drive and video persistence |
 

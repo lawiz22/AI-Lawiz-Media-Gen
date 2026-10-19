@@ -62,6 +62,7 @@ Recommended pre-commit checks:
 ```powershell
 npm audit --omit=dev
 node --test services/sceneVariationService.test.mjs
+node --test services\characterSwapWorkflow.test.mjs services\characterSwapService.test.mjs services\characterSwapProgress.test.mjs services\characterSwapLibrary.test.mjs components\CharacterSwapComparison.test.mjs components\VideoWorkspace.test.mjs
 node --test services/minimaxH3Workflow.test.mjs services/minimaxH3Service.test.mjs services/minimaxH3Library.test.mjs services/videoPromptService.test.mjs services/videoPromptLibrary.test.mjs services/videoPromptDrive.test.mjs services/openRouterService.test.mjs services/videoClipService.test.mjs services/ltxDirectorWorkflow.test.mjs
 npm run build
 git diff --check

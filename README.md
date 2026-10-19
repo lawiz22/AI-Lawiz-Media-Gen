@@ -25,7 +25,7 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 | --- | --- | --- |
 | Images and characters | Generate/refine with MOSS, use KREA2 Edit/Identity, Qwen 2.1 and Outpaint, and compare multi-angle characters | [Images and characters](docs/features/images-and-characters.md) |
 | Scene and identity editing | Vary scenes, edit selected people, swap identities and fuse portraits | [Scene Variation](docs/features/scene-variation.md) / [Swap and Fusion](docs/features/swap-and-fusion.md) |
-| Video | Write multimodal prompts, render MiniMax H3 REF2V videos and direct LTX timelines | [Video prompts](docs/features/video-prompt-generator.md) / [H3](docs/features/minimax-h3.md) / [LTX](docs/features/ltx-and-audio.md) |
+| Video | Write multimodal prompts, render MiniMax H3 REF2V and multi-shot character swaps, and direct LTX timelines | [Video prompts](docs/features/video-prompt-generator.md) / [H3](docs/features/minimax-h3.md) / [Character Swap](docs/features/character-swap-h3.md) / [LTX](docs/features/ltx-and-audio.md) |
 | Creative tools | Generate prompts from images, create Magic Soup, transform styles, crop references, extract clips and record audio | [Creative tools](docs/features/creative-tools.md) / [Image-to-prompt](docs/features/images-and-characters.md#generating-a-prompt-from-an-image) |
 | Models and LoRAs | Scan local models, retrieve metadata and organize your ComfyUI inventory | [Models and LoRAs](docs/features/models-and-loras.md) |
 | Library | Save media and exact generation settings, import saved image prompts without changing settings, search/tag/rate assets and back up projects | [Library and backups](docs/features/library.md) / [Prompt import](docs/features/images-and-characters.md#importing-library-prompts) |
@@ -45,7 +45,9 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 
 ### Video and Library highlights
 
-- A unified **Video** workspace with **Video Prompt Generator**, **LTX Director** and **Minimax H3**.
+- A unified **Video** workspace with **Video Prompt Generator**, **LTX Director**, **Minimax H3** and an independent **[Character Swap H3](docs/features/character-swap-h3.md)** using the native BFS Shot Planner, persistent sequential shots and before/after comparison. Its optional second pass starts disabled.
+- **Character Swap H3 progress and Library integration**: live operation/sampling-step percentages, saved-shot counts, source-video and global/per-shot reference imports, and local saving of result/comparison videos. Monitoring reconnects when returning from another workspace without submitting the render again.
+- **User-confirmed GPU rendering on an RTX 3070 8 GB**: a successful single-shot test followed by a **15-second clip split into 4 shots**, reported successful on October 19, 2026. This validates those runs, not every model/resolution or a general guarantee against OOM; see [validation details](docs/features/character-swap-h3.md#validation).
 - Editable multimodal prompt templates, image/video crop and resize, colored references and automatic prompt snapshots in the Library.
 - Connected **H3 REF2V**, six optional LoRAs, optional live previews and local Library saving of rendered videos with their actual settings.
 - Expanded Library organization/backups, multi-ingredient Magic Soup and configurable local model workflows.

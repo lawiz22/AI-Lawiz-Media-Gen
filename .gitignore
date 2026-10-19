@@ -29,3 +29,6 @@ dist-ssr
 .build-check/assets/worker-DYSz7Krg.js
 .build-check/assets/index-BzA1SrlF.js
 .build-check/assets/ffmpeg-core-CgUfceKH.wasm
+
+# Local writing drafts
+/reddit-post-draft.txt
