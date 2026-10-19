@@ -11,13 +11,15 @@
 [![Electron](https://img.shields.io/badge/Electron-44-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Windows](https://img.shields.io/badge/Windows-desktop-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
 
-[Features](#features) | [Quick start](#quick-start) | [Documentation](docs/README.md) | [Screenshots](docs/screenshots/README.md) | [Windows build](docs/development.md#production-build)
+[Features](#features) | [Quick start](#quick-start) | [Documentation](docs/README.md) | [Screenshots](docs/screenshots/README.md) | [Windows build](docs/development.md#production-build) | [Acknowledgements](#acknowledgements)
 
 </div>
 
 LAWIZ'S Media Generator combines image generation, character creation, video direction, speech synthesis, asset extraction, upscaling, and model management in one React/Electron desktop application. It connects to hosted providers including Mammouth AI, Gemini and OpenRouter, local language and vision models through Ollama, and configurable workflows on a local ComfyUI server.
 
 > This repository contains the application and workflow definitions. AI checkpoints, LoRAs, ComfyUI, custom nodes, and third-party API access are not bundled.
+
+> **Licensing status:** original Lawiz contributions are GPLv3. Permission for portions derived from zGenMedia's projects is still pending; this is not clearance to redistribute the complete application. See [licensing scope and pending permissions](LICENSING.md).
 
 ## Features
 
@@ -80,9 +82,59 @@ For browser-only development, use `npm run dev` at `http://localhost:3000`; some
 
 Detailed settings belong in the guides so this README can stay short. Screenshots can be added progressively without displaying broken images.
 
+## Acknowledgements
+
+This application would not be possible without **[comfyanonymous](https://github.com/comfyanonymous), [Comfy Org](https://github.com/Comfy-Org) and the [ComfyUI](https://github.com/Comfy-Org/ComfyUI) contributors**, along with the custom-node creators who make these workflows possible. Thank you for sharing your tools, research and time with the community.
+
+A special thank-you to **[NRDX (`alisson-anjos`)](https://github.com/alisson-anjos)**, creator of **[ComfyUI-BFSNodes](https://github.com/alisson-anjos/ComfyUI-BFSNodes)**, and its contributors. Character Swap H3 uses their **native BFS Shot Planner**, including its shot timeline, sequential shot loop, persistent cache and GPU-memory history. The planner is their work, loaded from the user's ComfyUI installation rather than bundled with this app; Lawiz adds the application integration, render monitoring and Library connections.
+
+The following authors, maintainers and teams also deserve credit for the node packs used across Lawiz's workflows. Names, public handles and project links were checked against upstream GitHub repositories, package metadata and explicit project credits on October 19, 2026.
+
+| Author / maintainer / team | Project | Used for |
+| --- | --- | --- |
+| [HearmemanAI (`Hearmeman24`)](https://github.com/Hearmeman24) | [MiniMax References Manager](https://github.com/Hearmeman24/ComfyUI-MiniMaxRefPack) | H3 REF2V reference management and prompt-writing integration |
+| [kijai](https://github.com/kijai) | [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes), [ComfyUI-Florence2](https://github.com/kijai/ComfyUI-Florence2) | Video previews, image/mask utilities, VAE helpers and Florence2 captioning |
+| [rgthree](https://github.com/rgthree) | [rgthree-comfy](https://github.com/rgthree/rgthree-comfy) | Power LoRA loading and workflow display/output utilities |
+| [Kosinkadink](https://github.com/Kosinkadink) | [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) | Video encoding and output assembly |
+| [Jonathan Watkins (`WhatDreamsCost`)](https://github.com/WhatDreamsCost) | [WhatDreamsCost-ComfyUI](https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI) | LTX Director timeline and guide nodes |
+| [Lightricks](https://github.com/Lightricks) | [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) | LTX video support required by the Director workflows |
+| [city96](https://github.com/city96) | [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) | Quantized model and text-encoder loading |
+| [John Pollock (`pollockjj`)](https://github.com/pollockjj) | [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU) | Device-aware model/text-encoder loading and offloading |
+| [Nunchaku team](https://github.com/nunchux-ai) | [ComfyUI-nunchaku](https://github.com/nunchux-ai/ComfyUI-nunchaku) | Nunchaku FLUX and Kontext workflows |
+| [NumZ](https://github.com/numz) and [Adrien Toupet / AInVFX](https://github.com/adrientoupet) | [ComfyUI-SeedVR2_VideoUpscaler](https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler) | SeedVR2 image/video upscaling; the underlying SeedVR2 research is by the ByteDance Seed team |
+| [Pixaroma](https://github.com/pixaroma) | [ComfyUI-Pixaroma](https://github.com/pixaroma/ComfyUI-Pixaroma) | Qwen 2.1 image editing, outpainting, references and comparison utilities |
+| [lbouaraba](https://github.com/lbouaraba) (publisher: ConradLocke) | [comfyui-krea2edit](https://github.com/lbouaraba/comfyui-krea2edit) | KREA2 General Edit and Identity conditioning |
+| [LucianoCirino](https://github.com/LucianoCirino) (original author), [jags111](https://github.com/jags111) (maintained fork) | [Efficiency Nodes](https://github.com/jags111/efficiency-nodes-comfyui), [original project](https://github.com/LucianoCirino/efficiency-nodes-comfyui) | Efficient sampling used by the MOSS workflow |
+| [scraed](https://github.com/scraed) and the LanPaint authors Candi Zheng, Yuan Lan and Yang Wang | [LanPaint](https://github.com/scraed/LanPaint) | Training-free inpainting used by the LanPaint head-swap mode |
+| [Ziteng Zhang (`Jasonzzt`)](https://github.com/Jasonzzt) | [ComfyUI-CacheDiT](https://github.com/Jasonzzt/ComfyUI-CacheDiT) | Optional model acceleration and LTX optimization |
+| [AI Lab (`1038lab`)](https://github.com/1038lab) | [ComfyUI-RMBG](https://github.com/1038lab/ComfyUI-RMBG) | Reference-image background removal |
+| [LBH-123-AI](https://github.com/LBH-123-AI) (original nodes/network/checkpoints), [xmarre](https://github.com/xmarre) (Plus fork) | [MiniMax H3 Latent Upscaler](https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler), [Upscaler-Plus](https://github.com/xmarre/Comfyui_Minimax_h3_latent_Upscaler-Plus) | H3 latent-upscaling tooling for optional second-pass workflows |
+| [bbaudio-2025](https://github.com/bbaudio-2025) | [Comfyui-MMH3-UltimateUpscale](https://github.com/bbaudio-2025/Comfyui-MMH3-UltimateUpscale) | Optional H3 second-pass upscaling on VRAM-limited GPUs |
+| [Dr.Lt.Data (`ltdrdata`)](https://github.com/ltdrdata) | [ComfyUI Impact Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack), [Impact Subpack](https://github.com/ltdrdata/ComfyUI-Impact-Subpack) | Face detailing and detector integration |
+| [yolain](https://github.com/yolain) | [ComfyUI-Easy-Use](https://github.com/yolain/ComfyUI-Easy-Use) | GPU/cache cleanup and workflow utilities |
+| [Fannovel16](https://github.com/Fannovel16) | [ComfyUI ControlNet Aux](https://github.com/Fannovel16/comfyui_controlnet_aux) | Optional pose/structure preprocessing |
+| [BadCafeCode](https://github.com/BadCafeCode) | [Masquerade Nodes](https://github.com/BadCafeCode/masquerade-nodes-comfyui) | Mask-based donor extraction in Swap Anything |
+| [Rvage (`r-vage`)](https://github.com/r-vage) | [ComfyUI-RvTools v2](https://github.com/r-vage/ComfyUI-RvTools_v2) | RGB normalization in Swap Anything |
+| [diodiogod](https://github.com/diodiogod) | [TTS Audio Suite](https://github.com/diodiogod/TTS-Audio-Suite) | Multilingual speech synthesis |
+| [Shmuel Ronen](https://github.com/ShmuelRonen) | [ComfyUI_ChatterBox_Voice](https://github.com/ShmuelRonen/ComfyUI_ChatterBox_Voice) | ChatterBox voice-cloning integration |
+| [ControlAltAI (`gseth`)](https://github.com/gseth) | [ControlAltAI Nodes](https://github.com/gseth/ControlAltAI-Nodes) | Resolution utilities |
+| [VRGameDevGirl (`vrgamegirl19`)](https://github.com/vrgamegirl19) | [VRGameDevGirl Custom Nodes](https://github.com/vrgamegirl19/comfyui-vrgamedevgirl) | Optional film grain in WAN video workflows |
+| [Shammi G (`ShammiG`)](https://github.com/ShammiG) | [Simple Readable Metadata-SG](https://github.com/ShammiG/ComfyUI-Simple_Readable_Metadata-SG) | Source-image metadata handling |
+| [Girish Gopaul (`giriss`)](https://github.com/giriss) | [comfy-image-saver](https://github.com/giriss/comfy-image-saver) | String Literal utility used by a voice workflow |
+| [peterkickasspeter-civit](https://github.com/peterkickasspeter-civit) | [ZImageTurboProgressiveLockedUpscale](https://github.com/peterkickasspeter-civit/ComfyUI-ZImageTurboProgressiveLockedUpscale) | Z-Image creative upscaling |
+
+Thank you as well to every contributor to these projects and to the researchers behind the models they support. These credits are not an exhaustive dependency or model attribution list; see the [workflow dependency inventory](COMFYUI_REQUIRED_NODES.txt) and each upstream project for its own contributors, model credits, installation instructions and license terms. Third-party nodes and models remain separate installations, and these acknowledgements do not imply endorsement of Lawiz.
+
+Feature starting points also include **[Ammaar Reshi's Past Forward](https://github.com/ammaarreshi/past-forward-ai-studio)** and **zGenMedia's [Portrait Generator v2.0](https://github.com/zGenMedia/zGenMedia-Portrait-Generator-v2.0) and [Group Photo Fusion](https://github.com/zGenMedia/zGenMedia-Group-Photo-Fusion)**. Thank you to their creators. Attribution is not permission: authorization for the zGenMedia-derived portions remains [pending](LICENSING.md#zgenmedia-permission-pending).
+
+## License
+
+Copyright (C) 2026 Lawiz. Original contributions for which Lawiz holds licensing rights are licensed under the **GNU General Public License v3.0 only** (`GPL-3.0-only`), without warranty. See [LICENSE](LICENSE) for the license text and [LICENSING.md](LICENSING.md) for its scope, third-party notices and unresolved permissions.
+
+**The current application is not yet cleared for redistribution as a complete GPLv3 release.** Permission for code derived from zGenMedia's projects is being requested in [zGenMedia/zGenMedia-Group-Photo-Fusion#1](https://github.com/zGenMedia/zGenMedia-Group-Photo-Fusion/issues/1). Adding the GPL text does not relicense that material or replace third-party obligations.
+
 ## Important notes
 
 - Selected cloud providers receive the media/prompts sent to them and may charge for usage. Configure your own credentials; never commit API keys.
 - Local workflows need compatible models, custom nodes and sufficient GPU memory. The app does not install them automatically.
 - The local Library is not a backup: use [archives, Library Folder projects or Drive](docs/features/library.md).
-- No license file is currently included; reuse and redistribution rights are not granted unless a license is added.
