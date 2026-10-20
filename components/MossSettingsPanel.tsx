@@ -107,7 +107,7 @@ export const MossSettingsPanel: React.FC<{
             <button type="button" disabled={disabled} onClick={() => update({ loras: [...settings.loras, { name: '', enabled: false, strength: 1 }] })} className="text-sm text-accent disabled:opacity-50">Add LoRA</button>
         </>}
         {section === 'sampler' && <>
-            {number('Steps', 'steps', 1, 30, 1)}{number('CFG', 'cfg', 0, 5, 0.1)}
+            {number('Steps', 'steps', 1, 50, 1)}{number('CFG', 'cfg', 0, 5, 0.1)}
             {select('Sampler', 'sampler', 'KSampler (Efficient)', 'sampler_name')}
             {select('Scheduler', 'scheduler', 'KSampler (Efficient)', 'scheduler')}
             {settings.refineImage ? number('Refine denoise', 'refineDenoise', 0, 1, 0.01) : number('Denoise', 'denoise', 0, 1, 0.01)}

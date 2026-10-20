@@ -123,7 +123,7 @@ declare global {
       reclassifyLocalModel: (request: {
         modelPath: string;
         kind: 'lora' | 'checkpoint' | 'diffusion';
-        folder: '.' | 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'flux2' | 'krea' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
+        folder: import('./services/civitaiService').CivitaiModelFolder;
       }) => Promise<import('./services/civitaiService').CivitaiInventoryItem>;
       fetchLocalModelUsageMetadata: (request: {
         modelPath: string;
@@ -158,7 +158,7 @@ declare global {
         url: string;
         fileName: string;
         destination: 'checkpoint' | 'diffusion' | 'lora';
-        modelFolder: '.' | 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'flux2' | 'krea' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
+        modelFolder: import('./services/civitaiService').CivitaiModelFolder;
         modelId: number;
         modelVersionId: number;
         versionName: string;

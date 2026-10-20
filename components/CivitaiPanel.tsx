@@ -301,7 +301,10 @@ export const CivitaiPanel: React.FC = React.memo(() => {
         try {
             setInventory(await window.electron.scanCivitaiLibrary({ provider: 'regular', ...options }));
         } catch (scanError) {
-            setError(scanError instanceof Error ? scanError.message : 'Local model scan failed.');
+            const message = scanError instanceof Error ? scanError.message : 'Local model scan failed.';
+            setError(message.includes('Unknown model scan family')
+                ? `${message} Fully quit and restart the Electron desktop app to load the updated model categories. Refreshing this page is not enough.`
+                : message);
         } finally {
             setIsScanning(false);
         }
@@ -516,7 +519,7 @@ export const CivitaiPanel: React.FC = React.memo(() => {
                 <div>
                     <p className={`text-xs font-bold uppercase tracking-widest ${provider === 'red' ? 'text-red-400' : 'text-blue-400'}`}>Model depot</p>
                     <h1 className="text-3xl font-bold text-text-primary mt-1">Models/LoRAs</h1>
-                    <p className="text-sm text-text-secondary mt-2">Checkpoints and LoRAs for SD 1.5, SDXL, FLUX, FLUX2, KREA2, Qwen, Qwen Edit, ZIT, and LTX 2.3.</p>
+                    <p className="text-sm text-text-secondary mt-2">Checkpoints and LoRAs for SD 1.5, SDXL, FLUX, FLUX2, KREA2, Qwen, Qwen Edit, Qwen 2.1, MOSS, MiniMax H3, ZIT, and LTX 2.3.</p>
                 </div>
                 <div className="inline-flex self-start bg-bg-tertiary border border-border-primary rounded-lg p-1" aria-label="Civitai service">
                     <button onClick={() => { setProvider('regular'); setModels([]); setNextCursor(undefined); }} className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${provider === 'regular' ? 'bg-blue-600 text-white' : 'text-text-secondary hover:text-blue-400'}`}>Blue · SFW</button>

@@ -21,7 +21,11 @@ const FAMILY_OPTIONS = [
     { value: 'Flux.2 Klein 9B-base', label: 'FLUX.2 Klein 9B Base' },
     { value: 'Qwen', label: 'Qwen' },
     { value: 'Qwen 2', label: 'Qwen 2' },
+    { value: 'Qwen 2.1', label: 'Qwen 2.1' },
     { value: 'Qwen 3', label: 'Qwen 3' },
+    { value: 'MOSS Image', label: 'MOSS Image' },
+    { value: 'MOSS Image Base', label: 'MOSS Image Base' },
+    { value: 'MiniMax H3', label: 'MiniMax H3' },
     { value: 'ZImageBase', label: 'Z-Image Base' },
     { value: 'ZImageTurbo', label: 'Z-Image Turbo' },
     { value: 'LTXV 2.3', label: 'LTX Video 2.3' },
@@ -109,6 +113,9 @@ type ArchiveDownloadState = { id: string; fileName: string; receivedBytes: numbe
 
 const inferArchiveFamily = (baseModel: string, name: string): ArchiveFamily => {
     const identity = `${baseModel} ${name}`.toLowerCase();
+    if (/qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(identity)) return 'qwen21';
+    if (/\bmoss(?:image|\b|_)/.test(identity)) return 'moss';
+    if (/mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(identity)) return 'minimax-h3';
     if (/flux[- ._]?2|klein/.test(identity)) return 'flux2';
     if (/krea[- ._]?2/.test(identity)) return 'krea2';
     if (/qwen.*edit|edit.*qwen/.test(identity)) return 'qwen-edit';
@@ -123,7 +130,7 @@ const inferArchiveFamily = (baseModel: string, name: string): ArchiveFamily => {
 
 const getArchiveDestination = (modelType: string, family: ArchiveFamily): CivitaiDestination => {
     if (/lora|locon|dora/i.test(modelType)) return 'lora';
-    return ['flux', 'flux2', 'krea2', 'qwen', 'qwen-edit', 'zit-base', 'zit-turbo', 'ltx-23'].includes(family) ? 'diffusion' : 'checkpoint';
+    return ['flux', 'flux2', 'krea2', 'qwen', 'qwen-edit', 'qwen21', 'moss', 'minimax-h3', 'zit-base', 'zit-turbo', 'ltx-23'].includes(family) ? 'diffusion' : 'checkpoint';
 };
 
 const getArchiveFolder = (family: ArchiveFamily, destination: CivitaiDestination, identity: string): CivitaiModelFolder => {
@@ -133,6 +140,9 @@ const getArchiveFolder = (family: ArchiveFamily, destination: CivitaiDestination
     if (family === 'flux2') return 'flux2';
     if (family === 'krea2') return 'krea';
     if (family === 'qwen' || family === 'qwen-edit') return 'QWEN';
+    if (family === 'qwen21') return 'qwen21';
+    if (family === 'moss') return 'moss';
+    if (family === 'minimax-h3') return 'H3';
     if (family === 'zit-base' || family === 'zit-turbo') return 'ZIT';
     return /camera[ _-]*control|control[ _-]*camera/i.test(identity) ? 'LTX2_camera_control' : 'LTX2';
 };

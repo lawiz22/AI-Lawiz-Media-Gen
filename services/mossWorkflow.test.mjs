@@ -13,6 +13,21 @@ const seed = 1103816017183395;
 const prompt = 'A mid-century living room on Kodachrome film';
 const settings = () => defaultMossSettings();
 const graph = () => buildMossWorkflow(settings(), prompt, seed);
+test('MOSS Steps control supports 1-50 and sends 50 steps unchanged to the sampler', () => {
+    const source = readFileSync(new URL('../components/MossSettingsPanel.tsx', import.meta.url), 'utf8');
+    const tree = ts.createSourceFile('MossSettingsPanel.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    let control;
+    const visit = node => {
+        if (ts.isCallExpression(node) && node.expression.getText(tree) === 'number'
+            && node.arguments[0]?.getText(tree) === "'Steps'") control = node;
+        ts.forEachChild(node, visit);
+    };
+    visit(tree);
+    assert.ok(control);
+    assert.deepEqual(control.arguments.slice(1).map(argument => argument.getText(tree)), ["'steps'", '1', '50', '1']);
+    assert.equal(buildMossWorkflow({ ...settings(), steps: 50 }, prompt, seed)['18'].inputs.steps, 50);
+    assert.equal(settings().steps, 10);
+});
 const objectInfo = workflow => {
     const info = {};
     for (const node of Object.values(workflow)) {

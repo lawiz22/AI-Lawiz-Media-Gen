@@ -23,7 +23,8 @@ import { MossSettingsPanel } from './MossSettingsPanel';
 import { Krea2EditSettingsPanel } from './Krea2EditSettingsPanel';
 import { LibraryPromptButton } from './LibraryPromptButton';
 import { getImagePromptOnlyUpdate } from '../utils/promptDestination';
-import { defaultQwen21MultiOptions, defaultQwen21EditOptions, getQwen21Choices, QWEN21_MULTI_SIZES } from '../services/qwen21Workflow';
+import { defaultQwen21MultiOptions, defaultQwen21EditOptions, defaultQwen21Settings, getQwen21Choices, QWEN21_MULTI_SIZES } from '../services/qwen21Workflow';
+import { defaultMossSettings } from '../services/mossWorkflow';
 import { dataUrlToFile, fileToDataUrl, dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 import { SelectInput, TextInput, NumberSlider, CheckboxSlider, PresetTextInput } from './InputComponents';
 import {
@@ -94,6 +95,14 @@ type PromptExampleSource = NonNullable<GenerationOptions['comfyPromptExampleSour
 type AvailablePromptExampleSource = PromptExampleSource & { hasLocalPrompts: boolean };
 
 const getSelectedLoraNames = (options: GenerationOptions): string[] => {
+    if (options.comfyModelType === 'moss-image') {
+        return (options.comfyMoss || defaultMossSettings()).loras.filter(lora => lora.enabled && lora.name).map(lora => lora.name);
+    }
+    if (options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo') {
+        const mode = options.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
+        const settings = (mode === 'turbo' ? options.comfyQwen21Turbo : options.comfyQwen21T2i) || defaultQwen21Settings(mode);
+        return settings.loras.filter(lora => lora.enabled && lora.name).map(lora => lora.name);
+    }
     const config = options.comfyModelType === 'sd1.5' ? ['comfySd15', 4]
         : options.comfyModelType === 'sdxl' ? ['comfySdxl', 4]
             : options.comfyModelType === 'flux' ? ['comfyFlux', 4]
@@ -374,7 +383,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         };
         void loadSources();
         return () => { active = false; };
-    }, [options.comfyPromptExampleSource?.modelPath, selectedLoraKey]);
+    }, [options.comfyPromptExampleSource, selectedLoraKey]);
 
     const openPromptExamples = async (source: AvailablePromptExampleSource) => {
         if (!window.electron) return;
@@ -428,6 +437,19 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             updateOptions({
                 comfyFlux2Prompt: prompt,
                 comfyFlux2NegativePrompt: safeNegativePrompt,
+            });
+        } else if (options.comfyModelType === 'moss-image') {
+            updateOptions({
+                ...getImagePromptOnlyUpdate(prompt, options, generationMode),
+                comfyMoss: { ...(options.comfyMoss || defaultMossSettings()), negativePrompt: safeNegativePrompt },
+            });
+        } else if (options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo') {
+            const mode = options.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
+            const key = mode === 'turbo' ? 'comfyQwen21Turbo' : 'comfyQwen21T2i';
+            const updates = getImagePromptOnlyUpdate(prompt, options, generationMode);
+            updateOptions({
+                ...updates,
+                [key]: { ...(updates[key] || defaultQwen21Settings(mode)), negativePrompt: safeNegativePrompt },
             });
         } else {
             updateOptions({
@@ -1441,6 +1463,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         </>;
     };
 
+    const renderPromptExampleButtons = () => promptExampleSources.length > 0 && <div className="space-y-2">{promptExampleSources.map(source => <button key={source.modelPath} type="button" onClick={() => openPromptExamples(source)} disabled={isDisabled || promptExamplesLoading} className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">{promptExamplesLoading && activePromptExampleSource?.modelPath === source.modelPath && <SpinnerIcon className="w-4 h-4 animate-spin" />}{source.hasLocalPrompts ? 'Local prompts' : 'Find prompt examples'} · {source.modelName}</button>)}</div>;
+
     const renderComfyUIOptions = () => {
         if (activeTab === 'character-generator') return renderCharacterOptions();
         const modelType = options.comfyModelType || 'sdxl';
@@ -1450,10 +1474,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 onSecondChange={setElementImages ? file => setElementImages(file ? [file] : []) : undefined} />;
         }
         if (modelType === 'moss-image') {
-            return <MossSettingsPanel options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} sourceFile={sourceImage} onSourceFileChange={onSourceImageChange} onOpenSourceLibrary={onOpenSourceLibrary} />;
+            return <>{renderPromptExampleButtons()}<MossSettingsPanel options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} sourceFile={sourceImage} onSourceFileChange={onSourceImageChange} onOpenSourceLibrary={onOpenSourceLibrary} /></>;
         }
         if (modelType === 'qwen21-t2i' || modelType === 'qwen21-turbo') {
-            return <Qwen21SettingsPanel options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} />;
+            return <>{renderPromptExampleButtons()}<Qwen21SettingsPanel options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} /></>;
         }
         return (
             <>
@@ -1678,7 +1702,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         </div>
                     )}
 
-                    {promptExampleSources.length > 0 && <div className="space-y-2">{promptExampleSources.map(source => <button key={source.modelPath} type="button" onClick={() => openPromptExamples(source)} disabled={isDisabled || promptExamplesLoading} className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">{promptExamplesLoading && activePromptExampleSource?.modelPath === source.modelPath && <SpinnerIcon className="w-4 h-4 animate-spin" />}{source.hasLocalPrompts ? 'Local prompts' : 'Find prompt examples'} · {source.modelName}</button>)}</div>}
+                    {renderPromptExampleButtons()}
                     <TextInput label={modelType === 'flux2-edit' ? 'Additional Editing Instructions' : 'Positive Prompt'} value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaPrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2Prompt || '') : modelType === 'flux2-edit' ? (options.comfyFlux2EditPrompt || '') : (options.comfyPrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaPrompt' : modelType === 'flux2-simple' ? 'comfyFlux2Prompt' : modelType === 'flux2-edit' ? 'comfyFlux2EditPrompt' : 'comfyPrompt')} disabled={isDisabled} isTextArea />
                     {modelType !== 'nunchaku-kontext-flux' && modelType !== 'nunchaku-flux-image' && modelType !== 'flux-krea' && modelType !== 'flux2-edit' && (
                         <TextInput label="Negative Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaNegativePrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2NegativePrompt || '') : (options.comfyNegativePrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaNegativePrompt' : modelType === 'flux2-simple' ? 'comfyFlux2NegativePrompt' : 'comfyNegativePrompt')} disabled={isDisabled} isTextArea />

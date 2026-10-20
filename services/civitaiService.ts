@@ -2,9 +2,9 @@ import type { ComfyModelType, GenerationOptions } from '../types';
 
 export type CivitaiProvider = 'regular' | 'red';
 export type CivitaiModelType = 'Checkpoint' | 'LORA';
-export type CivitaiFamily = 'all' | 'sd15' | 'sdxl' | 'flux' | 'flux2' | 'krea2' | 'qwen' | 'qwen-edit' | 'zit-base' | 'zit-turbo' | 'ltx-23';
+export type CivitaiFamily = 'all' | 'sd15' | 'sdxl' | 'flux' | 'flux2' | 'krea2' | 'qwen' | 'qwen-edit' | 'qwen21' | 'moss' | 'minimax-h3' | 'zit-base' | 'zit-turbo' | 'ltx-23';
 export type CivitaiDestination = 'checkpoint' | 'diffusion' | 'lora';
-export type CivitaiModelFolder = '.' | 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'flux2' | 'krea' | 'QWEN' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
+export type CivitaiModelFolder = '.' | 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'flux2' | 'krea' | 'QWEN' | 'qwen21' | 'moss' | 'H3' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
 export type CivitaiSort = 'Highest Rated' | 'Most Downloaded' | 'Most Liked' | 'Newest' | 'Most Images';
 
 export interface CivitaiFile {
@@ -189,6 +189,13 @@ const normalizeModelPath = (value: string) => value.replace(/\\/g, '/').replace(
 
 export const getComfyRelativePath = (item: CivitaiInventoryItem) => item.relativePath.replace(/^[^\\/]+[\\/]/, '');
 
+export const selectInventoryLora = <T extends { name: string; enabled: boolean }>(loras: T[], modelPath: string): T[] => {
+    const existing = loras.findIndex(lora => normalizeModelPath(lora.name) === normalizeModelPath(modelPath));
+    const index = existing >= 0 ? existing : loras.findIndex(lora => !lora.enabled);
+    if (index < 0) throw new Error('All LoRA slots are enabled. Disable a slot in the matching workflow before using another LoRA.');
+    return loras.map((lora, position) => position === index ? { ...lora, name: modelPath, enabled: true } : lora);
+};
+
 export const findInventoryModel = (inventory: CivitaiInventory, modelPath: string): CivitaiInventoryItem | undefined => {
     const normalizedModelPath = normalizeModelPath(modelPath);
     return inventory.items.find(item => normalizeModelPath(getComfyRelativePath(item)) === normalizedModelPath)
@@ -200,7 +207,7 @@ const PROVIDER_ORIGINS: Record<CivitaiProvider, string> = {
     red: 'https://civitai.red',
 };
 
-export const CIVITAI_FAMILIES: Array<{ id: CivitaiFamily; label: string; query: string; baseModel?: string }> = [
+export const CIVITAI_FAMILIES: Array<{ id: CivitaiFamily; label: string; query: string; baseModel?: string; baseModels?: string[] }> = [
     { id: 'all', label: 'All families', query: '' },
     { id: 'sd15', label: 'SD 1.5', query: '', baseModel: 'SD 1.5' },
     { id: 'sdxl', label: 'SDXL', query: '', baseModel: 'SDXL 1.0' },
@@ -209,6 +216,9 @@ export const CIVITAI_FAMILIES: Array<{ id: CivitaiFamily; label: string; query: 
     { id: 'krea2', label: 'KREA2', query: 'Krea 2' },
     { id: 'qwen', label: 'Qwen', query: 'Qwen Image' },
     { id: 'qwen-edit', label: 'Qwen Edit', query: 'Qwen Image Edit' },
+    { id: 'qwen21', label: 'Qwen 2.1', query: '', baseModel: 'Qwen 2.1' },
+    { id: 'moss', label: 'MOSS', query: '', baseModels: ['MOSS Image', 'MOSS Image Base'] },
+    { id: 'minimax-h3', label: 'MiniMax H3', query: '', baseModel: 'MiniMax H3' },
     { id: 'zit-base', label: 'ZIT Base', query: 'Z-Image Base' },
     { id: 'zit-turbo', label: 'ZIT Turbo', query: 'Z-Image Turbo' },
     { id: 'ltx-23', label: 'LTX 2.3', query: 'LTX 2.3' },
@@ -231,7 +241,7 @@ export const getCivitaiModelUrl = (provider: CivitaiProvider, modelId: number) =
 export const getDefaultDestination = (model: CivitaiModel, version: CivitaiModelVersion | undefined, family: CivitaiFamily): CivitaiDestination => {
     if (model.type.toUpperCase() === 'LORA') return 'lora';
     const modelFolder = getCivitaiModelFolder(model, version, family);
-    if (modelFolder === 'Flux' || modelFolder === 'flux2' || modelFolder === 'krea' || modelFolder === 'QWEN' || modelFolder === 'ZIT' || modelFolder === 'LTX2' || modelFolder === 'LTX2_camera_control') {
+    if (modelFolder === 'Flux' || modelFolder === 'flux2' || modelFolder === 'krea' || modelFolder === 'QWEN' || modelFolder === 'qwen21' || modelFolder === 'moss' || modelFolder === 'H3' || modelFolder === 'ZIT' || modelFolder === 'LTX2' || modelFolder === 'LTX2_camera_control') {
         return 'diffusion';
     }
     return 'checkpoint';
@@ -239,6 +249,9 @@ export const getDefaultDestination = (model: CivitaiModel, version: CivitaiModel
 
 export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModelVersion | undefined, family: CivitaiFamily): CivitaiModelFolder => {
     const versionIdentity = `${version?.baseModel || ''} ${version?.baseModelType || ''} ${version?.name || ''}`.toLowerCase();
+    if (/qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(versionIdentity)) return 'qwen21';
+    if (/\bmoss(?:image|\b|_)/.test(versionIdentity)) return 'moss';
+    if (/mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(versionIdentity)) return 'H3';
     if (/flux[- ._]?2|klein/.test(versionIdentity)) return 'flux2';
     if (/krea[- ._]?2/.test(versionIdentity)) return 'krea';
     if (/qwen/.test(versionIdentity)) return 'QWEN';
@@ -248,6 +261,9 @@ export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModel
     if (/\bflux/.test(versionIdentity)) return 'Flux';
     if (/sdxl|pony|illustrious|noobai/.test(versionIdentity)) return 'SDXL';
     const fallbackIdentity = `${family === 'all' ? '' : family} ${model.name}`.toLowerCase();
+    if (/qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(fallbackIdentity)) return 'qwen21';
+    if (/\bmoss(?:image|\b|_)/.test(fallbackIdentity)) return 'moss';
+    if (/mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(fallbackIdentity)) return 'H3';
     if (/flux[- ._]?2|klein/.test(fallbackIdentity)) return 'flux2';
     if (/krea[- ._]?2/.test(fallbackIdentity)) return 'krea';
     if (/qwen/.test(fallbackIdentity)) return 'QWEN';
@@ -297,6 +313,7 @@ export async function searchCivitaiModels(options: {
     const params = new URLSearchParams({ limit: '24', sort: options.sort, period: 'AllTime' });
     if (searchText) params.set('query', searchText);
     if (family.baseModel) params.append('baseModels', family.baseModel);
+    for (const baseModel of family.baseModels || []) params.append('baseModels', baseModel);
     if (options.modelType !== 'all') params.append('types', options.modelType);
     if (options.cursor) params.set('cursor', options.cursor);
 

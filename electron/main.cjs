@@ -31,19 +31,22 @@ const MODEL_SCAN_DIRECTORIES = [
     { kind: 'diffusion', directory: 'unet' },
     { kind: 'lora', directory: 'loras' },
 ];
-const MODEL_FOLDERS = new Set(['.', 'sd15', 'SD1.5', 'SDXL', 'Flux', 'FLUX', 'flux-dev', 'flux2', 'krea', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control']);
-const MODEL_FAMILIES = new Set(['sd15', 'sdxl', 'flux', 'flux2', 'krea2', 'qwen', 'qwen-edit', 'zit-base', 'zit-turbo', 'ltx-23']);
+const MODEL_FOLDERS = new Set(['.', 'sd15', 'SD1.5', 'SDXL', 'Flux', 'FLUX', 'flux-dev', 'flux2', 'krea', 'QWEN', 'qwen21', 'moss', 'H3', 'ZIT', 'LTX2', 'LTX2_camera_control']);
+const MODEL_FAMILIES = new Set(['sd15', 'sdxl', 'flux', 'flux2', 'krea2', 'qwen', 'qwen-edit', 'qwen21', 'moss', 'minimax-h3', 'zit-base', 'zit-turbo', 'ltx-23']);
 const LOCAL_MODEL_EXTENSIONS = new Set(['.safetensors', '.ckpt', '.pt', '.pth', '.bin', '.gguf']);
 const SCAN_FAMILY_FOLDERS = {
     lora: {
+        qwen21: ['qwen21', 'QWEN'], moss: ['moss'], 'minimax-h3': ['H3'],
         sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], flux2: ['flux2'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2', 'LTX2_camera_control'],
     },
     checkpoint: {
+        qwen21: ['qwen21', 'QWEN'], moss: ['moss'], 'minimax-h3': ['H3'],
         sd15: ['SD1.5'], sdxl: ['SDXL'], flux: ['FLUX', 'flux-dev'], flux2: ['flux2'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2'],
     },
     diffusion: {
+        qwen21: ['qwen21', 'QWEN'], moss: ['moss'], 'minimax-h3': ['H3'],
         sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], flux2: ['flux2'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2', 'LTX2_camera_control'],
     },
@@ -55,8 +58,11 @@ function inventoryItemMatchesSelection(item, kind, family) {
     if (item.userFamily) return item.userFamily === family;
     const familyFolders = SCAN_FAMILY_FOLDERS[item.kind]?.[family] || [];
     const pathSegments = String(item.relativePath || '').replace(/\\/g, '/').toLowerCase().split('/');
-    if (familyFolders.some(folder => folder !== '.' && pathSegments.includes(folder.toLowerCase()))) return true;
     const identity = [item.fileName, item.modelName, item.installedVersionName, item.archiveInfo?.baseModel].filter(Boolean).join(' ').toLowerCase();
+    if (family === 'qwen21') return pathSegments.includes('qwen21') || /qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(identity);
+    if (familyFolders.some(folder => folder !== '.' && pathSegments.includes(folder.toLowerCase()))) return true;
+    if (family === 'moss') return /\bmoss(?:image|\b|_)/.test(identity);
+    if (family === 'minimax-h3') return /mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(identity);
     if (family === 'flux2') return /flux[- ._]?2|klein/.test(identity);
     if (family === 'krea2') return /krea[- ._]?2/.test(identity);
     return false;
@@ -667,6 +673,9 @@ async function cacheCivitaiPreview(filePath, previewUrl) {
 
 function inferModelFolder(model, version) {
     const identity = `${version?.baseModel || ''} ${version?.name || ''} ${model?.name || ''}`.toLowerCase();
+    if (/qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(identity)) return 'qwen21';
+    if (/\bmoss(?:image|\b|_)/.test(identity)) return 'moss';
+    if (/mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(identity)) return 'H3';
     if (/flux[- ._]?2|klein/.test(identity)) return 'flux2';
     if (/krea[- ._]?2/.test(identity)) return 'krea';
     if (/qwen/.test(identity)) return 'QWEN';

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch } from 'react-redux';
-import { CIVITAI_FAMILIES, CivitaiFamily, CivitaiInventory, CivitaiInventoryItem, CivitaiModelFolder, CivitaiProvider, formatModelSize, getCivitaiModelUrl, getComfyRelativePath, getRecommendedSettingUpdates } from '../services/civitaiService';
+import { CIVITAI_FAMILIES, CivitaiFamily, CivitaiInventory, CivitaiInventoryItem, CivitaiModelFolder, CivitaiProvider, formatModelSize, getCivitaiModelUrl, getComfyRelativePath, getRecommendedSettingUpdates, selectInventoryLora } from '../services/civitaiService';
+import { defaultMossSettings } from '../services/mossWorkflow';
+import { defaultQwen21Settings } from '../services/qwen21Workflow';
 import { queueLtxTransfer, setActiveTab } from '../store/appSlice';
 import { setGenerationMode, updateOptions } from '../store/generationSlice';
 import { store, type AppDispatch } from '../store/store';
@@ -35,9 +37,9 @@ interface Props {
 }
 
 const FOLDERS: Record<LocalKind, CivitaiModelFolder[]> = {
-    lora: ['sd15', 'SDXL', 'Flux', 'flux2', 'krea', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control'],
-    checkpoint: ['SD1.5', 'SDXL', 'FLUX', 'flux-dev', 'flux2', 'krea', 'LTX2'],
-    diffusion: ['sd15', 'SDXL', 'Flux', 'flux2', 'krea', 'QWEN', 'ZIT', 'LTX2', 'LTX2_camera_control'],
+    lora: ['sd15', 'SDXL', 'Flux', 'flux2', 'krea', 'QWEN', 'qwen21', 'moss', 'H3', 'ZIT', 'LTX2', 'LTX2_camera_control'],
+    checkpoint: ['SD1.5', 'SDXL', 'FLUX', 'flux-dev', 'flux2', 'krea', 'qwen21', 'moss', 'H3', 'LTX2'],
+    diffusion: ['sd15', 'SDXL', 'Flux', 'flux2', 'krea', 'QWEN', 'qwen21', 'moss', 'H3', 'ZIT', 'LTX2', 'LTX2_camera_control'],
 };
 
 const getItemFolder = (item: CivitaiInventoryItem): CivitaiModelFolder | '' => {
@@ -129,6 +131,9 @@ const itemMatchesFamily = (item: CivitaiInventoryItem, family: CivitaiFamily) =>
         krea2: ['/krea/'],
         qwen: ['/qwen/'],
         'qwen-edit': ['/qwen/'],
+        qwen21: ['/qwen21/'],
+        moss: ['/moss/'],
+        'minimax-h3': ['/h3/'],
         'zit-base': ['/zit/'],
         'zit-turbo': ['/zit/'],
         'ltx-23': ['/ltx2/', '/ltx2_camera_control/'],
@@ -139,12 +144,18 @@ const itemMatchesFamily = (item: CivitaiInventoryItem, family: CivitaiFamily) =>
     const identity = [item.fileName, item.modelName, item.installedVersionName, item.archiveInfo?.baseModel].filter(Boolean).join(' ').toLowerCase();
     if (family === 'flux2') return /flux[- ._]?2|klein/.test(identity);
     if (family === 'krea2') return /krea[- ._]?2/.test(identity);
+    if (family === 'qwen21') return /qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(identity);
+    if (family === 'moss') return /\bmoss(?:image|\b|_)/.test(identity);
+    if (family === 'minimax-h3') return /mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(identity);
     return false;
 };
 
 const inferItemFamily = (item: CivitaiInventoryItem): ModelFamily => {
     if (item.userFamily) return item.userFamily;
     const identity = [item.relativePath, item.fileName, item.modelName, item.installedVersionName, item.archiveInfo?.baseModel, item.huggingFaceInfo?.repoId, ...(item.huggingFaceInfo?.tags || [])].filter(Boolean).join(' ').replace(/\\/g, '/').toLowerCase();
+    if (/qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(identity)) return 'qwen21';
+    if (/\bmoss(?:image|\b|_)/.test(identity)) return 'moss';
+    if (/mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(identity)) return 'minimax-h3';
     if (/flux[- ._]?2|klein/.test(identity)) return 'flux2';
     if (/krea[- ._]?2/.test(identity)) return 'krea2';
     if (/qwen.*edit|edit.*qwen/.test(identity)) return 'qwen-edit';
@@ -304,14 +315,57 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
 
     const useModel = async () => {
         const modelPath = getComfyRelativePath(item);
-        if (itemMatchesFamily(item, 'ltx-23')) {
-            dispatch(queueLtxTransfer(item.kind === 'lora' ? { selectedLora: modelPath } : { selectedCheckpoint: modelPath }));
+        const family = inferItemFamily(item);
+        if (family === 'minimax-h3') {
+            window.alert('Select this model or LoRA in Video > Minimax H3. H3 video models cannot be applied to an image workflow.');
             return;
         }
         const exampleSources: Array<'civitai' | 'archive'> = [
             'civitai',
             ...(item.archiveMirrorUrl ? ['archive' as const] : []),
         ];
+        const exampleSource = {
+            modelPath: item.path,
+            modelName: item.modelName || item.fileName,
+            provider,
+            sources: exampleSources,
+            triggerWords: item.kind === 'lora' ? item.usageMetadata?.triggerWords || [] : [],
+        };
+        if (family === 'moss' || family === 'qwen21') {
+            try {
+                const current = store.getState().generation.options;
+                const triggers = item.usageMetadata?.triggerWords?.join(', ') || '';
+                if (family === 'moss') {
+                    const settings = current.comfyMoss || defaultMossSettings();
+                    dispatch(updateOptions({
+                        provider: 'comfyui', comfyModelType: 'moss-image',
+                        comfyPromptExampleSource: exampleSource,
+                        comfyMoss: item.kind === 'lora' ? { ...settings, loras: selectInventoryLora(settings.loras, modelPath) } : { ...settings, unet: modelPath },
+                        ...(item.kind === 'lora' && triggers ? { comfyPrompt: triggers } : {}),
+                    }));
+                } else {
+                    const turbo = current.comfyModelType === 'qwen21-turbo';
+                    const field = turbo ? 'comfyQwen21Turbo' : 'comfyQwen21T2i';
+                    const settings = current[field] || defaultQwen21Settings(turbo ? 'turbo' : 't2i');
+                    dispatch(updateOptions({
+                        provider: 'comfyui', comfyModelType: turbo ? 'qwen21-turbo' : 'qwen21-t2i',
+                        comfyPromptExampleSource: exampleSource,
+                        [field]: item.kind === 'lora'
+                            ? { ...settings, loras: selectInventoryLora(settings.loras, modelPath), ...(triggers ? { prompt: triggers } : {}) }
+                            : { ...settings, unet: modelPath },
+                    }));
+                }
+                dispatch(setGenerationMode('t2i'));
+                dispatch(setActiveTab('image-generator'));
+            } catch (cause) {
+                window.alert(cause instanceof Error ? cause.message : String(cause));
+            }
+            return;
+        }
+        if (itemMatchesFamily(item, 'ltx-23')) {
+            dispatch(queueLtxTransfer(item.kind === 'lora' ? { selectedLora: modelPath } : { selectedCheckpoint: modelPath }));
+            return;
+        }
         let selectedItem = item;
         const workflow = getImageWorkflow(item);
         const hasRecommendedSettings = Boolean(item.usageMetadata?.sampler
@@ -345,10 +399,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
             comfyModelType: workflow.modelType,
             ...recommendedSettings,
             comfyPromptExampleSource: exampleSources.length ? {
-                modelPath: item.path,
-                modelName: item.modelName || item.fileName,
-                provider,
-                sources: exampleSources,
+                ...exampleSource,
                 triggerWords: savedTriggers,
             } : undefined,
         };
