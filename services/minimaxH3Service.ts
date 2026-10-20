@@ -1,11 +1,12 @@
 import type { MinimaxDraft } from './videoPromptService';
+import { forceOriginalVideoAudio } from './videoAudioService';
 import {
     buildMinimaxH3Workflow, h3ReferenceControl, isRecord, planH3References, validateMinimaxH3Readiness,
     type H3ObjectInfo, type H3Workflow, type MinimaxH3Options,
 } from './minimaxH3Workflow';
 
 export interface H3Preview { url: string; mime: string; step: number; total: number }
-export interface H3GenerationResult { videoUrl: string; promptId: string; workflow: H3Workflow; prompt: string; promptIsFinal: boolean; seed: number; options: MinimaxH3Options }
+export interface H3GenerationResult { videoUrl: string; videoBlob?: Blob; promptId: string; workflow: H3Workflow; prompt: string; promptIsFinal: boolean; seed: number; options: MinimaxH3Options }
 export const minimaxComfyURL = (): string => {
     const configured = localStorage.getItem('comfyui_url')?.trim();
     if (!configured) throw new Error('Configure your ComfyUI URL in Connection Settings.');
@@ -98,7 +99,7 @@ export const generateMinimaxH3Video = async (
     const resolvedPlan = planH3References(draft, resolvedOptions);
     validateMinimaxH3Readiness(workflow, info);
     signal.throwIfAborted();
-    return new Promise<H3GenerationResult>((resolve, reject) => {
+    const rendered = await new Promise<H3GenerationResult>((resolve, reject) => {
         const clientId = `lawiz-h3-${crypto.randomUUID()}`;
         const wsURL = new URL(`${base}/ws`);
         wsURL.protocol = wsURL.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -149,7 +150,7 @@ export const generateMinimaxH3Video = async (
                         const displayed = isRecord(outputs['186']) && Array.isArray(outputs['186'].text) && outputs['186'].text.every(value => typeof value === 'string')
                             ? outputs['186'].text.join('\n').trim() : '';
                         settled = true; cleanup();
-                        onProgress('H3 video ready.', 1);
+                        onProgress(options.forceOriginalAudio ? 'H3 rendered. Locking the original WAV soundtrack...' : 'H3 video ready.', options.forceOriginalAudio ? 0.9 : 1);
                         resolve({ videoUrl, promptId, workflow, prompt: displayed || resolvedPlan.prompt, promptIsFinal: !!displayed || options.promptProvider === 'none', seed: options.seed, options: resolvedOptions });
                     } else if (status.completed || ending) throw new Error('H3 finished without a video in VHS_VideoCombine output 119. Check the output format and ComfyUI logs.');
                 }
@@ -198,4 +199,15 @@ export const generateMinimaxH3Video = async (
         ws.onerror = () => fail(new Error('ComfyUI WebSocket failed. Check ComfyUI and its queue before retrying.'));
         ws.onclose = () => { if (!settled) fail(new Error('ComfyUI WebSocket closed before completion. Check the server queue; the job may still be running.')); };
     });
+    if (!resolvedOptions.forceOriginalAudio) return rendered;
+    signal.throwIfAborted();
+    const audio = resolvedPlan.references.find(ref => ref.id === resolvedOptions.originalAudioId && ref.kind === 'audio');
+    if (!audio) throw new Error('The locked soundtrack is missing. No generated-audio fallback was used.');
+    const response = await fetch(rendered.videoUrl, { signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
+    if (!response.ok) throw new Error(`Could not download the rendered video for audio locking (${response.status}).`);
+    const video = await response.blob();
+    onProgress('Replacing all server audio with the selected WAV locally (no GPU/video re-encoding)...', 0.94);
+    const videoBlob = await forceOriginalVideoAudio(new File([video], 'h3-render.mp4', { type: 'video/mp4' }), audio.file, resolvedOptions.duration, signal);
+    onProgress('H3 video ready. Original WAV soundtrack locked.', 1);
+    return { ...rendered, videoBlob };
 };

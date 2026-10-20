@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Banner } from './Banner';
 import { SystemMetricsIndicators } from './SystemMetricsIndicators';
+import { ComfyMemoryActions } from './ComfyMemoryActions';
 // import { ThemeSwitcher } from './ThemeSwitcher'; // Removed in favor of VisualSettingsModal
 // FIX: Imported the missing PromptIcon component.
 import { LogoutIcon, WorkflowIcon, SpinnerIcon, GoogleDriveIcon, FolderPlusIcon, PencilIcon, ResetIcon, PromptIcon, QuestionMarkCircleIcon, SwatchIcon, InfoIcon, CloseIcon } from './icons';
@@ -131,7 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
         <SystemMetricsIndicators />
         </div>
-        <div className="flex items-center gap-2 md:gap-4">
+        <div className="ml-auto flex items-center gap-2 md:gap-4">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-medium text-text-primary">Welcome, {currentUser.username}</p>
             {isEditingName ? (
@@ -213,6 +214,8 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
           {/* <ThemeSwitcher currentTheme={theme} setTheme={setTheme} /> */}
+          <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2 md:gap-4" role="group" aria-label="Header actions">
           <button
             onClick={onOpenInstallationDashboard}
             title="What's installed"
@@ -252,6 +255,9 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <LogoutIcon className="w-5 h-5" />
           </button>
+          </div>
+          {isComfyUIConnected === true && <ComfyMemoryActions />}
+          </div>
         </div>
       </div>
     </header>

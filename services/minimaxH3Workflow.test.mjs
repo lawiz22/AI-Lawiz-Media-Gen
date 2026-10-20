@@ -4,7 +4,7 @@ import test from 'node:test';
 import ts from 'typescript';
 
 const source = readFileSync(new URL('./minimaxH3Workflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '');
-const bridge = "const referenceToken = ref => `<${ref.kind === 'image' ? 'Picture' : ref.kind === 'video' ? 'Video' : 'Audio'} ${ref.slot}>`;\n";
+const bridge = readFileSync(new URL('./videoPromptService.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '');
 const { outputText } = ts.transpileModule(bridge + source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
 export const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 export const ref = (kind, slot) => ({
@@ -16,6 +16,108 @@ export const draft = (references = [ref('image', 1)]) => ({
 });
 const build = (options = api.defaultMinimaxH3Options(), input = draft()) =>
     api.buildMinimaxH3Workflow(input, options, Object.fromEntries(input.references.map(ref => [ref.id, ref.file.name])));
+
+test('explicit lock configures native original output without overwriting other settings and never tolerates missing audio', () => {
+    const original = { ...api.defaultMinimaxH3Options(), format: 'image/gif', frameRate: 30, pingpong: true, loopCount: 2 };
+    const locked = api.withH3OriginalAudio(original, 'audio-1', true);
+    assert.equal(locked.forceOriginalAudio, true);
+    assert.equal(locked.format, 'video/h264-mp4');
+    assert.equal(locked.frameRate, 24);
+    assert.equal(locked.pingpong, false);
+    assert.equal(locked.loopCount, 0);
+    assert.equal(locked.formatOptions.trim_to_audio, true);
+    assert.equal(locked.steps, original.steps);
+    assert.equal(original.format, 'image/gif');
+    assert.throws(() => build({ ...locked, originalAudioId: undefined }), /locked/);
+    const unlocked = api.withH3OriginalAudio(locked, undefined, false);
+    assert.deepEqual(build(unlocked)['119'].inputs.audio, ['134', 0]);
+});
+
+test('original track bypasses generated audio and uses the standalone socket, not its soundtrack-offset token', () => {
+    const first = ref('audio', 1);
+    const selected = { ...ref('audio', 3), audioSelection: { start: 4, end: 7 } };
+    const input = { ...draft([ref('video', 1), selected, first]), prompt: 'Follow <Video 1> singing to <Audio 3>.' };
+    const options = { ...api.defaultMinimaxH3Options(), originalAudioId: selected.id, previewAudio: true, conditionAudioVae: false, audioVae: '' };
+    const graph = build(options, input);
+    assert.deepEqual(graph['119'].inputs.audio, ['185', 16], 'Second enabled standalone audio is socket 16, although its compact token is Audio 3.');
+    assert.equal(graph['119'].inputs.trim_to_audio, true);
+    assert.equal(graph['134'], undefined);
+    assert.equal(graph['122'], undefined);
+    assert.equal(graph['141'].inputs.audio_vae, undefined, 'Generated preview sound is also bypassed.');
+    assert.match(graph['185'].inputs.direction, /<Audio 3>/);
+    options.references[first.id] = { enabled: false, useSoundtrack: false };
+    const compact = build(options, input);
+    assert.deepEqual(compact['119'].inputs.audio, ['185', 15]);
+    assert.match(compact['185'].inputs.direction, /<Audio 2>/);
+    assert.equal(input.prompt, 'Follow <Video 1> singing to <Audio 3>.');
+});
+
+test('original track rejects missing/disabled sources, unapplied passages, timing and unsupported output changes', () => {
+    const audio = { ...ref('audio', 1), audioSelection: { start: 4, end: 7 } };
+    const input = { ...draft([audio, ref('image', 1)]), prompt: 'A singer <Picture 1>.' };
+    const options = { ...api.defaultMinimaxH3Options(), originalAudioId: audio.id };
+    for (const originalAudioId of ['', 'missing', 'image-1']) assert.throws(() => build({ ...options, originalAudioId }, input), /audio/i);
+    assert.throws(() => build({ ...options, references: { [audio.id]: { enabled: false, useSoundtrack: false } } }, input), /audio/i);
+    assert.throws(() => build(options, { ...input, references: [{ ...audio, audioSelection: undefined }, ref('image', 1)] }), /Apply an audio passage/);
+    assert.throws(() => build({ ...options, duration: 4 }, input), /duration must match/);
+    for (const audioSelection of [{ start: NaN, end: 3 }, { start: 2, end: 1 }, { start: -1, end: 2 }]) {
+        assert.throws(() => build(options, { ...input, references: [{ ...audio, audioSelection }, ref('image', 1)] }), /boundaries/);
+    }
+    for (const patch of [{ format: 'image/gif' }, { frameRate: 30 }, { pingpong: true }, { loopCount: 1 }]) {
+        assert.throws(() => build({ ...options, ...patch }, input), /H.264 MP4/);
+    }
+    assert.deepEqual(build({ ...options, generateAudio: false }, input)['119'].inputs.audio, ['185', 15]);
+});
+
+test('current reviewed lyrics remap once; advancing a passage blocks reuse until reviewed', () => {
+    const audio = { ...ref('audio', 3), audioSelection: { start: 0, end: 3 } };
+    audio.original = audio.file;
+    audio.lyrics = { enabled: true, text: 'one two three', source: api.audioLyricsSource(audio) };
+    const input = { ...draft([audio]), prompt: 'Singer follows <Audio 3>.' };
+    const options = api.defaultMinimaxH3Options();
+    const graph = build(options, input);
+    assert.match(graph['185'].inputs.direction, /one two three/);
+    assert.ok(!graph['185'].inputs.direction.includes('<Audio 3>'), 'Both scene and appended requirements use the compact token.');
+    audio.audioSelection = { start: 3, end: 6 };
+    assert.throws(() => build(options, input), /previous|stale|passage/i);
+    audio.lyrics = { ...audio.lyrics, source: api.audioLyricsSource(audio) };
+    assert.doesNotThrow(() => build(options, input));
+    audio.lyrics.enabled = false; audio.audioSelection = { start: 6, end: 9 };
+    assert.doesNotThrow(() => build(options, input));
+});
+
+test('original mode covers the full audio before trimming, even just above a native frame-grid boundary', () => {
+    const seconds = 73.2 / 24;
+    assert.equal(api.h3FrameCount(seconds), 73, 'Legacy nearest-frame behavior is preserved.');
+    assert.equal(api.h3FrameCount(seconds, true), 90);
+    const audio = { ...ref('audio', 1), audioSelection: { start: 0, end: seconds } };
+    const options = { ...api.defaultMinimaxH3Options(), duration: seconds, originalAudioId: audio.id };
+    const graph = build(options, { ...draft([audio]), prompt: 'A singer.' });
+    assert.equal(graph['177'].inputs.expression, '90');
+    assert.ok(Number(graph['177'].inputs.expression) / 24 >= seconds);
+    assert.deepEqual(graph['184'].inputs.length, ['177', 1]);
+});
+
+test('last frame replaces only Picture 1, retaining its identity, role and restorable original', () => {
+    const first = ref('image', 1);
+    first.original = first.file; first.note = 'Keep the same singer';
+    const others = [ref('image', 2), ref('audio', 1)];
+    const frame = new File(['frame PNG'], 'last.png', { type: 'image/png' });
+    const replaced = api.replaceH3FirstPicture([first, ...others], frame);
+    assert.equal(replaced[0].id, first.id);
+    assert.equal(replaced[0].note, first.note);
+    assert.equal(replaced[0].file, frame);
+    assert.equal(replaced[0].original, first.original);
+    assert.equal(first.file, first.original, 'The existing draft is not mutated.');
+    assert.equal(replaced[1], others[0]);
+    assert.equal(replaced[2], others[1]);
+    const created = api.replaceH3FirstPicture(others, frame);
+    assert.equal(created.length, 3);
+    assert.equal(created[2].kind, 'image');
+    assert.equal(created[2].slot, 1);
+    assert.equal(created[2].original, frame);
+    assert.throws(() => api.replaceH3FirstPicture(others, new File([], 'empty.png', { type: 'image/png' })), /non-empty PNG/);
+});
 
 test('supplied REF2V settings and wiring are preserved without copied credentials or local example media', () => {
     const options = api.defaultMinimaxH3Options();

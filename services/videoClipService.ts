@@ -32,7 +32,7 @@ export const readVideoClipSource = async (file: File, signal: AbortSignal): Prom
     }
 };
 
-const readVideoDuration = (file: File, signal: AbortSignal): Promise<number> => new Promise((resolve, reject) => {
+export const readVideoDuration = (file: File, signal: AbortSignal): Promise<number> => new Promise((resolve, reject) => {
     const video = document.createElement('video');
     const url = URL.createObjectURL(file);
     const cleanup = () => {
@@ -85,15 +85,11 @@ export const buildSpatialVideoFilter = (edit: NonNullable<VideoClipOptions['spat
     return `crop=iw*${width}/100:ih*${height}/100:iw*${x}/100:ih*${y}/100,scale=${outputWidth}:${outputHeight},setsar=1`;
 };
 
-export const extractVideoClip = async (
-    file: File,
-    options: VideoClipOptions,
+export const withVideoEncoder = async <T>(
     signal: AbortSignal,
-    onProgress: (progress: number) => void,
-): Promise<{ file: File; duration: number }> => {
-    const args = buildVideoClipArgs(options);
-    if (options.spatialEdit) args[args.indexOf('-vf') + 1] = buildSpatialVideoFilter(options.spatialEdit);
-    await readVideoClipSource(file, signal);
+    task: (ffmpeg: FFmpeg, logs: () => string) => Promise<T>,
+): Promise<T> => {
+    signal.throwIfAborted();
     const ffmpeg = new FFmpeg();
     const assetURLs: string[] = [];
     const logs: string[] = [];
@@ -105,7 +101,6 @@ export const extractVideoClip = async (
         logs.push(message);
         if (logs.length > 15) logs.shift();
     });
-    ffmpeg.on('progress', ({ time }) => onProgress(Math.min(99, Math.max(0, time / 1_000_000 / (options.end - options.start) * 100))));
     const loadAsset = async (url: string, type: string) => {
         try {
             const response = await fetch(url, { signal });
@@ -130,12 +125,32 @@ export const extractVideoClip = async (
         ]);
         clearTimeout(loadTimer);
         signal.throwIfAborted();
+        return await task(ffmpeg, () => logs.join('\n'));
+    } finally {
+        clearTimeout(loadTimer);
+        signal.removeEventListener('abort', abort);
+        ffmpeg.terminate();
+        assetURLs.forEach(url => URL.revokeObjectURL(url));
+    }
+};
+
+export const extractVideoClip = async (
+    file: File,
+    options: VideoClipOptions,
+    signal: AbortSignal,
+    onProgress: (progress: number) => void,
+): Promise<{ file: File; duration: number }> => {
+    const args = buildVideoClipArgs(options);
+    if (options.spatialEdit) args[args.indexOf('-vf') + 1] = buildSpatialVideoFilter(options.spatialEdit);
+    await readVideoClipSource(file, signal);
+    return withVideoEncoder(signal, async (ffmpeg, logs) => {
+        ffmpeg.on('progress', ({ time }) => onProgress(Math.min(99, Math.max(0, time / 1_000_000 / (options.end - options.start) * 100))));
         await ffmpeg.createDir('/source');
         const mounted = await ffmpeg.mount(FFFSType.WORKERFS, { blobs: [{ name: 'input', data: file }] }, '/source');
         if (!mounted) throw new Error('Could not mount the video source for read-only, chunked access.');
         signal.throwIfAborted();
         const exitCode = await ffmpeg.exec(args);
-        if (exitCode !== 0) throw new Error(`MP4 extraction failed (code ${exitCode}). ${logs.join('\n')}`);
+        if (exitCode !== 0) throw new Error(`MP4 extraction failed (code ${exitCode}). ${logs()}`);
         const output = await ffmpeg.readFile('clip.mp4');
         if (typeof output === 'string' || output.byteLength === 0) throw new Error('The video encoder returned an empty MP4.');
         const outputFile = new File([new Uint8Array(output)], 'clip.mp4', { type: 'video/mp4' });
@@ -143,10 +158,5 @@ export const extractVideoClip = async (
         signal.throwIfAborted();
         onProgress(100);
         return { file: outputFile, duration: clipDuration };
-    } finally {
-        clearTimeout(loadTimer);
-        signal.removeEventListener('abort', abort);
-        ffmpeg.terminate();
-        assetURLs.forEach(url => URL.revokeObjectURL(url));
-    }
+    });
 };

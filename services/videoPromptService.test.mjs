@@ -24,6 +24,64 @@ const draft = (patch = {}) => ({
 const generated = 'integrated_multimodal_description: [Shot 1] A scene.\noverall_soundscape: Footsteps.\nnon_diegetic_music: None.';
 const replacement = 'subject_definitions: <Subject 1> from <Picture 1>.\nsummary: A replacement.\nretention_analysis: Motion preserved.\ndetailed_description: [Shot 1] Walk.\noverall_soundscape: Footsteps.\nnon_diegetic_music: None.';
 
+test('transcription sends only the applied excerpt, respects provider/model and rejects malformed answers', async () => {
+    const audio = ref('audio');
+    audio.file = new File(['selected passage'], 'passage.wav', { type: 'audio/wav' });
+    audio.audioSelection = { start: 4, end: 7 };
+    api.setResponse('{"text":"one two three"}');
+    try {
+        for (const provider of ['gemini', 'openrouter']) {
+            const start = api.calls.length;
+            const lyrics = await api.transcribeAudioLyrics(audio, provider, 'audio-model');
+            assert.deepEqual(lyrics, { enabled: true, text: 'one two three', source: api.audioLyricsSource(audio) });
+            const call = api.calls[start];
+            assert.equal(call[0], provider);
+            assert.deepEqual(call[2], [audio.file]);
+            assert.ok(!call[2].includes(audio.original));
+            assert.equal(call.at(-1), 'audio-model');
+            assert.match(call[1], /Never complete a song/);
+        }
+        const start = api.calls.length;
+        for (const [input, provider, model] of [[ref('image'), 'gemini', 'model'], [audio, 'mammouth', 'model'], [audio, 'gemini', ' '],
+            [{ ...audio, file: new File([], 'empty.wav', { type: 'audio/wav' }) }, 'gemini', 'model'],
+            [{ ...audio, file: new File([new Uint8Array(18 * 1024 * 1024 + 1)], 'big.wav', { type: 'audio/wav' }) }, 'gemini', 'model']]) {
+            await assert.rejects(api.transcribeAudioLyrics(input, provider, model));
+        }
+        assert.equal(api.calls.length, start, 'Invalid requests do not call a provider.');
+        for (const text of ['not JSON', '```json\n{"text":"wrong"}\n```', '{"text":""}', '{"text":7}', '[]', 'null', '{"text":"word","extra":"field"}']) {
+            api.setResponse(text);
+            await assert.rejects(api.transcribeAudioLyrics(audio, 'gemini', 'model'), /JSON|transcript/);
+        }
+        api.setResponse('{"text":"[instrumental]"}');
+        assert.equal((await api.transcribeAudioLyrics(audio, 'gemini', 'model')).text, '[instrumental]');
+    } finally { api.setResponse(generated); }
+});
+
+test('lyrics fingerprints survive reapplying an excerpt but change with the source/range; snapshots isolate lyrics', () => {
+    const audio = ref('audio');
+    audio.audioSelection = { start: 0, end: 3 };
+    audio.lyrics = { enabled: true, text: 'one two three', source: api.audioLyricsSource(audio) };
+    const originalAudioId = audio.id;
+    const snapshot = api.captureVideoPromptInputs(draft({ references: [audio], originalAudioId }));
+    const instruction = api.buildVideoPromptInstruction(snapshot);
+    assert.match(instruction, /unchanged source performance/);
+    assert.match(instruction, /one two three/);
+    const source = api.audioLyricsSource(audio);
+    audio.file = new File(['newly exported same passage'], 'regenerated-passage.wav', { type: 'audio/wav', lastModified: Date.now() + 100 });
+    assert.equal(api.audioLyricsSource(audio), source);
+    audio.lyrics.text = 'changed by user';
+    assert.equal(snapshot.references[0].lyrics.text, 'one two three');
+    assert.equal(snapshot.originalAudioId, audio.id);
+    audio.audioSelection = { start: 3, end: 6 };
+    assert.notEqual(api.audioLyricsSource(audio), source);
+    assert.throws(() => api.audioPromptRequirements([audio], originalAudioId), /previous passage/);
+    audio.lyrics.enabled = false;
+    assert.doesNotThrow(() => api.audioPromptRequirements([audio], originalAudioId));
+    assert.throws(() => api.audioPromptRequirements([], originalAudioId), /Select an enabled/);
+    audio.audioSelection = undefined;
+    assert.notEqual(api.audioLyricsSource(audio), source);
+});
+
 test('imports accept exactly 4 images, 2 videos, 2 audio; overflow and mixed types are atomic', () => {
     let refs = [];
     for (const [kind, limit] of Object.entries(api.REFERENCE_LIMITS)) {

@@ -1200,8 +1200,9 @@ export interface VideoSliceState {
 
   // Video Utilities
   videoUtilsState: VideoUtilsState;
-  activeVideoUtilsSubTab: 'frames' | 'clips' | 'reference-maker' | 'colors' | 'resize-crop' | 'voice-recorder';
+  activeVideoUtilsSubTab: 'frames' | 'clips' | 'merge' | 'reference-maker' | 'colors' | 'resize-crop' | 'voice-recorder';
   referenceMakerResetVersion: number;
+  videoMergeResetVersion: number;
 }
 
 export interface LibrarySliceState {

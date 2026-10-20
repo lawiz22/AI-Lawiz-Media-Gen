@@ -6,10 +6,20 @@ import ts from 'typescript';
 const compile = source => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const load = code => import(`data:text/javascript;base64,${Buffer.from(compile(code)).toString('base64')}`);
 const workflowSource = readFileSync(new URL('./minimaxH3Workflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '');
-const workflow = await load("const referenceToken = ref => `<${ref.kind === 'image' ? 'Picture' : ref.kind === 'video' ? 'Video' : 'Audio'} ${ref.slot}>`;\n" + workflowSource);
+const workflow = await load(readFileSync(new URL('./videoPromptService.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '') + workflowSource);
 globalThis.__h3Test = workflow;
 const serviceSource = readFileSync(new URL('./minimaxH3Service.ts', import.meta.url), 'utf8').replace(/import[\s\S]*?from\s+'[^']+';/g, '');
-const api = await load('const { buildMinimaxH3Workflow, h3ReferenceControl, isRecord, planH3References, validateMinimaxH3Readiness } = globalThis.__h3Test;\n' + serviceSource);
+const api = await load(`
+const { buildMinimaxH3Workflow, h3ReferenceControl, isRecord, planH3References, validateMinimaxH3Readiness } = globalThis.__h3Test;
+export const muxCalls = [];
+export let muxFailure = false;
+export const setMuxFailure = value => { muxFailure = value; };
+const forceOriginalVideoAudio = async (video, audio, duration, signal) => {
+    signal.throwIfAborted(); muxCalls.push({ video, audio, duration });
+    if (muxFailure) throw new Error('Audio lock failed. No generated-audio fallback was used.');
+    return new File(['locally locked soundtrack'], 'locked.mp4', { type: 'video/mp4' });
+};
+` + serviceSource);
 delete globalThis.__h3Test;
 const reference = (kind, slot) => ({
     id: `${kind}-${slot}`, kind, slot, note: '',
@@ -54,6 +64,7 @@ function harness(t, config = {}) {
             return json(config.history ? await config.history(socket) : { 'owned-h3': finalHistory });
         }
         if (path === '/api/jobs/owned-h3/cancel') return config.cancelStatus ? new Response('Targeted cancellation unavailable', { status: config.cancelStatus }) : json({ cancelled: true });
+        if (path === '/view') return new Response('server video with generated sound', { status: config.downloadStatus || 200, headers: { 'Content-Type': 'video/mp4' } });
         throw new Error(`Unexpected request: ${path}`);
     };
     t.after(() => Object.assign(globalThis, previous));
@@ -63,6 +74,40 @@ function harness(t, config = {}) {
         run: (draft = input(), controller = new AbortController()) => api.generateMinimaxH3Video(draft, options, controller.signal, (...args) => progress.push(args), preview => previews.push(preview)),
     };
 }
+
+test('forced original survives two four-second clips and a last-frame reference; only current WAV reaches the final mux', async t => {
+    const h = harness(t);
+    const audio = { ...reference('audio', 1), original: new File(['FULL EIGHT SECOND SONG'], 'song.wav', { type: 'audio/wav' }), audioSelection: { start: 0, end: 4 } };
+    const value = input([reference('image', 1), audio]);
+    Object.assign(h.options, { originalAudioId: audio.id, forceOriginalAudio: true, duration: 4 });
+    const start = api.muxCalls.length;
+    const first = await h.run(value);
+    assert.ok(first.videoBlob);
+    assert.equal(api.muxCalls[start].audio, audio.file);
+    value.references = workflow.replaceH3FirstPicture(value.references, new File(['frame'], 'last.png', { type: 'image/png' }));
+    const next = { ...audio, file: new File(['SECOND FOUR SECOND WAV'], 'song-4-8.wav', { type: 'audio/wav' }), audioSelection: { start: 4, end: 8 } };
+    value.references = value.references.map(ref => ref.id === audio.id ? next : ref);
+    const second = await h.run(value);
+    assert.equal(second.options.forceOriginalAudio, true);
+    assert.equal(second.options.originalAudioId, audio.id);
+    assert.equal(api.muxCalls[start + 1].audio, next.file);
+    assert.notEqual(api.muxCalls[start + 1].audio, audio.original);
+    assert.deepEqual(h.queued.prompt['119'].inputs.audio, ['185', 15]);
+    assert.equal(h.queued.prompt['134'], undefined);
+    assert.equal(await second.videoBlob.text(), 'locally locked soundtrack');
+});
+
+test('locked mode rejects missing source before uploads and mux errors never return an uncorrected result', async t => {
+    const h = harness(t);
+    h.options.forceOriginalAudio = true;
+    await assert.rejects(h.run(), /locked/);
+    assert.ok(!h.requests.some(request => request.path === '/prompt' || request.path === '/upload/image'));
+    const audio = { ...reference('audio', 1), audioSelection: { start: 0, end: 3 } };
+    h.options.originalAudioId = audio.id;
+    api.setMuxFailure(true);
+    try { await assert.rejects(h.run(input([reference('image', 1), audio])), /No generated-audio fallback/); }
+    finally { api.setMuxFailure(false); }
+});
 
 test('preview parser accepts only node 141 image/WebP/MP4 messages, including no-image sigma initialization', () => {
     for (const mime of ['image/jpeg', 'image/webp', 'video/mp4']) assert.equal(api.parseH3Preview('kj_preview_override', { node_id: 141, image: 'YWJj', mime }).mime, mime);
@@ -101,6 +146,24 @@ test('queue uses unique client/media names, accepts cached history, filters othe
     assert.equal(h.previews[0].mime, 'video/mp4');
     assert.equal(h.progress.some(([text]) => text.includes('5/5')), false);
     assert.ok(h.socket.closed);
+});
+
+test('generation uploads the applied audio excerpt, never the preserved original recording', async t => {
+    const h = harness(t);
+    const audio = reference('audio', 1);
+    audio.file = new File(['selected PCM samples'], 'song-3.000-6.000.wav', { type: 'audio/wav' });
+    audio.original = new File(['full original song'], 'song.wav', { type: 'audio/wav' });
+    audio.audioSelection = { start: 3, end: 6 };
+    const draft = input([reference('image', 1), audio]);
+    draft.prompt = 'Film <Picture 1> singing <Audio 1>.';
+    h.options.duration = 3;
+    const result = await h.run(draft);
+    const uploads = h.requests.filter(request => request.path === '/upload/image');
+    assert.equal(uploads.length, 2);
+    assert.equal(await uploads[1].init.body.get('image').text(), 'selected PCM samples');
+    assert.equal(await audio.original.text(), 'full original song');
+    assert.equal(h.queued.prompt['132'].inputs.value, 3);
+    assert.equal(result.options.duration, 3);
 });
 
 test('silent video probe prevents wrong standalone Audio labels while keeping source options unchanged', async t => {

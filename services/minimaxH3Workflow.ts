@@ -1,5 +1,5 @@
 import type { MinimaxDraft, VideoReference } from './videoPromptService';
-import { referenceToken } from './videoPromptService';
+import { audioPromptRequirements, referenceToken } from './videoPromptService';
 
 export interface H3NodeInfo {
     input?: { required?: Record<string, unknown>; optional?: Record<string, unknown> };
@@ -49,6 +49,8 @@ export interface MinimaxH3Options {
     previewUseVae: boolean;
     previewAudio: boolean;
     generateAudio: boolean;
+    originalAudioId?: string;
+    forceOriginalAudio?: boolean;
     frameRate: number;
     loopCount: number;
     filenamePrefix: string;
@@ -67,6 +69,13 @@ export interface MinimaxH3Options {
     references: Record<string, H3ReferenceControl>;
 }
 export const H3_ASPECTS = ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'];
+export const withH3OriginalAudio = (options: MinimaxH3Options, originalAudioId: string | undefined, forceOriginalAudio: boolean): MinimaxH3Options => ({
+    ...options, originalAudioId, forceOriginalAudio,
+    ...(forceOriginalAudio ? {
+        format: 'video/h264-mp4', frameRate: 24, pingpong: false, loopCount: 0,
+        formatOptions: { ...(options.format === 'video/h264-mp4' ? options.formatOptions : defaultMinimaxH3Options().formatOptions), trim_to_audio: true },
+    } : {}),
+});
 export const defaultMinimaxH3Options = (): MinimaxH3Options => ({
     model: 'h3ErosMax_beta5_fp8.safetensors', weightDtype: 'default',
     clip: 'minimaxH3_h3Comfy_nvfp4.safetensors', clipDevice: 'default',
@@ -129,14 +138,22 @@ export const h3Resolution = (options: Pick<MinimaxH3Options, 'aspect' | 'megapix
     const scale = Math.sqrt(options.megapixels * 1024 * 1024 / (w * h));
     return { width: pythonRound(w * scale / options.multiple) * options.multiple, height: pythonRound(h * scale / options.multiple) * options.multiple };
 };
-export const h3FrameCount = (seconds: number): number => {
+export const h3FrameCount = (seconds: number, coverAudio = false): number => {
     if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 60) throw new Error('H3 duration must be greater than 0 and at most 60 seconds.');
-    const base = Math.max(5, pythonRound(seconds * 24));
+    const base = Math.max(5, coverAudio ? Math.ceil(seconds * 24) : pythonRound(seconds * 24));
     return base + ((5 - base % 17) + 17) % 17;
 };
 export const h3AspectFromPrompt = (aspect: string): string => H3_ASPECTS.find(value => value.startsWith(`${aspect} `)) || aspect;
 export const h3ReferenceControl = (options: MinimaxH3Options, ref: VideoReference): H3ReferenceControl =>
     options.references[ref.id] || { enabled: true, useSoundtrack: true };
+
+export const replaceH3FirstPicture = (references: VideoReference[], file: File): VideoReference[] => {
+    if (!file.size || file.type !== 'image/png') throw new Error('The last frame must be a non-empty PNG image.');
+    const existing = references.find(ref => ref.kind === 'image' && ref.slot === 1);
+    return existing ? references.map(ref => ref.id === existing.id ? { ...ref, file } : ref) : [
+        ...references, { id: crypto.randomUUID(), kind: 'image', slot: 1, file, original: file, note: '' },
+    ];
+};
 
 export interface H3ReferencePlan {
     references: VideoReference[];
@@ -164,7 +181,8 @@ export const planH3References = (draft: MinimaxDraft, options: MinimaxH3Options)
         if (!mapped) throw new Error(`The prompt uses ${token}, but its reference is disabled or missing. Edit the prompt or enable the reference.`);
         return mapped;
     });
-    return { references, mappings, prompt };
+    const requirements = audioPromptRequirements(references, options.originalAudioId, options.forceOriginalAudio);
+    return { references, mappings, prompt: requirements ? `${prompt}\n\n${requirements.replace(/<(?:Picture|Video|Audio)\s+\d+>/g, token => map.get(token) || token)}` : prompt };
 };
 
 export const buildMinimaxH3Workflow = (
@@ -173,10 +191,23 @@ export const buildMinimaxH3Workflow = (
     uploads: Record<string, string>,
 ): H3Workflow => {
     if (!draft.prompt.trim()) throw new Error('A video prompt is required.');
-    const frames = h3FrameCount(options.duration);
+    const frames = h3FrameCount(options.duration, options.originalAudioId !== undefined);
     const resolution = h3Resolution(options);
     if (resolution.width < 32 || resolution.height < 32 || resolution.width % 32 || resolution.height % 32) throw new Error('H3 dimensions must be multiples of 32. Select a compatible resolution multiple.');
     const plan = planH3References(draft, options);
+    const originalAudioIndex = options.originalAudioId === undefined ? -1 : plan.references.filter(ref => ref.kind === 'audio').findIndex(ref => ref.id === options.originalAudioId);
+    const preserveAudio = originalAudioIndex >= 0;
+    const decodeAudio = options.generateAudio && !preserveAudio;
+    const previewAudio = options.previewAudio && !preserveAudio;
+    if (preserveAudio) {
+        const source = plan.references.find(ref => ref.id === options.originalAudioId)!;
+        if (!source.audioSelection) throw new Error('Apply an audio passage before choosing its original soundtrack, so audio/video timing can be checked.');
+        if (!Number.isFinite(source.audioSelection.start) || !Number.isFinite(source.audioSelection.end) || source.audioSelection.start < 0 || source.audioSelection.end <= source.audioSelection.start) throw new Error('The original audio passage has invalid boundaries. Apply a valid passage again.');
+        if (Math.abs(source.audioSelection.end - source.audioSelection.start - options.duration) > 0.001) throw new Error('H3 duration must match the applied original audio passage. Apply the passage again.');
+        if (options.format !== 'video/h264-mp4' || options.frameRate !== 24 || options.pingpong || options.loopCount !== 0) {
+            throw new Error('Original soundtrack requires H.264 MP4, native 24 FPS, no ping-pong and no loops.');
+        }
+    }
     const number = (name: string, value: number, min: number, max: number, integer = false) => {
         if (!Number.isFinite(value) || value < min || value > max || (integer && !Number.isSafeInteger(value))) throw new Error(`Invalid ${name}: expected ${integer ? 'an integer' : 'a number'} between ${min} and ${max}.`);
     };
@@ -193,17 +224,17 @@ export const buildMinimaxH3Workflow = (
     if (options.loras.length > 6) throw new Error('Maximum six LoRAs in this workflow.');
     for (const [name, value] of [
         ['Model', options.model], ['CLIP', options.clip], ['Video VAE', options.videoVae],
-        ...(options.generateAudio || options.conditionAudioVae || (options.preview && options.previewAudio) ? [['Audio VAE', options.audioVae]] : []),
+        ...(decodeAudio || options.conditionAudioVae || (options.preview && previewAudio) ? [['Audio VAE', options.audioVae]] : []),
     ]) if (!value.trim()) throw new Error(`${name} is missing a filename.`);
     const workflow: H3Workflow = {};
     const add = (id: string, class_type: string, inputs: H3Node['inputs']) => { workflow[id] = { class_type, inputs }; };
     add('115', 'ResolutionSelector', { aspect_ratio: options.aspect, megapixels: options.megapixels, multiple: options.multiple });
     add('132', 'PrimitiveFloat', { value: options.duration });
-    add('177', 'ComfyMathExpression', { expression: 'max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17', 'values.a': ['132', 0] });
+    add('177', 'ComfyMathExpression', { expression: preserveAudio ? String(frames) : 'max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17', 'values.a': ['132', 0] });
     add('135', 'UNETLoader', { unet_name: options.model, weight_dtype: options.weightDtype });
     add('127', 'CLIPLoader', { clip_name: options.clip, type: 'minimax', device: options.clipDevice });
     add('121', 'VAELoader', { vae_name: options.videoVae });
-    if (options.generateAudio || options.conditionAudioVae || (options.preview && options.previewAudio)) add('122', 'VAELoader', { vae_name: options.audioVae });
+    if (decodeAudio || options.conditionAudioVae || (options.preview && previewAudio)) add('122', 'VAELoader', { vae_name: options.audioVae });
     let model: [string, number] = ['135', 0];
     if (options.preview) {
         number('preview resolution', options.previewMaxResolution, 0, 8192, true);
@@ -216,7 +247,7 @@ export const buildMinimaxH3Workflow = (
             preview_frames: options.previewAllFrames ? ['177', 1] : options.previewFrames,
             preview_fps: options.previewFps, tiny_vae: options.tinyVae,
             ...(options.previewUseVae ? { vae: ['121', 0] } : {}),
-            ...(options.previewAudio ? { audio_vae: ['122', 0] } : {}),
+            ...(previewAudio ? { audio_vae: ['122', 0] } : {}),
         });
         model = ['141', 0];
     }
@@ -273,9 +304,10 @@ export const buildMinimaxH3Workflow = (
     }
     add('153', 'SamplerCustomAdvanced', { noise: ['154', 0], guider: ['149', 0], sampler: ['150', 0], sigmas: [options.extendSigmas ? '189' : '190', 0], latent_image: ['184', 1] });
     add('133', 'VAEDecode', { samples: ['153', 0], vae: ['121', 0] });
-    if (options.generateAudio) add('134', 'VAEDecodeAudio', { samples: ['153', 0], vae: ['122', 0] });
+    if (decodeAudio) add('134', 'VAEDecodeAudio', { samples: ['153', 0], vae: ['122', 0] });
     add('119', 'VHS_VideoCombine', {
-        ...options.formatOptions, images: ['133', 0], ...(options.generateAudio ? { audio: ['134', 0] } : {}),
+        ...options.formatOptions, ...(preserveAudio ? { trim_to_audio: true } : {}),
+        images: ['133', 0], ...(preserveAudio ? { audio: ['185', 15 + originalAudioIndex] } : decodeAudio ? { audio: ['134', 0] } : {}),
         frame_rate: options.frameRate, loop_count: options.loopCount, filename_prefix: options.filenamePrefix, format: options.format,
         pingpong: options.pingpong, save_output: options.saveOutput,
     });

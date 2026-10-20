@@ -10,6 +10,7 @@ Configure provider access and local servers. Provider tests, catalog refreshes a
 - [OpenRouter](#openrouter)
 - [Ollama](#ollama)
 - [ComfyUI](#comfyui)
+  - [Header memory controls](#header-memory-controls)
 - [Installation overview](#installation-overview)
   - [ComfyUI node checks](#comfyui-node-checks)
   - [ComfyUI model inventory](#comfyui-model-inventory)
@@ -85,6 +86,19 @@ FLUX2 and KREA2 diffusion models are indexed directly from `ComfyUI/models/diffu
 In Photo Fusion, choose **FLUX2**, **QWEN-Edit**, or **Mammouth** from the engine control. FLUX2 and Qwen Edit run locally through the configured ComfyUI endpoint and expose their own advanced model and sampling settings. Mammouth sends each subject as a distinct multimodal input and exposes the hosted image-model selector instead.
 
 Model-specific metadata is stored beside the model where applicable. Keep these sidecars with the model when moving files outside the application's organizer.
+
+### Header memory controls
+
+The header shows two discreet icon-only memory actions **under the main action buttons on the right**, **only while ComfyUI is connected**, including on small screens. Hover an icon to see its name and explanation; both also have accessible names and keyboard focus indicators. The cube unloads models, while the trash icon clears model and node caches:
+
+- **Clear VRAM** is ComfyUI's native **Unload Models** command: `POST /free` with `{"unload_models":true}`. It unloads currently loaded models and requests cleanup of unused GPU allocations, while keeping node execution results cached. It cannot release memory used by other applications or guarantee that all VRAM drops to zero. A separate Unload Models button would duplicate this action.
+- **Free model + node cache** sends `{"unload_models":true,"free_memory":true}` to the same native endpoint. It also resets ComfyUI's execution caches, so later runs may need to reload models and recompute nodes.
+
+These actions target the configured ComfyUI server. They do not delete model files, output files, Library media or queued jobs, and do not send a global interrupt. ComfyUI processes the flags between jobs: **request accepted** is an acknowledgement, not proof that memory has already been released during an active render. Both buttons are disabled while a request is pending; connection, HTTP and unexpected-response failures are shown explicitly. A dismissible notification appears below the icons without expanding the header.
+
+This follows the official [frontend memory commands](https://github.com/Comfy-Org/ComfyUI_frontend/blob/main/src/composables/useCoreCommands.ts), [API payloads](https://github.com/Comfy-Org/ComfyUI_frontend/blob/main/src/scripts/api.ts) and [backend cleanup flags](https://github.com/Comfy-Org/ComfyUI/blob/master/main.py). No custom node is required.
+
+Regression checks: `node --test services/comfyMemoryService.test.mjs components/Header.test.mjs`.
 
 ## Installation overview
 

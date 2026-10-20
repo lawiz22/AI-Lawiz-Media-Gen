@@ -9,6 +9,7 @@ Create a production prompt from your idea and edited references, save its comple
 - [Video workspace](#video-workspace)
 - [References and media editing](#references-and-media-editing)
 - [Providers and editable templates](#providers-and-editable-templates)
+- [Original audio and editable lyrics](#original-audio-and-editable-lyrics)
 - [Send to MiniMax H3](#send-to-minimax-h3)
 - [Library snapshots and restoration](#library-snapshots-and-restoration)
 - [Local draft persistence](#local-draft-persistence)
@@ -31,6 +32,14 @@ Create a production prompt from your idea and edited references, save its comple
 - **Templates** edits and saves the generation and character-replacement canvases locally. Generation returns `integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`; replacement returns `subject_definitions`, `summary`, `retention_analysis`, `detailed_description`, `overall_soundscape`, `non_diegetic_music`. Keep these field names/order when customizing templates. Malformed, empty or incomplete responses are reported, not accepted as successful prompts.
 
 Regression checks: `node --test components/VideoWorkspace.test.mjs services/openRouterService.test.mjs services/videoPromptService.test.mjs services/videoPromptLibrary.test.mjs`. These use mocked providers; live catalog capabilities do not establish paid-generation access or model output quality.
+
+## Original audio and editable lyrics
+
+- The audio reference cards include the same original-track waveform, precise start/end selection, selection playback and **Next N s** as H3. Select the first four seconds, click **Apply passage + prompt duration**, then compose/transcribe: only that real WAV excerpt is attached to the model and transferred to H3. The full recording stays local for subsequent selections. Prompt excerpts support 1-120 seconds; H3 rendering supports at most 60. Pending partial selections block model requests and transfer until applied.
+- **Force original WAV soundtrack (lock)** persists alongside the selected track. Selecting original mode enables it; it can also be checked explicitly in either editor. It prevents switching back to generated mode without unlocking and locally replaces all server sound with the selected WAV after rendering. It sets compatible H.264/24 FPS/no-loop settings, reports mux failures explicitly and never substitutes generated audio. Both editors share this audio choice so transferring a new prompt cannot quietly reset it.
+- **Soundtrack mode** lets you keep the existing reference/generated-audio behavior or explicitly select an **original track** to preserve its performance in H3's final soundtrack. Original mode also tells the prompt model not to rewrite words, invent music or rearrange the recording. Apply the desired passage in H3 before rendering; original mode uses H.264 MP4 at 24 FPS, no loops/ping-pong, and trims surplus video to the audio endpoint, subject to frame/codec rounding. AAC output is not a lossless WAV copy, and keeping the soundtrack does not itself guarantee accurate generated lip motion. See [H3 original soundtrack](minimax-h3.md#original-soundtrack-and-passage-lyrics).
+- On an audio card, **Use exact lyrics / spoken words** exposes an editable passage transcript and **Transcribe current passage**. This is an explicit API call with the selected Gemini/OpenRouter model and **only the current audio file**; provider capabilities, credentials and charges apply. Mammouth audio is unsupported. No web lyrics lookup or automatic calls on passage changes.
+- Edit/transcribe again after changing the passage. Stale enabled lyrics block generation rather than silently reuse an earlier verse; you can explicitly confirm unchanged words or disable the option. The H3 panel also offers manual **Refresh prompt for current passage** to replace old quoted vocals in an existing scene description. Lyrics, passage stamps and original-track selection survive prompt Library round-trips and H3 transfers.
 
 ## Send to MiniMax H3
 

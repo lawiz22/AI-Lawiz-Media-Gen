@@ -7,6 +7,7 @@ interface AudioPlayerProps {
     label: string;
     detail?: string;
     compact?: boolean;
+    pauseWhenHidden?: boolean;
 }
 
 const formatTime = (seconds: number) => {
@@ -15,7 +16,7 @@ const formatTime = (seconds: number) => {
     return `${minutes}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 };
 
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, label, detail, compact = false }) => {
+export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, label, detail, compact = false, pauseWhenHidden = false }) => {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -33,7 +34,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, label, detail, co
         setError('');
         if (!src.startsWith('data:')) {
             setPlaybackSrc(src);
-            return;
+            return () => { if (pauseWhenHidden) audio?.pause(); };
         }
 
         let disposed = false;
@@ -51,9 +52,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, label, detail, co
             });
         return () => {
             disposed = true;
+            if (pauseWhenHidden) audio?.pause();
             if (objectUrl) URL.revokeObjectURL(objectUrl);
         };
-    }, [src]);
+    }, [src, pauseWhenHidden]);
 
     const togglePlayback = async () => {
         const audio = audioRef.current;

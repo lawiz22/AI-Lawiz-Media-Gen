@@ -5,12 +5,16 @@ import { addToLibrary } from '../store/librarySlice';
 import { buildMinimaxH3LibraryItem } from '../services/minimaxH3Library';
 import {
     H3_ASPECTS, buildMinimaxH3Workflow, defaultMinimaxH3Options, h3Choices, h3FormatWidgets, h3FrameCount,
-    h3ReferenceControl, h3Resolution, planH3References, validateMinimaxH3Readiness,
+    h3ReferenceControl, h3Resolution, planH3References, replaceH3FirstPicture, validateMinimaxH3Readiness, withH3OriginalAudio,
     type H3FormatWidget, type H3ObjectInfo, type MinimaxH3Options,
 } from '../services/minimaxH3Workflow';
 import { generateMinimaxH3Video, loadH3ObjectInfo, type H3GenerationResult, type H3Preview } from '../services/minimaxH3Service';
-import { referenceToken, type MinimaxDraft, type ReferenceKind, type VideoReference } from '../services/videoPromptService';
+import { referenceToken, type MinimaxDraft, type ReferenceKind, type VideoReference, type VideoPromptProvider } from '../services/videoPromptService';
 import { VideoReferenceEditor, useMediaURL } from './VideoReferenceEditor';
+import { H3AudioReference } from './H3AudioReference';
+import { AudioPlayer } from './AudioPlayer';
+import { AudioLyricsEditor, OriginalAudioSelector } from './VideoAudioControls';
+import { extractLastVideoFrame } from '../services/videoFrameService';
 
 const input = 'mt-1 w-full rounded-lg border border-border-primary bg-bg-primary p-2 text-sm text-text-primary focus:border-accent focus:outline-none';
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed';
@@ -36,7 +40,11 @@ export const MinimaxH3Panel: React.FC<{
     ready: boolean;
     onOpenPromptGenerator: () => void;
     onClearDraft: () => void;
-}> = ({ draft, onDraftChange, options: savedOptions, onOptionsChange, ready, onOpenPromptGenerator, onClearDraft }) => {
+    lyricsProvider: VideoPromptProvider;
+    lyricsModel: string;
+    onLyricsSettingsChange: (provider: VideoPromptProvider, model?: string) => void;
+    onRefreshPrompt: (draft: MinimaxDraft, options: MinimaxH3Options) => Promise<string>;
+}> = ({ draft, onDraftChange, options: savedOptions, onOptionsChange, ready, onOpenPromptGenerator, onClearDraft, lyricsProvider, lyricsModel, onLyricsSettingsChange, onRefreshPrompt }) => {
     const dispatch = useDispatch<AppDispatch>();
     const options = savedOptions || defaultMinimaxH3Options();
     const [info, setInfo] = useState<H3ObjectInfo | null>(null);
@@ -48,10 +56,22 @@ export const MinimaxH3Panel: React.FC<{
     const [progress, setProgress] = useState(0);
     const [preview, setPreview] = useState<H3Preview | null>(null);
     const [result, setResult] = useState<H3GenerationResult | null>(null);
+    const localResultUrl = useMediaURL(result?.videoBlob);
+    const resultUrl = result?.videoBlob ? localResultUrl : result?.videoUrl;
+    const [pendingAudio, setPendingAudio] = useState<Record<string, boolean>>({});
+    const hasPendingAudio = !!draft?.references.some(ref => ref.kind === 'audio' && h3ReferenceControl(options, ref).enabled && pendingAudio[ref.id]);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const [editing, setEditing] = useState<VideoReference | null>(null);
     const [checking, setChecking] = useState(false);
+    const [copyingFrame, setCopyingFrame] = useState(false);
+    const [refreshingPrompt, setRefreshingPrompt] = useState(false);
     const controller = useRef<AbortController | null>(null);
+    const frameController = useRef<AbortController | null>(null);
+    const latestDraft = useRef(draft);
+    const latestOptions = useRef(options);
+    const promptRefresh = useRef({ revision: 0, pending: false });
+    latestDraft.current = draft;
+    latestOptions.current = options;
     const refreshController = useRef<AbortController | null>(null);
     const defaultsApplied = useRef(false);
 
@@ -60,7 +80,14 @@ export const MinimaxH3Panel: React.FC<{
         defaultsApplied.current = true;
         if (!savedOptions) onOptionsChange(defaultMinimaxH3Options());
     }, [ready, savedOptions, onOptionsChange]);
-    useEffect(() => () => { refreshController.current?.abort(); }, []);
+    useEffect(() => {
+        setRefreshingPrompt(false);
+        if (promptRefresh.current.pending) {
+            promptRefresh.current.pending = false;
+            setStatus('Prompt refresh was interrupted when the panel was hidden. A pending API request may still be billed; retry for the current passage.');
+        }
+        return () => { promptRefresh.current.revision++; refreshController.current?.abort(); frameController.current?.abort(); };
+    }, []);
     const update = (patch: Partial<MinimaxH3Options>) => onOptionsChange({ ...options, ...patch });
     const refresh = async () => {
         refreshController.current?.abort();
@@ -93,7 +120,7 @@ export const MinimaxH3Panel: React.FC<{
     let mappingError = '';
     try { const size = h3Resolution(options); dimensions = `${size.width} x ${size.height}`; }
     catch (cause) { dimensions = cause instanceof Error ? cause.message : String(cause); }
-    try { const count = h3FrameCount(options.duration); frames = `${count} frames · ${(count / 24).toFixed(2)}s at native 24 fps`; }
+    try { const count = h3FrameCount(options.duration, options.originalAudioId !== undefined); frames = `${count} frames · ${(count / 24).toFixed(2)}s at native 24 fps`; }
     catch (cause) { frames = cause instanceof Error ? cause.message : String(cause); }
     if (draft?.references.length) {
         try { mapping = planH3References(draft, options); }
@@ -112,6 +139,7 @@ export const MinimaxH3Panel: React.FC<{
     };
     const generate = async () => {
         if (!draft) { setError('Prepare a prompt and references first.'); return; }
+        if (hasPendingAudio) { setError('Apply the audio selection before generating. The full original or an older passage will not be substituted.'); return; }
         const resolved = { ...options, loras: options.loras.map(lora => ({ ...lora })), references: { ...options.references }, formatOptions: { ...options.formatOptions },
             seed: options.randomizeSeed ? Math.floor(Math.random() * 1e15) : options.seed };
         update({ seed: resolved.seed });
@@ -138,10 +166,54 @@ export const MinimaxH3Panel: React.FC<{
             setError(`Could not save the H3 output to Library: ${cause instanceof Error ? cause.message : String(cause)}`);
         }
     };
+    const copyLastFrame = async () => {
+        if (!result || copyingFrame || busy) return;
+        const abort = new AbortController(); frameController.current = abort;
+        setCopyingFrame(true); setError(''); setStatus('Decoding the output to copy its exact last video frame...');
+        try {
+            let blob = result.videoBlob;
+            if (!blob) {
+                const response = await fetch(result.videoUrl, { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(120000)]) });
+                if (!response.ok) throw new Error(`Could not read the rendered output (${response.status}).`);
+                blob = await response.blob();
+            }
+            if (!blob.size) throw new Error('The rendered output is empty.');
+            const name = new URL(result.videoUrl, window.location.href).searchParams.get('filename') || 'h3-output.mp4';
+            const frame = await extractLastVideoFrame(new File([blob], name, { type: blob.type || 'video/mp4' }), abort.signal);
+            abort.signal.throwIfAborted();
+            const current = latestDraft.current;
+            if (!current) throw new Error('The REF2V draft was removed. Nothing was replaced.');
+            const references = replaceH3FirstPicture(current.references, frame);
+            const picture = references.find(ref => ref.kind === 'image' && ref.slot === 1)!;
+            onDraftChange({ ...current, references });
+            const currentOptions = latestOptions.current;
+            onOptionsChange({ ...currentOptions, references: { ...currentOptions.references, [picture.id]: { ...h3ReferenceControl(currentOptions, picture), enabled: true } } });
+            setStatus('Last video frame copied to Picture 1 and enabled for the next clip. An existing original picture is retained for Restore original.');
+        } catch (cause) {
+            setStatus('');
+            setError(abort.signal.aborted ? 'Last-frame copy cancelled. Picture 1 was not changed.' : cause instanceof Error ? cause.message : String(cause));
+        } finally { frameController.current = null; setCopyingFrame(false); }
+    };
     const download = (content: string, name: string, mime: string) => {
         const url = URL.createObjectURL(new Blob([content], { type: mime }));
         const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+    const refreshPromptForPassage = async () => {
+        if (!draft || refreshingPrompt) return;
+        const snapshot = draft;
+        const snapshotOptions = options;
+        const revision = ++promptRefresh.current.revision;
+        promptRefresh.current.pending = true;
+        setRefreshingPrompt(true); setError(''); setStatus('Refreshing the scene prompt from the current audio passage and reviewed lyrics...');
+        try {
+            const prompt = await onRefreshPrompt(snapshot, options);
+            if (revision !== promptRefresh.current.revision) return;
+            if (latestDraft.current !== snapshot || latestOptions.current !== snapshotOptions) throw new Error('The draft/settings changed during prompt generation. The response was not applied; retry for the current passage.');
+            onDraftChange({ ...snapshot, prompt });
+            setStatus('Prompt refreshed for the current passage. Review it before generating the video.');
+        } catch (cause) { if (revision === promptRefresh.current.revision) { setStatus(''); setError(cause instanceof Error ? cause.message : String(cause)); } }
+        finally { if (revision === promptRefresh.current.revision) { promptRefresh.current.pending = false; setRefreshingPrompt(false); } }
     };
     const exportWorkflow = () => {
         setError('');
@@ -182,10 +254,15 @@ export const MinimaxH3Panel: React.FC<{
         {error && <p role="alert" className="whitespace-pre-wrap rounded-lg border border-red-400/40 bg-red-400/10 p-3 text-sm text-red-300">{error}</p>}
         {status && <p role="status" className="text-xs text-text-secondary">{status}</p>}
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,1fr)]">
-            <fieldset disabled={!ready || busy} className="min-w-0 space-y-4 disabled:opacity-60">
+            <fieldset disabled={!ready || busy || copyingFrame || refreshingPrompt} className="min-w-0 space-y-4 disabled:opacity-60">
                 <section className={`${box} space-y-3`}>
                     <div className="flex items-center justify-between gap-2"><h4 className="font-semibold">Prompt & references</h4><button type="button" className={button} onClick={() => { setError(''); try { onOpenPromptGenerator(); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); } }}>Video Prompt Generator</button></div>
                     <textarea aria-label="H3 video prompt" className={`${input} min-h-48 font-mono !text-xs`} value={draft?.prompt || ''} placeholder="Send your production prompt from Video Prompt Generator, or paste it here..." onChange={event => patchDraft({ prompt: event.target.value })} />
+                    <button type="button" className={button} disabled={!draft?.prompt.trim() || hasPendingAudio} onClick={() => void refreshPromptForPassage()}>Refresh prompt for current passage</button>
+                    <p className="text-[11px] text-text-muted">Manual LLM request using {lyricsProvider} / {lyricsModel}; sends the current edited references and lyrics and may incur API charges. Use it after changing the passage to replace old quoted words while retaining the scene.</p>
+                    <OriginalAudioSelector references={draft?.references.filter(ref => h3ReferenceControl(options, ref).enabled) || []} value={options.originalAudioId} forced={options.forceOriginalAudio}
+                        onChange={originalAudioId => onOptionsChange(withH3OriginalAudio(options, originalAudioId, originalAudioId !== undefined))}
+                        onForceChange={(forced, originalAudioId) => onOptionsChange(withH3OriginalAudio(options, originalAudioId, forced))} />
                     <div className="flex flex-wrap gap-2">
                         <button type="button" className={button} disabled={!draft?.prompt} onClick={async () => { try { await navigator.clipboard.writeText(draft!.prompt); setStatus('Prompt copied.'); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); } }}>Copy prompt</button>
                         <button type="button" className={button} disabled={!draft?.prompt} onClick={() => download(draft!.prompt, 'minimax-h3-ref2v-prompt.txt', 'text/plain')}>Export prompt .txt</button>
@@ -196,16 +273,25 @@ export const MinimaxH3Panel: React.FC<{
                     <p className="text-xs text-text-muted">Native workflow limits: 9 pictures, 3 videos, 3 standalone audios. The linked prompt generator currently imports 4 / 2 / 2.</p>
                     <div className="grid gap-3 sm:grid-cols-2">{draft?.references.map(ref => {
                         const control = h3ReferenceControl(options, ref);
-                        return <div key={ref.id} className="min-w-0 rounded-lg border border-border-primary bg-bg-primary p-2">
+                        return <div key={ref.id} className={`min-w-0 rounded-lg border border-border-primary bg-bg-primary p-2 ${ref.kind === 'audio' ? 'sm:col-span-2' : ''}`}>
                             <div className="mb-2 flex items-center justify-between gap-2">
                                 <Toggle label={referenceToken(ref)} checked={control.enabled} onChange={enabled => update({ references: { ...options.references, [ref.id]: { ...control, enabled } } })} />
                                 <button type="button" className="text-xs text-red-300" onClick={() => { if (window.confirm(`Remove ${referenceToken(ref)}? Update the prompt if it mentions this reference.`)) patchDraft({ references: draft.references.filter(item => item.id !== ref.id) }); }}>Remove</button>
                             </div>
                             <H3Media reference={ref} />
+                            {ref.kind === 'audio' && <H3AudioReference reference={ref} videoDuration={options.duration}
+                                onPendingChange={pending => setPendingAudio(current => current[ref.id] === pending ? current : { ...current, [ref.id]: pending })} onApply={(file, audioSelection) => {
+                                setError('');
+                                const duration = audioSelection.end - audioSelection.start;
+                                patchDraft({ duration, references: draft.references.map(item => item.id === ref.id ? { ...item, file, audioSelection } : item) });
+                                update({ duration });
+                                setStatus(`${referenceToken(ref)} uses ${audioSelection.start.toFixed(3)} - ${audioSelection.end.toFixed(3)} s. H3 duration set to ${duration.toFixed(3)} s (native frame rounding applies).`);
+                            }} />}
+                            {ref.kind === 'audio' && <AudioLyricsEditor reference={ref} provider={lyricsProvider} model={lyricsModel} onSettingsChange={onLyricsSettingsChange} passagePending={!!pendingAudio[ref.id]} requireAppliedPassage={options.forceOriginalAudio && options.originalAudioId === ref.id} onChange={lyrics => patchReference(ref, { lyrics })} />}
                             {ref.kind === 'video' && <div className="mt-2"><Toggle label="Use source soundtrack" checked={control.useSoundtrack} onChange={useSoundtrack => update({ references: { ...options.references, [ref.id]: { ...control, useSoundtrack } } })} /></div>}
                             <input aria-label={`H3 role ${referenceToken(ref)}`} className={`${input} !text-xs`} value={ref.note} placeholder="Reference role" onChange={event => patchReference(ref, { note: event.target.value })} />
                             {ref.kind !== 'audio' && <button type="button" className={`${button} mt-2 !py-1 !text-xs`} onClick={() => setEditing(ref)}>Crop / resize{ref.kind === 'video' ? ' / trim' : ''}</button>}
-                            {ref.file !== ref.original && <button type="button" className={`${button} ml-1 mt-2 !py-1 !text-xs`} onClick={() => patchReference(ref, { file: ref.original })}>Restore original</button>}
+                            {ref.file !== ref.original && <button type="button" className={`${button} ml-1 mt-2 !py-1 !text-xs`} onClick={() => patchReference(ref, { file: ref.original, audioSelection: undefined })}>Restore original</button>}
                         </div>;
                     })}</div>
                     {mapping && <div className="space-y-1 text-xs text-text-secondary">{mapping.mappings.map(item => <p key={item.from}>{item.from} → {item.to}</p>)}<p>Video soundtrack presence is verified on the server before final token mapping. Silent videos do not consume an Audio number.</p></div>}
@@ -288,19 +374,21 @@ export const MinimaxH3Panel: React.FC<{
                             <NumberField label="Preview FPS" value={options.previewFps} min={1} max={60} onChange={previewFps => update({ previewFps })} hint="Ignored by KJ when audio preview is enabled." />
                             <Choice label="Preview tiny VAE" value={options.tinyVae} choices={lists('ModelPreviewOverrideKJ', 'tiny_vae', ['none', 'taeh3.safetensors'])} onChange={tinyVae => update({ tinyVae })} />
                             <Toggle label="Use full video VAE in preview" checked={options.previewUseVae} onChange={previewUseVae => update({ previewUseVae })} />
-                            <Toggle label="Include audio in preview" checked={options.previewAudio} onChange={previewAudio => update({ previewAudio })} />
+                            <Toggle label="Include audio in preview" checked={options.originalAudioId === undefined && options.previewAudio} disabled={options.originalAudioId !== undefined} onChange={previewAudio => update({ previewAudio })} />
                         </div>
                         <p className="text-xs text-text-muted">KJ emits JPEG, animated WebP or MP4 over the API. Tiny VAE takes priority over full VAE. Audio/full-frame previews increase decoding cost. No preview is required for a successful generation.</p>
                     </fieldset>
                 </div></details>
                 <details className={box} open><summary className="cursor-pointer font-semibold">Output & audio</summary><div className="mt-3 space-y-3">
-                    <Toggle label="Generate output audio" checked={options.generateAudio} onChange={generateAudio => update({ generateAudio })} />
+                    <Toggle label="Generate output audio" checked={options.originalAudioId === undefined && options.generateAudio} disabled={options.originalAudioId !== undefined} onChange={generateAudio => update({ generateAudio })} />
+                    {options.originalAudioId !== undefined && <p className="text-xs text-violet-300">Original soundtrack is active: generated audio is not decoded or mixed into the result. trim_to_audio is forced on. H3 reference conditioning still guides generated visuals; it does not hard-lock the mouth to the recording.</p>}
                     <div className="grid gap-3 sm:grid-cols-2">
                         <NumberField label="Output FPS" value={options.frameRate} min={1} max={240} onChange={frameRate => update({ frameRate })} />
                         <NumberField label="Loop count" value={options.loopCount} min={0} max={100} onChange={loopCount => update({ loopCount })} />
                         <Choice label="Output format" value={options.format} choices={lists('VHS_VideoCombine', 'format', ['video/h264-mp4'])} onChange={changeFormat} />
                         <Field label="Filename prefix"><input aria-label="Filename prefix" className={input} value={options.filenamePrefix} onChange={event => update({ filenamePrefix: event.target.value })} /></Field>
                         {widgets.map(widget => {
+                            if (widget.name === 'trim_to_audio' && options.originalAudioId !== undefined) return <Toggle key={widget.name} label="trim_to_audio (original soundtrack)" checked disabled onChange={() => {}} />;
                             const value = options.formatOptions[widget.name] ?? widget.config?.default ?? (Array.isArray(widget.type) ? widget.type[0] : widget.type === 'BOOLEAN' ? false : 0);
                             const set = (next: string | number | boolean) => update({ formatOptions: { ...options.formatOptions, [widget.name]: next } });
                             if (Array.isArray(widget.type)) return <Choice key={widget.name} label={widget.name} value={String(value)} choices={widget.type} onChange={set} />;
@@ -323,21 +411,27 @@ export const MinimaxH3Panel: React.FC<{
                     </> : <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-border-primary p-4 text-center text-sm text-text-secondary">{busy ? options.preview ? 'Waiting for KJ preview frames...' : 'Live preview disabled.' : 'Animated previews appear during sampling, when emitted by KJ.'}</div>}
                     {busy && <progress aria-label="H3 generation progress" value={progress} max={1} className="h-2 w-full accent-violet-400" />}
                     {busy ? <button type="button" disabled={cancelling} className={`${button} w-full border-red-400/50 text-red-300`} onClick={() => { setCancelling(true); controller.current?.abort(); }}>{cancelling ? 'Cancelling safely...' : 'Cancel H3 generation'}</button>
-                        : <button type="button" className={`${button} w-full border-violet-400 bg-violet-400/15 !py-3 text-violet-200`} disabled={!ready || saveStatus === 'saving' || !draft?.prompt.trim() || !draft.references.length || !!mappingError} onClick={generate}>Generate REF2V video</button>}
-                    <div className="flex flex-wrap gap-2"><button type="button" className={button} disabled={!ready || busy || checking} onClick={check}>{checking ? 'Checking...' : 'Check workflow'}</button><button type="button" className={button} disabled={!draft || busy} onClick={exportWorkflow}>Export API workflow</button></div>
+                        : <button type="button" className={`${button} w-full border-violet-400 bg-violet-400/15 !py-3 text-violet-200`} disabled={!ready || copyingFrame || refreshingPrompt || hasPendingAudio || saveStatus === 'saving' || !draft?.prompt.trim() || !draft.references.length || !!mappingError} onClick={generate}>Generate REF2V video</button>}
+                    {hasPendingAudio && <p role="alert" className="text-xs text-amber-300">Apply the audio selection first. No older/full track will be submitted instead.</p>}
+                    <div className="flex flex-wrap gap-2"><button type="button" className={button} disabled={!ready || busy || copyingFrame || checking} onClick={check}>{checking ? 'Checking...' : 'Check workflow'}</button><button type="button" className={button} disabled={!draft || busy || copyingFrame} onClick={exportWorkflow}>Export API workflow</button></div>
                     <p className="text-xs text-text-muted">Generation uploads enabled edited references to your ComfyUI server. Model/GPU cost and memory depend on resolution, length, reference size and preview settings.</p>
                 </section>
                 {result && <section className={`${box} space-y-3`}>
                     <h4 className="font-semibold">Last completed output</h4>
                     {result.options.format.startsWith('image/') || /(?:png|gif)$/.test(result.options.format)
-                        ? <img src={result.videoUrl} alt="H3 generated output" className="w-full rounded-lg bg-black" />
-                        : <video src={result.videoUrl} controls className="w-full rounded-lg bg-black" />}
+                        ? <img src={resultUrl} alt="H3 generated output" className="w-full rounded-lg bg-black" />
+                        : <video src={resultUrl || undefined} controls className="w-full rounded-lg bg-black" />}
+                    {result.videoBlob && <p className="text-xs text-violet-300">Original WAV locked locally. This player, download, Library save and last-frame extraction use the corrected MP4, not the server soundtrack.</p>}
                     <p className="break-all text-xs text-text-secondary">Seed {result.seed} · Prompt {result.promptId}</p>
+                    {result.options.format.startsWith('video/') && <button type="button" className={`${button} w-full`} disabled={!ready || busy || copyingFrame || refreshingPrompt || !draft} onClick={() => void copyLastFrame()}>
+                        {copyingFrame ? 'Copying last frame...' : 'Copy last frame to Picture 1'}
+                    </button>}
+                    {result.options.format.startsWith('video/') && <p className="text-xs text-text-muted">Uses the exact last decoded video frame at full resolution. This prepares a reference for the next clip; REF2V does not guarantee seamless first-frame matching.</p>}
                     <button type="button" className={`${button} w-full border-violet-400 bg-violet-400/15 text-violet-200`} disabled={busy || saveStatus !== 'idle'} onClick={saveOutputToLibrary}>
                         {saveStatus === 'saving' ? 'Saving to Library...' : saveStatus === 'saved' ? 'Saved to Library' : 'Save to Library'}
                     </button>
                     <p className="text-xs text-text-muted">Copies this output into your Library, including its prompt, seed, settings and executed workflow. It remains available without the ComfyUI output file.</p>
-                    <a href={result.videoUrl} download className={`${button} inline-block`} target="_blank" rel="noreferrer">Open / download output</a>
+                    <a href={resultUrl} download={result.videoBlob ? 'minimax-h3-original-audio.mp4' : true} className={`${button} inline-block`} target="_blank" rel="noreferrer">Open / download output</a>
                     <p className="text-xs text-text-muted">Browser playback depends on the selected container/codec. Image-sequence formats remain in the server output folder; this link opens the returned file.</p>
                     <button type="button" className={`${button} ml-2`} onClick={() => download(JSON.stringify(result.workflow, null, 2), 'minimax-h3-executed-workflow.json', 'application/json')}>Executed workflow</button>
                     <details><summary className="cursor-pointer text-sm">{result.promptIsFinal ? 'Executed prompt' : 'Submitted prompt (server rewrite not returned)'}</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{result.prompt}</pre></details>
@@ -350,9 +444,10 @@ export const MinimaxH3Panel: React.FC<{
 
 const H3Media: React.FC<{ reference: VideoReference }> = ({ reference }) => {
     const url = useMediaURL(reference.file);
+    if (reference.kind === 'audio') return url ? <AudioPlayer src={url} label={`Generation audio ${referenceToken(reference)}`} detail={reference.file.name} compact pauseWhenHidden /> : null;
     return <div>
-        {url && (reference.kind === 'image' ? <img src={url} alt={`H3 ${referenceToken(reference)}`} className="h-28 w-full object-contain" /> : reference.kind === 'video'
-            ? <video src={url} controls preload="metadata" className="h-28 w-full" /> : <audio src={url} controls className="w-full" />)}
+        {url && (reference.kind === 'image' ? <img src={url} alt={`H3 ${referenceToken(reference)}`} className="h-28 w-full object-contain" />
+            : <video src={url} controls preload="metadata" className="h-28 w-full" />)}
         <p title={reference.file.name} className="mt-1 truncate text-[11px] text-text-secondary">{reference.file.name}</p>
     </div>;
 };

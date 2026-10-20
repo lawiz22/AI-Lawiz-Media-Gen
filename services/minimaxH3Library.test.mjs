@@ -19,7 +19,6 @@ const dataUrlToThumbnail = async url => {
     return 'data:image/jpeg;base64,dGh1bWI=';
 };
 const createVideoPlaceholderThumbnail = () => 'data:image/svg+xml;base64,cGxhY2Vob2xkZXI=';
-const referenceToken = ref => \`<Picture \${ref.slot}>\`;
 const cloneVideoPromptLibraryOptions = value => value;
 const stores = new Map();
 const store = name => {
@@ -36,7 +35,7 @@ const openDB = async () => ({
     transaction: () => ({ objectStore: store, done: Promise.resolve() }),
 });
 `;
-const source = mocks + read('./minimaxH3Workflow.ts') + read('./minimaxH3Library.ts') + read('./idbLibraryService.ts');
+const source = mocks + read('./videoPromptService.ts') + read('./minimaxH3Workflow.ts') + read('./minimaxH3Library.ts') + read('./idbLibraryService.ts');
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 const nativeFetch = globalThis.fetch;
@@ -51,6 +50,17 @@ const mockFetch = (t, handler) => {
     globalThis.fetch = handler;
     t.after(() => { globalThis.fetch = previous; api.setThumbnailFailure(false); });
 };
+
+test('Library saves the locally locked MP4 instead of fetching the server soundtrack', async t => {
+    mockFetch(t, () => { throw new Error('Must not download uncorrected server media'); });
+    const rendered = result();
+    rendered.videoBlob = new Blob(['locked local bytes'], { type: 'video/mp4' });
+    rendered.options.forceOriginalAudio = true;
+    const { item } = await api.buildMinimaxH3LibraryItem(rendered);
+    assert.equal(await item.assetBlobs.media.text(), 'locked local bytes');
+    assert.equal(item.minimaxH3Options.options.forceOriginalAudio, true);
+    assert.equal(item.minimaxH3Options.filename, 'minimax-h3-original-audio.mp4');
+});
 const bytes = new Uint8Array([0, 1, 2, 127, 128, 255]);
 
 test('saves original video bytes as a Library Blob with prompt, actual seed, options and executed graph', async t => {

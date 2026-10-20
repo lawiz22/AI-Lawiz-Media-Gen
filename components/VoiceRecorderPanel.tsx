@@ -4,6 +4,7 @@ import { addToLibrary } from '../store/librarySlice';
 import type { AppDispatch } from '../store/store';
 import { fileToDataUrl, fileToResizedDataUrl } from '../utils/imageUtils';
 import { AudioPlayer } from './AudioPlayer';
+import { encodeAudioWav } from '../services/audioClipService';
 import { CheckIcon, DownloadIcon, MicrophoneIcon, PhotographIcon, RefreshIcon, SaveIcon, SpinnerIcon, VolumeIcon } from './icons';
 
 type RecordingSource = 'microphone' | 'system' | 'mixed';
@@ -19,34 +20,7 @@ const convertToWav = async (blob: Blob) => {
     const context = new AudioContext();
     try {
         const buffer = await context.decodeAudioData(await blob.arrayBuffer());
-        const channelCount = buffer.numberOfChannels;
-        const dataLength = buffer.length * channelCount * 2;
-        const output = new ArrayBuffer(44 + dataLength);
-        const view = new DataView(output);
-        const writeText = (offset: number, text: string) => Array.from(text).forEach((character, index) => view.setUint8(offset + index, character.charCodeAt(0)));
-        writeText(0, 'RIFF');
-        view.setUint32(4, 36 + dataLength, true);
-        writeText(8, 'WAVE');
-        writeText(12, 'fmt ');
-        view.setUint32(16, 16, true);
-        view.setUint16(20, 1, true);
-        view.setUint16(22, channelCount, true);
-        view.setUint32(24, buffer.sampleRate, true);
-        view.setUint32(28, buffer.sampleRate * channelCount * 2, true);
-        view.setUint16(32, channelCount * 2, true);
-        view.setUint16(34, 16, true);
-        writeText(36, 'data');
-        view.setUint32(40, dataLength, true);
-        const channels = Array.from({ length: channelCount }, (_, index) => buffer.getChannelData(index));
-        let offset = 44;
-        for (let frame = 0; frame < buffer.length; frame += 1) {
-            for (let channel = 0; channel < channelCount; channel += 1) {
-                const sample = Math.max(-1, Math.min(1, channels[channel][frame]));
-                view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
-                offset += 2;
-            }
-        }
-        return new Blob([output], { type: 'audio/wav' });
+        return encodeAudioWav(buffer);
     } finally {
         await context.close();
     }

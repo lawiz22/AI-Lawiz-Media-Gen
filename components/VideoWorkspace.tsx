@@ -12,8 +12,11 @@ import { DEFAULT_OPENROUTER_MODEL, filterOpenRouterModels, getOpenRouterInputMod
 import { VideoReferenceEditor, useMediaURL } from './VideoReferenceEditor';
 import { buildVideoPromptLibraryItem, restoreVideoPromptLibraryItem } from '../services/videoPromptLibrary';
 import { MinimaxH3Panel } from './MinimaxH3Panel';
+import { AudioLyricsEditor, OriginalAudioSelector } from './VideoAudioControls';
+import { AudioPlayer } from './AudioPlayer';
+import { H3AudioReference } from './H3AudioReference';
 import { CharacterSwapPanel } from './CharacterSwapPanel';
-import { defaultMinimaxH3Options, h3AspectFromPrompt } from '../services/minimaxH3Workflow';
+import { defaultMinimaxH3Options, h3AspectFromPrompt, withH3OriginalAudio } from '../services/minimaxH3Workflow';
 
 const button = 'inline-flex items-center justify-center gap-2 rounded-lg border border-border-primary px-3 py-2 text-sm font-medium transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-40';
 const input = 'w-full rounded-lg border border-border-primary bg-bg-primary p-2.5 text-sm text-text-primary focus:border-accent focus:outline-none';
@@ -59,7 +62,7 @@ const ReferenceCard: React.FC<{
         <div className="flex h-36 items-center justify-center bg-black/40">
             {url && (reference.kind === 'image' ? <img src={url} alt={referenceToken(reference)} className="h-full w-full object-contain" />
                 : reference.kind === 'video' ? <video src={url} controls preload="metadata" className="h-full w-full object-contain" />
-                    : <audio src={url} controls preload="metadata" className="w-full px-2" />)}
+                    : <AudioPlayer src={url} label={`Audio ${referenceToken(reference)}`} compact pauseWhenHidden />)}
         </div>
         <div className="space-y-2 p-2">
             <p title={reference.file.name} className="truncate text-xs text-text-secondary">{reference.file.name} · {(reference.file.size / 1024 / 1024).toFixed(2)} MB</p>
@@ -101,6 +104,8 @@ export const VideoWorkspace: React.FC<{
     const [editOutput, setEditOutput] = useState(false);
     const [librarySaving, setLibrarySaving] = useState(false);
     const [librarySaved, setLibrarySaved] = useState(false);
+    const [pendingAudio, setPendingAudio] = useState<Record<string, boolean>>({});
+    const hasPendingAudio = draft.references.some(ref => ref.kind === 'audio' && pendingAudio[ref.id]);
     const ideaRef = useRef<HTMLTextAreaElement>(null);
     const saveQueue = useRef<Promise<void>>(Promise.resolve());
     const loaded = useRef(false);
@@ -162,6 +167,10 @@ export const VideoWorkspace: React.FC<{
     }, [libraryItem, ready, busy, librarySaving, onLibraryItemLoaded]);
 
     const update = (patch: Partial<VideoPromptDraft>) => setDraft(current => ({ ...current, ...patch }));
+    const changeSoundtrack = (originalAudioId: string | undefined, forceOriginalAudio: boolean) => setDraft(current => ({
+        ...current, originalAudioId, forceOriginalAudio,
+        minimaxH3Options: withH3OriginalAudio(current.minimaxH3Options || defaultMinimaxH3Options(), originalAudioId, forceOriginalAudio),
+    }));
     const chooseTab = (next: typeof tab) => { setTab(next); if (next === 'character-swap') setSwapOpened(true); if (next !== 'ltx' && openDirector) onLeaveDirector(); };
     const changeReference = (id: string, patch: Partial<VideoReference>) => setDraft(current => ({
         ...current, references: current.references.map(ref => ref.id === id ? { ...ref, ...patch } : ref),
@@ -193,6 +202,7 @@ export const VideoWorkspace: React.FC<{
         setError(''); setNotice(''); setBusy(true); setLibrarySaved(false);
         try {
             const inputs = captureVideoPromptInputs(draft);
+            if (hasPendingAudio) throw new Error('Apply the audio selection first. The full song or an older excerpt will not be sent to the prompt model.');
             const result = await generateVideoPrompt(draft);
             update({ result, generatedInputs: inputs, generatedInputsProvenance: 'generation' });
             setEditOutput(false);
@@ -211,6 +221,7 @@ export const VideoWorkspace: React.FC<{
         setError(''); setNotice('');
         try {
             const prompt = validateVideoPromptOutput(draft.result, draft.template);
+            if (hasPendingAudio) throw new Error('Apply the audio selection before transferring it to H3.');
             if (draft.workflow === 'replacement' && (!draft.references.some(ref => ref.kind === 'image') || !draft.references.some(ref => ref.kind === 'video'))) {
                 throw new Error('Character replacement needs one video and at least one character picture.');
             }
@@ -221,6 +232,8 @@ export const VideoWorkspace: React.FC<{
                 references: draft.references.map(ref => ({ ...ref })), aspect: draft.aspect, duration: draft.duration, template: draft.template,
             } }, ...(draft.workflow === 'reference' ? { minimaxH3Options: {
                 ...(draft.minimaxH3Options || defaultMinimaxH3Options()), aspect: h3AspectFromPrompt(draft.aspect), duration: draft.duration,
+                originalAudioId: draft.originalAudioId ?? draft.minimaxH3Options?.originalAudioId,
+                forceOriginalAudio: draft.forceOriginalAudio ?? draft.minimaxH3Options?.forceOriginalAudio,
             } } : {}) });
             setSelectedWorkflow(draft.workflow);
             chooseTab('minimax');
@@ -318,6 +331,8 @@ export const VideoWorkspace: React.FC<{
                             </div>
                             <label className="block space-y-2 text-sm font-medium">Your idea<textarea ref={ideaRef} className={`${input} min-h-40 resize-y`} placeholder="Describe the scene, action, dialogue and sound. Click a reference badge to insert its token..." value={draft.idea} onChange={event => update({ idea: event.target.value })} /></label>
                             <div className="flex flex-wrap gap-2">{draft.references.map(ref => <button type="button" key={ref.id} onClick={() => insertToken(ref)}><Token text={referenceToken(ref)} /></button>)}</div>
+                            <OriginalAudioSelector references={draft.references} value={draft.originalAudioId} forced={draft.forceOriginalAudio}
+                                onChange={originalAudioId => changeSoundtrack(originalAudioId, originalAudioId !== undefined)} onForceChange={(forced, originalAudioId) => changeSoundtrack(originalAudioId, forced)} />
                             {draft.template === 'replacement' && <p className="text-xs text-violet-300">Requires a source video and at least one character image. Use each reference's Role field to map identities and actors.</p>}
                         </fieldset>
                     </section>
@@ -345,17 +360,30 @@ export const VideoWorkspace: React.FC<{
                                 </label>
                             </div>
                             {count(kind) ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{draft.references.filter(ref => ref.kind === kind).map(ref =>
-                                <ReferenceCard key={ref.id} reference={ref} disabled={busy || !ready} onEdit={() => setEditing(ref)} onNote={note => changeReference(ref.id, { note })} onInsert={() => insertToken(ref)}
+                                <div key={ref.id} className={ref.kind === 'audio' ? 'sm:col-span-2' : ''}><ReferenceCard reference={ref} disabled={busy || !ready} onEdit={() => setEditing(ref)} onNote={note => changeReference(ref.id, { note })} onInsert={() => insertToken(ref)}
                                     onRemove={() => {
                                         const token = referenceToken(ref);
                                         if ((draft.idea.includes(token) || draft.result.includes(token)) && !window.confirm(`${token} is mentioned in your idea or output. Remove it anyway? Update those references before generating again.`)) return;
                                         update({ references: draft.references.filter(item => item.id !== ref.id) });
                                     }}
-                                    onReset={() => changeReference(ref.id, { file: ref.original })} />)}</div>
+                                    onReset={() => changeReference(ref.id, { file: ref.original, audioSelection: undefined })} />
+                                    {ref.kind === 'audio' && <fieldset disabled={!ready || busy}>
+                                        <H3AudioReference reference={ref} videoDuration={draft.duration} target="prompt"
+                                            onPendingChange={pending => setPendingAudio(current => current[ref.id] === pending ? current : { ...current, [ref.id]: pending })}
+                                            onApply={(file, audioSelection) => {
+                                                setError('');
+                                                setDraft(current => ({ ...current, duration: audioSelection.end - audioSelection.start,
+                                                    references: current.references.map(item => item.id === ref.id ? { ...item, file, audioSelection } : item) }));
+                                                setNotice(`${referenceToken(ref)}: only ${audioSelection.start.toFixed(3)} - ${audioSelection.end.toFixed(3)} s will be sent. The full original stays local. Generate the prompt for this passage before transferring.`);
+                                            }} />
+                                        <AudioLyricsEditor reference={ref} provider={draft.provider} model={draft.models[draft.provider]} passagePending={!!pendingAudio[ref.id]} requireAppliedPassage={draft.forceOriginalAudio && draft.originalAudioId === ref.id} onChange={lyrics => changeReference(ref.id, { lyrics })} />
+                                    </fieldset>}
+                                </div>)}</div>
                                 : <div className="rounded-xl border border-dashed border-border-primary p-5 text-center text-xs text-text-secondary">Drop {kind} files here or use Add {kind}.</div>}
                         </div>)}
                         <p className="text-xs text-text-secondary">Generation sends your idea, selected template, reference notes and edited media to the chosen provider. Maximum 18 MB total media per request; originals stay local. Provider usage may be billed.</p>
-                        <button type="button" className={`${button} w-full border-accent bg-accent/15 !py-3 text-accent`} disabled={!ready || busy || librarySaving || !draft.idea.trim() || openRouterModelBlocked} onClick={generate}>{busy ? 'Composing and saving your video prompt...' : 'Generate video prompt'}</button>
+                        {hasPendingAudio && <p role="alert" className="text-xs text-amber-300">Apply the audio selection first. Only an applied excerpt will be sent, not an older/full track.</p>}
+                        <button type="button" className={`${button} w-full border-accent bg-accent/15 !py-3 text-accent`} disabled={!ready || busy || librarySaving || hasPendingAudio || !draft.idea.trim() || openRouterModelBlocked} onClick={generate}>{busy ? 'Composing and saving your video prompt...' : 'Generate video prompt'}</button>
                         <p className="text-xs text-text-secondary">Successful generations are automatically saved to Library &gt; Prompts with the exact generation setup and all references.</p>
                     </section>
                 </div>
@@ -375,7 +403,7 @@ export const VideoWorkspace: React.FC<{
                     </div>
                     <div className="space-y-3 border-t border-border-primary pt-4">
                         <label className="block space-y-1 text-sm">Minimax H3 destination<select className={input} disabled={busy || !ready} value={draft.workflow} onChange={event => update({ workflow: event.target.value as VideoWorkflow })}>{VIDEO_WORKFLOWS.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label>
-                        <button type="button" className={`${button} w-full border-violet-400/50 bg-violet-400/10 text-violet-300`} disabled={!draft.result || busy || !ready} onClick={transfer}>Send to Minimax H3 draft</button>
+                        <button type="button" className={`${button} w-full border-violet-400/50 bg-violet-400/10 text-violet-300`} disabled={!draft.result || busy || !ready || hasPendingAudio} onClick={transfer}>Send to Minimax H3 draft</button>
                         <p className="text-xs text-text-secondary">Reference to video opens the connected H3 REF2V workflow with your prompt, edited references, aspect ratio and duration. Other workflow slots remain in preparation. No new LTX prompt link yet.</p>
                     </div>
                 </section>
@@ -395,8 +423,20 @@ export const VideoWorkspace: React.FC<{
                         draft={draft.minimaxDrafts.reference}
                         onDraftChange={reference => update({ minimaxDrafts: { ...draft.minimaxDrafts, reference } })}
                         options={draft.minimaxH3Options}
-                        onOptionsChange={minimaxH3Options => update({ minimaxH3Options })}
+                        onOptionsChange={options => setDraft(current => {
+                            const minimaxH3Options = !current.minimaxH3Options && options.originalAudioId === undefined && options.forceOriginalAudio === undefined
+                                ? withH3OriginalAudio(options, current.originalAudioId, current.forceOriginalAudio ?? false) : options;
+                            return { ...current, minimaxH3Options, originalAudioId: minimaxH3Options.originalAudioId, forceOriginalAudio: minimaxH3Options.forceOriginalAudio };
+                        })}
                         ready={ready}
+                        lyricsProvider={draft.provider}
+                        lyricsModel={draft.models[draft.provider]}
+                        onLyricsSettingsChange={(provider, model) => update({ provider, models: { ...draft.models, [provider]: model ?? draft.models[provider] } })}
+                        onRefreshPrompt={(reference, options) => generateVideoPrompt({
+                            ...draft, references: reference.references.filter(ref => (options.references[ref.id]?.enabled ?? true)),
+                            idea: `Refresh this existing shot description for the CURRENT attached audio passage. Keep its visual identity, camera and setting. Remove ALL earlier quoted vocal words and rewrite them using only the current reviewed transcript. Do not continue the previous verse. The current soundtrack requirements override any previous request for new music.\n\nPrevious scene description:\n${reference.prompt}`,
+                            duration: options.duration, aspect: options.aspect.split(' ')[0], template: reference.template, workflow: 'reference', originalAudioId: options.originalAudioId, forceOriginalAudio: options.forceOriginalAudio,
+                        })}
                         onOpenPromptGenerator={() => {
                             if (busy || librarySaving) throw new Error('Wait for the prompt generator or Library save to finish first.');
                             const reference = draft.minimaxDrafts.reference;
@@ -409,6 +449,8 @@ export const VideoWorkspace: React.FC<{
                                     result: reference.prompt, idea: reference.prompt, references: reference.references.map(ref => ({ ...ref })), workflow: 'reference',
                                     aspect: draft.minimaxH3Options?.aspect.split(' ')[0] || reference.aspect,
                                     duration: draft.minimaxH3Options?.duration ?? reference.duration, template: reference.template,
+                                    originalAudioId: draft.minimaxH3Options?.originalAudioId,
+                                    forceOriginalAudio: draft.minimaxH3Options?.forceOriginalAudio,
                                     generatedInputs: undefined, generatedInputsProvenance: undefined,
                                 });
                                 setLibrarySaved(false);

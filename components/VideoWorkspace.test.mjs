@@ -21,7 +21,13 @@ const names = new Set(['selectedModel', 'requiredInputs', 'compatibleModels', 'f
 const calculations = [];
 let select;
 let catalogEffect;
+let transfer;
+let audioSettingsChange;
 const visit = node => {
+    if (ts.isVariableDeclaration(node) && node.name.getText(tree) === 'transfer') transfer = node.initializer;
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(tree) === 'MinimaxH3Panel') {
+        audioSettingsChange = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(tree) === 'onOptionsChange')?.initializer?.expression;
+    }
     if (ts.isVariableStatement(node) && node.declarationList.declarations.some(item => names.has(item.name.getText(tree)))) calculations.push(node.getText(tree));
     if (ts.isJsxElement(node) && node.openingElement.tagName.getText(tree) === 'select'
         && node.openingElement.attributes.properties.some(attribute => ts.isJsxAttribute(attribute)
@@ -34,9 +40,30 @@ visit(tree);
 assert.ok(select, 'OpenRouter must use a native, unfiltered-by-current-value dropdown');
 assert.ok(catalogEffect, 'OpenRouter catalog must load automatically with cancellation');
 assert.equal(calculations.length, names.size);
+assert.ok(transfer && audioSettingsChange);
+const audioWorkflowUrl = compile(['../services/videoPromptService.ts', '../services/minimaxH3Workflow.ts']
+    .map(name => readFileSync(new URL(name, import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '')).join('\n'));
 const component = await import(compile(`
     import React from ${JSON.stringify(pathToFileURL(require.resolve('react')).href)};
     import { filterOpenRouterModels, getOpenRouterInputModalities } from ${JSON.stringify(serviceUrl)};
+    import { defaultMinimaxH3Options, withH3OriginalAudio, validateVideoPromptOutput, h3AspectFromPrompt } from ${JSON.stringify(audioWorkflowUrl)};
+    export { defaultMinimaxH3Options, withH3OriginalAudio };
+    export const changeAudioOptions = (draft, options) => {
+        let result;
+        const setDraft = action => { result = action(draft); };
+        (${audioSettingsChange.getText(tree)})(options);
+        return result;
+    };
+    export const transferAudioDraft = draft => {
+        let result, error;
+        const window = { confirm: () => true }, hasPendingAudio = false;
+        const update = patch => { result = { ...draft, ...patch }; };
+        const setError = value => { error = value; };
+        const setNotice = () => {}, setSelectedWorkflow = () => {}, chooseTab = () => {};
+        (${transfer.getText(tree)})();
+        if (error) throw new Error(error);
+        return result;
+    };
     export const renderPicker = (models, selected, references = [], modelSearch = '', loadingModels = false) => {
         const draft = { models: { openrouter: selected }, references: references.map(kind => ({ kind })) };
         const input = '';
@@ -63,6 +90,36 @@ const models = [
 ];
 const render = (...args) => renderToStaticMarkup(component.renderPicker(...args));
 const tick = () => new Promise(resolve => setImmediate(resolve));
+
+test('H3 audio updates synchronize the composer; a transfer cannot reset the locked source to generated sound', () => {
+    const options = component.withH3OriginalAudio(component.defaultMinimaxH3Options(), 'audio-1', true);
+    const value = {
+        idea: 'singer', workflow: 'reference', template: 'generation', aspect: '4:3', duration: 4,
+        references: [{ id: 'audio-1', kind: 'audio', slot: 1, audioSelection: { start: 4, end: 8 } }],
+        result: 'integrated_multimodal_description: [Shot 1] A singer.\\noverall_soundscape: Original track.\\nnon_diegetic_music: None.'.replaceAll('\\n', '\n'),
+        minimaxDrafts: {}, minimaxH3Options: options,
+    };
+    const synced = component.changeAudioOptions(value, options);
+    assert.equal(synced.originalAudioId, 'audio-1');
+    assert.equal(synced.forceOriginalAudio, true);
+    for (const source of [value, synced]) {
+        const transferred = component.transferAudioDraft(source);
+        assert.equal(transferred.minimaxH3Options.originalAudioId, 'audio-1');
+        assert.equal(transferred.minimaxH3Options.forceOriginalAudio, true);
+        assert.deepEqual(transferred.minimaxDrafts.reference.references[0].audioSelection, { start: 4, end: 8 });
+    }
+    const unlocked = component.changeAudioOptions(synced, component.withH3OriginalAudio(options, undefined, false));
+    assert.equal(component.transferAudioDraft(unlocked).minimaxH3Options.originalAudioId, undefined);
+    assert.equal(component.transferAudioDraft(unlocked).minimaxH3Options.forceOriginalAudio, false);
+});
+
+test('initializing H3 defaults does not clear an original-audio lock restored into the prompt composer', () => {
+    const value = { originalAudioId: 'library-audio', forceOriginalAudio: true };
+    const updated = component.changeAudioOptions(value, component.defaultMinimaxH3Options());
+    assert.equal(updated.originalAudioId, 'library-audio');
+    assert.equal(updated.minimaxH3Options.originalAudioId, 'library-audio');
+    assert.equal(updated.minimaxH3Options.forceOriginalAudio, true);
+});
 
 test('a populated Grok selection still exposes several other OpenRouter models', () => {
     const html = render(models, 'x-ai/grok-4.7');

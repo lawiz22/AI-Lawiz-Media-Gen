@@ -14,10 +14,12 @@ import { createAccentStyle } from '../utils/accentTheme';
 import { VoiceRecorderPanel } from './VoiceRecorderPanel';
 import { VideoClipExtractor } from './VideoClipExtractor';
 import { ReferenceMakerPanel } from './ReferenceMakerPanel';
+import { VideoMergePanel } from './VideoMergePanel';
 
 const VIDEO_UTILS_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     frames: createAccentStyle('#38bdf8', '#7dd3fc', '#0284c7'),
     clips: createAccentStyle('#38bdf8', '#7dd3fc', '#0284c7'),
+    merge: createAccentStyle('#38bdf8', '#7dd3fc', '#0284c7'),
     'reference-maker': createAccentStyle('#c084fc', '#d8b4fe', '#9333ea'),
     colors: createAccentStyle('#4ade80', '#86efac', '#16a34a'),
     'resize-crop': createAccentStyle('#facc15', '#fde047', '#ca8a04'),
@@ -456,6 +458,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     const dispatch = useDispatch<AppDispatch>();
     const videoUtilsState = useSelector((state: RootState) => state.video.videoUtilsState);
     const referenceMakerResetVersion = useSelector((state: RootState) => state.video.referenceMakerResetVersion);
+    const videoMergeResetVersion = useSelector((state: RootState) => state.video.videoMergeResetVersion);
     const { videoFile, extractedFrame, colorPicker, extractedFrameSaveStatus, resizeCrop } = videoUtilsState;
 
     // --- State Setters ---
@@ -707,6 +710,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     const subTabs: SubTab[] = [
         { id: 'frames', label: 'Frame Extractor' },
         { id: 'clips', label: 'Video Extractor' },
+        { id: 'merge', label: 'Merge Video' },
         { id: 'reference-maker', label: 'Reference Maker' },
         { id: 'colors', label: 'Color Palette Extractor' },
         { id: 'resize-crop', label: 'Resize & Crop' },
@@ -718,6 +722,9 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
              <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
             <div className={activeSubTab === 'reference-maker' ? 'block' : 'hidden'}>
                 <ReferenceMakerPanel key={referenceMakerResetVersion} />
+            </div>
+            <div className={activeSubTab === 'merge' ? 'block' : 'hidden'}>
+                <VideoMergePanel key={videoMergeResetVersion} />
             </div>
             <div className={activeSubTab === 'clips' ? 'block' : 'hidden'}>
                 <VideoClipExtractor videoFile={videoFile} onOpenLibrary={onOpenVideoLibrary}

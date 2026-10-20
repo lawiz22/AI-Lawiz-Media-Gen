@@ -105,6 +105,38 @@ test('externalized binaries round-trip original and edited image/video/audio wit
     } finally { urls.forEach(url => URL.revokeObjectURL(url)); }
 });
 
+test('audio selection timestamps and original song survive snapshots and Library round-trip', async () => {
+    const original = inputs();
+    original.references[2].original = file('song.wav', 'audio/wav', 'full song');
+    original.references[2].audioSelection = { start: 3, end: 6 };
+    original.references[2].lyrics = { enabled: true, text: 'one two three', source: api.audioLyricsSource(original.references[2]) };
+    original.originalAudioId = original.references[2].id;
+    original.forceOriginalAudio = true;
+    const snapshot = api.captureVideoPromptInputs(original);
+    original.references[2].audioSelection.start = 0;
+    original.references[2].lyrics.text = 'later edited words';
+    assert.deepEqual(snapshot.references[2].audioSelection, { start: 3, end: 6 });
+    const { assetBlobs, ...metadata } = await api.buildVideoPromptLibraryItem(result, snapshot);
+    const item = { ...metadata, id: 45 };
+    for (const [role, blob] of Object.entries(assetBlobs)) {
+        api.setVideoPromptLibraryAsset(item, role, `data:${blob.type};base64,${Buffer.from(await blob.arrayBuffer()).toString('base64')}`);
+    }
+    const restored = await api.restoreVideoPromptLibraryItem(item);
+    assert.deepEqual(restored.inputs.references[2].audioSelection, { start: 3, end: 6 });
+    assert.equal(await restored.inputs.references[2].original.text(), 'full song');
+    assert.equal(await restored.inputs.references[2].file.text(), 'voice bytes');
+    assert.equal(restored.inputs.originalAudioId, 'a2');
+    assert.equal(restored.inputs.forceOriginalAudio, true);
+    assert.equal(restored.inputs.references[2].lyrics.text, 'one two three');
+    assert.equal(restored.inputs.references[2].lyrics.source, api.audioLyricsSource(restored.inputs.references[2]));
+    assert.match(api.buildVideoPromptInstruction(restored.inputs), /one two three/);
+    const cloned = api.cloneVideoPromptLibraryOptions(item.videoPromptOptions);
+    cloned.references[2].audioSelection.end = 9;
+    cloned.references[2].lyrics.text = 'edited clone';
+    assert.equal(item.videoPromptOptions.references[2].audioSelection.end, 6);
+    assert.equal(item.videoPromptOptions.references[2].lyrics.text, 'one two three');
+});
+
 test('text-only prompts have a thumbnail, preserve explicit legacy provenance and validate output before saving', async () => {
     const item = await api.buildVideoPromptLibraryItem(result, { ...inputs(), references: [] }, 'current-setup');
     assert.match(item.thumbnail, /^data:image\/svg\+xml;base64,/);

@@ -7,13 +7,16 @@ const OUTPUT_MIME_TYPES: Record<string, string> = {
     gif: 'image/gif', webp: 'image/webp', png: 'image/png',
 };
 
-export const readRenderedLibraryMedia = async (videoUrl: string): Promise<{
+export const readRenderedLibraryMedia = async (videoUrl: string, localBlob?: Blob): Promise<{
     blob: Blob; mediaType: 'video' | 'image'; thumbnail: string; warning?: string;
 }> => {
     const filename = new URL(videoUrl).searchParams.get('filename') || '';
-    const response = await fetch(videoUrl, { signal: AbortSignal.timeout(120000) });
-    if (!response.ok) throw new Error(`Could not read the H3 output (${response.status}). Check that its ComfyUI output file still exists.`);
-    const downloaded = await response.blob();
+    let downloaded = localBlob;
+    if (!downloaded) {
+        const response = await fetch(videoUrl, { signal: AbortSignal.timeout(120000) });
+        if (!response.ok) throw new Error(`Could not read the H3 output (${response.status}). Check that its ComfyUI output file still exists.`);
+        downloaded = await response.blob();
+    }
     if (!downloaded.size) throw new Error('The H3 output file is empty. Nothing was saved.');
     const reportedType = downloaded.type.split(';')[0].trim().toLowerCase();
     const extension = filename.split('.').pop()?.toLowerCase() || '';
@@ -45,9 +48,9 @@ export const buildMinimaxH3LibraryItem = async (
         version: 1 as const, savedAt: new Date().toISOString(),
         promptId: result.promptId, prompt: result.prompt, promptIsFinal: result.promptIsFinal,
         seed: result.seed, options: result.options, workflow: result.workflow,
-        filename: new URL(result.videoUrl).searchParams.get('filename') || '',
+        filename: result.videoBlob ? 'minimax-h3-original-audio.mp4' : new URL(result.videoUrl).searchParams.get('filename') || '',
     });
-    const { blob, mediaType, thumbnail, warning } = await readRenderedLibraryMedia(result.videoUrl);
+    const { blob, mediaType, thumbnail, warning } = await readRenderedLibraryMedia(result.videoUrl, result.videoBlob);
     const title = snapshot.prompt.replace(/^[a-z_]+:\s*/, '').replace(/\s+/g, ' ').trim().slice(0, 80) || snapshot.promptId;
     return {
         item: {

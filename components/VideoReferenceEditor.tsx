@@ -4,12 +4,12 @@ import 'react-image-crop/dist/ReactCrop.css';
 import { extractVideoClip } from '../services/videoClipService';
 import { referenceToken, type VideoReference } from '../services/videoPromptService';
 
-export const useMediaURL = (file: File): string => {
+export const useMediaURL = (file: Blob | undefined): string => {
     const [url, setURL] = useState('');
     useEffect(() => {
-        const next = URL.createObjectURL(file);
+        const next = file ? URL.createObjectURL(file) : '';
         setURL(next);
-        return () => URL.revokeObjectURL(next);
+        return () => { if (next) URL.revokeObjectURL(next); };
     }, [file]);
     return url;
 };

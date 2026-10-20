@@ -19,6 +19,8 @@ export const buildVideoPromptLibraryItem = async (
     for (const [index, ref] of snapshot.references.entries()) {
         references.push({
             id: ref.id, kind: ref.kind, slot: ref.slot, note: ref.note,
+            ...(ref.audioSelection ? { audioSelection: { ...ref.audioSelection } } : {}),
+            ...(ref.lyrics ? { lyrics: { ...ref.lyrics } } : {}),
             file: serializeFile(ref.file),
             original: ref.original !== ref.file ? serializeFile(ref.original) : undefined,
         });
@@ -59,7 +61,11 @@ export const restoreVideoPromptLibraryItem = async (item: LibraryItem): Promise<
     for (const ref of options.references) {
         const file = await restoreFile(ref.file);
         const original = ref.original ? await restoreFile(ref.original) : file;
-        references.push({ id: ref.id, kind: ref.kind, slot: ref.slot, note: ref.note, file, original });
+        references.push({
+            id: ref.id, kind: ref.kind, slot: ref.slot, note: ref.note, file, original,
+            ...(ref.audioSelection ? { audioSelection: { ...ref.audioSelection } } : {}),
+            ...(ref.lyrics ? { lyrics: { ...ref.lyrics } } : {}),
+        });
     }
     const inputs = captureVideoPromptInputs({ ...options, references });
     return { inputs, result: validateVideoPromptOutput(item.media, options.template) };
@@ -68,6 +74,8 @@ export const restoreVideoPromptLibraryItem = async (item: LibraryItem): Promise<
 export const cloneVideoPromptLibraryOptions = (options: VideoPromptLibraryOptions | undefined): VideoPromptLibraryOptions | undefined =>
     options ? { ...options, references: options.references.map(ref => ({
         ...ref, file: { ...ref.file }, original: ref.original ? { ...ref.original } : undefined,
+        ...(ref.audioSelection ? { audioSelection: { ...ref.audioSelection } } : {}),
+        ...(ref.lyrics ? { lyrics: { ...ref.lyrics } } : {}),
     })) } : undefined;
 
 export const setVideoPromptLibraryAsset = (item: LibraryItem, role: string, data: string): void => {
