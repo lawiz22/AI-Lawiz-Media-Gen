@@ -6,20 +6,25 @@ import { addToLibrary } from '../store/librarySlice';
 import { setFrameSaveStatus, setPaletteSaveStatus, updateVideoUtilsState, updateColorPickerState, updateResizeCropState, setResizeCropSaveStatus } from '../store/videoSlice';
 // Fix: Imported the missing ImageIcon to resolve the "Cannot find name" error.
 import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, PaletteIcon, LibraryIcon, CopyIcon, GenerateIcon, VideoIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, ResetIcon, CropIcon, ResizeIcon, ImageIcon } from './icons';
-import { dataUrlToFile, dataUrlToThumbnail, createPaletteThumbnail, fileToResizedDataUrl, fileToDataUrl } from '../utils/imageUtils';
+import { dataUrlToFile, dataUrlToThumbnail, createPaletteThumbnail, fileToResizedDataUrl, fileToDataUrl, videoToThumbnail } from '../utils/imageUtils';
 import { resizeImageFile, cropImageFile } from '../utils/imageProcessing';
+import { canSaveVideoClip, extractVideoClip } from '../services/videoClipService';
+import { readLibraryMediaFile } from '../services/libraryMediaService';
 import type { LibraryItem, VideoUtilsState, PaletteColor, ColorPickerState, ResizeCropState, VideoSliceState } from '../types';
 import { ImageUploader } from './ImageUploader';
+import { LibraryPickerModal } from './LibraryPickerModal';
 import { createAccentStyle } from '../utils/accentTheme';
 import { VoiceRecorderPanel } from './VoiceRecorderPanel';
 import { VideoClipExtractor } from './VideoClipExtractor';
 import { ReferenceMakerPanel } from './ReferenceMakerPanel';
 import { VideoMergePanel } from './VideoMergePanel';
+import { AudioExtractorPanel } from './AudioExtractorPanel';
 
 const VIDEO_UTILS_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     frames: createAccentStyle('#38bdf8', '#7dd3fc', '#0284c7'),
     clips: createAccentStyle('#38bdf8', '#7dd3fc', '#0284c7'),
     merge: createAccentStyle('#38bdf8', '#7dd3fc', '#0284c7'),
+    'audio-extractor': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
     'reference-maker': createAccentStyle('#c084fc', '#d8b4fe', '#9333ea'),
     colors: createAccentStyle('#4ade80', '#86efac', '#16a34a'),
     'resize-crop': createAccentStyle('#facc15', '#fde047', '#ca8a04'),
@@ -254,13 +259,104 @@ interface VideoUtilsPanelProps {
     onOpenLibraryForResizeCrop: () => void;
 }
 
+const RESIZE_CROP_ASPECT_RATIOS = [
+    { value: 'free', label: 'Freeform', shortLabel: 'Free' },
+    { value: '1:1', label: '1:1 (Square)', shortLabel: '1:1' },
+    { value: '16:9', label: '16:9 (Widescreen)', shortLabel: '16:9' },
+    { value: '9:16', label: '9:16 (Vertical)', shortLabel: '9:16' },
+    { value: '4:3', label: '4:3 (Standard)', shortLabel: '4:3' },
+    { value: '3:4', label: '3:4 (Portrait)', shortLabel: '3:4' },
+    { value: '21:9', label: '21:9 (Ultrawide)', shortLabel: '21:9' },
+    { value: '3:2', label: '3:2 (Classic)', shortLabel: '3:2' },
+    { value: '2:3', label: '2:3 (Classic Portrait)', shortLabel: '2:3' },
+    { value: '4:5', label: '4:5 (Social Portrait)', shortLabel: '4:5' },
+    { value: '5:4', label: '5:4 (Large Format)', shortLabel: '5:4' },
+] as const;
+
+const parseCropAspectRatio = (aspectStr: string): number | undefined => {
+    if (!aspectStr || aspectStr === 'free') return undefined;
+    const [w, h] = aspectStr.split(':').map(Number);
+    return w > 0 && h > 0 ? w / h : undefined;
+};
+
+const clampEvenVideoDimension = (value: number): number =>
+    Math.max(2, Math.min(4096, Math.round(value / 2) * 2));
+
 const ResizeCropTool: React.FC<{
     resizeCrop: ResizeCropState;
     onOpenLibrary: () => void;
-}> = ({ resizeCrop, onOpenLibrary }) => {
+    resetVersion: number;
+    setStartFrame: (file: File | null) => Promise<void>;
+    setEndFrame: (file: File | null) => Promise<void>;
+}> = ({ resizeCrop, onOpenLibrary, resetVersion, setStartFrame, setEndFrame }) => {
     const dispatch = useDispatch<AppDispatch>();
+    const [mediaMode, setMediaMode] = useState<'image' | 'video'>('image');
     const [crop, setCrop] = useState<Crop>();
     const imgRef = useRef<HTMLImageElement>(null);
+
+    // --- Video Resize & Crop State ---
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const videoControllerRef = useRef<AbortController | null>(null);
+    const videoSourceVersionRef = useRef(0);
+    const [videoFile, setVideoFile] = useState<File | null>(null);
+    const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+    const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+    const [videoDuration, setVideoDuration] = useState(0);
+    const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+    const [videoStart, setVideoStart] = useState(0);
+    const [videoEnd, setVideoEnd] = useState(0);
+    const [videoFps, setVideoFps] = useState(24);
+    const [videoCrop, setVideoCrop] = useState<PercentCrop>({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+    const [videoAspectRatio, setVideoAspectRatio] = useState<string>('free');
+    const [videoResizeMode, setVideoResizeMode] = useState<'scale' | 'dimensions'>('scale');
+    const [videoScale, setVideoScale] = useState<number>(100);
+    const [videoOutputWidth, setVideoOutputWidth] = useState<number>(1280);
+    const [videoOutputHeight, setVideoOutputHeight] = useState<number>(720);
+    const [videoLockRatio, setVideoLockRatio] = useState<boolean>(true);
+    const [videoIsLoading, setVideoIsLoading] = useState<boolean>(false);
+    const [videoProgress, setVideoProgress] = useState<number>(0);
+    const [videoError, setVideoError] = useState<string | null>(null);
+    const [videoResult, setVideoResult] = useState<{ file: File; name: string; duration: number } | null>(null);
+    const [videoResultUrl, setVideoResultUrl] = useState<string | null>(null);
+    const [videoSaveStatus, setVideoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+    const [capturedFrame, setCapturedFrame] = useState<{ dataUrl: string; time: number; width: number; height: number } | null>(null);
+    const [capturedFrameSaveStatus, setCapturedFrameSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+    const [isVideoLibraryPickerOpen, setIsVideoLibraryPickerOpen] = useState<boolean>(false);
+
+    useEffect(() => {
+        return () => {
+            videoControllerRef.current?.abort();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (resetVersion === 0) return;
+        videoSourceVersionRef.current++;
+        videoControllerRef.current?.abort();
+        videoControllerRef.current = null;
+        setVideoFile(null);
+        setVideoDimensions({ width: 0, height: 0 });
+        setVideoDuration(0);
+        setVideoCurrentTime(0);
+        setVideoStart(0);
+        setVideoEnd(0);
+        setVideoFps(24);
+        setVideoCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+        setVideoAspectRatio('free');
+        setVideoResizeMode('scale');
+        setVideoScale(100);
+        setVideoOutputWidth(1280);
+        setVideoOutputHeight(720);
+        setVideoLockRatio(true);
+        setVideoIsLoading(false);
+        setVideoProgress(0);
+        setVideoError(null);
+        setVideoResult(null);
+        setVideoSaveStatus('idle');
+        setCapturedFrame(null);
+        setCapturedFrameSaveStatus('idle');
+        setIsVideoLibraryPickerOpen(false);
+    }, [resetVersion]);
 
     const handleImageUpload = (file: File | null) => {
         dispatch(updateResizeCropState({
@@ -298,19 +394,38 @@ const ResizeCropTool: React.FC<{
         // The effect should only re-run when the source file itself changes.
     }, [resizeCrop.sourceFile, dispatch]);
 
-    const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-        const { width, height } = e.currentTarget;
-        const aspectStr = resizeCrop.aspectRatio;
-        const aspect = aspectStr === 'free' ? undefined : (parseFloat(aspectStr.split(':')[0]) / parseFloat(aspectStr.split(':')[1]));
-        
-        const newCrop = centerCrop(
-            makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height),
-            width, height
-        );
-        setCrop(newCrop);
-        // Also update the redux state immediately
-        handleCropComplete(undefined, newCrop as PercentCrop);
-    };
+    useEffect(() => {
+        videoSourceVersionRef.current++;
+        const url = videoFile ? URL.createObjectURL(videoFile) : null;
+        setVideoPreviewUrl(url);
+        setVideoDimensions({ width: 0, height: 0 });
+        setVideoDuration(0);
+        setVideoCurrentTime(0);
+        setVideoStart(0);
+        setVideoEnd(0);
+        setVideoCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+        setVideoScale(100);
+        setVideoResult(null);
+        setVideoSaveStatus('idle');
+        setCapturedFrame(null);
+        setCapturedFrameSaveStatus('idle');
+        setVideoIsLoading(false);
+        setVideoProgress(0);
+        setVideoError(null);
+        return () => {
+            videoSourceVersionRef.current++;
+            videoControllerRef.current?.abort();
+            if (url) URL.revokeObjectURL(url);
+        };
+    }, [videoFile]);
+
+    useEffect(() => {
+        const url = videoResult ? URL.createObjectURL(videoResult.file) : null;
+        setVideoResultUrl(url);
+        return () => {
+            if (url) URL.revokeObjectURL(url);
+        };
+    }, [videoResult]);
 
     const handleCropComplete = useCallback((_: PixelCrop | undefined, percentCrop: PercentCrop) => {
         if (percentCrop.width > 0 && percentCrop.height > 0) {
@@ -324,6 +439,224 @@ const ResizeCropTool: React.FC<{
             }));
         }
     }, [dispatch]);
+
+    const applyImageAspectRatio = useCallback((aspectStr: string, imgWidth: number, imgHeight: number) => {
+        const aspect = parseCropAspectRatio(aspectStr);
+        const newCrop: PercentCrop = aspect
+            ? centerCrop(
+                makeAspectCrop({ unit: '%', width: 90 }, aspect, imgWidth, imgHeight),
+                imgWidth,
+                imgHeight
+            )
+            : { unit: '%', x: 5, y: 5, width: 90, height: 90 };
+        setCrop(newCrop);
+        handleCropComplete(undefined, newCrop);
+    }, [handleCropComplete]);
+
+    const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+        const { width, height } = e.currentTarget;
+        applyImageAspectRatio(resizeCrop.aspectRatio, width, height);
+    };
+
+    const handleImageAspectRatioChange = (nextAspectRatio: string) => {
+        dispatch(updateResizeCropState({ aspectRatio: nextAspectRatio }));
+        if (imgRef.current && imgRef.current.width > 0 && imgRef.current.height > 0) {
+            applyImageAspectRatio(nextAspectRatio, imgRef.current.width, imgRef.current.height);
+        }
+    };
+
+    const syncVideoDimensionsFromCropAndScale = useCallback((
+        nextCrop: PercentCrop,
+        nextScale: number,
+        dims: { width: number; height: number },
+        mode: 'scale' | 'dimensions',
+        lockRatio: boolean,
+        currentCustomWidth: number,
+    ) => {
+        if (!dims.width || !dims.height || nextCrop.width <= 0 || nextCrop.height <= 0) return;
+        const croppedW = dims.width * (nextCrop.width / 100);
+        const croppedH = dims.height * (nextCrop.height / 100);
+        if (mode === 'scale') {
+            setVideoOutputWidth(clampEvenVideoDimension(croppedW * (nextScale / 100)));
+            setVideoOutputHeight(clampEvenVideoDimension(croppedH * (nextScale / 100)));
+        } else if (lockRatio && croppedW > 0 && croppedH > 0) {
+            setVideoOutputHeight(clampEvenVideoDimension(currentCustomWidth * (croppedH / croppedW)));
+        }
+    }, []);
+
+    const computeVideoCropForAspect = useCallback((aspectStr: string, dims: { width: number; height: number }): PercentCrop => {
+        const aspect = parseCropAspectRatio(aspectStr);
+        if (!aspect || !dims.width || !dims.height) {
+            return { unit: '%', x: 0, y: 0, width: 100, height: 100 };
+        }
+        return centerCrop(
+            makeAspectCrop({ unit: '%', width: 100 }, aspect, dims.width, dims.height),
+            dims.width,
+            dims.height
+        );
+    }, []);
+
+    const handleVideoLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+        const video = e.currentTarget;
+        const w = video.videoWidth;
+        const h = video.videoHeight;
+        const dur = video.duration;
+        if (!w || !h) {
+            setVideoError('Could not read video dimensions.');
+            return;
+        }
+        if (!Number.isFinite(dur) || dur <= 0) {
+            setVideoError('This video does not have a valid finite duration.');
+            return;
+        }
+        const dims = { width: w, height: h };
+        setVideoDimensions(dims);
+        setVideoDuration(dur);
+        setVideoStart(0);
+        setVideoEnd(dur);
+        const nextCrop = computeVideoCropForAspect(videoAspectRatio, dims);
+        setVideoCrop(nextCrop);
+        const croppedW = w * (nextCrop.width / 100);
+        const croppedH = h * (nextCrop.height / 100);
+        setVideoOutputWidth(clampEvenVideoDimension(croppedW * (videoScale / 100)));
+        setVideoOutputHeight(clampEvenVideoDimension(croppedH * (videoScale / 100)));
+    };
+
+    const seekVideo = (time: number) => {
+        if (!videoRef.current || !videoDuration) return;
+        videoRef.current.pause();
+        const clamped = Math.max(0, Math.min(videoDuration, time));
+        videoRef.current.currentTime = clamped;
+        setVideoCurrentTime(clamped);
+    };
+
+    const validVideoRange = Number.isFinite(videoStart)
+        && Number.isFinite(videoEnd)
+        && videoDuration > 0
+        && videoStart >= 0
+        && videoEnd > videoStart
+        && videoEnd <= videoDuration;
+
+    const handleCaptureSelectedFrame = (targetTime?: number) => {
+        const video = videoRef.current;
+        if (!video || !videoDimensions.width || !videoDimensions.height) return;
+        const captureNow = () => {
+            const outW = videoResizeMode === 'scale'
+                ? clampEvenVideoDimension(videoDimensions.width * (videoCrop.width / 100) * (videoScale / 100))
+                : videoOutputWidth;
+            const outH = videoResizeMode === 'scale'
+                ? clampEvenVideoDimension(videoDimensions.height * (videoCrop.height / 100) * (videoScale / 100))
+                : videoOutputHeight;
+            if (!outW || !outH) return;
+            const sx = videoDimensions.width * (videoCrop.x / 100);
+            const sy = videoDimensions.height * (videoCrop.y / 100);
+            const sWidth = videoDimensions.width * (videoCrop.width / 100);
+            const sHeight = videoDimensions.height * (videoCrop.height / 100);
+            const canvas = document.createElement('canvas');
+            canvas.width = outW;
+            canvas.height = outH;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                setVideoError('Could not initialize canvas to capture frame.');
+                return;
+            }
+            ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, outW, outH);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+            setCapturedFrame({
+                dataUrl,
+                time: video.currentTime,
+                width: outW,
+                height: outH,
+            });
+            setCapturedFrameSaveStatus('idle');
+            setVideoError(null);
+        };
+
+        video.pause();
+        if (targetTime !== undefined && Math.abs(video.currentTime - targetTime) > 0.001) {
+            const clamped = Math.max(0, Math.min(videoDuration, targetTime));
+            const onSeeked = () => {
+                video.removeEventListener('seeked', onSeeked);
+                setVideoCurrentTime(video.currentTime);
+                captureNow();
+            };
+            video.addEventListener('seeked', onSeeked);
+            video.currentTime = clamped;
+        } else {
+            captureNow();
+        }
+    };
+
+    const handleDownloadCapturedFrame = () => {
+        if (!capturedFrame) return;
+        const link = document.createElement('a');
+        link.href = capturedFrame.dataUrl;
+        const videoName = sanitizeForFilename(videoFile?.name.replace(/\.[^/.]+$/, '') || 'video_frame');
+        const timeStr = formatTime(capturedFrame.time).replace(/:|\./g, '_');
+        link.download = `${videoName}_${timeStr}_${capturedFrame.width}x${capturedFrame.height}.jpeg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleSetCapturedAsStartFrame = async () => {
+        if (!capturedFrame) return;
+        const file = await dataUrlToFile(capturedFrame.dataUrl, 'start_frame.jpeg');
+        await setStartFrame(file);
+        alert('Frame sent to LTX Director.');
+    };
+
+    const handleSetCapturedAsEndFrame = async () => {
+        if (!capturedFrame) return;
+        const file = await dataUrlToFile(capturedFrame.dataUrl, 'end_frame.jpeg');
+        await setEndFrame(file);
+        alert('Frame sent to LTX Director.');
+    };
+
+    const handleSaveCapturedFrameToLibrary = async () => {
+        if (!capturedFrame || capturedFrameSaveStatus !== 'idle') return;
+        setCapturedFrameSaveStatus('saving');
+        try {
+            const videoName = videoFile?.name || 'video';
+            const item: Omit<LibraryItem, 'id'> = {
+                mediaType: 'extracted-frame',
+                media: capturedFrame.dataUrl,
+                thumbnail: await dataUrlToThumbnail(capturedFrame.dataUrl, 256),
+                name: `Frame (${capturedFrame.width}x${capturedFrame.height}) from ${videoName} at ${formatTime(capturedFrame.time)}`,
+            };
+            await dispatch(addToLibrary(item)).unwrap();
+            setCapturedFrameSaveStatus('saved');
+        } catch (err) {
+            console.error('Failed to save captured frame to library:', err);
+            setCapturedFrameSaveStatus('idle');
+        }
+    };
+
+    const handleVideoCropChange = (nextCrop: PercentCrop) => {
+        if (nextCrop.width <= 0 || nextCrop.height <= 0) return;
+        setVideoCrop(nextCrop);
+        syncVideoDimensionsFromCropAndScale(nextCrop, videoScale, videoDimensions, videoResizeMode, videoLockRatio, videoOutputWidth);
+    };
+
+    const handleVideoAspectRatioChange = (nextRatio: string) => {
+        setVideoAspectRatio(nextRatio);
+        if (videoDimensions.width > 0 && videoDimensions.height > 0) {
+            const nextCrop = computeVideoCropForAspect(nextRatio, videoDimensions);
+            setVideoCrop(nextCrop);
+            syncVideoDimensionsFromCropAndScale(nextCrop, videoScale, videoDimensions, videoResizeMode, videoLockRatio, videoOutputWidth);
+        }
+    };
+
+    const handleVideoScaleChange = (nextScale: number) => {
+        setVideoScale(nextScale);
+        setVideoResizeMode('scale');
+        syncVideoDimensionsFromCropAndScale(videoCrop, nextScale, videoDimensions, 'scale', videoLockRatio, videoOutputWidth);
+    };
+
+    const videoCropAspect = useMemo(() => {
+        if (!videoDimensions.width || !videoDimensions.height || !videoCrop.width || !videoCrop.height) return 16 / 9;
+        return (videoDimensions.width * videoCrop.width) / (videoDimensions.height * videoCrop.height);
+    }, [videoDimensions, videoCrop]);
 
     const handleApplyChanges = async () => {
         if (!resizeCrop.sourceFile) return;
@@ -344,6 +677,84 @@ const ResizeCropTool: React.FC<{
             dispatch(updateResizeCropState({ isLoading: false }));
         }
     };
+
+    const handleApplyVideoChanges = async () => {
+        if (!videoFile || videoIsLoading) return;
+        if (!videoDimensions.width || !videoDimensions.height || videoDuration <= 0) {
+            setVideoError('Wait for the video preview metadata to finish loading.');
+            return;
+        }
+        if (!validVideoRange) {
+            setVideoError('Select a valid start and end time within the video duration.');
+            return;
+        }
+        const outW = videoResizeMode === 'scale'
+            ? clampEvenVideoDimension(videoDimensions.width * (videoCrop.width / 100) * (videoScale / 100))
+            : videoOutputWidth;
+        const outH = videoResizeMode === 'scale'
+            ? clampEvenVideoDimension(videoDimensions.height * (videoCrop.height / 100) * (videoScale / 100))
+            : videoOutputHeight;
+
+        if (![outW, outH].every(value => Number.isInteger(value) && value >= 2 && value <= 4096 && value % 2 === 0)) {
+            setVideoError('Use even output dimensions between 2 and 4096 pixels.');
+            return;
+        }
+
+        const controller = new AbortController();
+        videoControllerRef.current = controller;
+        const version = videoSourceVersionRef.current;
+        videoRef.current?.pause();
+        setVideoIsLoading(true);
+        setVideoProgress(0);
+        setVideoError(null);
+        setVideoResult(null);
+        setVideoSaveStatus('idle');
+
+        try {
+            const { file: processedVideo, duration: outDuration } = await extractVideoClip(
+                videoFile,
+                {
+                    start: videoStart,
+                    end: videoEnd,
+                    duration: videoDuration,
+                    reduceResolution: false,
+                    spatialEdit: {
+                        x: videoCrop.x,
+                        y: videoCrop.y,
+                        width: videoCrop.width,
+                        height: videoCrop.height,
+                        outputWidth: outW,
+                        outputHeight: outH,
+                    },
+                },
+                controller.signal,
+                setVideoProgress
+            );
+            if (version !== videoSourceVersionRef.current) return;
+            const base = videoFile.name.replace(/\.[^.]+$/, '').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+            const isTrimmed = videoStart > 0.001 || Math.abs(videoEnd - videoDuration) > 0.001;
+            const rangeSuffix = isTrimmed ? `_${videoStart.toFixed(2)}-${videoEnd.toFixed(2)}` : '';
+            const outName = `edited_${base}${rangeSuffix}_${outW}x${outH}.mp4`;
+            setVideoResult({
+                file: new File([processedVideo], outName, { type: 'video/mp4' }),
+                name: outName,
+                duration: outDuration,
+            });
+        } catch (cause) {
+            if (version !== videoSourceVersionRef.current) return;
+            if (controller.signal.aborted) {
+                setVideoError('Video processing cancelled.');
+            } else {
+                console.error('Failed to resize/crop video:', cause);
+                setVideoError(cause instanceof Error ? cause.message : String(cause));
+            }
+        } finally {
+            if (version === videoSourceVersionRef.current) {
+                setVideoIsLoading(false);
+                videoControllerRef.current = null;
+            }
+        }
+    };
     
     const handleSaveResultToLibrary = async () => {
         if (!resizeCrop.resultUrl || !resizeCrop.sourceFile) return;
@@ -362,6 +773,32 @@ const ResizeCropTool: React.FC<{
         }
     };
 
+    const handleSaveVideoResultToLibrary = async () => {
+        if (!videoResult || !canSaveVideoClip(videoResult.duration) || videoSaveStatus !== 'idle') return;
+        const version = videoSourceVersionRef.current;
+        setVideoSaveStatus('saving');
+        setVideoError(null);
+        try {
+            const [media, thumbnail] = await Promise.all([
+                fileToDataUrl(videoResult.file),
+                videoToThumbnail(videoResult.file, 256),
+            ]);
+            await dispatch(addToLibrary({
+                mediaType: 'video',
+                name: `Edited - ${videoFile?.name || videoResult.name}`,
+                media,
+                thumbnail,
+            })).unwrap();
+            if (version === videoSourceVersionRef.current) setVideoSaveStatus('saved');
+        } catch (cause) {
+            console.error('Failed to save edited video:', cause);
+            if (version === videoSourceVersionRef.current) {
+                setVideoError(`Could not save to Library: ${cause instanceof Error ? cause.message : String(cause)}`);
+                setVideoSaveStatus('idle');
+            }
+        }
+    };
+
     const handleDownloadResult = () => {
         if (!resizeCrop.resultUrl || !resizeCrop.sourceFile) return;
         const link = document.createElement('a');
@@ -372,74 +809,654 @@ const ResizeCropTool: React.FC<{
         document.body.removeChild(link);
     };
 
+    const handleSelectVideoFromLibrary = async (item: LibraryItem) => {
+        setIsVideoLibraryPickerOpen(false);
+        setVideoError(null);
+        try {
+            const file = await readLibraryMediaFile(item, ['video']);
+            setVideoFile(file);
+        } catch (cause) {
+            setVideoError(cause instanceof Error ? cause.message : String(cause));
+        }
+    };
+
+    const effectiveVideoOutputWidth = videoResizeMode === 'scale' && videoDimensions.width
+        ? clampEvenVideoDimension(videoDimensions.width * (videoCrop.width / 100) * (videoScale / 100))
+        : videoOutputWidth;
+    const effectiveVideoOutputHeight = videoResizeMode === 'scale' && videoDimensions.height
+        ? clampEvenVideoDimension(videoDimensions.height * (videoCrop.height / 100) * (videoScale / 100))
+        : videoOutputHeight;
+    const videoControlsDisabled = videoIsLoading || videoSaveStatus === 'saving';
+
     return (
         <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">
-            <div className="flex items-center gap-3 mb-4">
-                <CropIcon className="w-8 h-8 text-accent" />
-                <h2 className="text-2xl font-bold text-accent">Resize & Crop</h2>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                <div className="flex items-center gap-3">
+                    <CropIcon className="w-8 h-8 text-accent" />
+                    <h2 className="text-2xl font-bold text-accent">Resize & Crop</h2>
+                </div>
+                <div role="tablist" aria-label="Resize & Crop media type" className="inline-flex rounded-lg bg-bg-tertiary p-1 border border-border-primary">
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={mediaMode === 'image'}
+                        onClick={() => setMediaMode('image')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                            mediaMode === 'image'
+                                ? 'bg-accent text-accent-text shadow-sm'
+                                : 'text-text-secondary hover:text-text-primary'
+                        }`}
+                    >
+                        <ImageIcon className="w-4 h-4" />
+                        Image
+                    </button>
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={mediaMode === 'video'}
+                        onClick={() => setMediaMode('video')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                            mediaMode === 'video'
+                                ? 'bg-accent text-accent-text shadow-sm'
+                                : 'text-text-secondary hover:text-text-primary'
+                        }`}
+                    >
+                        <VideoIcon className="w-4 h-4" />
+                        Video
+                    </button>
+                </div>
             </div>
             <p className="text-sm text-text-secondary mb-6">
-                Quickly resize or crop your images to a specific aspect ratio or scale.
+                {mediaMode === 'image'
+                    ? 'Quickly resize or crop your images using standard aspect ratios (16:9, 4:3, 1:1, etc.) or freeform selection.'
+                    : 'Resize or crop your videos using standard aspect ratios (16:9, 4:3, 9:16, etc.) or freeform selection. Exports MP4 with original audio locally.'}
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                        <ImageUploader label="Upload Image" id="resize-crop-source" onImageUpload={handleImageUpload} sourceFile={resizeCrop.sourceFile} />
-                        <button onClick={onOpenLibrary} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select from Library">
-                            <LibraryIcon className="w-6 h-6" />
-                        </button>
-                    </div>
-                    {resizeCrop.sourceFile && (
-                        <div className="space-y-4 pt-4 border-t border-border-primary">
-                            <div>
-                                <label className="block text-sm font-medium text-text-secondary">Resize: {resizeCrop.scale}%</label>
-                                <input type="range" min="10" max="200" step="1" value={resizeCrop.scale} onChange={(e) => dispatch(updateResizeCropState({ scale: Number(e.target.value) }))} disabled={resizeCrop.isLoading} className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-text-secondary">Crop Aspect Ratio</label>
-                                <select value={resizeCrop.aspectRatio} onChange={e => dispatch(updateResizeCropState({ aspectRatio: e.target.value }))} className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
-                                    <option value="free">Freeform</option><option value="1:1">1:1 (Square)</option><option value="16:9">16:9 (Widescreen)</option><option value="9:16">9:16 (Tall)</option><option value="4:3">4:3 (Landscape)</option><option value="3:4">3:4 (Portrait)</option>
-                                </select>
-                            </div>
-                            <button onClick={handleApplyChanges} disabled={resizeCrop.isLoading} style={!resizeCrop.isLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
-                                {resizeCrop.isLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
-                                {resizeCrop.isLoading ? 'Processing...' : 'Apply Changes'}
+
+            {mediaMode === 'image' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <ImageUploader label="Upload Image" id="resize-crop-source" onImageUpload={handleImageUpload} sourceFile={resizeCrop.sourceFile} />
+                            <button onClick={onOpenLibrary} className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary" title="Select image from Library">
+                                <LibraryIcon className="w-6 h-6" />
                             </button>
                         </div>
-                    )}
-                </div>
-                <div className="space-y-4">
-                    <div className="bg-bg-primary p-2 rounded-lg min-h-[400px] flex items-center justify-center">
-                        {resizeCrop.previewUrl ? (
-                            <ReactCrop
-                                crop={crop}
-                                onChange={(_, percentCrop) => setCrop(percentCrop)}
-                                onComplete={handleCropComplete}
-                                aspect={resizeCrop.aspectRatio === 'free' ? undefined : (parseFloat(resizeCrop.aspectRatio.split(':')[0]) / parseFloat(resizeCrop.aspectRatio.split(':')[1]))}
-                                className="max-w-full"
-                            >
-                                <img ref={imgRef} src={resizeCrop.previewUrl} alt="Image to crop" onLoad={onImageLoad} style={{ maxHeight: '60vh' }}/>
-                            </ReactCrop>
-                        ) : (
-                            <div className="text-center text-text-secondary"><ImageIcon className="w-16 h-16 mx-auto mb-4 text-border-primary" /><p>Upload an image to begin editing.</p></div>
-                        )}
-                    </div>
-                    {resizeCrop.resultUrl && (
-                        <div className="pt-4 border-t border-border-primary">
-                            <h3 className="text-lg font-semibold text-text-primary mb-2">Result</h3>
-                            <img src={resizeCrop.resultUrl} alt="Processed result" className="w-full rounded-lg shadow-md" />
-                            <div className="grid grid-cols-2 gap-4 mt-4">
-                                <button onClick={handleDownloadResult} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover"><DownloadIcon className="w-5 h-5" /> Download</button>
-                                <button onClick={handleSaveResultToLibrary} disabled={resizeCrop.saveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors ${resizeCrop.saveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-accent text-accent-text hover:bg-accent-hover'}`}>
-                                    {resizeCrop.saveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : resizeCrop.saveStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                                    {resizeCrop.saveStatus === 'saving' ? 'Saving...' : resizeCrop.saveStatus === 'saved' ? 'Saved' : 'Save to Library'}
+                        {resizeCrop.sourceFile && (
+                            <div className="space-y-4 pt-4 border-t border-border-primary">
+                                <div>
+                                    <label className="block text-sm font-medium text-text-secondary">Resize: {resizeCrop.scale}%</label>
+                                    <input type="range" min="10" max="200" step="1" value={resizeCrop.scale} onChange={(e) => dispatch(updateResizeCropState({ scale: Number(e.target.value) }))} disabled={resizeCrop.isLoading} className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-sm font-medium text-text-secondary">Crop Aspect Ratio</label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {RESIZE_CROP_ASPECT_RATIOS.map(ratio => (
+                                            <button
+                                                key={ratio.value}
+                                                type="button"
+                                                disabled={resizeCrop.isLoading}
+                                                onClick={() => handleImageAspectRatioChange(ratio.value)}
+                                                aria-pressed={resizeCrop.aspectRatio === ratio.value}
+                                                className={`px-2.5 py-1.5 rounded-md text-xs font-semibold border transition-colors ${
+                                                    resizeCrop.aspectRatio === ratio.value
+                                                        ? 'border-accent bg-accent/15 text-accent'
+                                                        : 'border-border-primary bg-bg-tertiary text-text-secondary hover:text-text-primary'
+                                                }`}
+                                            >
+                                                {ratio.shortLabel}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <select value={resizeCrop.aspectRatio} onChange={e => handleImageAspectRatioChange(e.target.value)} disabled={resizeCrop.isLoading} className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
+                                        {RESIZE_CROP_ASPECT_RATIOS.map(ratio => (
+                                            <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <button onClick={handleApplyChanges} disabled={resizeCrop.isLoading} style={!resizeCrop.isLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
+                                    {resizeCrop.isLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                    {resizeCrop.isLoading ? 'Processing...' : 'Apply Changes'}
                                 </button>
                             </div>
+                        )}
+                    </div>
+                    <div className="space-y-4">
+                        <div className="bg-bg-primary p-2 rounded-lg min-h-[400px] flex items-center justify-center">
+                            {resizeCrop.previewUrl ? (
+                                <ReactCrop
+                                    crop={crop}
+                                    onChange={(_, percentCrop) => setCrop(percentCrop)}
+                                    onComplete={handleCropComplete}
+                                    aspect={parseCropAspectRatio(resizeCrop.aspectRatio)}
+                                    className="max-w-full"
+                                >
+                                    <img ref={imgRef} src={resizeCrop.previewUrl} alt="Image to crop" onLoad={onImageLoad} style={{ maxHeight: '60vh' }}/>
+                                </ReactCrop>
+                            ) : (
+                                <div className="text-center text-text-secondary"><ImageIcon className="w-16 h-16 mx-auto mb-4 text-border-primary" /><p>Upload an image to begin editing.</p></div>
+                            )}
                         </div>
-                    )}
-                    {resizeCrop.error && <p className="text-danger text-center bg-danger-bg p-3 rounded-md mt-4">{resizeCrop.error}</p>}
+                        {resizeCrop.resultUrl && (
+                            <div className="pt-4 border-t border-border-primary">
+                                <h3 className="text-lg font-semibold text-text-primary mb-2">Result</h3>
+                                <img src={resizeCrop.resultUrl} alt="Processed result" className="w-full rounded-lg shadow-md" />
+                                <div className="grid grid-cols-2 gap-4 mt-4">
+                                    <button onClick={handleDownloadResult} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover"><DownloadIcon className="w-5 h-5" /> Download</button>
+                                    <button onClick={handleSaveResultToLibrary} disabled={resizeCrop.saveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors ${resizeCrop.saveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-accent text-accent-text hover:bg-accent-hover'}`}>
+                                        {resizeCrop.saveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : resizeCrop.saveStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                        {resizeCrop.saveStatus === 'saving' ? 'Saving...' : resizeCrop.saveStatus === 'saved' ? 'Saved' : 'Save to Library'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        {resizeCrop.error && <p className="text-danger text-center bg-danger-bg p-3 rounded-md mt-4">{resizeCrop.error}</p>}
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                                <VideoUploader onVideoUpload={setVideoFile} sourceFile={videoFile} disabled={videoControlsDisabled} />
+                            </div>
+                            <button
+                                type="button"
+                                disabled={videoControlsDisabled}
+                                onClick={() => setIsVideoLibraryPickerOpen(true)}
+                                className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Select video from Library"
+                            >
+                                <LibraryIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {videoFile && (
+                            <div className="space-y-4 pt-4 border-t border-border-primary">
+                                {videoDimensions.width > 0 && (
+                                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-text-secondary bg-bg-tertiary/60 p-2.5 rounded-lg">
+                                        <span>Source: <strong className="text-text-primary">{videoDimensions.width} × {videoDimensions.height} px</strong></span>
+                                        <span>Output: <strong className="text-accent">{effectiveVideoOutputWidth} × {effectiveVideoOutputHeight} px</strong></span>
+                                    </div>
+                                )}
+
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="block text-sm font-medium text-text-secondary">Crop Aspect Ratio</label>
+                                        <button
+                                            type="button"
+                                            disabled={videoControlsDisabled || !videoDimensions.width}
+                                            onClick={() => handleVideoAspectRatioChange('free')}
+                                            className="text-xs text-text-secondary hover:text-accent disabled:opacity-50"
+                                        >
+                                            Reset full frame
+                                        </button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {RESIZE_CROP_ASPECT_RATIOS.map(ratio => (
+                                            <button
+                                                key={ratio.value}
+                                                type="button"
+                                                disabled={videoControlsDisabled || !videoDimensions.width}
+                                                onClick={() => handleVideoAspectRatioChange(ratio.value)}
+                                                aria-pressed={videoAspectRatio === ratio.value}
+                                                className={`px-2.5 py-1.5 rounded-md text-xs font-semibold border transition-colors disabled:opacity-50 ${
+                                                    videoAspectRatio === ratio.value
+                                                        ? 'border-accent bg-accent/15 text-accent'
+                                                        : 'border-border-primary bg-bg-tertiary text-text-secondary hover:text-text-primary'
+                                                }`}
+                                            >
+                                                {ratio.shortLabel}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <select
+                                        aria-label="Video crop aspect ratio"
+                                        value={videoAspectRatio}
+                                        onChange={e => handleVideoAspectRatioChange(e.target.value)}
+                                        disabled={videoControlsDisabled || !videoDimensions.width}
+                                        className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm disabled:opacity-50"
+                                    >
+                                        {RESIZE_CROP_ASPECT_RATIOS.map(ratio => (
+                                            <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="space-y-3 pt-2 border-t border-border-primary">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium text-text-secondary">Resize Mode</span>
+                                        <div className="inline-flex rounded-md bg-bg-tertiary p-0.5 border border-border-primary text-xs">
+                                            <button
+                                                type="button"
+                                                disabled={videoControlsDisabled}
+                                                onClick={() => {
+                                                    setVideoResizeMode('scale');
+                                                    syncVideoDimensionsFromCropAndScale(videoCrop, videoScale, videoDimensions, 'scale', videoLockRatio, videoOutputWidth);
+                                                }}
+                                                className={`px-2.5 py-1 rounded font-semibold transition-colors ${
+                                                    videoResizeMode === 'scale' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:text-text-primary'
+                                                }`}
+                                            >
+                                                Scale (%)
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={videoControlsDisabled}
+                                                onClick={() => {
+                                                    setVideoResizeMode('dimensions');
+                                                    if (videoDimensions.width > 0) {
+                                                        setVideoOutputWidth(effectiveVideoOutputWidth);
+                                                        setVideoOutputHeight(effectiveVideoOutputHeight);
+                                                    }
+                                                }}
+                                                className={`px-2.5 py-1 rounded font-semibold transition-colors ${
+                                                    videoResizeMode === 'dimensions' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:text-text-primary'
+                                                }`}
+                                            >
+                                                Custom (px)
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {videoResizeMode === 'scale' ? (
+                                        <div>
+                                            <label className="block text-sm font-medium text-text-secondary">
+                                                Resize: {videoScale}% ({effectiveVideoOutputWidth} × {effectiveVideoOutputHeight} px)
+                                            </label>
+                                            <input
+                                                type="range"
+                                                min="10"
+                                                max="200"
+                                                step="1"
+                                                value={videoScale}
+                                                onChange={(e) => handleVideoScaleChange(Number(e.target.value))}
+                                                disabled={videoControlsDisabled || !videoDimensions.width}
+                                                className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <label className="text-xs text-text-secondary">
+                                                    Width (px)
+                                                    <input
+                                                        aria-label="Video output width"
+                                                        type="number"
+                                                        min={2}
+                                                        max={4096}
+                                                        step={2}
+                                                        value={videoOutputWidth}
+                                                        disabled={videoControlsDisabled || !videoDimensions.width}
+                                                        onChange={e => {
+                                                            const val = Number(e.target.value);
+                                                            setVideoOutputWidth(val);
+                                                            if (videoLockRatio && val > 0) {
+                                                                setVideoOutputHeight(clampEvenVideoDimension(val / videoCropAspect));
+                                                            }
+                                                        }}
+                                                        className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm text-text-primary"
+                                                    />
+                                                </label>
+                                                <label className="text-xs text-text-secondary">
+                                                    Height (px)
+                                                    <input
+                                                        aria-label="Video output height"
+                                                        type="number"
+                                                        min={2}
+                                                        max={4096}
+                                                        step={2}
+                                                        value={videoOutputHeight}
+                                                        disabled={videoControlsDisabled || !videoDimensions.width}
+                                                        onChange={e => {
+                                                            const val = Number(e.target.value);
+                                                            setVideoOutputHeight(val);
+                                                            if (videoLockRatio && val > 0) {
+                                                                setVideoOutputWidth(clampEvenVideoDimension(val * videoCropAspect));
+                                                            }
+                                                        }}
+                                                        className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm text-text-primary"
+                                                    />
+                                                </label>
+                                            </div>
+                                            <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={videoLockRatio}
+                                                    disabled={videoControlsDisabled || !videoDimensions.width}
+                                                    onChange={e => {
+                                                        setVideoLockRatio(e.target.checked);
+                                                        if (e.target.checked && videoOutputWidth > 0) {
+                                                            setVideoOutputHeight(clampEvenVideoDimension(videoOutputWidth / videoCropAspect));
+                                                        }
+                                                    }}
+                                                />
+                                                Preserve cropped aspect ratio (uncheck to stretch)
+                                            </label>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="space-y-3 pt-2 border-t border-border-primary">
+                                    <div className="flex items-center justify-between gap-2 text-xs text-text-secondary">
+                                        <span className="font-mono">
+                                            {formatTime(videoCurrentTime)} / {formatTime(videoDuration)}
+                                        </span>
+                                        <label className="flex items-center gap-1.5">
+                                            <span>FPS:</span>
+                                            <input
+                                                aria-label="Video frame rate"
+                                                type="number"
+                                                min={1}
+                                                max={240}
+                                                step="any"
+                                                value={videoFps}
+                                                disabled={videoControlsDisabled}
+                                                onChange={e => {
+                                                    const val = Number(e.target.value);
+                                                    if (val >= 1 && val <= 240) setVideoFps(val);
+                                                }}
+                                                className="w-16 bg-bg-tertiary p-1 rounded border border-border-primary text-center text-text-primary"
+                                            />
+                                        </label>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            disabled={videoControlsDisabled || !videoDuration}
+                                            onClick={() => seekVideo(videoCurrentTime - 1)}
+                                            className="p-2 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary disabled:opacity-50"
+                                            title="Seek 1 Second Backward"
+                                        >
+                                            <ChevronDoubleLeftIcon className="w-5 h-5" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={videoControlsDisabled || !videoDuration}
+                                            onClick={() => seekVideo(videoCurrentTime - 1 / (videoFps || 24))}
+                                            className="p-2 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary disabled:opacity-50"
+                                            title="Previous Frame"
+                                        >
+                                            <ChevronLeftIcon className="w-5 h-5" />
+                                        </button>
+                                        <input
+                                            aria-label="Video timeline position"
+                                            type="range"
+                                            min={0}
+                                            max={videoDuration || 0}
+                                            step={0.001}
+                                            value={videoCurrentTime}
+                                            disabled={videoControlsDisabled || !videoDuration}
+                                            onChange={e => seekVideo(Number(e.target.value))}
+                                            className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
+                                        />
+                                        <button
+                                            type="button"
+                                            disabled={videoControlsDisabled || !videoDuration}
+                                            onClick={() => seekVideo(videoCurrentTime + 1 / (videoFps || 24))}
+                                            className="p-2 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary disabled:opacity-50"
+                                            title="Next Frame"
+                                        >
+                                            <ChevronRightIcon className="w-5 h-5" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={videoControlsDisabled || !videoDuration}
+                                            onClick={() => seekVideo(videoCurrentTime + 1)}
+                                            className="p-2 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary-hover text-text-secondary disabled:opacity-50"
+                                            title="Seek 1 Second Forward"
+                                        >
+                                            <ChevronDoubleRightIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <label className="block text-xs text-text-secondary">
+                                                Start Frame (seconds)
+                                                <input
+                                                    aria-label="Start frame (seconds)"
+                                                    type="number"
+                                                    min={0}
+                                                    max={videoDuration}
+                                                    step={0.001}
+                                                    value={Number.isFinite(videoStart) ? videoStart : ''}
+                                                    disabled={videoControlsDisabled || !videoDuration}
+                                                    onChange={e => setVideoStart(e.target.value === '' ? NaN : Number(e.target.value))}
+                                                    className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm text-text-primary"
+                                                />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                disabled={videoControlsDisabled || !videoDuration}
+                                                onClick={() => setVideoStart(videoRef.current?.currentTime ?? videoCurrentTime)}
+                                                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary-hover text-xs font-semibold text-text-secondary disabled:opacity-50"
+                                            >
+                                                <StartFrameIcon className="w-4 h-4" />
+                                                Set start here
+                                            </button>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="block text-xs text-text-secondary">
+                                                End Frame (seconds)
+                                                <input
+                                                    aria-label="End frame (seconds)"
+                                                    type="number"
+                                                    min={0}
+                                                    max={videoDuration}
+                                                    step={0.001}
+                                                    value={Number.isFinite(videoEnd) ? videoEnd : ''}
+                                                    disabled={videoControlsDisabled || !videoDuration}
+                                                    onChange={e => setVideoEnd(e.target.value === '' ? NaN : Number(e.target.value))}
+                                                    className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm text-text-primary"
+                                                />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                disabled={videoControlsDisabled || !videoDuration}
+                                                onClick={() => setVideoEnd(videoRef.current?.currentTime ?? videoCurrentTime)}
+                                                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary-hover text-xs font-semibold text-text-secondary disabled:opacity-50"
+                                            >
+                                                <EndFrameIcon className="w-4 h-4" />
+                                                Set end here
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-text-secondary">
+                                        {validVideoRange
+                                            ? `Selected clip duration: ${formatTime(videoEnd - videoStart)}`
+                                            : 'End must be after start and within the video duration.'}
+                                    </p>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                        <button
+                                            type="button"
+                                            disabled={videoControlsDisabled || !videoDimensions.width}
+                                            onClick={() => handleCaptureSelectedFrame()}
+                                            className="w-full flex items-center justify-center gap-2 font-semibold py-2.5 px-3 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary-hover text-sm text-text-primary border border-border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <FilmIcon className="w-4 h-4 text-accent" />
+                                            Save This Frame (Crop & Resize)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={videoControlsDisabled || !videoDimensions.width}
+                                            onClick={() => handleCaptureSelectedFrame(videoDuration)}
+                                            className="w-full flex items-center justify-center gap-2 font-semibold py-2.5 px-3 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary-hover text-sm text-text-secondary border border-border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <EndFrameIcon className="w-4 h-4" />
+                                            Save Last Frame (Crop & Resize)
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={handleApplyVideoChanges}
+                                    disabled={videoControlsDisabled || !videoDimensions.width || !validVideoRange}
+                                    style={!videoControlsDisabled && videoDimensions.width && validVideoRange ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                                    className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary"
+                                >
+                                    {videoIsLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
+                                    {videoIsLoading ? `Processing Video... ${Math.floor(videoProgress)}%` : 'Apply Video Changes (MP4)'}
+                                </button>
+                                {videoIsLoading && (
+                                    <button
+                                        type="button"
+                                        onClick={() => videoControllerRef.current?.abort()}
+                                        className="w-full flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover"
+                                    >
+                                        Cancel Processing
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="bg-bg-primary p-2 rounded-lg min-h-[400px] flex flex-col items-center justify-center">
+                            {videoPreviewUrl ? (
+                                <>
+                                    <ReactCrop
+                                        crop={videoCrop}
+                                        onChange={(_, percentCrop) => handleVideoCropChange(percentCrop)}
+                                        aspect={parseCropAspectRatio(videoAspectRatio)}
+                                        keepSelection
+                                        disabled={videoControlsDisabled || !videoDimensions.width}
+                                        minWidth={2}
+                                        minHeight={2}
+                                        className="max-w-full"
+                                    >
+                                        <video
+                                            ref={videoRef}
+                                            src={videoPreviewUrl}
+                                            controls
+                                            preload="metadata"
+                                            onLoadedMetadata={handleVideoLoadedMetadata}
+                                            onTimeUpdate={e => setVideoCurrentTime(e.currentTarget.currentTime)}
+                                            onError={() => setVideoError('Could not decode this video. Choose a supported MP4, MOV or WEBM file.')}
+                                            style={{ maxHeight: '60vh' }}
+                                            className="block max-w-full rounded"
+                                        />
+                                    </ReactCrop>
+                                    <p className="text-xs text-text-muted mt-2 text-center">
+                                        Drag the handles to crop or drag inside the selection to reposition the video frame.
+                                    </p>
+                                </>
+                            ) : (
+                                <div className="text-center text-text-secondary">
+                                    <VideoIcon className="w-16 h-16 mx-auto mb-4 text-border-primary" />
+                                    <p>Upload a video to begin resizing & cropping.</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {capturedFrame && (
+                            <div className="pt-4 border-t border-border-primary space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-semibold text-text-primary">Selected Frame Result</h3>
+                                    <span className="text-xs text-text-secondary font-mono">
+                                        {capturedFrame.width} × {capturedFrame.height} px @ {formatTime(capturedFrame.time)}
+                                    </span>
+                                </div>
+                                <img
+                                    src={capturedFrame.dataUrl}
+                                    alt="Cropped and resized video frame"
+                                    className="max-w-full mx-auto rounded-lg shadow-md"
+                                />
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadCapturedFrame}
+                                        className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors"
+                                    >
+                                        <DownloadIcon className="w-5 h-5" /> Download
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleSetCapturedAsStartFrame}
+                                        className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors"
+                                    >
+                                        <StartFrameIcon className="w-5 h-5" /> Set as Start
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleSetCapturedAsEndFrame}
+                                        className="flex flex-col items-center justify-center gap-1 p-2 bg-bg-tertiary rounded-md hover:bg-accent hover:text-accent-text transition-colors"
+                                    >
+                                        <EndFrameIcon className="w-5 h-5" /> Set as End
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveCapturedFrameToLibrary}
+                                        disabled={capturedFrameSaveStatus !== 'idle'}
+                                        className={`flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors ${
+                                            capturedFrameSaveStatus === 'saved'
+                                                ? 'bg-green-500 text-white cursor-default'
+                                                : capturedFrameSaveStatus === 'saving'
+                                                ? 'bg-bg-tertiary cursor-wait'
+                                                : 'bg-bg-tertiary hover:bg-accent hover:text-accent-text'
+                                        }`}
+                                    >
+                                        {capturedFrameSaveStatus === 'saving' ? (
+                                            <SpinnerIcon className="w-5 h-5 animate-spin" />
+                                        ) : capturedFrameSaveStatus === 'saved' ? (
+                                            <CheckIcon className="w-5 h-5" />
+                                        ) : (
+                                            <SaveIcon className="w-5 h-5" />
+                                        )}
+                                        {capturedFrameSaveStatus === 'saved' ? 'Saved!' : 'Save to Library'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {videoResult && videoResultUrl && (
+                            <div className="pt-4 border-t border-border-primary space-y-3">
+                                <h3 className="text-lg font-semibold text-text-primary">Result</h3>
+                                <video src={videoResultUrl} controls className="w-full rounded-lg shadow-md bg-black" />
+                                <p className="text-xs text-text-secondary break-all">{videoResult.name}</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <a
+                                        href={videoResultUrl}
+                                        download={videoResult.name}
+                                        className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover"
+                                    >
+                                        <DownloadIcon className="w-5 h-5" /> Download MP4
+                                    </a>
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveVideoResultToLibrary}
+                                        disabled={!canSaveVideoClip(videoResult.duration) || videoSaveStatus !== 'idle'}
+                                        className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                            videoSaveStatus === 'saved' ? 'bg-green-500 text-white' : 'bg-accent text-accent-text hover:bg-accent-hover'
+                                        }`}
+                                    >
+                                        {videoSaveStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : videoSaveStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                                        {videoSaveStatus === 'saving' ? 'Saving...' : videoSaveStatus === 'saved' ? 'Saved' : 'Save to Library'}
+                                    </button>
+                                </div>
+                                {!canSaveVideoClip(videoResult.duration) && (
+                                    <p className="text-xs text-text-secondary">
+                                        Library saving is only available for videos shorter than 5 minutes. You can still download this MP4.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                        {videoError && <p role="alert" className="text-danger text-center bg-danger-bg p-3 rounded-md mt-4 whitespace-pre-wrap">{videoError}</p>}
+                    </div>
+                </div>
+            )}
+
+            {isVideoLibraryPickerOpen && (
+                <LibraryPickerModal
+                    isOpen={isVideoLibraryPickerOpen}
+                    hydrateMedia={false}
+                    onClose={() => setIsVideoLibraryPickerOpen(false)}
+                    onSelectItem={handleSelectVideoFromLibrary}
+                    filter="video"
+                />
+            )}
         </div>
     );
 };
@@ -459,6 +1476,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     const videoUtilsState = useSelector((state: RootState) => state.video.videoUtilsState);
     const referenceMakerResetVersion = useSelector((state: RootState) => state.video.referenceMakerResetVersion);
     const videoMergeResetVersion = useSelector((state: RootState) => state.video.videoMergeResetVersion);
+    const audioExtractorResetVersion = useSelector((state: RootState) => state.video.audioExtractorResetVersion);
     const { videoFile, extractedFrame, colorPicker, extractedFrameSaveStatus, resizeCrop } = videoUtilsState;
 
     // --- State Setters ---
@@ -710,6 +1728,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
     const subTabs: SubTab[] = [
         { id: 'frames', label: 'Frame Extractor' },
         { id: 'clips', label: 'Video Extractor' },
+        { id: 'audio-extractor', label: 'Audio Extractor' },
         { id: 'merge', label: 'Merge Video' },
         { id: 'reference-maker', label: 'Reference Maker' },
         { id: 'colors', label: 'Color Palette Extractor' },
@@ -725,6 +1744,9 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
             </div>
             <div className={activeSubTab === 'merge' ? 'block' : 'hidden'}>
                 <VideoMergePanel key={videoMergeResetVersion} />
+            </div>
+            <div className={activeSubTab === 'audio-extractor' ? 'block' : 'hidden'}>
+                <AudioExtractorPanel key={audioExtractorResetVersion} active={activeSubTab === 'audio-extractor'} />
             </div>
             <div className={activeSubTab === 'clips' ? 'block' : 'hidden'}>
                 <VideoClipExtractor videoFile={videoFile} onOpenLibrary={onOpenVideoLibrary}
@@ -993,6 +2015,9 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                 <ResizeCropTool 
                     resizeCrop={resizeCrop}
                     onOpenLibrary={onOpenLibraryForResizeCrop}
+                    resetVersion={referenceMakerResetVersion}
+                    setStartFrame={setStartFrame}
+                    setEndFrame={setEndFrame}
                 />
             </div>
 

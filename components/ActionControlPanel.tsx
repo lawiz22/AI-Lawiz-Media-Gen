@@ -6,6 +6,7 @@ import { DEFAULT_GEMINI_IMAGE_MODEL, getGeminiAspectRatios } from '../services/g
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL } from '../services/mammouthService';
 import { defaultQwen21Settings, QWEN21_SIZES, qwen21Dimensions } from '../services/qwen21Workflow';
 import { defaultMossSettings } from '../services/mossWorkflow';
+import { defaultMossPhotoSettings, mossPhotoDimensions } from '../services/mossPhotoWorkflow';
 
 interface ActionControlPanelProps {
     options: GenerationOptions;
@@ -30,6 +31,16 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
     const qwen21Key = qwen21Mode === 'turbo' ? 'comfyQwen21Turbo' : 'comfyQwen21T2i';
     const qwen21Settings = options[qwen21Key] || defaultQwen21Settings(qwen21Mode);
     const moss = options.comfyMoss || defaultMossSettings();
+    const photo = options.comfyMossPhoto || defaultMossPhotoSettings();
+    let photoResolution = '';
+    if (options.comfyModelType === 'moss-photo') {
+        try {
+            const size = mossPhotoDimensions(photo);
+            photoResolution = `${size.width} x ${size.height}`;
+        } catch (error) {
+            photoResolution = error instanceof Error ? error.message : 'Invalid PHOTO dimensions.';
+        }
+    }
     const aspectRatioOptions = options.provider === 'gemini'
         ? getGeminiAspectRatios(options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL).map(value => ({
             value,
@@ -54,6 +65,8 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                         ? 'FLUX2 Multi-Reference Edit'
                     : options.comfyModelType === 'moss-image'
                         ? 'MOSS Image 1.0'
+                    : options.comfyModelType === 'moss-photo'
+                        ? 'MOSS PHOTO'
                     : options.comfyModelType === 'krea2-edit'
                         ? `KREA2 ${options.comfyKrea2Edit?.task === 'identity' ? 'Identity' : 'General Edit'} V2`
                     : (options.comfyModelType || 'sdxl');
@@ -76,6 +89,8 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                     )}
                     {options.provider === 'comfyui' && options.comfyModelType === 'krea2-edit' ? (
                         <span className="text-xs text-text-secondary">Edit | {options.comfyKrea2Edit?.aspect || '3:4'} | {options.comfyKrea2Edit?.megapixels ?? 1} MP | Batch: {options.comfyKrea2Edit?.batchSize ?? 1} | Total: {options.numImages * (options.comfyKrea2Edit?.batchSize ?? 1)} images</span>
+                    ) : options.provider === 'comfyui' && options.comfyModelType === 'moss-photo' ? (
+                        <span className="text-xs text-text-secondary">PHOTO | {photoResolution} | Batch: {photo.batchSize} | Total: {options.numImages * photo.batchSize} images</span>
                     ) : options.provider === 'comfyui' && options.comfyModelType === 'moss-image' ? (
                         <span className="text-xs text-text-secondary">{moss.refineImage ? 'Refine: source proportions, max 1280 px' : `Resolution: ${moss.width} x ${moss.height}`} | Batch: {moss.batchSize} | Total: {options.numImages * moss.batchSize} images</span>
                     ) : options.provider === 'comfyui' && options.comfyModelType === 'flux2-edit' ? (

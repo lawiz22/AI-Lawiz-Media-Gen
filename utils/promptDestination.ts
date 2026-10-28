@@ -36,6 +36,8 @@ export const PROMPT_T2I_WORKFLOWS: Array<{ id: ComfyModelType; label: string }> 
   { id: 'z-image', label: 'Z-Image' },
   { id: 'flux2-simple', label: 'FLUX2' },
   { id: 'krea2-simple', label: 'KREA2' },
+  { id: 'moss-image', label: 'MOSS Image' },
+  { id: 'moss-photo', label: 'MOSS PHOTO' },
 ];
 
 export const getPromptDestinationOptions = (

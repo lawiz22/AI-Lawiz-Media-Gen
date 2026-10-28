@@ -192,7 +192,7 @@ export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | '
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = string;
-export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'qwen21-t2i' | 'qwen21-turbo' | 'qwen21-remove-background' | 'qwen21-i2i-consistency' | 'qwen21-i2i-turbo' | 'qwen21-i2i-multi' | 'qwen21-character-scene' | 'z-image' | 'flux2-simple' | 'flux2-edit' | 'krea2-simple' | 'krea2-raw' | 'krea2-edit' | 'moss-image';
+export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'qwen21-t2i' | 'qwen21-turbo' | 'qwen21-remove-background' | 'qwen21-i2i-consistency' | 'qwen21-i2i-turbo' | 'qwen21-i2i-multi' | 'qwen21-character-scene' | 'z-image' | 'flux2-simple' | 'flux2-edit' | 'krea2-simple' | 'krea2-raw' | 'krea2-edit' | 'moss-image' | 'moss-photo';
 export type Flux2ReferenceRole = 'identity' | 'outfit' | 'background' | 'pose' | 'style' | 'custom';
 export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui' | 'mammouth';
@@ -204,6 +204,7 @@ export type NunchakuAttention = 'nunchaku-fp16' | 'flash-attention2';
 export interface GenerationOptions {
   provider: Provider;
   comfyMoss?: import('./services/mossWorkflow').MossSettings;
+  comfyMossPhoto?: import('./services/mossPhotoWorkflow').MossPhotoSettings;
   comfyKrea2Edit?: import('./services/krea2EditWorkflow').Krea2EditSettings;
   comfyQwen21T2i?: import('./services/qwen21Workflow').Qwen21Settings;
   comfyQwen21Turbo?: import('./services/qwen21Workflow').Qwen21Settings;
@@ -868,6 +869,7 @@ export interface VideoPromptLibraryOptions extends Omit<import('./services/video
   savedAt: string;
   provenance: 'generation' | 'current-setup';
   instruction: string;
+  renderOptions?: import('./services/minimaxH3Workflow').MinimaxH3Options;
   references: Array<Omit<import('./services/videoPromptService').VideoReference, 'file' | 'original'> & {
     file: VideoPromptLibraryFile;
     original?: VideoPromptLibraryFile;
@@ -1200,9 +1202,10 @@ export interface VideoSliceState {
 
   // Video Utilities
   videoUtilsState: VideoUtilsState;
-  activeVideoUtilsSubTab: 'frames' | 'clips' | 'merge' | 'reference-maker' | 'colors' | 'resize-crop' | 'voice-recorder';
+  activeVideoUtilsSubTab: 'frames' | 'clips' | 'audio-extractor' | 'merge' | 'reference-maker' | 'colors' | 'resize-crop' | 'voice-recorder';
   referenceMakerResetVersion: number;
   videoMergeResetVersion: number;
+  audioExtractorResetVersion: number;
 }
 
 export interface LibrarySliceState {

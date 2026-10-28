@@ -2,7 +2,7 @@
 
 [Documentation index](../README.md) | [Project overview](../../README.md)
 
-Create a production prompt from your idea and edited references, save its complete prompt-generation setup, then send it to H3.
+Create a production prompt independently of video rendering, save its complete prompt-generation setup, then copy it or send it to an available workflow.
 
 ## On this page
 
@@ -18,11 +18,11 @@ Create a production prompt from your idea and edited references, save its comple
 
 ## Video workspace
 
-- **Video** contains **Video Prompt Generator** (first subtab), **LTX Director**, **Minimax H3**, and the independent [Character Swap H3 Shot Planner](character-swap-h3.md). Existing Library, TTS and model transfers still open LTX Director inside this workspace.
+- **Video** contains **Video Prompt Generator** (first subtab), **LTX Director**, **Minimax REF2v H3** (violet), **[Ultrafast](minimax-h3.md#ultrafast)** (green), **[MiniMax Advanced](minimax-h3.md#minimax-advanced)** (cyan, FL2V/REF2V), and the independent [Character Swap H3 Shot Planner](character-swap-h3.md) (rose). The prompt generator is not embedded in H3 or required for rendering. Existing Library, TTS and model transfers still open LTX Director inside this workspace.
 
 ## References and media editing
 
-- The dedicated prompt generator accepts up to **4 pictures, 2 videos and 2 audio files**, with previews, stable numbered/color-coded reference tokens, per-reference roles and click-to-insert tokens. Images and videos have free/preset-ratio crop and pixel resizing; video editing also trims and exports a real local H.264 MP4 with audio using the existing FFmpeg encoder. Restore Original undoes edits.
+- The dedicated prompt generator accepts up to **6 pictures, 2 videos and 2 audio files**, with previews, stable numbered/color-coded reference tokens, per-reference roles and click-to-insert tokens. Images and videos have free/preset-ratio crop and pixel resizing; video editing also trims and exports a real local H.264 MP4 with audio using the existing FFmpeg encoder. Restore Original undoes edits.
 
 ## Providers and editable templates
 
@@ -36,23 +36,26 @@ Regression checks: `node --test components/VideoWorkspace.test.mjs services/open
 ## Original audio and editable lyrics
 
 - The audio reference cards include the same original-track waveform, precise start/end selection, selection playback and **Next N s** as H3. Select the first four seconds, click **Apply passage + prompt duration**, then compose/transcribe: only that real WAV excerpt is attached to the model and transferred to H3. The full recording stays local for subsequent selections. Prompt excerpts support 1-120 seconds; H3 rendering supports at most 60. Pending partial selections block model requests and transfer until applied.
-- **Force original WAV soundtrack (lock)** persists alongside the selected track. Selecting original mode enables it; it can also be checked explicitly in either editor. It prevents switching back to generated mode without unlocking and locally replaces all server sound with the selected WAV after rendering. It sets compatible H.264/24 FPS/no-loop settings, reports mux failures explicitly and never substitutes generated audio. Both editors share this audio choice so transferring a new prompt cannot quietly reset it.
+- **Force original WAV soundtrack (lock)** persists alongside the selected track. Selecting original mode enables it; it can also be checked explicitly in either editor. It prevents switching back to generated mode without unlocking and locally replaces all server sound with the selected WAV after rendering. An explicit transfer sets compatible H.264/24 FPS/no-loop settings, reports mux failures explicitly and never substitutes generated audio. Each editor keeps an independent audio choice; transfer copies the generator selection together with its references, avoiding a stale soundtrack from an older H3 draft.
 - **Soundtrack mode** lets you keep the existing reference/generated-audio behavior or explicitly select an **original track** to preserve its performance in H3's final soundtrack. Original mode also tells the prompt model not to rewrite words, invent music or rearrange the recording. Apply the desired passage in H3 before rendering; original mode uses H.264 MP4 at 24 FPS, no loops/ping-pong, and trims surplus video to the audio endpoint, subject to frame/codec rounding. AAC output is not a lossless WAV copy, and keeping the soundtrack does not itself guarantee accurate generated lip motion. See [H3 original soundtrack](minimax-h3.md#original-soundtrack-and-passage-lyrics).
 - On an audio card, **Use exact lyrics / spoken words** exposes an editable passage transcript and **Transcribe current passage**. This is an explicit API call with the selected Gemini/OpenRouter model and **only the current audio file**; provider capabilities, credentials and charges apply. Mammouth audio is unsupported. No web lyrics lookup or automatic calls on passage changes.
-- Edit/transcribe again after changing the passage. Stale enabled lyrics block generation rather than silently reuse an earlier verse; you can explicitly confirm unchanged words or disable the option. The H3 panel also offers manual **Refresh prompt for current passage** to replace old quoted vocals in an existing scene description. Lyrics, passage stamps and original-track selection survive prompt Library round-trips and H3 transfers.
+- Edit/transcribe again after changing the passage. Stale enabled lyrics block generation rather than silently reuse an earlier verse; you can explicitly confirm unchanged words or disable the option. Update the scene prompt manually or generate a new one here before transferring it. Lyrics, passage stamps and original-track selection survive prompt Library round-trips and H3 transfers.
 
 ## Send to MiniMax H3
 
-- Output can be edited, previewed with colored Picture/Video/Audio/Subject tokens, copied or exported as text. **Send to Minimax H3 draft** transfers the prompt, edited media, target aspect and duration into one of four independent workflow slots. **Reference to video** executes the supplied `00-rEF2V` MiniMax H3 workflow through ComfyUI; Text to video, Character replacement and Audio-driven video remain preparation slots for future graphs.
+- Output can be edited, previewed with colored Picture/Video/Audio/Subject tokens, copied or exported as text. Choose **Minimax REF2v H3**, **Ultrafast**, or **MiniMax Advanced**, then **Send to** that workflow to copy the prompt, optional edited media, target aspect, duration and soundtrack choice to its independent rendering draft. Existing drafts require replacement confirmation. Subsequent generator edits do not affect the renderer, and renderer edits do not affect the generator. Advanced enforces 3 images / 1 video / 2 standalone audios without silently dropping references; choose REF2V for multimodal conditioning. Plain prompts do not require an image.
+- The destination choice is saved locally. Advanced defaults to FL2V and has independent settings. The obsolete Text to video, Character replacement and Audio-driven video preparation cards are no longer shown. Their legacy saved drafts are retained rather than deleted.
 
 ## Library snapshots and restoration
 
 - Each successful video prompt generation automatically saves a **Library > Prompts** item containing the output, exact generation-time idea/provider/model, aspect ratio, duration, workflow, editable canvases, full instruction, stable reference numbers/roles, and original plus edited images/videos/audio. Later changes to the composer do not change that saved snapshot. **Save to Library** also saves edited output as a new item or retries a failed save; prompts created before this feature save the current setup and are labeled accordingly.
-- Library details preview the saved reference media and show all settings. **Open in Video Prompt Generator** restores the complete setup without replacing your independent Minimax workflow drafts. Reference binaries use the existing Library asset store and are included in Library ZIP export/import, Library Folder projects and Google Drive synchronization; no API keys are included.
+- Editing unlocks as soon as the model responds, without waiting for the Library save. A slow save cannot lock the generated text; changes made during saving are not marked as already saved. Save failures are shown and remain retryable.
+- Library details preview the saved reference media and show all settings. **Open in Minimax REF2v H3**, **Open in Ultrafast**, or **Open in MiniMax Advanced** restores the saved prompt and original/edited references directly into the chosen renderer, leaving this prompt composer unchanged. Legacy prompt-generation items have no H3 sampling settings and show a defaults notice on load; cross-variant loading explicitly uses destination model/sampling defaults while preserving input controls. Each renderer's **Save prompt to Library** adds an exact generation-setup snapshot, including the variant, for subsequent reruns. See [saving and reopening generation prompts](minimax-h3.md#save-and-reopen-generation-prompts).
+- Reference binaries use the existing Library asset store and are included in Library ZIP export/import, Library Folder projects and Google Drive synchronization; no API keys are included. Existing saved prompts are never deleted or rewritten by compatibility loading.
 
 ## Local draft persistence
 
-- The workspace, editable canvases, H3 settings and workflow drafts (including original and edited files) persist in browser/Electron IndexedDB, not in the cloud or source tree; storage failures are shown explicitly. No new prompt-generator-to-LTX link is enabled yet.
+- The workspace, editable canvases, H3 settings and workflow drafts (including original and edited files) persist in browser/Electron IndexedDB, not in the cloud or source tree; storage failures are shown explicitly. Local saves wait for a 400 ms typing pause instead of cloning the full media workspace on every keystroke. No new prompt-generator-to-LTX link is enabled yet.
 
 ## Screenshots
 

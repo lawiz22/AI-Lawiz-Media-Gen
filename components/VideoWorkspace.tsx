@@ -5,38 +5,27 @@ import type { LibraryItem } from '../types';
 import { addToLibrary } from '../store/librarySlice';
 import {
     DEFAULT_VIDEO_TEMPLATES, REFERENCE_LIMITS, VIDEO_WORKFLOWS, VIDEO_PROMPT_ASPECTS, generateVideoPrompt, addVideoReferences,
-    loadVideoPromptDraft, saveVideoPromptDraft, referenceToken, validateVideoPromptOutput, validateVideoReferences,
-    captureVideoPromptInputs, type ReferenceKind, type VideoPromptDraft, type VideoPromptInputs, type VideoPromptProvider, type VideoReference, type VideoTemplate, type VideoWorkflow,
+    loadVideoPromptDraft, saveVideoPromptDraft, referenceToken, validateVideoPromptOutput,
+    captureVideoPromptInputs, type ReferenceKind, type VideoPromptDraft, type VideoPromptInputs, type VideoPromptProvider, type VideoReference, type VideoTemplate,
 } from '../services/videoPromptService';
 import { DEFAULT_OPENROUTER_MODEL, filterOpenRouterModels, getOpenRouterInputModalities, getOpenRouterModels, type OpenRouterModel } from '../services/openRouterService';
 import { VideoReferenceEditor, useMediaURL } from './VideoReferenceEditor';
-import { buildVideoPromptLibraryItem, restoreVideoPromptLibraryItem } from '../services/videoPromptLibrary';
+import { buildVideoPromptLibraryItem, restoreMinimaxH3PromptLibraryItem } from '../services/videoPromptLibrary';
 import { MinimaxH3Panel } from './MinimaxH3Panel';
 import { AudioLyricsEditor, OriginalAudioSelector } from './VideoAudioControls';
 import { AudioPlayer } from './AudioPlayer';
 import { H3AudioReference } from './H3AudioReference';
 import { CharacterSwapPanel } from './CharacterSwapPanel';
 import { defaultMinimaxH3Options, h3AspectFromPrompt, withH3OriginalAudio } from '../services/minimaxH3Workflow';
+import { defaultH3WorkflowOptions, defaultUltrafastH3Options, h3WorkflowName, validateH3ReferenceLimits, type H3RenderWorkflow } from '../services/minimaxH3UltrafastWorkflow';
+import { getLibraryAssetBlob } from '../services/idbLibraryService';
+import { restoreAdvancedVideoLibraryItem } from '../services/minimaxH3Library';
+import type { AdvancedVideoFinishing } from '../services/minimaxH3AdvancedWorkflow';
+import { VideoReferenceToken as Token, ColoredVideoPrompt as ColoredPrompt } from './VideoPromptText';
 
 const button = 'inline-flex items-center justify-center gap-2 rounded-lg border border-border-primary px-3 py-2 text-sm font-medium transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-40';
 const input = 'w-full rounded-lg border border-border-primary bg-bg-primary p-2.5 text-sm text-text-primary focus:border-accent focus:outline-none';
 const panel = 'rounded-2xl border border-border-primary bg-bg-secondary p-4 md:p-5';
-const colors: Record<string, string[]> = {
-    Picture: ['border-sky-400/50 bg-sky-400/10 text-sky-300', 'border-teal-400/50 bg-teal-400/10 text-teal-300', 'border-pink-400/50 bg-pink-400/10 text-pink-300', 'border-lime-400/50 bg-lime-400/10 text-lime-300'],
-    Video: ['border-violet-400/50 bg-violet-400/10 text-violet-300', 'border-fuchsia-400/50 bg-fuchsia-400/10 text-fuchsia-300'],
-    Audio: ['border-amber-400/50 bg-amber-400/10 text-amber-300', 'border-orange-400/50 bg-orange-400/10 text-orange-300'],
-    Subject: ['border-emerald-400/50 bg-emerald-400/10 text-emerald-300', 'border-green-400/50 bg-green-400/10 text-green-300'],
-};
-const tokenClass = (text: string) => {
-    const kind = text.match(/Picture|Video|Audio|Subject/)?.[0] || 'Subject';
-    const slot = Number(text.match(/\d+/)?.[0] || 1);
-    return colors[kind][(slot - 1) % colors[kind].length];
-};
-const Token: React.FC<{ text: string }> = ({ text }) => <span className={`inline rounded border px-1 py-0.5 font-mono text-xs ${tokenClass(text)}`}>{text}</span>;
-const ColoredPrompt: React.FC<{ text: string }> = ({ text }) => <div className="whitespace-pre-wrap break-words font-mono text-sm leading-7">
-    {text.split(/(<(?:Picture|Video|Audio|Subject)\s+\d+>)/g).map((part, index) =>
-        /^<(?:Picture|Video|Audio|Subject)\s+\d+>$/.test(part) ? <Token key={index} text={part} /> : <React.Fragment key={index}>{part}</React.Fragment>)}
-</div>;
 const initialDraft = (): VideoPromptDraft => ({
     idea: '', provider: 'openrouter',
     models: { openrouter: DEFAULT_OPENROUTER_MODEL, gemini: 'gemini-2.5-flash', mammouth: 'gemini-2.5-flash' },
@@ -81,10 +70,13 @@ export const VideoWorkspace: React.FC<{
     onLeaveDirector: () => void;
     onResetDirector: () => void;
     libraryItem: LibraryItem | null;
+    libraryWorkflow?: H3RenderWorkflow;
+    libraryFinishing?: AdvancedVideoFinishing;
     onLibraryItemLoaded: () => void;
-}> = ({ director, openDirector, onLeaveDirector, onResetDirector, libraryItem, onLibraryItemLoaded }) => {
+}> = ({ director, openDirector, onLeaveDirector, onResetDirector, libraryItem, libraryWorkflow: requestedWorkflow, libraryFinishing, onLibraryItemLoaded }) => {
     const dispatch: AppDispatch = useDispatch();
-    const [tab, setTab] = useState<'prompt' | 'ltx' | 'minimax' | 'character-swap'>('prompt');
+    const libraryWorkflow: H3RenderWorkflow = requestedWorkflow ?? 'reference';
+    const [tab, setTab] = useState<'prompt' | 'ltx' | 'minimax' | 'ultrafast' | 'advanced' | 'character-swap'>('prompt');
     const [swapOpened, setSwapOpened] = useState(false);
     const [draft, setDraft] = useState<VideoPromptDraft>(initialDraft);
     const [ready, setReady] = useState(false);
@@ -100,7 +92,6 @@ export const VideoWorkspace: React.FC<{
     const [modelError, setModelError] = useState('');
     const [modelSearch, setModelSearch] = useState('');
     const [modelRefresh, setModelRefresh] = useState(0);
-    const [selectedWorkflow, setSelectedWorkflow] = useState<VideoWorkflow>('reference');
     const [editOutput, setEditOutput] = useState(false);
     const [librarySaving, setLibrarySaving] = useState(false);
     const [librarySaved, setLibrarySaved] = useState(false);
@@ -110,13 +101,15 @@ export const VideoWorkspace: React.FC<{
     const saveQueue = useRef<Promise<void>>(Promise.resolve());
     const loaded = useRef(false);
     const persistenceVersion = useRef(0);
+    const latestDraft = useRef(draft);
+    latestDraft.current = draft;
 
     useEffect(() => { if (openDirector) setTab('ltx'); }, [openDirector]);
     useEffect(() => {
         if (loaded.current) return;
         loaded.current = true;
         loadVideoPromptDraft().then(value => {
-            if (value) setDraft(value);
+            if (value) setDraft({ ...value, workflow: value.workflow === 'advanced' || value.workflow === 'ultrafast' ? value.workflow : 'reference', minimaxLyricsSettings: value.minimaxLyricsSettings ?? { provider: value.provider, model: value.models[value.provider] } });
             setReady(true);
         }).catch(cause => {
             setStorageError(`Could not restore the video workspace: ${cause instanceof Error ? cause.message : String(cause)}. Reload to retry; saving is disabled to protect the existing draft.`);
@@ -137,40 +130,59 @@ export const VideoWorkspace: React.FC<{
         if (!ready) return;
         setSaved(false);
         const version = ++persistenceVersion.current;
-        saveQueue.current = saveQueue.current.then(async () => {
-            if (version !== persistenceVersion.current) return;
-            await saveVideoPromptDraft(draft);
-            if (version === persistenceVersion.current) { setSaved(true); setStorageError(''); }
-        }).catch(cause => {
-            setStorageError(`Draft could not be saved: ${cause instanceof Error ? cause.message : String(cause)}`);
-        });
+        const timer = setTimeout(() => {
+            saveQueue.current = saveQueue.current.then(async () => {
+                if (version !== persistenceVersion.current) return;
+                await saveVideoPromptDraft(draft);
+                if (version === persistenceVersion.current) { setSaved(true); setStorageError(''); }
+            }).catch(cause => {
+                setStorageError(`Draft could not be saved: ${cause instanceof Error ? cause.message : String(cause)}`);
+            });
+        }, 400);
+        return () => clearTimeout(timer);
     }, [draft, ready]);
 
     useEffect(() => {
-        if (!libraryItem || !ready || busy || librarySaving) return;
+        if (!libraryItem) return;
+        setTab(libraryWorkflow === 'reference' ? 'minimax' : libraryWorkflow);
+        if (openDirector) onLeaveDirector();
+        if (!ready) return;
+        setError('');
+        const name = h3WorkflowName(libraryWorkflow);
+        setNotice(`Loading ${libraryFinishing ? 'source video and finishing settings' : 'saved prompt and references'} into ${name}...`);
         let cancelled = false;
-        restoreVideoPromptLibraryItem(libraryItem).then(({ inputs, result }) => {
+        const restore = libraryFinishing ? restoreAdvancedVideoLibraryItem(libraryItem, libraryFinishing, getLibraryAssetBlob)
+            : restoreMinimaxH3PromptLibraryItem(libraryItem, getLibraryAssetBlob);
+        restore.then(({ draft: reference, options, warning }) => {
             if (cancelled) return;
-            setDraft(current => ({ ...current, ...inputs, result, generatedInputs: captureVideoPromptInputs(inputs), generatedInputsProvenance: libraryItem.videoPromptOptions!.provenance }));
-            setTab('prompt');
-            setEditOutput(false);
-            setLibrarySaved(true);
+            const restored = { ...reference, workflow: libraryWorkflow };
+            validateH3ReferenceLimits(restored);
+            const sameWorkflow = (options.variant ?? 'reference') === libraryWorkflow;
+            const renderOptions = sameWorkflow ? options : withH3OriginalAudio({
+                ...defaultH3WorkflowOptions(libraryWorkflow), aspect: options.aspect, duration: options.duration,
+                references: structuredClone(options.references),
+            }, options.originalAudioId, options.forceOriginalAudio ?? false);
+            if (latestDraft.current.minimaxDrafts[libraryWorkflow] && !window.confirm(`Load this ${libraryFinishing ? 'source video and finishing setup' : 'saved prompt and references'} into ${name}? This replaces only that workflow's draft, not the Library item or Video Prompt Generator.`)) {
+                onLibraryItemLoaded();
+                return;
+            }
+            setDraft(current => ({ ...current, minimaxDrafts: { ...current.minimaxDrafts, [libraryWorkflow]: restored },
+                ...(libraryWorkflow === 'advanced' ? { advancedH3Options: renderOptions } : libraryWorkflow === 'ultrafast' ? { ultrafastH3Options: renderOptions } : { minimaxH3Options: renderOptions }),
+            }));
             setError('');
-            setNotice('Video prompt restored from Library with its settings and original/edited references.');
+            setNotice(`${libraryFinishing ? 'Source video and finishing setup' : 'Prompt and original/edited references'} loaded into ${name}. ${sameWorkflow ? warning || 'Saved H3 settings restored.' : `Destination workflow defaults loaded; prompt, references, aspect, duration and soundtrack selection retained. ${warning || ''}`} The Library item was not changed.`);
             onLibraryItemLoaded();
         }).catch(cause => {
             if (cancelled) return;
-            setError(`Could not restore Library prompt: ${cause instanceof Error ? cause.message : String(cause)}`);
+            setNotice('');
+            setError(`Could not restore Library ${libraryFinishing ? 'video' : 'prompt'}: ${cause instanceof Error ? cause.message : String(cause)}`);
             onLibraryItemLoaded();
         });
         return () => { cancelled = true; };
-    }, [libraryItem, ready, busy, librarySaving, onLibraryItemLoaded]);
+    }, [libraryItem, libraryWorkflow, libraryFinishing, ready, onLibraryItemLoaded, openDirector, onLeaveDirector]);
 
     const update = (patch: Partial<VideoPromptDraft>) => setDraft(current => ({ ...current, ...patch }));
-    const changeSoundtrack = (originalAudioId: string | undefined, forceOriginalAudio: boolean) => setDraft(current => ({
-        ...current, originalAudioId, forceOriginalAudio,
-        minimaxH3Options: withH3OriginalAudio(current.minimaxH3Options || defaultMinimaxH3Options(), originalAudioId, forceOriginalAudio),
-    }));
+    const changeSoundtrack = (originalAudioId: string | undefined, forceOriginalAudio: boolean) => update({ originalAudioId, forceOriginalAudio });
     const chooseTab = (next: typeof tab) => { setTab(next); if (next === 'character-swap') setSwapOpened(true); if (next !== 'ltx' && openDirector) onLeaveDirector(); };
     const changeReference = (id: string, patch: Partial<VideoReference>) => setDraft(current => ({
         ...current, references: current.references.map(ref => ref.id === id ? { ...ref, ...patch } : ref),
@@ -194,23 +206,27 @@ export const VideoWorkspace: React.FC<{
         try {
             const item = await buildVideoPromptLibraryItem(text, inputs, fromGeneration ? 'generation' : 'current-setup');
             await dispatch(addToLibrary(item)).unwrap();
-            setLibrarySaved(true);
+            setLibrarySaved(latestDraft.current.result === text);
             setNotice('Saved to Library > Prompts with the idea, provider/model, templates, settings and all original/edited references.');
         } finally { setLibrarySaving(false); }
     };
     const generate = async () => {
         setError(''); setNotice(''); setBusy(true); setLibrarySaved(false);
+        let generated: { text: string; inputs: VideoPromptInputs } | undefined;
         try {
             const inputs = captureVideoPromptInputs(draft);
             if (hasPendingAudio) throw new Error('Apply the audio selection first. The full song or an older excerpt will not be sent to the prompt model.');
             const result = await generateVideoPrompt(draft);
             update({ result, generatedInputs: inputs, generatedInputsProvenance: 'generation' });
             setEditOutput(false);
-            try { await savePromptToLibrary(result, inputs, true); }
-            catch (cause) { setError(`Prompt generated, but Library saving failed: ${cause instanceof Error ? cause.message : String(cause)}. Use Save to Library to retry.`); }
+            generated = { text: result, inputs };
         }
         catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
         finally { setBusy(false); }
+        if (generated) {
+            try { await savePromptToLibrary(generated.text, generated.inputs, true); }
+            catch (cause) { setError(`Prompt generated, but Library saving failed: ${cause instanceof Error ? cause.message : String(cause)}. Use Save to Library to retry.`); }
+        }
     };
     const saveCurrentPrompt = async () => {
         setError(''); setNotice('');
@@ -222,22 +238,23 @@ export const VideoWorkspace: React.FC<{
         try {
             const prompt = validateVideoPromptOutput(draft.result, draft.template);
             if (hasPendingAudio) throw new Error('Apply the audio selection before transferring it to H3.');
-            if (draft.workflow === 'replacement' && (!draft.references.some(ref => ref.kind === 'image') || !draft.references.some(ref => ref.kind === 'video'))) {
-                throw new Error('Character replacement needs one video and at least one character picture.');
-            }
-            const previous = draft.minimaxDrafts[draft.workflow];
-            if (previous && !window.confirm('Replace the existing draft for this Minimax workflow?')) return;
-            update({ minimaxDrafts: { ...draft.minimaxDrafts, [draft.workflow]: {
-                id: crypto.randomUUID(), workflow: draft.workflow, prompt,
+            const destination = draft.workflow === 'advanced' || draft.workflow === 'ultrafast' ? draft.workflow : 'reference';
+            const reference = {
+                id: crypto.randomUUID(), workflow: destination, prompt,
                 references: draft.references.map(ref => ({ ...ref })), aspect: draft.aspect, duration: draft.duration, template: draft.template,
-            } }, ...(draft.workflow === 'reference' ? { minimaxH3Options: {
-                ...(draft.minimaxH3Options || defaultMinimaxH3Options()), aspect: h3AspectFromPrompt(draft.aspect), duration: draft.duration,
-                originalAudioId: draft.originalAudioId ?? draft.minimaxH3Options?.originalAudioId,
-                forceOriginalAudio: draft.forceOriginalAudio ?? draft.minimaxH3Options?.forceOriginalAudio,
-            } } : {}) });
-            setSelectedWorkflow(draft.workflow);
-            chooseTab('minimax');
-            setNotice('Prompt and edited references transferred to the Minimax H3 workflow draft.');
+            } as const;
+            validateH3ReferenceLimits(reference);
+            const previous = draft.minimaxDrafts[destination];
+            if (previous && !window.confirm('Replace the existing draft for this Minimax workflow?')) return;
+            const options = {
+                ...withH3OriginalAudio((destination === 'advanced' ? draft.advancedH3Options : destination === 'ultrafast' ? draft.ultrafastH3Options : draft.minimaxH3Options) || defaultH3WorkflowOptions(destination), draft.originalAudioId, draft.forceOriginalAudio ?? false),
+                aspect: h3AspectFromPrompt(draft.aspect), duration: draft.duration,
+            };
+            update({ minimaxDrafts: { ...draft.minimaxDrafts, [destination]: reference },
+                ...(destination === 'advanced' ? { advancedH3Options: options } : destination === 'ultrafast' ? { ultrafastH3Options: options } : { minimaxH3Options: options }),
+            });
+            chooseTab(destination === 'reference' ? 'minimax' : destination);
+            setNotice(`Prompt and edited references transferred to ${h3WorkflowName(destination)}. Subsequent edits in the generator do not change that workflow.`);
         } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     };
     const copy = async (text: string) => {
@@ -250,20 +267,27 @@ export const VideoWorkspace: React.FC<{
         const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename; anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     };
-    const activeMinimax = draft.minimaxDrafts[selectedWorkflow];
     const count = (kind: ReferenceKind) => draft.references.filter(ref => ref.kind === kind).length;
     const selectedModel = models.find(model => model.id === draft.models.openrouter);
-    const requiredInputs = [...new Set<ReferenceKind>(draft.references.map((reference: VideoReference) => reference.kind))];
-    const compatibleModels = filterOpenRouterModels(models, requiredInputs);
-    const filteredModels = filterOpenRouterModels(compatibleModels, [], modelSearch);
+    const requiredInputs = React.useMemo(() => [...new Set<ReferenceKind>(draft.references.map((reference: VideoReference) => reference.kind))], [draft.references]);
+    const compatibleModels = React.useMemo(() => filterOpenRouterModels(models, requiredInputs), [models, requiredInputs]);
+    const filteredModels = React.useMemo(() => filterOpenRouterModels(compatibleModels, [], modelSearch), [compatibleModels, modelSearch]);
+    const modelOptions = React.useMemo(() => filteredModels.map(model => <option key={model.id} value={model.id}>{model.name} [{getOpenRouterInputModalities(model).join(' + ')}] ({model.id})</option>), [filteredModels]);
     const unsupportedInputs = selectedModel ? requiredInputs.filter(kind => !getOpenRouterInputModalities(selectedModel).includes(kind)) : [];
     const openRouterModelBlocked = draft.provider === 'openrouter' && (loadingModels || !selectedModel || unsupportedInputs.length > 0);
 
     return <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <nav className="flex flex-wrap gap-2" aria-label="Video tools">
-                {([{ id: 'prompt', label: 'Video Prompt Generator' }, { id: 'ltx', label: 'LTX Director' }, { id: 'minimax', label: 'Minimax H3' }, { id: 'character-swap', label: 'Character Swap H3' }] as const).map(item =>
-                    <button key={item.id} type="button" onClick={() => chooseTab(item.id)} aria-pressed={tab === item.id} className={`${button} ${tab === item.id ? 'border-accent bg-accent/15 text-accent' : 'text-text-secondary'}`}>{item.label}</button>)}
+                {([
+                    { id: 'prompt', label: 'Video Prompt Generator', color: 'border-sky-400/60 text-sky-300', active: 'bg-sky-400/15' },
+                    { id: 'ltx', label: 'LTX Director', color: 'border-amber-400/60 text-amber-300', active: 'bg-amber-400/15' },
+                    { id: 'minimax', label: 'Minimax REF2v H3', color: 'border-violet-400/60 text-violet-300', active: 'bg-violet-400/15' },
+                    { id: 'ultrafast', label: 'Ultrafast', color: 'border-emerald-400/60 text-emerald-300', active: 'bg-emerald-400/15' },
+                    { id: 'advanced', label: 'MiniMax Advanced', color: 'border-cyan-400/60 text-cyan-300', active: 'bg-cyan-400/15' },
+                    { id: 'character-swap', label: 'Character Swap H3', color: 'border-rose-400/60 text-rose-300', active: 'bg-rose-400/15' },
+                ] as const).map(item =>
+                    <button key={item.id} type="button" onClick={() => chooseTab(item.id)} aria-pressed={tab === item.id} className={`${button} ${item.color} ${tab === item.id ? item.active : ''}`}>{item.label}</button>)}
             </nav>
             <span role="status" className="text-xs text-text-secondary">{!ready ? 'Loading saved workspace...' : saved ? 'Saved locally · media included' : 'Saving workspace...'}</span>
         </div>
@@ -283,7 +307,7 @@ export const VideoWorkspace: React.FC<{
                 <div className="min-w-0 space-y-4">
                     <section className={`${panel} bg-gradient-to-br from-sky-400/10 via-bg-secondary to-violet-400/10`}>
                         <div className="mb-4 flex items-start justify-between gap-3">
-                            <div><p className="mb-1 text-xs uppercase tracking-widest text-accent">Minimax H3 · Creative workspace</p><h2 className="text-xl font-bold">Video Prompt Generator</h2><p className="mt-1 text-sm text-text-secondary">Your idea, references and sound, composed into one production-ready prompt.</p></div>
+                            <div><p className="mb-1 text-xs uppercase tracking-widest text-accent">Video · Creative workspace</p><h2 className="text-xl font-bold">Video Prompt Generator</h2><p className="mt-1 text-sm text-text-secondary">An independent prompt tool. Compose, copy or send your prompt to an available video workflow.</p></div>
                             <div className="flex flex-wrap gap-2">
                                 <button type="button" disabled={!ready || busy} className={button} onClick={() => setSettingsOpen(value => !value)} aria-expanded={settingsOpen}>Templates</button>
                                 <button type="button" disabled={!ready || busy || librarySaving} className={`${button} text-red-300`} onClick={() => {
@@ -304,7 +328,7 @@ export const VideoWorkspace: React.FC<{
                                         {!filteredModels.some(model => model.id === draft.models.openrouter) && <option value={draft.models.openrouter} disabled={models.length > 0 && (!selectedModel || unsupportedInputs.length > 0)}>
                                             {selectedModel ? `${selectedModel.name} [${getOpenRouterInputModalities(selectedModel).join(' + ')}] (${selectedModel.id})` : draft.models.openrouter || 'Select a model'} {models.length && !selectedModel ? '(unavailable)' : '(current selection)'}
                                         </option>}
-                                        {filteredModels.map(model => <option key={model.id} value={model.id}>{model.name} [{getOpenRouterInputModalities(model).join(' + ')}] ({model.id})</option>)}
+                                        {modelOptions}
                                     </select></label>
                                 </div> : <label className="space-y-1 text-sm">Model ID<input className={input} list={`video-${draft.provider}-models`} value={draft.models[draft.provider]} onChange={event => update({ models: { ...draft.models, [draft.provider]: event.target.value } })} placeholder="Provider model ID" /></label>}
                             </div>
@@ -383,7 +407,7 @@ export const VideoWorkspace: React.FC<{
                         </div>)}
                         <p className="text-xs text-text-secondary">Generation sends your idea, selected template, reference notes and edited media to the chosen provider. Maximum 18 MB total media per request; originals stay local. Provider usage may be billed.</p>
                         {hasPendingAudio && <p role="alert" className="text-xs text-amber-300">Apply the audio selection first. Only an applied excerpt will be sent, not an older/full track.</p>}
-                        <button type="button" className={`${button} w-full border-accent bg-accent/15 !py-3 text-accent`} disabled={!ready || busy || librarySaving || hasPendingAudio || !draft.idea.trim() || openRouterModelBlocked} onClick={generate}>{busy ? 'Composing and saving your video prompt...' : 'Generate video prompt'}</button>
+                        <button type="button" className={`${button} w-full border-accent bg-accent/15 !py-3 text-accent`} disabled={!ready || busy || librarySaving || hasPendingAudio || !draft.idea.trim() || openRouterModelBlocked} onClick={generate}>{busy ? 'Composing your video prompt...' : 'Generate video prompt'}</button>
                         <p className="text-xs text-text-secondary">Successful generations are automatically saved to Library &gt; Prompts with the exact generation setup and all references.</p>
                     </section>
                 </div>
@@ -394,7 +418,7 @@ export const VideoWorkspace: React.FC<{
                     {!draft.result ? <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border-primary p-6 text-center">
                         <span className="text-3xl text-accent">[ Shot 1 ]</span><p className="text-sm text-text-secondary">Your shot plan, soundscape and music will appear here with colored reference tokens.</p>
                     </div> : editOutput
-                        ? <textarea aria-label="Generated video prompt" className={`${input} min-h-96 font-mono`} disabled={busy || librarySaving} value={draft.result} onChange={event => { update({ result: event.target.value }); setLibrarySaved(false); }} />
+                        ? <textarea aria-label="Generated video prompt" className={`${input} min-h-96 font-mono`} disabled={busy} value={draft.result} onChange={event => { update({ result: event.target.value }); setLibrarySaved(false); }} />
                         : <div className="max-h-[65vh] overflow-y-auto rounded-xl bg-bg-primary p-4"><ColoredPrompt text={draft.result} /></div>}
                     <div className="my-3 flex flex-wrap gap-2"><button type="button" className={button} disabled={!draft.result} onClick={() => copy(draft.result)}>Copy</button><button type="button" className={button} disabled={!draft.result} onClick={() => download(draft.result, 'video-prompt.txt')}>Export .txt</button></div>
                     <div className="mb-4 space-y-2">
@@ -402,104 +426,84 @@ export const VideoWorkspace: React.FC<{
                         <p className="text-xs text-text-secondary">Includes originals and edited media, reference roles, idea, model and editable canvases. Edits to the output can be saved as a new Library item. Older prompts without a generation snapshot save the current setup.</p>
                     </div>
                     <div className="space-y-3 border-t border-border-primary pt-4">
-                        <label className="block space-y-1 text-sm">Minimax H3 destination<select className={input} disabled={busy || !ready} value={draft.workflow} onChange={event => update({ workflow: event.target.value as VideoWorkflow })}>{VIDEO_WORKFLOWS.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label>
-                        <button type="button" className={`${button} w-full border-violet-400/50 bg-violet-400/10 text-violet-300`} disabled={!draft.result || busy || !ready || hasPendingAudio} onClick={transfer}>Send to Minimax H3 draft</button>
-                        <p className="text-xs text-text-secondary">Reference to video opens the connected H3 REF2V workflow with your prompt, edited references, aspect ratio and duration. Other workflow slots remain in preparation. No new LTX prompt link yet.</p>
+                        <label className="block space-y-1 text-sm">Send prompt to workflow<select className={input} disabled={busy || !ready} value={draft.workflow} onChange={event => update({ workflow: event.target.value === 'advanced' ? 'advanced' : event.target.value === 'ultrafast' ? 'ultrafast' : 'reference' })}>{VIDEO_WORKFLOWS.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label>
+                        <button type="button" className={`${button} w-full ${draft.workflow === 'advanced' ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300' : draft.workflow === 'ultrafast' ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-violet-400/50 bg-violet-400/10 text-violet-300'}`} disabled={!draft.result || busy || !ready || hasPendingAudio} onClick={transfer}>Send to {h3WorkflowName(draft.workflow === 'advanced' || draft.workflow === 'ultrafast' ? draft.workflow : 'reference')}</button>
+                        <p className="text-xs text-text-secondary">Copies the prompt, optional references, aspect ratio, duration and soundtrack selection. Each workflow keeps its own draft and settings. In Advanced, select REF2V for multimodal references or FL2V for first/last frames.</p>
                     </div>
                 </section>
             </div>
         </React.Activity>
         <React.Activity mode={tab === 'minimax' ? 'visible' : 'hidden'}>
-            <div className="grid gap-4 lg:grid-cols-[200px_minmax(0,1fr)]">
-                <aside className={`${panel} space-y-3`}>
-                    <div><h2 className="text-xl font-bold">Minimax H3</h2><p className="mt-1 text-xs text-text-secondary">REF2V connected · more workflows soon</p></div>
-                    {VIDEO_WORKFLOWS.map(workflow => <button type="button" key={workflow.id} onClick={() => setSelectedWorkflow(workflow.id)} aria-pressed={selectedWorkflow === workflow.id} className={`w-full rounded-xl border p-3 text-left ${selectedWorkflow === workflow.id ? 'border-violet-400 bg-violet-400/10' : 'border-border-primary'}`}>
-                        <span className="text-sm font-semibold">{workflow.name}{draft.minimaxDrafts[workflow.id] ? ' · Draft' : ''}</span><span className="mt-1 block text-xs text-text-secondary">{workflow.description}</span>
-                    </button>)}
-                </aside>
-                <div className="min-w-0">
-                <React.Activity mode={selectedWorkflow === 'reference' ? 'visible' : 'hidden'}>
                     <MinimaxH3Panel
                         draft={draft.minimaxDrafts.reference}
-                        onDraftChange={reference => update({ minimaxDrafts: { ...draft.minimaxDrafts, reference } })}
+                        onDraftChange={reference => setDraft(current => ({ ...current, minimaxDrafts: { ...current.minimaxDrafts, reference } }))}
                         options={draft.minimaxH3Options}
-                        onOptionsChange={options => setDraft(current => {
-                            const minimaxH3Options = !current.minimaxH3Options && options.originalAudioId === undefined && options.forceOriginalAudio === undefined
-                                ? withH3OriginalAudio(options, current.originalAudioId, current.forceOriginalAudio ?? false) : options;
-                            return { ...current, minimaxH3Options, originalAudioId: minimaxH3Options.originalAudioId, forceOriginalAudio: minimaxH3Options.forceOriginalAudio };
-                        })}
+                        onOptionsChange={options => setDraft(current => ({ ...current, minimaxH3Options: options }))}
                         ready={ready}
-                        lyricsProvider={draft.provider}
-                        lyricsModel={draft.models[draft.provider]}
-                        onLyricsSettingsChange={(provider, model) => update({ provider, models: { ...draft.models, [provider]: model ?? draft.models[provider] } })}
-                        onRefreshPrompt={(reference, options) => generateVideoPrompt({
-                            ...draft, references: reference.references.filter(ref => (options.references[ref.id]?.enabled ?? true)),
-                            idea: `Refresh this existing shot description for the CURRENT attached audio passage. Keep its visual identity, camera and setting. Remove ALL earlier quoted vocal words and rewrite them using only the current reviewed transcript. Do not continue the previous verse. The current soundtrack requirements override any previous request for new music.\n\nPrevious scene description:\n${reference.prompt}`,
-                            duration: options.duration, aspect: options.aspect.split(' ')[0], template: reference.template, workflow: 'reference', originalAudioId: options.originalAudioId, forceOriginalAudio: options.forceOriginalAudio,
-                        })}
-                        onOpenPromptGenerator={() => {
-                            if (busy || librarySaving) throw new Error('Wait for the prompt generator or Library save to finish first.');
-                            const reference = draft.minimaxDrafts.reference;
-                            if (reference) {
-                                if (reference.references.some(ref => ref.slot > REFERENCE_LIMITS[ref.kind])) throw new Error('The prompt generator supports Picture 1-4, Video 1-2 and Audio 1-2. Remove higher reference slots before reopening this draft there.');
-                                validateVideoReferences(reference.references);
-                                if ((draft.minimaxH3Options?.duration ?? reference.duration) < 1) throw new Error('The prompt generator requires at least one second. Increase the H3 duration before reopening this draft there.');
-                                if (!window.confirm('Load this REF2V draft into the prompt generator? This replaces its current idea, references and output.')) return;
-                                update({
-                                    result: reference.prompt, idea: reference.prompt, references: reference.references.map(ref => ({ ...ref })), workflow: 'reference',
-                                    aspect: draft.minimaxH3Options?.aspect.split(' ')[0] || reference.aspect,
-                                    duration: draft.minimaxH3Options?.duration ?? reference.duration, template: reference.template,
-                                    originalAudioId: draft.minimaxH3Options?.originalAudioId,
-                                    forceOriginalAudio: draft.minimaxH3Options?.forceOriginalAudio,
-                                    generatedInputs: undefined, generatedInputsProvenance: undefined,
-                                });
-                                setLibrarySaved(false);
-                            } else update({ workflow: 'reference' });
-                            chooseTab('prompt');
-                        }}
+                        lyricsProvider={draft.minimaxLyricsSettings?.provider ?? 'openrouter'}
+                        lyricsModel={draft.minimaxLyricsSettings?.model ?? DEFAULT_OPENROUTER_MODEL}
+                        onLyricsSettingsChange={(provider, model) => update({ minimaxLyricsSettings: { provider, model: model ?? (provider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-2.5-flash') } })}
                         onClearDraft={() => { const next = { ...draft.minimaxDrafts }; delete next.reference; update({ minimaxDrafts: next }); }}
+                        onStartFromScratch={() => {
+                            if (libraryItem && libraryWorkflow === 'reference') onLibraryItemLoaded();
+                            setError('');
+                            setNotice('');
+                            setDraft(current => {
+                                const minimaxDrafts = { ...current.minimaxDrafts };
+                                delete minimaxDrafts.reference;
+                                return { ...current, minimaxDrafts, minimaxH3Options: defaultMinimaxH3Options(), minimaxLyricsSettings: undefined };
+                            });
+                        }}
                     />
-                </React.Activity>
-                {selectedWorkflow !== 'reference' && <section className={`${panel} min-w-0 space-y-4`}>
-                    <h3 className="font-semibold">{VIDEO_WORKFLOWS.find(workflow => workflow.id === selectedWorkflow)?.name}</h3>
-                    <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">This additional workflow is still in preparation. The supplied REF2V workflow is available under Reference to video.</p>
-                    {activeMinimax ? <>
-                        <p className="text-sm text-text-secondary">{activeMinimax.aspect} · {activeMinimax.duration}s · {activeMinimax.references.length} references</p>
-                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{activeMinimax.references.map(ref => <MinimaxReference key={ref.id} reference={ref} />)}</div>
-                        <div className="max-h-[55vh] overflow-y-auto rounded-xl bg-bg-primary p-4"><ColoredPrompt text={activeMinimax.prompt} /></div>
-                        <div className="flex flex-wrap gap-2">
-                            <button type="button" className={button} onClick={() => copy(activeMinimax.prompt)}>Copy prompt</button>
-                            <button type="button" className={button} onClick={() => download(activeMinimax.prompt, `minimax-h3-${selectedWorkflow}.txt`)}>Export .txt</button>
-                            <button type="button" disabled={busy || librarySaving} className={button} onClick={() => {
-                                if (!window.confirm('Load this workflow draft into the prompt generator? This replaces its current idea, references and output.')) return;
-                                update({ references: activeMinimax.references.map(ref => ({ ...ref })), result: activeMinimax.prompt, idea: activeMinimax.prompt, generatedInputs: undefined, generatedInputsProvenance: undefined,
-                                    aspect: activeMinimax.aspect, duration: activeMinimax.duration, workflow: activeMinimax.workflow,
-                                    template: activeMinimax.template });
-                                setLibrarySaved(false);
-                                chooseTab('prompt');
-                            }}>Edit in prompt generator</button>
-                            <button type="button" disabled={busy} className={`${button} text-red-300`} onClick={() => {
-                                if (!window.confirm('Delete this Minimax workflow draft?')) return;
-                                const next = { ...draft.minimaxDrafts }; delete next[selectedWorkflow]; update({ minimaxDrafts: next });
-                            }}>Delete draft</button>
-                        </div>
-                    </> : <div className="rounded-xl border border-dashed border-border-primary p-8 text-center text-sm text-text-secondary">No draft yet. Generate a prompt, choose this workflow and send it here.<div className="mt-4"><button type="button" disabled={!ready || busy} className={button} onClick={() => { update({ workflow: selectedWorkflow, template: selectedWorkflow === 'replacement' ? 'replacement' : 'generation' }); chooseTab('prompt'); }}>Prepare this workflow</button></div></div>}
-                </section>}
-                </div>
-            </div>
+        </React.Activity>
+        <React.Activity mode={tab === 'ultrafast' ? 'visible' : 'hidden'}>
+            <MinimaxH3Panel variant="ultrafast"
+                draft={draft.minimaxDrafts.ultrafast}
+                onDraftChange={ultrafast => setDraft(current => ({ ...current, minimaxDrafts: { ...current.minimaxDrafts, ultrafast } }))}
+                options={draft.ultrafastH3Options}
+                onOptionsChange={options => setDraft(current => ({ ...current, ultrafastH3Options: options }))}
+                ready={ready}
+                lyricsProvider={draft.ultrafastLyricsSettings?.provider ?? 'openrouter'}
+                lyricsModel={draft.ultrafastLyricsSettings?.model ?? DEFAULT_OPENROUTER_MODEL}
+                onLyricsSettingsChange={(provider, model) => update({ ultrafastLyricsSettings: { provider, model: model ?? (provider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-2.5-flash') } })}
+                onClearDraft={() => setDraft(current => {
+                    const minimaxDrafts = { ...current.minimaxDrafts }; delete minimaxDrafts.ultrafast;
+                    return { ...current, minimaxDrafts };
+                })}
+                onStartFromScratch={() => {
+                    if (libraryItem && libraryWorkflow === 'ultrafast') onLibraryItemLoaded();
+                    setError(''); setNotice('');
+                    setDraft(current => {
+                        const minimaxDrafts = { ...current.minimaxDrafts }; delete minimaxDrafts.ultrafast;
+                        return { ...current, minimaxDrafts, ultrafastH3Options: defaultUltrafastH3Options(), ultrafastLyricsSettings: undefined };
+                    });
+                }}
+            />
+        </React.Activity>
+        <React.Activity mode={tab === 'advanced' ? 'visible' : 'hidden'}>
+            <MinimaxH3Panel variant="advanced"
+                draft={draft.minimaxDrafts.advanced}
+                onDraftChange={advanced => setDraft(current => ({ ...current, minimaxDrafts: { ...current.minimaxDrafts, advanced } }))}
+                options={draft.advancedH3Options}
+                onOptionsChange={options => setDraft(current => ({ ...current, advancedH3Options: options }))}
+                ready={ready}
+                lyricsProvider={draft.advancedLyricsSettings?.provider ?? 'openrouter'}
+                lyricsModel={draft.advancedLyricsSettings?.model ?? DEFAULT_OPENROUTER_MODEL}
+                onLyricsSettingsChange={(provider, model) => update({ advancedLyricsSettings: { provider, model: model ?? (provider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-2.5-flash') } })}
+                onClearDraft={() => setDraft(current => {
+                    const minimaxDrafts = { ...current.minimaxDrafts }; delete minimaxDrafts.advanced;
+                    return { ...current, minimaxDrafts };
+                })}
+                onStartFromScratch={() => {
+                    if (libraryItem && libraryWorkflow === 'advanced') onLibraryItemLoaded();
+                    setError(''); setNotice('');
+                    setDraft(current => {
+                        const minimaxDrafts = { ...current.minimaxDrafts }; delete minimaxDrafts.advanced;
+                        return { ...current, minimaxDrafts, advancedH3Options: defaultH3WorkflowOptions('advanced'), advancedLyricsSettings: undefined };
+                    });
+                }}
+            />
         </React.Activity>
         {editing && <VideoReferenceEditor key={editing.id} reference={editing} onClose={() => setEditing(null)} onSave={file => { changeReference(editing.id, { file }); setEditing(null); }} />}
-    </div>;
-};
-
-const MinimaxReference: React.FC<{ reference: VideoReference }> = ({ reference }) => {
-    const url = useMediaURL(reference.file);
-    return <div className="space-y-2 rounded-xl border border-border-primary bg-bg-primary p-2">
-        <Token text={referenceToken(reference)} />
-        {url && (reference.kind === 'image' ? <img src={url} alt={referenceToken(reference)} className="h-32 w-full object-contain" />
-            : reference.kind === 'video' ? <video src={url} controls preload="metadata" className="h-32 w-full" />
-                : <audio src={url} controls className="w-full" />)}
-        <p className="truncate text-xs text-text-secondary" title={reference.file.name}>{reference.file.name}</p>
-        {reference.note && <p className="text-xs text-text-secondary">{reference.note}</p>}
     </div>;
 };

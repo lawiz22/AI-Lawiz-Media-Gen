@@ -40,7 +40,7 @@ const { outputText } = ts.transpileModule(mocks + helpers, { compilerOptions: { 
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 const item = {
     mediaType: 'prompt', name: 'Video Prompt test', media: 'generated prompt', thumbnail: 'thumbnail',
-    videoPromptOptions: { version: 1, references: [{ file: { name: 'cropped.png', data: '' }, original: { name: 'source.png', data: '' } }] },
+    videoPromptOptions: { version: 1, workflow: 'ultrafast', renderOptions: { variant: 'ultrafast', ultrafast: { spectrum: true, rtxUpscale: true, rtxScale: 2 }, seed: 12345, steps: 5, references: { picture: { enabled: false } } }, references: [{ file: { name: 'cropped.png', data: '' }, original: { name: 'source.png', data: '' } }] },
 };
 const blobs = {
     'videoPromptReference:0': new Blob(['edited'], { type: 'image/png' }),

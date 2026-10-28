@@ -50,14 +50,14 @@ export const encodeAudioWav = (audio: AudioSamples, selection: AudioSelection = 
     return new Blob([output], { type: 'audio/wav' });
 };
 
-export const audioWaveformPeaks = (audio: AudioSamples, bins = 640): number[] => {
-    audioSelectionFrames(audio, { start: 0, end: audio.length / audio.sampleRate });
+export const audioWaveformPeaks = (audio: AudioSamples, bins = 640, selection: AudioSelection = { start: 0, end: audio.length / audio.sampleRate }): number[] => {
+    const { first, last } = audioSelectionFrames(audio, selection);
     if (!Number.isInteger(bins) || bins < 1) throw new Error('Invalid waveform resolution.');
     const channels = Array.from({ length: audio.numberOfChannels }, (_, index) => audio.getChannelData(index));
-    const count = Math.min(bins, audio.length);
+    const count = Math.min(bins, last - first);
     return Array.from({ length: count }, (_, bucket) => {
         let peak = 0;
-        for (let frame = Math.floor(bucket * audio.length / count); frame < Math.floor((bucket + 1) * audio.length / count); frame++) {
+        for (let frame = first + Math.floor(bucket * (last - first) / count); frame < first + Math.floor((bucket + 1) * (last - first) / count); frame++) {
             for (const channel of channels) {
                 if (!Number.isFinite(channel[frame])) throw new Error('The decoded audio contains an invalid sample.');
                 peak = Math.max(peak, Math.abs(channel[frame]));

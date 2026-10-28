@@ -67,6 +67,7 @@ import { UpscalePanel } from './components/UpscalePanel';
 import { CivitaiPanel } from './components/CivitaiPanel';
 import versionData from './version.json';
 import { LibraryPickerModal } from './components/LibraryPickerModal';
+import { isMinimaxH3PromptLibraryItem } from './services/videoPromptLibrary';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
 import { ErrorModal } from './components/ErrorModal';
@@ -121,7 +122,10 @@ const App: React.FC = () => {
     const [localMammouthKey, setLocalMammouthKey] = useState('');
     const [localOpenRouterSettings, setLocalOpenRouterSettings] = useState<OpenRouterSettings>({ apiKey: '', model: DEFAULT_OPENROUTER_MODEL });
     const [videoPromptToLoad, setVideoPromptToLoad] = useState<LibraryItem | null>(null);
+    const [videoPromptDestination, setVideoPromptDestination] = useState<'reference' | 'ultrafast' | 'advanced'>('reference');
+    const [videoFinishing, setVideoFinishing] = useState<'latent' | 'ltx' | undefined>();
     const handleVideoPromptLoaded = useCallback(() => setVideoPromptToLoad(null), []);
+    const handleLeaveVideoDirector = useCallback(() => dispatch(setActiveTab('video')), [dispatch]);
     const [localOllamaUrl, setLocalOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || DEFAULT_OLLAMA_URL);
     const [localOllamaModel, setLocalOllamaModel] = useState(() => localStorage.getItem('ollama_model') || DEFAULT_OLLAMA_MODEL);
     const [isOllamaConnected, setIsOllamaConnected] = useState<boolean | null>(null);
@@ -666,7 +670,7 @@ const App: React.FC = () => {
 
         const supportsProgressiveImageGeneration = activeTab === 'image-generator' && currentOptions.provider === 'comfyui';
         const imageOutputCount = currentOptions.comfyModelType === 'face-detailer-sd1.5' ? 1
-            : currentOptions.numImages * (currentOptions.comfyModelType === 'moss-image' ? currentOptions.comfyMoss?.batchSize ?? 1 : currentOptions.comfyModelType === 'krea2-edit' ? currentOptions.comfyKrea2Edit?.batchSize ?? 1 : 1);
+            : currentOptions.numImages * (currentOptions.comfyModelType === 'moss-photo' ? currentOptions.comfyMossPhoto?.batchSize ?? 1 : currentOptions.comfyModelType === 'moss-image' ? currentOptions.comfyMoss?.batchSize ?? 1 : currentOptions.comfyModelType === 'krea2-edit' ? currentOptions.comfyKrea2Edit?.batchSize ?? 1 : 1);
         setMossPreview(null);
         if (supportsProgressiveImageGeneration) {
             setImageGenerationJobs(Array.from({ length: imageOutputCount }, (_, index) => ({
@@ -760,7 +764,7 @@ const App: React.FC = () => {
                         activeTab === 'image-generator' ? (index, message, value) => {
                             setImageGenerationJobs(current => current.map((job, jobIndex) => jobIndex === index ? { ...job, progress: value, message } : job));
                         } : undefined,
-                        activeTab === 'image-generator' && options.comfyModelType === 'moss-image' ? setMossPreview : undefined,
+                        activeTab === 'image-generator' && (options.comfyModelType === 'moss-image' || options.comfyModelType === 'moss-photo') ? setMossPreview : undefined,
                     );
                 result = {
                     images: comfyResult.images.map(img => ({ src: img.src, seed: img.seed, usageMetadata: undefined, before: comparisonSource })),
@@ -1341,7 +1345,8 @@ const App: React.FC = () => {
                                             || currentOptions.comfyModelType === 'krea2-raw'
                                             || currentOptions.comfyModelType === 'qwen21-t2i'
                                             || currentOptions.comfyModelType === 'qwen21-turbo'
-                                            || currentOptions.comfyModelType === 'moss-image')) && (
+                                            || currentOptions.comfyModelType === 'moss-image'
+                                            || currentOptions.comfyModelType === 'moss-photo')) && (
                                     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                         <div className="mb-4 flex flex-wrap items-center gap-3">
                                             <h2 className="text-xl font-bold text-accent">
@@ -1500,7 +1505,7 @@ const App: React.FC = () => {
                                         isDisabled={isLoading}
                                         updateOptions={handleUpdateOptions}
                                     />
-                                    {isLoading && currentOptions.comfyModelType === 'moss-image' && mossPreview && <MossGenerationPreview image={mossPreview} />}
+                                    {isLoading && (currentOptions.comfyModelType === 'moss-image' || currentOptions.comfyModelType === 'moss-photo') && mossPreview && <MossGenerationPreview image={mossPreview} />}
                                     {isLoading && imageGenerationJobs.length === 0 ? (
                                         <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />
                                     ) : (
@@ -1807,9 +1812,11 @@ const App: React.FC = () => {
                     <React.Activity mode={activeTab === 'video' || activeTab === 'ltx-director' ? 'visible' : 'hidden'}>
                         <VideoWorkspace
                             libraryItem={videoPromptToLoad}
+                            libraryWorkflow={videoPromptDestination}
+                            libraryFinishing={videoFinishing}
                             onLibraryItemLoaded={handleVideoPromptLoaded}
                             openDirector={activeTab === 'ltx-director'}
-                            onLeaveDirector={() => dispatch(setActiveTab('video'))}
+                            onLeaveDirector={handleLeaveVideoDirector}
                             onResetDirector={() => {
                                 dispatch(clearLtxTransfer());
                                 setPanelResetVersions(current => ({ ...current, 'ltx-director': (current['ltx-director'] || 0) + 1 }));
@@ -1844,7 +1851,9 @@ const App: React.FC = () => {
                             onUpscaleItem={(item) => handleSendToUpscale(item.media, item.name ? `${item.name}.png` : undefined)}
                             onLoadItem={(item, loadOptions) => {
                                 // Logic to load item back into generator state
-                                if (item.videoPromptOptions) {
+                                if (loadOptions?.videoFinishing || isMinimaxH3PromptLibraryItem(item)) {
+                                    setVideoFinishing(loadOptions?.videoFinishing);
+                                    setVideoPromptDestination(loadOptions?.videoFinishing ? 'advanced' : loadOptions?.videoWorkflow ?? item.videoPromptOptions?.renderOptions?.variant ?? 'reference');
                                     setVideoPromptToLoad(item);
                                     dispatch(setActiveTab('video'));
                                 } else if (item.mediaType === 'preset' && item.sceneVariationPreset) {

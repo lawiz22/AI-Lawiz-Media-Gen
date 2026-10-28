@@ -11,6 +11,7 @@ interface LibraryPickerModalProps {
   filter: LibraryItemType | LibraryItemType[] | null;
   multiSelect?: boolean;
   onSelectMultiple?: (items: LibraryItem[]) => void;
+  hydrateMedia?: boolean;
 }
 
 // Fix: Widened the type of `mediaType` to `LibraryItemType` to include all possible values from `LibraryItem` and added a case for 'object' to resolve the TypeScript error.
@@ -38,7 +39,7 @@ const getCategoryIcon = (mediaType: LibraryItemType) => {
     }
 };
 
-export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, onClose, onSelectItem, filter, multiSelect = false, onSelectMultiple }) => {
+export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, onClose, onSelectItem, filter, multiSelect = false, onSelectMultiple, hydrateMedia = true }) => {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState<LibraryItem[]>([]);
@@ -97,7 +98,7 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
       setIsResolving(true);
       setErrorMessage('');
       try {
-        await onSelectItem(await hydrateLibraryItem(item));
+        await onSelectItem(hydrateMedia ? await hydrateLibraryItem(item) : item);
         onClose();
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : 'Could not load the selected Library media.');
@@ -113,7 +114,7 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
       setErrorMessage('');
       try {
         const hydratedItems: LibraryItem[] = [];
-        for (const item of selectedItems) hydratedItems.push(await hydrateLibraryItem(item));
+        for (const item of selectedItems) hydratedItems.push(hydrateMedia ? await hydrateLibraryItem(item) : item);
         onSelectMultiple(hydratedItems);
         onClose();
       } catch (error) {

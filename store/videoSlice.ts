@@ -41,6 +41,7 @@ const initialState: VideoSliceState = {
   activeVideoUtilsSubTab: 'frames',
   referenceMakerResetVersion: 0,
   videoMergeResetVersion: 0,
+  audioExtractorResetVersion: 0,
 };
 
 const videoSlice = createSlice({
@@ -106,6 +107,7 @@ const videoSlice = createSlice({
       state.videoUtilsState = initialVideoUtilsState;
       state.referenceMakerResetVersion++;
       state.videoMergeResetVersion++;
+      state.audioExtractorResetVersion++;
     },
     setFrameSaveStatus: (state, action: PayloadAction<'idle' | 'saving' | 'saved'>) => {
         state.videoUtilsState.extractedFrameSaveStatus = action.payload;

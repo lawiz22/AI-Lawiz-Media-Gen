@@ -3,7 +3,7 @@ import type { SwapProject, SwapResult, SwapVideo } from './characterSwapService'
 import { swapJSON, swapRequest, swapVideoURL } from './characterSwapService';
 import { isRecord } from './minimaxH3Workflow';
 import { readRenderedLibraryMedia } from './minimaxH3Library';
-import { getLibraryAssetBlob } from './idbLibraryService';
+import { readLibraryMediaFile } from './libraryMediaService';
 
 export const swapResultSnapshot = (project: SwapProject): SwapResult => {
     if (!project.result?.videos.length) throw new Error('No Character Swap video is available to save.');
@@ -43,31 +43,9 @@ export const buildCharacterSwapLibraryItem = async (
     };
 };
 
-const inputFormats: Record<string, string> = {
-    'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'video/x-matroska': 'mkv',
-    'video/x-msvideo': 'avi', 'video/mpeg': 'mpeg', 'video/x-m4v': 'm4v',
-    'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
-    'image/bmp': 'bmp', 'image/tiff': 'tiff',
-};
 export const swapLibraryFile = async (item: LibraryItem, kind: 'video' | 'image'): Promise<File> => {
-    let blob: Blob;
-    if (item.assetRefs?.media) blob = await getLibraryAssetBlob(item.assetRefs.media);
-    else {
-        if (!/^(blob:|data:)/.test(item.media)) throw new Error('This Library item has no local media. Restore its original file before importing.');
-        const response = await fetch(item.media);
-        if (!response.ok) throw new Error(`Cannot read Library media: HTTP ${response.status}.`);
-        blob = await response.blob();
-    }
-    if (!blob.size) throw new Error('The selected Library media is empty.');
-    let mime = blob.type.split(';')[0].toLowerCase();
-    if (!mime || mime === 'application/octet-stream') {
-        const filename = item.characterSwapOptions?.filename || item.minimaxH3Options?.filename || item.name || '';
-        const extension = filename.split('.').pop()?.toLowerCase();
-        mime = Object.entries(inputFormats).find(([, ext]) => ext === extension || ext === 'jpg' && extension === 'jpeg')?.[0] || '';
-    }
-    const extension = inputFormats[mime];
-    if (!extension || !mime.startsWith(`${kind}/`)) throw new Error(`Select a supported ${kind} file from Library (received ${mime || 'unknown format'}).`);
-    return new File([blob], `lawiz-swap-library-${crypto.randomUUID()}.${extension}`, { type: mime });
+    const file = await readLibraryMediaFile(item, [kind]);
+    return new File([file], `lawiz-swap-${file.name}`, { type: file.type });
 };
 
 export const uploadSwapLibraryFile = async (

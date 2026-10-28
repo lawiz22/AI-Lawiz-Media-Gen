@@ -6,11 +6,13 @@ import ts from 'typescript';
 const compile = source => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const load = code => import(`data:text/javascript;base64,${Buffer.from(compile(code)).toString('base64')}`);
 const workflowSource = readFileSync(new URL('./minimaxH3Workflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '');
-const workflow = await load(readFileSync(new URL('./videoPromptService.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '') + workflowSource);
+const workflow = await load(readFileSync(new URL('./videoPromptService.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '') + workflowSource
+    + readFileSync(new URL('./minimaxH3AdvancedWorkflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '')
+    + readFileSync(new URL('./minimaxH3UltrafastWorkflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, ''));
 globalThis.__h3Test = workflow;
 const serviceSource = readFileSync(new URL('./minimaxH3Service.ts', import.meta.url), 'utf8').replace(/import[\s\S]*?from\s+'[^']+';/g, '');
 const api = await load(`
-const { buildMinimaxH3Workflow, h3ReferenceControl, isRecord, planH3References, validateMinimaxH3Readiness } = globalThis.__h3Test;
+const { buildH3RenderWorkflow, ADVANCED_NODE_SPECS, planAdvancedH3Input, h3ReferenceControl, isRecord, planH3References, validateMinimaxH3Readiness } = globalThis.__h3Test;
 export const muxCalls = [];
 export let muxFailure = false;
 export const setMuxFailure = value => { muxFailure = value; };
@@ -30,11 +32,15 @@ const finalHistory = { outputs: { '119': { gifs: [{ filename: 'H3_0001.mp4', sub
 
 function harness(t, config = {}) {
     const previous = { fetch: globalThis.fetch, WebSocket: globalThis.WebSocket, localStorage: globalThis.localStorage };
-    const requests = [], progress = [], previews = [];
+    const requests = [], progress = [], previews = [], execution = [];
     let socket, queued;
-    const options = workflow.defaultMinimaxH3Options();
-    const graph = workflow.buildMinimaxH3Workflow(input(), options, { 'image-1': 'image.png' });
+    const options = config.advanced ? workflow.defaultAdvancedH3Options() : config.ultrafast ? workflow.defaultUltrafastH3Options() : workflow.defaultMinimaxH3Options();
+    if (config.advanced) Object.assign(options.advanced, { stageOrder: 'latent-first' }, config.stages);
+    if (config.accelerators) Object.assign(options.ultrafast, config.accelerators);
+    const fixture = config.stages?.inputMode === 'video' ? { ...input([reference('video', 1)]), prompt: '' } : input();
+    const graph = workflow.buildH3RenderWorkflow({ ...fixture, workflow: config.advanced ? 'advanced' : config.ultrafast ? 'ultrafast' : 'reference' }, options, { 'image-1': 'image.png', 'video-1': 'video.mp4' });
     const info = Object.fromEntries(Object.values(graph).map(node => [node.class_type, {}]));
+    if (config.omitReferencePack) delete info.MiniMaxH3ReferencePack;
     class Socket {
         constructor(url) { this.url = String(url); socket = this; queueMicrotask(() => this.onopen?.()); }
         close() { this.closed = true; this.onclose?.(); }
@@ -69,11 +75,189 @@ function harness(t, config = {}) {
     };
     t.after(() => Object.assign(globalThis, previous));
     return {
-        requests, progress, previews, options,
+        requests, progress, previews, execution, options,
         get queued() { return queued; }, get socket() { return socket; },
-        run: (draft = input(), controller = new AbortController()) => api.generateMinimaxH3Video(draft, options, controller.signal, (...args) => progress.push(args), preview => previews.push(preview)),
+        run: (draft = input(), controller = new AbortController()) => api.generateMinimaxH3Video(draft, options, controller.signal, (...args) => progress.push(args), preview => previews.push(preview), value => execution.push(value)),
     };
 }
+
+test('Advanced waits for the final RTX output and retains the actual executed FL2V/refine graph', async t => {
+    const h = harness(t, { advanced: true, stages: { ltxRefine: true, rtxUpscale: true },
+        history: () => ({ 'owned-h3': { ...finalHistory, outputs: { '119': { gifs: [{ filename: 'Advanced_RTX.mp4', type: 'output' }] } } } }) });
+    const result = await h.run({ ...input([]), workflow: 'advanced', prompt: 'A quiet street with footsteps.' });
+    assert.deepEqual(h.queued.prompt['119'].inputs.images, ['advanced-rtx', 0]);
+    assert.deepEqual(h.queued.prompt['advanced-rtx'].inputs.images, ['advanced-clear-after', 1]);
+    assert.deepEqual(h.queued.prompt['advanced-clear-after'].inputs.image_pass, ['advanced-after-ltx', 1]);
+    assert.equal(result.options.variant, 'advanced');
+    assert.equal(result.options.advanced.mode, 'fl2v');
+    assert.equal(result.workflow['184'].class_type, 'MiniMaxH3ImageToVideo');
+    assert.match(result.videoUrl, /Advanced_RTX.mp4/);
+    assert.equal(h.socket.closed, true);
+});
+
+test('checkpoint outputs never finish the job early and remain accessible when LTX fails later', async t => {
+    const h = harness(t, { advanced: true, stages: { ltxRefine: true, rtxUpscale: true }, history: socket => {
+        socket.emit('executed', { prompt_id: 'another-client', node: 'advanced-save-ltx', output: { gifs: [{ filename: 'foreign.mp4' }] } });
+        for (const [node, filename] of [['advanced-save-first-pass', 'FirstPass.mp4'], ['advanced-save-latent-upscale', 'LatentUpscale.mp4']]) {
+            socket.emit('executed', { prompt_id: 'owned-h3', node, output: { gifs: [{ filename, subfolder: 'MrWeaz/2026-10-21', type: 'output' }] } });
+        }
+        socket.emit('execution_error', { prompt_id: 'owned-h3', node_type: 'VAEDecodeTiled', exception_message: 'test LTX failure' });
+        return {};
+    } });
+    await assert.rejects(h.run({ ...input([]), workflow: 'advanced', prompt: 'A quiet street.' }), /test LTX failure/);
+    const videos = h.execution.at(-1).videos;
+    assert.equal(videos.length, 2);
+    assert.deepEqual(videos.map(video => video.label), ['First pass', 'Latent upscale']);
+    assert.ok(videos.every(video => /type=output/.test(video.videoUrl)));
+    assert.ok(!h.progress.some(([text]) => text === 'H3 video ready.'));
+    assert.equal(h.socket.closed, true);
+});
+
+test('completed history recovers cached intermediate links while keeping output 119 as the final result', async t => {
+    const h = harness(t, { advanced: true, history: () => ({ 'owned-h3': { ...finalHistory, outputs: {
+        ...finalHistory.outputs, 'advanced-save-first-pass': { gifs: [{ filename: 'cached_FirstPass.mp4', type: 'output' }] },
+    } } }) });
+    const result = await h.run({ ...input([]), workflow: 'advanced', prompt: 'A quiet street.' });
+    assert.match(result.videoUrl, /H3_0001.mp4/);
+    assert.equal(result.stageVideos.length, 1);
+    assert.match(result.stageVideos[0].videoUrl, /cached_FirstPass.mp4/);
+});
+
+test('Advanced tracks each sampling/decode/save stage, cached nodes and local progress without reusing H3 steps', async t => {
+    const h = harness(t, { advanced: true, stages: { ltxRefine: true, rtxUpscale: true }, history: socket => {
+        socket.emit('executing', { prompt_id: 'another-client', node: 'advanced-rtx' });
+        socket.emit('execution_cached', { prompt_id: 'owned-h3', nodes: ['135', '121', 'not-in-graph'] });
+        socket.emit('executing', { prompt_id: 'owned-h3', node: '153' });
+        socket.emit('progress', { prompt_id: 'owned-h3', node: '153', value: 4, max: 4 });
+        socket.emit('executing', { prompt_id: 'owned-h3', node: 'advanced-latent-sample' });
+        socket.emit('progress', { prompt_id: 'owned-h3', node: 'advanced-latent-sample', value: 1, max: 3 });
+        socket.emit('executing', { prompt_id: 'owned-h3', node: 'advanced-ltx-sample' });
+        socket.emit('progress', { prompt_id: 'owned-h3', node: 'advanced-ltx-sample', value: 2, max: 3 });
+        socket.emit('executing', { prompt_id: 'owned-h3', node: 'advanced-ltx-decode' });
+        socket.emit('progress', { prompt_id: 'another-client', node: 'advanced-ltx-decode', value: 999, max: 999 });
+        socket.emit('progress', { prompt_id: 'owned-h3', node: 'advanced-ltx-decode', value: 1, max: 12 });
+        socket.emit('progress_state', { prompt_id: 'another-client', nodes: { 'advanced-ltx-decode': { state: 'running', value: 888, max: 888 } } });
+        socket.emit('progress_state', { prompt_id: 'owned-h3', nodes: { 'advanced-ltx-sample': { state: 'finished', value: 3, max: 3 }, 'advanced-ltx-decode': { state: 'running', value: 2, max: 12 } } });
+        socket.emit('executing', { prompt_id: 'owned-h3', node: 'advanced-rtx' });
+        socket.emit('executing', { prompt_id: 'owned-h3', node: '119' });
+        return { 'owned-h3': finalHistory };
+    } });
+    await h.run({ ...input([]), workflow: 'advanced', prompt: 'A quiet street.' });
+    const atDecode = h.execution.find(value => value.currentNode === 'advanced-ltx-decode');
+    assert.equal(atDecode.step, undefined, 'Entering decode clears the previous sampler step count.');
+    assert.equal(atDecode.totalSteps, undefined, 'Decode is indeterminate until real tile progress arrives.');
+    const tiles = h.execution.find(value => value.currentNode === 'advanced-ltx-decode' && value.step === 1);
+    assert.equal(tiles.totalSteps, 12);
+    assert.equal(tiles.nodes.find(node => node.id === 'advanced-ltx-decode').label, 'LTX Refine · tiled video decode');
+    assert.equal(tiles.nodes.find(node => node.id === '135').state, 'cached');
+    assert.equal(tiles.nodes.find(node => node.id === '153').state, 'complete');
+    assert.ok(!tiles.nodes.some(node => node.id === 'not-in-graph'));
+    assert.ok(h.progress.some(([message]) => message === 'LTX Refine · sampling: 2/3'));
+    assert.ok(h.progress.some(([message]) => message === 'LTX Refine · tiled video decode: 2/12'));
+    assert.ok(h.progress.some(([message]) => message.includes('Final video · encoding and saving')));
+    assert.ok(!h.progress.some(([message]) => message.includes('999')));
+    assert.ok(!h.progress.some(([message]) => message.includes('888')));
+    assert.ok(h.execution.every(value => value.elapsedSeconds >= 0 && value.nodeSeconds >= 0));
+    assert.equal(h.execution.at(-1).currentNode, undefined);
+    assert.equal(h.execution.at(-1).nodes.find(node => node.id === '119').state, 'complete');
+});
+
+test('Ultrafast monitors native SaveVideo output and realtime preview through the shared owned-job pipeline', async t => {
+    const h = harness(t, { ultrafast: true, accelerators: { spectrum: true, rtxUpscale: true },
+        history: () => ({ 'owned-h3': { ...finalHistory, outputs: { '119': { images: [{ filename: 'ultra.mp4', subfolder: 'video', type: 'output' }] } } } }) });
+    const result = await h.run({ ...input([]), workflow: 'ultrafast', prompt: 'A quiet scene with sound.' });
+    assert.equal(h.queued.prompt['119'].class_type, 'SaveVideo');
+    assert.equal(h.queued.prompt['190'].class_type, 'BasicScheduler');
+    assert.equal(h.queued.prompt['ultrafast-spectrum'].class_type, 'SpectrumApplyMiniMaxH3');
+    assert.equal(h.queued.prompt['ultrafast-rtx'].class_type, 'RTXVideoSuperResolution');
+    assert.equal(h.requests.filter(request => request.path === '/upload/image').length, 0);
+    assert.equal(result.options.variant, 'ultrafast');
+    assert.match(result.videoUrl, /filename=ultra.mp4/);
+    assert.equal(h.previews.length, 1);
+    assert.equal(h.socket.closed, true);
+});
+
+test('Library finishing uploads only the source video, skips H3 first pass and handles silent soundtracks explicitly', async t => {
+    for (const stage of ['latent', 'ltx']) for (const hasAudio of [false, true]) await t.test(`${stage} / soundtrack ${hasAudio}`, async t => {
+        const h = harness(t, { advanced: true, omitReferencePack: true, probe: { has_audio: hasAudio }, stages: {
+            inputMode: 'video', stageOrder: 'ltx-first', latentUpscale: stage === 'latent', ltxRefine: stage === 'ltx', sourceAudio: true,
+        } });
+        const result = await h.run({ ...input([reference('video', 1)]), workflow: 'advanced', prompt: '' });
+        assert.equal(h.requests.filter(r => r.path === '/upload/image').length, 1);
+        assert.equal(h.requests.filter(r => r.path === '/minimax_refpack/probe').length, 1);
+        assert.equal(h.queued.prompt['153'], undefined);
+        assert.equal(h.queued.prompt['185'], undefined);
+        assert.match(h.queued.prompt['advanced-source-video'].inputs.video, /h3-input\/lawiz-h3-/);
+        assert.equal(result.options.advanced.sourceAudio, hasAudio);
+        assert.equal(h.options.advanced.sourceAudio, true, 'The submitted options must not mutate the editable draft.');
+        assert.deepEqual(h.queued.prompt['119'].inputs.audio, hasAudio ? ['advanced-source-video', 2] : undefined);
+        assert.deepEqual(h.queued.prompt['119'].inputs.frame_rate, ['advanced-source-info', 5]);
+        if (stage === 'ltx') {
+            assert.equal(h.queued.prompt['135'], undefined);
+            assert.equal(h.queued.prompt['121'], undefined);
+        }
+        assert.equal(result.promptIsFinal, true);
+    });
+});
+
+test('video finishing skips soundtrack probing when disabled and rejects failed probes before queueing', async t => {
+    for (const sourceAudio of [false, true]) await t.test(`soundtrack ${sourceAudio}`, async t => {
+        const h = harness(t, { advanced: true, probe: { has_audio: 'invalid' }, stages: { inputMode: 'video', latentUpscale: false, ltxRefine: true, sourceAudio } });
+        const job = h.run({ ...input([reference('video', 1)]), workflow: 'advanced', prompt: '' });
+        if (sourceAudio) {
+            await assert.rejects(job, /probe|audio/i);
+            assert.equal(h.queued, undefined);
+        } else {
+            await job;
+            assert.equal(h.requests.filter(r => r.path === '/minimax_refpack/probe').length, 0);
+            assert.equal(h.queued.prompt['119'].inputs.audio, undefined);
+        }
+    });
+});
+
+test('Ultrafast stops history polling and execution heartbeat after completion or failure', async t => {
+    for (const fail of [false, true]) await t.test(fail ? 'failure' : 'completion', async t => {
+        const h = harness(t, { ultrafast: true, history: fail ? socket => {
+            socket.emit('execution_error', { prompt_id: 'owned-h3', node_type: 'VAEDecode', exception_message: 'mock decode failure' });
+            return {};
+        } : undefined });
+        const nativeSet = globalThis.setInterval, nativeClear = globalThis.clearInterval;
+        const active = new Set();
+        let created = 0;
+        globalThis.setInterval = (...args) => { const timer = nativeSet(...args); active.add(timer); created++; return timer; };
+        globalThis.clearInterval = timer => { active.delete(timer); nativeClear(timer); };
+        try {
+            const run = h.run({ ...input([]), workflow: 'ultrafast', prompt: 'A quiet scene.' });
+            if (fail) await assert.rejects(run, /mock decode failure/);
+            else await run;
+            assert.equal(created, 2, 'The execution heartbeat and history polling were both started.');
+            assert.equal(active.size, 0, 'Neither background interval survives settlement.');
+            assert.equal(h.socket.closed, true);
+        } finally {
+            for (const timer of active) nativeClear(timer);
+            globalThis.setInterval = nativeSet;
+            globalThis.clearInterval = nativeClear;
+        }
+    });
+});
+
+test('a plain prompt queues successfully with no media uploads or ReferencePack links', async t => {
+    const h = harness(t, { omitReferencePack: true, history: () => ({ 'owned-h3': { ...finalHistory, outputs: { '119': finalHistory.outputs['119'] } } }) });
+    const draft = { ...input([]), prompt: 'A rainy street with footsteps.' };
+    const result = await h.run(draft);
+    assert.equal(h.requests.filter(request => request.path === '/upload/image').length, 0);
+    assert.equal(h.queued.prompt['185'], undefined);
+    assert.equal(h.queued.prompt['184'].inputs.prompt, draft.prompt);
+    assert.equal(result.prompt, draft.prompt);
+    assert.equal(result.promptIsFinal, true);
+    assert.equal(h.socket.closed, true);
+});
+
+test('references still require ReferencePack and fail before any upload when it is missing', async t => {
+    const h = harness(t, { omitReferencePack: true });
+    await assert.rejects(h.run(), /Missing ComfyUI nodes: MiniMaxH3ReferencePack/);
+    assert.equal(h.requests.filter(request => request.path === '/upload/image' || request.path === '/prompt').length, 0);
+});
 
 test('forced original survives two four-second clips and a last-frame reference; only current WAV reaches the final mux', async t => {
     const h = harness(t);

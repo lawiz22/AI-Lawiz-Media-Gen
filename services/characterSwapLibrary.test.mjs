@@ -27,7 +27,7 @@ const referenceToken = ref => \`<Picture \${ref.slot}>\`;
 const cloneVideoPromptLibraryOptions = value => value;
 `;
 const source = mocks + read('./characterSwapService.ts') + read('./minimaxH3Library.ts')
-    + read('./idbLibraryService.ts') + read('./characterSwapLibrary.ts');
+    + read('./idbLibraryService.ts') + read('./libraryMediaService.ts') + read('./characterSwapLibrary.ts');
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 const bytes = new Uint8Array([0, 2, 127, 255]);

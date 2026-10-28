@@ -39,6 +39,22 @@ test('a verified PNG becomes a full-resolution reference File from the mounted s
     assert.deepEqual(new Uint8Array(await result.arrayBuffer()), png);
 });
 
+test('selected frames use the last presentation timestamp at or before the cursor without scaling or FPS conversion', async () => {
+    const args = api.buildVideoFrameArgs(0.51);
+    assert.equal(args[args.indexOf('-vf') + 1], 'select=lte(t\\,0.51)');
+    assert.equal(args[args.indexOf('-vsync') + 1], '0');
+    assert.ok(!args.includes('-ss'), 'Seeking to the next frame would not match the displayed frame.');
+    assert.ok(!args.includes('-r'));
+    const result = await api.extractVideoFrame(file, 0.51, new AbortController().signal);
+    assert.equal(result.name, 'clip-frame-0.510s.png');
+    assert.equal(result.type, 'image/png');
+    assert.deepEqual(new Uint8Array(await result.arrayBuffer()), png);
+    assert.deepEqual(api.buildVideoFrameArgs(null), api.buildLastVideoFrameArgs());
+    for (const seconds of [-1, NaN, Infinity]) {
+        await assert.rejects(api.extractVideoFrame(file, seconds, new AbortController().signal), /finite, non-negative/);
+    }
+});
+
 test('mount failures, decoder failures, invalid output and abort never produce a reference', async () => {
     state.mounted = false;
     await assert.rejects(api.extractLastVideoFrame(file, new AbortController().signal), /mount/);

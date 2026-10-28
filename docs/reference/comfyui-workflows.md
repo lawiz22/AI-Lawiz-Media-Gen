@@ -9,6 +9,7 @@ This reference preserves the model-family notes formerly grouped under Qwen requ
 - [KREA2 Simple](#krea2-simple)
 - [KREA2 RAW](#krea2-raw)
 - [MOSS Image 1.0](#moss-image-10)
+- [MOSS PHOTO](#moss-photo)
 - [KREA2 Identity and General Edit V2](#krea2-identity-and-general-edit-v2)
 - [FLUX2](#flux2)
 - [Photo Fusion FLUX2](#photo-fusion-flux2)
@@ -43,15 +44,35 @@ The live prompt builder includes season/background changes, person/object remova
 
 Generation, export, presets and history use the same nested settings. Seed controls and batches apply to every requested execution, uploads occur once per enabled source, only `SaveImage` output 29 is collected, and results retain image 1 for comparisons. Model licensing is not changed by this integration: see the [upstream model terms](https://huggingface.co/conradlocke/krea2-identity-edit), including commercial-use permission requirements.
 
+## MOSS PHOTO
+
+Select **Image Generation > ComfyUI > MOSS > MOSS PHOTO**. See [PHOTO controls and behavior](../features/images-and-characters.md#moss-photo).
+
+PHOTO defaults to Clean, AI writing enabled, 1024 x 768, 25 steps, CFG 3, `er_sde` / `simple`, batch 1 and no LoRAs. Second pass, face/hand fixes, SeedVR2 and general JPEG crunch start disabled. This is a separate graph from the Efficient-sampler MOSS Image workflow below.
+
+Update ComfyUI for MOSS encoders, `EmptyFlux2LatentImage`, `ModelSamplingAuraFlow`, `TextGenerate`, core string/regex/primitive nodes and `er_sde` / `simple` sampling. Install/update:
+
+- [ComfyUI-Kreative-Moss](https://github.com/Lo-res/ComfyUI-Kreative-Moss): `KreativeResolutionFocal`, `KreativeShowText`, `GenTimerLap`.
+- [rgthree-comfy](https://github.com/rgthree/rgthree-comfy): source prompt switches.
+- [ComfyUI-ProPost](https://github.com/digitaljohn/comfyui-propost): `ProPostFilmGrain`. Core `ImageSharpen` is also required except for Polaroid.
+- Optional face/hand fixing: Impact Pack and Impact Subpack (`FaceDetailer`, `UltralyticsDetectorProvider`), with `bbox/face_yolov8m.pt` and `bbox/hand_yolov8s.pt`.
+- Optional SeedVR2: `SeedVR2LoadDiTModel`, `SeedVR2LoadVAEModel`, `SeedVR2VideoUpscaler`; source models `seedvr2_ema_3b_fp8_e4m3fn.safetensors` and `ema_vae_fp16.safetensors`. `KreativeDetailMix` comes from [ComfyUI-Kreative-Studio](https://github.com/Lo-res/ComfyUI-Kreative-Studio). First use may load/download the 3.19 GB model through the installed node's own behavior.
+- Optional JPEG/iPhone crunch: `KreativeJPEGCrunch` from Kreative Studio.
+- Optional experimental IR: [comfyui_aerochrome](https://github.com/Lo-res/comfyui_aerochrome), exposing `AerochromeIRPrep` and `AerochromeIRFilm`.
+
+Default files are `dirtyMoss_bf16.safetensors` in diffusion models, `qwen3.5_9b_int8_convrot.safetensors` and `Huihui-Qwen3-VL-4B-Instruct-abliterated-fp8_scaled.safetensors` in text encoders, and `flux2-vae.safetensors` in VAE. All four LoRAs default to None. Disabling AI writing removes the writer dependency. Disabling an optional stage removes its nodes from generation and export; the app validates only the resulting active graph against live object info.
+
+The supplied graph is adapted for API operation: panel-only controls are translated into actual branch wiring, seed behavior is controlled by the app, model loading is split to avoid an unused writer, stale displayed texts/personal examples are cleared, and final `KreativeKeep` is replaced by standard `SaveImage` output 10 so generated images flow into the normal results/Library system. The first-pass preview is not treated as a final saved output.
+
 ## MOSS Image 1.0
 
-Select **Image Generation > ComfyUI > MOSS > T2I**. This preserves the supplied MOSS graph, including `SkipLayerGuidanceDiTSimple`, `Power Lora Loader (rgthree)`, `KSampler (Efficient)` and the explicit `VAEDecode` from sampler output 3. Install/update Efficiency Nodes and rgthree, plus a ComfyUI version that exposes `moss_image` in `CLIPLoader.type`, `EmptyFlux2LatentImage`, and SLG. The selected Efficient sampler must expose `seeds_2` and `beta57` for the source defaults. Missing nodes, weights, enabled LoRAs or sampler choices produce an explicit error before queueing; weights are not downloaded automatically.
+Select **Image Generation > ComfyUI > MOSS > MOSS Image**. This preserves the supplied MOSS graph, including `SkipLayerGuidanceDiTSimple`, `Power Lora Loader (rgthree)`, `KSampler (Efficient)` and the explicit `VAEDecode` from sampler output 3. Install/update Efficiency Nodes and rgthree, plus a ComfyUI version that exposes `moss_image` in `CLIPLoader.type`, `EmptyFlux2LatentImage`, and SLG. The selected Efficient sampler must expose `seeds_2` and `beta57` for the source defaults. Missing nodes, weights, enabled LoRAs or sampler choices produce an explicit error before queueing; weights are not downloaded automatically.
 
 Source models are `mossImageINT8INT6_mossImageINT8.safetensors`, `qwen3.5_9b_int8_convrot.safetensors`, and `flux2-vae.safetensors`. All model filenames, weight dtype, CLIP type/device, positive/negative prompts, resolution, batch size, output prefix, SLG layers/range, steps, CFG, sampler/scheduler, denoise, preview method and sampler VAE decode are editable. **Orientation** offers Portrait, Landscape and Square, followed by valid resolution presets aligned to 16 pixels; no side exceeds **1280 px**. Portrait/landscape switching reverses the current dimensions when a matching preset exists. Older saved sizes outside the presets must be reselected explicitly. LoRAs have independent enable and strength controls, with add/remove support. The four source LoRAs and their exact strengths/enabled states are restored by **Restore workflow defaults** (the positive prompt and shared seed are retained).
 
 Defaults: **1280 x 848** (intentionally capped from the source JSON's 1296 x 864), batch 1, 10 steps, CFG 1.2, `seeds_2`, `beta57`, denoise 1, SLG single layer 22 from 0 to 0.5, preview `auto`, VAE decode `true`. Seed controls support fixed, increment, decrement and randomize across generations. The total number of saved images is **Images to Generate x Batch size**. Settings participate in per-model persistence, presets, history and workflow export.
 
-The MOSS sampling controls use **1-30 steps** in whole-step increments and **CFG 0-5** in **0.1** increments for fine adjustment, with matching direct numeric inputs. Existing workflow defaults are unchanged.
+The MOSS Image sampling controls use **1-50 steps** in whole-step increments and **CFG 0-5** in **0.1** increments for fine adjustment, with matching direct numeric inputs. Existing workflow defaults are unchanged.
 
 Live JPEG/PNG previews are displayed when the server emits standard ComfyUI binary preview frames. They are optional: an unsupported or disabled preview does not prevent final images. Only `SaveImage` output is collected, so Efficient sampler preview outputs are not duplicated in the gallery.
 

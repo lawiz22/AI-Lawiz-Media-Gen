@@ -14,7 +14,7 @@ The README is the short introduction. This index is the entry point for setup, w
 
 | Area | Guide | Covers |
 | --- | --- | --- |
-| Images and characters | [Image and character generation](features/images-and-characters.md) | Model families, Qwen 2.1 T2I/edit modes, character sheets and Outpaint |
+| Images and characters | [Image and character generation](features/images-and-characters.md) | MOSS Image/refinement, MOSS PHOTO film looks and conditional finishing, KREA2, Qwen 2.1 T2I/edit modes, character sheets and Outpaint |
 | Scene editing | [Scene Variation](features/scene-variation.md) | Global/Masked modes, SAM3 masks and Character in a Scene |
 | Identity editing | [Swap a Person and Photo Fusion](features/swap-and-fusion.md) | SAM3 swaps, LanPaint head swaps and multi-person fusion |
 | Prompt analysis and utilities | [Creative tools](features/creative-tools.md) | Prompt/Soup tools, PastForward, styles, Reference Maker, Video Extractor, recording and upscaling |
@@ -27,6 +27,7 @@ The README is the short introduction. This index is the entry point for setup, w
 
 ## Quick task index
 
+- **Generate a film-look photo:** [MOSS PHOTO controls and quick start](features/images-and-characters.md#moss-photo), then check [PHOTO nodes and models](reference/comfyui-workflows.md#moss-photo).
 - **Generate a video prompt:** [references and media editing](features/video-prompt-generator.md#references-and-media-editing), then [providers and templates](features/video-prompt-generator.md#providers-and-editable-templates).
 - **Render in H3:** [workflow settings](features/minimax-h3.md#workflow-settings-and-six-loras), [reference limits](features/minimax-h3.md#reference-limits-and-token-mapping), then [save the result](features/minimax-h3.md#save-rendered-output-to-library).
 - **Restore a saved prompt:** [Library snapshots and restoration](features/video-prompt-generator.md#library-snapshots-and-restoration).
@@ -37,7 +38,7 @@ The README is the short introduction. This index is the entry point for setup, w
 
 ## Technical reference and development
 
-- [ComfyUI workflow dependencies](reference/comfyui-workflows.md): KREA2, FLUX2, Photo Fusion, legacy workflows and LTX packages.
+- [ComfyUI workflow dependencies](reference/comfyui-workflows.md): MOSS Image, MOSS PHOTO and its optional stages, KREA2, FLUX2, Photo Fusion, legacy workflows and LTX packages.
 - [Complete required-node list](../COMFYUI_REQUIRED_NODES.txt): node names, model-family requirements and install notes.
 - [Development and Windows packaging](development.md): commands, source layout, installer creation, validation, stack and licensing.
 - [Screenshots and gallery](screenshots/README.md): planned filenames, capture checklist and image activation.

@@ -17,6 +17,52 @@ export const draft = (references = [ref('image', 1)]) => ({
 const build = (options = api.defaultMinimaxH3Options(), input = draft()) =>
     api.buildMinimaxH3Workflow(input, options, Object.fromEntries(input.references.map(ref => [ref.id, ref.file.name])));
 
+test('filename dates expand locally before VHS saving without changing saved prefixes', () => {
+    const prefix = 'MrWeaz/%date:yyyy-MM-dd%/Advanced_';
+    assert.equal(api.resolveH3FilenamePrefix(prefix, new Date(2026, 0, 2, 23, 59)), 'MrWeaz/2026-01-02/Advanced_');
+    assert.equal(api.resolveH3FilenamePrefix('%date:yyyy-MM-dd%\\%date:yyyy-MM-dd%\\clip', new Date(2026, 9, 21)), '2026-10-21\\2026-10-21\\clip');
+    assert.equal(api.resolveH3FilenamePrefix('video/H3'), 'video/H3');
+    const options = { ...api.defaultMinimaxH3Options(), filenamePrefix: prefix };
+    assert.equal(build(options)['119'].inputs.filename_prefix, api.resolveH3FilenamePrefix(prefix));
+    assert.equal(options.filenamePrefix, prefix);
+    for (const invalid of ['%date:yyyy/MM/dd%/clip', '%date:yyyy-MM-dd/clip']) {
+        assert.throws(() => build({ ...options, filenamePrefix: invalid }), /Unsupported filename date template/);
+    }
+});
+
+test('uploaded VHS source filenames bypass stale file catalogs without bypassing format validation', () => {
+    const graph = { source: { class_type: 'VHS_LoadVideo', inputs: { video: 'new-upload.mp4', format: 'None' } } };
+    const info = { VHS_LoadVideo: { input: { required: { video: [['old-file.mp4']] }, optional: { format: [['None', 'LTXV']] } } } };
+    assert.doesNotThrow(() => api.validateMinimaxH3Readiness(graph, info));
+    graph.source.inputs.format = 'invalid';
+    assert.throws(() => api.validateMinimaxH3Readiness(graph, info), /format/);
+});
+
+test('plain prompts need no references or prompt generator and retain generated output audio', () => {
+    const input = { ...draft([]), prompt: 'A rainy street. Footsteps and quiet dialogue.' };
+    const graph = build(undefined, input);
+    assert.equal(graph['185'], undefined, 'Plain prompting bypasses ReferencePack and any LLM request.');
+    assert.equal(graph['184'].inputs.prompt, input.prompt);
+    assert.equal(graph['186'].inputs.source, input.prompt);
+    assert.deepEqual(graph['119'].inputs.audio, ['134', 0]);
+    assert.ok(!Object.keys(graph['184'].inputs).some(key => key.startsWith('ref_') && key !== 'ref_image_size'));
+    for (const node of Object.values(graph)) for (const value of Object.values(node.inputs)) {
+        if (Array.isArray(value)) assert.ok(graph[value[0]], `Missing node ${value[0]}`);
+    }
+    assert.throws(() => build(undefined, { ...input, prompt: '' }), /prompt is required/);
+    assert.throws(() => build(undefined, { ...input, prompt: 'Use <Picture 1>.' }), /disabled or missing/);
+    const disabled = { ...api.defaultMinimaxH3Options(), references: { 'image-1': { enabled: false } } };
+    assert.equal(build(disabled, { ...input, references: [ref('image', 1)] })['184'].inputs.prompt, input.prompt);
+});
+
+test('audio-only prompts wire standalone audio without any image or video input', () => {
+    const graph = build(undefined, { ...draft([ref('audio', 2)]), prompt: 'A person dances to <Audio 2>.' });
+    assert.equal(graph['185'].inputs.direction, 'A person dances to <Audio 1>.');
+    assert.deepEqual(graph['184'].inputs['ref_audios.ref_audio_0'], ['185', 15]);
+    assert.ok(!Object.keys(graph['184'].inputs).some(key => key.startsWith('ref_images.') || key.startsWith('ref_videos.')));
+    assert.deepEqual(graph['119'].inputs.audio, ['134', 0]);
+});
+
 test('explicit lock configures native original output without overwriting other settings and never tolerates missing audio', () => {
     const original = { ...api.defaultMinimaxH3Options(), format: 'image/gif', frameRate: 30, pingpong: true, loopCount: 2 };
     const locked = api.withH3OriginalAudio(original, 'audio-1', true);

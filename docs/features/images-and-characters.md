@@ -7,6 +7,7 @@ Choose an image family, edit references or generate character views. Each workfl
 ## On this page
 
 - [Image and character workflows](#image-and-character-workflows)
+- [MOSS PHOTO](#moss-photo)
 - [Importing Library prompts](#importing-library-prompts)
 - [Generating a prompt from an image](#generating-a-prompt-from-an-image)
 - [KREA2 Identity and General Edit](#krea2-identity-and-general-edit)
@@ -24,7 +25,7 @@ Choose an image family, edit references or generate character views. Each workfl
 ## Image and character workflows
 
 - Text-to-image and image-to-image generation through Mammouth AI or ComfyUI.
-- Local workflows for SD 1.5, SDXL, Flux, FLUX2 Simple, Qwen Image, Qwen Edit, Z-Image, KREA2 Simple, KREA2 RAW, Nunchaku Flux, Flux Krea, and face detailing.
+- Local workflows for SD 1.5, SDXL, Flux, FLUX2 Simple, Qwen Image, Qwen Edit, Z-Image, MOSS Image, MOSS PHOTO, KREA2 Simple, KREA2 RAW, Nunchaku Flux, Flux Krea, and face detailing.
 - Qwen image-to-image editing with multiple source references passed independently to ComfyUI.
 - FLUX2 Edit with a primary source image and role-based references for identity, outfit, background, pose, style, or custom instructions.
 - Import the FLUX2 source and reference images from the Library, retain saved Library prompts, and generate role-aware reference hints through Mammouth AI. Pose references are analyzed directly for accurate pose guidance.
@@ -42,6 +43,63 @@ Choose an image family, edit references or generate character views. Each workfl
 - **Turbo (Viggle)** in Create Character is off by default. Enabling it switches the full sampling graph to the native Viggle I2I Turbo chain: mandatory Viggle LoRA, ModelSamplingFlux, BasicScheduler at 4 steps, ExtendIntermediateSigmas with 3 subdivisions, BasicGuider and SamplerCustomAdvanced. It keeps the eight output prompts, up to four ordered references and independent output canvas; it is not a LoRA-only modification of KSampler. Turbo sampling values are fixed while enabled, and disabling it restores the unchanged normal settings. Required nodes and the Viggle LoRA are checked before upload. The toggle is unavailable during generation; Cancel Generation still works.
 - ComfyUI Character's eight output controls are in the wide right column below Generate. Each output can be expanded/collapsed; **Collapse all outputs** / **Expand all outputs** keeps saved values and enabled selections unchanged. Camera, pose and expression fields share a row on desktop and stack on mobile. Background and reference controls remain on the left. In Qwen Create Character, **Green Screen** explicitly requests replacement of the entire scenery with uniform chroma-key green, overriding stale custom/background-preservation settings. Selecting a background clears the preservation checkbox; Green Screen disables it. This instruction is verified in all eight normal/Turbo queue prompts, not in a new GPU render.
 
+## MOSS PHOTO
+
+Open **Image Gen > ComfyUI > MOSS > MOSS PHOTO**. **MOSS Image** remains a separate, unchanged workflow, including its 1280 px limit and optional image refinement. PHOTO uses the supplied compact v7 workflow, reconstructing branches absent from its API export using the normal workflow.
+
+### Quick start
+
+1. Connect ComfyUI and check the [PHOTO dependencies](../reference/comfyui-workflows.md#moss-photo). Models and custom nodes are not bundled with the app.
+2. Leave **AI prompt writer** enabled, enter an idea in the active row and choose a look. **Your own style** opens an editable style accordion; the experimental IR look opens its infrared parameters.
+3. Keep the default **1024 x 768 / 25 steps / batch 1** for an initial run. Open **Image size + focal length** to change the canvas or lens, and **Models & LoRAs** to select installed weights.
+4. Enable only the finishing stages you need. Their parameter accordions appear when enabled; closed model/parameter accordions do not mount their large menus until opened.
+5. Generate, inspect the final image and **Final Prompt Used**, then save the result to the Library or save a parameter preset for reuse.
+
+| Setting | MOSS Image | MOSS PHOTO |
+| --- | --- | --- |
+| Default canvas | 1280 x 848 | 1024 x 768 |
+| Default steps | 10 | 25 |
+| Size controls | Portrait/landscape/square presets, max 1280 px per side | Eleven ratios, ten long-side sizes, custom canvas and lens ratios |
+| Prompt path | Direct positive/negative prompts | Local AI idea expansion or an own-prompt row without rewriting |
+| Optional image source | Refine Image, with source proportions and denoise | Text-to-image workflow; no source-image refinement input |
+| Finishing | Existing MOSS sampling/refinement controls | Optional second pass, IR, face/hand fixes, SeedVR2 and JPEG |
+
+### Controls and conditional accordions
+
+- **Your idea** supports adding/removing rows, one active radio selection, or explicitly combining enabled ideas into one prompt. The primary idea also receives Library/Civitai prompt imports. Personal example prompts from the supplied workflow are not bundled as defaults.
+- **AI prompt writer** uses the local Qwen writer model. Turning it off opens independent own-prompt rows; one selected row is used. **Add look + lens text** appends the source look/lens/flash/ordinary-person wording. Turn it off to send the selected positive prompt exactly, without AI rewriting or positive additions. Negative conditioning and photographic postprocessing still apply. The unused writer model and text-generation nodes are omitted entirely.
+- Choose exactly one of Clean, Your own style, Kodachrome, Cheap iPhone, Aerochrome prompt, experimental Aerochrome IR, Portra, Tri-X, CineStill, Polaroid or LomoChrome Purple. Your own style and IR expose their conditional accordions. Flash and ordinary-person wording are independent switches; ethnicity/subject mode selects Caucasian, Asian, As in my idea or No people.
+- **Quality** defaults to 25 steps and allows 1-50. Optional second pass, face fix, hand fix, SeedVR2 detail and JPEG crunch each reveal their parameter accordion when enabled. Execution order is first pass, optional second pass, optional IR, face fix, hand fix, SeedVR2/detail mix, sharpening, film grain, JPEG. Disabled branches are absent from the submitted graph and do not require their nodes/models.
+- Polaroid bypasses sharpening, focal text and SeedVR2, retaining their saved settings for other looks. Tri-X forces monochrome film grain. Cheap iPhone honors `always_on_for_iphone` and its separate JPEG settings even when the general JPEG switch is off.
+- **Image size + focal length** exposes all eleven ratios, custom ratio/resolution, ten long-side sizes (768-2560), batch size 1-64, snap 8-64, swap, ten focal choices, automatic lens ratios, fisheye type and full/short lens descriptions. XPan/Widelux force their horizontal panoramic ratios. Default output is **1024 x 768**, 4:3, snap 16, lens Off. The displayed aligned dimensions match the resolution node; unlike standard MOSS, PHOTO is not capped to 1280 px.
+- Custom ratio terms accept whole numbers **1-99**; custom resolution sides accept whole numbers **64-8192 px**. Snap alignment uses multiples of 8 from 8 to 64 and rounds to the nearest grid value, with halfway values rounded up. For example, 1000 px at snap 16 becomes 1008 px. The displayed size and Generate summary use the effective lens ratio and aligned dimensions, not just the manually selected ratio. These input limits are not a guarantee that a large canvas will fit in GPU memory.
+- **Models & LoRAs** contains diffusion model/dtype, text encoder/type, VAE, AI writer/type and four independent None/file LoRA slots with strengths. Live server menus supply installed choices. The source combined loader is split into equivalent standard loaders so disabling the writer genuinely avoids loading its model.
+- **Sampling & finishing** and **Negative prompt, seed & output** retain the source advanced controls. Shared seed modes control the first pass and face/hand fixes; second-pass, IR, grain and SeedVR2 seed parameters remain independently editable, as in the source workflow.
+
+### Presets, Library and output
+
+PHOTO settings are retained independently when switching subtabs within the session and are included in presets, generated-image options and exported API workflows. Save a parameter preset to reuse a setup later. **Restore PHOTO workflow defaults** resets PHOTO options and its extra idea/own-prompt rows while retaining the shared primary idea and seed.
+
+Library prompt imports update the primary idea in AI mode, or the selected own-prompt row with the writer off, without replacing models or sampling settings. Applying a MOSS model/LoRA from the inventory while PHOTO is active keeps the PHOTO subtab and its other settings; occupied LoRA slots are not silently replaced.
+
+Run count times batch size determines the progressive output cards; only the final SaveImage output is collected. Standard ComfyUI JPEG/PNG binary previews are displayed when the server provides them. The final prompt reported by the writer is retained from execution output or history, including when ComfyUI reuses cached prompt-writing results.
+
+Required packages, weights and optional dependencies are listed under [MOSS PHOTO dependencies](../reference/comfyui-workflows.md#moss-photo). Missing active nodes, model/LoRA choices and out-of-range server parameters fail explicitly before queueing. Nothing is installed or downloaded automatically by this integration.
+
+### Validation and limitations
+
+Integration validation on **2026-10-28** included a successful real ComfyUI render with the default PHOTO model, **25 steps and a 1024 x 768 saved image**, plus verification of the final prompt in the app. Automated checks cover branch wiring, seeds, batches, prompt imports, presets, subtab isolation and conditional controls; the existing H3 regression suite also passed. All looks and enabled extras were checked against the connected server's schemas. This does **not** mean every optional stage or combination received a separate GPU render or visual-quality assessment.
+
+Run focused checks with `node --test services/mossPhotoWorkflow.test.mjs services/mossWorkflow.test.mjs`. To also preflight against your installed ComfyUI schemas without queueing images, use PowerShell:
+
+```powershell
+$env:COMFYUI_PHOTO_LIVE_URL = 'http://127.0.0.1:8188'
+node --test services\mossPhotoWorkflow.test.mjs
+Remove-Item Env:\COMFYUI_PHOTO_LIVE_URL
+```
+
+Binary previews depend on the server. SeedVR2's first load can be slow and memory-intensive; reduce the resolution/batch or disable Detail if necessary. Aerochrome IR remains experimental.
+
 ## KREA2 Identity and General Edit
 
 **KREA2 > I2I Edit / Identity** adds one/two-image V2 editing without changing the existing Simple/RAW T2I workflows. Switch **General Edit / Identity**, upload or choose each image from the Library, and use independent reference placement/boost controls. Image 2 is off by default and is completely excluded while disabled.
@@ -56,7 +114,7 @@ In the **Image Generation** tab, **Import Library Prompt** opens a searchable te
 
 Clicking a row replaces only the active positive prompt (or active cloud edit instruction). It does not load the entry's model, LoRAs, sampler, negative prompt, seed or other settings, and it preserves the saved text's formatting. Qwen 2.1 multi-image editing requires **Manual prompt** to be enabled first, so importing does not change that setting. Its manual textarea shows the stored text verbatim; the existing background-blending instruction is still added at generation when a background reference is active. Cloud inpainting's **Remove Area** task has no editable prompt; select Custom Prompt, Replace or Change Color before importing.
 
-MOSS offers **Portrait / Landscape / Square** and valid resolution presets up to **1280 px per side**, replacing the separate width/height sliders. Its default is 1280 x 848; the other source workflow values are unchanged. The sampler's **Steps** control ranges from **1 to 50**, with the default unchanged at **10**.
+**MOSS Image** offers **Portrait / Landscape / Square** and valid resolution presets up to **1280 px per side**, replacing the separate width/height sliders. Its default is 1280 x 848; the other source workflow values are unchanged. The sampler's **Steps** control ranges from **1 to 50**, with the default unchanged at **10**. These defaults and the 1280 px cap do not apply to the separate [MOSS PHOTO](#moss-photo) subtab.
 
 In MOSS options, enable **Refine Image (Image-to-Image)** to upload/drag a source or select it from the Library. **Refine denoise** controls how strongly it changes (0-1, default 0.5). The source is VAE-encoded instead of using an empty latent. Refinement preserves source proportions rather than using the T2I canvas, reducing only when needed to stay within 1280 px and aligning down to 16 pixels. The exact resulting size is displayed. Disabling refinement restores the unchanged T2I size and denoise; its uploaded source is not used.
 

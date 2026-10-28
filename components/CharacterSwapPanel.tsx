@@ -476,16 +476,20 @@ export const CharacterSwapPanel: React.FC = () => {
                     catch (cause) { fail(cause); }
                 }}>Reconnect planner</button>
             </div>
-            <div className="flex flex-wrap items-center gap-2 border-t border-border-primary pt-3">
-                <span className="text-sm font-medium">Import from Library</span>
-                <button className={button} disabled={!plannerReady || busy || active} onClick={() => setLibraryTarget({ kind: 'video' })}>Source video</button>
+            <section aria-label="Character Swap Library imports" className="space-y-3 rounded-xl border border-cyan-400/50 bg-cyan-400/5 p-4">
+                <div><h3 className="font-semibold text-cyan-300">Source video & reference photos · Library</h3>
+                    <p className="text-xs text-text-secondary">Choose saved Library media here. Computer uploads remain available in the planner below.</p></div>
+                <div className="flex flex-wrap items-center gap-2">
+                <button className={button} disabled={!plannerReady || busy || active} onClick={() => setLibraryTarget({ kind: 'video' })}>Choose video from Library</button>
                 <select aria-label="Library reference destination" className="rounded-lg border border-border-primary bg-bg-primary p-2 text-sm"
                     disabled={!plannerReady || busy || active} value={referenceScope} onChange={event => setReferenceScope(event.target.value === 'shot' ? 'shot' : 'global')}>
                     <option value="global">Global references</option><option value="shot">Selected shot references</option>
                 </select>
-                <button className={button} disabled={!plannerReady || busy || active} onClick={() => pickReference('ref')}>Reference photo 1</button>
-                <button className={button} disabled={!plannerReady || busy || active} onClick={() => pickReference('ref2')}>Reference photo 2</button>
-            </div>
+                <button className={button} disabled={!plannerReady || busy || active} onClick={() => pickReference('ref')}>Choose photo 1 from Library</button>
+                <button className={button} disabled={!plannerReady || busy || active} onClick={() => pickReference('ref2')}>Choose photo 2 from Library</button>
+                </div>
+                {(!plannerReady || busy || active) && <p className="text-xs text-amber-300">{active ? 'Finish or stop the current render before replacing its inputs.' : busy ? 'Wait for the current import or operation to finish.' : 'Library imports become available when the installed planner is connected. Use Reconnect planner if loading fails.'}</p>}
+            </section>
             <details>
                 <summary className="cursor-pointer text-sm font-medium">Character Swap workflow settings</summary>
                 <fieldset disabled={busy || active} className="mt-3 grid gap-3 md:grid-cols-3">
@@ -526,7 +530,7 @@ export const CharacterSwapPanel: React.FC = () => {
             </div>
             <p className="text-xs text-text-secondary">Library saves a copy of the original video, not a link to ComfyUI. Existing downloads remain available above.</p>
         </div>}
-        {libraryTarget && <LibraryPickerModal isOpen onClose={() => { if (!busy) setLibraryTarget(null); }}
+        {libraryTarget && <LibraryPickerModal isOpen hydrateMedia={false} onClose={() => { if (!busy) setLibraryTarget(null); }}
             filter={libraryTarget.kind === 'video' ? 'video' : imageLibraryTypes} onSelectItem={importLibraryMedia} />}
     </div>;
 };

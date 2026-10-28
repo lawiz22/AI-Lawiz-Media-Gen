@@ -65,4 +65,6 @@ test('waveform includes quiet gaps and peaks from every channel without omitting
     assert.deepEqual(api.audioWaveformPeaks(audio([[0, 0]]), 640), [0, 0]);
     assert.throws(() => api.audioWaveformPeaks(audio(), 0), /resolution/);
     assert.throws(() => api.audioWaveformPeaks(audio([[NaN]])), /invalid sample/);
+    assert.deepEqual(api.audioWaveformPeaks(audio(), 2, { start: 0.5, end: 1.5 }), [1, 1]);
+    assert.throws(() => api.audioWaveformPeaks(audio(), 2, { start: 1, end: 0.5 }), /start and end/);
 });

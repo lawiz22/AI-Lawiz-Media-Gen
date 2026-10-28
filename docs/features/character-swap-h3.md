@@ -2,7 +2,7 @@
 
 [Documentation index](../README.md) | [Video workspace](video-prompt-generator.md)
 
-**Video > Character Swap H3** is independent of Video Prompt Generator, H3 REF2V and the reserved character-replacement draft in the older Minimax H3 panel.
+**Video > Character Swap H3** is independent of Video Prompt Generator and Minimax REF2v H3.
 
 ## Native Shot Planner
 
@@ -14,9 +14,9 @@ Select/upload a source and references in the planner. **Check workflow / refresh
 
 ### Import from Library
 
-**Import from Library > Source video** copies a saved video's original bytes into ComfyUI input. It uses the native source-selection behavior: shot boundaries/overrides are reset and the new source starts as a single, maximum 15-second clip. Adjust the range and use automatic splitting for a longer multi-shot run. Existing global references remain available.
+The highlighted **Source video & reference photos · Library** section above the native planner provides **Choose video from Library**, which copies a saved video's original bytes into ComfyUI input. It uses the native source-selection behavior: shot boundaries/overrides are reset and the new source starts as a single, maximum 15-second clip. Adjust the range and use automatic splitting for a longer multi-shot run. Existing global references remain available.
 
-Choose **Global references** or **Selected shot references**, then **Reference photo 1 / 2** to import an image into that exact slot. For a shot override, select the shot in the native timeline first. Other shot settings are preserved. Imports use unique filenames, support asset-backed and older inline Library items, and upload large videos in chunks instead of one oversized request. Upload failures are visible and do not replace the current plan's media. Imports and plan editing are locked while rendering.
+Choose **Global references** or **Selected shot references**, then **Choose photo 1 / 2 from Library** to import an image into that exact slot. For a shot override, select the shot in the native timeline first. Other shot settings are preserved. Imports use unique filenames, support asset-backed and older inline Library items, and upload large videos in chunks instead of one oversized request. Only the selected original media is resolved: missing unrelated attachments do not block its import, and generic Blob types use the saved asset's MIME metadata when available. Upload failures are visible and do not replace the current plan's media. Imports and plan editing are locked while rendering; disabled Library controls explain whether the planner is loading, an operation is running or a render is active.
 
 ## Live render progress
 

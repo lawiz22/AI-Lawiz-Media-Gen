@@ -1,0 +1,1757 @@
+{
+  "45": {
+    "class_type": "KreativeKeep",
+    "inputs": {
+      "filename_prefix": "moss-image-sft",
+      "auto_save": true,
+      "images": [
+        "129",
+        0
+      ]
+    }
+  },
+  "71": {
+    "class_type": "KreativeSeed",
+    "inputs": {
+      "seed_number": 3884107871,
+      "each_run": "New seed each run"
+    }
+  },
+  "84": {
+    "class_type": "GenTimerReport",
+    "inputs": {
+      "run_note": "",
+      "log_csv": true,
+      "image": [
+        "129",
+        0
+      ]
+    }
+  },
+  "85": {
+    "class_type": "KreativeShowText",
+    "inputs": {
+      "text": "",
+      "source": [
+        "84",
+        0
+      ]
+    }
+  },
+  "86": {
+    "class_type": "ImageSharpen",
+    "inputs": {
+      "sharpen_radius": 1,
+      "sigma": 0.5,
+      "alpha": 0.3,
+      "image": [
+        "311",
+        0
+      ]
+    }
+  },
+  "87": {
+    "class_type": "ProPostFilmGrain",
+    "inputs": {
+      "gray_scale": false,
+      "grain_type": "Fine Simple",
+      "grain_sat": 0.5,
+      "grain_power": 0.3,
+      "shadows": 0.2,
+      "highs": 0.2,
+      "scale": 1,
+      "sharpen": 0,
+      "src_gamma": 1,
+      "seed": 1,
+      "image": [
+        "86",
+        0
+      ]
+    }
+  },
+  "88": {
+    "class_type": "KreativeResolutionFocal",
+    "inputs": {
+      "ui_state": "{\"ratio\":\"4:3\",\"size_index\":1,\"custom_ratio\":[3,2],\"custom_res\":[1024,1024],\"focal\":\"Off\"}",
+      "batch_size": 1,
+      "snap_to": 16,
+      "swap_w_h": false,
+      "auto_ratio": false,
+      "fisheye_type": "Full-frame",
+      "lens_detail": "Full description"
+    }
+  },
+  "89": {
+    "class_type": "KreativePromptMulti",
+    "inputs": {
+      "selection_mode": "Single Active (Radio)",
+      "delimiter": "\n\n",
+      "prompt_data": "[{\"enabled\":true,\"text\":\"\"}]"
+    }
+  },
+  "110": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "worst quality, low quality, bad anatomy, deformed hands, extra fingers, malformed limbs, distorted face, plastic skin, overly smooth skin, waxy skin, airbrushed skin, oversharpening, excessive skin retouching, studio lighting, HDR, oversaturated, 3d render, illustration, watermark, text, logo"
+    }
+  },
+  "122": {
+    "class_type": "UltralyticsDetectorProvider",
+    "inputs": {
+      "model_name": "bbox/face_yolov8m.pt"
+    }
+  },
+  "123": {
+    "class_type": "FaceDetailer",
+    "inputs": {
+      "guide_size": 768,
+      "guide_size_for": true,
+      "max_size": 1024,
+      "seed": [
+        "71",
+        0
+      ],
+      "steps": 20,
+      "cfg": 3,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 0.4,
+      "feather": 5,
+      "noise_mask": true,
+      "force_inpaint": true,
+      "bbox_threshold": 0.3,
+      "bbox_dilation": 10,
+      "bbox_crop_factor": 3,
+      "sam_detection_hint": "center-1",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 10,
+      "wildcard": "",
+      "cycle": 1,
+      "inpaint_model": false,
+      "noise_mask_feather": 20,
+      "tiled_encode": false,
+      "tiled_decode": false,
+      "image": [
+        "300:108",
+        0
+      ],
+      "model": [
+        "300:15",
+        0
+      ],
+      "clip": [
+        "160",
+        1
+      ],
+      "vae": [
+        "160",
+        2
+      ],
+      "positive": [
+        "300:4",
+        0
+      ],
+      "negative": [
+        "300:5",
+        0
+      ],
+      "bbox_detector": [
+        "122",
+        0
+      ]
+    }
+  },
+  "124": {
+    "class_type": "KreativeImageOnOff",
+    "inputs": {
+      "switch": false,
+      "image_off": [
+        "300:108",
+        0
+      ],
+      "image_on": [
+        "123",
+        0
+      ]
+    }
+  },
+  "125": {
+    "class_type": "SeedVR2LoadDiTModel",
+    "inputs": {
+      "model": "seedvr2_ema_3b_fp8_e4m3fn.safetensors",
+      "device": "cuda:0",
+      "blocks_to_swap": 16,
+      "swap_io_components": false,
+      "offload_device": "cpu",
+      "cache_model": false,
+      "attention_mode": "sdpa"
+    }
+  },
+  "126": {
+    "class_type": "SeedVR2LoadVAEModel",
+    "inputs": {
+      "model": "ema_vae_fp16.safetensors",
+      "device": "cuda:0",
+      "encode_tiled": true,
+      "encode_tile_size": 1024,
+      "encode_tile_overlap": 128,
+      "decode_tiled": true,
+      "decode_tile_size": 1024,
+      "decode_tile_overlap": 128,
+      "tile_debug": "false",
+      "offload_device": "cpu",
+      "cache_model": false
+    }
+  },
+  "127": {
+    "class_type": "SeedVR2VideoUpscaler",
+    "inputs": {
+      "seed": 42,
+      "resolution": 1536,
+      "max_resolution": 2560,
+      "batch_size": 1,
+      "uniform_batch_size": false,
+      "color_correction": "lab",
+      "temporal_overlap": 0,
+      "prepend_frames": 0,
+      "input_noise_scale": 0,
+      "latent_noise_scale": 0,
+      "offload_device": "cpu",
+      "enable_debug": false,
+      "image": [
+        "358",
+        0
+      ],
+      "dit": [
+        "125",
+        0
+      ],
+      "vae": [
+        "126",
+        0
+      ]
+    }
+  },
+  "128": {
+    "class_type": "KreativeDetailMix",
+    "inputs": {
+      "switch": false,
+      "detail_mix": 0.5,
+      "original": [
+        "358",
+        0
+      ],
+      "detailed": [
+        "127",
+        0
+      ]
+    }
+  },
+  "129": {
+    "class_type": "KreativeJPEGCrunch",
+    "inputs": {
+      "switch": false,
+      "quality": 55,
+      "passes": 2,
+      "phone_softness": 0.85,
+      "always_on_for_iphone": true,
+      "iphone_quality": 45,
+      "image": [
+        "87",
+        0
+      ],
+      "look_text": [
+        "300:69",
+        0
+      ]
+    }
+  },
+  "150": {
+    "class_type": "KreativeControlPanel",
+    "inputs": {
+      "A · Clean (no look)": true,
+      "✏️ Your own style (type it below)": false,
+      "B · 1970s Kodachrome": false,
+      "C · Cheap iPhone": false,
+      "D · Aerochrome (prompt)": false,
+      "E · Aerochrome IR  🧪 EXPERIMENTAL": false,
+      "G · Kodak Portra 400 (colour negative)": false,
+      "H · Kodak Tri-X 400 (black & white)": false,
+      "I · CineStill 800T (tungsten, night)": false,
+      "J · Polaroid (soft, no sharpening)": false,
+      "K · LomoChrome Purple (purple foliage)": false,
+      "your own style": "",
+      "📸 camera flash (any look)": false,
+      "🧑 ordinary people": true,
+      "A · Caucasian": true,
+      "B · Asian": false,
+      "C · As in my idea": false,
+      "D · No people": false,
+      "steps": 25,
+      "second pass": false,
+      "face fix": false,
+      "hand fix": false,
+      "detail (SeedVR2)": false,
+      "JPEG crunch": false
+    }
+  },
+  "160": {
+    "class_type": "KreativeModelPanel",
+    "inputs": {
+      "model": "dirtyMoss_bf16.safetensors",
+      "model weights": "default",
+      "text encoder": "qwen3.5_9b_int8_convrot.safetensors",
+      "text encoder type": "moss_image",
+      "vae": "flux2-vae.safetensors",
+      "prompt writer": "Huihui-Qwen3-VL-4B-Instruct-abliterated-fp8_scaled.safetensors",
+      "prompt writer type": "qwen_image",
+      "lora 1": "None",
+      "lora 1 strength": 1,
+      "lora 2": "None",
+      "lora 2 strength": 1,
+      "lora 3": "None",
+      "lora 3 strength": 1,
+      "lora 4": "None",
+      "lora 4 strength": 1
+    }
+  },
+  "311": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "128",
+        0
+      ]
+    }
+  },
+  "337": {
+    "class_type": "KreativeMyPrompt",
+    "inputs": {
+      "AI prompt writer": true,
+      "add look + lens text": true,
+      "prompt_data": "[{\"enabled\":true,\"text\":\"\"}]"
+    }
+  },
+  "356": {
+    "class_type": "UltralyticsDetectorProvider",
+    "inputs": {
+      "model_name": "bbox/hand_yolov8s.pt"
+    }
+  },
+  "357": {
+    "class_type": "FaceDetailer",
+    "inputs": {
+      "guide_size": 768,
+      "guide_size_for": true,
+      "max_size": 1024,
+      "seed": [
+        "71",
+        0
+      ],
+      "steps": 20,
+      "cfg": 3,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 0.45,
+      "feather": 5,
+      "noise_mask": true,
+      "force_inpaint": true,
+      "bbox_threshold": 0.4,
+      "bbox_dilation": 10,
+      "bbox_crop_factor": 2.5,
+      "sam_detection_hint": "center-1",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 16,
+      "wildcard": "",
+      "cycle": 1,
+      "inpaint_model": false,
+      "noise_mask_feather": 20,
+      "tiled_encode": false,
+      "tiled_decode": false,
+      "image": [
+        "124",
+        0
+      ],
+      "model": [
+        "300:15",
+        0
+      ],
+      "clip": [
+        "160",
+        1
+      ],
+      "vae": [
+        "160",
+        2
+      ],
+      "positive": [
+        "300:4",
+        0
+      ],
+      "negative": [
+        "300:5",
+        0
+      ],
+      "bbox_detector": [
+        "356",
+        0
+      ]
+    }
+  },
+  "358": {
+    "class_type": "KreativeImageOnOff",
+    "inputs": {
+      "switch": false,
+      "image_off": [
+        "124",
+        0
+      ],
+      "image_on": [
+        "357",
+        0
+      ]
+    }
+  },
+  "300:72": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 25
+    }
+  },
+  "300:15": {
+    "class_type": "ModelSamplingAuraFlow",
+    "inputs": {
+      "shift": 5,
+      "sampling": "flow",
+      "model": [
+        "160",
+        0
+      ]
+    }
+  },
+  "300:4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": [
+        "300:51",
+        0
+      ],
+      "clip": [
+        "160",
+        1
+      ]
+    }
+  },
+  "300:5": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": [
+        "300:355",
+        0
+      ],
+      "clip": [
+        "160",
+        1
+      ]
+    }
+  },
+  "300:6": {
+    "class_type": "EmptyFlux2LatentImage",
+    "inputs": {
+      "width": [
+        "88",
+        0
+      ],
+      "height": [
+        "88",
+        1
+      ],
+      "batch_size": [
+        "88",
+        4
+      ]
+    }
+  },
+  "300:16": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": [
+        "71",
+        0
+      ],
+      "steps": [
+        "300:72",
+        0
+      ],
+      "cfg": 3,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "300:15",
+        0
+      ],
+      "positive": [
+        "300:4",
+        0
+      ],
+      "negative": [
+        "300:5",
+        0
+      ],
+      "latent_image": [
+        "300:6",
+        0
+      ]
+    }
+  },
+  "300:17": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "300:82",
+        0
+      ],
+      "vae": [
+        "160",
+        2
+      ]
+    }
+  },
+  "300:40": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "300:17",
+        0
+      ]
+    }
+  },
+  "300:49": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": "You write image descriptions for a text-to-image model. The user message holds an idea inside <idea> tags.\n\nTASK: Turn the idea into ONE paragraph of 140 to 180 words that describes a single photograph. Open with the subject and what they are doing. Then cover pose and expression, clothing, the setting from foreground to background, light, and colours. Every sentence states something visible in the frame. Keep every fact from the idea exactly as given and add only details that fit it naturally. Describe the scene itself only; the camera and film look are added elsewhere.\n\nEXAMPLE\n<idea>a man repairing a bicycle on a wet pavement</idea>\nA middle-aged man in a faded green raincoat crouches beside an upturned bicycle, one hand steadying the rear wheel while the other turns a small wrench on the axle. His brow is furrowed in concentration and rain beads on his dark cap. The pavement glistens around him, reflecting the amber glow of a shopfront whose shutters are half lowered. Behind him a row of terraced houses fades into soft grey drizzle, with a red postbox standing at the corner. Cool daylight falls evenly from an overcast sky, picking out the chrome of the spokes and the wet sheen on his sleeves. Muted greens, greys and a single warm amber highlight give the street a quiet, lived-in mood.",
+      "string_b": [
+        "300:352",
+        0
+      ],
+      "delimiter": "\n\n"
+    }
+  },
+  "300:50": {
+    "class_type": "TextGenerate",
+    "inputs": {
+      "prompt": [
+        "300:77",
+        0
+      ],
+      "max_length": 320,
+      "sampling_mode": "on",
+      "sampling_mode.temperature": 0.3,
+      "sampling_mode.top_k": 64,
+      "sampling_mode.top_p": 0.95,
+      "sampling_mode.min_p": 0.05,
+      "sampling_mode.repetition_penalty": 1.05,
+      "sampling_mode.seed": 5,
+      "sampling_mode.presence_penalty": 0,
+      "thinking": false,
+      "use_default_template": true,
+      "mtp": "auto",
+      "clip": [
+        "160",
+        3
+      ],
+      "system_prompt": [
+        "300:49",
+        0
+      ]
+    }
+  },
+  "300:51": {
+    "class_type": "KreativeShowText",
+    "inputs": {
+      "text": "",
+      "source": [
+        "300:81",
+        0
+      ]
+    }
+  },
+  "300:62": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:69",
+        0
+      ],
+      "string_b": [
+        "300:333",
+        0
+      ],
+      "delimiter": " "
+    }
+  },
+  "300:68": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_04": [
+        "300:93",
+        0
+      ]
+    }
+  },
+  "300:69": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_04": [
+        "300:94",
+        0
+      ]
+    }
+  },
+  "300:75": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:17",
+        0
+      ]
+    }
+  },
+  "300:76": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": "<idea>",
+      "string_b": [
+        "89",
+        0
+      ],
+      "delimiter": "\n"
+    }
+  },
+  "300:77": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:76",
+        0
+      ],
+      "string_b": "</idea>\n\nWrite one paragraph that describes only what is visible in the frame.",
+      "delimiter": "\n"
+    }
+  },
+  "300:78": {
+    "class_type": "RegexReplace",
+    "inputs": {
+      "string": [
+        "300:305",
+        0
+      ],
+      "regex_pattern": "(?:</?idea>)|(?:[,;—–]\\s*)?(?:\\b(?:with|and|but|or|yet|having|showing|leaving)\\s+)?(?:\\b(?:there\\s+(?:is|are|was|were)|he|she|it|they|which|that)\\s+)?(?:\\b(?:is|are|was|were|has|have|had)\\s+)?(?:\\b(?:almost|nearly|virtually|completely|totally|absolutely)\\s+)?\\b(?:no|not|nothing|nobody|never|without|devoid of|free of|lacking|absent)\\b[^.,;—–\\n]*",
+      "replace": "",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "count": 0
+    }
+  },
+  "300:80": {
+    "class_type": "RegexReplace",
+    "inputs": {
+      "string": [
+        "300:78",
+        0
+      ],
+      "regex_pattern": "(?<=\\.)\\s*\\.+|\\s*[,;—–]+\\s*(?=\\.)|\\s+(?=[.,;])",
+      "replace": "",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "count": 0
+    }
+  },
+  "300:79": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:62",
+        0
+      ],
+      "string_b": [
+        "300:68",
+        0
+      ],
+      "delimiter": " "
+    }
+  },
+  "300:81": {
+    "class_type": "GenTimerLap",
+    "inputs": {
+      "label": "Prompt writer",
+      "value": [
+        "300:336",
+        0
+      ]
+    }
+  },
+  "300:82": {
+    "class_type": "GenTimerLap",
+    "inputs": {
+      "label": "First pass",
+      "value": [
+        "300:16",
+        0
+      ]
+    }
+  },
+  "300:90": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:79",
+        0
+      ],
+      "string_b": [
+        "88",
+        3
+      ],
+      "delimiter": " "
+    }
+  },
+  "300:93": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": ""
+    }
+  },
+  "300:94": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": ""
+    }
+  },
+  "300:108": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:75",
+        0
+      ]
+    }
+  },
+  "300:111": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_01": [
+        "300:114",
+        0
+      ]
+    }
+  },
+  "300:112": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_01": [
+        "300:115",
+        0
+      ]
+    }
+  },
+  "300:113": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "110",
+        0
+      ],
+      "string_b": [
+        "300:112",
+        0
+      ],
+      "delimiter": ", "
+    }
+  },
+  "300:114": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "PEOPLE: If the idea includes a person and does not state their ethnicity, describe them as Caucasian / European with Western facial features. If the idea states an ethnicity, keep it exactly as given. Always write it into the description of each person, for example 'a Caucasian woman'. Only include people if the idea mentions them; a scene without people stays without people. CLOTHING: if the idea does not say what a person is wearing, dress them in ordinary everyday clothes and name each garment and its colour; every person is clothed unless the idea clearly asks otherwise.\n\nReply with the paragraph only."
+    }
+  },
+  "300:115": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "east asian, asian"
+    }
+  },
+  "300:190": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Lit by a direct on-camera flash: hard bright frontal light on the subject, flash-lit foreground, crisp dark shadows cast just behind the subject, shiny skin highlights, small catchlights in the eyes, background falling off quickly into darkness."
+    }
+  },
+  "300:191": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": ""
+    }
+  },
+  "300:192": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:90",
+        0
+      ],
+      "string_b": [
+        "300:191",
+        0
+      ],
+      "delimiter": " "
+    }
+  },
+  "300:193": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": ""
+    }
+  },
+  "300:194": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:113",
+        0
+      ],
+      "string_b": [
+        "300:193",
+        0
+      ],
+      "delimiter": ", "
+    }
+  },
+  "300:304": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": ""
+    }
+  },
+  "300:305": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:50",
+        0
+      ]
+    }
+  },
+  "300:306": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:307": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:363",
+        0
+      ],
+      "string_b": [
+        "300:306",
+        0
+      ],
+      "delimiter": "\n\n"
+    }
+  },
+  "300:308": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:309": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:194",
+        0
+      ],
+      "string_b": [
+        "300:308",
+        0
+      ],
+      "delimiter": ", "
+    }
+  },
+  "300:312": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": "FILM LOOK: This photograph is shot on the film described below. Describe every colour as this film renders it in the final photograph, not as it would look in real life. For example, if the film turns greens violet, write 'violet leaves', never 'green leaves'. Do not name the film or mention this rule. If nothing is written after FILM, use natural colours.\nFILM:",
+      "string_b": [
+        "300:68",
+        0
+      ],
+      "delimiter": " "
+    }
+  },
+  "300:313": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:307",
+        0
+      ],
+      "string_b": [
+        "300:312",
+        0
+      ],
+      "delimiter": "\n\n"
+    }
+  },
+  "300:319": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:320": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:313",
+        0
+      ],
+      "string_b": [
+        "300:319",
+        0
+      ],
+      "delimiter": "\n\n"
+    }
+  },
+  "300:322": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:323": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:320",
+        0
+      ],
+      "string_b": [
+        "300:322",
+        0
+      ],
+      "delimiter": "\n\n"
+    }
+  },
+  "300:325": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:326": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:309",
+        0
+      ],
+      "string_b": [
+        "300:325",
+        0
+      ],
+      "delimiter": ", "
+    }
+  },
+  "300:328": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:329": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:326",
+        0
+      ],
+      "string_b": [
+        "300:328",
+        0
+      ],
+      "delimiter": ", "
+    }
+  },
+  "300:331": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:332": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:323",
+        0
+      ],
+      "string_b": [
+        "300:331",
+        0
+      ],
+      "delimiter": "\n\n"
+    }
+  },
+  "300:333": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_01": [
+        "300:80",
+        0
+      ],
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:334": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_01": [
+        "300:80",
+        0
+      ],
+      "any_02": [
+        "337",
+        0
+      ]
+    }
+  },
+  "300:335": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "337",
+        0
+      ],
+      "string_b": [
+        "300:361",
+        0
+      ],
+      "delimiter": " "
+    }
+  },
+  "300:336": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_01": [
+        "337",
+        1
+      ],
+      "any_02": [
+        "300:335",
+        0
+      ]
+    }
+  },
+  "300:339": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:340": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:332",
+        0
+      ],
+      "string_b": [
+        "300:339",
+        0
+      ],
+      "delimiter": "\n\n"
+    }
+  },
+  "300:342": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:343": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:329",
+        0
+      ],
+      "string_b": [
+        "300:342",
+        0
+      ],
+      "delimiter": ", "
+    }
+  },
+  "300:345": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:346": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:340",
+        0
+      ],
+      "string_b": [
+        "300:345",
+        0
+      ],
+      "delimiter": "\n\n"
+    }
+  },
+  "300:348": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:349": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:343",
+        0
+      ],
+      "string_b": [
+        "300:348",
+        0
+      ],
+      "delimiter": ", "
+    }
+  },
+  "300:351": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:352": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:346",
+        0
+      ],
+      "string_b": [
+        "300:351",
+        0
+      ],
+      "delimiter": "\n\n"
+    }
+  },
+  "300:354": {
+    "class_type": "Any Switch (rgthree)",
+    "inputs": {
+      "any_02": [
+        "300:304",
+        0
+      ]
+    }
+  },
+  "300:355": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:349",
+        0
+      ],
+      "string_b": [
+        "300:354",
+        0
+      ],
+      "delimiter": ", "
+    }
+  },
+  "300:360": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Every person has an average-looking face and an average body: an ordinary, real everyday person with natural, slightly imperfect features, natural skin texture and an unremarkable, believable build, like someone you would pass in the street."
+    }
+  },
+  "300:361": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:192",
+        0
+      ],
+      "string_b": [
+        "300:360",
+        0
+      ],
+      "delimiter": " "
+    }
+  },
+  "300:362": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "AVERAGE PEOPLE: describe every person as an ordinary, average-looking real person: an average-looking face with natural, slightly imperfect features, natural skin texture with pores and small blemishes, and an average everyday body. Use the words average-looking face and average body. Describe them plainly and honestly, never as beautiful, gorgeous, stunning, attractive, model-like, flawless or perfect."
+    }
+  },
+  "300:363": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:111",
+        0
+      ],
+      "string_b": [
+        "300:362",
+        0
+      ],
+      "delimiter": "\n\n"
+    }
+  },
+  "300:364": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Every person has an average-looking face and an average body: an ordinary, real everyday person with natural, slightly imperfect features, natural skin texture and an unremarkable, believable build, like someone you would pass in the street."
+    }
+  },
+  "300:365": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "AVERAGE PEOPLE: describe every person as an ordinary, average-looking real person: an average-looking face with natural, slightly imperfect features, natural skin texture with pores and small blemishes, and an average everyday body. Use the words average-looking face and average body. Describe them plainly and honestly, never as beautiful, gorgeous, stunning, attractive, model-like, flawless or perfect."
+    }
+  },
+  "300:41": {
+    "class_type": "ImageScaleBy",
+    "inputs": {
+      "upscale_method": "lanczos",
+      "scale_by": 1.5,
+      "image": [
+        "300:17",
+        0
+      ]
+    }
+  },
+  "300:42": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "300:41",
+        0
+      ],
+      "vae": [
+        "160",
+        2
+      ]
+    }
+  },
+  "300:43": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 672391918528337,
+      "steps": 8,
+      "cfg": 2,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 0.22,
+      "model": [
+        "300:15",
+        0
+      ],
+      "positive": [
+        "300:4",
+        0
+      ],
+      "negative": [
+        "300:5",
+        0
+      ],
+      "latent_image": [
+        "300:42",
+        0
+      ]
+    }
+  },
+  "300:44": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "300:83",
+        0
+      ],
+      "vae": [
+        "160",
+        2
+      ]
+    }
+  },
+  "300:60": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Shot on 1970s Kodak Kodachrome 64 colour slide film: dense, opaque, paint-like primary colours; reds are lacquered scarlet, crimson and brick-red; yellows are rich cadmium-gold, mustard and warm ochre; clear skies are deep cobalt and ultramarine, darkening toward the top of the frame; foliage is muted earthy olive, dark pine and moss-green; sunlit skin is warm bronzed peach and golden tan; white shirts, stone and concrete carry a warm antique-ivory parchment tint; steep slide-film contrast with bright crisp sunlit highlights and deep velvety black shadows; razor-sharp edges, fine surface texture and ultra-fine slide grain."
+    }
+  },
+  "300:65": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "A 1970s Kodachrome colour slide photograph."
+    }
+  },
+  "300:66": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Cheap old iPhone snapshot: heavy digital grain, noise and compression artifacts, soft imperfect focus, slight motion blur, blown-out highlights, harsh on-camera flash if night, smudged lens, casual off-center framing."
+    }
+  },
+  "300:67": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "Cheap phone iPhone grainy amateur."
+    }
+  },
+  "300:83": {
+    "class_type": "GenTimerLap",
+    "inputs": {
+      "label": "Second pass",
+      "value": [
+        "300:43",
+        0
+      ]
+    }
+  },
+  "300:91": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Shot on vintage Kodak Aerochrome colour infrared film with a yellow filter: every leaf, tree, hedge, ivy vine, reed and blade of grass glows hyper-saturated fluorescent crimson, magenta and hot pink; the sky is a deep cyan-blue to navy; rivers and lakes are black, glassy and inky with crimson reflections; stone, brick, concrete, earth paths and metal keep their own greys, browns and brick reds; clothing keeps its own colours; skin is luminous porcelain with a soft peach glow; each person's hair is plain brown, black, blonde or grey exactly as described; a scanned 35mm colour infrared slide: rich film contrast with soft, slightly faded inky blacks, a glowing red halation bloom around bright highlights, visible gritty film grain across the whole frame, gentle analog softness and slight colour cross-over, like a real 1970s Aerochrome frame."
+    }
+  },
+  "300:92": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "A false-colour infrared photograph on Kodak Aerochrome film."
+    }
+  },
+  "300:95": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "A 35mm Kodak Ektachrome colour slide photograph."
+    }
+  },
+  "300:96": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Shot on Kodak Ektachrome E100 slide film in daylight: clean natural colours, rich green foliage, clear blue sky, accurate skin tones, crisp detail, fine grain."
+    }
+  },
+  "300:97": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "A black and white infrared photograph shot on Rollei Infrared 400 film through an R72 filter, strong Wood effect: every living leaf, blade of grass, fern and patch of moss glows bright white, the blue sky and any water turn almost black, skin is pale and luminous, hair, clothing, stone and wood keep their normal brightness, crisp high-contrast monochrome."
+    }
+  },
+  "300:98": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "colour photograph, colours, saturated, sepia, toned, blurry, distorted, extra people, text, watermark"
+    }
+  },
+  "300:99": {
+    "class_type": "AerochromeIRPrep",
+    "inputs": {
+      "image": [
+        "300:75",
+        0
+      ]
+    }
+  },
+  "300:100": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "300:99",
+        0
+      ],
+      "vae": [
+        "160",
+        2
+      ]
+    }
+  },
+  "300:101": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": [
+        "300:97",
+        0
+      ],
+      "string_b": [
+        "300:334",
+        0
+      ],
+      "delimiter": " "
+    }
+  },
+  "300:102": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": [
+        "300:101",
+        0
+      ],
+      "clip": [
+        "160",
+        1
+      ]
+    }
+  },
+  "300:103": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": [
+        "300:98",
+        0
+      ],
+      "clip": [
+        "160",
+        1
+      ]
+    }
+  },
+  "300:104": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 123456789,
+      "steps": 16,
+      "cfg": 3,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 0.55,
+      "model": [
+        "300:15",
+        0
+      ],
+      "positive": [
+        "300:102",
+        0
+      ],
+      "negative": [
+        "300:103",
+        0
+      ],
+      "latent_image": [
+        "300:100",
+        0
+      ]
+    }
+  },
+  "300:105": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "300:104",
+        0
+      ],
+      "vae": [
+        "160",
+        2
+      ]
+    }
+  },
+  "300:106": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "300:105",
+        0
+      ]
+    }
+  },
+  "300:107": {
+    "class_type": "AerochromeIRFilm",
+    "inputs": {
+      "strength": 1,
+      "variant": "Classic crimson",
+      "blue_source": "Green (true Aerochrome)",
+      "ir_strength": 1,
+      "foliage_sensitivity": 0.5,
+      "foliage_boost": 1,
+      "sky_darkening": 0.3,
+      "contrast": 0.25,
+      "saturation": 1.1,
+      "red_softness": 0.75,
+      "halation": 0.3,
+      "halation_radius": 1.5,
+      "sky_hue_shift": 0.3,
+      "shadow_warmth": 0.2,
+      "image": [
+        "300:75",
+        0
+      ],
+      "ir_image": [
+        "300:105",
+        0
+      ]
+    }
+  },
+  "300:116": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "PEOPLE: If the idea includes a person and does not state their ethnicity, describe them as East Asian with East Asian facial features. If the idea states an ethnicity, keep it exactly as given. Always write it into the description of each person, for example 'an East Asian man'. Only include people if the idea mentions them; a scene without people stays without people. CLOTHING: if the idea does not say what a person is wearing, dress them in ordinary everyday clothes and name each garment and its colour; every person is clothed unless the idea clearly asks otherwise.\n\nReply with the paragraph only."
+    }
+  },
+  "300:117": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "caucasian, european, western facial features"
+    }
+  },
+  "300:118": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "PEOPLE: Describe people exactly as the idea does. Never add or change anyone's ethnicity. If the idea names several people of different ethnicities, describe each one as given. Only include people if the idea mentions them; a scene without people stays without people. CLOTHING: if the idea does not say what a person is wearing, dress them in ordinary everyday clothes and name each garment and its colour; every person is clothed unless the idea clearly asks otherwise.\n\nReply with the paragraph only."
+    }
+  },
+  "300:119": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": ""
+    }
+  },
+  "300:120": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "PEOPLE: This photograph shows a scene with nobody in it. Leave out every person, figure, face, hand, silhouette and reflection of a person, even if the idea mentions one, and describe only the place, objects, animals, plants, light and weather. Open with the main subject of the scene instead of a person.\n\nReply with the paragraph only."
+    }
+  },
+  "300:121": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "people, person, human, man, woman, child, figure, face, hands, body, silhouette, crowd"
+    }
+  },
+  "300:170": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": ""
+    }
+  },
+  "300:171": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": ""
+    }
+  },
+  "300:180": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "A Kodak Portra 400 film photograph."
+    }
+  },
+  "300:181": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Shot on Kodak Portra 400 colour negative film, well exposed: bright areas roll off into soft, creamy, desaturated ivory and warm pastels; skin is smooth warm golden-peach and soft salmon, standing cleanly apart from the background; foliage is muted dusty sage-green, the sky is pastel cyan-blue, reds are warm coral and terracotta; warm golden-amber midtones over soft lifted shadows with a subtle cool slate-blue tint; gentle low contrast, fine natural film grain."
+    }
+  },
+  "300:182": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "A Kodak Tri-X 400 black and white film photograph."
+    }
+  },
+  "300:183": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Shot on Kodak Tri-X 400 black and white film: classic monochrome with no colour, deep inky blacks and bright clean whites, punchy contrast, rich silvery mid-greys, gritty visible grain, timeless documentary street-photography feel."
+    }
+  },
+  "300:184": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "A CineStill 800T film photograph."
+    }
+  },
+  "300:185": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Shot on CineStill 800T tungsten cinema colour film: every light source itself (neon tube, street lamp, bulb, headlight, tail light) has a creamy pastel core wrapped in a soft glowing crimson-orange halation ring that spills into the dark around it; vehicles, buildings, people and objects keep clean, crisp, natural edges; daylight, sky and moonlight are cool cyan, steel-blue and deep petrol-teal; fluorescent tubes glow minty seafoam green; warm bulbs and sodium street lamps are clean champagne-gold and warm ivory; skin in warm light is smooth natural porcelain-peach, standing apart from the cool background; punchy cinematic contrast with softly rolled-off highlights; deep shadows are dense, grainy midnight-teal and slate-blue, full of detail; wet pavement, concrete, chrome and fabric stay crisp and textured; fine motion-picture film grain."
+    }
+  },
+  "300:186": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "A full-bleed instant film photograph filling the entire frame edge to edge."
+    }
+  },
+  "300:187": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Shot with the colour science of vintage SX-70 integral instant film, the picture fills the whole frame edge to edge: a creamy, grainless dye-diffusion texture with soft, painterly edges; bright skies, windows and flash highlights clip early into opaque chalky butter-cream and warm ivory; shadows are lifted and milky with a cyan-green and dusty teal cast; skin and midtones glow in golden-ochre, warm peach and faded dusty rose; skies are powdery cerulean and robin's-egg blue; foliage is muted sage and olive-teal; low contrast, gentle corner vignetting, the background falling softly into murky shadow; nostalgic intimate snapshot feel."
+    }
+  },
+  "300:301": {
+    "class_type": "RegexReplace",
+    "inputs": {
+      "string": [
+        "300:50",
+        0
+      ],
+      "regex_pattern": "\\s*\\b(?:colou?r(?:s|ful|ed|ing)?|hues?|tint(?:s|ed)?|tones? of (?:red|blue|green|gold|brown|orange|yellow)|red(?:s|dish)?|blue(?:s|ish)?|green(?:s|ish)?|yellow(?:s|ish)?|orange(?:s)?|purple(?:s)?|violet|pink(?:s|ish)?|magenta|cyan|teal|turquoise|brown(?:s|ish)?|beige|tan|golden|gold|amber|crimson|scarlet|maroon|navy|olive|lime|lavender|lilac|coral|peach|copper|bronze|ochre|sepia|emerald|azure|indigo|tawny|auburn|blond(?:e)?|ginger|chestnut|khaki|burgundy|mustard|rose|rosy|saturated|vivid|vibrant|pastel|neon|warm(?:-| )toned|cool(?:-| )toned|warm|cool)\\b(?:-(?=\\w))?",
+      "replace": "",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "count": 0
+    }
+  },
+  "300:302": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "BLACK AND WHITE: This photograph is black and white. Describe the scene only in terms of light, shadow, contrast and tone, from deep black through greys to bright white. Never name or mention any colour or hue, and never describe clothing, skin, hair, objects, sky or light by colour; describe them by tone instead (dark, light, pale, mid-grey, bright white, deep black, silvery)."
+    }
+  },
+  "300:303": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "colour photograph, color, colourful, sepia, toned, tinted, cross-processed, saturated colours"
+    }
+  },
+  "300:316": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "A Lomography LomoChrome Purple film photograph."
+    }
+  },
+  "300:317": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "Shot on Lomography LomoChrome Purple 400 colour negative film: every tree, leaf, hedge, fern and blade of grass is violet, purple, lavender and deep plum; the sky is clear teal and aqua with pure white clouds; yellow flowers are hot pink; skin is warm and natural, each person's hair is plain brown, black, blonde or grey exactly as described, white fabric is clean white; earth paths, wood and metal keep their own warm browns and greys; soft dreamy contrast, gentle highlight bloom, visible film grain."
+    }
+  },
+  "300:318": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "AEROCHROME COLOUR GUIDE: This photograph is shot on Kodak Aerochrome colour infrared film through a yellow filter. Before you write, go through every object in the idea, decide its colour with the rules below, then describe each object directly in that colour as a plain visible fact.\nLIVING PLANTS CHANGE COLOUR:\n- Every living plant is brilliant, saturated, fluorescent crimson, magenta or hot pink: tree leaves, grass, lawns, reeds, moss, lichen, ferns, hedges, crops, ivy, climbing plants, vines, weeping willows, bushes, flower stems and lily pads. Dead, dry or autumn plants are white, pale orange or pale yellow.\nOTHER THINGS THE FILM CHANGES:\n- Clear sky: deep cyan-blue to dark navy. Clouds: white.\n- Water (rivers, lakes, sea, canals, ponds, puddles): black, glassy and inky, with crisp reflections of the crimson plants and the sky.\n- Skin: luminous porcelain-pale with a soft pink-peach glow; lips and eyes dark and defined.\n- Hair: for every person, always state a specific hair colour in plain words: the colour given in the idea, otherwise brown, dark brown, chestnut, black, golden blonde or grey. Hair is never red, auburn, ginger, copper, pink or magenta unless the idea asks for it.\nMAN-MADE AND MINERAL THINGS KEEP THEIR OWN COLOURS:\n- Stone, brick, concrete, pavements, bare earth, dirt and gravel paths, sand, roofs, asphalt, metal, machinery, vehicles, bicycles, clothing and fabrics. Blues and greys in clothing stay close to normal.\nFILM CHARACTER: describe the picture as a scanned film photograph with visible grain, soft halation glow around highlights and gently faded blacks; never call it sharp, crisp, high-definition, clean or digital.\nFINAL CHECK before you answer: every person has a stated hair colour from the list above; every plant you mention is crimson, magenta, hot pink or white; the word green never appears; the phrase natural tones never describes the scene; water is black and inky."
+    }
+  },
+  "300:321": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "LOMOCHROME PURPLE COLOUR GUIDE: This photograph is shot on Lomography LomoChrome Purple colour negative film. Before you write, go through every object in the idea, decide its colour with the rules below, then describe each object directly in that colour as a plain visible fact.\nLIVING PLANTS ARE PURPLE:\n- Every living plant is violet, purple, lavender, mauve or deep plum: tree leaves, canopies, grass, lawns, meadows, reeds, moss, ferns, hedges, ivy, vines, bushes, crops and flower stems. Sunlit leaves and grass are bright lavender and mauve; shaded leaves are deep purple and plum.\nOTHER THINGS THE FILM CHANGES:\n- Sky: clear teal and aqua. Clouds: pure white. Haze near the horizon: pale aqua-white.\n- Water: teal and aqua.\n- Yellow things (yellow flowers, yellow paint, golden fields): hot pink and magenta.\n- Blue things (blue clothing, blue paint): teal-green.\nKEEP THEIR OWN COLOURS:\n- Skin: warm and natural. Hair: for every person, always state a specific hair colour in plain words: the colour given in the idea, otherwise brown, dark brown, chestnut, black, golden blonde or grey; hair is never purple, violet, lavender, pink or magenta unless the idea asks for it. White fabric: clean white. Red and orange things: red and orange.\n- Stone, brick, concrete, wood, earth and dirt paths, sand, metal and bicycles: their own warm browns, beiges and greys.\nFINAL CHECK before you answer: every person has a stated hair colour from the list above; every plant you mention is violet, purple, lavender, mauve or plum; the word green never describes a plant; the sky and clouds are only teal, aqua and white, with no purple, pink or lavender in the sky."
+    }
+  },
+  "300:324": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "red hair, pink hair, ginger hair, auburn hair, copper hair, magenta hair, dyed hair, digital photo, digital camera, HDR, oversharpened, hyper-detailed, clean digital sensor, smooth plastic look"
+    }
+  },
+  "300:327": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "purple hair, violet hair, lavender hair, pink hair, magenta hair, dyed hair"
+    }
+  },
+  "300:330": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "PORTRA 400 COLOUR GUIDE: This photograph is shot on Kodak Portra 400 colour negative film, well exposed. Before you write, go through every object in the idea, decide its colour and tone with the rules below, then describe each object directly in those colours as a plain visible fact.\nHIGHLIGHTS: bright areas are soft, creamy, desaturated ivory and warm pastel; describe them that way, never as crisp white, blinding or harsh.\nCOLOURS AS PORTRA RENDERS THEM:\n- Blue (sky, blue clothing, water): soft pastel cyan, robin's-egg blue or dusty slate-blue.\n- Green (leaves, grass, foliage): muted dusty sage, eucalyptus and soft olive; never bright or neon green.\n- Red (clothing, lips, flowers, cars): warm coral, terracotta and brick orange-red; never magenta or crimson.\n- Yellow and gold: warm honey and soft amber.\nSKIN AND HAIR:\n- Skin: smooth, warm golden-peach and soft salmon with a gentle glow, even and clear, standing cleanly apart from the background.\n- Hair: for every person, state a specific natural hair colour (the colour given in the idea, otherwise brown, dark brown, chestnut, black, golden blonde or grey).\nLIGHT AND TONE: sunlit midtones carry a warm golden-peach glow; shadows are soft, open and lifted with a subtle cool slate-blue tint, full of detail and never black; overall gentle, low contrast.\nFINAL CHECK before you answer: every person has a stated hair colour; no colour is called vivid, neon, saturated or crisp; every green is sage, eucalyptus or olive; every blue is pastel cyan or slate; every red is coral or terracotta; shadows are soft and lifted."
+    }
+  },
+  "300:338": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "CINESTILL 800T COLOUR GUIDE: This photograph is shot on CineStill 800T, a tungsten-balanced cinema colour film. Before you write, go through every light source and every object in the idea, decide its colour with the rules below, then describe each one directly in that colour as a plain visible fact.\nLIGHTS AND HALATION:\n- Only the light sources themselves (neon tubes, street lamp bulbs, headlights, tail lights, candles, bare bulbs): a soft creamy pastel core wrapped in a glowing crimson-orange halo that spills into the dark beside it.\n- Vehicles, buses, buildings, people, windows and every other object keep clean, crisp, natural edges; the halo belongs to the light source alone.\nCOLOURS AS 800T RENDERS THEM:\n- Daylight, overcast sky, twilight, moonlight, cool LEDs and window light: cool cyan, steel-blue and petrol-teal.\n- Fluorescent tubes (shops, subways, car parks, offices): minty seafoam green.\n- Warm bulbs, lamps, candles and sodium street lights: clean champagne-gold, warm amber and ivory.\n- Neon signs: their own neon colour in the tube, each with the crimson-orange halo around it.\nSIGNS AND WRITING:\n- Every neon sign, shop sign or bus display reads a short ordinary word in plain capital letters, such as OPEN, CAFE, OFF LICENCE, NEWS or the shop name given in the idea; write it as \"a neon sign reading OPEN\", with the word in plain capitals and free of quotation marks. Signs show only that word; the film name belongs to the photograph and never appears on any sign.\nSKIN AND HAIR:\n- Skin in warm light: smooth, natural porcelain-peach, standing cleanly apart from the cool background. Skin in cool light: pale with a soft cyan tint.\n- Hair: for every person, state a specific natural hair colour (the colour given in the idea, otherwise brown, dark brown, chestnut, black, golden blonde or grey).\nSURFACES: wet asphalt, concrete, brick, chrome, leather and fabric away from the lights are crisp, gritty and textured.\nLIGHT AND TONE: punchy cinematic midtone contrast; highlights roll off softly into pastel; deep shadows are dense, grainy midnight-teal and slate-blue, full of detail and never pure black; fine motion-picture film grain.\nFINAL CHECK before you answer: each light source has its crimson-orange halo and every object has clean edges; every sign reads a short ordinary word in plain capitals; every cool light is cyan, steel-blue or teal; every warm light is champagne-gold or amber; every person has a stated hair colour; shadows are teal and full of detail."
+    }
+  },
+  "300:341": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "film brand name on sign, CineStill text, quotation marks on sign, neon outlines, glowing rings, red glow around objects, red outline on vehicles, glowing edges, pure black shadows, crushed blacks, flat lighting, orange skin, red hair, ginger hair, digital photo, HDR, oversharpened, clean digital sensor, smooth plastic look"
+    }
+  },
+  "300:344": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "KODACHROME COLOUR GUIDE: This photograph is shot on 1970s Kodak Kodachrome 64 colour slide film. Before you write, go through every object in the idea, decide its colour and tone with the rules below, then describe each object directly in those colours as a plain visible fact.\nCOLOURS AS KODACHROME RENDERS THEM:\n- Red (clothing, cars, signs, flowers, lips): dense, opaque lacquered scarlet, crimson or brick-red, like thick paint.\n- Yellow and gold: rich cadmium-gold, mustard and warm ochre.\n- Blue (sky, blue clothing, water): deep cobalt and ultramarine; a clear sky darkens toward the top of the frame.\n- Green (leaves, grass, trees, hedges): muted earthy olive, dark pine and moss-green; never bright, vivid or emerald.\nSKIN AND HAIR:\n- Skin in sunlight: warm bronzed peach and golden tan, with natural skin texture.\n- Hair: for every person, state a specific natural hair colour (the colour given in the idea, otherwise brown, dark brown, chestnut, black, golden blonde or grey).\nWHITES AND NEUTRALS: white shirts, white paint, stone and concrete carry a warm antique-ivory parchment tint.\nLIGHT AND TONE: steep slide-film contrast: sunlit areas are bright and crisp; shadows under awnings, cars, trees and doorways fall to deep velvety black; edges are razor-sharp with fine surface texture and ultra-fine grain; highlights stay crisp and clean, never glowing, blooming or hazy.\nFINAL CHECK before you answer: every person has a stated hair colour; every red is scarlet, crimson or brick-red; every yellow is cadmium-gold, mustard or ochre; every blue is cobalt or ultramarine; every green is olive, pine or moss; shadows are deep black; highlights are crisp."
+    }
+  },
+  "300:347": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "halation, glow, bloom, soft focus, haze, lifted shadows, faded colours, washed out, pastel colours, neon green, bright green grass, emerald green, digital photo, HDR, plastic skin"
+    }
+  },
+  "300:350": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "INSTANT FILM COLOUR GUIDE: This photograph has the colour science of vintage SX-70 integral instant film, and the picture fills the whole frame edge to edge. Before you write, go through every object in the idea, decide its colour and tone with the rules below, then describe each object directly in those colours as a plain visible fact. Describe only the scene itself: write about the people, places and light in the picture, and never mention the photograph as a printed card, frame, border, edge or object.\nCOLOURS AS INSTANT FILM RENDERS THEM:\n- Bright areas (sky near the sun, windows, lamps, flash on faces and walls): opaque chalky butter-cream and warm ivory.\n- Shadows and dark areas: lifted, milky and soft, with a cyan-green and dusty teal cast.\n- Blue (sky, blue clothing, water): powdery cerulean, robin's-egg blue and faded turquoise.\n- Green (leaves, grass, trees): muted sage, olive-teal and soft moss.\n- Red: faded dusty rose and soft brick. Yellow: warm golden-ochre and honey.\nSKIN AND HAIR:\n- Skin: warm peach and golden-ochre with a soft dusty-rose glow, smooth and creamy.\n- Hair: for every person, state a specific natural hair colour (the colour given in the idea, otherwise brown, dark brown, chestnut, black, golden blonde or grey).\nTEXTURE AND TONE: creamy, grainless and smooth like liquid dye; edges soft and painterly; low contrast; gentle darkening toward the corners; the main subject close and intimate, the background falling softly into murky shadow.\nFINAL CHECK before you answer: the scene fills the frame edge to edge; the words card, border, frame and print never appear; every person has a stated hair colour; highlights are butter-cream or ivory; shadows are milky teal; greens are sage; blues are powdery cerulean."
+    }
+  },
+  "300:353": {
+    "class_type": "PrimitiveString",
+    "inputs": {
+      "value": "film grain, gritty noise, razor-sharp detail, crisp digital edges, crushed black shadows, deep blacks, saturated neon colours, vivid emerald green, high contrast, HDR, digital photo"
+    }
+  }
+}

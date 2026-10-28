@@ -64,7 +64,7 @@ See the upstream model license for non-commercial/commercial restrictions.
 
 MOSS IMAGE 1.0 - IMAGE GENERATOR
 ------------------------------
-Image Generation > ComfyUI > MOSS > T2I uses the supplied MOSS graph.
+Image Generation > ComfyUI > MOSS > MOSS Image uses the supplied MOSS graph.
 Update ComfyUI for CLIPLoader type=moss_image, EmptyFlux2LatentImage,
 SkipLayerGuidanceDiTSimple, UNETLoader, VAELoader, CLIPTextEncode,
 VAEDecode and SaveImage.
@@ -88,6 +88,35 @@ RepeatLatentBatch is additionally required for refine batches above one.
 Source dimensions are reduced only when above 1280 px, then rounded down
 to multiples of 16. Refine denoise defaults to 0.5 and is independent of T2I.
 No weights or custom nodes are installed automatically.
+
+MOSS PHOTO - IMAGE GENERATOR
+---------------------------
+Image Generation > ComfyUI > MOSS > MOSS PHOTO is separate from MOSS Image.
+Base: recent ComfyUI MOSS support, UNETLoader, CLIPLoader, VAELoader,
+EmptyFlux2LatentImage, ModelSamplingAuraFlow, KSampler (er_sde/simple),
+CLIPTextEncode, VAEDecode, SaveImage, core primitives/string/regex nodes,
+ImageSharpen and ProPostFilmGrain (ComfyUI-ProPost).
+ComfyUI-Kreative-Moss: KreativeResolutionFocal, KreativeShowText, GenTimerLap.
+rgthree-comfy: Any Switch (rgthree).
+AI writer (on by default): TextGenerate and the separate local writer model.
+Default weights:
+  models/diffusion_models/dirtyMoss_bf16.safetensors
+  models/text_encoders/qwen3.5_9b_int8_convrot.safetensors
+  models/text_encoders/Huihui-Qwen3-VL-4B-Instruct-abliterated-fp8_scaled.safetensors
+  models/vae/flux2-vae.safetensors
+Four optional model-only LoRAs default to None.
+Second pass: ImageScaleBy and VAEEncode.
+Face/hand fix: FaceDetailer (Impact Pack), UltralyticsDetectorProvider
+(Impact Subpack), bbox/face_yolov8m.pt and bbox/hand_yolov8s.pt.
+Detail: SeedVR2LoadDiTModel, SeedVR2LoadVAEModel, SeedVR2VideoUpscaler,
+seedvr2_ema_3b_fp8_e4m3fn.safetensors, ema_vae_fp16.safetensors,
+and KreativeDetailMix from ComfyUI-Kreative-Studio.
+JPEG / Cheap iPhone: KreativeJPEGCrunch from ComfyUI-Kreative-Studio.
+Experimental IR: AerochromeIRPrep and AerochromeIRFilm (comfyui_aerochrome).
+Only enabled branches require their optional nodes/models.
+All controls, conditional accordions, source-order postprocessing, presets,
+API export, batch counts and optional binary previews use PHOTO settings.
+No weights or custom nodes are installed automatically by the integration.
 
 MINIMAX H3 - REF2V VIDEO WORKSPACE
 ---------------------------------

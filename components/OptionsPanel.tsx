@@ -20,11 +20,13 @@ import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseI
 import { ImageUploader } from './ImageUploader';
 import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
 import { MossSettingsPanel } from './MossSettingsPanel';
+import { MossPhotoSettingsPanel } from './MossPhotoSettingsPanel';
 import { Krea2EditSettingsPanel } from './Krea2EditSettingsPanel';
 import { LibraryPromptButton } from './LibraryPromptButton';
 import { getImagePromptOnlyUpdate } from '../utils/promptDestination';
 import { defaultQwen21MultiOptions, defaultQwen21EditOptions, defaultQwen21Settings, getQwen21Choices, QWEN21_MULTI_SIZES } from '../services/qwen21Workflow';
 import { defaultMossSettings } from '../services/mossWorkflow';
+import { defaultMossPhotoSettings, withMossPhotoPrompt } from '../services/mossPhotoWorkflow';
 import { dataUrlToFile, fileToDataUrl, dataUrlToThumbnail, fileToResizedDataUrl } from '../utils/imageUtils';
 import { SelectInput, TextInput, NumberSlider, CheckboxSlider, PresetTextInput } from './InputComponents';
 import {
@@ -95,6 +97,11 @@ type PromptExampleSource = NonNullable<GenerationOptions['comfyPromptExampleSour
 type AvailablePromptExampleSource = PromptExampleSource & { hasLocalPrompts: boolean };
 
 const getSelectedLoraNames = (options: GenerationOptions): string[] => {
+    if (options.comfyModelType === 'moss-photo') {
+        const models = (options.comfyMossPhoto || defaultMossPhotoSettings()).nodes['160'];
+        return [1, 2, 3, 4].filter(index => models[`lora ${index} strength`] !== 0)
+            .map(index => models[`lora ${index}`]).filter((name): name is string => typeof name === 'string' && !!name && name !== 'None');
+    }
     if (options.comfyModelType === 'moss-image') {
         return (options.comfyMoss || defaultMossSettings()).loras.filter(lora => lora.enabled && lora.name).map(lora => lora.name);
     }
@@ -437,6 +444,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             updateOptions({
                 comfyFlux2Prompt: prompt,
                 comfyFlux2NegativePrompt: safeNegativePrompt,
+            });
+        } else if (options.comfyModelType === 'moss-photo') {
+            updateOptions({
+                ...getImagePromptOnlyUpdate(prompt, options, generationMode),
+                comfyMossPhoto: { ...withMossPhotoPrompt(options.comfyMossPhoto || defaultMossPhotoSettings(), prompt), negativePrompt: safeNegativePrompt },
             });
         } else if (options.comfyModelType === 'moss-image') {
             updateOptions({
@@ -1468,6 +1480,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const renderComfyUIOptions = () => {
         if (activeTab === 'character-generator') return renderCharacterOptions();
         const modelType = options.comfyModelType || 'sdxl';
+        if (modelType === 'moss-photo') {
+            return <>{renderPromptExampleButtons()}<MossPhotoSettingsPanel options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} /></>;
+        }
         if (modelType === 'krea2-edit') {
             return <Krea2EditSettingsPanel options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled}
                 sourceFile={sourceImage} secondFile={elementImages?.[0]} onSourceChange={onSourceImageChange}

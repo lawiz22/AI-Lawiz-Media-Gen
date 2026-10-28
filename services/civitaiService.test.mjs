@@ -37,9 +37,14 @@ const nativeNames = ['MODEL_SCAN_DIRECTORIES', 'MODEL_FOLDERS', 'MODEL_FAMILIES'
 const native = await import(compile(`${extract(nativeSource, nativeNames)}\nexport { ${nativeNames.join(',')} };`));
 const qwenUrl = compile(read('./qwen21Workflow.ts'));
 const mossUrl = compile(`import { getQwen21Choices } from '${qwenUrl}';\n${read('./mossWorkflow.ts').replace(/^import .*;$/gm, '')}`);
+const photoUrl = compile(read('./mossPhotoWorkflow.ts')
+    .replace("import template from '../assets/mossPhotoWorkflow.json';", `const template = ${read('../assets/mossPhotoWorkflow.json')};`)
+    .replace("from './qwen21Workflow'", `from '${qwenUrl}'`));
+const { defaultMossPhotoSettings } = await import(photoUrl);
 const useModel = (await import(compile(`
     import { getComfyRelativePath, getRecommendedSettingUpdates, selectInventoryLora } from '${serviceUrl}';
     import { defaultMossSettings } from '${mossUrl}';
+    import { defaultMossPhotoSettings, withMossPhotoPrompt } from '${photoUrl}';
     import { defaultQwen21Settings } from '${qwenUrl}';
     ${extract(inventorySource, inventoryNames)}
     export async function use(item, options = {}, provider = 'regular') {
@@ -204,11 +209,32 @@ test('USE adds new LoRAs without replacing active slots, and surfaces a full-slo
     assert.deepEqual(service.selectInventoryLora([{ name: 'MOSS\\SAME.safetensors', enabled: true }], 'moss/same.safetensors'), [{ name: 'moss/same.safetensors', enabled: true }]);
 });
 
+test('PHOTO inventory USE retains its subtab, model/sampler settings, four LoRA slots and own-prompt imports', async () => {
+    const photo = { ...defaultMossPhotoSettings(), aiWriter: false, steps: 37 };
+    const options = { comfyModelType: 'moss-photo', comfyMossPhoto: photo };
+    const model = await useModel(item(families[1]), options);
+    assert.deepEqual(model.alerts, []);
+    assert.equal(model.actions[0].payload.comfyModelType, 'moss-photo');
+    assert.equal(model.actions[0].payload.comfyMossPhoto.steps, 37);
+    assert.equal(model.actions[0].payload.comfyMossPhoto.nodes['160'].model, `moss\\${families[1].file}`);
+    const selected = item(families[1], { kind: 'lora', relativePath: 'loras/moss/new.safetensors', usageMetadata: { triggerWords: ['landscape'] } });
+    const lora = await useModel(selected, options);
+    assert.equal(lora.actions[0].payload.comfyModelType, 'moss-photo');
+    assert.equal(lora.actions[0].payload.comfyMossPhoto.nodes['160']['lora 1'], 'moss/new.safetensors');
+    assert.equal(lora.actions[0].payload.comfyMossPhoto.myPrompts[0].text, 'landscape');
+    assert.equal(photo.nodes['160']['lora 1'], 'None');
+    const full = structuredClone(photo);
+    for (let index = 1; index <= 4; index++) full.nodes['160'][`lora ${index}`] = `old-${index}`;
+    const rejected = await useModel(selected, { ...options, comfyMossPhoto: full });
+    assert.equal(rejected.actions.length, 0);
+    assert.match(rejected.alerts[0], /four MOSS PHOTO LoRA slots|All LoRA slots/);
+});
+
 test('MiniMax H3 USE never dispatches an SD image workflow', async () => {
     for (const kind of ['diffusion', 'lora']) {
         const result = await useModel(item(families[2], { kind }));
         assert.equal(result.actions.length, 0);
-        assert.match(result.alerts[0], /Video > Minimax H3/);
+        assert.match(result.alerts[0], /Video > Minimax REF2v H3/);
     }
 });
 
@@ -324,6 +350,7 @@ const optionsHelpersUrl = compile(`
     import { findInventoryModel } from '${serviceUrl}';
     import { defaultQwen21Settings } from '${qwenUrl}';
     import { defaultMossSettings } from '${mossUrl}';
+    import { defaultMossPhotoSettings } from '${photoUrl}';
     import { getImagePromptOnlyUpdate } from '${destinationUrl}';
     ${extract(optionsSource, ['getSelectedLoraNames', 'appendMissingTriggerWords'])}
     export { getSelectedLoraNames };

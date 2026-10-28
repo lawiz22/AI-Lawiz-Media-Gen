@@ -6,15 +6,15 @@ import { generateOpenRouterText } from './openRouterService';
 export type ReferenceKind = 'image' | 'video' | 'audio';
 export type VideoPromptProvider = 'openrouter' | 'gemini' | 'mammouth';
 export type VideoTemplate = 'generation' | 'replacement';
-export const REFERENCE_LIMITS: Record<ReferenceKind, number> = { image: 4, video: 2, audio: 2 };
+export const REFERENCE_LIMITS: Record<ReferenceKind, number> = { image: 6, video: 2, audio: 2 };
 export const VIDEO_PROMPT_ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4', '2:3', '3:2', '21:9'];
 export const VIDEO_WORKFLOWS = [
-    { id: 'reference', name: 'Reference to video', description: 'Images, motion and audio references.' },
-    { id: 'text', name: 'Text to video', description: 'A scene built from your written idea.' },
-    { id: 'replacement', name: 'Character replacement', description: 'Preserve source motion and replace character identity.' },
-    { id: 'audio', name: 'Audio-driven video', description: 'Prepare synchronized speech, motion and sound.' },
+    { id: 'reference', name: 'Minimax REF2v H3', description: 'A prompt, with optional image, video or audio references.' },
+    { id: 'ultrafast', name: 'Ultrafast', description: 'Five-step H3 with up to 6 images, 2 videos and 2 audios.' },
+    { id: 'advanced', name: 'MiniMax Advanced', description: 'FL2V / REF2V, latent upscale, LTX refine and final RTX upscale.' },
 ] as const;
-export type VideoWorkflow = typeof VIDEO_WORKFLOWS[number]['id'];
+// Retain legacy IDs so existing saved preparation drafts remain readable.
+export type VideoWorkflow = 'reference' | 'ultrafast' | 'advanced' | 'text' | 'replacement' | 'audio';
 export interface AudioLyrics { enabled: boolean; text: string; source: string }
 export interface VideoReference {
     id: string;
@@ -50,8 +50,13 @@ export interface VideoPromptDraft {
     generatedInputs?: VideoPromptInputs;
     generatedInputsProvenance?: 'generation' | 'current-setup';
     minimaxH3Options?: import('./minimaxH3Workflow').MinimaxH3Options;
+    ultrafastH3Options?: import('./minimaxH3Workflow').MinimaxH3Options;
+    advancedH3Options?: import('./minimaxH3Workflow').MinimaxH3Options;
     originalAudioId?: string;
     forceOriginalAudio?: boolean;
+    minimaxLyricsSettings?: { provider: VideoPromptProvider; model: string };
+    ultrafastLyricsSettings?: { provider: VideoPromptProvider; model: string };
+    advancedLyricsSettings?: { provider: VideoPromptProvider; model: string };
 }
 export type VideoPromptInputs = Pick<VideoPromptDraft, 'idea' | 'provider' | 'models' | 'aspect' | 'duration' | 'template' | 'templates' | 'references' | 'workflow' | 'originalAudioId' | 'forceOriginalAudio'>;
 export const captureVideoPromptInputs = (draft: VideoPromptInputs): VideoPromptInputs => ({

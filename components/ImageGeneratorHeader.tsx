@@ -58,11 +58,14 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
     const activeModelFamily = MODEL_FAMILIES.find(family =>
         Object.values(family.workflows).includes(options.comfyModelType as ComfyModelType)
         || (family.id === 'krea2' && options.comfyModelType === 'krea2-raw')
+        || (family.id === 'moss' && options.comfyModelType === 'moss-photo')
         || (family.id === 'qwen21' && ['qwen21-turbo', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(options.comfyModelType || ''))
     ) || MODEL_FAMILIES[1];
     const availableGenerationModes = (['t2i', 'i2i'] as const).filter(mode => activeModelFamily.workflows[mode]);
     const workflowTabs: { label: string; model: ComfyModelType; mode: GenerationMode }[] = activeModelFamily.id === 'qwen21'
         ? [{ label: 'T2I', model: 'qwen21-t2i', mode: 't2i' }, { label: 'T2I (Turbo)', model: 'qwen21-turbo', mode: 't2i' }, { label: 'I2I Multi Images', model: 'qwen21-i2i-multi', mode: 'i2i' }, { label: 'I2I Consistency', model: 'qwen21-i2i-consistency', mode: 'i2i' }, { label: 'I2I Turbo', model: 'qwen21-i2i-turbo', mode: 'i2i' }, { label: 'Remove Background', model: 'qwen21-remove-background', mode: 'i2i' }]
+        : activeModelFamily.id === 'moss'
+            ? [{ label: 'MOSS Image', model: 'moss-image', mode: 't2i' }, { label: 'MOSS PHOTO', model: 'moss-photo', mode: 't2i' }]
         : activeModelFamily.id === 'krea2'
             ? [{ label: 'SIMPLE KREA', model: 'krea2-simple', mode: 't2i' }, { label: 'KREA2 RAW', model: 'krea2-raw', mode: 't2i' }, { label: 'I2I Edit / Identity', model: 'krea2-edit', mode: 'i2i' }]
             : availableGenerationModes.map(mode => ({ label: activeModelFamily.id === 'flux2' ? mode === 't2i' ? 'FLUX2 SIMPLE' : 'FLUX2 Edit' : mode.toUpperCase(), model: activeModelFamily.workflows[mode]!, mode }));

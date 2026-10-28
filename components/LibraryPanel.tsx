@@ -23,6 +23,7 @@ import { getPromptDestinationOptions, PROMPT_T2I_WORKFLOWS } from '../utils/prom
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { requiresSfwLibraryRating } from '../services/idbLibraryService';
 import { LIBRARY_CATEGORY_ACCENT_STYLES } from '../utils/accentTheme';
+import { isMinimaxH3PromptLibraryItem } from '../services/videoPromptLibrary';
 
 // --- Confirmation Modal Component (defined in-file to avoid adding new files) ---
 interface ConfirmationModalProps {
@@ -89,7 +90,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
 
 
 interface LibraryPanelProps {
-  onLoadItem: (item: LibraryItem, options?: { importTtsCharacterPhotos: boolean }) => void;
+  onLoadItem: (item: LibraryItem, options?: { importTtsCharacterPhotos: boolean; videoWorkflow?: 'reference' | 'ultrafast' | 'advanced'; videoFinishing?: 'latent' | 'ltx' }) => void;
   onUpscaleItem: (item: LibraryItem) => void;
   isDriveConnected: boolean;
   onDownloadFromDrive: () => void;
@@ -725,6 +726,14 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
       setIsResolvingItem(false);
     }
   };
+  const sendVideoToAdvanced = (item: LibraryItem, videoFinishing: 'latent' | 'ltx', close?: () => void) => {
+    const use = (resolved: LibraryItem) => {
+      onLoadItem(resolved, { importTtsCharacterPhotos: false, videoWorkflow: 'advanced', videoFinishing });
+      close?.();
+    };
+    if (item.assetRefs?.media) use(item);
+    else void resolveAndUseItem(item, use);
+  };
   const handleOpenItem = async (item: LibraryItem) => {
     setIsResolvingItem(true);
     try {
@@ -1282,7 +1291,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
               <div className="flex-shrink-0 text-text-secondary">{getCategoryIcon(item.mediaType, "w-5 h-5")}</div>
               <div className="min-w-0 flex-grow"><p className="truncate text-sm font-medium text-text-primary">{item.name}</p><div className="mt-0.5 flex flex-wrap items-center gap-1"><span className="text-xs text-text-muted">Created: {new Date(item.id).toLocaleDateString()}</span>{getValidRating(item.rating) && <RatingStars rating={item.rating} />}{item.safetyRating && <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase text-white ${item.safetyRating === 'nsfw' ? 'bg-red-600' : 'bg-blue-600'}`}>{item.safetyRating}</span>}{item.tags?.map(tag => <span key={tag} className="rounded bg-bg-primary px-1.5 py-0.5 text-[10px] text-text-secondary">#{tag}</span>)}</div></div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {!item.minimaxH3Options && !item.characterSwapOptions && <button disabled={isResolvingItem} onClick={(e) => { e.stopPropagation(); if (item.mediaType === 'prompt' && !item.videoPromptOptions) { setPromptToUse(item); setPickerOpen(true); } else { void resolveAndUseItem(item, onLoadItem); } }} title={item.videoPromptOptions ? 'Open in Video Prompt Generator' : item.mediaType === 'prompt' ? 'Use Prompt' : 'Load in Generator'} className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent disabled:opacity-50">{item.mediaType === 'prompt' ? <SendIcon className="w-4 h-4" /> : <LoadIcon className="w-4 h-4" />}</button>}
+                {!item.minimaxH3Options && !item.characterSwapOptions && <button disabled={isResolvingItem} onClick={(e) => { e.stopPropagation(); if (item.mediaType === 'prompt' && !isMinimaxH3PromptLibraryItem(item)) { setPromptToUse(item); setPickerOpen(true); } else { void resolveAndUseItem(item, resolved => onLoadItem(resolved, isMinimaxH3PromptLibraryItem(resolved) ? { importTtsCharacterPhotos: false, videoWorkflow: 'reference' } : undefined)); } }} title={isMinimaxH3PromptLibraryItem(item) ? 'Open in Minimax REF2v H3' : item.mediaType === 'prompt' ? 'Use Prompt' : 'Load in Generator'} className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent disabled:opacity-50">{item.mediaType === 'prompt' ? <SendIcon className="w-4 h-4" /> : <LoadIcon className="w-4 h-4" />}</button>}
+                {isMinimaxH3PromptLibraryItem(item) && <button disabled={isResolvingItem} onClick={event => { event.stopPropagation(); void resolveAndUseItem(item, resolved => onLoadItem(resolved, { importTtsCharacterPhotos: false, videoWorkflow: 'ultrafast' })); }} title="Open in Ultrafast" className="rounded-full px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-400/15 disabled:opacity-50">Ultrafast</button>}
+                {isMinimaxH3PromptLibraryItem(item) && <button disabled={isResolvingItem} onClick={event => { event.stopPropagation(); void resolveAndUseItem(item, resolved => onLoadItem(resolved, { importTtsCharacterPhotos: false, videoWorkflow: 'advanced' })); }} title="Open in MiniMax Advanced" className="rounded-full px-2 py-1 text-xs font-semibold text-cyan-300 hover:bg-cyan-400/15 disabled:opacity-50">Advanced</button>}
+                {item.mediaType === 'video' && (['latent', 'ltx'] as const).map(videoFinishing => <button key={videoFinishing} disabled={isResolvingItem} onClick={event => { event.stopPropagation(); sendVideoToAdvanced(item, videoFinishing); }} title={videoFinishing === 'latent' ? 'Advanced: H3 latent upscale only' : 'Advanced: LTX refine only'} className="rounded-full px-2 py-1 text-xs font-semibold text-cyan-300 hover:bg-cyan-400/15 disabled:opacity-50">{videoFinishing === 'latent' ? 'Latent upscale' : 'LTX refine'}</button>)}
                 <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name || `Item #${item.id}`); }} disabled={deletingId === item.id} title="Delete Item" className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-danger">{deletingId === item.id ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : <TrashIcon className="w-4 h-4" />}</button>
               </div>
             </div>
@@ -1721,7 +1733,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                       : <p className="text-xs text-text-secondary">Generation settings are unavailable for this older result or partial assembly; current settings were not substituted.</p>}
                   </div>}
                   {selectedItemModal.minimaxH3Options && <div className="space-y-3 rounded-lg border border-border-primary p-3">
-                    <h3 className="font-semibold text-accent">MiniMax H3 REF2V generation</h3>
+                    <h3 className="font-semibold text-accent">Minimax REF2v H3 generation</h3>
                     <DetailItem label={selectedItemModal.minimaxH3Options.promptIsFinal ? 'Executed prompt' : 'Submitted prompt (server rewrite not returned)'} value={selectedItemModal.minimaxH3Options.prompt} />
                     <DetailItem label="Seed" value={selectedItemModal.minimaxH3Options.seed} />
                     <DetailItem label="Model" value={selectedItemModal.minimaxH3Options.options.model} isCode />
@@ -1734,23 +1746,25 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                     <details><summary className="cursor-pointer text-sm text-text-secondary">Executed API workflow</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(selectedItemModal.minimaxH3Options.workflow, null, 2)}</pre></details>
                   </div>}
                   {selectedItemModal.videoPromptOptions && <div className="space-y-3 rounded-lg border border-border-primary p-3">
-                    <h3 className="font-semibold text-accent">Video Prompt Generator setup</h3>
+                    <h3 className="font-semibold text-accent">{selectedItemModal.videoPromptOptions.renderOptions ? 'Minimax REF2v H3 generation setup' : 'Legacy video prompt setup'}</h3>
                     <DetailItem label="Original idea" value={selectedItemModal.videoPromptOptions.idea} />
-                    <DetailItem label="Provider" value={selectedItemModal.videoPromptOptions.provider} />
-                    <DetailItem label="Model" value={selectedItemModal.videoPromptOptions.models[selectedItemModal.videoPromptOptions.provider]} />
+                    {!selectedItemModal.videoPromptOptions.renderOptions && <><DetailItem label="Provider" value={selectedItemModal.videoPromptOptions.provider} />
+                    <DetailItem label="Model" value={selectedItemModal.videoPromptOptions.models[selectedItemModal.videoPromptOptions.provider]} /></>}
                     <DetailItem label="Aspect ratio" value={selectedItemModal.videoPromptOptions.aspect} />
                     <DetailItem label="Duration" value={`${selectedItemModal.videoPromptOptions.duration}s`} />
                     <DetailItem label="Canvas" value={selectedItemModal.videoPromptOptions.template} />
                     <DetailItem label="Workflow" value={selectedItemModal.videoPromptOptions.workflow} />
-                    <DetailItem label="Settings source" value={selectedItemModal.videoPromptOptions.provenance === 'generation' ? 'Exact generation snapshot' : 'Current setup (older prompt)'} />
+                    <DetailItem label="Settings source" value={selectedItemModal.videoPromptOptions.renderOptions ? 'Saved H3 generation setup' : selectedItemModal.videoPromptOptions.provenance === 'generation' ? 'Exact prompt-generation snapshot; H3 defaults on load' : 'Current prompt setup; H3 defaults on load'} />
                     {selectedItemModal.videoPromptOptions.references.map(ref => <div key={ref.id} className="space-y-2 border-t border-border-primary pt-2">
                       <p className="text-sm font-semibold">{ref.kind === 'image' ? 'Picture' : ref.kind === 'video' ? 'Video' : 'Audio'} {ref.slot} · {ref.file.name}</p>
                       {ref.note && <p className="text-xs text-text-secondary">Role: {ref.note}</p>}
                       {ref.original && <p className="text-xs text-text-secondary">Original: {ref.original.name}</p>}
+                      {ref.kind === 'image' && <img src={ref.file.data} alt={`Picture ${ref.slot}`} className="max-h-48 rounded object-contain" />}
                       {ref.kind === 'audio' && <><audio src={ref.file.data} controls className="w-full" />{ref.original && <audio src={ref.original.data} controls className="w-full" />}</>}
                     </div>)}
+                    {selectedItemModal.videoPromptOptions.renderOptions ? <details><summary className="cursor-pointer text-sm text-text-secondary">Saved H3 generation settings</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(selectedItemModal.videoPromptOptions.renderOptions, null, 2)}</pre></details> : <>
                     <details><summary className="cursor-pointer text-sm text-text-secondary">Exact instruction sent to the model</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{selectedItemModal.videoPromptOptions.instruction}</pre></details>
-                    <details><summary className="cursor-pointer text-sm text-text-secondary">Saved editable canvases and model selections</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify({ models: selectedItemModal.videoPromptOptions.models, templates: selectedItemModal.videoPromptOptions.templates }, null, 2)}</pre></details>
+                    <details><summary className="cursor-pointer text-sm text-text-secondary">Saved editable canvases and model selections</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify({ models: selectedItemModal.videoPromptOptions.models, templates: selectedItemModal.videoPromptOptions.templates }, null, 2)}</pre></details></>}
                   </div>}
                   {selectedItemModal.mediaType === 'audio-tts' && selectedItemModal.indexTtsOptions?.characters.some((character) => character.thumbnail) && <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border-primary bg-bg-primary p-3">
                     <input type="checkbox" checked={importTtsCharacterPhotos} onChange={(event) => setImportTtsCharacterPhotos(event.target.checked)} className="mt-0.5 h-4 w-4 accent-accent" />
@@ -1763,8 +1777,17 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                     {!NON_DOWNLOADABLE_MEDIA_TYPES.has(selectedItemModal.mediaType) && selectedItemModal.media && (
                       <button type="button" onClick={() => downloadLibraryItem(selectedItemModal)} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-primary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"><DownloadIcon className="w-5 h-5" /> Download</button>
                     )}
-                    {selectedItemModal.videoPromptOptions ? (
-                      <button type="button" onClick={() => { onLoadItem(selectedItemModal); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> Open in Video Prompt Generator</button>
+                    {selectedItemModal.mediaType === 'video' && <div className="flex flex-wrap gap-2" aria-label="Advanced video finishing">
+                      {(['latent', 'ltx'] as const).map(videoFinishing => <button key={videoFinishing} type="button" disabled={isResolvingItem} onClick={() => {
+                        sendVideoToAdvanced(selectedItemModal, videoFinishing, () => setSelectedItemModal(null));
+                      }} className="rounded-lg border border-cyan-400/50 bg-cyan-400/15 px-4 py-2 font-semibold text-cyan-200">{videoFinishing === 'latent' ? 'Advanced · H3 latent upscale only' : 'Advanced · LTX refine only'}</button>)}
+                    </div>}
+                    {isMinimaxH3PromptLibraryItem(selectedItemModal) ? (
+                      <>
+                        <button type="button" onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos: false, videoWorkflow: 'reference' }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 border border-violet-400/50 bg-violet-400/15 text-violet-200 font-bold py-2 px-4 rounded-lg hover:bg-violet-400/25 transition-colors"><LoadIcon className="w-5 h-5" /> Open in Minimax REF2v H3</button>
+                        <button type="button" onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos: false, videoWorkflow: 'ultrafast' }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 border border-emerald-400/50 bg-emerald-400/15 text-emerald-200 font-bold py-2 px-4 rounded-lg hover:bg-emerald-400/25 transition-colors"><LoadIcon className="w-5 h-5" /> Open in Ultrafast</button>
+                        <button type="button" onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos: false, videoWorkflow: 'advanced' }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 border border-cyan-400/50 bg-cyan-400/15 text-cyan-200 font-bold py-2 px-4 rounded-lg hover:bg-cyan-400/25 transition-colors"><LoadIcon className="w-5 h-5" /> Open in MiniMax Advanced</button>
+                      </>
                     ) : selectedItemModal.mediaType === 'prompt' ? (
                       <>
                         <button onClick={() => { setPromptToUse(selectedItemModal); setPickerOpen(true); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><SendIcon className="w-5 h-5" /> Use</button>

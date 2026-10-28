@@ -82,13 +82,13 @@ test('lyrics fingerprints survive reapplying an excerpt but change with the sour
     assert.notEqual(api.audioLyricsSource(audio), source);
 });
 
-test('imports accept exactly 4 images, 2 videos, 2 audio; overflow and mixed types are atomic', () => {
+test('imports accept exactly 6 images, 2 videos, 2 audio; overflow and mixed types are atomic', () => {
     let refs = [];
     for (const [kind, limit] of Object.entries(api.REFERENCE_LIMITS)) {
         refs = api.addVideoReferences(refs, kind, Array.from({ length: limit }, () => file(kind)));
         assert.throws(() => api.addVideoReferences(refs, kind, [file(kind)]), /Nothing was imported/);
     }
-    assert.equal(refs.length, 8);
+    assert.equal(refs.length, 10);
     api.validateVideoReferences(refs);
     assert.throws(() => api.addVideoReferences([], 'image', [file('image'), file('video')]), /Nothing was imported/);
     assert.throws(() => api.addVideoReferences([], 'image', [new File([], 'empty.png', { type: 'image/png' })]), /non-empty/);
@@ -176,6 +176,8 @@ test('providers receive selected model and edited media without changing global 
     api.setResponse(generated);
 });
 
-test('workflow preparation slots have distinct stable identifiers', () => {
-    assert.deepEqual(api.VIDEO_WORKFLOWS.map(item => item.id), ['reference', 'text', 'replacement', 'audio']);
+test('both connected workflows are exposed with their exact user-facing names', () => {
+    assert.deepEqual(api.VIDEO_WORKFLOWS.map(item => item.id), ['reference', 'ultrafast', 'advanced']);
+    assert.equal(api.VIDEO_WORKFLOWS[0].name, 'Minimax REF2v H3');
+    assert.equal(api.VIDEO_WORKFLOWS[1].name, 'Ultrafast');
 });

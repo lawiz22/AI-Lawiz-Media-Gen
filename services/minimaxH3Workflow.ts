@@ -10,6 +10,19 @@ export type H3Workflow = Record<string, H3Node>;
 export interface H3Lora { enabled: boolean; name: string; strength: number }
 export interface H3ReferenceControl { enabled: boolean; useSoundtrack: boolean }
 export interface MinimaxH3Options {
+    variant?: 'ultrafast' | 'advanced';
+    advanced?: import('./minimaxH3AdvancedWorkflow').AdvancedH3Settings;
+    ultrafast?: {
+        spectrum: boolean;
+        rtxUpscale: boolean;
+        rtxScale: number;
+        rtxQuality: string;
+        shiftVideo: number;
+        shiftAudio: number;
+        attention: string;
+        scheduler: string;
+        denoise: number;
+    };
     model: string;
     weightDtype: string;
     clip: string;
@@ -104,13 +117,29 @@ export const defaultMinimaxH3Options = (): MinimaxH3Options => ({
     reasoningEffort: 'none', apiBase: '', localModelSlug: '', jobType: 'auto', references: {},
 });
 
-export const h3Input = (info: H3ObjectInfo | null | undefined, node: string, name: string): unknown =>
-    info?.[node]?.input?.required?.[name] ?? info?.[node]?.input?.optional?.[name];
+export const resolveH3FilenamePrefix = (prefix: string, date = new Date()): string => {
+    const day = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+    const resolved = prefix.replaceAll('%date:yyyy-MM-dd%', day);
+    if (/%date/i.test(resolved)) throw new Error('Unsupported filename date template. Use %date:yyyy-MM-dd% or a literal folder name.');
+    return resolved;
+};
+
+export const h3Input = (info: H3ObjectInfo | null | undefined, node: string, name: string, values?: Record<string, unknown>): unknown => {
+    const direct = info?.[node]?.input?.required?.[name] ?? info?.[node]?.input?.optional?.[name];
+    if (direct !== undefined || !name.includes('.') || !values) return direct;
+    const split = name.lastIndexOf('.'), parent = name.slice(0, split), field = name.slice(split + 1);
+    const selector = h3Input(info, node, parent, values);
+    if (!Array.isArray(selector) || !isRecord(selector[1]) || !Array.isArray(selector[1].options)) return undefined;
+    const option = selector[1].options.find(entry => isRecord(entry) && entry.key === values[parent]);
+    if (!isRecord(option) || !isRecord(option.inputs)) return undefined;
+    return (isRecord(option.inputs.required) ? option.inputs.required[field] : undefined)
+        ?? (isRecord(option.inputs.optional) ? option.inputs.optional[field] : undefined);
+};
 export const h3Choices = (info: H3ObjectInfo | null | undefined, node: string, name: string): string[] => {
     const input = h3Input(info, node, name);
     if (!Array.isArray(input)) return [];
     const values = Array.isArray(input[0]) ? input[0] : typeof input[1] === 'object' && input[1] !== null && 'options' in input[1] ? input[1].options : [];
-    return Array.isArray(values) ? values.filter((item): item is string => typeof item === 'string') : [];
+    return Array.isArray(values) ? values.flatMap(item => typeof item === 'string' ? [item] : isRecord(item) && typeof item.key === 'string' ? [item.key] : []) : [];
 };
 export interface H3FormatWidget { name: string; type: string | string[]; config?: Record<string, unknown> }
 export const h3FormatWidgets = (info: H3ObjectInfo | null | undefined, format: string): H3FormatWidget[] => {
@@ -163,7 +192,6 @@ export interface H3ReferencePlan {
 export const planH3References = (draft: MinimaxDraft, options: MinimaxH3Options): H3ReferencePlan => {
     const references = draft.references.filter(ref => h3ReferenceControl(options, ref).enabled)
         .sort((a, b) => ['image', 'video', 'audio'].indexOf(a.kind) - ['image', 'video', 'audio'].indexOf(b.kind) || a.slot - b.slot);
-    if (!references.length) throw new Error('REF2V needs at least one enabled reference.');
     const mappings: H3ReferencePlan['mappings'] = [];
     let audioOffset = 0;
     for (const kind of ['image', 'video', 'audio'] as const) {
@@ -217,6 +245,7 @@ export const buildMinimaxH3Workflow = (
     number('reference edge', options.maxReferenceEdge, 0, 8192, true);
     number('frame rate', options.frameRate, 1, 240); number('loop count', options.loopCount, 0, 100, true);
     if (!options.filenamePrefix.trim() || !options.format.trim()) throw new Error('Output format and filename prefix are required.');
+    const filenamePrefix = resolveH3FilenamePrefix(options.filenamePrefix);
     if (!['none', 'local', 'openrouter'].includes(options.promptProvider) || !['auto', 'standard', 'replacement'].includes(options.jobType)
         || !['none', 'low', 'medium', 'high'].includes(options.reasoningEffort) || !['linear', 'cosine', 'sine'].includes(options.spacing)
         || !['max', 'match'].includes(options.refImageSize)) throw new Error('Invalid H3 reference or sampling selection.');
@@ -269,7 +298,8 @@ export const buildMinimaxH3Workflow = (
         if (!file) throw new Error(`Missing uploaded file for ${referenceToken(ref)}.`);
         return { kind: ref.kind, file, ...(ref.kind === 'video' ? { use_soundtrack: h3ReferenceControl(options, ref).useSoundtrack } : {}) };
     });
-    add('185', 'MiniMaxH3ReferencePack', {
+    const useReferencePack = references.length > 0 || options.promptProvider !== 'none';
+    if (useReferencePack) add('185', 'MiniMaxH3ReferencePack', {
         direction: plan.prompt, references_json: JSON.stringify({ references }),
         system_prompt: options.systemPrompt, prompt_provider: options.promptProvider,
         // The node uses the ComfyUI server environment for hosted credentials.
@@ -278,7 +308,7 @@ export const buildMinimaxH3Workflow = (
         width: ['115', 0], height: ['115', 1], length_seconds: ['132', 0], max_reference_edge: options.maxReferenceEdge,
     });
     const refInputs: H3Node['inputs'] = {
-        prompt: ['185', 18], clip, width: ['115', 0], height: ['115', 1], length: ['177', 1], ref_image_size: options.refImageSize,
+        prompt: useReferencePack ? ['185', 18] : plan.prompt, clip, width: ['115', 0], height: ['115', 1], length: ['177', 1], ref_image_size: options.refImageSize,
         ...(options.conditionVideoVae ? { vae: ['121', 0] } : {}),
         ...(options.conditionAudioVae ? { audio_vae: ['122', 0] } : {}),
     };
@@ -308,10 +338,10 @@ export const buildMinimaxH3Workflow = (
     add('119', 'VHS_VideoCombine', {
         ...options.formatOptions, ...(preserveAudio ? { trim_to_audio: true } : {}),
         images: ['133', 0], ...(preserveAudio ? { audio: ['185', 15 + originalAudioIndex] } : decodeAudio ? { audio: ['134', 0] } : {}),
-        frame_rate: options.frameRate, loop_count: options.loopCount, filename_prefix: options.filenamePrefix, format: options.format,
+        frame_rate: options.frameRate, loop_count: options.loopCount, filename_prefix: filenamePrefix, format: options.format,
         pingpong: options.pingpong, save_output: options.saveOutput,
     });
-    if (options.displayPrompt) add('186', 'Display Any (rgthree)', { output: '', source: ['185', 18] });
+    if (options.displayPrompt) add('186', 'Display Any (rgthree)', { output: '', source: useReferencePack ? ['185', 18] : plan.prompt });
     return workflow;
 };
 
@@ -321,10 +351,13 @@ export const validateMinimaxH3Readiness = (workflow: H3Workflow, info: H3ObjectI
     for (const node of Object.values(workflow)) {
         for (const [name, value] of Object.entries(node.inputs)) {
             if (Array.isArray(value)) continue;
+            if (node.class_type === 'VHS_LoadVideo' && name === 'video') continue;
             const choices = h3Choices(info, node.class_type, name);
-            const schema = h3Input(info, node.class_type, name);
-            const isCombo = Array.isArray(schema) && (Array.isArray(schema[0]) || schema[0] === 'COMBO');
-            if (isCombo && typeof value === 'string' && !choices.includes(value)) throw new Error(`${node.class_type}: "${value}" is unavailable for ${name}. Refresh the node/model lists.`);
+            const schema = h3Input(info, node.class_type, name, node.inputs);
+            const isCombo = Array.isArray(schema) && (Array.isArray(schema[0]) || schema[0] === 'COMBO' || schema[0] === 'COMFY_DYNAMICCOMBO_V3');
+            const validChoices = choices.length ? choices : Array.isArray(schema) && isRecord(schema[1]) && Array.isArray(schema[1].options)
+                ? schema[1].options.flatMap(entry => isRecord(entry) && typeof entry.key === 'string' ? [entry.key] : typeof entry === 'string' ? [entry] : []) : [];
+            if (isCombo && typeof value === 'string' && !validChoices.includes(value)) throw new Error(`${node.class_type}: "${value}" is unavailable for ${name}. Refresh the node/model lists.`);
             if (typeof value === 'number' && Array.isArray(schema) && isRecord(schema[1])) {
                 const config = schema[1];
                 if ((typeof config.min === 'number' && value < config.min) || (typeof config.max === 'number' && value > config.max)
@@ -346,6 +379,15 @@ export const validateMinimaxH3Readiness = (workflow: H3Workflow, info: H3ObjectI
             const available = h3Choices(info, 'LoraLoader', 'lora_name').concat(h3Choices(info, 'LoraLoaderModelOnly', 'lora_name'));
             for (const [name, value] of Object.entries(node.inputs)) {
                 if (name.startsWith('lora_') && isRecord(value) && !available.includes(String(value.lora))) throw new Error(`LoRA "${value.lora}" is not available in the ComfyUI LoRA catalog.`);
+            }
+        }
+        if (node.class_type === 'LTX_lora_loader') {
+            const stack: unknown = JSON.parse(String(node.inputs.stack_data));
+            if (!Array.isArray(stack)) throw new Error('Invalid Ultrafast LoRA stack.');
+            const available = h3Choices(info, 'LoraLoader', 'lora_name').concat(h3Choices(info, 'LoraLoaderModelOnly', 'lora_name'));
+            for (const entry of stack) {
+                if (!isRecord(entry)) throw new Error('Invalid Ultrafast LoRA entry.');
+                if (entry.on && !available.includes(String(entry.lora))) throw new Error(`LoRA "${entry.lora}" is not available in the ComfyUI LoRA catalog.`);
             }
         }
     }

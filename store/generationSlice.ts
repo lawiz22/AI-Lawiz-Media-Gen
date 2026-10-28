@@ -5,6 +5,7 @@ import type { RootState } from './store';
 import { getEnabledCharacterAngles } from '../services/characterAnglesWorkflow';
 import { defaultQwen21Settings } from '../services/qwen21Workflow';
 import { defaultMossSettings } from '../services/mossWorkflow';
+import { defaultMossPhotoSettings, mossPhotoPrompt, withMossPhotoPrompt } from '../services/mossPhotoWorkflow';
 import { defaultKrea2EditSettings } from '../services/krea2EditWorkflow';
 
 const KREA_TURBO_LORA_FIELDS = [
@@ -52,6 +53,7 @@ const initialOptions: GenerationOptions = {
   comfyModelType: 'krea2-simple',
   comfyPrompt: '',
   comfyMoss: defaultMossSettings(),
+  comfyMossPhoto: defaultMossPhotoSettings(),
   comfyKrea2Edit: defaultKrea2EditSettings(),
   comfyQwen21T2i: defaultQwen21Settings('t2i'),
   comfyQwen21Turbo: defaultQwen21Settings('turbo'),
@@ -316,6 +318,9 @@ const generationSlice = createSlice({
     },
     updateOptions: (state, action: PayloadAction<Partial<GenerationOptions>>) => {
       state.options = { ...state.options, ...action.payload };
+      if (state.options.comfyModelType === 'moss-photo' && action.payload.comfyPrompt !== undefined && !action.payload.comfyMossPhoto) {
+        state.options.comfyMossPhoto = withMossPhotoPrompt(state.options.comfyMossPhoto || defaultMossPhotoSettings(), action.payload.comfyPrompt);
+      }
       if (action.payload.comfyPrompt !== undefined && (state.options.comfyModelType === 'qwen21-t2i' || state.options.comfyModelType === 'qwen21-turbo')) {
         const mode = state.options.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
         const key = mode === 'turbo' ? 'comfyQwen21Turbo' : 'comfyQwen21T2i';
@@ -343,6 +348,10 @@ const generationSlice = createSlice({
         : { ...state.options, ...sharedPrompts, ...action.payload, provider: 'comfyui' };
       if (action.payload.comfyModelType === 'moss-image') {
         nextOptions.comfyMoss = action.payload.comfyMoss ?? nextOptions.comfyMoss ?? defaultMossSettings();
+      }
+      if (action.payload.comfyModelType === 'moss-photo') {
+        nextOptions.comfyMossPhoto = action.payload.comfyMossPhoto ?? nextOptions.comfyMossPhoto ?? defaultMossPhotoSettings();
+        if (action.payload.comfyPrompt !== undefined) nextOptions.comfyMossPhoto = withMossPhotoPrompt(nextOptions.comfyMossPhoto, action.payload.comfyPrompt);
       }
       if (action.payload.comfyModelType === 'qwen21-t2i' || action.payload.comfyModelType === 'qwen21-turbo') {
         const mode = action.payload.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
@@ -560,6 +569,9 @@ export const selectIsReadyToGenerate = createSelector(
         return !!isComfyUIConnected && !!sourceImage && getEnabledCharacterAngles(activeOptions).length > 0;
       }
       const isI2IMode = generationMode === 'i2i';
+      if (activeOptions.comfyModelType === 'moss-photo') {
+        return !!isComfyUIConnected && !!mossPhotoPrompt(activeOptions.comfyMossPhoto || defaultMossPhotoSettings(), activeOptions.comfyPrompt || '').trim();
+      }
       if (activeOptions.comfyModelType === 'krea2-edit') {
         const settings = activeOptions.comfyKrea2Edit || defaultKrea2EditSettings();
         return !!isComfyUIConnected && !!sourceImage && !!settings.prompt.trim()

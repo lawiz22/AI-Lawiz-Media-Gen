@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { CIVITAI_FAMILIES, CivitaiFamily, CivitaiInventory, CivitaiInventoryItem, CivitaiModelFolder, CivitaiProvider, formatModelSize, getCivitaiModelUrl, getComfyRelativePath, getRecommendedSettingUpdates, selectInventoryLora } from '../services/civitaiService';
 import { defaultMossSettings } from '../services/mossWorkflow';
+import { defaultMossPhotoSettings, withMossPhotoPrompt } from '../services/mossPhotoWorkflow';
 import { defaultQwen21Settings } from '../services/qwen21Workflow';
 import { queueLtxTransfer, setActiveTab } from '../store/appSlice';
 import { setGenerationMode, updateOptions } from '../store/generationSlice';
@@ -317,7 +318,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
         const modelPath = getComfyRelativePath(item);
         const family = inferItemFamily(item);
         if (family === 'minimax-h3') {
-            window.alert('Select this model or LoRA in Video > Minimax H3. H3 video models cannot be applied to an image workflow.');
+            window.alert('Select this model or LoRA in Video > Minimax REF2v H3. H3 video models cannot be applied to an image workflow.');
             return;
         }
         const exampleSources: Array<'civitai' | 'archive'> = [
@@ -336,6 +337,22 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                 const current = store.getState().generation.options;
                 const triggers = item.usageMetadata?.triggerWords?.join(', ') || '';
                 if (family === 'moss') {
+                    if (current.comfyModelType === 'moss-photo') {
+                        const photo = current.comfyMossPhoto || defaultMossPhotoSettings();
+                        const models = { ...photo.nodes['160'] };
+                        if (item.kind === 'lora') {
+                            const slots = [1, 2, 3, 4].map(index => ({
+                                name: String(models[`lora ${index}`] || ''),
+                                enabled: !!models[`lora ${index}`] && models[`lora ${index}`] !== 'None',
+                            }));
+                            selectInventoryLora(slots, modelPath).forEach((lora, index) => { models[`lora ${index + 1}`] = lora.name; });
+                        } else models.model = modelPath;
+                        dispatch(updateOptions({
+                            provider: 'comfyui', comfyModelType: 'moss-photo', comfyPromptExampleSource: exampleSource,
+                            comfyMossPhoto: { ...photo, nodes: { ...photo.nodes, '160': models } },
+                            ...(item.kind === 'lora' && triggers ? { comfyPrompt: triggers, comfyMossPhoto: { ...withMossPhotoPrompt(photo, triggers), nodes: { ...photo.nodes, '160': models } } } : {}),
+                        }));
+                    } else {
                     const settings = current.comfyMoss || defaultMossSettings();
                     dispatch(updateOptions({
                         provider: 'comfyui', comfyModelType: 'moss-image',
@@ -343,6 +360,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                         comfyMoss: item.kind === 'lora' ? { ...settings, loras: selectInventoryLora(settings.loras, modelPath) } : { ...settings, unet: modelPath },
                         ...(item.kind === 'lora' && triggers ? { comfyPrompt: triggers } : {}),
                     }));
+                    }
                 } else {
                     const turbo = current.comfyModelType === 'qwen21-turbo';
                     const field = turbo ? 'comfyQwen21Turbo' : 'comfyQwen21T2i';

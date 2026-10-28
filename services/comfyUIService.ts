@@ -34,6 +34,7 @@ import { buildFlux2EditWorkflow, buildMaskedFlux2EditWorkflow, type Flux2EditRef
 import { buildSceneMaskWorkflow, sceneSegmentationErrors, type SceneSegmentationTarget } from './sceneMaskWorkflow';
 import { buildQwen21Workflow, defaultQwen21Settings, setQwen21WorkflowSeed, validateQwen21Readiness } from './qwen21Workflow';
 import { buildMossWorkflow, defaultMossSettings, mossPreviewBlob, validateMossReadiness } from './mossWorkflow';
+import { buildMossPhotoWorkflow, defaultMossPhotoSettings, mossPhotoPrompt, setMossPhotoSeed, validateMossPhotoReadiness } from './mossPhotoWorkflow';
 import { buildKrea2EditWorkflow, defaultKrea2EditSettings, validateKrea2EditReadiness } from './krea2EditWorkflow';
 import { getImageDimensionsFromFile } from '../utils/imageUtils';
 import { buildQwen21OutpaintWorkflow, qwen21OutpaintPrompt, validateQwen21OutpaintReadiness, type Qwen21OutpaintOptions } from './qwen21Workflow';
@@ -1197,6 +1198,7 @@ const executeWorkflow = async (
                     try {
                         const history = await fetchHistoryWithRetries(retries, delay);
                         const outputs = history.outputs;
+                        if (onNodeOutput) for (const [nodeId, output] of Object.entries(outputs)) onNodeOutput(nodeId, output);
                         const imageOutputs = [];
                         let videoUrl = null;
                         let audioUrl = null;
@@ -1599,6 +1601,9 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             uploaded.push(result.subfolder ? `${result.subfolder}/${result.name}` : result.name);
         }
         return buildKrea2EditWorkflow(settings, seed, uploaded[0], uploaded[1], info);
+    }
+    if (options.comfyModelType === 'moss-photo') {
+        return buildMossPhotoWorkflow(options.comfyMossPhoto || defaultMossPhotoSettings(), options.comfyPrompt || '', options.comfySeed ?? Math.floor(Math.random() * 1e15));
     }
     if (options.comfyModelType === 'moss-image') {
         const settings = options.comfyMoss || defaultMossSettings();
@@ -2602,10 +2607,12 @@ export const generateComfyUIPortraits = async (
     const allImages: { src: string, seed: number }[] = [];
     const baseWorkflow = await buildWorkflow(options, sourceImage, referenceImages);
     const isQwen21 = options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo';
-    const isMoss = options.comfyModelType === 'moss-image';
+    const isMossPhoto = options.comfyModelType === 'moss-photo';
+    const isMoss = options.comfyModelType === 'moss-image' || isMossPhoto;
     const isKreaEdit = options.comfyModelType === 'krea2-edit';
-    if (isMoss) validateMossReadiness(baseWorkflow, await getComfyUIObjectInfo());
-    const batchSize = isMoss ? (options.comfyMoss || defaultMossSettings()).batchSize : isKreaEdit ? (options.comfyKrea2Edit || defaultKrea2EditSettings()).batchSize : 1;
+    if (isMossPhoto) validateMossPhotoReadiness(baseWorkflow, await getComfyUIObjectInfo());
+    else if (isMoss) validateMossReadiness(baseWorkflow, await getComfyUIObjectInfo());
+    const batchSize = isMossPhoto ? (options.comfyMossPhoto || defaultMossPhotoSettings()).batchSize : isMoss ? (options.comfyMoss || defaultMossSettings()).batchSize : isKreaEdit ? (options.comfyKrea2Edit || defaultKrea2EditSettings()).batchSize : 1;
     if (isQwen21) {
         validateQwen21Readiness(baseWorkflow, await getComfyUIObjectInfo());
     }
@@ -2614,6 +2621,7 @@ export const generateComfyUIPortraits = async (
     const numImages = options.comfyModelType === 'face-detailer-sd1.5' ? 1 : options.numImages;
 
     let currentSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+    let photoFinalPrompt = isMossPhoto ? mossPhotoPrompt(options.comfyMossPhoto || defaultMossPhotoSettings(), options.comfyPrompt || '') : '';
 
     for (let i = 0; i < numImages; i++) {
         const currentWorkflow = JSON.parse(JSON.stringify(baseWorkflow));
@@ -2622,8 +2630,9 @@ export const generateComfyUIPortraits = async (
         const seedForThisImage = currentSeed;
 
         const samplerKey = Object.keys(currentWorkflow).find(k => currentWorkflow[k].class_type === 'KSampler' || (isMoss && currentWorkflow[k].class_type === 'KSampler (Efficient)'));
-        if (isQwen21) {
-            setQwen21WorkflowSeed(currentWorkflow, seedForThisImage);
+        if (isQwen21 || isMossPhoto) {
+            if (isMossPhoto) setMossPhotoSeed(currentWorkflow, seedForThisImage);
+            else setQwen21WorkflowSeed(currentWorkflow, seedForThisImage);
             const increment = options.comfySeedIncrement || 1;
             if (options.comfySeedControl === 'increment') currentSeed += increment;
             else if (options.comfySeedControl === 'decrement') currentSeed = Math.max(0, currentSeed - increment);
@@ -2679,7 +2688,10 @@ export const generateComfyUIPortraits = async (
                 if (!Number.isSafeInteger(seedForThisImage) || seedForThisImage < 0) throw new Error(`${isKreaEdit ? 'KREA2 edit' : 'MOSS'} seed is outside the safe integer range.`);
             }
             for (let batchIndex = 0; batchIndex < batchSize; batchIndex++) updateOutputProgress(i * batchSize + batchIndex, `Starting image ${i + 1}...`, 0.02);
-            const result = await executeWorkflow(currentWorkflow, progressWrapper, isLongJob, batchSize, isKreaEdit ? ['29'] : isMoss ? ['10'] : isQwen21 ? ['11'] : undefined, undefined, isMoss ? onPreview : undefined);
+            const result = await executeWorkflow(currentWorkflow, progressWrapper, isLongJob, batchSize, isKreaEdit ? ['29'] : isMoss ? ['10'] : isQwen21 ? ['11'] : undefined,
+                isMossPhoto ? (nodeId, output) => {
+                    if (nodeId === '300:51' && Array.isArray(output?.text) && output.text.every((text: unknown) => typeof text === 'string')) photoFinalPrompt = output.text.join('\n');
+                } : undefined, isMoss ? onPreview : undefined);
             if (isKreaEdit && result.images.length !== batchSize) throw new Error(`KREA2 edit returned ${result.images.length}/${batchSize} saved images.`);
             if (isMoss && result.images.length !== batchSize) throw new Error(`MOSS returned ${result.images.length}/${batchSize} saved images.`);
             result.images.forEach(img => {
@@ -2698,7 +2710,7 @@ export const generateComfyUIPortraits = async (
     // RE-WRITING THE FUNCTION CONTENT FOR REPLACEMENT
     // I will capture the seed used before modifying it for the next iteration.
 
-    const finalPrompt = isKreaEdit ? options.comfyKrea2Edit?.prompt
+    const finalPrompt = isMossPhoto ? photoFinalPrompt : isKreaEdit ? options.comfyKrea2Edit?.prompt
         : isQwen21
         ? (options.comfyModelType === 'qwen21-turbo' ? options.comfyQwen21Turbo?.prompt : options.comfyQwen21T2i?.prompt)
         : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw'
