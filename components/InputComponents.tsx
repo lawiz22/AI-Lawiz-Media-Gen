@@ -7,7 +7,8 @@ export const PresetTextInput: React.FC<{
     options: readonly string[];
     onChange: (value: string) => void;
     disabled?: boolean;
-}> = ({ label, ariaLabel, value, options, onChange, disabled }) => {
+    emptyLabel?: string;
+}> = ({ label, ariaLabel, value, options, onChange, disabled, emptyLabel = 'Default (nothing)' }) => {
     const id = useId();
     const [customValue, setCustomValue] = useState<string | undefined>();
     const isCustom = customValue === value || (value !== '' && !options.includes(value));
@@ -28,7 +29,7 @@ export const PresetTextInput: React.FC<{
             disabled={disabled}
             className="mt-1.5 block w-full min-w-0 rounded-md border border-border-primary bg-bg-tertiary p-3 text-sm text-text-primary focus:border-accent focus:ring-accent disabled:opacity-50"
         >
-            <option value="">Default (nothing)</option>
+            <option value="">{emptyLabel}</option>
             {options.map(option => <option key={option} value={option}>{option}</option>)}
             <option value="__custom__">Custom...</option>
         </select>
@@ -91,12 +92,12 @@ export const EditableNumberInput: React.FC<{
     />;
 };
 
-export const SelectInput: React.FC<{ label: string, value: string, onChange: (e: ChangeEvent<HTMLSelectElement>) => void, options: { value: string, label: string }[], disabled?: boolean, className?: string, selectClassName?: string }> =
+export const SelectInput: React.FC<{ label: string, value: string, onChange: (e: ChangeEvent<HTMLSelectElement>) => void, options: { value: string, label: string, disabled?: boolean }[], disabled?: boolean, className?: string, selectClassName?: string }> =
     ({ label, value, onChange, options, disabled, className, selectClassName }) => (
         <div className={className}>
             <label className="block text-sm font-medium text-text-secondary">{label}</label>
-            <select value={value} onChange={onChange} disabled={disabled} className={`mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent ${selectClassName || ''}`}>
-                {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            <select aria-label={label} value={value} onChange={onChange} disabled={disabled} className={`mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent ${selectClassName || ''}`}>
+                {options.map(opt => <option key={opt.value} value={opt.value} disabled={opt.disabled}>{opt.label}</option>)}
             </select>
         </div>
     );

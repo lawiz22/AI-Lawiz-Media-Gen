@@ -16,7 +16,7 @@ export const H3AudioReference: React.FC<{
     reference: VideoReference;
     videoDuration: number;
     onApply: (file: File, selection: AudioSelection) => void;
-    target?: 'H3' | 'prompt';
+    target?: 'H3' | 'prompt' | 'Audio-Sync';
     onPendingChange?: (pending: boolean) => void;
 }> = ({ reference, videoDuration, onApply, target = 'H3', onPendingChange }) => {
     const url = useMediaURL(reference.original);
@@ -93,7 +93,7 @@ export const H3AudioReference: React.FC<{
         if (!decoded) return;
         setError('');
         try {
-            if (next.end - next.start > (target === 'H3' ? 60 : 120)) throw new Error(`${target === 'H3' ? 'H3 supports at most 60' : 'Prompt generation supports at most 120'} seconds per passage. Select a shorter excerpt.`);
+            if (target !== 'Audio-Sync' && next.end - next.start > (target === 'H3' ? 60 : 120)) throw new Error(`${target === 'H3' ? 'H3 supports at most 60' : 'Prompt generation supports at most 120'} seconds per passage. Select a shorter excerpt.`);
             if (target === 'prompt' && next.end - next.start < 1) throw new Error('Prompt generation requires at least one second per passage.');
             const file = new File([encodeAudioWav(decoded, next)], `${reference.original.name.replace(/\.[^.]+$/, '')}-${time(next.start)}-${time(next.end)}.wav`, { type: 'audio/wav' });
             stop(); onApply(file, next); setSelection(next);
@@ -184,9 +184,13 @@ export const H3AudioReference: React.FC<{
             </svg>
             <div className="flex justify-between border-t border-border-primary px-2 py-1.5 font-mono text-[10px] text-text-muted">{[0, 0.25, 0.5, 0.75, 1].map(tick => <span key={tick}>{clock(duration * tick)}</span>)}</div>
         </div>}
-        <div className="mt-3 flex items-center gap-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" className={button} aria-label={`Back 5 seconds ${label}`} disabled={!mediaDuration}
+                onClick={() => seek(Math.max(0, (audioRef.current?.currentTime || 0) - 5))}>-5 s</button>
             <input aria-label={`Seek original ${label}`} type="range" min={0} max={total} step="0.01" value={Math.min(position, total)} disabled={!mediaDuration}
                 onChange={event => seek(Number(event.target.value))} className="h-1.5 min-w-0 flex-1 cursor-pointer accent-violet-400" />
+            <button type="button" className={button} aria-label={`Forward 5 seconds ${label}`} disabled={!mediaDuration}
+                onClick={() => seek(Math.min(total, (audioRef.current?.currentTime || 0) + 5))}>+5 s</button>
             <div className="flex shrink-0 items-center gap-2 text-text-muted"><VolumeIcon className="h-4 w-4" />
                 <input aria-label={`Volume original ${label}`} type="range" min={0} max={1} step="0.05" value={volume} onChange={event => {
                     const value = Number(event.target.value); setVolume(value); if (audioRef.current) audioRef.current.volume = value;

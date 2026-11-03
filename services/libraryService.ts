@@ -134,8 +134,8 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>, blobs?: Parti
             const { index, fileId: indexFileId } = await driveService.getLibraryIndex();
 
             if (newItem.mediaType === 'prompt' || newItem.mediaType === 'color-palette' || newItem.mediaType === 'preset') {
-                const driveAssetFileIds = newItem.videoPromptOptions ? await uploadLibraryAssetsToDrive(newItem) : newItem.driveAssetFileIds;
-                if (newItem.videoPromptOptions) {
+                const driveAssetFileIds = newItem.videoPromptOptions || newItem.ltxAudioSyncOptions || newItem.ltxRippleOptions || newItem.creationSuiteOptions || newItem.clothesSwitcherOptions || newItem.blazingFastOptions ? await uploadLibraryAssetsToDrive(newItem) : newItem.driveAssetFileIds;
+                if (newItem.videoPromptOptions || newItem.ltxAudioSyncOptions || newItem.ltxRippleOptions || newItem.creationSuiteOptions || newItem.clothesSwitcherOptions || newItem.blazingFastOptions) {
                     await idbService.updateLibraryItem(newItem.id, { driveAssetFileIds });
                     newItem.driveAssetFileIds = driveAssetFileIds;
                 }
@@ -935,7 +935,7 @@ export const syncLibraryFromDrive = async (onProgress: (message: string) => void
         const itemMetadata = missingItems[i];
         onProgress(`Processing "${itemMetadata.name || itemMetadata.mediaType}" (${i + 1}/${missingItems.length})...`);
         try {
-            if (itemMetadata.videoPromptOptions && itemMetadata.driveAssetFileIds) {
+            if ((itemMetadata.videoPromptOptions || itemMetadata.ltxAudioSyncOptions || itemMetadata.ltxRippleOptions || itemMetadata.creationSuiteOptions || itemMetadata.clothesSwitcherOptions || itemMetadata.blazingFastOptions) && itemMetadata.driveAssetFileIds) {
                 const blobs: Partial<Record<LibraryAssetRole, Blob>> = {};
                 for (const [role, fileId] of Object.entries(itemMetadata.driveAssetFileIds) as [LibraryAssetRole, string][]) {
                     signal?.throwIfAborted();

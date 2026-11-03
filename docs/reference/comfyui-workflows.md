@@ -10,12 +10,17 @@ This reference preserves the model-family notes formerly grouped under Qwen requ
 - [KREA2 RAW](#krea2-raw)
 - [MOSS Image 1.0](#moss-image-10)
 - [MOSS PHOTO](#moss-photo)
+- [Creation suite](#creation-suite)
+- [Clothes Switcher](#clothes-switcher)
 - [KREA2 Identity and General Edit V2](#krea2-identity-and-general-edit-v2)
 - [FLUX2](#flux2)
+- [Blazing Fast character](#blazing-fast-character)
 - [Photo Fusion FLUX2](#photo-fusion-flux2)
 - [Photo Fusion Qwen Edit](#photo-fusion-qwen-edit)
 - [Legacy Flux and Qwen](#legacy-flux-and-qwen)
 - [LTX Director](#ltx-director)
+- [LTX 2.5 Audio-Sync](#ltx-25-audio-sync)
+- [LTX-Ripple-FFAF](#ltx-ripple-ffaf)
 - [Related guides](#related-guides)
 
 ## KREA2 Simple
@@ -29,6 +34,21 @@ KREA2 RAW uses the supplied two-stage `ClownsharKSampler_Beta` graph with fixed 
 ## FLUX2
 
 FLUX2 Simple supports GGUF and Safetensors diffusion models using `UnetLoaderGGUF` or `UNETLoader` automatically. It also uses `Power Lora Loader (rgthree)`, `Flux2Scheduler`, and `EmptyFlux2LatentImage` with a FLUX2 CLIP encoder, FLUX2 VAE, and compatible LoRAs installed in their corresponding ComfyUI model folders. FLUX2 Edit and FLUX2 Photo Fusion additionally use `LoadImage`, `ImageScaleToTotalPixels`, `GetImageSize`, `VAEEncode`, and `ReferenceLatent` to encode the source and each independent reference. Character FLUX2 supports the same GGUF/Safetensors selection with `ReferenceLatent` and two optional LoRAs. Pose references require `AIO_Preprocessor` from ComfyUI ControlNet Aux, while optional acceleration requires `CacheDiT_Model_Optimizer` from ComfyUI-CacheDiT.
+
+## Blazing Fast character
+
+Style scheduler overrides are optional for FLUX2 Simple/Edit and Blazing Fast. Empty or `flux2` retains native automatic `Flux2Scheduler`; another explicit style scheduler, with style sampling overrides enabled, requires native `BasicScheduler` and uses full denoise with the same sampling model. Blazing validates the requested node and scheduler choice before upload.
+
+**Character > FLUX2 > Blazing Fast character** uses the supplied v1.1 API graph, separate from Character Angles. Choose 1–6 poses; the active samplers share the model, noise seed, FLUX2 encoder, VAE and LoRA stack. For 1–5 poses, dependency pruning removes unused samplers and the collage/comparison/final-caption branches. Six poses retain the complete pipeline. The sampler dropdown lists all installed `KSamplerSelect` choices. Completed files from cancelled/failed jobs remain individually downloadable and saveable with their available caption metadata. Defaults are:
+
+- `flux2\flux2Klein9BInt8_v10.safetensors`
+- `qwen38BFluxKlein9BTE_38b.safetensors` (CLIP type `flux2`)
+- `flux2-vae.safetensors`
+- `qwen3VLInstruct4bHeretic_v10.safetensors` (vision CLIP type `ltxv`)
+
+Update ComfyUI for `TextGenerate`, `PreviewAny`, FLUX2 scheduling/latents, `ReferenceLatent`, primitives/string concatenation and standard image/model/sampling nodes. The supplied graph uses image passthrough outputs from `SaveImage` and text passthrough from `PreviewAny`; older versions without these outputs are not compatible. Install/update **rgthree-comfy** (`Power Lora Loader (rgthree)`), **ComfyUI-KJNodes** (`ImageConcatMulti`) and **ComfyUI-Easy-Use** (`easy cleanGpuUsed`). The source CustomCombo style/background menus become native editable strings. Both vision analysis and final caption generation are mandatory.
+
+**Check workflow** and generation validate active filenames, LoRA paths, sampler choices and numeric limits against the installed schemas before uploading. Cancellation requires ComfyUI's targeted `/api/jobs/{prompt_id}/cancel` endpoint; if unavailable, the application reports that cancellation was not confirmed instead of interrupting another user's job. Gallery LoRAs are optional and never downloaded by the application. A LoRA must be compatible with the selected Klein model; filename availability alone does not certify compatibility.
 
 ## KREA2 Identity and General Edit V2
 
@@ -95,6 +115,73 @@ The standard Flux workflow automatically enables `Flux\flux-turbo.safetensors` a
 ## LTX Director
 
 LTX Director requires the latest WhatDreamsCost LTX Director, ComfyUI-LTXVideo, and ComfyUI-KJNodes packages. GGUF models and text encoders additionally require ComfyUI-GGUF. CacheDiT acceleration requires [ComfyUI-CacheDiT](https://github.com/Jasonzzt/ComfyUI-CacheDiT), which exposes `CacheDiT_LTX2_Optimizer`; restart ComfyUI after installing or updating it so the node appears in `/object_info`.
+
+## LTX-Ripple-FFAF
+
+**Video > LTX-Ripple-FFAF** uses the imported [Ripple API graph](../../assets/ltxRippleFFAFWorkflow.json). It requires a recent ComfyUI with LTX 2.5, `SeedNode`, `BatchImagesNode`, `TextOverlay`, `ResolutionSelector`, `ComfyNumberConvert`, `ComfyMathExpression` and the native sampling/AV nodes. By default, the active graph adds an actual-loaded-frame-count clamp and a source slice so it cannot extend a short video; explicit **Allow extra frames** restores the original requested-length behavior.
+
+Additional packs used by the supplied graph:
+- **ComfyUI-LTXVideo**: `LTXAddVideoICLoRAGuide`.
+- **RES4LYF**: `Frames Slice`.
+- **ComfyUI-KJNodes**: `INTConstant`, `ImageResizeKJv2`, `VAELoaderKJ`, `ImageConcatMulti`, `PathchSageAttentionKJ` (spelling as exported), `LTX2MemoryEfficientSageAttentionPatch`.
+- **ComfyUI-VideoHelperSuite**: `VHS_LoadVideo`, `VHS_VideoCombine`.
+- **ComfyUI-CacheDiT**: `CacheDiT_LTX2_Optimizer`.
+
+Default weights:
+- Diffusion: `ltx-2.5-22b-distilled-transformer-nvfp4.safetensors`.
+- Encoder: `gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors`.
+- VAEs: `ltx-2.5-video-vae-bf16.safetensors`, `ltx-2.5-audio-vae-bf16.safetensors`.
+- LoRA: `LTX2_camera_control\LTX25_Ripple_v11.safetensors`.
+
+NVFP4, Sage attention and Triton still require compatible hardware/runtime support; installed schemas and weights do not prove a render can execute. No pack or model is automatically installed or downloaded. See [controls and persistence](../features/ltx-and-audio.md#ltx-ripple-ffaf).
+
+## LTX 2.5 Audio-Sync
+
+Select **Video > LTX 2.5 Audio-Sync**. This separate ImageAudioToVideo v10 graph needs a recent ComfyUI with LTX 2.5 and native text generation support; it does not require the Director, KJ preview or H3 nodes.
+
+Default weights:
+
+- Diffusion: `ltx-2.5-22b-distilled-transformer-nvfp4.safetensors`.
+- Video text encoder: `gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors`, CLIP type `ltxv`.
+- Video VAE: `ltx-2.5-video-vae-bf16.safetensors`.
+- Audio VAE: `ltx-2.5-audio-vae-bf16.safetensors`.
+- Latent upscaler: `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors`.
+- Optional Qwen writer, enabled by default: `Huihui-Qwen3-VL-4B-Instruct-abliterated-fp8_scaled.safetensors`, CLIP type `ltxv`.
+
+Core/comfy_extras nodes: `LoadImage`, `LoadAudio`, `ResolutionSelector`, `UNETLoader`, `CLIPLoader`, `VAELoader`, `CLIPTextEncode`, `PrimitiveStringMultiline`, `PrimitiveInt`, `PrimitiveFloat`, `ComfyNumberConvert`, `ComfyMathExpression`, `PreviewAny`, `KSamplerSelect`, `RandomNoise`, `ManualSigmas`, `LTXVConditioning`, `LTXVDualCFGGuider`, `SamplerCustomAdvanced`, `ResizeImageMaskNode`, `LTXVPreprocess`, `EmptyLTXVLatentVideo`, `LTXVImgToVideoInplace`, `LTXVConcatAVLatent`, `LTXVSeparateAVLatent`, `LatentUpscaleModelLoader`, `LTXVLatentUpsampler`, `LTXVAudioVAEEncode`, `LTXVAudioVAEDecode`, `SolidMask`, `SetLatentNoiseMask`, `TrimAudioDuration`, `VAEDecodeTiled`, `CreateVideo`, `SaveVideo`. `TextGenerateLTX2Prompt` and its separate writer model are required only while enhancement is enabled.
+
+GGUF diffusion/video encoders additionally require ComfyUI-GGUF's `UnetLoaderGGUF` / `CLIPLoaderGGUF`. Their menus include all installed choices, but not every listed file is an LTX 2.5 model.
+
+Up to four optional camera/style LoRAs use native `LoraLoaderModelOnly`, chained after the diffusion loader and before both `LTXVDualCFGGuider` nodes. No CLIP LoRA is applied. The loader and selected installed weights are required only for enabled slots; with none enabled, the original source graph is retained. LoRAs must match LTX 2.5 and the selected model/quantization. Models needing additional control-conditioning nodes are not made compatible merely by selecting their LoRA.
+
+NVFP4 requires compatible GPU, quantization kernels and runtime support. Inventory presence does not prove that these weights can execute on a particular GPU or fit its VRAM. Check compatibility before rendering or select a suitable installed alternative. No model/custom-node downloads are performed by this integration.
+
+See [Audio-Sync controls, transfer and persistence](../features/ltx-and-audio.md#ltx-25-audio-sync).
+
+## Creation suite
+
+Select **Scene Variation > Creation suite**. See [controls and exact defaults](../features/scene-variation.md#creation-suite). The checked-in API template preserves the supplied nodes and scalar values; only personal input filenames are cleared. All eight workflow notes are retained separately.
+
+- **Scene Creation:** `UNETLoader`, `CLIPLoader` with `moss_image`, `VAELoader`, `TextEncodeMOSSImageVision`, `EmptyFlux2LatentImage`, `ResolutionSelector`, `PrimitiveString`, `PrimitiveStringMultiline`, `StringConcatenate`, `PreviewAny`, `KSampler`, `VAEDecode`, `SaveImage`; `LoadImage` when reference conditioning is on and `StringReplace` for Cheap phone.
+- **Swap:** `UNETLoader`, `CLIPLoader` with `qwen_image`, `VAELoader`, `TextEncodeQwenImage21` accepting `images.image_1` / `images.image_2`, `LoadImage`, `KSampler`, `VAEDecode`, `SaveImage`, `ImageCompare`; `ResolutionSelector` / `EmptyLatentImage` when selected output sizing is on.
+- **Default-on, individually bypassable patches:** `SpectrumMOSSImageManual`, `SkipLayerGuidanceDiTSimple`, `ModelPreviewOverrideKJ`, `PathchSageAttentionKJ` (exact node spelling), `LoraLoaderModelOnly` (two source LoRAs), `RescaleCFG`, `QwenImage21Cache`. MOSS preview uses `TAE_Flux2_AcademiaSD.safetensors`; Qwen preview uses `none`.
+- Default weights: `dirtyMoss_bf16.safetensors`, `qwen3.5_9b_int8_convrot.safetensors`, `flux2-vae.safetensors`, `qwen_image_2.1_int8_convrot.safetensors`, `qwen3vl_8b_int8_convrot.safetensors`, `qwen_image_2.1_vae_bf16.safetensors`, and LoRAs `qwen21\bfs_head_v1.1_qwen_2.1.safetensors` / `qwen21\p_qwen_image_2.1_8step_v0.1.safetensors`.
+
+The source switches are resolved before submission; inactive branches, loaders and bypassed patches are pruned. Both pipelines enabled connects MOSS `VAEDecode` directly to Qwen image 1 and the comparison base, retaining both `SaveImage` outputs. The independent base image is then omitted. `ImageCompare` retains the source `SaveImage` image passthrough; the live schema must support that output. Missing active dependencies stop execution before uploads; inactive branches do not require their models. No automatic downloads or cloud prompt rewriting occur.
+
+## Clothes Switcher
+
+Select **Scene Variation > Clothes Switcher**. See [controls and exact defaults](../features/scene-variation.md#clothes-switcher). The updated default graph has 29 nodes, including CacheDiT, the three source LoRAs, three reference latents on each conditioning branch, both preprocessing outputs and rgthree comparison. A fourth LoRA is optional; all four slots can be enabled independently.
+
+- Core: `UNETLoader`, `CLIPLoader` (`flux2`), `CLIPTextEncode`, `VAELoader`, `LoadImage`, `ReferenceLatent`, `VAEEncode`, `LoraLoaderModelOnly`, `KSampler`, `VAEDecode`, `PreviewImage`, `SaveImage`.
+- Resize: `ImageResize+` (ComfyUI Essentials).
+- Depth: `DownloadAndLoadDepthAnythingV2Model` and `DepthAnything_V2` (ComfyUI-DepthAnythingV2); default `depth_anything_v2_vits_fp16.safetensors` / auto precision.
+- Edges: native `Canny` at 0.2 / 0.7.
+- Comparison: `Image Comparer (rgthree)` (rgthree-comfy), retaining result as A and original source as B. The app also exposes a before/after wipe.
+- Acceleration: `CacheDiT_Model_Optimizer` (ComfyUI-CacheDiT), after all enabled LoRAs and before KSampler. Source defaults: enable true, model type Flux, warmup 0, skip interval 0, print summary true. Disabling CacheDiT removes this dependency; disabling all LoRAs removes their loader dependency.
+- Exact weights: `flux2\flux2Klein9BInt8_v10.safetensors`, `qwen38BFluxKlein9BTE_38b.safetensors`, `flux2-vae.safetensors`; LoRAs `FLUX2\00-REMC-Flux20-20v2.safetensors`, `FLUX2\flux2_kathl_9b.safetensors`, `FLUX2\klein_snofs_v1_2.safetensors`.
+
+All dependencies are validated before input upload. No extensions are installed by the app. The original Depth Anything loader can download its selected checkpoint during execution; install/cache it in advance for offline use. Model presence does not certify VRAM compatibility or render quality.
 
 ## Related guides
 

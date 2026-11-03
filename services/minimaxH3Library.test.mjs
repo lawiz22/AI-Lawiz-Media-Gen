@@ -51,6 +51,28 @@ const mockFetch = (t, handler) => {
     t.after(() => { globalThis.fetch = previous; api.setThumbnailFailure(false); });
 };
 
+test('Audio-Sync presets round-trip their own audio role and metadata without video-prompt metadata or ComfyUI', async () => {
+    const metadata = { id: 456789, mediaType: 'preset', name: 'Audio-Sync', media: '{}', thumbnail: 'thumb',
+        ltxAudioSyncOptions: { version: 1, prompt: 'A singer.', settings: { enhancePrompt: false,
+            loras: [{ enabled: true, name: 'camera.safetensors', strength: 0.7 }, { enabled: false, name: 'style.safetensors', strength: 0.9 }] },
+            audio: { name: 'voice.wav', type: 'audio/wav', lastModified: 123 },
+            audioOriginal: { name: 'original.wav', type: 'audio/wav', lastModified: 456 },
+            audioSelection: { start: 5, end: 10 }, lyrics: { enabled: false, text: 'Previous words', source: 'previous' } } };
+    const audio = new Blob(['source audio'], { type: 'audio/wav' });
+    const original = new Blob(['full original'], { type: 'audio/wav' });
+    const stored = await api.saveLibraryItemWithBlobs(metadata, { ltxAudioSyncAudio: audio, ltxAudioSyncOriginalAudio: original });
+    assert.equal(stored.videoPromptOptions, undefined);
+    assert.equal(stored.ltxAudioSyncAudio, '');
+    assert.equal(stored.assetRefs.ltxAudioSyncAudio.mimeType, 'audio/wav');
+    assert.equal(await (await api.getLibraryAssetBlob(stored.assetRefs.ltxAudioSyncAudio)).text(), 'source audio');
+    assert.equal(await (await api.getLibraryAssetBlob(stored.assetRefs.ltxAudioSyncOriginalAudio)).text(), 'full original');
+    const hydrated = await api.hydrateLibraryItem(stored);
+    assert.ok(hydrated.ltxAudioSyncAudio.startsWith('blob:'));
+    assert.equal(await (await nativeFetch(hydrated.ltxAudioSyncAudio)).text(), 'source audio');
+    assert.equal(await (await nativeFetch(hydrated.ltxAudioSyncOriginalAudio)).text(), 'full original');
+    assert.deepEqual(hydrated.ltxAudioSyncOptions, metadata.ltxAudioSyncOptions);
+});
+
 test('Library saves the locally locked MP4 instead of fetching the server soundtrack', async t => {
     mockFetch(t, () => { throw new Error('Must not download uncorrected server media'); });
     const rendered = result();

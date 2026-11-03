@@ -8,6 +8,8 @@ Review a scene, change the whole composition or prepare person-specific edits. C
 
 - [Global and masked variation](#global-and-masked-variation)
 - [Character in a Scene](#character-in-a-scene)
+- [Creation suite](#creation-suite)
+- [Clothes Switcher](#clothes-switcher)
 - [Screenshots](#screenshots)
 - [Related guides](#related-guides)
 
@@ -54,6 +56,78 @@ Review a scene, change the whole composition or prepare person-specific edits. C
 - Nine canvas sizes and portrait/landscape orientation control an independent empty latent; the scene reference retains the native aspect-preserving resize path and the incoming character defaults to 1 MP. Default output is 1152x864 landscape. The native scene/result comparison, PNG download, LTX transfer and workflow JSON export are retained.
 - **Save to Library** stores the generated PNG, both original images as separate assets, analysis, selected target/placement and the successful result's prompt/settings/actual seed. **Restore composition** restores those inputs explicitly without a new analysis. Missing dependencies or enabled LoRA files stop generation before uploading images. No weights or nodes are installed automatically.
 - The supplied graph has no person mask or pixel-exact compositing. Analysis can misidentify people and Qwen can still alter bystanders or background details; verify each generated result. Automated graph and simulated browser checks do not certify GPU image quality or VRAM usage. Workflow regression checks: `node --test services/qwen21Workflow.test.mjs`.
+
+## Creation suite
+
+Open **Scene Variation > Creation suite**. This separate workspace preserves the supplied Create_scene_moss_Swap_Qwen21_Hyperrealism_1.0 workflow, with no automatic cloud analysis.
+
+On desktop, workflow options, models and reference images are on the **left**; prompts, generation, live monitoring and results are on the **right**. On narrow screens the prompts/generation column comes first, with options below. The executed API export is a compact action beside the Results heading, not a result-grid tile.
+
+1. Enable **Scene Creation**, **Swap face-Change expression**, or both. Both start enabled.
+2. Scene Creation accepts your scene prompt, **Modern iPhone** or **Cheap phone**, and an optional scene reference. Cheap phone also exposes the scene word used in its closing block. Expand **Assembled scene prompt** below the prompt to review the complete text; edit the opener/closing blocks under **Phone prompt builder** on the left.
+3. Swap requires a face/head donor (image 2). In swap-only mode, also supply a base photo (image 1). With both pipelines enabled, MOSS's decoded image feeds Qwen directly; the separate swap base is not used or uploaded. Both intermediate scene and final image are saved.
+4. Open the model, resolution, sampling, conditioning, LoRA, acceleration and output accordions as needed. **Use swap Resolution Selector** starts on, as in the actual exports; off uses the base-image latent returned by the Qwen encoder. Optional model patches can be bypassed individually without changing their saved settings.
+5. **Check active workflow** validates installed nodes, exact weights and parameters without uploading or queuing. **Export API workflow** uploads only active inputs and downloads an executable graph without queuing. **Generate Creation suite** runs the enabled pipelines; cancellation targets only its owned job and never sends a global interrupt.
+
+### Exact source defaults
+
+| | Scene Creation | Swap face-Change expression |
+|---|---|---|
+| Model | `dirtyMoss_bf16.safetensors` | `qwen_image_2.1_int8_convrot.safetensors` |
+| Encoder | `qwen3.5_9b_int8_convrot.safetensors` | `qwen3vl_8b_int8_convrot.safetensors` |
+| VAE | `flux2-vae.safetensors` | `qwen_image_2.1_vae_bf16.safetensors` |
+| Sampling | 50 steps, CFG 3, dpmpp_2m_sde / sgm_uniform, denoise 1 | 20 steps, CFG 3, res_multistep / sgm_uniform, denoise 1 |
+| Resolution | 9:16, 1.5 MP, alignment 8 | 3:4, 1.5 MP, alignment 32 |
+| Seed | 500697199210746, randomize on | 43, randomize off |
+
+The source Spectrum MOSS, skip-layer guidance, model-preview patches, Sage attention, Rescale CFG and Qwen cache remain enabled. The two Qwen LoRAs are `qwen21\bfs_head_v1.1_qwen_2.1.safetensors` at **0.9** and `qwen21\p_qwen_image_2.1_8step_v0.1.safetensors` at **1**. The existing head-swap prompt, negative prompt and encoder resolution **0** are preserved, not replaced with the Character in a Scene graph.
+
+### Helpers, persistence and results
+
+- **Show live preview** and **Show sampling charts** can be changed even during generation and persist locally. They only hide/show the app's display; they do not bypass the workflow's preview patches or change sampling.
+- The monitor shows the current node ID/title, sampling step count, and an expandable list of active workflow nodes with pending/running/done/cached states. Failed/cancelled runs are identified explicitly. Progress and preview frames from unrelated jobs are ignored.
+- The enabled `ModelPreviewOverrideKJ` nodes stream preview images plus actual sigma, delta, step duration and average duration. Sigma/delta curves use independent vertical scales; step times are in seconds, with up to 256 recent measurements. Curves reset between MOSS and Qwen sampling. No measurements are invented when telemetry is unavailable: the charts show a waiting message. Native ComfyUI binary images use the same decoder as MOSS Image Generation.
+- **Modern iPhone helper**, **Cheap phone helper**, **Head swap helper**, and **Workflow helpers - original notes** expose all eight original notes, with a copy button. These are informational: the notes' 22-year-old beauty-clause example never overwrites the actual 42-year-old source opener. Notes may describe older size defaults; the actual controls above are authoritative.
+- The head-swap notes explain image order, the `head_swap:` training caption, and expression/pose edits such as `change the facial expression: ...`. Review negative-prompt conflicts; visual identity and expression matching are not guaranteed.
+- Settings and original images persist locally, independently of the other Scene Variation tabs. **Start from scratch** resets only Creation suite after confirmation.
+- **Save setup to Library** stores settings plus original input assets. Each completed image can be downloaded, sent to LTX, or saved to Library with its actual executed settings, seeds, graph and original images. Later edits do not change a saved result's snapshot.
+- Result-image actions appear over the photo's top-right corner on hover or keyboard focus (always visible on touch screens). Open/zoom, download, Save to Library and LTX transfer no longer occupy a separate row below the photo. Click the photo or its zoom button for the full-screen viewer: **Fit** displays the whole photo, **100%** shows original pixels with scrolling, and Escape/Close dismisses it. A successful Library save shows a checkmark; a failed save remains retryable.
+- Reopen a setup or result through **Open in Creation suite** in Library details (or the card's **Load in Generator** action). Only Creation suite is replaced, after confirmation; missing stored inputs stop restoration without partially replacing the current draft. Drive preset synchronization includes the original binary images.
+- API export and model selection do not install dependencies. See [Creation suite dependencies](../reference/comfyui-workflows.md#creation-suite). Automated and browser checks do not certify GPU image quality or VRAM usage.
+- Focused regressions: `node --test services/creationSuiteWorkflow.test.mjs services/creationSuiteService.test.mjs components/CreationSuitePanel.test.mjs components/CreationSuiteResult.test.mjs services/videoPromptDrive.test.mjs`.
+
+## Clothes Switcher
+
+Open **Scene Variation > Clothes Switcher**. This independent tab preserves the supplied `00-Flux Klein 9b -- Clothes` API graph plus the CacheDiT node from the updated normal export: 29 executable nodes by default, including both `PreviewImage` nodes and the rgthree comparer. Only the personal source filename and stale comparer thumbnail URLs are cleared. The normal workflow supplies the default **Randomize seed** policy.
+
+1. Select the **Original photo** locally or from Library. No cloud analysis or prompt enhancement runs on import.
+2. Enter the desired clothing change on the right. Positive and negative prompts start empty, exactly as supplied, and are sent verbatim.
+3. Use the collapsed left-hand accordions for **Models and encoders**, **LoRAs - up to four**, **CacheDiT acceleration**, **Sampling and seed**, **Resize, Depth Anything V2 and Canny**, and **Negative prompt and output**. Each LoRA has its own enable switch, model and strength. Disabled slots retain their selections but are removed from the submitted graph. CacheDiT can also be disabled without requiring its extension.
+4. **Check workflow** validates installed nodes, exact model/LoRA choices and numeric limits without uploading or queuing. **Export API workflow** uploads a uniquely named input and downloads the executable API without generating.
+5. **Generate Clothes Switcher** submits one native graph. Both preprocessing images appear as their output nodes execute: **Depth Anything V2 - depth map** (150) and **Canny - edge map** (163). The second preview is Canny, not a second depth estimator. Cached previews are recovered from completed history. Native sampling previews appear if enabled by ComfyUI.
+6. The result retains top-right hover actions for Fit/100% inspection, download, Save to Library and LTX transfer; controls stay visible on touch. The final **Compare original / result** slider compares against the original input captured for that render, not a subsequently selected photo. Aspect ratios are retained rather than stretching/cropping the original.
+
+### Exact source defaults
+
+- Diffusion: `flux2\flux2Klein9BInt8_v10.safetensors`, default dtype.
+- Encoder: `qwen38BFluxKlein9BTE_38b.safetensors`, type `flux2`, default device; VAE `flux2-vae.safetensors`.
+- LoRAs, in order: `FLUX2\00-REMC-Flux20-20v2.safetensors` at **1**, `FLUX2\flux2_kathl_9b.safetensors` at **0.9**, `FLUX2\klein_snofs_v1_2.safetensors` at **0.8**. These three start enabled. The fourth slot starts disabled with no model and strength **1**. Enabled slots execute in slot order.
+- CacheDiT follows the complete active LoRA chain, immediately before KSampler: **enabled**, model preset **Flux**, warmup **0**, skip interval **0**, performance summary **on**, exactly as in the updated workflow. Zero warmup/skip uses the extension's preset defaults.
+- Sampler: **8 steps / CFG 1 / Euler / simple / denoise 1**. Initial seed **123247689436968**, randomize on. Disable randomization to reuse the displayed seed; successful renders record their actual seed.
+- Resize: **1024 x 1024**, Lanczos, **keep proportion**, always, multiple **0**. This is a bounding resize, not a forced square output.
+- Depth: `depth_anything_v2_vits_fp16.safetensors`, precision `auto`; Canny thresholds **0.2 / 0.7**.
+- Original, depth and edge images are VAE-encoded as three ordered `ReferenceLatent` inputs on **both** conditioning branches. The resized original latent also initializes KSampler.
+- Save prefix: `Flux2-Klein-4b-base`, retained verbatim despite the selected model being 9B.
+
+Settings and the original File persist in a separate local draft. **Start from scratch** resets only this tab after confirmation. **Save setup to Library** stores the complete setup and optional original image; saving a result stores its original photo, exact settings, executed API and prompt ID alongside the rendered image. Library **Open in Clothes Switcher** returns to this tab, and Drive setup synchronization preserves its source binary.
+
+The header also has the same **Load Preset / save icon / confirmed delete** controls and named **Save Preset** modal as Image Generator. These presets save parameters only, including the negative prompt, CacheDiT settings and all four LoRA selections/switches; they exclude the source photo and positive clothing prompt. Loading one, including through Library, keeps the current photo and positive prompt. Full **Save setup to Library** remains separate and restores both. Named presets appear in **Library > Presets** with prefix `CLOTHES-SWITCHER_FLUX2_Param_` and sync through Drive.
+
+Existing drafts and full Library setups migrate to the new settings format without losing their prior models, prompts, seeds, strengths or original photo. They receive the updated workflow's enabled CacheDiT defaults and an empty, disabled fourth slot. Malformed modern drafts are reported rather than silently reset.
+
+Cancellation targets only this job ID and never sends a global interrupt. Missing dependencies stop preparation before upload. The app does not install extensions or replace models; the supplied **DownloadAndLoadDepthAnythingV2Model** node may download its selected checkpoint when executed if it is not already cached. See [dependencies](../reference/comfyui-workflows.md#clothes-switcher). Automated/browser checks do not certify GPU render quality or identity/outfit preservation.
+
+Focused regressions: `node --test services/clothesSwitcherWorkflow.test.mjs services/clothesSwitcherService.test.mjs components/ClothesSwitcherPanel.test.mjs services/videoPromptDrive.test.mjs`.
 
 ## Screenshots
 

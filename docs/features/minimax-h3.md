@@ -12,6 +12,7 @@ Pasted zero-based subject labels such as `<Subject 0>` are also safe to display.
 ## On this page
 
 - [Workflow settings and six LoRAs](#workflow-settings-and-six-loras)
+- [Shared H3 styles](#shared-h3-styles)
 - [Ultrafast](#ultrafast)
 - [MiniMax Advanced](#minimax-advanced)
 - [Reference limits and token mapping](#reference-limits-and-token-mapping)
@@ -30,6 +31,24 @@ Pasted zero-based subject labels such as `<Subject 0>` are also safe to display.
 ## Workflow settings and six LoRAs
 
 - **H3 REF2V** retains the supplied model/CLIP/dual-VAE choices, resolution selector, duration/frame expression, `seeds_2` sampler, Beta scheduler, intermediate sigma extension, ReferencePack and VHS output controls. Six independently enabled LoRA slots preserve the source strengths; all start disabled. Optional patched-CLIP conditioning is off, matching the source graph. Refresh loads installed model/LoRA lists and format-specific encoder widgets; **Check workflow** validates active nodes/models/options without uploading or queueing a job. Active settings are checked again before generation.
+
+## Shared H3 styles
+
+The root **Style Gallery** includes an **H3** category shared by **Minimax REF2v H3**, **Ultrafast** and **MiniMax Advanced**. Character Swap is intentionally excluded. MiniMax / MiniMax H3 aliases normalize to H3. Create prompt-only or LoRA-backed styles and link their triggers, previews and recommended sampling to **My Library**. Installed choices use indexed H3 classifications or H3 / MiniMax folders, without rescanning the LoRA inventory.
+
+Each renderer keeps its own selected style, strength and optional sampling flag. The active LoRA path and strength are visible. A dedicated model-only loader applies the style even if the additional LoRA chain is disabled; the six additional slots remain available and exact path duplicates are removed. Choosing another style replaces its contribution without changing the editable prompt or unrelated LoRAs. **No style**, reset and start-from-scratch remove the active gallery contribution; saved Library prompts retain their style snapshots.
+
+Active additional LoRAs and the gallery LoRA expose **Find prompt examples** / **Local prompts**, using the same dialog and Electron prompt-sidecar storage as the image generator. Online results can be saved with **Save all locally** and reopened without an online lookup. **Use prompt** replaces only the editable H3 positive prompt and prefixes known triggers; settings, references and LoRAs stay unchanged. These controls do not rescan the inventory. Missing/ambiguous Library matches and lookup/save errors are reported explicitly. Character Swap remains excluded.
+
+The separate **Video Prompt Generator** also offers the H3 style picker. It passes the selected style name, trigger, visual directions and notes to the chosen prompt model, plus up to three already-saved local positive examples (bounded in size) when available. It never searches online for examples automatically. These local examples become part of the AI-provider request. The model is instructed to turn era/style information into concrete visual vocabulary while retaining the user's subject, motion, reference and audio requirements. The exact trigger is enforced at the start of the visual field body without breaking the required output headings. H3 render conditioning still receives the trigger first.
+
+Sending a generated prompt to any H3 renderer also transfers its style snapshot and LoRA, clears the previous managed style/strength and removes duplicate additional slots; the destination sampling switch stays under the user's control. If the style changed after generation, regenerate before sending to avoid pairing old wording with a new LoRA. **No style** clears the destination gallery contribution. Library snapshots retain style context and local examples; restored H3 destinations retain the associated style even when destination model/sampling defaults are loaded. The H3 prompt style is explicitly inactive for LTX Audio-Sync.
+
+Triggers lead the actual conditioning prompt, including after ReferencePack AI rewriting. The final displayed prompt and rendered Library metadata include the gallery contribution when the final prompt is available. If rewriting output is unavailable, Library metadata remains marked non-final rather than pretending that the editable direction is the executed prompt.
+
+**Apply style sampling overrides** optionally applies steps, sampler and scheduler to the H3 first pass only. Empty scheduler keeps the workflow scheduler; `h3-beta` forces BetaSamplingScheduler with the current alpha / beta; another installed name forces BasicScheduler, preserving the workflow denoise. Existing intermediate sigma extension remains unchanged. H3 uses BasicGuider without editable CFG, so style CFG and megapixels are not applied. Duration, resolution, source audio, sigma shifts, H3 latent-refine sampling and LTX finishing stay unchanged.
+
+**Save sampling as style default** saves the current editable steps, sampler and scheduler, without inventing a CFG value or toggling overrides. REF2V retains an active forced style scheduler because its native scheduler has no scheduler-name control. Existing unsupported CFG / megapixel metadata is preserved. In Advanced source-video mode, only an enabled H3 latent refinement receives the style model/prompt; no first-pass sampling overrides are applied. Without H3 latent refinement, the saved selection is retained but explicitly inactive.
 
 ## Reference limits and token mapping
 

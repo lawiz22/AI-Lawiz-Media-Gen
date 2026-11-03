@@ -22,6 +22,7 @@ import {
 } from '../services/civitaiService';
 import { CheckIcon, CloseIcon, DownloadIcon, LibraryIcon, SpinnerIcon } from './icons';
 import { CivitaiInventoryPanel } from './CivitaiInventoryPanel';
+import { useModelInventory } from './useModelInventory';
 import { ArchiveCivitPanel } from './ArchiveCivitPanel';
 import { MenuSelect } from './MenuSelect';
 
@@ -220,7 +221,7 @@ const ModelCard: React.FC<{
     );
 };
 
-export const CivitaiPanel: React.FC = React.memo(() => {
+export const CivitaiPanel: React.FC<{ libraryRequest?: { path: string; id: number } | null; onLibraryRequestHandled?: () => void }> = React.memo(({ libraryRequest, onLibraryRequestHandled }) => {
     const localAccessAvailable = Boolean(window.electron);
     const [activeSection, setActiveSection] = useState<'catalog' | 'library' | 'archive' | 'tools'>('library');
     const [provider, setProvider] = useState<CivitaiProvider>('regular');
@@ -237,12 +238,13 @@ export const CivitaiPanel: React.FC = React.memo(() => {
     const [error, setError] = useState('');
     const [settingsMessage, setSettingsMessage] = useState('');
     const [download, setDownload] = useState<DownloadState | null>(null);
-    const [inventory, setInventory] = useState<CivitaiInventory>(EMPTY_INVENTORY);
+    const { inventory, setInventory, error: inventoryError } = useModelInventory();
     const [isScanning, setIsScanning] = useState(false);
     const [isOrganizing, setIsOrganizing] = useState(false);
     const [organizeMessage, setOrganizeMessage] = useState('');
     const [scanProgress, setScanProgress] = useState<{ completed: number; total: number; fileName: string; stage: string } | null>(null);
     const [focusedInventoryPath, setFocusedInventoryPath] = useState<string | null>(null);
+    const [focusRequestId, setFocusRequestId] = useState(0);
     const [classificationStatus, setClassificationStatus] = useState<{ phase: 'working' | 'updating' | 'complete' | 'error'; message: string } | null>(null);
 
     useEffect(() => {
@@ -251,7 +253,6 @@ export const CivitaiPanel: React.FC = React.memo(() => {
                 setKeys({ regular: settings.regularApiKey || '', red: settings.redApiKey || '' });
                 setComfyUIRoot(settings.comfyUIRoot || '');
             });
-            window.electron.getCivitaiInventory().then(setInventory);
         } else {
             setKeys({ regular: getStoredKey('regular'), red: getStoredKey('red') });
         }
@@ -324,7 +325,7 @@ export const CivitaiPanel: React.FC = React.memo(() => {
         const sources: Array<'civitai' | 'archive'> = preferredSource === 'civitai' ? ['civitai', 'archive'] : ['archive', 'civitai'];
         for (const source of sources) {
             try {
-                return await window.electron.fetchLocalModelUsageMetadata({ modelPath: enrichedItem.path, provider: itemProvider, source });
+                return await window.electron.fetchLocalModelUsageMetadata({ modelPath: enrichedItem.path, provider: itemProvider, source, preserveExisting: true });
             } catch {
                 // Some models expose usage metadata on only one of the two services.
             }
@@ -395,23 +396,20 @@ export const CivitaiPanel: React.FC = React.memo(() => {
                     versionName: version.name,
                 });
                 setDownload(current => current?.id === downloadId ? { ...current, status: 'complete', receivedBytes: result.receivedBytes, message: `Saved to ${result.path}` } : current);
-                setIsScanning(true);
-                setScanProgress(null);
                 try {
-                    const refreshedInventory = await window.electron.scanCivitaiLibrary({ provider, kind: destination, family });
+                    if (!window.electron.indexCivitaiModel) throw new Error('Restart the Electron desktop app to enable single-file download indexing.');
+                    const refreshedInventory = await window.electron.indexCivitaiModel({ provider, modelPath: result.path });
                     const downloadedPath = result.path.toLowerCase();
                     const downloadedItem = refreshedInventory.items.find(item => item.path.toLowerCase() === downloadedPath);
-                    const enrichedItem = downloadedItem ? await enrichDownloadedItem(downloadedItem, 'civitai', provider) : undefined;
-                    const nextInventory = enrichedItem ? { ...refreshedInventory, items: refreshedInventory.items.map(item => item.path === enrichedItem.path ? enrichedItem : item) } : refreshedInventory;
-                    setInventory(nextInventory);
-                    setFocusedInventoryPath(enrichedItem?.path || downloadedItem?.path || result.path);
-                    setActiveSection('library');
+                    if (!downloadedItem) throw new Error('The downloaded file was not added to My Library.');
+                    setInventory(refreshedInventory);
+                    openInventoryItem(downloadedItem);
+                    const enrichedItem = await enrichDownloadedItem(downloadedItem, 'civitai', provider);
+                    setInventory(current => ({ ...current, items: current.items.map(item => item.path === enrichedItem.path ? item === downloadedItem ? enrichedItem : { ...enrichedItem, ...item } : item) }));
                 } catch (refreshError) {
                     const message = refreshError instanceof Error ? refreshError.message : 'Library refresh failed.';
                     setError(`Download completed, but the library could not be refreshed: ${message}`);
                     setActiveSection('library');
-                } finally {
-                    setIsScanning(false);
                 }
             } else {
                 const url = new URL(file.downloadUrl);
@@ -436,32 +434,35 @@ export const CivitaiPanel: React.FC = React.memo(() => {
     const openInventoryItem = useCallback((item: CivitaiInventoryItem) => {
         setProvider((item.safetyOverride || item.contentSafety) === 'nsfw' ? 'red' : 'regular');
         setFocusedInventoryPath(item.path);
+        setFocusRequestId(current => current + 1);
         setActiveSection('library');
     }, []);
+    useEffect(() => {
+        if (!libraryRequest) return;
+        const item = inventory.items.find(value => value.path === libraryRequest.path);
+        if (!item) return;
+        openInventoryItem(item); onLibraryRequestHandled?.();
+    }, [libraryRequest, inventory.items, openInventoryItem, onLibraryRequestHandled]);
 
-    const completeArchiveDownload = useCallback(async (path: string, destination: CivitaiDestination, archiveFamily: CivitaiFamily) => {
+    const completeArchiveDownload = useCallback(async (path: string) => {
         if (!window.electron) return;
-        setIsScanning(true);
-        setScanProgress(null);
         try {
-            const refreshedInventory = await window.electron.scanCivitaiLibrary({ provider: 'regular', kind: destination, family: archiveFamily });
+            if (!window.electron.indexCivitaiModel) throw new Error('Restart the Electron desktop app to enable single-file download indexing.');
+            const refreshedInventory = await window.electron.indexCivitaiModel({ provider: 'regular', modelPath: path });
             const downloadedPath = path.toLowerCase();
             const downloadedItem = refreshedInventory.items.find(item => item.path.toLowerCase() === downloadedPath);
             const itemProvider: CivitaiProvider = downloadedItem?.contentSafety === 'nsfw' ? 'red' : 'regular';
-            const enrichedItem = downloadedItem ? await enrichDownloadedItem(downloadedItem, 'archive', itemProvider) : undefined;
-            const nextInventory = enrichedItem ? { ...refreshedInventory, items: refreshedInventory.items.map(item => item.path === enrichedItem.path ? enrichedItem : item) } : refreshedInventory;
-            setProvider(itemProvider);
-            setInventory(nextInventory);
-            setFocusedInventoryPath(enrichedItem?.path || downloadedItem?.path || path);
-            setActiveSection('library');
+            if (!downloadedItem) throw new Error('The downloaded file was not added to My Library.');
+            setInventory(refreshedInventory);
+            openInventoryItem(downloadedItem);
+            const enrichedItem = await enrichDownloadedItem(downloadedItem, 'archive', itemProvider);
+            setInventory(current => ({ ...current, items: current.items.map(item => item.path === enrichedItem.path ? item === downloadedItem ? enrichedItem : { ...enrichedItem, ...item } : item) }));
         } catch (refreshError) {
             const message = refreshError instanceof Error ? refreshError.message : 'Library refresh failed.';
             setError(`Download completed, but the library could not be refreshed: ${message}`);
             setActiveSection('library');
-        } finally {
-            setIsScanning(false);
         }
-    }, [enrichDownloadedItem]);
+    }, [enrichDownloadedItem, openInventoryItem]);
 
     const replaceInventoryItem = useCallback((updatedItem: CivitaiInventoryItem) => {
         setInventory(current => ({
@@ -496,15 +497,14 @@ export const CivitaiPanel: React.FC = React.memo(() => {
         if (!window.electron) throw new Error('Model updates require the Electron desktop app.');
         const downloadId = crypto.randomUUID();
         const result = await window.electron.updateCivitaiModel({ downloadId, provider, modelPath: item.path, mode });
-        setIsScanning(true);
-        setScanProgress(null);
-        try {
-            setInventory(await window.electron.scanCivitaiLibrary({ provider, kind: item.kind, family: 'all' }));
-        } finally {
-            setIsScanning(false);
-        }
+        if (!window.electron.indexCivitaiModel) throw new Error('Restart the Electron desktop app to enable single-file download indexing.');
+        const refreshedInventory = await window.electron.indexCivitaiModel({ provider, modelPath: result.path });
+        setInventory(refreshedInventory);
+        const updatedItem = refreshedInventory.items.find(candidate => candidate.path.toLowerCase() === result.path.toLowerCase());
+        if (!updatedItem) throw new Error('The updated file was not added to My Library.');
+        openInventoryItem(updatedItem);
         return result;
-    }, [provider]);
+    }, [provider, openInventoryItem]);
 
     const providerColor = provider === 'red' ? 'red' : 'blue';
     const visibleModels = useMemo(
@@ -519,7 +519,7 @@ export const CivitaiPanel: React.FC = React.memo(() => {
                 <div>
                     <p className={`text-xs font-bold uppercase tracking-widest ${provider === 'red' ? 'text-red-400' : 'text-blue-400'}`}>Model depot</p>
                     <h1 className="text-3xl font-bold text-text-primary mt-1">Models/LoRAs</h1>
-                    <p className="text-sm text-text-secondary mt-2">Checkpoints and LoRAs for SD 1.5, SDXL, FLUX, FLUX2, KREA2, Qwen, Qwen Edit, Qwen 2.1, MOSS, MiniMax H3, ZIT, and LTX 2.3.</p>
+                    <p className="text-sm text-text-secondary mt-2">Checkpoints and LoRAs for SD 1.5, SDXL, FLUX, FLUX2-9B, FLUX2-4B, KREA2, Qwen, Qwen Edit, Qwen 2.1, MOSS, MiniMax H3, ZIT, and LTX 2.3.</p>
                 </div>
                 <div className="inline-flex self-start bg-bg-tertiary border border-border-primary rounded-lg p-1" aria-label="Civitai service">
                     <button onClick={() => { setProvider('regular'); setModels([]); setNextCursor(undefined); }} className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${provider === 'regular' ? 'bg-blue-600 text-white' : 'text-text-secondary hover:text-blue-400'}`}>Blue · SFW</button>
@@ -564,7 +564,8 @@ export const CivitaiPanel: React.FC = React.memo(() => {
 
             {error && <div className="border border-red-500/50 bg-red-500/10 text-red-300 rounded-md px-4 py-3 text-sm">{error}</div>}
 
-            {(activeSection === 'library' || activeSection === 'tools') && <CivitaiInventoryPanel view={activeSection} inventory={inventory} provider={provider} isScanning={isScanning} isOrganizing={isOrganizing} progress={scanProgress} onScan={scanLibrary} onOrganize={organizeModelRoot} onInventoryChange={setInventory} onItemChange={replaceInventoryItem} onClassifyItem={classifyInventoryItem} onOpenItem={openInventoryItem} onUpdateItem={updateInventoryItem} focusedItemPath={focusedInventoryPath} organizeMessage={organizeMessage} localAccessAvailable={localAccessAvailable} />}
+            {inventoryError && <p role="alert" className="text-red-400">{inventoryError}</p>}
+            {(activeSection === 'library' || activeSection === 'tools') && <CivitaiInventoryPanel view={activeSection} inventory={inventory} provider={provider} isScanning={isScanning} isOrganizing={isOrganizing} progress={scanProgress} onScan={scanLibrary} onOrganize={organizeModelRoot} onInventoryChange={setInventory} onItemChange={replaceInventoryItem} onClassifyItem={classifyInventoryItem} onOpenItem={openInventoryItem} onUpdateItem={updateInventoryItem} focusedItemPath={focusedInventoryPath} focusRequestId={focusRequestId} organizeMessage={organizeMessage} localAccessAvailable={localAccessAvailable} />}
 
             {activeSection === 'archive' && <ArchiveCivitPanel inventoryItems={inventory.items} comfyUIRoot={comfyUIRoot} onOpenOwned={openInventoryItem} onDownloadComplete={completeArchiveDownload} />}
 

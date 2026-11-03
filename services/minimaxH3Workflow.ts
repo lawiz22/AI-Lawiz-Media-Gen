@@ -1,5 +1,6 @@
 import type { MinimaxDraft, VideoReference } from './videoPromptService';
 import { audioPromptRequirements, referenceToken } from './videoPromptService';
+import { applyH3GalleryStyle, type H3StyleSettings } from './h3StyleWorkflow';
 
 export interface H3NodeInfo {
     input?: { required?: Record<string, unknown>; optional?: Record<string, unknown> };
@@ -9,7 +10,7 @@ export interface H3Node { class_type: string; inputs: Record<string, unknown> }
 export type H3Workflow = Record<string, H3Node>;
 export interface H3Lora { enabled: boolean; name: string; strength: number }
 export interface H3ReferenceControl { enabled: boolean; useSoundtrack: boolean }
-export interface MinimaxH3Options {
+export interface MinimaxH3Options extends H3StyleSettings {
     variant?: 'ultrafast' | 'advanced';
     advanced?: import('./minimaxH3AdvancedWorkflow').AdvancedH3Settings;
     ultrafast?: {
@@ -342,6 +343,7 @@ export const buildMinimaxH3Workflow = (
         pingpong: options.pingpong, save_output: options.saveOutput,
     });
     if (options.displayPrompt) add('186', 'Display Any (rgthree)', { output: '', source: useReferencePack ? ['185', 18] : plan.prompt });
+    applyH3GalleryStyle(workflow, options);
     return workflow;
 };
 
@@ -351,7 +353,9 @@ export const validateMinimaxH3Readiness = (workflow: H3Workflow, info: H3ObjectI
     for (const node of Object.values(workflow)) {
         for (const [name, value] of Object.entries(node.inputs)) {
             if (Array.isArray(value)) continue;
-            if (node.class_type === 'VHS_LoadVideo' && name === 'video') continue;
+            if (node.class_type === 'VHS_LoadVideo' && name === 'video'
+                || node.class_type === 'LoadImage' && name === 'image'
+                || node.class_type === 'LoadAudio' && name === 'audio') continue;
             const choices = h3Choices(info, node.class_type, name);
             const schema = h3Input(info, node.class_type, name, node.inputs);
             const isCombo = Array.isArray(schema) && (Array.isArray(schema[0]) || schema[0] === 'COMBO' || schema[0] === 'COMFY_DYNAMICCOMBO_V3');

@@ -39,6 +39,68 @@ packages such as Nunchaku, SeedVR2, Impact Pack and TTS Audio Suite require extr
 Python dependencies or installation scripts.
 
 
+BLAZING FAST CHARACTER - CHARACTER > FLUX2
+-----------------------------------------
+Separate supplied v1.1 pipeline: initial edit + five views, six-image collage,
+original comparison and mandatory TextGenerate vision captions.
+Native: UNETLoader, CLIPLoader, VAELoader, LoadImage, TextGenerate,
+PrimitiveString, PrimitiveStringMultiline, StringConcatenate, PreviewAny,
+RandomNoise, ImageScaleToTotalPixels, VAEEncode, ReferenceLatent,
+CLIPTextEncode, ConditioningZeroOut, GetImageSize, KSamplerSelect,
+Flux2Scheduler, EmptyFlux2LatentImage, CFGGuider, SamplerCustomAdvanced,
+VAEDecode, SaveImage, PreviewImage.
+Custom: Power Lora Loader (rgthree), ImageConcatMulti (KJNodes),
+easy cleanGpuUsed (Easy-Use). Update ComfyUI for SaveImage image passthrough
+and PreviewAny text passthrough outputs used in the supplied graph.
+Models: flux2\flux2Klein9BInt8_v10.safetensors,
+qwen38BFluxKlein9BTE_38b.safetensors, flux2-vae.safetensors,
+qwen3VLInstruct4bHeretic_v10.safetensors.
+Optional: one FLUX2 Style Gallery LoRA plus four additional LoRAs.
+The Style Gallery stores names/triggers/settings only; it does not install weights.
+Cancel targets /api/jobs/{prompt_id}/cancel; no global interrupt fallback.
+
+
+LTX 2.5 AUDIO-SYNC - VIDEO
+-------------------------
+Video > LTX 2.5 Audio-Sync is separate from LTX Director and H3.
+Video > LTX-Ripple-FFAF is a separate first-frame-edit propagation workflow.
+Ripple requires ComfyUI-LTXVideo (LTXAddVideoICLoRAGuide), RES4LYF (Frames Slice),
+KJNodes (INTConstant, ImageResizeKJv2, VAELoaderKJ, ImageConcatMulti,
+PathchSageAttentionKJ, LTX2MemoryEfficientSageAttentionPatch), VideoHelperSuite
+(VHS_LoadVideo, VHS_VideoCombine) and CacheDiT (CacheDiT_LTX2_Optimizer).
+Use a recent ComfyUI with native LTX 2.5 AV nodes, SeedNode, BatchImagesNode,
+TextOverlay, ResolutionSelector, ComfyNumberConvert and ComfyMathExpression. Its default weights
+and exact node requirements are documented in docs/reference/comfyui-workflows.md.
+Update ComfyUI for the native LTX 2.5 audio/video nodes, text generation,
+math/conversion, resolution, image resize, tiled VAE and SaveVideo nodes.
+No Director/KJ/H3 packages are required for the source Safetensors graph.
+Required LTX nodes include:
+  LTXVConditioning, LTXVDualCFGGuider, EmptyLTXVLatentVideo,
+  LTXVImgToVideoInplace, LTXVPreprocess, LTXVConcatAVLatent,
+  LTXVSeparateAVLatent, LTXVLatentUpsampler, LTXVAudioVAEEncode,
+  LTXVAudioVAEDecode, LatentUpscaleModelLoader.
+Also required: ResolutionSelector, ManualSigmas, ComfyMathExpression,
+ComfyNumberConvert, TrimAudioDuration, SolidMask, SetLatentNoiseMask,
+ResizeImageMaskNode, VAEDecodeTiled, PreviewAny, CreateVideo, SaveVideo,
+standard model loaders, CLIPTextEncode, primitives and sampler nodes.
+Optional camera/style LoRAs: up to four LoraLoaderModelOnly nodes chained
+after the diffusion loader, shared by both sampling passes. Select installed
+LTX 2.5-compatible LoRAs from models/loras. Disabled slots add no nodes.
+Default weights:
+  models/diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4.safetensors
+  models/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors
+  models/vae/ltx-2.5-video-vae-bf16.safetensors
+  models/vae/ltx-2.5-audio-vae-bf16.safetensors
+  models/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors
+Optional local Qwen enhancement (enabled by default):
+  TextGenerateLTX2Prompt
+  models/text_encoders/Huihui-Qwen3-VL-4B-Instruct-abliterated-fp8_scaled.safetensors
+Disabling enhancement removes its nodes and separate model dependency.
+GGUF selections additionally require ComfyUI-GGUF UnetLoaderGGUF/CLIPLoaderGGUF.
+NVFP4 needs compatible GPU/runtime support; installed weights do not guarantee
+that a render will run or fit in VRAM. No automatic downloads are performed.
+
+
 KREA2 IDENTITY / GENERAL EDIT V2 - IMAGE GENERATOR
 ------------------------------------------------
 Image Generation > ComfyUI > KREA2 > I2I Edit / Identity.
@@ -269,6 +331,57 @@ Euler/simple, denoise 1, cache auto/default, kitchen attention.
 Gemini/Mammouth API key or installed multi-image Ollama vision model
 required for analysis. Review detected targets before replacement.
 No automatic downloads, installation or pixel-exact preservation guarantee.
+
+CREATION SUITE - MOSS SCENE + QWEN HEAD / EXPRESSION SWAP
+-------------------------------------------------------
+Scene Variation > Creation suite. Independent or sequential pipelines.
+Scene: UNETLoader, CLIPLoader (moss_image), VAELoader,
+TextEncodeMOSSImageVision, EmptyFlux2LatentImage, ResolutionSelector,
+PrimitiveString, PrimitiveStringMultiline, StringConcatenate, PreviewAny,
+KSampler, VAEDecode, SaveImage; LoadImage if reference is on,
+StringReplace for Cheap phone.
+Swap: UNETLoader, CLIPLoader (qwen_image), VAELoader,
+TextEncodeQwenImage21 (images.image_1/image_2), LoadImage, KSampler,
+VAEDecode, SaveImage with IMAGE passthrough, ImageCompare;
+ResolutionSelector and EmptyLatentImage for selected output sizing.
+Default-on optional patches: SpectrumMOSSImageManual,
+SkipLayerGuidanceDiTSimple, ModelPreviewOverrideKJ, PathchSageAttentionKJ,
+LoraLoaderModelOnly, RescaleCFG, QwenImage21Cache.
+Default diffusion models: dirtyMoss_bf16.safetensors,
+qwen_image_2.1_int8_convrot.safetensors.
+Default encoders: qwen3.5_9b_int8_convrot.safetensors,
+qwen3vl_8b_int8_convrot.safetensors.
+Default VAEs: flux2-vae.safetensors, qwen_image_2.1_vae_bf16.safetensors.
+Default preview: TAE_Flux2_AcademiaSD.safetensors (MOSS), none (Qwen).
+Default LoRAs: qwen21\bfs_head_v1.1_qwen_2.1.safetensors (0.9),
+qwen21\p_qwen_image_2.1_8step_v0.1.safetensors (1.0).
+Scene: 50 steps, CFG 3, dpmpp_2m_sde/sgm_uniform, 9:16, 1.5 MP, align 8.
+Swap: 20 steps, CFG 3, res_multistep/sgm_uniform, 3:4, 1.5 MP, align 32.
+Source defaults and eight notes retained; no automatic installation.
+
+CLOTHES SWITCHER - FLUX2 KLEIN 9B
+--------------------------------
+Scene Variation > Clothes Switcher. Updated 29-node default workflow.
+UNETLoader, CLIPLoader (flux2), CLIPTextEncode, VAELoader, LoadImage,
+ImageResize+ (ComfyUI Essentials), ReferenceLatent, VAEEncode,
+LoraLoaderModelOnly, KSampler, VAEDecode, PreviewImage, SaveImage,
+DownloadAndLoadDepthAnythingV2Model, DepthAnything_V2
+(ComfyUI-DepthAnythingV2), Canny, Image Comparer (rgthree).
+Diffusion: flux2\flux2Klein9BInt8_v10.safetensors.
+Encoder: qwen38BFluxKlein9BTE_38b.safetensors; VAE: flux2-vae.safetensors.
+LoRAs in order: FLUX2\00-REMC-Flux20-20v2.safetensors (1),
+FLUX2\flux2_kathl_9b.safetensors (0.9),
+FLUX2\klein_snofs_v1_2.safetensors (0.8).
+Up to four LoRA slots with independent enable switches; slot 4 starts off.
+Disabled LoRAs are removed from the graph; their files are not required.
+CacheDiT_Model_Optimizer (ComfyUI-CacheDiT), after all active LoRAs:
+enabled, model_type Flux, warmup_steps 0, skip_interval 0, print_summary on.
+CacheDiT can be disabled; its node is then omitted.
+Depth: depth_anything_v2_vits_fp16.safetensors, precision auto.
+Both previews retained: depth (node 150), Canny (node 163).
+8 steps, CFG 1, Euler/simple, denoise 1; seed 123247689436968/randomize.
+1024x1024 bounding resize, Lanczos, keep proportion, always, multiple 0.
+No extension installation. Original depth loader may fetch missing weights.
 
 QWEN IMAGE 2.1 - SINGLE IMAGE EDIT
 --------------------------------

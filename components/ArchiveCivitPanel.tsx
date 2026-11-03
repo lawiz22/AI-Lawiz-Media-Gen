@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { CivitaiDestination, CivitaiFamily, CivitaiInventoryItem, CivitaiModelFolder } from '../services/civitaiService';
-import { formatModelSize } from '../services/civitaiService';
+import { formatModelSize, inferFlux2Variant } from '../services/civitaiService';
 import { MenuSelect } from './MenuSelect';
 import { CheckIcon, DownloadIcon, ImageIcon, LibraryIcon, SpinnerIcon } from './icons';
 
@@ -116,7 +116,7 @@ const inferArchiveFamily = (baseModel: string, name: string): ArchiveFamily => {
     if (/qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(identity)) return 'qwen21';
     if (/\bmoss(?:image|\b|_)/.test(identity)) return 'moss';
     if (/mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(identity)) return 'minimax-h3';
-    if (/flux[- ._]?2|klein/.test(identity)) return 'flux2';
+    if (/flux[- ._]?2|klein/.test(identity)) return inferFlux2Variant(baseModel) || inferFlux2Variant(identity) || 'flux2';
     if (/krea[- ._]?2/.test(identity)) return 'krea2';
     if (/qwen.*edit|edit.*qwen/.test(identity)) return 'qwen-edit';
     if (/\bqwen\b/.test(identity)) return 'qwen';
@@ -130,14 +130,14 @@ const inferArchiveFamily = (baseModel: string, name: string): ArchiveFamily => {
 
 const getArchiveDestination = (modelType: string, family: ArchiveFamily): CivitaiDestination => {
     if (/lora|locon|dora/i.test(modelType)) return 'lora';
-    return ['flux', 'flux2', 'krea2', 'qwen', 'qwen-edit', 'qwen21', 'moss', 'minimax-h3', 'zit-base', 'zit-turbo', 'ltx-23'].includes(family) ? 'diffusion' : 'checkpoint';
+    return ['flux', 'flux2', 'flux2-9b', 'flux2-4b', 'krea2', 'qwen', 'qwen-edit', 'qwen21', 'moss', 'minimax-h3', 'zit-base', 'zit-turbo', 'ltx-23'].includes(family) ? 'diffusion' : 'checkpoint';
 };
 
 const getArchiveFolder = (family: ArchiveFamily, destination: CivitaiDestination, identity: string): CivitaiModelFolder => {
     if (family === 'sd15') return destination === 'checkpoint' ? 'SD1.5' : 'sd15';
     if (family === 'sdxl') return 'SDXL';
     if (family === 'flux') return destination === 'checkpoint' ? (/dev/i.test(identity) ? 'flux-dev' : 'FLUX') : 'Flux';
-    if (family === 'flux2') return 'flux2';
+    if (family === 'flux2' || family === 'flux2-9b' || family === 'flux2-4b') return family;
     if (family === 'krea2') return 'krea';
     if (family === 'qwen' || family === 'qwen-edit') return 'QWEN';
     if (family === 'qwen21') return 'qwen21';

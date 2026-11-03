@@ -30,7 +30,9 @@ import { buildLtxDirectorModelNodes, LTX_DIRECTOR_WORKFLOW_TEMPLATE } from './lt
 import { createLtxDialogueInstruction, parseSpeakerTranscript } from '../utils/ttsTranscript';
 import { buildCharacterAnglesWorkflow, buildFlux2CharacterAnglesWorkflow, buildQwen21CharacterAnglePrompts, CHARACTER_ANGLES, getEnabledCharacterAngles } from './characterAnglesWorkflow';
 import { buildSwapAnythingWorkflow, type SwapAnythingOptions } from './swapAnythingWorkflow';
-import { buildFlux2EditWorkflow, buildMaskedFlux2EditWorkflow, type Flux2EditReference } from './flux2EditWorkflow';
+import { buildFlux2EditWorkflow, buildMaskedFlux2EditWorkflow, defaultFlux2Clip, flux2StyleOptions, type Flux2EditReference } from './flux2EditWorkflow';
+import { applyFlux2StyleScheduler } from './styleGallery';
+import { KREA_SIMPLE_DEFAULT_LORAS, krea2StyleOptions } from './krea2StyleWorkflow';
 import { buildSceneMaskWorkflow, sceneSegmentationErrors, type SceneSegmentationTarget } from './sceneMaskWorkflow';
 import { buildQwen21Workflow, defaultQwen21Settings, setQwen21WorkflowSeed, validateQwen21Readiness } from './qwen21Workflow';
 import { buildMossWorkflow, defaultMossSettings, mossPreviewBlob, validateMossReadiness } from './mossWorkflow';
@@ -1759,7 +1761,7 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
                 role: roles[index] || 'custom',
                 description: descriptions[index] || '',
             }));
-            workflow = buildFlux2EditWorkflow(sourceUpload.name, references, options).workflow;
+            workflow = buildFlux2EditWorkflow(sourceUpload.name, references, options, options.comfyFlux2EditStyle).workflow;
             break;
         }
 
@@ -2159,20 +2161,33 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             break;
         }
         case 'flux2-simple': {
+            const style = options.comfyFlux2Style;
+            options = flux2StyleOptions(options, style, 't2i');
             workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX2_SIMPLE_WORKFLOW_TEMPLATE));
             workflow["93"].inputs.text = options.comfyFlux2Prompt || '';
             workflow["86"].inputs.text = options.comfyFlux2NegativePrompt || '';
-            const flux2Model = options.comfyFlux2Unet || 'flux-2-klein-4b-Q4_K_M.gguf';
+            const flux2Model = options.comfyFlux2Unet || 'flux2\\flux2Klein9BInt8_v10.safetensors';
             workflow["94"].class_type = flux2Model.toLowerCase().endsWith('.gguf') ? 'UnetLoaderGGUF' : 'UNETLoader';
             workflow["94"].inputs = flux2Model.toLowerCase().endsWith('.gguf')
                 ? { unet_name: flux2Model }
                 : { unet_name: flux2Model, weight_dtype: 'default' };
-            workflow["91"].inputs.clip_name = options.comfyFlux2Clip || 'qwen3vl_4b_fp8_scaled.safetensors';
+            workflow["91"].inputs.clip_name = options.comfyFlux2Clip || defaultFlux2Clip(flux2Model, 't2i');
             workflow["92"].inputs.vae_name = options.comfyFlux2Vae || 'flux2-vae.safetensors';
 
             const resolution = FLUX2_RESOLUTION_OPTIONS.find(option => option.value === options.comfyFlux2Resolution) || FLUX2_RESOLUTION_OPTIONS[8];
             workflow["87"].inputs.value = resolution.width;
             workflow["88"].inputs.value = resolution.height;
+            if (options.comfyFlux2UseStyleSettings && style?.settings.megapixels !== undefined) {
+                const scale = Math.sqrt(style.settings.megapixels * 1_000_000 / (resolution.width * resolution.height));
+                workflow["87"].inputs.value = Math.max(16, Math.round(resolution.width * scale / 16) * 16);
+                workflow["88"].inputs.value = Math.max(16, Math.round(resolution.height * scale / 16) * 16);
+            }
+            if (style?.lora) {
+                workflow.style_lora = { class_type: 'LoraLoaderModelOnly', inputs: {
+                    model: ['94', 0], lora_name: style.lora, strength_model: options.comfyFlux2StyleStrength ?? style.strength,
+                }, _meta: { title: `Style: ${style.title}` } };
+                workflow["99"].inputs.model = ['style_lora', 0];
+            }
 
             for (let index = 1; index <= 6; index += 1) {
                 const name = options[`comfyFlux2Lora${index}Name` as keyof GenerationOptions] as string | undefined || '';
@@ -2187,13 +2202,16 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             workflow["82"].inputs.cfg = options.comfyCfg ?? 1;
             workflow["80"].inputs.sampler_name = options.comfySampler || 'euler';
             workflow["89"].inputs.noise_seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
+            applyFlux2StyleScheduler(workflow, options.comfyFlux2UseStyleSettings ? style?.settings.scheduler : undefined);
             break;
         }
         case 'krea2-simple': {
+            const style = options.comfyKreaStyle;
+            options = krea2StyleOptions(options, style);
             workflow = JSON.parse(JSON.stringify(COMFYUI_KREA2_SIMPLE_WORKFLOW_TEMPLATE));
             workflow["104"].inputs.text = options.comfyKreaPrompt || '';
             workflow["17"].inputs.text = options.comfyKreaNegativePrompt || '';
-            workflow["106:1"].inputs.unet_name = options.comfyKreaUnet || 'krea2_raw_fp8_scaled.safetensors';
+            workflow["106:1"].inputs.unet_name = options.comfyKreaUnet || 'krea2_turbo_fp8_scaled.safetensors';
             workflow["106:13"].inputs.clip_name = options.comfyKreaClip || 'qwen3vl_4b_fp8_scaled.safetensors';
             workflow["106:4"].inputs.vae_name = options.comfyKreaVae || 'qwen_image_vae.safetensors';
 
@@ -2201,11 +2219,19 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             workflow["106:10"].inputs.width = resolution.width;
             workflow["106:10"].inputs.height = resolution.height;
             workflow["106:10"].inputs.batch_size = 1;
+            if (options.comfyKreaUseStyleSettings && style?.settings.megapixels !== undefined) {
+                const scale = Math.sqrt(style.settings.megapixels * 1_000_000 / (resolution.width * resolution.height));
+                workflow["106:10"].inputs.width = Math.max(16, Math.round(resolution.width * scale / 16) * 16);
+                workflow["106:10"].inputs.height = Math.max(16, Math.round(resolution.height * scale / 16) * 16);
+            }
+            if (style?.lora) {
+                workflow.style_lora = { class_type: 'LoraLoaderModelOnly', inputs: {
+                    model: ['106:1', 0], lora_name: style.lora, strength_model: options.comfyKreaStyleStrength ?? style.strength,
+                }, _meta: { title: `Style: ${style.title}` } };
+                workflow["57"].inputs.model = ['style_lora', 0];
+            }
 
-            const defaultKreaLoras = [
-                { name: 'KREA\\krea2_turbo_lora_rank_64_bf16.safetensors', strength: 0.6 },
-                { name: 'KREA\\snofs_krea_v1_nostrip.safetensors', strength: 1 },
-            ];
+            const defaultKreaLoras = KREA_SIMPLE_DEFAULT_LORAS;
             for (let index = 1; index <= 6; index += 1) {
                 const configuredName = options[`comfyKreaLora${index}Name` as keyof GenerationOptions] as string | undefined;
                 const name = configuredName === undefined ? (defaultKreaLoras[index - 1]?.name || '') : configuredName;
@@ -2710,13 +2736,15 @@ export const generateComfyUIPortraits = async (
     // RE-WRITING THE FUNCTION CONTENT FOR REPLACEMENT
     // I will capture the seed used before modifying it for the next iteration.
 
-    const finalPrompt = isMossPhoto ? photoFinalPrompt : isKreaEdit ? options.comfyKrea2Edit?.prompt
+    const finalPrompt = isMossPhoto ? photoFinalPrompt : options.comfyModelType === 'moss-image' ? baseWorkflow["5"]?.inputs?.text : isKreaEdit ? options.comfyKrea2Edit?.prompt
         : isQwen21
         ? (options.comfyModelType === 'qwen21-turbo' ? options.comfyQwen21Turbo?.prompt : options.comfyQwen21T2i?.prompt)
-        : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw'
+        : options.comfyModelType === 'krea2-simple'
+        ? baseWorkflow["104"]?.inputs?.text
+        : options.comfyModelType === 'krea2-raw'
         ? options.comfyKreaPrompt
         : options.comfyModelType === 'flux2-simple'
-            ? options.comfyFlux2Prompt
+            ? baseWorkflow["93"]?.inputs?.text
             : options.comfyModelType === 'flux2-edit'
                 ? baseWorkflow.prompt?.inputs?.text
             : options.comfyPrompt;

@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electron', {
     fetchLocalModelArchive: (request) => ipcRenderer.invoke('fetch-local-model-archive', request),
     fetchLocalModelHuggingFace: (request) => ipcRenderer.invoke('fetch-local-model-hugging-face', request),
     scanCivitaiLibrary: (request) => ipcRenderer.invoke('scan-civitai-library', request),
+    indexCivitaiModel: (request) => ipcRenderer.invoke('index-civitai-model', request),
     classifyCivitaiModelRoot: (provider) => ipcRenderer.invoke('classify-civitai-model-root', provider),
     getLocalModelPreview: (modelPath, metadata) => ipcRenderer.invoke('get-local-model-preview', modelPath, metadata),
     selectLocalModelPreview: (modelPath) => ipcRenderer.invoke('select-local-model-preview', modelPath),

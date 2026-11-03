@@ -2,9 +2,9 @@ import type { ComfyModelType, GenerationOptions } from '../types';
 
 export type CivitaiProvider = 'regular' | 'red';
 export type CivitaiModelType = 'Checkpoint' | 'LORA';
-export type CivitaiFamily = 'all' | 'sd15' | 'sdxl' | 'flux' | 'flux2' | 'krea2' | 'qwen' | 'qwen-edit' | 'qwen21' | 'moss' | 'minimax-h3' | 'zit-base' | 'zit-turbo' | 'ltx-23';
+export type CivitaiFamily = 'all' | 'sd15' | 'sdxl' | 'flux' | 'flux2' | 'flux2-9b' | 'flux2-4b' | 'krea2' | 'qwen' | 'qwen-edit' | 'qwen21' | 'moss' | 'minimax-h3' | 'zit-base' | 'zit-turbo' | 'ltx-23';
 export type CivitaiDestination = 'checkpoint' | 'diffusion' | 'lora';
-export type CivitaiModelFolder = '.' | 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'flux2' | 'krea' | 'QWEN' | 'qwen21' | 'moss' | 'H3' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
+export type CivitaiModelFolder = '.' | 'sd15' | 'SD1.5' | 'SDXL' | 'Flux' | 'FLUX' | 'flux-dev' | 'flux2' | 'flux2-9b' | 'flux2-4b' | 'krea' | 'QWEN' | 'qwen21' | 'moss' | 'H3' | 'ZIT' | 'LTX2' | 'LTX2_camera_control';
 export type CivitaiSort = 'Highest Rated' | 'Most Downloaded' | 'Most Liked' | 'Newest' | 'Most Images';
 
 export interface CivitaiFile {
@@ -118,6 +118,7 @@ export interface CivitaiInventoryItem {
     modelType?: string;
     installedVersionId?: number;
     installedVersionName?: string;
+    baseModel?: string;
     installedPublishedAt?: string;
     latestVersionId?: number;
     latestVersionName?: string;
@@ -150,7 +151,7 @@ const normalizeComfyOption = (value: string) => value.toLowerCase()
     .replace(/ancestral/g, 'a')
     .replace(/[^a-z0-9]/g, '');
 
-const resolveComfyOption = (recommendation: string | undefined, options: string[]) => {
+export const resolveComfyOption = (recommendation: string | undefined, options: string[]) => {
     if (!recommendation) return undefined;
     const normalizedRecommendation = normalizeComfyOption(recommendation);
     return [...options]
@@ -159,6 +160,16 @@ const resolveComfyOption = (recommendation: string | undefined, options: string[
 };
 
 export const getRecommendedSettingUpdates = (modelType: ComfyModelType, usageMetadata: CivitaiInventoryItem['usageMetadata'], objectInfo: any): Partial<GenerationOptions> => {
+    if (modelType === 'flux2-simple' || modelType === 'flux2-edit') {
+        const prefix = modelType === 'flux2-simple' ? 'comfy' : 'comfyFlux2Edit';
+        const samplers = getComfyOptions(objectInfo?.KSamplerSelect?.input?.required?.sampler_name);
+        const available = samplers.length ? samplers : getComfyOptions(objectInfo?.KSampler?.input?.required?.sampler_name);
+        return {
+            [prefix + 'Steps']: usageMetadata?.steps ?? (modelType === 'flux2-simple' ? 10 : 4),
+            [prefix + 'Cfg']: usageMetadata?.cfg ?? 1,
+            [prefix + 'Sampler']: resolveComfyOption(usageMetadata?.sampler, available) || 'euler',
+        };
+    }
     const defaults = WORKFLOW_DEFAULT_SETTINGS[modelType] || {};
     const samplerOptions = getComfyOptions(objectInfo?.KSampler?.input?.required?.sampler_name);
     const schedulerOptions = getComfyOptions(objectInfo?.KSampler?.input?.required?.scheduler);
@@ -177,10 +188,6 @@ export const getRecommendedSettingUpdates = (modelType: ComfyModelType, usageMet
     if (modelType === 'qwen-t2i-gguf') {
         updates.comfySteps = 4;
         updates.comfyCfg = 1;
-    } else if (modelType === 'flux2-simple') {
-        updates.comfySteps = 10;
-        updates.comfyCfg = 1;
-        updates.comfySampler = 'euler';
     }
     return updates;
 };
@@ -188,6 +195,46 @@ export const getRecommendedSettingUpdates = (modelType: ComfyModelType, usageMet
 const normalizeModelPath = (value: string) => value.replace(/\\/g, '/').replace(/^models\//i, '').toLowerCase();
 
 export const getComfyRelativePath = (item: CivitaiInventoryItem) => item.relativePath.replace(/^[^\\/]+[\\/]/, '');
+
+export const inferFlux2Variant = (identity: string, legacy9b = false): 'flux2-9b' | 'flux2-4b' | undefined => {
+    if (!legacy9b && !/flux[- ._]?2|klein/i.test(identity)) return undefined;
+    const four = /(?:^|[^0-9])4[- ._]?b(?!it)/i.test(identity);
+    const nine = /(?:^|[^0-9])9[- ._]?b(?!it)/i.test(identity);
+    if (four && nine) return undefined;
+    return four ? 'flux2-4b' : nine || legacy9b ? 'flux2-9b' : undefined;
+};
+
+export const inventoryFlux2Variant = (item: Pick<CivitaiInventoryItem, 'relativePath'> & Partial<CivitaiInventoryItem>): 'flux2-9b' | 'flux2-4b' | undefined => {
+    if (item.userFamily === 'flux2-9b' || item.userFamily === 'flux2-4b') return item.userFamily;
+    if (item.userFamily && item.userFamily !== 'flux2') return undefined;
+    const path = item.relativePath.replace(/\\/g, '/');
+    const legacy = item.userFamily === 'flux2' || /(?:^|\/)flux2(?:[-_]?[49]b)?\//i.test(path);
+    if (!legacy && /(?:^|\/)(?:sdxl|sd15|sd1\.5|flux|flux-dev|qwen|qwen21|krea|moss|h3|zit|ltx2|ltx2_camera_control)\//i.test(path)) return undefined;
+    const metadata = [item.archiveInfo?.baseModel, item.installedVersionName].filter(Boolean).join(' ');
+    return inferFlux2Variant(item.baseModel || item.archiveInfo?.baseModel || '') || inferFlux2Variant(metadata)
+        || inferFlux2Variant(`${path} ${item.modelName || ''} ${metadata}`, legacy && (!item.kind || item.kind === 'lora'));
+};
+
+export const inventoryItemMatchesFamily = (item: CivitaiInventoryItem, family: CivitaiFamily): boolean => {
+    if (family === 'all') return true;
+    if (family === 'flux2-9b' || family === 'flux2-4b') return inventoryFlux2Variant(item) === family;
+    if (family === 'flux2' && inventoryFlux2Variant(item)) return true;
+    const path = `/${item.relativePath.replace(/\\/g, '/').toLowerCase()}`;
+    const folders: Record<Exclude<CivitaiFamily, 'all'>, string[]> = {
+        sd15: ['sd15', 'sd1.5'], sdxl: ['sdxl'], flux: ['flux', 'flux-dev'], flux2: ['flux2'], 'flux2-9b': ['flux2-9b'], 'flux2-4b': ['flux2-4b'], krea2: ['krea', 'krea2', 'krea-2', 'krea_2'],
+        qwen: ['qwen'], 'qwen-edit': ['qwen'], qwen21: ['qwen21'], moss: ['moss'], 'minimax-h3': ['h3'],
+        'zit-base': ['zit'], 'zit-turbo': ['zit'], 'ltx-23': ['ltx2', 'ltx2_camera_control'],
+    };
+    if (item.userFamily) return item.userFamily === family;
+    if (folders[family].some(folder => path.includes(`/${folder}/`))) return true;
+    const identity = [item.fileName, item.modelName, item.installedVersionName, item.archiveInfo?.baseModel, item.huggingFaceInfo?.repoId, ...(item.huggingFaceInfo?.tags || [])].filter(Boolean).join(' ').toLowerCase();
+    if (family === 'flux2') return /flux[- ._]?2|klein/.test(identity) && !Object.values(folders).flat().some(folder => path.includes(`/${folder}/`));
+    if (family === 'krea2') return /krea[- ._]?2/.test(`${item.baseModel || ''} ${identity}`.toLowerCase());
+    if (family === 'qwen21') return /qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(identity);
+    if (family === 'moss') return /\bmoss(?:image|\b|_)/.test(identity);
+    if (family === 'minimax-h3') return /mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(identity);
+    return false;
+};
 
 export const selectInventoryLora = <T extends { name: string; enabled: boolean }>(loras: T[], modelPath: string): T[] => {
     const existing = loras.findIndex(lora => normalizeModelPath(lora.name) === normalizeModelPath(modelPath));
@@ -212,7 +259,9 @@ export const CIVITAI_FAMILIES: Array<{ id: CivitaiFamily; label: string; query: 
     { id: 'sd15', label: 'SD 1.5', query: '', baseModel: 'SD 1.5' },
     { id: 'sdxl', label: 'SDXL', query: '', baseModel: 'SDXL 1.0' },
     { id: 'flux', label: 'FLUX', query: 'Flux' },
-    { id: 'flux2', label: 'FLUX2', query: 'Flux 2 Klein' },
+    { id: 'flux2-9b', label: 'FLUX2-9B', query: '', baseModels: ['Flux.2 Klein 9B', 'Flux.2 Klein 9B-base'] },
+    { id: 'flux2-4b', label: 'FLUX2-4B', query: '', baseModels: ['Flux.2 Klein 4B', 'Flux.2 Klein 4B-base'] },
+    { id: 'flux2', label: 'FLUX2 (all variants)', query: 'Flux 2 Klein' },
     { id: 'krea2', label: 'KREA2', query: 'Krea 2' },
     { id: 'qwen', label: 'Qwen', query: 'Qwen Image' },
     { id: 'qwen-edit', label: 'Qwen Edit', query: 'Qwen Image Edit' },
@@ -241,7 +290,7 @@ export const getCivitaiModelUrl = (provider: CivitaiProvider, modelId: number) =
 export const getDefaultDestination = (model: CivitaiModel, version: CivitaiModelVersion | undefined, family: CivitaiFamily): CivitaiDestination => {
     if (model.type.toUpperCase() === 'LORA') return 'lora';
     const modelFolder = getCivitaiModelFolder(model, version, family);
-    if (modelFolder === 'Flux' || modelFolder === 'flux2' || modelFolder === 'krea' || modelFolder === 'QWEN' || modelFolder === 'qwen21' || modelFolder === 'moss' || modelFolder === 'H3' || modelFolder === 'ZIT' || modelFolder === 'LTX2' || modelFolder === 'LTX2_camera_control') {
+    if (modelFolder === 'Flux' || modelFolder.startsWith('flux2') || modelFolder === 'krea' || modelFolder === 'QWEN' || modelFolder === 'qwen21' || modelFolder === 'moss' || modelFolder === 'H3' || modelFolder === 'ZIT' || modelFolder === 'LTX2' || modelFolder === 'LTX2_camera_control') {
         return 'diffusion';
     }
     return 'checkpoint';
@@ -252,7 +301,7 @@ export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModel
     if (/qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(versionIdentity)) return 'qwen21';
     if (/\bmoss(?:image|\b|_)/.test(versionIdentity)) return 'moss';
     if (/mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(versionIdentity)) return 'H3';
-    if (/flux[- ._]?2|klein/.test(versionIdentity)) return 'flux2';
+    if (/flux[- ._]?2|klein/.test(versionIdentity)) return inferFlux2Variant(version?.baseModel || '') || inferFlux2Variant(versionIdentity) || 'flux2';
     if (/krea[- ._]?2/.test(versionIdentity)) return 'krea';
     if (/qwen/.test(versionIdentity)) return 'QWEN';
     if (/z[- ]?image|\bzit\b/.test(versionIdentity)) return 'ZIT';
@@ -264,7 +313,7 @@ export const getCivitaiModelFolder = (model: CivitaiModel, version: CivitaiModel
     if (/qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(fallbackIdentity)) return 'qwen21';
     if (/\bmoss(?:image|\b|_)/.test(fallbackIdentity)) return 'moss';
     if (/mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(fallbackIdentity)) return 'H3';
-    if (/flux[- ._]?2|klein/.test(fallbackIdentity)) return 'flux2';
+    if (/flux[- ._]?2|klein/.test(fallbackIdentity)) return inferFlux2Variant(fallbackIdentity) || 'flux2';
     if (/krea[- ._]?2/.test(fallbackIdentity)) return 'krea';
     if (/qwen/.test(fallbackIdentity)) return 'QWEN';
     if (/z[- ]?image|\bzit\b/.test(fallbackIdentity)) return 'ZIT';

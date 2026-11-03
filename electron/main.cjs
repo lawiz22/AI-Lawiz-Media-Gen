@@ -31,30 +31,54 @@ const MODEL_SCAN_DIRECTORIES = [
     { kind: 'diffusion', directory: 'unet' },
     { kind: 'lora', directory: 'loras' },
 ];
-const MODEL_FOLDERS = new Set(['.', 'sd15', 'SD1.5', 'SDXL', 'Flux', 'FLUX', 'flux-dev', 'flux2', 'krea', 'QWEN', 'qwen21', 'moss', 'H3', 'ZIT', 'LTX2', 'LTX2_camera_control']);
-const MODEL_FAMILIES = new Set(['sd15', 'sdxl', 'flux', 'flux2', 'krea2', 'qwen', 'qwen-edit', 'qwen21', 'moss', 'minimax-h3', 'zit-base', 'zit-turbo', 'ltx-23']);
+const MODEL_FOLDERS = new Set(['.', 'sd15', 'SD1.5', 'SDXL', 'Flux', 'FLUX', 'flux-dev', 'flux2', 'flux2-9b', 'flux2-4b', 'krea', 'QWEN', 'qwen21', 'moss', 'H3', 'ZIT', 'LTX2', 'LTX2_camera_control']);
+const MODEL_FAMILIES = new Set(['sd15', 'sdxl', 'flux', 'flux2', 'flux2-9b', 'flux2-4b', 'krea2', 'qwen', 'qwen-edit', 'qwen21', 'moss', 'minimax-h3', 'zit-base', 'zit-turbo', 'ltx-23']);
 const LOCAL_MODEL_EXTENSIONS = new Set(['.safetensors', '.ckpt', '.pt', '.pth', '.bin', '.gguf']);
 const SCAN_FAMILY_FOLDERS = {
     lora: {
+        'flux2-9b': ['flux2-9b', 'flux2'], 'flux2-4b': ['flux2-4b', 'flux2'],
         qwen21: ['qwen21', 'QWEN'], moss: ['moss'], 'minimax-h3': ['H3'],
-        sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], flux2: ['flux2'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
+        sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], flux2: ['flux2', 'flux2-9b', 'flux2-4b'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2', 'LTX2_camera_control'],
     },
     checkpoint: {
+        'flux2-9b': ['flux2-9b', 'flux2'], 'flux2-4b': ['flux2-4b', 'flux2'],
         qwen21: ['qwen21', 'QWEN'], moss: ['moss'], 'minimax-h3': ['H3'],
-        sd15: ['SD1.5'], sdxl: ['SDXL'], flux: ['FLUX', 'flux-dev'], flux2: ['flux2'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
+        sd15: ['SD1.5'], sdxl: ['SDXL'], flux: ['FLUX', 'flux-dev'], flux2: ['flux2', 'flux2-9b', 'flux2-4b'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2'],
     },
     diffusion: {
+        'flux2-9b': ['flux2-9b', 'flux2'], 'flux2-4b': ['flux2-4b', 'flux2'],
         qwen21: ['qwen21', 'QWEN'], moss: ['moss'], 'minimax-h3': ['H3'],
-        sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], flux2: ['flux2'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
+        sd15: ['sd15'], sdxl: ['SDXL'], flux: ['Flux'], flux2: ['flux2', 'flux2-9b', 'flux2-4b'], krea2: ['krea'], qwen: ['QWEN'], 'qwen-edit': ['QWEN'],
         'zit-base': ['ZIT'], 'zit-turbo': ['ZIT'], 'ltx-23': ['LTX2', 'LTX2_camera_control'],
     },
 };
 
+function inferFlux2Variant(identity, legacy9b = false) {
+    if (!legacy9b && !/flux[- ._]?2|klein/i.test(identity)) return undefined;
+    const four = /(?:^|[^0-9])4[- ._]?b(?!it)/i.test(identity);
+    const nine = /(?:^|[^0-9])9[- ._]?b(?!it)/i.test(identity);
+    if (four && nine) return undefined;
+    return four ? 'flux2-4b' : nine || legacy9b ? 'flux2-9b' : undefined;
+}
+
+function inventoryFlux2Variant(item) {
+    if (item.userFamily === 'flux2-9b' || item.userFamily === 'flux2-4b') return item.userFamily;
+    if (item.userFamily && item.userFamily !== 'flux2') return undefined;
+    const modelPath = item.relativePath.replace(/\\/g, '/');
+    const legacy = item.userFamily === 'flux2' || /(?:^|\/)flux2(?:[-_]?[49]b)?\//i.test(modelPath);
+    if (!legacy && /(?:^|\/)(?:sdxl|sd15|sd1\.5|flux|flux-dev|qwen|qwen21|krea|moss|h3|zit|ltx2|ltx2_camera_control)\//i.test(modelPath)) return undefined;
+    const metadata = [item.archiveInfo?.baseModel, item.installedVersionName].filter(Boolean).join(' ');
+    return inferFlux2Variant(item.baseModel || item.archiveInfo?.baseModel || '') || inferFlux2Variant(metadata)
+        || inferFlux2Variant(`${modelPath} ${item.modelName || ''} ${metadata}`, legacy && (!item.kind || item.kind === 'lora'));
+}
+
 function inventoryItemMatchesSelection(item, kind, family) {
     if (kind !== 'all' && item.kind !== kind) return false;
     if (family === 'all') return true;
+    if (family === 'flux2-9b' || family === 'flux2-4b') return inventoryFlux2Variant(item) === family;
+    if (family === 'flux2' && inventoryFlux2Variant(item)) return true;
     if (item.userFamily) return item.userFamily === family;
     const familyFolders = SCAN_FAMILY_FOLDERS[item.kind]?.[family] || [];
     const pathSegments = String(item.relativePath || '').replace(/\\/g, '/').toLowerCase().split('/');
@@ -489,7 +513,11 @@ async function fetchArchiveGalleryExamples(value) {
     return workflows.map(getWorkflowPromptExample).filter(Boolean);
 }
 
-async function saveUsageMetadata(resolvedPath, usageMetadata) {
+async function saveUsageMetadata(resolvedPath, usageMetadata, preserveExisting = false) {
+    if (preserveExisting) {
+        const current = store.get('civitai_inventory', { items: [] }).items.find(item => item.path === resolvedPath);
+        usageMetadata = { ...usageMetadata, ...current?.usageMetadata };
+    }
     const stem = resolvedPath.slice(0, -path.extname(resolvedPath).length);
     await fs.promises.writeFile(`${stem}.usage.json`, JSON.stringify({ usageMetadata }, null, 2), 'utf8');
     const inventory = store.get('civitai_inventory', { scannedAt: null, root: '', items: [] });
@@ -676,7 +704,7 @@ function inferModelFolder(model, version) {
     if (/qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(identity)) return 'qwen21';
     if (/\bmoss(?:image|\b|_)/.test(identity)) return 'moss';
     if (/mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(identity)) return 'H3';
-    if (/flux[- ._]?2|klein/.test(identity)) return 'flux2';
+    if (/flux[- ._]?2|klein/.test(identity)) return inferFlux2Variant(version?.baseModel || '') || inferFlux2Variant(identity) || 'flux2';
     if (/krea[- ._]?2/.test(identity)) return 'krea';
     if (/qwen/.test(identity)) return 'QWEN';
     if (/z[- ]?image|\bzit\b/.test(identity)) return 'ZIT';
@@ -1115,7 +1143,7 @@ ipcMain.handle('get-civitai-inventory', async event => {
     return inventory.items?.length ? inventory : buildFastLocalInventory(event);
 });
 
-ipcMain.handle('scan-civitai-library', async (event, request) => {
+async function scanCivitaiLibrary(event, request) {
     const provider = typeof request === 'string' ? request : request?.provider;
     const scanKind = typeof request === 'string' ? 'all' : request?.kind || 'all';
     const scanFamily = typeof request === 'string' ? 'all' : request?.family || 'all';
@@ -1135,7 +1163,17 @@ ipcMain.handle('scan-civitai-library', async (event, request) => {
             directory: folder ? path.join(modelRoot, category.directory, folder) : path.join(modelRoot, category.directory),
         }));
     });
-    await Promise.all(scanRoots.map(root => collectModelFiles(root.directory, root.kind, files)));
+    const modelPath = request?.modelPath ? assertLocalModelPath(request.modelPath).resolvedPath : undefined;
+    if (modelPath) {
+        const category = MODEL_SCAN_DIRECTORIES.find(({ directory }) => {
+            const relative = path.relative(path.join(modelRoot, directory), modelPath);
+            return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+        });
+        if (!category) throw new Error('Unsupported local model directory.');
+        files.push({ path: modelPath, kind: category.kind });
+    } else {
+        await Promise.all(scanRoots.map(root => collectModelFiles(root.directory, root.kind, files)));
+    }
     files.sort((left, right) => left.path.localeCompare(right.path));
 
     const previousCache = store.get('civitai_inventory_hash_cache', {});
@@ -1159,6 +1197,12 @@ ipcMain.handle('scan-civitai-library', async (event, request) => {
         const huggingFaceSidecar = previousItem?.huggingFaceInfo ? undefined : await readHuggingFaceSidecar(localFile.path);
         const usageSidecar = previousItem?.usageMetadata ? undefined : await readUsageSidecar(localFile.path);
         const unchanged = Boolean(previousItem && cached?.size === stat.size && cached?.mtimeMs === stat.mtimeMs && cached.sha256);
+        if ((scanFamily === 'flux2-9b' || scanFamily === 'flux2-4b') && !inventoryItemMatchesSelection({
+            ...previousItem, ...archiveSidecar, kind: localFile.kind, fileName, relativePath: path.relative(modelRoot, localFile.path),
+        }, scanKind, scanFamily)) {
+            sendProgress(index + 1, fileName, 'Skipped incompatible FLUX2 variant');
+            continue;
+        }
         const localPreviewPath = findModelPreviewPath(localFile.path);
         const lastCheckedAt = Date.parse(previousItem?.civitaiCheckedAt || '') || 0;
         const previewCheckedAt = Date.parse(previousItem?.previewCheckedAt || '') || 0;
@@ -1251,6 +1295,7 @@ ipcMain.handle('scan-civitai-library', async (event, request) => {
                     civitaiCheckedAt: new Date().toISOString(),
                     installedVersionId: installedVersion.id,
                     installedVersionName: installedVersion.name,
+                    baseModel: installedVersion.baseModel,
                     installedPublishedAt: installedVersion.publishedAt,
                     latestVersionId: latestVersion?.id,
                     latestVersionName: latestVersion?.name,
@@ -1296,11 +1341,28 @@ ipcMain.handle('scan-civitai-library', async (event, request) => {
         const relative = path.relative(root.directory, itemPath);
         return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
     });
-    const retainedItems = (previousInventory.items || []).filter(item => !isInScannedRoot(item.path));
-    const inventory = { scannedAt: new Date().toISOString(), root: comfyUIRoot, items: [...retainedItems, ...scannedItems] };
-    store.set('civitai_inventory_hash_cache', nextCache);
+    const latestInventory = store.get('civitai_inventory', { items: [] });
+    const retainedItems = (latestInventory.items || []).filter(item => modelPath
+        ? path.resolve(item.path) !== modelPath
+        : !isInScannedRoot(item.path)
+        || (scanFamily === 'flux2-9b' || scanFamily === 'flux2-4b') && !inventoryItemMatchesSelection(item, scanKind, scanFamily));
+    const indexedItems = modelPath ? scannedItems.map(item => {
+        const previous = previousItems.get(item.path) || {};
+        const current = (latestInventory.items || []).find(candidate => path.resolve(candidate.path) === modelPath);
+        const editedFields = Object.fromEntries(Object.entries(current || {}).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(previous[key])));
+        return { ...item, ...editedFields };
+    }) : scannedItems;
+    const inventory = { scannedAt: new Date().toISOString(), root: comfyUIRoot, items: [...retainedItems, ...indexedItems] };
+    const latestCache = store.get('civitai_inventory_hash_cache', {});
+    store.set('civitai_inventory_hash_cache', modelPath ? { ...latestCache, [modelPath]: nextCache[modelPath] } : nextCache);
     store.set('civitai_inventory', inventory);
     return inventory;
+}
+
+ipcMain.handle('scan-civitai-library', scanCivitaiLibrary);
+ipcMain.handle('index-civitai-model', (event, request) => {
+    if (typeof request?.modelPath !== 'string' || !request.modelPath.trim()) throw new Error('A downloaded model path is required.');
+    return scanCivitaiLibrary(event, { provider: request.provider, modelPath: request.modelPath, kind: 'all', family: 'all' });
 });
 
 ipcMain.handle('refresh-civitai-library-safety', async (event, request = {}) => {
@@ -1408,9 +1470,10 @@ ipcMain.handle('fetch-local-model-archive', async (event, request) => {
     const item = (inventory.items || []).find(candidate => candidate.path === resolvedPath);
     if (!item) throw new Error('Model is not present in the local inventory.');
     const updateArchiveLookup = updates => {
-        inventory.items = (inventory.items || []).map(candidate => candidate.path === resolvedPath ? { ...candidate, ...updates } : candidate);
-        store.set('civitai_inventory', inventory);
-        return inventory;
+        const latestInventory = store.get('civitai_inventory', { scannedAt: null, root: '', items: [] });
+        latestInventory.items = (latestInventory.items || []).map(candidate => candidate.path === resolvedPath ? { ...candidate, ...updates } : candidate);
+        store.set('civitai_inventory', latestInventory);
+        return latestInventory;
     };
 
     let sha256 = String(item.sha256 || '').toLowerCase();
@@ -1821,7 +1884,7 @@ ipcMain.handle('fetch-local-model-usage-metadata', async (event, request) => {
         source,
         updatedAt: new Date().toISOString(),
     };
-    return saveUsageMetadata(resolvedPath, usageMetadata);
+    return saveUsageMetadata(resolvedPath, usageMetadata, request?.preserveExisting === true);
 });
 
 ipcMain.handle('get-local-model-prompt-examples', async (event, request) => {

@@ -45,17 +45,17 @@ export const restoreAdvancedVideoLibraryItem = async (
     return { draft, options, warning: 'Source video loaded for finishing only. No H3 first pass will run. FPS and optional soundtrack come from the source; VAE processing may adjust frame count. The Library item was not changed.' };
 };
 
-export const readRenderedLibraryMedia = async (videoUrl: string, localBlob?: Blob): Promise<{
+export const readRenderedLibraryMedia = async (videoUrl: string, localBlob?: Blob, label = 'H3'): Promise<{
     blob: Blob; mediaType: 'video' | 'image'; thumbnail: string; warning?: string;
 }> => {
     const filename = new URL(videoUrl).searchParams.get('filename') || '';
     let downloaded = localBlob;
     if (!downloaded) {
         const response = await fetch(videoUrl, { signal: AbortSignal.timeout(120000) });
-        if (!response.ok) throw new Error(`Could not read the H3 output (${response.status}). Check that its ComfyUI output file still exists.`);
+        if (!response.ok) throw new Error(`Could not read the ${label} output (${response.status}). Check that its ComfyUI output file still exists.`);
         downloaded = await response.blob();
     }
-    if (!downloaded.size) throw new Error('The H3 output file is empty. Nothing was saved.');
+    if (!downloaded.size) throw new Error(`The ${label} output file is empty. Nothing was saved.`);
     const reportedType = downloaded.type.split(';')[0].trim().toLowerCase();
     const extension = filename.split('.').pop()?.toLowerCase() || '';
     const mimeType = !reportedType || reportedType === 'application/octet-stream' ? OUTPUT_MIME_TYPES[extension] : reportedType;
@@ -72,7 +72,7 @@ export const readRenderedLibraryMedia = async (videoUrl: string, localBlob?: Blo
             finally { URL.revokeObjectURL(url); }
         }
     } catch (cause) {
-        console.warn('H3 output thumbnail could not be extracted; retaining the original output with a placeholder.', cause);
+        console.warn(`${label} output thumbnail could not be extracted; retaining the original output with a placeholder.`, cause);
         thumbnail = createVideoPlaceholderThumbnail();
         warning = 'A thumbnail could not be extracted for this codec. The original output file was saved with a placeholder.';
     }

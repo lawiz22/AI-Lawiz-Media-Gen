@@ -24,6 +24,7 @@ import { LibraryPickerModal } from './LibraryPickerModal';
 import { requiresSfwLibraryRating } from '../services/idbLibraryService';
 import { LIBRARY_CATEGORY_ACCENT_STYLES } from '../utils/accentTheme';
 import { isMinimaxH3PromptLibraryItem } from '../services/videoPromptLibrary';
+import { downloadBlazingBlob } from '../services/blazingFastCharacterLibrary';
 
 // --- Confirmation Modal Component (defined in-file to avoid adding new files) ---
 interface ConfirmationModalProps {
@@ -90,7 +91,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
 
 
 interface LibraryPanelProps {
-  onLoadItem: (item: LibraryItem, options?: { importTtsCharacterPhotos: boolean; videoWorkflow?: 'reference' | 'ultrafast' | 'advanced'; videoFinishing?: 'latent' | 'ltx' }) => void;
+  onLoadItem: (item: LibraryItem, options?: { importTtsCharacterPhotos: boolean; videoWorkflow?: 'reference' | 'ultrafast' | 'advanced' | 'ltx-audio-sync'; videoFinishing?: 'latent' | 'ltx' }) => void;
   onUpscaleItem: (item: LibraryItem) => void;
   isDriveConnected: boolean;
   onDownloadFromDrive: () => void;
@@ -555,7 +556,9 @@ const getImageWorkflow = (item: LibraryItem) => {
   return '';
 };
 
+const getCharacterProvider = (item: LibraryItem) => item.blazingFastOptions ? 'comfyui' : item.options?.provider || '';
 const getCharacterWorkflow = (item: LibraryItem) => {
+  if (item.blazingFastOptions) return 'FLUX2 - Blazing Fast character';
   if (item.options?.provider === 'comfyui') return item.options.comfyCharacterMode || 'qwen';
   if (item.options?.provider === 'mammouth') return item.options.mammouthImageModel || '';
   if (item.options?.provider === 'gemini') return item.options.geminiT2IModel || '';
@@ -966,7 +969,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
     }
     if (filter.includes('character') && (characterProvider || characterWorkflow)) {
       filtered = filtered.filter(item => item.mediaType !== 'character'
-        || ((!characterProvider || item.options?.provider === characterProvider)
+        || ((!characterProvider || getCharacterProvider(item) === characterProvider)
           && (!characterWorkflow || getCharacterWorkflow(item) === characterWorkflow)));
     }
     if (safetyFilter !== 'all') {
@@ -1002,10 +1005,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
     .map(getImageWorkflow)
     .filter(Boolean))].sort(), [items, imageProvider]);
   const characterProviders = useMemo(() => [...new Set(items
-    .filter(item => item.mediaType === 'character' && item.options?.provider)
-    .map(item => item.options!.provider!))].sort(), [items]);
+    .filter(item => item.mediaType === 'character')
+    .map(getCharacterProvider).filter(Boolean))].sort(), [items]);
   const characterWorkflows = useMemo(() => [...new Set(items
-    .filter(item => item.mediaType === 'character' && (!characterProvider || item.options?.provider === characterProvider))
+    .filter(item => item.mediaType === 'character' && (!characterProvider || getCharacterProvider(item) === characterProvider))
     .map(getCharacterWorkflow)
     .filter(Boolean))].sort(), [items, characterProvider]);
   const availableTags = useMemo(() => [...new Set(items.flatMap(item => item.tags || []))]
@@ -1294,6 +1297,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                 {!item.minimaxH3Options && !item.characterSwapOptions && <button disabled={isResolvingItem} onClick={(e) => { e.stopPropagation(); if (item.mediaType === 'prompt' && !isMinimaxH3PromptLibraryItem(item)) { setPromptToUse(item); setPickerOpen(true); } else { void resolveAndUseItem(item, resolved => onLoadItem(resolved, isMinimaxH3PromptLibraryItem(resolved) ? { importTtsCharacterPhotos: false, videoWorkflow: 'reference' } : undefined)); } }} title={isMinimaxH3PromptLibraryItem(item) ? 'Open in Minimax REF2v H3' : item.mediaType === 'prompt' ? 'Use Prompt' : 'Load in Generator'} className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-accent disabled:opacity-50">{item.mediaType === 'prompt' ? <SendIcon className="w-4 h-4" /> : <LoadIcon className="w-4 h-4" />}</button>}
                 {isMinimaxH3PromptLibraryItem(item) && <button disabled={isResolvingItem} onClick={event => { event.stopPropagation(); void resolveAndUseItem(item, resolved => onLoadItem(resolved, { importTtsCharacterPhotos: false, videoWorkflow: 'ultrafast' })); }} title="Open in Ultrafast" className="rounded-full px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-400/15 disabled:opacity-50">Ultrafast</button>}
                 {isMinimaxH3PromptLibraryItem(item) && <button disabled={isResolvingItem} onClick={event => { event.stopPropagation(); void resolveAndUseItem(item, resolved => onLoadItem(resolved, { importTtsCharacterPhotos: false, videoWorkflow: 'advanced' })); }} title="Open in MiniMax Advanced" className="rounded-full px-2 py-1 text-xs font-semibold text-cyan-300 hover:bg-cyan-400/15 disabled:opacity-50">Advanced</button>}
+                {isMinimaxH3PromptLibraryItem(item) && <button disabled={isResolvingItem} onClick={event => { event.stopPropagation(); void resolveAndUseItem(item, resolved => onLoadItem(resolved, { importTtsCharacterPhotos: false, videoWorkflow: 'ltx-audio-sync' })); }} title="Open in LTX 2.5 Audio-Sync" className="rounded-full px-2 py-1 text-xs font-semibold text-orange-300 hover:bg-orange-400/15 disabled:opacity-50">Audio-Sync</button>}
                 {item.mediaType === 'video' && (['latent', 'ltx'] as const).map(videoFinishing => <button key={videoFinishing} disabled={isResolvingItem} onClick={event => { event.stopPropagation(); sendVideoToAdvanced(item, videoFinishing); }} title={videoFinishing === 'latent' ? 'Advanced: H3 latent upscale only' : 'Advanced: LTX refine only'} className="rounded-full px-2 py-1 text-xs font-semibold text-cyan-300 hover:bg-cyan-400/15 disabled:opacity-50">{videoFinishing === 'latent' ? 'Latent upscale' : 'LTX refine'}</button>)}
                 <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name || `Item #${item.id}`); }} disabled={deletingId === item.id} title="Delete Item" className="p-1.5 rounded-full hover:bg-bg-primary text-text-secondary hover:text-danger">{deletingId === item.id ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : <TrashIcon className="w-4 h-4" />}</button>
               </div>
@@ -1717,7 +1721,32 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                     </>}
                     <details><summary className="cursor-pointer text-xs text-text-secondary">{selectedItemModal.sceneVariationPreset.settings.comfyModelType === 'qwen21-i2i-multi' ? 'Qwen 2.1 settings' : 'FLUX2 settings'}</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-text-secondary">{JSON.stringify(selectedItemModal.sceneVariationPreset.settings, null, 2)}</pre></details>
                   </div>}
-                  {!selectedItemModal.ttsOptions && !selectedItemModal.sceneVariationPreset && !selectedItemModal.minimaxH3Options && !selectedItemModal.characterSwapOptions && (selectedItemModal.themeOptions ? renderThemeOptionsDetails(selectedItemModal.themeOptions) : renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType))}
+                  {selectedItemModal.creationSuiteOptions && <div className="space-y-2 border-t border-border-primary pt-3">
+                    <h4 className="font-semibold text-text-primary">Creation suite</h4>
+                    <DetailItem label="Pipelines" value={[selectedItemModal.creationSuiteOptions.settings.sceneEnabled && 'Scene Creation', selectedItemModal.creationSuiteOptions.settings.swapEnabled && 'Swap face-Change expression'].filter(Boolean).join(' then ') || 'Disabled'} />
+                    <DetailItem label="Saved output" value={selectedItemModal.creationSuiteOptions.output || 'Setup'} />
+                    <DetailItem label="Scene seed" value={selectedItemModal.creationSuiteOptions.settings.nodes['10'].seed} />
+                    <DetailItem label="Swap seed" value={selectedItemModal.creationSuiteOptions.settings.nodes['120'].seed} />
+                    <details><summary className="cursor-pointer text-xs text-text-secondary">Creation suite settings and original inputs</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-text-secondary">{JSON.stringify(selectedItemModal.creationSuiteOptions, null, 2)}</pre></details>
+                  </div>}
+                  {selectedItemModal.blazingFastOptions && <div className="space-y-2 border-t border-border-primary pt-3">
+                    <h3 className="font-semibold text-accent">Blazing Fast character</h3>
+                    <DetailItem label="Model" value={selectedItemModal.blazingFastOptions.settings.model} />
+                    <DetailItem label="Seed" value={selectedItemModal.blazingFastOptions.settings.seed} />
+                    <DetailItem label="Style" value={selectedItemModal.blazingFastOptions.style?.title || 'Same Style'} />
+                    <DetailItem label="Associated caption" value={selectedItemModal.blazingFastOptions.caption} isCode />
+                    <button type="button" className="rounded-lg border border-border-primary px-3 py-2 text-sm" onClick={() => downloadBlazingBlob(new Blob([selectedItemModal.blazingFastOptions!.caption], { type: 'text/plain;charset=utf-8' }), `${(selectedItemModal.name || 'blazing-fast').replace(/[<>:"/\\|?*]/g, '_')}.txt`)}>Download associated TXT</button>
+                    <details><summary className="cursor-pointer text-xs text-text-secondary">Exact settings and executed API workflow</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(selectedItemModal.blazingFastOptions, null, 2)}</pre></details>
+                  </div>}
+                  {selectedItemModal.clothesSwitcherOptions && <div className="space-y-2 border-t border-border-primary pt-3">
+                    <h4 className="font-semibold text-text-primary">Clothes Switcher</h4>
+                    <DetailItem label="Saved output" value={selectedItemModal.clothesSwitcherOptions.kind === 'parameters' ? 'Parameter preset' : selectedItemModal.clothesSwitcherOptions.output || 'Setup'} />
+                    <DetailItem label="Model" value={selectedItemModal.clothesSwitcherOptions.settings.nodes['106'].unet_name} />
+                    <DetailItem label="Seed" value={selectedItemModal.clothesSwitcherOptions.settings.nodes['138'].seed} />
+                    <DetailItem label="Original photo" value={selectedItemModal.clothesSwitcherOptions.input?.name || 'None'} />
+                    <details><summary className="cursor-pointer text-xs text-text-secondary">Clothes Switcher settings and original input</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-text-secondary">{JSON.stringify(selectedItemModal.clothesSwitcherOptions, null, 2)}</pre></details>
+                  </div>}
+                  {!selectedItemModal.ttsOptions && !selectedItemModal.blazingFastOptions && !selectedItemModal.sceneVariationPreset && !selectedItemModal.creationSuiteOptions && !selectedItemModal.clothesSwitcherOptions && !selectedItemModal.minimaxH3Options && !selectedItemModal.characterSwapOptions && (selectedItemModal.themeOptions ? renderThemeOptionsDetails(selectedItemModal.themeOptions) : renderOptionsDetails(selectedItemModal.options, selectedItemModal.mediaType))}
                   {selectedItemModal.characterSwapOptions && <div className="space-y-3 rounded-lg border border-border-primary p-3">
                     <h3 className="font-semibold text-accent">Character Swap H3 {selectedItemModal.characterSwapOptions.output === 'comparison' ? 'comparison' : 'result'}</h3>
                     <DetailItem label="Original filename" value={selectedItemModal.characterSwapOptions.filename} />
@@ -1787,6 +1816,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                         <button type="button" onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos: false, videoWorkflow: 'reference' }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 border border-violet-400/50 bg-violet-400/15 text-violet-200 font-bold py-2 px-4 rounded-lg hover:bg-violet-400/25 transition-colors"><LoadIcon className="w-5 h-5" /> Open in Minimax REF2v H3</button>
                         <button type="button" onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos: false, videoWorkflow: 'ultrafast' }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 border border-emerald-400/50 bg-emerald-400/15 text-emerald-200 font-bold py-2 px-4 rounded-lg hover:bg-emerald-400/25 transition-colors"><LoadIcon className="w-5 h-5" /> Open in Ultrafast</button>
                         <button type="button" onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos: false, videoWorkflow: 'advanced' }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 border border-cyan-400/50 bg-cyan-400/15 text-cyan-200 font-bold py-2 px-4 rounded-lg hover:bg-cyan-400/25 transition-colors"><LoadIcon className="w-5 h-5" /> Open in MiniMax Advanced</button>
+                        <button type="button" onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos: false, videoWorkflow: 'ltx-audio-sync' }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 border border-orange-400/50 bg-orange-400/15 text-orange-200 font-bold py-2 px-4 rounded-lg hover:bg-orange-400/25 transition-colors"><LoadIcon className="w-5 h-5" /> Open in LTX 2.5 Audio-Sync</button>
                       </>
                     ) : selectedItemModal.mediaType === 'prompt' ? (
                       <>
@@ -1794,7 +1824,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                         {selectedItemModal.promptType === 'soup' && <button type="button" onClick={() => setSoupPromptToLink(selectedItemModal)} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-primary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors"><PhotographIcon className="w-5 h-5" /> {selectedItemModal.linkedResultId ? 'Change Result' : 'Link Result'}</button>}
                       </>
                     ) : selectedItemModal.minimaxH3Options || selectedItemModal.characterSwapOptions ? null : (
-                      <button onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> {selectedItemModal.sceneVariationPreset ? 'Open in Scene Variation' : selectedItemModal.ltxDirectorOptions ? 'Open in LTX Director' : selectedItemModal.mediaType === 'audio-tts' ? 'Use in LTX Video' : 'Load in Generator'}</button>
+                      <button onClick={() => { onLoadItem(selectedItemModal, { importTtsCharacterPhotos }); setSelectedItemModal(null); }} className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors"><LoadIcon className="w-5 h-5" /> {selectedItemModal.blazingFastOptions ? 'Open in Blazing Fast character' : selectedItemModal.clothesSwitcherOptions ? 'Open in Clothes Switcher' : selectedItemModal.creationSuiteOptions ? 'Open in Creation suite' : selectedItemModal.sceneVariationPreset ? 'Open in Scene Variation' : selectedItemModal.ltxDirectorOptions ? 'Open in LTX Director' : selectedItemModal.mediaType === 'audio-tts' ? 'Use in LTX Video' : 'Load in Generator'}</button>
                     )}
                     <button onClick={() => handleDelete(selectedItemModal.id, selectedItemModal.name || `Item #${selectedItemModal.id}`)} disabled={deletingId === selectedItemModal.id} className="flex items-center justify-center gap-2 bg-danger-bg text-danger font-semibold py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">{deletingId === selectedItemModal.id ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <TrashIcon className="w-5 h-5" />}</button>
                   </div>

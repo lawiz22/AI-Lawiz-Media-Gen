@@ -48,7 +48,8 @@ const visit = node => {
     if (ts.isCallExpression(node) && node.expression.getText(tree) === 'useEffect'
         && node.arguments[0]?.getText(tree).includes('getOpenRouterModels(controller.signal)')) catalogEffect = node.arguments[0];
     if (ts.isCallExpression(node) && node.expression.getText(tree) === 'useEffect'
-        && node.arguments[0]?.getText(tree).includes('restoreMinimaxH3PromptLibraryItem(libraryItem')) libraryEffect = node.arguments[0];
+        && node.arguments[0]?.getText(tree).includes('restoreMinimaxH3PromptLibraryItem(libraryItem')
+        && node.arguments[0]?.getText(tree).includes('validateH3ReferenceLimits(restored)')) libraryEffect = node.arguments[0];
     ts.forEachChild(node, visit);
 };
 visit(tree);
@@ -56,13 +57,15 @@ assert.ok(select, 'OpenRouter must use a native, unfiltered-by-current-value dro
 assert.ok(catalogEffect, 'OpenRouter catalog must load automatically with cancellation');
 assert.equal(calculations.length, names.size);
 assert.ok(transfer && audioSettingsChange);
-const audioWorkflowUrl = compile(['../services/videoPromptService.ts', '../services/minimaxH3Workflow.ts', '../services/minimaxH3AdvancedWorkflow.ts', '../services/minimaxH3UltrafastWorkflow.ts']
+const audioWorkflowUrl = compile(['../services/styleGallery.ts', '../services/h3StyleWorkflow.ts', '../services/videoPromptService.ts', '../services/minimaxH3Workflow.ts', '../services/minimaxH3AdvancedWorkflow.ts', '../services/minimaxH3UltrafastWorkflow.ts']
     .map(name => readFileSync(new URL(name, import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '')).join('\n'));
+const syncWorkflowUrl = compile(readFileSync(new URL('../services/ltxAudioSyncWorkflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, ''));
 const component = await import(compile(`
     import React from ${JSON.stringify(pathToFileURL(require.resolve('react')).href)};
+    import { transferAudioSyncPrompt, defaultAudioSyncSettings } from ${JSON.stringify(syncWorkflowUrl)};
     import { filterOpenRouterModels, getOpenRouterInputModalities } from ${JSON.stringify(serviceUrl)};
-    import { defaultMinimaxH3Options, defaultUltrafastH3Options, defaultH3WorkflowOptions, h3WorkflowName, validateH3ReferenceLimits, withH3OriginalAudio, validateVideoPromptOutput, h3AspectFromPrompt } from ${JSON.stringify(audioWorkflowUrl)};
-    export { defaultMinimaxH3Options, defaultUltrafastH3Options, withH3OriginalAudio };
+    import { defaultMinimaxH3Options, defaultUltrafastH3Options, defaultH3WorkflowOptions, h3WorkflowName, validateH3ReferenceLimits, withH3OriginalAudio, validateVideoPromptOutput, h3AspectFromPrompt, h3StyleLoraRemovals } from ${JSON.stringify(audioWorkflowUrl)};
+    export { defaultMinimaxH3Options, defaultUltrafastH3Options, withH3OriginalAudio, defaultAudioSyncSettings };
     export const changeAudioOptions = (draft, options) => {
         let result;
         const setDraft = action => { result = action(draft); };
@@ -154,6 +157,22 @@ const models = [
 const render = (...args) => renderToStaticMarkup(component.renderPicker(...args));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test('Audio-Sync transfer disables Qwen while preserving model choices and all H3 settings', () => {
+    const sync = component.defaultAudioSyncSettings();
+    sync.enhancePrompt = true;
+    sync.nodes['398:393'].clip_name = 'selected-writer.safetensors';
+    const current = { workflow: 'ltx-audio-sync', template: 'generation', aspect: '9:16', duration: 4, references: [],
+        result: 'integrated_multimodal_description: A performer.\noverall_soundscape: Singing.\nnon_diegetic_music: None.',
+        audioSyncSettings: sync, minimaxDrafts: { reference: { prompt: 'Keep H3' } }, minimaxH3Options: component.defaultMinimaxH3Options() };
+    const transferred = component.transferAudioDraft(current);
+    assert.equal(transferred.audioSyncDraft.prompt, current.result);
+    assert.equal(transferred.audioSyncDraft.audio, null);
+    assert.equal(transferred.audioSyncSettings.enhancePrompt, false);
+    assert.equal(transferred.audioSyncSettings.nodes['398:393'].clip_name, 'selected-writer.safetensors');
+    assert.equal(transferred.minimaxDrafts, current.minimaxDrafts);
+    assert.equal(transferred.minimaxH3Options, current.minimaxH3Options);
+});
+
 test('Advanced transfers, cross-variant Library loads and reset keep the other workflow drafts intact', async () => {
     const current = { idea: 'scene', workflow: 'advanced', template: 'generation', aspect: '4:3', duration: 3, references: [],
         result: 'integrated_multimodal_description: [Shot 1] A quiet street.\noverall_soundscape: Footsteps.\nnon_diegetic_music: None.',
@@ -192,6 +211,33 @@ test('composer transfers target Ultrafast without changing the normal H3 draft o
     assert.equal(reset.minimaxDrafts.reference, normal);
     assert.equal(reset.minimaxH3Options, normalOptions);
     assert.deepEqual(reset.ultrafastH3Options, component.defaultUltrafastH3Options());
+});
+
+test('styled composer transfers match wording and LoRA across every H3 destination, clearing old managed contributions', () => {
+    const style = { id: 'film', model: 'H3', title: '1920s', trigger: 'FILM', prompt: 'Aged film', lora: 'H3\\film.safetensors',
+        strength: 0.6, notes: '', settings: {} };
+    const result = 'integrated_multimodal_description: FILM [Shot 1] A scene.\noverall_soundscape: Quiet.\nnon_diegetic_music: None.';
+    for (const workflow of ['reference', 'ultrafast', 'advanced']) {
+        const key = workflow === 'advanced' ? 'advancedH3Options' : workflow === 'ultrafast' ? 'ultrafastH3Options' : 'minimaxH3Options';
+        const previous = { ...component.defaultMinimaxH3Options(), style: { ...style, id: 'old', lora: 'H3\\old.safetensors' }, styleStrength: 1.5, useStyleSettings: true };
+        previous.loras[0] = { enabled: true, name: style.lora, strength: 1 };
+        previous.loras[1] = { enabled: true, name: 'H3\\detail.safetensors', strength: 0.2 };
+        const draft = { workflow, style, generatedInputs: { style: structuredClone(style) }, result, template: 'generation', references: [],
+            aspect: '4:3', duration: 3, minimaxDrafts: {}, [key]: previous };
+        const transferred = component.transferAudioDraft(draft);
+        assert.deepEqual(transferred[key].style, style);
+        assert.notEqual(transferred[key].style, style);
+        assert.equal(transferred[key].styleStrength, undefined);
+        assert.equal(transferred[key].useStyleSettings, true);
+        assert.equal(transferred[key].loras[0].enabled, false);
+        assert.deepEqual(transferred[key].loras[1], previous.loras[1]);
+        assert.equal(transferred.minimaxDrafts[workflow].prompt, result);
+        assert.throws(() => component.transferAudioDraft({ ...draft, style: { ...style, id: 'changed' } }), /changed since/);
+        assert.throws(() => component.transferAudioDraft({ ...draft, style: undefined }), /changed since/);
+        const cleared = component.transferAudioDraft({ ...draft, style: undefined, generatedInputs: { style: undefined } });
+        assert.equal(cleared[key].style, undefined);
+        assert.equal(previous.style.id, 'old');
+    }
 });
 
 test('Library destination override loads old prompts into Ultrafast using its defaults without overwriting normal H3', async () => {

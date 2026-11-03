@@ -12,7 +12,8 @@ const generateGeminiTextResult = async (...args) => { calls.push(['gemini', ...a
 const generateMammouthText = async (...args) => { calls.push(['mammouth', ...args]); return { text: response }; };
 const generateOpenRouterText = async (...args) => { calls.push(['openrouter', ...args]); return response; };
 `;
-const { outputText } = ts.transpileModule(mocks + source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
+const gallery = readFileSync(new URL('./styleGallery.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '');
+const { outputText } = ts.transpileModule(mocks + gallery + source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 const file = kind => new File(['test'], `ref.${kind === 'image' ? 'png' : kind === 'video' ? 'mp4' : 'wav'}`, { type: `${kind}/${kind === 'image' ? 'png' : kind === 'video' ? 'mp4' : 'wav'}` });
 const ref = (kind, slot = 1) => { const input = file(kind); return { id: `${kind}-${slot}`, kind, slot, file: input, original: input, note: 'Identity reference' }; };
@@ -23,6 +24,52 @@ const draft = (patch = {}) => ({
 });
 const generated = 'integrated_multimodal_description: [Shot 1] A scene.\noverall_soundscape: Footsteps.\nnon_diegetic_music: None.';
 const replacement = 'subject_definitions: <Subject 1> from <Picture 1>.\nsummary: A replacement.\nretention_analysis: Motion preserved.\ndetailed_description: [Shot 1] Walk.\noverall_soundscape: Footsteps.\nnon_diegetic_music: None.';
+const filmStyle = { id: 'h3-film', model: 'MiniMax H3', title: '1920s silent film', trigger: 'AGED_FILM', prompt: 'Aged monochrome celluloid',
+    lora: 'H3\\1920s_film.safetensors', strength: 0.7, notes: 'Hand-cranked motion, grain and intertitles', settings: {} };
+
+test('all providers receive style vocabulary and bounded local examples while output keeps its exact field structure', async () => {
+    try {
+        for (const provider of ['gemini', 'openrouter', 'mammouth']) {
+            const value = draft({ provider, style: filmStyle, styleExamples: ['LOCAL_EXAMPLE_1', 'x'.repeat(1600), 'LOCAL_EXAMPLE_3', 'EXCLUDE_FOURTH'] });
+            api.setResponse(generated);
+            const result = await api.generateVideoPrompt(value), call = api.calls.at(-1);
+            assert.equal(call[0], provider);
+            for (const expected of ['1920s silent film', 'AGED_FILM', 'Hand-cranked motion', 'LOCAL_EXAMPLE_1', 'LOCAL_EXAMPLE_3', 'camera, lighting, texture, color, motion']) assert.ok(call[1].includes(expected));
+            assert.ok(!call[1].includes('EXCLUDE_FOURTH'));
+            assert.ok(!call[1].includes('x'.repeat(1501)));
+            assert.ok(!call[1].includes('H3\\\\1920s_film'), 'no local directory is sent');
+            assert.match(call[1], /does not authorize removing or changing an explicitly requested soundtrack/);
+            assert.match(result, /^integrated_multimodal_description: AGED_FILM\n\[Shot 1\]/);
+            assert.equal(api.validateVideoPromptOutput(result, 'generation'), result);
+            assert.ok(result.endsWith('overall_soundscape: Footsteps.\nnon_diegetic_music: None.'));
+            assert.equal(value.idea, 'Two people walking');
+        }
+    } finally { api.setResponse(generated); }
+});
+test('style trigger is unique at the visual-field start across multiline shots and replacement output', () => {
+    const raw = 'integrated_multimodal_description: [Shot 1] Rain.\n[Shot 2] AGED_FILM The street.\noverall_soundscape: Keep exact speech.\nnon_diegetic_music: None.';
+    const result = api.applyVideoPromptStyle(raw, draft({ style: filmStyle }));
+    assert.equal(result.match(/AGED_FILM/g).length, 1);
+    assert.ok(result.includes('[Shot 2] The street.'));
+    assert.ok(result.endsWith('overall_soundscape: Keep exact speech.\nnon_diegetic_music: None.'));
+    const changed = api.applyVideoPromptStyle(replacement, draft({ style: filmStyle, template: 'replacement' }));
+    assert.ok(changed.startsWith('subject_definitions:'));
+    assert.match(changed, /detailed_description: AGED_FILM\n\[Shot 1\]/);
+    assert.equal(api.validateVideoPromptOutput(changed, 'replacement'), changed);
+    assert.equal(api.applyVideoPromptStyle(generated, draft({ style: { ...filmStyle, trigger: '' } })), generated);
+    assert.equal(api.applyVideoPromptStyle(generated, draft({ style: filmStyle, workflow: 'ltx-audio-sync' })), generated);
+});
+test('style context snapshots are independent, invalid families fail before requests and LTX stays unaffected', async () => {
+    const value = draft({ style: structuredClone(filmStyle), styleExamples: ['Example'] }), snapshot = api.captureVideoPromptInputs(value);
+    value.style.title = 'Changed'; value.styleExamples[0] = 'Changed';
+    assert.equal(snapshot.style.title, '1920s silent film');
+    assert.deepEqual(snapshot.styleExamples, ['Example']);
+    const before = api.calls.length;
+    await assert.rejects(api.generateVideoPrompt(draft({ style: { ...filmStyle, model: 'MOSS' } })), /H3 \/ MiniMax/);
+    assert.equal(api.calls.length, before);
+    const plain = api.buildVideoPromptInstruction(draft({ workflow: 'ltx-audio-sync' }));
+    assert.equal(api.buildVideoPromptInstruction(draft({ workflow: 'ltx-audio-sync', style: filmStyle })), plain);
+});
 
 test('transcription sends only the applied excerpt, respects provider/model and rejects malformed answers', async () => {
     const audio = ref('audio');
@@ -176,8 +223,9 @@ test('providers receive selected model and edited media without changing global 
     api.setResponse(generated);
 });
 
-test('both connected workflows are exposed with their exact user-facing names', () => {
-    assert.deepEqual(api.VIDEO_WORKFLOWS.map(item => item.id), ['reference', 'ultrafast', 'advanced']);
+test('connected workflows include H3 variants and LTX Audio-Sync with their exact user-facing names', () => {
+    assert.deepEqual(api.VIDEO_WORKFLOWS.map(item => item.id), ['reference', 'ultrafast', 'advanced', 'ltx-audio-sync']);
     assert.equal(api.VIDEO_WORKFLOWS[0].name, 'Minimax REF2v H3');
     assert.equal(api.VIDEO_WORKFLOWS[1].name, 'Ultrafast');
+    assert.equal(api.VIDEO_WORKFLOWS[3].name, 'LTX 2.5 Audio-Sync');
 });

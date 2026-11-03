@@ -6,13 +6,14 @@ import ts from 'typescript';
 const compile = source => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const load = code => import(`data:text/javascript;base64,${Buffer.from(compile(code)).toString('base64')}`);
 const workflowSource = readFileSync(new URL('./minimaxH3Workflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '');
-const workflow = await load(readFileSync(new URL('./videoPromptService.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '') + workflowSource
+const styles = ['./styleGallery.ts', './h3StyleWorkflow.ts'].map(name => readFileSync(new URL(name, import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '')).join('\n');
+const workflow = await load(styles + readFileSync(new URL('./videoPromptService.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '') + workflowSource
     + readFileSync(new URL('./minimaxH3AdvancedWorkflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '')
     + readFileSync(new URL('./minimaxH3UltrafastWorkflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, ''));
 globalThis.__h3Test = workflow;
 const serviceSource = readFileSync(new URL('./minimaxH3Service.ts', import.meta.url), 'utf8').replace(/import[\s\S]*?from\s+'[^']+';/g, '');
 const api = await load(`
-const { buildH3RenderWorkflow, ADVANCED_NODE_SPECS, planAdvancedH3Input, h3ReferenceControl, isRecord, planH3References, validateMinimaxH3Readiness } = globalThis.__h3Test;
+const { appendGalleryStylePrompt, buildH3RenderWorkflow, ADVANCED_NODE_SPECS, planAdvancedH3Input, h3ReferenceControl, isRecord, planH3References, validateMinimaxH3Readiness } = globalThis.__h3Test;
 export const muxCalls = [];
 export let muxFailure = false;
 export const setMuxFailure = value => { muxFailure = value; };
@@ -37,6 +38,7 @@ function harness(t, config = {}) {
     const options = config.advanced ? workflow.defaultAdvancedH3Options() : config.ultrafast ? workflow.defaultUltrafastH3Options() : workflow.defaultMinimaxH3Options();
     if (config.advanced) Object.assign(options.advanced, { stageOrder: 'latent-first' }, config.stages);
     if (config.accelerators) Object.assign(options.ultrafast, config.accelerators);
+    if (config.options) Object.assign(options, config.options);
     const fixture = config.stages?.inputMode === 'video' ? { ...input([reference('video', 1)]), prompt: '' } : input();
     const graph = workflow.buildH3RenderWorkflow({ ...fixture, workflow: config.advanced ? 'advanced' : config.ultrafast ? 'ultrafast' : 'reference' }, options, { 'image-1': 'image.png', 'video-1': 'video.mp4' });
     const info = Object.fromEntries(Object.values(graph).map(node => [node.class_type, {}]));
@@ -313,7 +315,7 @@ test('history supports VHS output variants and temporary output URLs with encode
 test('queue uses unique client/media names, accepts cached history, filters other clients and receives animated preview', async t => {
     const h = harness(t);
     const result = await h.run();
-    assert.equal(h.requests.filter(request => request.path.startsWith('/object_info/')).length, 22);
+    assert.equal(h.requests.filter(request => request.path.startsWith('/object_info/')).length, 25);
     assert.equal(h.requests.some(request => request.path === '/object_info'), false);
     assert.equal(h.requests.filter(request => request.path === '/upload/image').length, 1);
     const upload = h.requests.find(request => request.path === '/upload/image').init.body;
@@ -330,6 +332,37 @@ test('queue uses unique client/media names, accepts cached history, filters othe
     assert.equal(h.previews[0].mime, 'video/mp4');
     assert.equal(h.progress.some(([text]) => text.includes('5/5')), false);
     assert.ok(h.socket.closed);
+});
+
+test('all H3 renderers retain the actual styled prompt and style snapshot when no display output was requested', async t => {
+    const style = { id: 'h3', model: 'H3', title: 'Etching', prompt: 'Engraved film', trigger: 'ETCH',
+        lora: 'H3\\etch.safetensors', strength: 0.6, notes: '', settings: {} };
+    for (const variant of ['reference', 'ultrafast', 'advanced']) await t.test(variant, async t => {
+        const h = harness(t, { advanced: variant === 'advanced', ultrafast: variant === 'ultrafast',
+            options: { style, displayPrompt: false }, history: () => ({ 'owned-h3': {
+                ...finalHistory, outputs: { '119': finalHistory.outputs['119'] },
+            } }) });
+        const draft = { ...input([]), workflow: variant, prompt: 'A rainy street.' };
+        const result = await h.run(draft);
+        assert.equal(result.prompt, 'ETCH\nA rainy street.\nEngraved film');
+        assert.equal(result.promptIsFinal, true);
+        assert.deepEqual(result.options.style, style);
+        assert.equal(result.workflow.style_lora.inputs.lora_name, style.lora);
+        assert.equal(result.workflow['186'], undefined);
+        assert.equal(draft.prompt, 'A rainy street.');
+    });
+});
+
+test('styled rewritten metadata captures final display text or remains explicitly non-final when unavailable', async t => {
+    const style = { id: 'h3', model: 'H3', title: 'Etching', prompt: 'Engraved film', trigger: 'ETCH',
+        lora: '', strength: 1, notes: '', settings: {} };
+    const h = harness(t, { options: { style, promptProvider: 'local', apiBase: 'http://localhost:1234', localModelSlug: 'writer' },
+        history: () => ({ 'owned-h3': { ...finalHistory, outputs: { '119': finalHistory.outputs['119'] } } }) });
+    const result = await h.run();
+    assert.equal(result.promptIsFinal, false);
+    assert.equal(result.prompt, 'ETCH\nFilm <Picture 1>.\nEngraved film');
+    assert.deepEqual(h.queued.prompt['184'].inputs.prompt, ['style_prompt', 0]);
+    assert.deepEqual(h.queued.prompt['186'].inputs.source, ['style_prompt', 0]);
 });
 
 test('generation uploads the applied audio excerpt, never the preserved original recording', async t => {

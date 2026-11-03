@@ -8,7 +8,7 @@ import { fileToDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed';
 
-export const VideoOutputFrames: React.FC<{ result: H3GenerationResult; url: string | undefined; disabled: boolean }> = ({ result, url, disabled }) => {
+export const VideoOutputFrames: React.FC<{ result: Pick<H3GenerationResult, 'videoUrl' | 'videoBlob'>; url: string | undefined; disabled: boolean }> = ({ result, url, disabled }) => {
     const dispatch = useDispatch<AppDispatch>();
     const video = useRef<HTMLVideoElement | null>(null);
     const [seconds, setSeconds] = useState<number | null>(null);

@@ -6,6 +6,12 @@ import ts from 'typescript';
 const load = async (name) => {
     const source = readFileSync(new URL(name, import.meta.url), 'utf8');
     let { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
+    if (name === './flux2EditWorkflow.ts') {
+        for (const dependency of ['styleGallery', 'civitaiService']) {
+            const compiled = ts.transpileModule(readFileSync(new URL(`./${dependency}.ts`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+            outputText = outputText.replace(`from './${dependency}'`, `from 'data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}'`);
+        }
+    }
     if (name === './sceneVariationService.ts') {
         const qwen = ts.transpileModule(readFileSync(new URL('./qwen21Workflow.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
         outputText = outputText.replace(/from ['"]\.\/qwen21Workflow['"]/g, `from 'data:text/javascript;base64,${Buffer.from(qwen).toString('base64')}'`);

@@ -45,6 +45,8 @@ Prompt analysis, visual transformations, local media utilities and upscaling are
 
 ## Local media tools
 
+The root **Tools** tab also contains **Outpaint** and **Upscale**. Outpaint opens its workspace directly, without another sub-tab level; see [Outpaint controls](images-and-characters.md#outpaint). Upscale retains its **Upscale SeedVR2** and **Z-Image Creative Upscale** sub-tabs. They are no longer separate root tabs. Switching Tools sections preserves their workspaces, and the top Reset button targets the active Outpaint/Upscale workspace rather than clearing unrelated media tools.
+
 - Video frame extraction, palette extraction, image resize, and crop tools.
 - Audio Extractor's **Choose audio/video from Library** accepts saved videos, generated speech and voice-reference recordings. It loads the original local media bytes, including older inline saves, into the same waveform/range editor as a computer upload. Missing unrelated reference attachments do not block the selected source. Missing source files and videos without audio report an error; saved Library items are never rewritten.
 - After **Extract WAV**, use **Save to Library** beside **Download WAV** to store the finished excerpt as an audio reference (`tts-reference`), with its filename, WAV thumbnail and `audio-extractor` / `wav` tags. The original WAV bytes are stored durably, independently of the source and preview URL, and can be reopened through **Choose audio/video from Library**. The button confirms **Saved to Library**, prevents duplicate clicks, and allows retry after a visible save error. Extracting a new passage enables saving that new result; the source Library item is never replaced.
@@ -59,6 +61,8 @@ Prompt analysis, visual transformations, local media utilities and upscaling are
 - Record a selected microphone, computer output audio, or both; export WAV audio and save it with an optional photo as a reusable voice reference.
 
 ## Upscaling
+
+Open **Tools > Upscale**, then choose **Upscale SeedVR2** or **Z-Image Creative Upscale**. Existing image and Library upscale shortcuts open this location with the selected image.
 
 - SeedVR2 and Z-Image creative upscaling workflows.
 - SeedVR2 lists all DiT and VAE models reported by the connected ComfyUI server and selects the first available model by default. Choose another model in **Advanced**; a valid selection is preserved when the lists refresh. Removed models fall back to the first available model, and upscaling is blocked with a message if either list is empty.

@@ -1,0 +1,1946 @@
+{
+  "76": {
+    "inputs": {
+      "image": "mondo (10).JPG"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Charger Image ⏱ 0.1s"
+    }
+  },
+  "234": {
+    "inputs": {
+      "inputcount": 3,
+      "direction": "right",
+      "match_image_size": true,
+      "Update inputs": null,
+      "image_1": [
+        "532:476",
+        0
+      ],
+      "image_2": [
+        "591",
+        0
+      ],
+      "image_3": [
+        "629",
+        0
+      ]
+    },
+    "class_type": "ImageConcatMulti",
+    "_meta": {
+      "title": "Image Concatenate Multi ⏱ 0.0s"
+    }
+  },
+  "235": {
+    "inputs": {
+      "inputcount": 3,
+      "direction": "right",
+      "match_image_size": true,
+      "Update inputs": null,
+      "image_1": [
+        "653",
+        0
+      ],
+      "image_2": [
+        "677",
+        0
+      ],
+      "image_3": [
+        "701",
+        0
+      ]
+    },
+    "class_type": "ImageConcatMulti",
+    "_meta": {
+      "title": "Image Concatenate Multi ⏱ 0.1s"
+    }
+  },
+  "236": {
+    "inputs": {
+      "inputcount": 2,
+      "direction": "down",
+      "match_image_size": true,
+      "Update inputs": null,
+      "image_1": [
+        "234",
+        0
+      ],
+      "image_2": [
+        "235",
+        0
+      ]
+    },
+    "class_type": "ImageConcatMulti",
+    "_meta": {
+      "title": "Image Concatenate Multi ⏱ 0.1s"
+    }
+  },
+  "358": {
+    "inputs": {
+      "source": [
+        "445:357",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "What i see - Not Editable ⏱ 0.0s"
+    }
+  },
+  "361": {
+    "inputs": {
+      "inputcount": 2,
+      "direction": "right",
+      "match_image_size": false,
+      "Update inputs": null,
+      "image_1": [
+        "76",
+        0
+      ],
+      "image_2": [
+        "236",
+        0
+      ]
+    },
+    "class_type": "ImageConcatMulti",
+    "_meta": {
+      "title": "Image Concatenate Multi ⏱ 0.0s"
+    }
+  },
+  "364": {
+    "inputs": {
+      "filename_prefix": "COMPAREALL",
+      "images": [
+        "361",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Compare Orivinal VS Output ⏱ 4.3s"
+    }
+  },
+  "426": {
+    "inputs": {
+      "noise_seed": 6969696969
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "Seed ⏱ 0.0s"
+    }
+  },
+  "449": {
+    "inputs": {
+      "filename_prefix": "1ST",
+      "images": [
+        "532:476",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Edit 1ST ⏱ 11.7s"
+    }
+  },
+  "450": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": true,
+        "lora": "FLUX2\\moebius_klein_000007500.safetensors",
+        "strength": 1
+      },
+      "lora_2": {
+        "on": false,
+        "lora": "FLUX2\\Dario Argento movie theme for Klein.safetensors",
+        "strength": 0.81
+      },
+      "lora_3": {
+        "on": false,
+        "lora": "FLUX2\\klein_snofs_v1_2.safetensors",
+        "strength": 0.59
+      },
+      "lora_4": {
+        "on": false,
+        "lora": "None",
+        "strength": 0.95
+      },
+      "➕ Add Lora": "",
+      "model": [
+        "442:435",
+        0
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power Lora Loader (rgthree) ⏱ 0.1s"
+    }
+  },
+  "495": {
+    "inputs": {
+      "source": [
+        "554:553",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "What i will do to the Original ⏱ 0.0s"
+    }
+  },
+  "576": {
+    "inputs": {
+      "inputcount": 2,
+      "direction": "right",
+      "match_image_size": true,
+      "Update inputs": null,
+      "image_1": [
+        "76",
+        0
+      ],
+      "image_2": [
+        "532:476",
+        0
+      ]
+    },
+    "class_type": "ImageConcatMulti",
+    "_meta": {
+      "title": "Image Concatenate Multi ⏱ 0.0s"
+    }
+  },
+  "580": {
+    "inputs": {
+      "images": [
+        "576",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Compare Original Vs Edit ⏱ 4.1s"
+    }
+  },
+  "591": {
+    "inputs": {
+      "filename_prefix": "CloseUP",
+      "images": [
+        "606:593",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Enregistrer Image ⏱ 3.8s"
+    }
+  },
+  "592": {
+    "inputs": {
+      "filename_prefix": "ICIDLORA",
+      "images": [
+        "236",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "IC ID Lora OUTPUT ⏱ 5.4s"
+    }
+  },
+  "629": {
+    "inputs": {
+      "filename_prefix": "Full body front",
+      "images": [
+        "628:608",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Enregistrer Image ⏱ 3.6s"
+    }
+  },
+  "653": {
+    "inputs": {
+      "filename_prefix": "Full body back",
+      "images": [
+        "652:632",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Enregistrer Image ⏱ 3.8s"
+    }
+  },
+  "677": {
+    "inputs": {
+      "filename_prefix": "Full body portrait",
+      "images": [
+        "676:656",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Enregistrer Image ⏱ 4.0s"
+    }
+  },
+  "701": {
+    "inputs": {
+      "filename_prefix": "Full body portrait",
+      "images": [
+        "700:680",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Enregistrer Image ⏱ 4.6s"
+    }
+  },
+  "751": {
+    "inputs": {
+      "anything": [
+        "592",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used ⏱ 1.5s"
+    }
+  },
+  "771": {
+    "inputs": {
+      "source": [
+        "757:752",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Reference for IC Lora LTX ⏱ 0.0s"
+    }
+  },
+  "774": {
+    "inputs": {
+      "image": [
+        "449",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Obtenir la taille de l'image"
+    }
+  },
+  "442:434": {
+    "inputs": {
+      "clip_name": "qwen38BFluxKlein9BTE_38b.safetensors",
+      "type": "flux2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Charger CLIP"
+    }
+  },
+  "442:435": {
+    "inputs": {
+      "unet_name": "flux2\\flux2Klein9BInt8_v10.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Charger Modèle Diffusion"
+    }
+  },
+  "442:436": {
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Charger VAE"
+    }
+  },
+  "442:437": {
+    "inputs": {
+      "clip_name": "qwen3VLInstruct4bHeretic_v10.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Charger CLIP"
+    }
+  },
+  "445:357": {
+    "inputs": {
+      "prompt": "",
+      "max_length": 512,
+      "sampling_mode": "on",
+      "sampling_mode.temperature": 0.2,
+      "sampling_mode.top_k": 64,
+      "sampling_mode.top_p": 0.95,
+      "sampling_mode.min_p": 0.05,
+      "sampling_mode.repetition_penalty": 1.05,
+      "sampling_mode.seed": 0,
+      "sampling_mode.presence_penalty": 0,
+      "thinking": true,
+      "use_default_template": true,
+      "mtp": "auto",
+      "clip": [
+        "442:437",
+        0
+      ],
+      "image": [
+        "76",
+        0
+      ],
+      "system_prompt": [
+        "445:360",
+        0
+      ]
+    },
+    "class_type": "TextGenerate",
+    "_meta": {
+      "title": "TextGenerate"
+    }
+  },
+  "445:360": {
+    "inputs": {
+      "value": "Analyze only the visible face and head.\n\nDescribe only the most important visible identity traits.\n\nFor humans, include:\n\n* apparent gender\n* approximate age in years\n* skin tone\n* eye color\n* hair color\n* basic hairstyle\n* emotion or expression\n* distinctive facial features if clearly relevant\n* If the subject is dressed indicate the type of clothes.\nDo not mention absent features such as \"no facial hair\".\n\nFor non-human subjects, briefly state the subject type and only the most important visible head traits.\n\n\nOUTPUT EXACTLY ONCE.\nthis is for flux image to image\nUse exactly this structure: \"<one short English sentence>\"\n\nExample: \"[woman, 20-25 years old, green eyes, dark skin, black hair, Yellow shirt, blue pants, short hair with pigtails, sad, with a scar on her eye]\"\n\n\n"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Prompt Template"
+    }
+  },
+  "554:544": {
+    "inputs": {
+      "choice": "White Background",
+      "index": 2,
+      "option1": "Same Background ",
+      "option2": "Remove Background",
+      "option3": "White Background",
+      "option4": ""
+    },
+    "class_type": "CustomCombo",
+    "_meta": {
+      "title": "Combo personnalisé"
+    }
+  },
+  "554:549": {
+    "inputs": {
+      "value": "Background:"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Chaîne"
+    }
+  },
+  "554:550": {
+    "inputs": {
+      "value": "Style:"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Background"
+    }
+  },
+  "554:545": {
+    "inputs": {
+      "choice": "Same Style",
+      "index": 0,
+      "option1": "Same Style",
+      "option2": "Pixar Style",
+      "option3": ""
+    },
+    "class_type": "CustomCombo",
+    "_meta": {
+      "title": "Combo personnalisé"
+    }
+  },
+  "554:547": {
+    "inputs": {
+      "string_a": [
+        "445:357",
+        0
+      ],
+      "string_b": [
+        "554:549",
+        0
+      ],
+      "delimiter": " "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concaténer"
+    }
+  },
+  "554:548": {
+    "inputs": {
+      "string_a": [
+        "554:547",
+        0
+      ],
+      "string_b": [
+        "554:544",
+        0
+      ],
+      "delimiter": " "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concaténer"
+    }
+  },
+  "554:551": {
+    "inputs": {
+      "string_a": [
+        "554:548",
+        0
+      ],
+      "string_b": [
+        "554:550",
+        0
+      ],
+      "delimiter": " "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concaténer"
+    }
+  },
+  "554:552": {
+    "inputs": {
+      "string_a": [
+        "554:551",
+        0
+      ],
+      "string_b": [
+        "554:545",
+        0
+      ],
+      "delimiter": " "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concaténer"
+    }
+  },
+  "554:546": {
+    "inputs": {
+      "value": "background : in a futuristic desert\nstyle : Moebius style"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Initial Change"
+    }
+  },
+  "554:553": {
+    "inputs": {
+      "string_a": [
+        "554:552",
+        0
+      ],
+      "string_b": [
+        "554:546",
+        0
+      ],
+      "delimiter": " "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concaténer"
+    }
+  },
+  "532:476": {
+    "inputs": {
+      "samples": [
+        "532:484",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "532:474": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "megapixels": 1,
+      "resolution_steps": 1,
+      "image": [
+        "76",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Redimensionner l'image en fonction du nombre total de pixels"
+    }
+  },
+  "532:500": {
+    "inputs": {
+      "pixels": [
+        "532:474",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "532:477": {
+    "inputs": {
+      "conditioning": [
+        "532:475",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "532:499": {
+    "inputs": {},
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "532:501": {
+    "inputs": {
+      "conditioning": [
+        "532:475",
+        0
+      ],
+      "latent": [
+        "532:500",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "532:475": {
+    "inputs": {
+      "text": [
+        "495",
+        0
+      ],
+      "clip": [
+        "442:434",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Prompt Command Changes"
+    }
+  },
+  "532:479": {
+    "inputs": {
+      "image": [
+        "532:474",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Obtenir la taille de l'image"
+    }
+  },
+  "532:480": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "532:481": {
+    "inputs": {
+      "steps": 4,
+      "width": [
+        "532:479",
+        0
+      ],
+      "height": [
+        "532:479",
+        1
+      ]
+    },
+    "class_type": "Flux2Scheduler",
+    "_meta": {
+      "title": "Flux2Scheduler"
+    }
+  },
+  "532:482": {
+    "inputs": {
+      "width": [
+        "532:479",
+        0
+      ],
+      "height": [
+        "532:479",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Flux vide vers latent"
+    }
+  },
+  "532:483": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "450",
+        0
+      ],
+      "positive": [
+        "532:501",
+        0
+      ],
+      "negative": [
+        "532:477",
+        0
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "GuideCFG"
+    }
+  },
+  "532:484": {
+    "inputs": {
+      "noise": [
+        "426",
+        0
+      ],
+      "guider": [
+        "532:483",
+        0
+      ],
+      "sampler": [
+        "532:480",
+        0
+      ],
+      "sigmas": [
+        "532:481",
+        0
+      ],
+      "latent_image": [
+        "532:482",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "ÉchantillonneurPersonnaliséAvancé"
+    }
+  },
+  "606:581": {
+    "inputs": {
+      "value": "Close up Portait Photo,serious"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "PhotoMode"
+    }
+  },
+  "606:593": {
+    "inputs": {
+      "samples": [
+        "606:605",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "606:582": {
+    "inputs": {
+      "string_a": [
+        "445:357",
+        0
+      ],
+      "string_b": [
+        "606:581",
+        0
+      ],
+      "delimiter": "Camera Actions : "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concaténer"
+    }
+  },
+  "606:596": {
+    "inputs": {
+      "conditioning": [
+        "606:599",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "606:597": {
+    "inputs": {},
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "606:598": {
+    "inputs": {
+      "conditioning": [
+        "606:599",
+        0
+      ],
+      "latent": [
+        "606:595",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "606:599": {
+    "inputs": {
+      "text": [
+        "606:582",
+        0
+      ],
+      "clip": [
+        "442:434",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Prompt Command Changes"
+    }
+  },
+  "606:594": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "megapixels": 1,
+      "resolution_steps": 1,
+      "image": [
+        "532:476",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Redimensionner l'image en fonction du nombre total de pixels"
+    }
+  },
+  "606:600": {
+    "inputs": {
+      "image": [
+        "606:594",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Obtenir la taille de l'image"
+    }
+  },
+  "606:601": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "606:602": {
+    "inputs": {
+      "steps": 4,
+      "width": [
+        "606:600",
+        0
+      ],
+      "height": [
+        "606:600",
+        1
+      ]
+    },
+    "class_type": "Flux2Scheduler",
+    "_meta": {
+      "title": "Flux2Scheduler"
+    }
+  },
+  "606:603": {
+    "inputs": {
+      "width": [
+        "606:600",
+        0
+      ],
+      "height": [
+        "606:600",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Flux vide vers latent"
+    }
+  },
+  "606:604": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "450",
+        0
+      ],
+      "positive": [
+        "606:598",
+        0
+      ],
+      "negative": [
+        "606:596",
+        0
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "GuideCFG"
+    }
+  },
+  "606:595": {
+    "inputs": {
+      "pixels": [
+        "606:594",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "606:605": {
+    "inputs": {
+      "noise": [
+        "426",
+        0
+      ],
+      "guider": [
+        "606:604",
+        0
+      ],
+      "sampler": [
+        "606:601",
+        0
+      ],
+      "sigmas": [
+        "606:602",
+        0
+      ],
+      "latent_image": [
+        "606:603",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "ÉchantillonneurPersonnaliséAvancé"
+    }
+  },
+  "628:607": {
+    "inputs": {
+      "value": "ultra Close up Face, neutral face"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "PhotoMode"
+    }
+  },
+  "628:608": {
+    "inputs": {
+      "samples": [
+        "628:621",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "628:609": {
+    "inputs": {
+      "string_a": [
+        "445:357",
+        0
+      ],
+      "string_b": [
+        "628:607",
+        0
+      ],
+      "delimiter": "Camera Actions : "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concaténer"
+    }
+  },
+  "628:610": {
+    "inputs": {
+      "conditioning": [
+        "628:613",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "628:611": {
+    "inputs": {},
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "628:612": {
+    "inputs": {
+      "conditioning": [
+        "628:613",
+        0
+      ],
+      "latent": [
+        "628:620",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "628:613": {
+    "inputs": {
+      "text": [
+        "628:609",
+        0
+      ],
+      "clip": [
+        "442:434",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Prompt Command Changes"
+    }
+  },
+  "628:614": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "megapixels": 1,
+      "resolution_steps": 1,
+      "image": [
+        "532:476",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Redimensionner l'image en fonction du nombre total de pixels"
+    }
+  },
+  "628:615": {
+    "inputs": {
+      "image": [
+        "628:614",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Obtenir la taille de l'image"
+    }
+  },
+  "628:616": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "628:617": {
+    "inputs": {
+      "steps": 4,
+      "width": [
+        "628:615",
+        0
+      ],
+      "height": [
+        "628:615",
+        1
+      ]
+    },
+    "class_type": "Flux2Scheduler",
+    "_meta": {
+      "title": "Flux2Scheduler"
+    }
+  },
+  "628:618": {
+    "inputs": {
+      "width": [
+        "628:615",
+        0
+      ],
+      "height": [
+        "628:615",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Flux vide vers latent"
+    }
+  },
+  "628:619": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "450",
+        0
+      ],
+      "positive": [
+        "628:612",
+        0
+      ],
+      "negative": [
+        "628:610",
+        0
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "GuideCFG"
+    }
+  },
+  "628:620": {
+    "inputs": {
+      "pixels": [
+        "628:614",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "628:621": {
+    "inputs": {
+      "noise": [
+        "426",
+        0
+      ],
+      "guider": [
+        "628:619",
+        0
+      ],
+      "sampler": [
+        "628:616",
+        0
+      ],
+      "sigmas": [
+        "628:617",
+        0
+      ],
+      "latent_image": [
+        "628:618",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "ÉchantillonneurPersonnaliséAvancé"
+    }
+  },
+  "652:631": {
+    "inputs": {
+      "value": "Full body portrait, back view, 0 degrees"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "PhotoMode"
+    }
+  },
+  "652:632": {
+    "inputs": {
+      "samples": [
+        "652:645",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "652:633": {
+    "inputs": {
+      "string_a": [
+        "445:357",
+        0
+      ],
+      "string_b": [
+        "652:631",
+        0
+      ],
+      "delimiter": "Camera Actions : "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concaténer"
+    }
+  },
+  "652:634": {
+    "inputs": {
+      "conditioning": [
+        "652:637",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "652:635": {
+    "inputs": {},
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "652:636": {
+    "inputs": {
+      "conditioning": [
+        "652:637",
+        0
+      ],
+      "latent": [
+        "652:644",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "652:637": {
+    "inputs": {
+      "text": [
+        "652:633",
+        0
+      ],
+      "clip": [
+        "442:434",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Prompt Command Changes"
+    }
+  },
+  "652:638": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "megapixels": 1,
+      "resolution_steps": 1,
+      "image": [
+        "532:476",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Redimensionner l'image en fonction du nombre total de pixels"
+    }
+  },
+  "652:639": {
+    "inputs": {
+      "image": [
+        "652:638",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Obtenir la taille de l'image"
+    }
+  },
+  "652:640": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "652:641": {
+    "inputs": {
+      "steps": 4,
+      "width": [
+        "652:639",
+        0
+      ],
+      "height": [
+        "652:639",
+        1
+      ]
+    },
+    "class_type": "Flux2Scheduler",
+    "_meta": {
+      "title": "Flux2Scheduler"
+    }
+  },
+  "652:642": {
+    "inputs": {
+      "width": [
+        "652:639",
+        0
+      ],
+      "height": [
+        "652:639",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Flux vide vers latent"
+    }
+  },
+  "652:643": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "450",
+        0
+      ],
+      "positive": [
+        "652:636",
+        0
+      ],
+      "negative": [
+        "652:634",
+        0
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "GuideCFG"
+    }
+  },
+  "652:644": {
+    "inputs": {
+      "pixels": [
+        "652:638",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "652:645": {
+    "inputs": {
+      "noise": [
+        "426",
+        0
+      ],
+      "guider": [
+        "652:643",
+        0
+      ],
+      "sampler": [
+        "652:640",
+        0
+      ],
+      "sigmas": [
+        "652:641",
+        0
+      ],
+      "latent_image": [
+        "652:642",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "ÉchantillonneurPersonnaliséAvancé"
+    }
+  },
+  "676:655": {
+    "inputs": {
+      "value": "Full body, surprised face arms along the body"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "PhotoMode"
+    }
+  },
+  "676:656": {
+    "inputs": {
+      "samples": [
+        "676:669",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "676:657": {
+    "inputs": {
+      "string_a": [
+        "445:357",
+        0
+      ],
+      "string_b": [
+        "676:655",
+        0
+      ],
+      "delimiter": "Camera Actions : "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concaténer"
+    }
+  },
+  "676:658": {
+    "inputs": {
+      "conditioning": [
+        "676:661",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "676:659": {
+    "inputs": {},
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "676:660": {
+    "inputs": {
+      "conditioning": [
+        "676:661",
+        0
+      ],
+      "latent": [
+        "676:668",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "676:661": {
+    "inputs": {
+      "text": [
+        "676:657",
+        0
+      ],
+      "clip": [
+        "442:434",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Prompt Command Changes"
+    }
+  },
+  "676:662": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "megapixels": 1,
+      "resolution_steps": 1,
+      "image": [
+        "532:476",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Redimensionner l'image en fonction du nombre total de pixels"
+    }
+  },
+  "676:663": {
+    "inputs": {
+      "image": [
+        "676:662",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Obtenir la taille de l'image"
+    }
+  },
+  "676:664": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "676:665": {
+    "inputs": {
+      "steps": 4,
+      "width": [
+        "676:663",
+        0
+      ],
+      "height": [
+        "676:663",
+        1
+      ]
+    },
+    "class_type": "Flux2Scheduler",
+    "_meta": {
+      "title": "Flux2Scheduler"
+    }
+  },
+  "676:666": {
+    "inputs": {
+      "width": [
+        "676:663",
+        0
+      ],
+      "height": [
+        "676:663",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Flux vide vers latent"
+    }
+  },
+  "676:667": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "450",
+        0
+      ],
+      "positive": [
+        "676:660",
+        0
+      ],
+      "negative": [
+        "676:658",
+        0
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "GuideCFG"
+    }
+  },
+  "676:668": {
+    "inputs": {
+      "pixels": [
+        "676:662",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "676:669": {
+    "inputs": {
+      "noise": [
+        "426",
+        0
+      ],
+      "guider": [
+        "676:667",
+        0
+      ],
+      "sampler": [
+        "676:664",
+        0
+      ],
+      "sigmas": [
+        "676:665",
+        0
+      ],
+      "latent_image": [
+        "676:666",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "ÉchantillonneurPersonnaliséAvancé"
+    }
+  },
+  "700:679": {
+    "inputs": {
+      "value": "Full body portrait, left view, 90 degrees , laughing"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "PhotoMode"
+    }
+  },
+  "700:680": {
+    "inputs": {
+      "samples": [
+        "700:693",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "700:681": {
+    "inputs": {
+      "string_a": [
+        "445:357",
+        0
+      ],
+      "string_b": [
+        "700:679",
+        0
+      ],
+      "delimiter": "Camera Actions : "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concaténer"
+    }
+  },
+  "700:682": {
+    "inputs": {
+      "conditioning": [
+        "700:685",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "700:683": {
+    "inputs": {},
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "700:684": {
+    "inputs": {
+      "conditioning": [
+        "700:685",
+        0
+      ],
+      "latent": [
+        "700:692",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "LatentDeRéférence"
+    }
+  },
+  "700:685": {
+    "inputs": {
+      "text": [
+        "700:681",
+        0
+      ],
+      "clip": [
+        "442:434",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Prompt Command Changes"
+    }
+  },
+  "700:686": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "megapixels": 1,
+      "resolution_steps": 1,
+      "image": [
+        "532:476",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Redimensionner l'image en fonction du nombre total de pixels"
+    }
+  },
+  "700:687": {
+    "inputs": {
+      "image": [
+        "700:686",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Obtenir la taille de l'image"
+    }
+  },
+  "700:688": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "700:689": {
+    "inputs": {
+      "steps": 4,
+      "width": [
+        "700:687",
+        0
+      ],
+      "height": [
+        "700:687",
+        1
+      ]
+    },
+    "class_type": "Flux2Scheduler",
+    "_meta": {
+      "title": "Flux2Scheduler"
+    }
+  },
+  "700:690": {
+    "inputs": {
+      "width": [
+        "700:687",
+        0
+      ],
+      "height": [
+        "700:687",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Flux vide vers latent"
+    }
+  },
+  "700:691": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "450",
+        0
+      ],
+      "positive": [
+        "700:684",
+        0
+      ],
+      "negative": [
+        "700:682",
+        0
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "GuideCFG"
+    }
+  },
+  "700:692": {
+    "inputs": {
+      "pixels": [
+        "700:686",
+        0
+      ],
+      "vae": [
+        "442:436",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "700:693": {
+    "inputs": {
+      "noise": [
+        "426",
+        0
+      ],
+      "guider": [
+        "700:691",
+        0
+      ],
+      "sampler": [
+        "700:688",
+        0
+      ],
+      "sigmas": [
+        "700:689",
+        0
+      ],
+      "latent_image": [
+        "700:690",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "ÉchantillonneurPersonnaliséAvancé"
+    }
+  },
+  "757:752": {
+    "inputs": {
+      "prompt": "",
+      "max_length": 2048,
+      "sampling_mode": "on",
+      "sampling_mode.temperature": 0.2,
+      "sampling_mode.top_k": 64,
+      "sampling_mode.top_p": 0.95,
+      "sampling_mode.min_p": 0.05,
+      "sampling_mode.repetition_penalty": 1.05,
+      "sampling_mode.seed": 0,
+      "sampling_mode.presence_penalty": 0,
+      "thinking": true,
+      "use_default_template": true,
+      "mtp": "auto",
+      "clip": [
+        "442:437",
+        0
+      ],
+      "image": [
+        "751",
+        0
+      ],
+      "system_prompt": [
+        "757:753",
+        0
+      ]
+    },
+    "class_type": "TextGenerate",
+    "_meta": {
+      "title": "TextGenerate"
+    }
+  },
+  "757:753": {
+    "inputs": {
+      "value": "View the image, this is seperated in 6 diferent images, identify the pose, create a reference for each and using this data create a final prompt to use in LTX \n\nIf no scenario indicated, and is allways the same person (persons) create a video prompt that use all the images rotating the camera and zooming in or out accordingly\n\nthe starting image is only for reference, the final video is a video with a unique reference doing what is asked for. \n\nDo not output nothing more than the Reference Sheet Description\nSeparate with a line every reference and place a end row at the end\n\nexample:< ### Reference Sheet Description Start\n\n**Top Row Left (Character):** An anthropomorphic bipedal German Shepherd news anchor with realistic brown, tan, and black fur, a calm professional expression, and thin round copper-bronze framed glasses. He is shown in close-up portraits and full-body front, three-quarter, side, and back views standing upright like a person, with a humanoid torso and limbs and a long bushy German Shepherd tail. He wears a vibrant long-sleeve button-down shirt with an abstract multicolored pink-purple-turquoise-yellow woven pattern, dark charcoal dress pants, and dark leather dress shoes. \n\n**Top Row Right (Prop):** A professional black studio condenser microphone on a short circular desk stand shown from multiple angles, plus black over-the-ear wireless earpieces / headsets for broadcast cues. \n\n**Middle Row Right (Prop):** A flat product view of the same vibrant long-sleeve multicolored patterned button-down shirt, clearly showing the abstract pink, purple, turquoise, and yellow woven texture. \n\n**Bottom Row (Setting):** A wide shot of a high-end professional news studio with a large curved dark teal anchor desk in the foreground, a massive digital backdrop screen displaying bold white \"NEWS\" lettering over soft blue-green abstract graphics, and polished cinematic broadcast lighting with studio fixtures visible around the set.\n\n### Reference Sheet Description Start end. >\n\n\n\n\n\n"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Prompt Template"
+    }
+  }
+}

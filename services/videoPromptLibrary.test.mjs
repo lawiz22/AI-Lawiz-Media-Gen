@@ -7,7 +7,7 @@ const read = name => readFileSync(new URL(name, import.meta.url), 'utf8').replac
 const mocks = `
 const dataUrlToThumbnail = async () => 'data:image/png;base64,dGh1bWI=';
 `;
-const source = mocks + read('./videoPromptService.ts') + read('./minimaxH3Workflow.ts') + read('./minimaxH3AdvancedWorkflow.ts') + read('./minimaxH3UltrafastWorkflow.ts') + read('./videoPromptLibrary.ts') + read('./idbLibraryService.ts') + '\nexport { externalizeItem };';
+const source = mocks + read('./styleGallery.ts') + read('./videoPromptService.ts') + read('./minimaxH3Workflow.ts') + read('./minimaxH3AdvancedWorkflow.ts') + read('./minimaxH3UltrafastWorkflow.ts') + read('./videoPromptLibrary.ts') + read('./idbLibraryService.ts') + '\nexport { externalizeItem };';
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 const result = 'integrated_multimodal_description: [Shot 1] <Picture 3> follows <Video 2>.\noverall_soundscape: <Audio 2>.\nnon_diegetic_music: None.';
@@ -91,6 +91,44 @@ test('Ultrafast prompt snapshots retain variant, six images, original binaries, 
     const cloned = api.cloneVideoPromptLibraryOptions(item.videoPromptOptions);
     cloned.renderOptions.ultrafast.spectrum = false;
     assert.equal(item.videoPromptOptions.renderOptions.ultrafast.spectrum, true);
+});
+
+test('all H3 destinations reopen independent gallery snapshots, strengths and sampling flags without rewriting the editable prompt', async () => {
+    const style = { id: 'h3', model: 'H3', title: 'Etching', prompt: 'Engraved film', trigger: 'ETCH',
+        lora: 'H3\\etch.safetensors', strength: 0.6, notes: 'Keep', settings: { steps: 8, scheduler: 'simple' },
+        libraryLink: { path: 'C:\\models\\loras\\H3\\etch.safetensors', sha256: 'hash' } };
+    for (const variant of ['reference', 'ultrafast', 'advanced']) {
+        const options = { ...api.defaultH3WorkflowOptions(variant), style, styleStrength: 0.4, useStyleSettings: true };
+        const draft = { id: variant, workflow: variant, prompt: 'A rainy street.', references: [], aspect: '4:3', duration: options.duration, template: 'generation' };
+        const saved = await hydratePrompt(await api.buildMinimaxH3PromptLibraryItem(draft, options));
+        const restored = await api.restoreMinimaxH3PromptLibraryItem(saved);
+        assert.deepEqual(restored.options.style, style);
+        assert.equal(restored.options.styleStrength, 0.4);
+        assert.equal(restored.options.useStyleSettings, true);
+        assert.equal(restored.draft.prompt, 'A rainy street.');
+        const cloned = api.cloneVideoPromptLibraryOptions(saved.videoPromptOptions);
+        cloned.renderOptions.style.title = 'Changed';
+        assert.equal(saved.videoPromptOptions.renderOptions.style.title, 'Etching');
+    }
+});
+
+test('style-aware generator Library snapshots retain examples, instruction and renderer style without render settings', async () => {
+    const style = { id: 'film', model: 'H3', title: '1920s', trigger: 'FILM', prompt: 'Aged monochrome film', lora: 'H3\\film.safetensors',
+        strength: 0.6, notes: 'Grain', settings: {} };
+    const original = { ...inputs(), references: [], style, styleExamples: ['Locally saved example'] };
+    const item = await hydratePrompt(await api.buildVideoPromptLibraryItem(result, original));
+    assert.deepEqual(item.videoPromptOptions.style, style);
+    assert.deepEqual(item.videoPromptOptions.styleExamples, original.styleExamples);
+    assert.match(item.videoPromptOptions.instruction, /1920s|Locally saved example/);
+    const restored = await api.restoreVideoPromptLibraryItem(item);
+    assert.deepEqual(restored.inputs.style, style);
+    assert.deepEqual(restored.inputs.styleExamples, original.styleExamples);
+    const renderer = await api.restoreMinimaxH3PromptLibraryItem(item);
+    assert.deepEqual(renderer.options.style, style);
+    const clone = api.cloneVideoPromptLibraryOptions(item.videoPromptOptions);
+    clone.style.title = 'Changed'; clone.styleExamples[0] = 'Changed';
+    assert.equal(item.videoPromptOptions.style.title, '1920s');
+    assert.equal(item.videoPromptOptions.styleExamples[0], 'Locally saved example');
 });
 
 test('Library item includes generated text and every generation parameter without credentials or unrelated drafts', async () => {

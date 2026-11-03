@@ -1,4 +1,56 @@
 import type { Flux2ReferenceRole, GenerationOptions } from '../types';
+import { appendGalleryStylePrompt, applyFlux2StyleScheduler, normalizeStyleModel, prependGalleryStyleTrigger, removeGalleryStyleTrigger, validateStyleGallery, type GalleryStyle } from './styleGallery';
+import { inferFlux2Variant } from './civitaiService';
+
+export const defaultFlux2Clip = (model: string, mode: 't2i' | 'i2i' = 'i2i'): string =>
+    inferFlux2Variant(model) === 'flux2-4b'
+        ? mode === 't2i' ? 'qwen3vl_4b_fp8_scaled.safetensors' : 'qwen_3_4b.safetensors'
+        : 'qwen38BFluxKlein9BTE_38b.safetensors';
+
+export const flux2StyleLoraRemovals = (options: GenerationOptions, loras: string[], mode: 't2i' | 'i2i'): Partial<GenerationOptions> => {
+    const normalize = (name: string) => name.trim().replace(/\\/g, '/').toLowerCase();
+    const managed = new Set(loras.filter(Boolean).map(normalize));
+    const patch: Partial<GenerationOptions> = {};
+    for (let index = 1; index <= (mode === 't2i' ? 6 : 2); index++) {
+        const key = `${mode === 't2i' ? 'comfyFlux2' : 'comfyFlux2Edit'}Lora${index}Name` as keyof GenerationOptions;
+        const name = options[key];
+        if (typeof name === 'string' && managed.has(normalize(name))) Object.assign(patch, { [key]: '' });
+    }
+    return patch;
+};
+
+export const flux2StyleOptions = (options: GenerationOptions, style?: GalleryStyle, mode: 'i2i' | 't2i' = 'i2i'): GenerationOptions => {
+    if (!style) return options;
+    validateStyleGallery({ version: 1, styles: [style] });
+    const model = inferFlux2Variant((mode === 't2i' ? options.comfyFlux2Unet : options.comfyFlux2EditUnet) || 'flux2\\flux2Klein9BInt8_v10.safetensors')?.toUpperCase();
+    if (!model || normalizeStyleModel(style.model) !== model) throw new Error(`Choose a ${model || 'compatible FLUX2'} style for this model; 9B and 4B LoRAs are not interchangeable.`);
+    const loraModel = inferFlux2Variant(`FLUX2 ${style.lora}`)?.toUpperCase();
+    if (loraModel && loraModel !== model) throw new Error(`The style LoRA is for ${loraModel}, not ${model}.`);
+    const strength = mode === 't2i' ? options.comfyFlux2StyleStrength : options.comfyFlux2EditStyleStrength;
+    if (strength !== undefined && !Number.isFinite(strength)) throw new Error('Style LoRA strength must be finite.');
+    options = { ...options, ...flux2StyleLoraRemovals(options, [style.lora], mode) };
+    const appendStyle = (base: string) => appendGalleryStylePrompt(base, style);
+    if (mode === 't2i') {
+        const result = { ...options, comfyFlux2Prompt: appendStyle(options.comfyFlux2Prompt || '') };
+        if (options.comfyFlux2UseStyleSettings) {
+            if (style.settings.steps !== undefined) result.comfySteps = style.settings.steps;
+            if (style.settings.cfg !== undefined) result.comfyCfg = style.settings.cfg;
+            if (style.settings.sampler !== undefined) result.comfySampler = style.settings.sampler;
+        }
+        return result;
+    }
+    const result = { ...options,
+        comfyFlux2EditPrompt: appendStyle(options.comfyFlux2EditPrompt || options.comfyPrompt || ''),
+        comfyFlux2EditRequirePhotorealism: false, comfyFlux2EditPreserveSourceStyle: false,
+    };
+    if (options.comfyFlux2EditUseStyleSettings) {
+        if (style.settings.steps !== undefined) result.comfyFlux2EditSteps = style.settings.steps;
+        if (style.settings.cfg !== undefined) result.comfyFlux2EditCfg = style.settings.cfg;
+        if (style.settings.sampler !== undefined) result.comfyFlux2EditSampler = style.settings.sampler;
+        if (style.settings.megapixels !== undefined) result.comfyFlux2EditMegapixels = style.settings.megapixels;
+    }
+    return result;
+};
 
 export interface Flux2EditReference {
     imageName: string;
@@ -33,26 +85,36 @@ export const buildFlux2EditPrompt = (
     references: Flux2EditReference[],
     requirePhotorealism = true,
     preserveSourceStyle = false,
-): string => [
+    styleApplied = false,
+    styleTrigger = '',
+): string => {
+    const trigger = styleTrigger.trim();
+    const instructions = removeGalleryStyleTrigger(basePrompt, trigger).trim();
+    return prependGalleryStyleTrigger([
     'Synthesize one final coherent image using Picture 1 as the primary source. Preserve the main subject identity and defining features from Picture 1 unless explicitly instructed otherwise.',
     ...references.map((reference, index) => roleInstruction(reference, index + 2)),
-    basePrompt.trim() ? `Additional editing instructions: ${basePrompt.trim()}` : '',
-    preserveSourceStyle
+    instructions ? `Additional editing instructions: ${instructions}` : '',
+    styleApplied
+        ? 'Produce a coherent result in the requested visual style, with consistent anatomy, perspective, scale and lighting.'
+        : preserveSourceStyle
         ? 'Preserve the source visual medium and capture treatment exactly: grain, noise, softness, compression, color response, artifacts and rendering technique. Do not beautify, restore, sharpen, modernize or restyle the image. VHS stays VHS; illustration stays illustration. Change only explicitly enabled scene attributes.'
         : requirePhotorealism
         ? 'Produce a photorealistic, anatomically coherent result with consistent perspective, scale, lighting, shadows, and color integration.'
         : 'Produce a polished, anatomically coherent result with consistent perspective, scale, lighting, shadows, and color integration in the requested non-photographic visual medium.',
-].filter(Boolean).join(' ');
+    ].filter(Boolean).join(' '), trigger);
+};
 
 export const buildFlux2EditWorkflow = (
     sourceImageName: string,
     references: Flux2EditReference[],
     options: GenerationOptions,
+    style?: GalleryStyle,
 ): { workflow: Record<string, any>; prompt: string; seed: number } => {
+    options = flux2StyleOptions(options, style);
     const megapixels = options.comfyFlux2EditMegapixels ?? 1;
     const seed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
-    const prompt = buildFlux2EditPrompt(options.comfyFlux2EditPrompt || options.comfyPrompt || '', references, options.comfyFlux2EditRequirePhotorealism !== false, options.comfyFlux2EditPreserveSourceStyle === true);
-    const modelName = options.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf';
+    const prompt = buildFlux2EditPrompt(options.comfyFlux2EditPrompt || options.comfyPrompt || '', references, options.comfyFlux2EditRequirePhotorealism !== false, options.comfyFlux2EditPreserveSourceStyle === true, !!style, style?.trigger);
+    const modelName = options.comfyFlux2EditUnet || 'flux2\\flux2Klein9BInt8_v10.safetensors';
     const modelLoader = modelName.toLowerCase().endsWith('.gguf')
         ? { inputs: { unet_name: modelName }, class_type: 'UnetLoaderGGUF', _meta: { title: 'FLUX2 Klein model (GGUF)' } }
         : { inputs: { unet_name: modelName, weight_dtype: 'default' }, class_type: 'UNETLoader', _meta: { title: 'FLUX2 Klein model' } };
@@ -62,7 +124,7 @@ export const buildFlux2EditWorkflow = (
         source_size: { inputs: { image: ['source_scale', 0] }, class_type: 'GetImageSize', _meta: { title: 'Output size' } },
         source_latent: { inputs: { pixels: ['source_scale', 0], vae: ['vae', 0] }, class_type: 'VAEEncode', _meta: { title: 'Encode Picture 1' } },
         vae: { inputs: { vae_name: options.comfyFlux2EditVae || 'flux2-vae.safetensors' }, class_type: 'VAELoader', _meta: { title: 'FLUX2 VAE' } },
-        clip: { inputs: { clip_name: options.comfyFlux2EditClip || 'qwen_3_4b.safetensors', type: 'flux2', device: 'default' }, class_type: 'CLIPLoader', _meta: { title: 'FLUX2 CLIP' } },
+        clip: { inputs: { clip_name: options.comfyFlux2EditClip || defaultFlux2Clip(modelName), type: 'flux2', device: 'default' }, class_type: 'CLIPLoader', _meta: { title: 'FLUX2 CLIP' } },
         model: modelLoader,
         prompt: { inputs: { text: prompt, clip: ['clip', 0] }, class_type: 'CLIPTextEncode', _meta: { title: 'Editing instructions' } },
         negative: { inputs: { conditioning: ['prompt', 0] }, class_type: 'ConditioningZeroOut', _meta: { title: 'Zero negative' } },
@@ -98,9 +160,17 @@ export const buildFlux2EditWorkflow = (
     });
 
     let model: [string, number] = ['model', 0];
+    if (style?.lora) {
+        workflow.style_lora = { class_type: 'LoraLoaderModelOnly', inputs: {
+            lora_name: style.lora, strength_model: options.comfyFlux2EditStyleStrength ?? style.strength, model,
+        }, _meta: { title: `Style: ${style.title}` } };
+        model = ['style_lora', 0];
+    }
     for (let index = 1; index <= 2; index++) {
         const name = options[`comfyFlux2EditLora${index}Name` as keyof GenerationOptions] as string | undefined;
         if (!name?.trim() || name === 'None') continue;
+        const variant = inferFlux2Variant(`FLUX2 ${name}`);
+        if (variant && variant !== inferFlux2Variant(modelName)) throw new Error(`Additional LoRA "${name}" is incompatible with the selected FLUX2 model.`);
         const strength = options[`comfyFlux2EditLora${index}Strength` as keyof GenerationOptions] as number | undefined;
         const nodeId = `lora_${index}`;
         workflow[nodeId] = {
@@ -135,6 +205,7 @@ export const buildFlux2EditWorkflow = (
     workflow.decode = { inputs: { samples: ['sample', 0], vae: ['vae', 0] }, class_type: 'VAEDecode', _meta: { title: 'Decode' } };
     workflow.save = { inputs: { filename_prefix: 'FLUX2_Edit', images: ['decode', 0] }, class_type: 'SaveImage', _meta: { title: 'Save Image' } };
 
+    applyFlux2StyleScheduler(workflow, options.comfyFlux2EditUseStyleSettings ? style?.settings.scheduler : undefined);
     return { workflow, prompt, seed };
 };
 

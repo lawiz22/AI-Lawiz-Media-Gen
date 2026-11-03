@@ -15,14 +15,19 @@ import { DEFAULT_GEMINI_IMAGE_MODEL, GEMINI_IMAGE_MODELS, generateBackgroundImag
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, MAMMOUTH_IMAGE_MODELS, generateFlux2ReferenceDescription, getMammouthImageModels } from '../services/mammouthService';
 import { generateRandomClothingPrompt, generateRandomBackgroundPrompt, generateRandomPosePrompts, getRandomTextObjectPrompt } from '../utils/promptBuilder';
 import { saveToLibrary } from '../services/libraryService';
-import { findInventoryModel, getRecommendedSettingUpdates } from '../services/civitaiService';
+import { findInventoryModel, getRecommendedSettingUpdates, inferFlux2Variant } from '../services/civitaiService';
+import { styleInstalledLoras } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 import { GenerateIcon, ResetIcon, SpinnerIcon, RefreshIcon, WorkflowIcon, CloseIcon, WarningIcon, LibraryIcon, SaveIcon, CheckIcon, DiceIcon, ChevronRightIcon } from './icons';
 import { ImageUploader } from './ImageUploader';
 import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
 import { MossSettingsPanel } from './MossSettingsPanel';
 import { MossPhotoSettingsPanel } from './MossPhotoSettingsPanel';
 import { Krea2EditSettingsPanel } from './Krea2EditSettingsPanel';
+import { ImageStyleControl } from './ImageStyleControl';
+import { defaultFlux2Clip } from '../services/flux2EditWorkflow';
 import { LibraryPromptButton } from './LibraryPromptButton';
+import { ModelPromptExamplesDialog } from './ModelPromptExamples';
 import { getImagePromptOnlyUpdate } from '../utils/promptDestination';
 import { defaultQwen21MultiOptions, defaultQwen21EditOptions, defaultQwen21Settings, getQwen21Choices, QWEN21_MULTI_SIZES } from '../services/qwen21Workflow';
 import { defaultMossSettings } from '../services/mossWorkflow';
@@ -85,6 +90,7 @@ interface OptionsPanelProps {
     onOpenBackgroundLibrary?: () => void;
     hideGeneralSettings?: boolean;
     characterOutputsContainer?: HTMLElement | null;
+    flux2EditWorkspaceContainer?: HTMLElement | null;
 }
 
 interface ModelPromptExample {
@@ -97,13 +103,27 @@ type PromptExampleSource = NonNullable<GenerationOptions['comfyPromptExampleSour
 type AvailablePromptExampleSource = PromptExampleSource & { hasLocalPrompts: boolean };
 
 const getSelectedLoraNames = (options: GenerationOptions): string[] => {
+    if (options.comfyModelType === 'krea2-simple') {
+        const names = options.comfyKreaUseLora === false ? [] : Array.from({ length: 6 }, (_, index) =>
+            options[`comfyKreaLora${index + 1}Name` as keyof GenerationOptions]);
+        return [...new Set([options.comfyKreaStyle?.lora, ...names].filter((name): name is string => typeof name === 'string' && !!name.trim() && name !== 'None'))];
+    }
+    if (options.comfyModelType === 'flux2-simple' || options.comfyModelType === 'flux2-edit') {
+        const t2i = options.comfyModelType === 'flux2-simple';
+        const style = t2i ? options.comfyFlux2Style : options.comfyFlux2EditStyle;
+        const names = t2i && options.comfyFlux2UseLora === false ? [] : Array.from({ length: t2i ? 6 : 2 }, (_, index) =>
+            options[`${t2i ? 'comfyFlux2' : 'comfyFlux2Edit'}Lora${index + 1}Name` as keyof GenerationOptions]);
+        return [...new Set([style?.lora, ...names].filter((name): name is string => typeof name === 'string' && !!name.trim() && name !== 'None'))];
+    }
     if (options.comfyModelType === 'moss-photo') {
-        const models = (options.comfyMossPhoto || defaultMossPhotoSettings()).nodes['160'];
-        return [1, 2, 3, 4].filter(index => models[`lora ${index} strength`] !== 0)
-            .map(index => models[`lora ${index}`]).filter((name): name is string => typeof name === 'string' && !!name && name !== 'None');
+        const settings = options.comfyMossPhoto || defaultMossPhotoSettings(), models = settings.nodes['160'];
+        return [...new Set([settings.style?.lora, ...[1, 2, 3, 4].filter(index => models[`lora ${index} strength`] !== 0)
+            .map(index => models[`lora ${index}`])].filter((name): name is string => typeof name === 'string' && !!name && name !== 'None'))];
     }
     if (options.comfyModelType === 'moss-image') {
-        return (options.comfyMoss || defaultMossSettings()).loras.filter(lora => lora.enabled && lora.name).map(lora => lora.name);
+        const settings = options.comfyMoss || defaultMossSettings();
+        return [...new Set([settings.style?.lora, ...settings.loras.filter(lora => lora.enabled && lora.name).map(lora => lora.name)]
+            .filter((name): name is string => !!name))];
     }
     if (options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo') {
         const mode = options.comfyModelType === 'qwen21-turbo' ? 'turbo' : 't2i';
@@ -116,8 +136,7 @@ const getSelectedLoraNames = (options: GenerationOptions): string[] => {
                 : options.comfyModelType === 'qwen-t2i-gguf' ? ['comfyQwen', 4]
                     : options.comfyModelType === 'qwen-edit' ? ['comfyQwenEdit', 5]
                         : options.comfyModelType === 'z-image' ? ['comfyZImage', 4]
-                            : options.comfyModelType === 'flux2-simple' ? ['comfyFlux2', 6]
-                                : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw' ? ['comfyKrea', 6]
+                            : options.comfyModelType === 'krea2-raw' ? ['comfyKrea', 6]
                                     : undefined;
     if (!config) return [];
     const [prefix, count] = config as [string, number];
@@ -330,6 +349,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     onOpenClothingLibrary, onOpenBackgroundLibrary,
     hideGeneralSettings = false,
     characterOutputsContainer,
+    flux2EditWorkspaceContainer,
 }) => {
     const [collapsedCharacterOutputs, setCollapsedCharacterOutputs] = useState<string[]>([]);
     const [characterOutputsOpen, setCharacterOutputsOpen] = useState(true);
@@ -349,51 +369,72 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
     const [promptExampleSources, setPromptExampleSources] = useState<AvailablePromptExampleSource[]>([]);
     const [activePromptExampleSource, setActivePromptExampleSource] = useState<AvailablePromptExampleSource | null>(null);
     const [promptExamplesSaving, setPromptExamplesSaving] = useState(false);
+    const promptExampleRequest = useRef(0);
+    const { inventory: styleInventory } = useModelInventory();
     const selectedLoraNames = getSelectedLoraNames(options);
     const selectedLoraKey = selectedLoraNames.join('\u0000');
 
     useEffect(() => {
         let active = true;
+        promptExampleRequest.current++;
+        setPromptExampleSources([]);
+        setPromptExamplesLoading(false);
+        setPromptExamplesSaving(false);
         setPromptExamples([]);
         setPromptExamplesOpen(false);
         setPromptExamplesStorage(null);
         setActivePromptExampleSource(null);
+        setPromptExamplesError('');
         if (!window.electron) {
             setPromptExampleSources([]);
-            return () => { active = false; };
+            return () => { active = false; promptExampleRequest.current++; };
         }
         const loadSources = async () => {
             const useSource = options.comfyPromptExampleSource;
             const sources: AvailablePromptExampleSource[] = [];
-            if (useSource) {
-                const hasLocalPrompts = await window.electron!.hasLocalModelPromptExamples(useSource.modelPath).catch(() => false);
+            const inventory = styleInventory;
+            const normalize = (path: string) => path.replace(/\\/g, '/').toLowerCase();
+            const isFlux2 = options.comfyModelType === 'flux2-simple' || options.comfyModelType === 'flux2-edit';
+            const isKrea = options.comfyModelType === 'krea2-simple';
+            const isMoss = options.comfyModelType === 'moss-image' || options.comfyModelType === 'moss-photo';
+            const mossModel = options.comfyModelType === 'moss-photo' ? options.comfyMossPhoto?.nodes['160']?.model : options.comfyMoss?.unet;
+            const activeNames = [...selectedLoraNames, isMoss ? mossModel : isKrea ? options.comfyKreaUnet : options.comfyModelType === 'flux2-simple' ? options.comfyFlux2Unet : options.comfyFlux2EditUnet];
+            const useSourceActive = useSource && (!(isFlux2 || isKrea || isMoss) || activeNames.some(name => {
+                if (typeof name !== 'string' || !name) return false;
+                const path = inventory ? findInventoryModel(inventory, name)?.path : undefined;
+                const sourcePath = normalize(useSource.modelPath);
+                return path ? normalize(path) === sourcePath : sourcePath === normalize(name) || sourcePath.endsWith(`/${normalize(name)}`);
+            }));
+            if (useSource && useSourceActive) {
+                const hasLocalPrompts = await window.electron!.hasLocalModelPromptExamples(useSource.modelPath);
                 sources.push({ ...useSource, hasLocalPrompts });
             }
-            const inventory = await window.electron!.getCivitaiInventory().catch(() => undefined);
             if (inventory) {
                 for (const loraName of selectedLoraNames) {
                     const item = findInventoryModel(inventory, loraName);
-                    if (!item || sources.some(source => source.modelPath === item.path)) continue;
-                    const hasLocalPrompts = await window.electron!.hasLocalModelPromptExamples(item.path).catch(() => false);
-                    if (!hasLocalPrompts) continue;
+                    if (!item || sources.some(source => normalize(source.modelPath) === normalize(item.path))) continue;
+                    const hasLocalPrompts = await window.electron!.hasLocalModelPromptExamples(item.path);
                     sources.push({
                         modelPath: item.path,
                         modelName: item.modelName || item.fileName,
                         provider: useSource?.provider || 'regular',
                         sources: ['civitai', ...(item.archiveMirrorUrl ? ['archive' as const] : [])],
                         triggerWords: item.usageMetadata?.triggerWords,
-                        hasLocalPrompts: true,
+                        hasLocalPrompts,
                     });
                 }
             }
             if (active) setPromptExampleSources(sources);
         };
-        void loadSources();
-        return () => { active = false; };
-    }, [options.comfyPromptExampleSource, selectedLoraKey]);
+        void loadSources().catch(cause => {
+            if (active) { setPromptExampleSources([]); setPromptExamplesError(`Cannot check LoRA prompt sources: ${String(cause)}`); }
+        });
+        return () => { active = false; promptExampleRequest.current++; };
+    }, [options.comfyPromptExampleSource, selectedLoraKey, styleInventory, options.comfyModelType, options.comfyFlux2Unet, options.comfyFlux2EditUnet, options.comfyKreaUnet, options.comfyMoss?.unet, options.comfyMossPhoto?.nodes['160']?.model]);
 
     const openPromptExamples = async (source: AvailablePromptExampleSource) => {
         if (!window.electron) return;
+        const request = ++promptExampleRequest.current;
         setActivePromptExampleSource(source);
         setPromptExamplesOpen(true);
         setPromptExamplesLoading(true);
@@ -406,28 +447,31 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 provider: source.provider,
                 sources: source.sources,
             });
+            if (request !== promptExampleRequest.current) return;
             setPromptExamples(result.examples);
             setPromptExamplesStorage(result.storage);
         } catch (error) {
-            setPromptExamplesError(error instanceof Error ? error.message : 'Prompt examples could not be loaded.');
+            if (request === promptExampleRequest.current) setPromptExamplesError(error instanceof Error ? error.message : 'Prompt examples could not be loaded.');
         } finally {
-            setPromptExamplesLoading(false);
+            if (request === promptExampleRequest.current) setPromptExamplesLoading(false);
         }
     };
 
     const saveAllPromptExamples = async () => {
         const modelPath = activePromptExampleSource?.modelPath;
         if (!modelPath || !window.electron || !promptExamples.length) return;
+        const request = promptExampleRequest.current;
         setPromptExamplesSaving(true);
         setPromptExamplesError('');
         try {
             await window.electron.saveLocalModelPromptExamples({ modelPath, examples: promptExamples });
+            if (request !== promptExampleRequest.current) return;
             setPromptExamplesStorage('sidecar');
             setPromptExampleSources(current => current.map(source => source.modelPath === modelPath ? { ...source, hasLocalPrompts: true } : source));
         } catch (error) {
-            setPromptExamplesError(error instanceof Error ? error.message : 'Prompt examples could not be saved.');
+            if (request === promptExampleRequest.current) setPromptExamplesError(error instanceof Error ? error.message : 'Prompt examples could not be saved.');
         } finally {
-            setPromptExamplesSaving(false);
+            if (request === promptExampleRequest.current) setPromptExamplesSaving(false);
         }
     };
 
@@ -445,6 +489,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 comfyFlux2Prompt: prompt,
                 comfyFlux2NegativePrompt: safeNegativePrompt,
             });
+        } else if (options.comfyModelType === 'flux2-edit') {
+            updateOptions({ comfyFlux2EditPrompt: prompt });
         } else if (options.comfyModelType === 'moss-photo') {
             updateOptions({
                 ...getImagePromptOnlyUpdate(prompt, options, generationMode),
@@ -553,6 +599,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         return [];
     }, [comfyUIObjectInfo]);
 
+    const flux2EditLoras = useMemo(() => styleInstalledLoras(comfyLoras, inferFlux2Variant(options.comfyFlux2EditUnet || 'flux2\\flux2Klein9BInt8_v10.safetensors') || 'unknown', styleInventory), [comfyLoras, options.comfyFlux2EditUnet, styleInventory]);
     const comfyVaes = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name), [comfyUIObjectInfo]);
     const cacheDitModelTypes = useMemo(() => {
         const installed = getModelListFromInfo(comfyUIObjectInfo?.CacheDiT_Model_Optimizer?.input?.required?.model_type);
@@ -659,7 +706,10 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         } else if (modelType === 'flux2-simple' || modelType === 'flux2-edit') {
             field = modelType === 'flux2-edit' ? 'comfyFlux2EditUnet' : 'comfyFlux2Unet';
             candidates = comfyFlux2Models;
-        } else if (modelType === 'krea2-simple' || modelType === 'krea2-raw') {
+        } else if (modelType === 'krea2-simple') {
+            field = 'comfyKreaUnet';
+            candidates = comfyUnets.filter(model => /krea[-_ .]?2/i.test(model));
+        } else if (modelType === 'krea2-raw') {
             return;
         } else if (modelType === 'nunchaku-kontext-flux' || modelType === 'nunchaku-flux-image') {
             field = 'comfyNunchakuModel';
@@ -671,12 +721,14 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         if (!field || candidates.length === 0) return;
         const configuredModel = String(options[field] || '');
-        const selectedModel = candidates.find(model => model.toLowerCase() === configuredModel.toLowerCase()) || candidates[0];
+        const selectedModel = candidates.find(model => model.toLowerCase() === configuredModel.toLowerCase())
+            || (modelType === 'flux2-simple' || modelType === 'flux2-edit' ? 'flux2\\flux2Klein9BInt8_v10.safetensors'
+                : modelType === 'krea2-simple' ? candidates.find(model => /krea2[_ .-]?turbo/i.test(model)) || 'krea2_turbo_fp8_scaled.safetensors' : candidates[0]);
         let cancelled = false;
 
         const applyModelDefaults = async () => {
             const updates: Partial<GenerationOptions> = configuredModel === selectedModel ? {} : { [field]: selectedModel };
-            if (window.electron && !options.comfyPromptExampleSource) {
+            if (window.electron && !options.comfyPromptExampleSource && modelType !== 'krea2-simple') {
                 try {
                     const inventory = await window.electron.getCivitaiInventory();
                     const inventoryItem = findInventoryModel(inventory, selectedModel);
@@ -687,16 +739,15 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     console.warn('Could not apply local model recommendations.', error);
                 }
             }
-            if (modelType === 'flux2-simple') {
-                Object.assign(updates, {
-                    comfyFlux2Clip: 'qwen3vl_4b_fp8_scaled.safetensors',
-                    comfyFlux2Vae: 'flux2-vae.safetensors',
-                });
-            } else if (modelType === 'flux2-edit') {
-                Object.assign(updates, {
-                    comfyFlux2EditClip: 'qwen_3_4b.safetensors',
-                    comfyFlux2EditVae: 'flux2-vae.safetensors',
-                });
+            if (modelType === 'flux2-simple' || modelType === 'flux2-edit') {
+                const clipField = modelType === 'flux2-simple' ? 'comfyFlux2Clip' : 'comfyFlux2EditClip';
+                const vaeField = modelType === 'flux2-simple' ? 'comfyFlux2Vae' : 'comfyFlux2EditVae';
+                const clip = defaultFlux2Clip(selectedModel, modelType === 'flux2-simple' ? 't2i' : 'i2i');
+                const configuredClip = options[clipField];
+                if (!configuredClip || ['qwen3vl_4b_fp8_scaled.safetensors', 'qwen_3_4b.safetensors', 'qwen38BFluxKlein9BTE_38b.safetensors'].includes(configuredClip) && configuredClip !== clip) {
+                    updates[clipField] = clip;
+                }
+                if (!options[vaeField]) updates[vaeField] = 'flux2-vae.safetensors';
             }
             if (!cancelled && Object.keys(updates).length > 0) updateOptions(updates);
         };
@@ -1475,7 +1526,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         </>;
     };
 
-    const renderPromptExampleButtons = () => promptExampleSources.length > 0 && <div className="space-y-2">{promptExampleSources.map(source => <button key={source.modelPath} type="button" onClick={() => openPromptExamples(source)} disabled={isDisabled || promptExamplesLoading} className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">{promptExamplesLoading && activePromptExampleSource?.modelPath === source.modelPath && <SpinnerIcon className="w-4 h-4 animate-spin" />}{source.hasLocalPrompts ? 'Local prompts' : 'Find prompt examples'} · {source.modelName}</button>)}</div>;
+    const renderPromptExampleButtons = () => promptExamplesError && !promptExamplesOpen
+        ? <p role="alert" className="text-sm text-red-400">{promptExamplesError}</p>
+        : promptExampleSources.length > 0 && <div className="space-y-2">{promptExampleSources.map(source => <button key={source.modelPath} type="button" onClick={() => openPromptExamples(source)} disabled={isDisabled || promptExamplesLoading} className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">{promptExamplesLoading && activePromptExampleSource?.modelPath === source.modelPath && <SpinnerIcon className="w-4 h-4 animate-spin" />}{source.hasLocalPrompts ? 'Local prompts' : 'Find prompt examples'} · {source.modelName}</button>)}</div>;
 
     const renderComfyUIOptions = () => {
         if (activeTab === 'character-generator') return renderCharacterOptions();
@@ -1494,8 +1547,47 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         if (modelType === 'qwen21-t2i' || modelType === 'qwen21-turbo') {
             return <>{renderPromptExampleButtons()}<Qwen21SettingsPanel options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} /></>;
         }
+        const flux2EditWorkspace = modelType === 'flux2-edit' ? <div className="space-y-6 rounded-2xl border border-border-primary bg-bg-secondary p-6">
+            <OptionSection title="FLUX2 Edit - Style">
+                <ImageStyleControl options={options} updateOptions={updateOptions} info={comfyUIObjectInfo || {}} disabled={isDisabled} />
+            </OptionSection>
+            <OptionSection title="Source & References">
+                <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-text-secondary">Image 1 - Source</span>
+                    <button type="button" onClick={onOpenSourceLibrary} disabled={isDisabled} className="rounded-md bg-bg-tertiary p-2 text-text-secondary hover:bg-bg-tertiary-hover disabled:opacity-50" title="Select Image 1 from Library"><LibraryIcon className="h-5 w-5" /></button>
+                </div>
+                <ImageUploader label="Upload Source Image (Required)" id="flux2-edit-source" onImageUpload={file => onSourceImageChange?.(file)} sourceFile={sourceImage} disabled={isDisabled} />
+                <p className="text-xs text-text-muted">Picture 1 is the source. Add up to three references and describe exactly what FLUX2 should copy from each one.</p>
+                <Flux2ReferenceManager
+                    images={elementImages.slice(0, 3)}
+                    setImages={(files) => setElementImages(files.slice(0, 3))}
+                    roles={options.comfyFlux2EditReferenceRoles || ['outfit', 'background', 'pose']}
+                    descriptions={options.comfyFlux2EditReferenceDescriptions || []}
+                    libraryPrompts={options.comfyFlux2EditReferenceLibraryPrompts || []}
+                    updateOptions={updateOptions}
+                    disabled={isDisabled}
+                    onOpenLibrary={onOpenElementPicker}
+                />
+                {elementImages.some((_, index) => (options.comfyFlux2EditReferenceRoles?.[index] || ['outfit', 'background', 'pose'][index]) === 'pose') && !comfyUIObjectInfo?.AIO_Preprocessor && <p className="rounded-md border border-warning/50 bg-warning-bg p-3 text-xs text-warning">Pose references require AIO_Preprocessor from ComfyUI ControlNet Aux.</p>}
+            </OptionSection>
+            <OptionSection title="Additional LoRAs">
+                <p className="text-xs text-text-muted">The gallery style is shown above. These two independent slots are applied after it.</p>
+                {[1, 2].map(index => {
+                    const nameField = `comfyFlux2EditLora${index}Name` as keyof GenerationOptions;
+                    const strengthField = `comfyFlux2EditLora${index}Strength` as keyof GenerationOptions;
+                    const selectedName = options[nameField] as string | undefined;
+                    const strength = options[strengthField] as number | undefined;
+                    return <div key={index} className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.65fr)]">
+                        <SelectInput label={`Additional LoRA ${index}`} value={selectedName || ''} onChange={handleOptionChange(nameField)} options={Array.from(new Set(['', selectedName || '', ...flux2EditLoras])).map(value => ({ value, label: value || 'None', disabled: !!value && !flux2EditLoras.includes(value) }))} disabled={isDisabled} />
+                        <NumberSlider label={`Strength: ${strength ?? 1}`} value={strength ?? 1} onChange={handleSliderChange(strengthField)} min={-2} max={2} step={0.05} disabled={isDisabled || !selectedName} allowDirectInput />
+                    </div>;
+                })}
+                {(options.comfyFlux2EditLora1Name || options.comfyFlux2EditLora2Name) && !comfyUIObjectInfo?.LoraLoaderModelOnly && <p className="text-xs text-warning">Additional LoRAs require LoraLoaderModelOnly in ComfyUI.</p>}
+            </OptionSection>
+        </div> : null;
         return (
             <>
+                {flux2EditWorkspaceContainer === undefined ? flux2EditWorkspace : flux2EditWorkspaceContainer ? createPortal(flux2EditWorkspace, flux2EditWorkspaceContainer) : null}
                 {sourceImage && comfyUIUrl && modelType !== 'flux2-edit' &&
                     <div className="bg-bg-tertiary p-3 rounded-md border border-border-primary/50 text-center">
                         <button onClick={onGeneratePrompt} disabled={isGeneratingPrompt} className="w-full flex items-center justify-center gap-2 text-sm bg-bg-primary text-text-secondary font-semibold py-2 px-3 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
@@ -1505,7 +1597,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     </div>
                 }
 
-                <OptionSection title="Model & Prompt">
+                <OptionSection title={modelType === 'flux2-edit' ? 'Model & Options' : 'Model & Prompt'}>
                     <button
                         type="button"
                         onClick={() => setComfyModelsOpen(open => !open)}
@@ -1640,41 +1732,15 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                             </div>
                         )}
                         {modelType === 'flux2-edit' && <div className="space-y-4 border-t border-border-primary/50 pt-3">
-                            <h4 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">FLUX2 Multi-Reference Edit</h4>
-                            <p className="text-xs text-text-muted">Picture 1 is the source. Add up to three references and describe exactly what FLUX2 should copy from each one.</p>
-                            <Flux2ReferenceManager
-                                images={elementImages.slice(0, 3)}
-                                setImages={(files) => setElementImages(files.slice(0, 3))}
-                                roles={options.comfyFlux2EditReferenceRoles || ['outfit', 'background', 'pose']}
-                                descriptions={options.comfyFlux2EditReferenceDescriptions || []}
-                                libraryPrompts={options.comfyFlux2EditReferenceLibraryPrompts || []}
-                                updateOptions={updateOptions}
-                                disabled={isDisabled}
-                                onOpenLibrary={onOpenElementPicker}
-                            />
-                            {elementImages.some((_, index) => (options.comfyFlux2EditReferenceRoles?.[index] || ['outfit', 'background', 'pose'][index]) === 'pose') && !comfyUIObjectInfo?.AIO_Preprocessor && <p className="rounded-md border border-warning/50 bg-warning-bg p-3 text-xs text-warning">Pose references require AIO_Preprocessor from ComfyUI ControlNet Aux.</p>}
-                            <button type="button" onClick={() => setFlux2EditAdvancedOpen(open => !open)} className={`w-full rounded-md border px-4 py-2 text-sm font-bold transition-colors ${flux2EditAdvancedOpen ? 'border-accent bg-accent/10 text-accent' : 'border-border-primary bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'}`}>Advanced {flux2EditAdvancedOpen ? '−' : '+'}</button>
-                            {flux2EditAdvancedOpen && <div className="space-y-4 rounded-md border border-border-secondary bg-bg-primary/50 p-3">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">FLUX2 Edit Settings</h4>
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <SelectInput label="Sampler" value={options.comfyFlux2EditSampler || 'euler'} onChange={handleOptionChange('comfyFlux2EditSampler')} options={Array.from(new Set([options.comfyFlux2EditSampler || 'euler', ...comfySamplers])).map(value => ({ value, label: value }))} disabled={isDisabled} />
                                     <NumberSlider label={`Steps: ${options.comfyFlux2EditSteps ?? 4}`} value={options.comfyFlux2EditSteps ?? 4} onChange={handleSliderChange('comfyFlux2EditSteps')} min={1} max={40} step={1} disabled={isDisabled} />
-                                    <NumberSlider label={`CFG: ${options.comfyFlux2EditCfg ?? 1}`} value={options.comfyFlux2EditCfg ?? 1} onChange={handleSliderChange('comfyFlux2EditCfg')} min={0.1} max={10} step={0.1} disabled={isDisabled} />
+                                    <NumberSlider label={`CFG: ${options.comfyFlux2EditCfg ?? 1}`} value={options.comfyFlux2EditCfg ?? 1} onChange={handleSliderChange('comfyFlux2EditCfg')} min={0} max={10} step={0.1} disabled={isDisabled} />
                                     <NumberSlider label={`Source Megapixels: ${options.comfyFlux2EditMegapixels ?? 1}`} value={options.comfyFlux2EditMegapixels ?? 1} onChange={handleSliderChange('comfyFlux2EditMegapixels')} min={0.25} max={4} step={0.25} disabled={isDisabled} />
                                 </div>
-                                <div className="space-y-3 border-t border-border-primary/50 pt-3">
-                                    <h5 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Additional LoRAs</h5>
-                                    {[1, 2].map(index => {
-                                        const nameField = `comfyFlux2EditLora${index}Name` as keyof GenerationOptions;
-                                        const strengthField = `comfyFlux2EditLora${index}Strength` as keyof GenerationOptions;
-                                        const selectedName = options[nameField] as string | undefined;
-                                        const strength = options[strengthField] as number | undefined;
-                                        return <div key={index} className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.65fr)]">
-                                            <SelectInput label={`Additional LoRA ${index}`} value={selectedName || ''} onChange={handleOptionChange(nameField)} options={Array.from(new Set(['', selectedName || '', ...comfyLoras])).map(value => ({ value, label: value || 'None' }))} disabled={isDisabled} />
-                                            <NumberSlider label={`Strength: ${strength ?? 1}`} value={strength ?? 1} onChange={handleSliderChange(strengthField)} min={-2} max={2} step={0.05} disabled={isDisabled || !selectedName} allowDirectInput />
-                                        </div>;
-                                    })}
-                                    {(options.comfyFlux2EditLora1Name || options.comfyFlux2EditLora2Name) && !comfyUIObjectInfo?.LoraLoaderModelOnly && <p className="text-xs text-warning">Additional LoRAs require LoraLoaderModelOnly in ComfyUI.</p>}
-                                </div>
+                            <button type="button" onClick={() => setFlux2EditAdvancedOpen(open => !open)} className={`w-full rounded-md border px-4 py-2 text-sm font-bold transition-colors ${flux2EditAdvancedOpen ? 'border-accent bg-accent/10 text-accent' : 'border-border-primary bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary-hover'}`}>Advanced {flux2EditAdvancedOpen ? '−' : '+'}</button>
+                            {flux2EditAdvancedOpen && <div className="space-y-4 rounded-md border border-border-secondary bg-bg-primary/50 p-3">
                                 <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={!!options.comfyFlux2EditUseCacheDit} onChange={handleOptionChange('comfyFlux2EditUseCacheDit')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />Enable CacheDiT Accelerator</label>
                                 {options.comfyFlux2EditUseCacheDit && <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                     <SelectInput label="CacheDiT Model Type" value={options.comfyFlux2EditCacheDitModelType || 'Auto'} onChange={handleOptionChange('comfyFlux2EditCacheDitModelType')} options={cacheDitModelTypes.map(value => ({ value, label: value }))} disabled={isDisabled} />
@@ -1717,11 +1783,18 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         </div>
                     )}
 
+                    {modelType === 'flux2-simple' && <ImageStyleControl options={options} updateOptions={updateOptions} info={comfyUIObjectInfo || {}} disabled={isDisabled} mode="t2i" />}
+                    {modelType === 'krea2-simple' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!options.comfyKreaUseStyleSettings} disabled={isDisabled || !options.comfyKreaStyle} onChange={event => updateOptions({ comfyKreaUseStyleSettings: event.target.checked })} />Apply style sampling overrides</label>}
+                    {modelType === 'flux2-edit' ? <>
+                        {renderPromptExampleButtons()}
+                        <TextInput label="Additional Editing Instructions" value={options.comfyFlux2EditPrompt || ''} onChange={handleOptionChange('comfyFlux2EditPrompt')} disabled={isDisabled} isTextArea />
+                    </> : <>
                     {renderPromptExampleButtons()}
-                    <TextInput label={modelType === 'flux2-edit' ? 'Additional Editing Instructions' : 'Positive Prompt'} value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaPrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2Prompt || '') : modelType === 'flux2-edit' ? (options.comfyFlux2EditPrompt || '') : (options.comfyPrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaPrompt' : modelType === 'flux2-simple' ? 'comfyFlux2Prompt' : modelType === 'flux2-edit' ? 'comfyFlux2EditPrompt' : 'comfyPrompt')} disabled={isDisabled} isTextArea />
-                    {modelType !== 'nunchaku-kontext-flux' && modelType !== 'nunchaku-flux-image' && modelType !== 'flux-krea' && modelType !== 'flux2-edit' && (
+                    <TextInput label="Positive Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaPrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2Prompt || '') : (options.comfyPrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaPrompt' : modelType === 'flux2-simple' ? 'comfyFlux2Prompt' : 'comfyPrompt')} disabled={isDisabled} isTextArea />
+                    {modelType !== 'nunchaku-kontext-flux' && modelType !== 'nunchaku-flux-image' && modelType !== 'flux-krea' && (
                         <TextInput label="Negative Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaNegativePrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2NegativePrompt || '') : (options.comfyNegativePrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaNegativePrompt' : modelType === 'flux2-simple' ? 'comfyFlux2NegativePrompt' : 'comfyNegativePrompt')} disabled={isDisabled} isTextArea />
                     )}
+                    </>}
                 </OptionSection>
 
 
@@ -1893,7 +1966,9 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                 {options.provider === 'comfyui' ? renderComfyUIOptions() : renderGeminiOptions()}
             </div>
 
-            {promptExamplesOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPromptExamplesOpen(false)}><div role="dialog" aria-modal="true" aria-label="Model prompt examples" className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border-primary bg-bg-secondary shadow-xl" onClick={event => event.stopPropagation()}><div className="flex items-center justify-between gap-3 border-b border-border-primary p-4"><div className="min-w-0"><h3 className="font-bold text-text-primary">Prompt examples</h3><p className="truncate text-xs text-text-muted">{options.comfyPromptExampleSource?.modelName}{promptExamplesStorage === 'sidecar' ? ' · Saved locally' : ''}</p></div><div className="flex items-center gap-2">{promptExamplesStorage === 'remote' && promptExamples.length > 0 && <button type="button" onClick={saveAllPromptExamples} disabled={promptExamplesSaving} className="rounded border border-emerald-500/60 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50">{promptExamplesSaving ? 'Saving...' : 'Save all locally'}</button>}<button type="button" onClick={() => setPromptExamplesOpen(false)} className="rounded p-2 text-text-secondary hover:bg-bg-tertiary" aria-label="Close prompt examples"><CloseIcon className="h-5 w-5" /></button></div></div><div className="min-h-32 overflow-y-auto divide-y divide-border-primary">{promptExamplesLoading && <div className="grid min-h-32 place-items-center"><SpinnerIcon className="h-6 w-6 animate-spin text-blue-400" /></div>}{promptExamplesError && <p className="p-4 text-sm text-red-400">{promptExamplesError}</p>}{!promptExamplesLoading && promptExamples.map((example, index) => <div key={`${example.source}-${index}`} className="space-y-2 p-4"><div className="flex items-center justify-between gap-3"><span className={`text-[10px] font-bold uppercase ${example.source === 'archive' ? 'text-emerald-400' : 'text-blue-400'}`}>{example.source === 'archive' ? 'CivArchive' : 'Civitai'}</span><button type="button" onClick={() => applyPromptExample(example)} className="rounded bg-accent px-3 py-1.5 text-xs font-bold text-accent-text">Use prompt</button></div><div><p className="text-[10px] font-bold uppercase text-text-muted">Positive</p><p className="mt-1 whitespace-pre-wrap break-words text-sm text-text-primary">{example.positive}</p></div>{example.negative && <div><p className="text-[10px] font-bold uppercase text-text-muted">Negative</p><p className="mt-1 whitespace-pre-wrap break-words text-xs text-text-secondary">{example.negative}</p></div>}</div>)}</div></div></div>}
+            {promptExamplesOpen && <ModelPromptExamplesDialog modelName={activePromptExampleSource?.modelName} examples={promptExamples}
+                storage={promptExamplesStorage} loading={promptExamplesLoading} saving={promptExamplesSaving} error={promptExamplesError}
+                onClose={() => setPromptExamplesOpen(false)} onSave={() => void saveAllPromptExamples()} onUse={applyPromptExample} disabled={isDisabled} />}
 
         </div>
     );

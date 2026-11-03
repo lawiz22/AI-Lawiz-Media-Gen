@@ -21,6 +21,8 @@ import { AudioPlayer } from './AudioPlayer';
 import { AudioLyricsEditor, OriginalAudioSelector } from './VideoAudioControls';
 import { extractLastVideoFrame } from '../services/videoFrameService';
 import { VideoOutputFrames } from './VideoOutputFrames';
+import { H3StyleControl } from './H3StyleControl';
+import { ModelPromptExamplesButton } from './ModelPromptExamples';
 
 const input = 'mt-1 w-full rounded-lg border border-border-primary bg-bg-primary p-2 text-sm text-text-primary focus:border-accent focus:outline-none';
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed';
@@ -378,6 +380,10 @@ export const MinimaxH3Panel: React.FC<{
             <fieldset disabled={!ready} aria-label="Workflow settings" className={`min-w-0 space-y-4 disabled:opacity-60 ${advanced ? 'order-last lg:order-first' : ''}`}>
                 {advanced && options.advanced && <AdvancedH3Settings settings={options.advanced} options={options} info={info} onChange={value => update({ advanced: value })} onOptionsChange={update} />}
                 {!advanced && promptSection}
+                {h3Needed ? <H3StyleControl options={options} onChange={update} info={info} prompt={draft?.prompt || ''} disabled={!ready || busy || loading} />
+                    : options.style && <p role="status" className="text-xs text-text-muted">H3 gallery style is retained but inactive: this source-video pipeline has no H3 latent refinement.</p>}
+                {h3Needed && options.style?.lora && <ModelPromptExamplesButton name={options.style.lora} linkedPath={options.style.libraryLink?.path}
+                    disabled={!ready || busy} onUsePrompt={prompt => patchDraft({ prompt })} />}
                 {ultrafast && acceleration && <section className={`${box} space-y-3 border-emerald-400/30`}>
                     <h4 className="font-semibold text-emerald-300">Ultrafast accelerators</h4>
                     <Toggle label="Spectrum" checked={acceleration.spectrum} onChange={spectrum => updateAcceleration({ spectrum })} />
@@ -442,6 +448,7 @@ export const MinimaxH3Panel: React.FC<{
                             {lora.enabled ? <>
                                 <Choice label={`LoRA ${index + 1} file`} value={lora.name} choices={loraNames} onChange={name => patch({ name })} />
                                 <NumberField label={`Strength ${index + 1}`} value={lora.strength} min={-20} max={20} step={0.05} onChange={strength => patch({ strength })} />
+                                <div className="col-span-full"><ModelPromptExamplesButton name={lora.name} disabled={!ready || busy} onUsePrompt={prompt => patchDraft({ prompt })} /></div>
                             </> : <p className="col-span-2 text-xs text-text-muted">Disabled · enable this slot to select its LoRA.</p>}
                         </div>;
                     })}</fieldset> : <p className="text-xs text-text-muted">Enable the LoRA chain, then enable a slot to choose its file and strength. Saved selections are retained while disabled.</p>}

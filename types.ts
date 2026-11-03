@@ -110,6 +110,7 @@ declare global {
         kind: 'all' | 'lora' | 'checkpoint' | 'diffusion';
         family: import('./services/civitaiService').CivitaiFamily;
       }) => Promise<import('./services/civitaiService').CivitaiInventory>;
+      indexCivitaiModel: (request: { provider: 'regular' | 'red'; modelPath: string }) => Promise<import('./services/civitaiService').CivitaiInventory>;
       classifyCivitaiModelRoot: (provider: 'regular' | 'red') => Promise<{
         total: number;
         moved: number;
@@ -129,6 +130,7 @@ declare global {
         modelPath: string;
         provider: 'regular' | 'red';
         source: 'civitai' | 'archive' | 'huggingface';
+        preserveExisting?: boolean;
       }) => Promise<import('./services/civitaiService').CivitaiInventoryItem>;
       setLocalModelUsageMetadata: (request: {
         modelPath: string;
@@ -282,6 +284,9 @@ export interface GenerationOptions {
 
   // FLUX2 Simple
   comfyFlux2Prompt?: string;
+  comfyFlux2Style?: import('./services/styleGallery').GalleryStyle;
+  comfyFlux2StyleStrength?: number;
+  comfyFlux2UseStyleSettings?: boolean;
   comfyFlux2NegativePrompt?: string;
   comfyFlux2Unet?: string;
   comfyFlux2Clip?: string;
@@ -303,6 +308,9 @@ export interface GenerationOptions {
 
   // FLUX2 multi-reference image editing
   comfyFlux2EditPrompt?: string;
+  comfyFlux2EditStyle?: import('./services/styleGallery').GalleryStyle;
+  comfyFlux2EditStyleStrength?: number;
+  comfyFlux2EditUseStyleSettings?: boolean;
   comfyFlux2EditUnet?: string;
   comfyFlux2EditClip?: string;
   comfyFlux2EditVae?: string;
@@ -328,6 +336,9 @@ export interface GenerationOptions {
 
   // KREA2 Simple
   comfyKreaPrompt?: string;
+  comfyKreaStyle?: import('./services/styleGallery').GalleryStyle;
+  comfyKreaStyleStrength?: number;
+  comfyKreaUseStyleSettings?: boolean;
   comfyKreaNegativePrompt?: string;
   comfyKreaUnet?: string;
   comfyKreaClip?: string;
@@ -413,6 +424,7 @@ export interface GenerationOptions {
 
   // Character multi-angle Qwen Edit workflow
   comfyCharacterMode?: 'qwen' | 'flux2' | 'qwen21' | 'qwen21-create';
+  comfyCharacterFlux2Tab?: 'standard' | 'blazing-fast';
   comfyQwen21Create?: import('./services/qwen21Workflow').Qwen21MultiOptions;
   comfyQwen21CreateTurbo?: boolean;
   qwen21CharacterSheet?: import('./services/qwen21Workflow').Qwen21CharacterSheetOptions;
@@ -855,7 +867,7 @@ export interface IndexTtsGenerationInfo {
   }>;
 }
 
-export type LibraryAssetRole = 'media' | 'sourceImage' | 'startFrame' | 'endFrame' | 'skeletonImage' | 'characterSceneImage' | `ltxSegmentSource:${number}` | `qwen21MultiSource:${number}` | `videoPromptReference:${number}` | `videoPromptOriginal:${number}`;
+export type LibraryAssetRole = 'media' | 'sourceImage' | 'startFrame' | 'endFrame' | 'skeletonImage' | 'characterSceneImage' | 'ltxAudioSyncAudio' | 'ltxAudioSyncOriginalAudio' | 'ltxRippleVideo' | `ltxSegmentSource:${number}` | `qwen21MultiSource:${number}` | `videoPromptReference:${number}` | `videoPromptOriginal:${number}`;
 
 export interface VideoPromptLibraryFile {
   name: string;
@@ -912,16 +924,24 @@ export interface LibraryItem {
   options?: GenerationOptions;
   themeOptions?: ThemeGenerationInfo;
   ltxDirectorOptions?: LtxDirectorGenerationInfo;
+  ltxAudioSyncOptions?: import('./services/ltxAudioSyncWorkflow').AudioSyncSavedSetup;
+  ltxRippleOptions?: import('./services/ltxRippleWorkflow').RippleSavedSetup;
   videoPromptOptions?: VideoPromptLibraryOptions;
   minimaxH3Options?: MinimaxH3LibraryOptions;
   characterSwapOptions?: CharacterSwapLibraryOptions;
   sceneVariationPreset?: import('./services/sceneVariationService').SceneVariationPreset;
+  creationSuiteOptions?: import('./services/creationSuiteWorkflow').CreationSuiteSnapshot;
+  clothesSwitcherOptions?: import('./services/clothesSwitcherWorkflow').ClothesSwitcherSnapshot;
+  blazingFastOptions?: import('./services/blazingFastCharacterWorkflow').BlazingSnapshot;
   lanPaintPersonSettings?: import('./services/swapPersonWorkflow').LanPaintPersonOptions;
   outpaintSettings?: import('./services/qwen21Workflow').Qwen21OutpaintOptions;
   characterSheetView?: { index: number; cuts: number[]; x: number; y: number; width: number; height: number };
   ttsOptions?: TtsGenerationInfo;
   indexTtsOptions?: IndexTtsGenerationInfo;
   sourceImage?: string; // data URL for image/video generations
+  ltxAudioSyncAudio?: string;
+  ltxAudioSyncOriginalAudio?: string;
+  ltxRippleVideo?: string;
   qwen21MultiSources?: string[];
   characterSceneImage?: string;
   startFrame?: string; // data URL for video generations
@@ -1202,7 +1222,7 @@ export interface VideoSliceState {
 
   // Video Utilities
   videoUtilsState: VideoUtilsState;
-  activeVideoUtilsSubTab: 'frames' | 'clips' | 'audio-extractor' | 'merge' | 'reference-maker' | 'colors' | 'resize-crop' | 'voice-recorder';
+  activeVideoUtilsSubTab: 'frames' | 'clips' | 'audio-extractor' | 'merge' | 'reference-maker' | 'colors' | 'resize-crop' | 'voice-recorder' | 'outpaint' | 'upscale';
   referenceMakerResetVersion: number;
   videoMergeResetVersion: number;
   audioExtractorResetVersion: number;

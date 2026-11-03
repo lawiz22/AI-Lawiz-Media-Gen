@@ -15,14 +15,14 @@ The README is the short introduction. This index is the entry point for setup, w
 | Area | Guide | Covers |
 | --- | --- | --- |
 | Images and characters | [Image and character generation](features/images-and-characters.md) | MOSS Image/refinement, MOSS PHOTO film looks and conditional finishing, KREA2, Qwen 2.1 T2I/edit modes, character sheets and Outpaint |
-| Scene editing | [Scene Variation](features/scene-variation.md) | Global/Masked modes, SAM3 masks and Character in a Scene |
+| Scene editing | [Scene Variation](features/scene-variation.md) | Global/Masked modes, SAM3 masks, Character in a Scene, Creation suite and Clothes Switcher with depth/edge previews |
 | Identity editing | [Swap a Person and Photo Fusion](features/swap-and-fusion.md) | SAM3 swaps, LanPaint head swaps and multi-person fusion |
 | Prompt analysis and utilities | [Creative tools](features/creative-tools.md) | Prompt/Soup tools, PastForward, styles, Reference Maker, Video Extractor, recording and upscaling |
 | Local inventory | [Models and LoRAs](features/models-and-loras.md) | Scanning, metadata, organization and workflow selection |
-| Video prompts | [Video Prompt Generator](features/video-prompt-generator.md) | Media editing, providers, templates, H3 transfer and prompt snapshots |
+| Video prompts | [Video Prompt Generator](features/video-prompt-generator.md) | Media editing, providers, templates, H3/Audio-Sync transfer and prompt snapshots |
 | H3 rendering | [MiniMax H3 REF2V](features/minimax-h3.md) | References, LoRAs, timing, previews, cancellation and rendered-result saving |
 | H3 character swap | [Character Swap H3](features/character-swap-h3.md) | Native BFS Shot Planner, memory history, live progress, persistent shots, resume, partial assembly, comparison, Library imports/saves and user-confirmed multi-shot rendering |
-| Timelines and speech | [LTX Director and audio](features/ltx-and-audio.md) | LTX profiles, clips, soundtracks, TTS and voice reuse |
+| LTX and speech | [LTX video and audio](features/ltx-and-audio.md) | Director profiles/timelines, LTX 2.5 Audio-Sync, soundtracks, TTS and voice reuse |
 | Saved assets | [Library and backups](features/library.md) | Search, tags, ratings, archives, Folder projects, Drive and video persistence |
 
 ## Quick task index
@@ -30,6 +30,7 @@ The README is the short introduction. This index is the entry point for setup, w
 - **Generate a film-look photo:** [MOSS PHOTO controls and quick start](features/images-and-characters.md#moss-photo), then check [PHOTO nodes and models](reference/comfyui-workflows.md#moss-photo).
 - **Generate a video prompt:** [references and media editing](features/video-prompt-generator.md#references-and-media-editing), then [providers and templates](features/video-prompt-generator.md#providers-and-editable-templates).
 - **Render in H3:** [workflow settings](features/minimax-h3.md#workflow-settings-and-six-loras), [reference limits](features/minimax-h3.md#reference-limits-and-token-mapping), then [save the result](features/minimax-h3.md#save-rendered-output-to-library).
+- **Animate an image to audio:** [LTX 2.5 Audio-Sync](features/ltx-and-audio.md#ltx-25-audio-sync), optionally [starting with Video Prompt Generator](features/video-prompt-generator.md#send-to-ltx-25-audio-sync).
 - **Restore a saved prompt:** [Library snapshots and restoration](features/video-prompt-generator.md#library-snapshots-and-restoration).
 - **Back up your work:** [portable archives](features/library.md#portable-archives) or [Library Folder projects](features/library.md#library-folder-projects).
 - **Prepare ComfyUI:** [connection setup](connections.md#comfyui), [workflow dependencies](reference/comfyui-workflows.md) and the [complete node list](../COMFYUI_REQUIRED_NODES.txt).

@@ -63,10 +63,14 @@ const initialOptions: GenerationOptions = {
   comfySampler: 'er_sde',
   comfyScheduler: 'beta',
 
+  comfyFlux2Unet: 'flux2\\flux2Klein9BInt8_v10.safetensors',
+  comfyFlux2Clip: 'qwen38BFluxKlein9BTE_38b.safetensors',
+  comfyFlux2Vae: 'flux2-vae.safetensors',
+
   // FLUX2 multi-reference edit defaults
   comfyFlux2EditPrompt: '',
-  comfyFlux2EditUnet: 'flux-2-klein-4b-Q4_K_M.gguf',
-  comfyFlux2EditClip: 'qwen_3_4b.safetensors',
+  comfyFlux2EditUnet: 'flux2\\flux2Klein9BInt8_v10.safetensors',
+  comfyFlux2EditClip: 'qwen38BFluxKlein9BTE_38b.safetensors',
   comfyFlux2EditVae: 'flux2-vae.safetensors',
   comfyFlux2EditSteps: 4,
   comfyFlux2EditCfg: 1,
@@ -86,14 +90,17 @@ const initialOptions: GenerationOptions = {
 
   // KREA2 Simple defaults
   comfyKreaPrompt: '',
+  comfyKreaStyle: undefined,
+  comfyKreaStyleStrength: undefined,
+  comfyKreaUseStyleSettings: false,
   comfyKreaNegativePrompt: '',
-  comfyKreaUnet: 'krea2_raw_fp8_scaled.safetensors',
+  comfyKreaUnet: 'krea2_turbo_fp8_scaled.safetensors',
   comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
   comfyKreaVae: 'qwen_image_vae.safetensors',
   comfyKreaResolution: '832x1216',
   comfyKreaUseLora: true,
-  comfyKreaLora1Name: 'KREA\\krea2_turbo_lora_rank_64_bf16.safetensors',
-  comfyKreaLora1Strength: 0.6,
+  comfyKreaLora1Name: '',
+  comfyKreaLora1Strength: 1,
   comfyKreaLora2Name: 'KREA\\snofs_krea_v1_nostrip.safetensors',
   comfyKreaLora2Strength: 1,
   comfyKreaLora3Name: '',
@@ -369,7 +376,8 @@ const generationSlice = createSlice({
         nextOptions.comfySteps = 4;
         nextOptions.comfyCfg = 1;
       } else if (action.payload.comfyModelType === 'flux2-simple') {
-        nextOptions.comfyFlux2Clip = 'qwen3vl_4b_fp8_scaled.safetensors';
+        nextOptions.comfyFlux2Unet = action.payload.comfyFlux2Unet ?? nextOptions.comfyFlux2Unet ?? 'flux2\\flux2Klein9BInt8_v10.safetensors';
+        nextOptions.comfyFlux2Clip = action.payload.comfyFlux2Clip ?? nextOptions.comfyFlux2Clip ?? 'qwen38BFluxKlein9BTE_38b.safetensors';
         nextOptions.comfyFlux2Vae = 'flux2-vae.safetensors';
         if (!savedOptions) {
           nextOptions.comfySteps = action.payload.comfySteps ?? 10;
@@ -377,20 +385,29 @@ const generationSlice = createSlice({
           nextOptions.comfySampler = action.payload.comfySampler ?? 'euler';
         }
       } else if (action.payload.comfyModelType === 'flux2-edit') {
-        nextOptions.comfyFlux2EditUnet = action.payload.comfyFlux2EditUnet ?? 'flux-2-klein-4b-Q4_K_M.gguf';
-        nextOptions.comfyFlux2EditClip = action.payload.comfyFlux2EditClip ?? 'qwen_3_4b.safetensors';
-        nextOptions.comfyFlux2EditVae = action.payload.comfyFlux2EditVae ?? 'flux2-vae.safetensors';
+        nextOptions.comfyFlux2EditUnet = action.payload.comfyFlux2EditUnet ?? nextOptions.comfyFlux2EditUnet ?? 'flux2\\flux2Klein9BInt8_v10.safetensors';
+        nextOptions.comfyFlux2EditClip = action.payload.comfyFlux2EditClip ?? nextOptions.comfyFlux2EditClip ?? 'qwen38BFluxKlein9BTE_38b.safetensors';
+        nextOptions.comfyFlux2EditVae = action.payload.comfyFlux2EditVae ?? nextOptions.comfyFlux2EditVae ?? 'flux2-vae.safetensors';
         nextOptions.comfyFlux2EditReferenceRoles = action.payload.comfyFlux2EditReferenceRoles ?? ['outfit', 'background', 'pose'];
         nextOptions.comfyFlux2EditReferenceDescriptions = action.payload.comfyFlux2EditReferenceDescriptions ?? ['', '', ''];
         nextOptions.comfyFlux2EditReferenceLibraryPrompts = action.payload.comfyFlux2EditReferenceLibraryPrompts ?? ['', '', ''];
       } else if (action.payload.comfyModelType === 'krea2-simple') {
-        nextOptions.comfyKreaUnet = action.payload.comfyKreaUnet ?? 'krea2_raw_fp8_scaled.safetensors';
+        nextOptions.comfyKreaUnet = action.payload.comfyKreaUnet ?? savedOptions?.comfyKreaUnet ?? 'krea2_turbo_fp8_scaled.safetensors';
         nextOptions.comfyKreaClip = 'qwen3vl_4b_fp8_scaled.safetensors';
         nextOptions.comfyKreaVae = 'qwen_image_vae.safetensors';
+        if (/krea2[_ .-]?turbo/i.test(nextOptions.comfyKreaUnet)) {
+          for (const field of KREA_TURBO_LORA_FIELDS) {
+            if (/krea2[_ .-]?turbo/i.test(nextOptions[field] || '')) nextOptions[field] = '';
+          }
+        }
       } else if (action.payload.comfyModelType === 'krea2-raw') {
         nextOptions.comfyKreaUnet = 'krea2_raw_fp8_scaled.safetensors';
         nextOptions.comfyKreaClip = 'qwen3vl_4b_fp8_scaled.safetensors';
         nextOptions.comfyKreaVae = 'Wan2.1_VAE.safetensors';
+        if (!savedOptions && !nextOptions.comfyKreaLora1Name && action.payload.comfyKreaLora1Name === undefined) {
+          nextOptions.comfyKreaLora1Name = 'KREA\\krea2_turbo_lora_rank_64_bf16.safetensors';
+          nextOptions.comfyKreaLora1Strength = 0.6;
+        }
       }
       state.options = nextOptions;
       if (!state.comfyDefaultOptionsByModel[action.payload.comfyModelType]) {
@@ -461,13 +478,30 @@ const generationSlice = createSlice({
       state.elementImages = [];
 
       const resetDefaults: Partial<GenerationOptions> = {
+        ...(activeModelType === 'krea2-simple' ? {
+          comfyKreaUnet: 'krea2_turbo_fp8_scaled.safetensors',
+          comfyKreaLora1Name: '',
+          comfyKreaLora1Strength: 1,
+        } : {}),
+        comfyFlux2Unet: 'flux2\\flux2Klein9BInt8_v10.safetensors',
+        comfyFlux2Clip: 'qwen38BFluxKlein9BTE_38b.safetensors',
+        comfyFlux2Vae: 'flux2-vae.safetensors',
+        comfyFlux2EditUnet: 'flux2\\flux2Klein9BInt8_v10.safetensors',
+        comfyFlux2EditClip: 'qwen38BFluxKlein9BTE_38b.safetensors',
+        comfyFlux2EditVae: 'flux2-vae.safetensors',
         geminiPrompt: '',
         comfyQwen21T2i: defaultQwen21Settings('t2i'),
         comfyQwen21Turbo: defaultQwen21Settings('turbo'),
         comfyPrompt: '',
         comfyFlux2Prompt: '',
+        comfyFlux2Style: undefined,
+        comfyFlux2StyleStrength: undefined,
+        comfyFlux2UseStyleSettings: false,
         comfyFlux2NegativePrompt: '',
         comfyFlux2EditPrompt: '',
+        comfyFlux2EditStyle: undefined,
+        comfyFlux2EditStyleStrength: undefined,
+        comfyFlux2EditUseStyleSettings: false,
         comfyFlux2EditReferenceRoles: ['outfit', 'background', 'pose'],
         comfyFlux2EditReferenceDescriptions: ['', '', ''],
         comfyFlux2EditReferenceLibraryPrompts: ['', '', ''],
@@ -583,19 +617,21 @@ export const selectIsReadyToGenerate = createSelector(
         return !!isComfyUIConnected && !!settings?.prompt.trim();
       }
       const activePrompt = activeOptions.comfyModelType === 'krea2-simple' || activeOptions.comfyModelType === 'krea2-raw'
-        ? activeOptions.comfyKreaPrompt
+        ? activeOptions.comfyKreaPrompt || (activeOptions.comfyModelType === 'krea2-simple' ? activeOptions.comfyKreaStyle?.title : '')
         : activeOptions.comfyModelType === 'flux2-simple'
-          ? activeOptions.comfyFlux2Prompt
+          ? activeOptions.comfyFlux2Prompt || activeOptions.comfyFlux2Style?.title
           : activeOptions.comfyModelType === 'flux2-edit'
-            ? activeOptions.comfyFlux2EditPrompt || activeOptions.comfyFlux2EditReferenceDescriptions?.find(description => description.trim())
+            ? activeOptions.comfyFlux2EditPrompt || activeOptions.comfyFlux2EditReferenceDescriptions?.find(description => description.trim()) || activeOptions.comfyFlux2EditStyle?.title
           : activeOptions.comfyPrompt;
       const baseReady = !!isComfyUIConnected && !!activePrompt?.trim();
+      if (activeOptions.comfyModelType === 'flux2-simple' && activeOptions.comfyFlux2Style?.lora && !app.comfyUIObjectInfo?.LoraLoaderModelOnly) return false;
+      if (activeOptions.comfyModelType === 'krea2-simple' && activeOptions.comfyKreaStyle?.lora && !app.comfyUIObjectInfo?.LoraLoaderModelOnly) return false;
       if (activeOptions.comfyModelType === 'moss-image' && activeOptions.comfyMoss?.refineImage) return baseReady && !!sourceImage;
       if (isI2IMode) {
         if (activeOptions.comfyModelType === 'flux2-edit') {
           const usesPose = elementImages.some((_, index) => (activeOptions.comfyFlux2EditReferenceRoles?.[index] || ['outfit', 'background', 'pose'][index]) === 'pose');
           if (usesPose && !app.comfyUIObjectInfo?.AIO_Preprocessor) return false;
-          if ((activeOptions.comfyFlux2EditLora1Name?.trim() || activeOptions.comfyFlux2EditLora2Name?.trim()) && !app.comfyUIObjectInfo?.LoraLoaderModelOnly) return false;
+          if ((activeOptions.comfyFlux2EditLora1Name?.trim() || activeOptions.comfyFlux2EditLora2Name?.trim() || activeOptions.comfyFlux2EditStyle?.lora) && !app.comfyUIObjectInfo?.LoraLoaderModelOnly) return false;
           if (activeOptions.comfyFlux2EditUseCacheDit && !app.comfyUIObjectInfo?.CacheDiT_Model_Optimizer) return false;
         }
         return baseReady && !!sourceImage;

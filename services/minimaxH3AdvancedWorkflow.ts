@@ -1,5 +1,6 @@
 import type { MinimaxDraft } from './videoPromptService';
 import { buildMinimaxH3Workflow, defaultMinimaxH3Options, planH3References, type H3Workflow, type MinimaxH3Options } from './minimaxH3Workflow';
+import { applyH3GalleryStyle } from './h3StyleWorkflow';
 
 export type AdvancedValue = string | number | boolean;
 export type AdvancedVideoFinishing = 'latent' | 'ltx';
@@ -129,7 +130,7 @@ export const buildAdvancedH3Workflow = (draft: MinimaxDraft, options: MinimaxH3O
         promptProvider: 'none' as const, references: {},
     } : options;
     const workflow = buildMinimaxH3Workflow(videoInput ? { ...draft, references: [], prompt: draft.prompt.trim() || 'High quality restoration, preserve the source video.' } : draft,
-        { ...bootstrap, preview: false, extendSigmas: false }, uploads);
+        { ...bootstrap, style: undefined, preview: false, extendSigmas: false }, uploads);
     const params = (id: string) => {
         const values = advanced.nodes[id];
         if (!values) throw new Error(`Missing Advanced settings: ${id}. Reset Advanced settings.`);
@@ -321,5 +322,6 @@ export const buildAdvancedH3Workflow = (draft: MinimaxDraft, options: MinimaxH3O
         visit('119');
         for (const id of Object.keys(workflow)) if (!reachable.has(id)) delete workflow[id];
     }
+    applyH3GalleryStyle(workflow, options);
     return workflow;
 };

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { GenerationOptions } from '../types';
+import { ImageStyleControl } from './ImageStyleControl';
 import { getQwen21Choices } from '../services/qwen21Workflow';
 import {
     defaultMossPhotoSettings, MOSS_PHOTO_FOCALS, MOSS_PHOTO_LONG_SIDES, MOSS_PHOTO_LOOKS,
@@ -147,6 +148,7 @@ export const MossPhotoSettingsPanel: React.FC<{
             {(settings.jpeg || settings.look === 'C') && details('JPEG crunch parameters', () => group('jpeg'), true)}
             {settings.look === 'C' && <p className="text-xs text-text-secondary">Cheap iPhone applies its automatic JPEG crunch when always_on_for_iphone is enabled.</p>}
         </>, true)}
+        {details('Style Gallery - MOSS (additional style)', () => <ImageStyleControl mode="moss-photo" options={options} updateOptions={updateOptions} info={objectInfo || {}} disabled={disabled} />)}
         {details('Image size + focal length', () => <>
             {select('Aspect ratio', settings.ratio, MOSS_PHOTO_RATIOS, ratio => update({ ratio }))}
             {settings.ratio !== 'Custom Resolution' && <label className="block text-sm">Size<select aria-label="MOSS PHOTO size" className={field} value={settings.sizeIndex} onChange={event => update({ sizeIndex: Number(event.target.value) })}>

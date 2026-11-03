@@ -1,10 +1,12 @@
 import template from '../assets/mossPhotoWorkflow.json';
 import type { MossWorkflow } from './mossWorkflow';
 import { getQwen21Choices } from './qwen21Workflow';
+import { mossGalleryStyle, mossStyleLoraMatches, mossStyleSampling, type MossStyleSettings } from './mossStyleWorkflow';
+import type { StyleSampling } from './styleSampling';
 
 export type PhotoValue = string | number | boolean;
 export interface PhotoPromptRow { enabled: boolean; text: string }
-export interface MossPhotoSettings {
+export interface MossPhotoSettings extends MossStyleSettings {
     look: string; ownStyle: string; flash: boolean; ordinaryPeople: boolean; people: string;
     aiWriter: boolean; addLookText: boolean; primaryEnabled: boolean; combineIdeas: boolean;
     ideas: PhotoPromptRow[]; myPrompts: PhotoPromptRow[];
@@ -60,6 +62,13 @@ export const mossPhotoPrompt = (settings: MossPhotoSettings, primary: string): s
     const texts = rows.filter(row => row.enabled).map(row => row.text.trim()).filter(Boolean);
     return (settings.aiWriter && settings.combineIdeas ? texts : texts.slice(0, 1)).join('\n\n');
 };
+export const mossPhotoSampling = (settings: MossPhotoSettings): StyleSampling => {
+    const values = { ...MOSS_PHOTO_NODE_SPECS.find(spec => spec.id === '300:16')!.defaults, ...settings.nodes['300:16'] };
+    if (typeof values.cfg !== 'number' || typeof values.sampler_name !== 'string' || typeof values.scheduler !== 'string') {
+        throw new Error('Invalid MOSS PHOTO main sampling settings. Restore or correct the first pass settings.');
+    }
+    return { steps: settings.steps, cfg: values.cfg, sampler: values.sampler_name, scheduler: values.scheduler };
+};
 
 export const withMossPhotoPrompt = (settings: MossPhotoSettings, prompt: string): MossPhotoSettings => {
     if (settings.aiWriter) return {
@@ -97,6 +106,8 @@ export const mossPhotoDimensions = (settings: MossPhotoSettings): { width: numbe
 type Link = [string, number];
 const isLink = (value: unknown): value is Link => Array.isArray(value) && value.length === 2 && typeof value[0] === 'string' && Number.isInteger(value[1]);
 export const buildMossPhotoWorkflow = (settings: MossPhotoSettings, primary: string, seed: number): MossWorkflow => {
+    const galleryStyle = mossGalleryStyle(settings), sampling = mossStyleSampling(settings);
+    settings = { ...settings, ...(sampling.steps !== undefined ? { steps: sampling.steps } : {}) };
     const prompt = mossPhotoPrompt(settings, primary);
     if (!prompt || !Number.isSafeInteger(seed) || seed < 0) throw new Error('Enter an active MOSS PHOTO idea (or your own prompt) and a valid non-negative seed.');
     mossPhotoDimensions(settings);
@@ -117,6 +128,10 @@ export const buildMossPhotoWorkflow = (settings: MossPhotoSettings, primary: str
         }
         Object.assign(workflow[spec.id].inputs, spec.defaults, values);
     }
+    Object.assign(workflow['300:16'].inputs,
+        sampling.cfg !== undefined ? { cfg: sampling.cfg } : {},
+        sampling.sampler !== undefined ? { sampler_name: sampling.sampler } : {},
+        sampling.scheduler !== undefined ? { scheduler: sampling.scheduler } : {});
     const put = (id: string, inputs: Record<string, unknown>) => Object.assign(workflow[id].inputs, inputs);
     const aliases: Record<string, Link> = {};
     const alias = (id: string, target: string, output = 0) => { aliases[id] = [target, output]; };
@@ -180,15 +195,40 @@ export const buildMossPhotoWorkflow = (settings: MossPhotoSettings, primary: str
     workflow.photo_vae = { class_type: 'VAELoader', inputs: { vae_name: models.vae } };
     workflow.photo_writer = { class_type: 'CLIPLoader', inputs: { clip_name: models['prompt writer'], type: models['prompt writer type'], device: 'default' } };
     let modelLink: Link = ['photo_model', 0];
+    if (galleryStyle?.lora) {
+        workflow.style_lora = { class_type: 'LoraLoaderModelOnly', inputs: {
+            model: modelLink, lora_name: galleryStyle.lora, strength_model: settings.styleStrength ?? galleryStyle.strength,
+        } };
+        modelLink = ['style_lora', 0];
+    }
     for (let index = 1; index <= 4; index++) {
         const name = models[`lora ${index}`], strength = models[`lora ${index} strength`];
         if (typeof name !== 'string' || typeof strength !== 'number' || Math.abs(strength) > 4) throw new Error('MOSS PHOTO LoRA strengths must be between -4 and 4.');
-        if (!name || name === 'None' || strength === 0) continue;
+        if (!name || name === 'None' || strength === 0 || mossStyleLoraMatches(name, [galleryStyle?.lora || ''])) continue;
         const id = `photo_lora_${index}`;
         workflow[id] = { class_type: 'LoraLoaderModelOnly', inputs: { model: modelLink, lora_name: name, strength_model: strength } };
         modelLink = [id, 0];
     }
     const modelOutputs: Link[] = [modelLink, ['photo_clip', 0], ['photo_vae', 0], ['photo_writer', 0]];
+    if (galleryStyle) {
+        const styledPrompt = (id: string, base: unknown): Link => {
+            let result = base;
+            if (galleryStyle.prompt.trim()) {
+                workflow[`${id}_boosters`] = { class_type: 'PrimitiveStringMultiline', inputs: { value: galleryStyle.prompt.trim() } };
+                workflow[`${id}_body`] = { class_type: 'StringConcatenate', inputs: { string_a: result, string_b: [`${id}_boosters`, 0], delimiter: '\n' } };
+                result = [`${id}_body`, 0];
+            }
+            if (galleryStyle.trigger.trim()) {
+                workflow[`${id}_trigger`] = { class_type: 'PrimitiveStringMultiline', inputs: { value: galleryStyle.trigger.trim() } };
+                workflow[id] = { class_type: 'StringConcatenate', inputs: { string_a: [`${id}_trigger`, 0], string_b: result, delimiter: '\n' } };
+                result = [id, 0];
+            }
+            if (!isLink(result)) throw new Error('MOSS PHOTO is missing its final positive prompt connection.');
+            return result;
+        };
+        workflow['300:51'].inputs.source = styledPrompt('gallery_prompt', workflow['300:51'].inputs.source);
+        workflow['300:102'].inputs.text = styledPrompt('gallery_ir_prompt', workflow['300:102'].inputs.text);
+    }
     const resolve = (link: Link, seen = new Set<string>()): Link => {
         if (seen.has(link[0])) throw new Error('MOSS PHOTO contains a cyclic switch.');
         seen.add(link[0]);
@@ -224,6 +264,9 @@ export const validateMossPhotoReadiness = (workflow: MossWorkflow, info: Paramet
             const entry = schema[key];
             if (!Array.isArray(entry)) continue;
             if (Array.isArray(entry[0]) && !entry[0].includes(value)) throw new Error(`Unavailable MOSS PHOTO ${node.class_type}.${key}: ${String(value)}`);
+            if (entry[0] === 'COMBO' && typeof value === 'string' && !getQwen21Choices(info, node.class_type, key).includes(value)) {
+                throw new Error(`Unavailable MOSS PHOTO ${node.class_type}.${key}: ${value}`);
+            }
             const bounds = entry[1];
             if (typeof value === 'number' && bounds && typeof bounds === 'object'
                 && (('min' in bounds && typeof bounds.min === 'number' && value < bounds.min)

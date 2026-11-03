@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
 
-const source = ['./videoPromptService.ts', './minimaxH3Workflow.ts', './minimaxH3UltrafastWorkflow.ts']
+const source = ['./styleGallery.ts', './h3StyleWorkflow.ts', './videoPromptService.ts', './minimaxH3Workflow.ts', './minimaxH3UltrafastWorkflow.ts']
     .map(name => readFileSync(new URL(name, import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '')).join('\n');
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);

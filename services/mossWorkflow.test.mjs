@@ -7,12 +7,47 @@ const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(ts.transp
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText).toString('base64')}`;
 const qwenUrl = moduleUrl(readFileSync(new URL('./qwen21Workflow.ts', import.meta.url), 'utf8'));
-const mossUrl = moduleUrl(readFileSync(new URL('./mossWorkflow.ts', import.meta.url), 'utf8').replace("from './qwen21Workflow'", `from '${qwenUrl}'`));
+const galleryUrl = moduleUrl(readFileSync(new URL('./styleGallery.ts', import.meta.url), 'utf8'));
+const mossStyleUrl = moduleUrl(readFileSync(new URL('./mossStyleWorkflow.ts', import.meta.url), 'utf8').replace("from './styleGallery'", `from '${galleryUrl}'`));
+const mossUrl = moduleUrl(readFileSync(new URL('./mossWorkflow.ts', import.meta.url), 'utf8').replace("from './qwen21Workflow'", `from '${qwenUrl}'`)
+    .replace("from './styleGallery'", `from '${galleryUrl}'`).replace("from './mossStyleWorkflow'", `from '${mossStyleUrl}'`));
 const { defaultMossSettings, buildMossWorkflow, validateMossReadiness, mossPreviewBlob, MOSS_RESOLUTIONS, mossOrientation, mossOrientationSize, mossRefineDimensions } = await import(mossUrl);
 const seed = 1103816017183395;
 const prompt = 'A mid-century living room on Kodachrome film';
 const settings = () => defaultMossSettings();
 const graph = () => buildMossWorkflow(settings(), prompt, seed);
+const galleryStyle = { id: 'moss-style', model: 'MOSS', title: 'Ink', prompt: 'Ink photograph', trigger: 'INK_TRIGGER',
+    lora: 'moss\\ink.safetensors', strength: 0.65, settings: { steps: 8, cfg: 0, sampler: 'euler', scheduler: 'bong_tangent', megapixels: 3 }, notes: '' };
+test('MOSS styles prepend triggers, chain a visible independent LoRA and apply optional sampling without changing size/refinement', () => {
+    const input = { ...settings(), style: galleryStyle, styleStrength: 0.4, useStyleSettings: true, refineImage: true, refineDenoise: 0.25 };
+    input.loras.push({ name: 'MOSS/INK.safetensors', enabled: true, strength: 1 });
+    const before = structuredClone(input), source = { name: 'source.png', width: 800, height: 600 };
+    const styled = buildMossWorkflow(input, prompt, seed, source);
+    assert.ok(styled['5'].inputs.text.startsWith('INK_TRIGGER\n'));
+    assert.ok(styled['5'].inputs.text.includes(prompt)); assert.ok(styled['5'].inputs.text.includes('Ink photograph'));
+    assert.deepEqual(styled.style_lora.inputs, { model: ['19', 0], lora_name: galleryStyle.lora, strength_model: 0.4 });
+    assert.deepEqual(styled['16'].inputs.model, ['style_lora', 0]);
+    assert.equal(styled['16'].inputs.lora_5.on, false); assert.equal(styled['16'].inputs.lora_2.on, true);
+    assert.equal(styled['18'].inputs.steps, 8); assert.equal(styled['18'].inputs.cfg, 0);
+    assert.equal(styled['18'].inputs.sampler_name, 'euler'); assert.equal(styled['18'].inputs.scheduler, 'bong_tangent');
+    assert.equal(styled['18'].inputs.denoise, 0.25); assert.equal(styled['18'].inputs.seed, seed);
+    assert.equal(styled.moss_resize.inputs.width, 800); assert.equal(styled.moss_resize.inputs.height, 592);
+    assert.deepEqual(input, before);
+    const plainSampling = buildMossWorkflow({ ...input, useStyleSettings: false }, prompt, seed, source);
+    assert.equal(plainSampling['18'].inputs.scheduler, settings().scheduler);
+    assert.equal(plainSampling['18'].inputs.cfg, settings().cfg);
+    const cleared = buildMossWorkflow({ ...input, style: undefined }, prompt, seed, source);
+    assert.equal(cleared.style_lora, undefined); assert.equal(cleared['5'].inputs.text, prompt);
+});
+test('MOSS supports prompt-only styles and rejects wrong families, invalid strength and missing style LoRAs', () => {
+    const styled = buildMossWorkflow({ ...settings(), style: { ...galleryStyle, lora: '' } }, prompt, seed);
+    assert.equal(styled.style_lora, undefined); assert.ok(styled['5'].inputs.text.startsWith('INK_TRIGGER'));
+    assert.throws(() => buildMossWorkflow({ ...settings(), style: { ...galleryStyle, model: 'KREA2' } }, prompt, seed), /MOSS style/);
+    assert.throws(() => buildMossWorkflow({ ...settings(), style: galleryStyle, styleStrength: NaN }, prompt, seed), /strength/);
+    const loraGraph = buildMossWorkflow({ ...settings(), style: galleryStyle }, prompt, seed), info = objectInfo(loraGraph);
+    info.LoraLoaderModelOnly = { input: { required: { lora_name: [['different.safetensors']] } } };
+    assert.throws(() => validateMossReadiness(loraGraph, info), /lora_name/);
+});
 test('MOSS Steps control supports 1-50 and sends 50 steps unchanged to the sampler', () => {
     const source = readFileSync(new URL('../components/MossSettingsPanel.tsx', import.meta.url), 'utf8');
     const tree = ts.createSourceFile('MossSettingsPanel.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -195,6 +230,16 @@ const runner = await import(moduleUrl(`
     };
     ${generateSource}
 `));
+test('MOSS generation returns the actual styled prompt for Library saving', async () => {
+    const options = { comfyModelType: 'moss-image', comfyMoss: { ...settings(), style: galleryStyle }, comfyPrompt: prompt,
+        comfySeed: seed, comfySeedControl: 'fixed', numImages: 1 };
+    const workflow = buildMossWorkflow(options.comfyMoss, prompt, seed);
+    runner.configure(objectInfo(workflow), 1);
+    const result = await runner.generateComfyUIPortraits(null, options, () => {}, [], () => {}, () => {});
+    assert.equal(result.finalPrompt, workflow['5'].inputs.text);
+    assert.ok(result.finalPrompt.startsWith('INK_TRIGGER\n'));
+    assert.equal(options.comfyPrompt, prompt);
+});
 
 test('MOSS refinement sizes preserve source scale, align to 16 and never exceed 1280 or upscale', () => {
     for (const [width, height, expected] of [

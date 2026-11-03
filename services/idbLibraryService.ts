@@ -24,7 +24,7 @@ interface MyDB extends DBSchema {
   };
 }
 
-const ASSET_FIELDS: LibraryAssetRole[] = ['media', 'sourceImage', 'startFrame', 'endFrame', 'skeletonImage', 'characterSceneImage'];
+const ASSET_FIELDS: LibraryAssetRole[] = ['media', 'sourceImage', 'startFrame', 'endFrame', 'skeletonImage', 'characterSceneImage', 'ltxAudioSyncAudio', 'ltxAudioSyncOriginalAudio', 'ltxRippleVideo'];
 const INLINE_MEDIA_TYPES = new Set(['prompt', 'color-palette', 'preset']);
 export const ALWAYS_SFW_LIBRARY_TYPES = new Set<LibraryItem['mediaType']>(['color-palette', 'font']);
 const objectUrlCache = new Map<string, string>();

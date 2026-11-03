@@ -11,12 +11,14 @@ const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(ts.transp
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
 }).outputText).toString('base64')}`;
 const qwenUrl = moduleUrl(readFileSync(new URL('./qwen21Workflow.ts', import.meta.url), 'utf8'));
+const galleryUrl = moduleUrl(readFileSync(new URL('./styleGallery.ts', import.meta.url), 'utf8'));
+const mossStyleUrl = moduleUrl(readFileSync(new URL('./mossStyleWorkflow.ts', import.meta.url), 'utf8').replace("from './styleGallery'", `from '${galleryUrl}'`));
 const template = JSON.parse(readFileSync(new URL('../assets/mossPhotoWorkflow.json', import.meta.url), 'utf8'));
 const source = readFileSync(new URL('./mossPhotoWorkflow.ts', import.meta.url), 'utf8')
     .replace("import template from '../assets/mossPhotoWorkflow.json';", `const template = ${JSON.stringify(template)};`)
-    .replace("from './qwen21Workflow'", `from '${qwenUrl}'`);
+    .replace("from './qwen21Workflow'", `from '${qwenUrl}'`).replace("from './mossStyleWorkflow'", `from '${mossStyleUrl}'`);
 export const photoModuleUrl = moduleUrl(source);
-const { defaultMossPhotoSettings, buildMossPhotoWorkflow, mossPhotoDimensions, mossPhotoPrompt, setMossPhotoSeed, validateMossPhotoReadiness, MOSS_PHOTO_LOOKS } = await import(photoModuleUrl);
+const { defaultMossPhotoSettings, buildMossPhotoWorkflow, mossPhotoDimensions, mossPhotoPrompt, mossPhotoSampling, setMossPhotoSeed, validateMossPhotoReadiness, MOSS_PHOTO_LOOKS } = await import(photoModuleUrl);
 const prompt = 'A mountain lake at sunrise';
 const build = (patch = {}) => buildMossPhotoWorkflow({ ...defaultMossPhotoSettings(), ...patch }, prompt, 42);
 const links = graph => {
@@ -54,6 +56,60 @@ const infoFor = graph => {
     }
     return info;
 };
+const galleryStyle = { id: 'moss-style', model: 'MOSS', title: 'Ink', prompt: 'Ink photograph', trigger: 'INK_TRIGGER',
+    lora: 'moss\\ink.safetensors', strength: 0.65, settings: { steps: 8, cfg: 0, sampler: 'euler', scheduler: 'bong_tangent', megapixels: 3 }, notes: '' };
+test('gallery styles complement every PHOTO look, own style, lens and AI/manual prompt without overwriting them', () => {
+    for (const [look] of MOSS_PHOTO_LOOKS) for (const aiWriter of [true, false]) {
+        const patch = { look, aiWriter, ownStyle: 'Vintage photo. Warm colours.', focal: '35mm', flash: true,
+            secondPass: true, myPrompts: [{ enabled: true, text: prompt }] };
+        const base = build(patch), input = { ...defaultMossPhotoSettings(), ...patch, style: galleryStyle };
+        const before = structuredClone(input), graph = buildMossPhotoWorkflow(input, prompt, 42);
+        links(graph);
+        assert.deepEqual(input, before);
+        assert.deepEqual(graph['300:62'], base['300:62'], 'original look prefix remains');
+        if (base['300:79']) assert.deepEqual(graph['300:79'], base['300:79'], 'original look description remains');
+        assert.deepEqual(graph['88'], base['88'], 'lens and image size are unchanged');
+        assert.deepEqual(graph['300:51'].inputs.source, ['gallery_prompt', 0]);
+        assert.equal(graph.gallery_prompt_trigger.inputs.value, 'INK_TRIGGER');
+        assert.deepEqual(graph.gallery_prompt.inputs.string_a, ['gallery_prompt_trigger', 0]);
+        assert.deepEqual(graph.gallery_prompt_body.inputs.string_a, base['300:51'].inputs.source);
+        assert.equal(graph.gallery_prompt_boosters.inputs.value, 'Ink photograph');
+        assert.deepEqual(graph.style_lora.inputs.model, ['photo_model', 0]);
+        assert.equal(graph.style_lora.inputs.lora_name, galleryStyle.lora);
+        assert.equal(graph.style_lora.inputs.strength_model, 0.65);
+        assert.equal(!!graph.photo_writer, aiWriter);
+        if (aiWriter) assert.deepEqual(graph['300:50'], base['300:50'], 'style bypasses the writer rather than being rewritten');
+        if (look === 'E') {
+            assert.deepEqual(graph['300:102'].inputs.text, ['gallery_ir_prompt', 0]);
+            assert.deepEqual(graph.gallery_ir_prompt_body.inputs.string_a, base['300:102'].inputs.text);
+        }
+    }
+});
+test('PHOTO style sampling is opt-in and limited to primary render settings, not photo look, dimensions, writer or finishing', () => {
+    const graph = build({ style: galleryStyle, useStyleSettings: true, secondPass: true, faceFix: true });
+    const plain = build({ secondPass: true, faceFix: true });
+    assert.equal(graph['300:72'].inputs.value, 8);
+    assert.equal(graph['300:16'].inputs.cfg, 0); assert.equal(graph['300:16'].inputs.sampler_name, 'euler');
+    assert.equal(graph['300:16'].inputs.scheduler, 'bong_tangent');
+    for (const id of ['300:50', '300:43', '123', '88', '110']) assert.deepEqual(graph[id], plain[id], id);
+    assert.equal(build({ style: galleryStyle, useStyleSettings: false })['300:16'].inputs.scheduler, 'simple');
+    assert.deepEqual(mossPhotoSampling(defaultMossPhotoSettings()), { steps: 25, cfg: 3, sampler: 'er_sde', scheduler: 'simple' });
+    const info = infoFor(graph);
+    info.KSampler.input.required.scheduler = ['COMBO', { options: ['simple'] }];
+    assert.throws(() => validateMossPhotoReadiness(graph, info), /bong_tangent/);
+});
+test('PHOTO keeps independent LoRAs, avoids duplicate style LoRAs and supports prompt-only styles', () => {
+    const input = { ...defaultMossPhotoSettings(), style: galleryStyle };
+    input.nodes['160'] = { ...input.nodes['160'], 'lora 1': 'MOSS/INK.safetensors', 'lora 2': 'moss\\detail.safetensors', 'lora 2 strength': 0.4 };
+    const graph = buildMossPhotoWorkflow(input, prompt, 42);
+    assert.equal(graph.photo_lora_1, undefined);
+    assert.deepEqual(graph.photo_lora_2.inputs, { model: ['style_lora', 0], lora_name: 'moss\\detail.safetensors', strength_model: 0.4 });
+    const promptOnly = build({ style: { ...galleryStyle, lora: '' } }); links(promptOnly);
+    assert.equal(promptOnly.style_lora, undefined); assert.equal(promptOnly.gallery_prompt_trigger.inputs.value, 'INK_TRIGGER');
+    const cleared = build({ style: undefined });
+    assert.equal(cleared.gallery_prompt, undefined); assert.equal(cleared.style_lora, undefined);
+    assert.throws(() => build({ style: { ...galleryStyle, model: 'FLUX2-9B' } }), /MOSS style/);
+});
 
 test('PHOTO defaults match the supplied panels without embedding personal prompts', () => {
     const settings = defaultMossPhotoSettings(), graph = build();
@@ -224,11 +280,20 @@ const runner = await import(moduleUrl(`
         calls.push({ workflow, longJob, count, outputNodes });
         progress('Sampling...', 0.5);
         preview?.(new Blob(['preview'], { type: 'image/png' }));
-        nodeOutput?.('300:51', { text: ['Expanded lake prompt'] });
+        nodeOutput?.('300:51', { text: [workflow.gallery_prompt ? 'INK_TRIGGER\\nExpanded lake prompt\\nInk photograph' : 'Expanded lake prompt'] });
         return { images: Array.from({ length: resultCount }, (_, index) => 'image' + index) };
     };
     ${generateSource}
 `));
+test('PHOTO generation returns its styled final writer output for Library saving without changing the editable idea', async () => {
+    const photo = { ...defaultMossPhotoSettings(), style: galleryStyle, batchSize: 1 };
+    runner.configure(infoFor(build({ style: galleryStyle })), 1);
+    const options = { comfyModelType: 'moss-photo', comfyMossPhoto: photo, comfyPrompt: prompt, comfySeed: 42, numImages: 1 };
+    const result = await runner.generateComfyUIPortraits(null, options, () => {}, [], () => {}, () => {});
+    assert.equal(result.finalPrompt, 'INK_TRIGGER\nExpanded lake prompt\nInk photograph');
+    assert.equal(options.comfyPrompt, prompt);
+    assert.deepEqual(runner.calls[0].workflow['300:51'].inputs.source, ['gallery_prompt', 0]);
+});
 
 test('PHOTO generation/export use the real service entry points, seed modes, batches, output filtering and previews', async t => {
     const photo = { ...defaultMossPhotoSettings(), batchSize: 2 };
@@ -265,6 +330,7 @@ test('PHOTO generation/export use the real service entry points, seed modes, bat
 const require = createRequire(import.meta.url);
 const reactUrl = pathToFileURL(require.resolve('react')).href;
 const panelSource = readFileSync(new URL('../components/MossPhotoSettingsPanel.tsx', import.meta.url), 'utf8')
+    .replace("import { ImageStyleControl } from './ImageStyleControl';", 'const ImageStyleControl = () => null;')
     .replace("from 'react'", `from '${reactUrl}'`)
     .replace("from '../services/qwen21Workflow'", `from '${qwenUrl}'`)
     .replace("from '../services/mossPhotoWorkflow'", `from '${photoModuleUrl}'`);
@@ -275,6 +341,8 @@ test('PHOTO renders conditional accordions, all requested controls, enabled LoRA
         updateOptions: () => {}, disabled,
     }));
     const initial = render();
+    assert.ok(initial.indexOf('Look, people, quality') < initial.indexOf('Style Gallery - MOSS'));
+    assert.ok(initial.indexOf('Style Gallery - MOSS') < initial.indexOf('Image size + focal length'));
     for (const label of ['MOSS PHOTO', 'Your idea', 'Image size + focal length', 'Models &amp; LoRAs', 'Sampling &amp; finishing', 'AI prompt writer', 'Add Idea Row']) assert.ok(initial.includes(label), label);
     assert.ok(!initial.includes('aria-label="Models, text encoder, VAE'));
     assert.ok(!initial.includes('Face fix parameters'));
@@ -291,7 +359,8 @@ test('PHOTO renders conditional accordions, all requested controls, enabled LoRA
     assert.ok(render({}, true).includes('<fieldset disabled=""'));
 });
 
-const mossUrl = moduleUrl(readFileSync(new URL('./mossWorkflow.ts', import.meta.url), 'utf8').replace("from './qwen21Workflow'", `from '${qwenUrl}'`));
+const mossUrl = moduleUrl(readFileSync(new URL('./mossWorkflow.ts', import.meta.url), 'utf8').replace("from './qwen21Workflow'", `from '${qwenUrl}'`)
+    .replace("from './styleGallery'", `from '${galleryUrl}'`).replace("from './mossStyleWorkflow'", `from '${mossStyleUrl}'`));
 const kreaUrl = moduleUrl(readFileSync(new URL('./krea2EditWorkflow.ts', import.meta.url), 'utf8').replace("from './qwen21Workflow'", `from '${qwenUrl}'`));
 const anglesUrl = moduleUrl(readFileSync(new URL('./characterAnglesWorkflow.ts', import.meta.url), 'utf8'));
 const sliceSource = readFileSync(new URL('../store/generationSlice.ts', import.meta.url), 'utf8')
@@ -302,6 +371,22 @@ const sliceSource = readFileSync(new URL('../store/generationSlice.ts', import.m
     .replace("from '../services/mossPhotoWorkflow'", `from '${photoModuleUrl}'`)
     .replace("from '../services/krea2EditWorkflow'", `from '${kreaUrl}'`);
 const generation = await import(moduleUrl(sliceSource));
+test('MOSS Image and PHOTO keep independent style snapshots through subtab switches and presets', () => {
+    let state = generation.default(undefined, { type: 'init' });
+    const imageStyle = { ...galleryStyle, id: 'image-style' }, photoStyle = { ...galleryStyle, id: 'photo-style', trigger: 'PHOTO' };
+    state = generation.default(state, generation.switchComfyModelOptions({ comfyModelType: 'moss-image',
+        comfyMoss: { ...JSON.parse(JSON.stringify(state.options.comfyMoss)), style: imageStyle } }));
+    state = generation.default(state, generation.switchComfyModelOptions({ comfyModelType: 'moss-photo',
+        comfyMossPhoto: { ...defaultMossPhotoSettings(), style: photoStyle, look: 'F', ownStyle: 'Vintage warmth' } }));
+    state = generation.default(state, generation.switchComfyModelOptions({ comfyModelType: 'moss-image' }));
+    assert.equal(state.options.comfyMoss.style.id, 'image-style');
+    state = generation.default(state, generation.switchComfyModelOptions({ comfyModelType: 'moss-photo' }));
+    assert.equal(state.options.comfyMossPhoto.style.id, 'photo-style');
+    assert.equal(state.options.comfyMossPhoto.look, 'F'); assert.equal(state.options.comfyMossPhoto.ownStyle, 'Vintage warmth');
+    const preset = JSON.parse(JSON.stringify(state.options));
+    state = generation.default(state, generation.setOptions(preset));
+    assert.deepEqual(state.options.comfyMossPhoto.style, photoStyle);
+});
 test('PHOTO state, prompt imports, readiness, presets and subtab switches preserve independent settings', () => {
     let state = generation.default(undefined, { type: 'init' });
     const app = { isComfyUIConnected: true, activeTab: 'image-generator' };

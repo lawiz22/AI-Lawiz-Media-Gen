@@ -160,6 +160,7 @@ export const restoreMinimaxH3PromptLibraryItem = async (
     const options = saved?.renderOptions ? structuredClone(saved.renderOptions) : {
         ...withH3OriginalAudio(defaultMinimaxH3Options(), saved?.originalAudioId, saved?.forceOriginalAudio ?? false),
         ...(saved ? { aspect: h3AspectFromPrompt(saved.aspect), duration: saved.duration } : {}),
+        ...(saved?.style && saved.workflow !== 'ltx-audio-sync' ? { style: structuredClone(saved.style) } : {}),
     };
     const warnings = [
         ...(!saved?.renderOptions ? ['This older prompt has no saved H3 model/sampling settings. Default H3 settings were loaded; review them before rendering. All stored prompt references were retained. The original Library item was not changed.'] : []),
@@ -174,7 +175,9 @@ export const restoreMinimaxH3PromptLibraryItem = async (
 };
 
 export const cloneVideoPromptLibraryOptions = (options: VideoPromptLibraryOptions | undefined): VideoPromptLibraryOptions | undefined =>
-    options ? { ...options, ...(options.renderOptions ? { renderOptions: structuredClone(options.renderOptions) } : {}), references: options.references.map(ref => ({
+    options ? { ...options, ...(options.style ? { style: structuredClone(options.style) } : {}),
+        ...(options.styleExamples ? { styleExamples: [...options.styleExamples] } : {}),
+        ...(options.renderOptions ? { renderOptions: structuredClone(options.renderOptions) } : {}), references: options.references.map(ref => ({
         ...ref, file: { ...ref.file }, original: ref.original ? { ...ref.original } : undefined,
         ...(ref.audioSelection ? { audioSelection: { ...ref.audioSelection } } : {}),
         ...(ref.lyrics ? { lyrics: { ...ref.lyrics } } : {}),

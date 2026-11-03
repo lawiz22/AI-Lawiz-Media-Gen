@@ -1251,10 +1251,10 @@ export const COMFYUI_FLUX2_SIMPLE_WORKFLOW_TEMPLATE = {
   "87": { "inputs": { "value": 832 }, "class_type": "PrimitiveInt", "_meta": { "title": "Width" } },
   "88": { "inputs": { "value": 1216 }, "class_type": "PrimitiveInt", "_meta": { "title": "Height" } },
   "89": { "inputs": { "noise_seed": 1001869159528562 }, "class_type": "RandomNoise", "_meta": { "title": "Random Noise" } },
-  "91": { "inputs": { "clip_name": "qwen3vl_4b_fp8_scaled.safetensors", "type": "flux2", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
+  "91": { "inputs": { "clip_name": "qwen38BFluxKlein9BTE_38b.safetensors", "type": "flux2", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
   "92": { "inputs": { "vae_name": "flux2-vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Load VAE" } },
   "93": { "inputs": { "text": "", "clip": ["99", 1] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Positive Prompt" } },
-  "94": { "inputs": { "unet_name": "flux-2-klein-4b-Q4_K_M.gguf" }, "class_type": "UnetLoaderGGUF", "_meta": { "title": "Unet Loader (GGUF)" } },
+  "94": { "inputs": { "unet_name": "flux2\\flux2Klein9BInt8_v10.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "Load Diffusion Model" } },
   "96": { "inputs": { "filename_prefix": "Flux2/Imagen", "images": ["84", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Image" } },
   "99": { "inputs": { "PowerLoraLoaderHeaderWidget": { "type": "PowerLoraLoaderHeaderWidget" }, "lora_1": { "on": false, "lora": "", "strength": 1 }, "lora_2": { "on": false, "lora": "", "strength": 1 }, "lora_3": { "on": false, "lora": "", "strength": 1 }, "lora_4": { "on": false, "lora": "", "strength": 1 }, "lora_5": { "on": false, "lora": "", "strength": 1 }, "lora_6": { "on": false, "lora": "", "strength": 1 }, "➕ Add Lora": "", "model": ["94", 0], "clip": ["91", 0] }, "class_type": "Power Lora Loader (rgthree)", "_meta": { "title": "Power Lora Loader (rgthree)" } }
 };
@@ -1264,12 +1264,12 @@ export const COMFYUI_KREA2_SIMPLE_WORKFLOW_TEMPLATE = {
   "3": { "inputs": { "samples": ["2", 0], "vae": ["106:4", 0] }, "class_type": "VAEDecode", "_meta": { "title": "VAE Decode" } },
   "17": { "inputs": { "text": "", "clip": ["57", 1] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Negative Prompt" } },
   "33": { "inputs": { "filename_prefix": "Krea2/Imagen", "images": ["3", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Image" } },
-  "57": { "inputs": { "PowerLoraLoaderHeaderWidget": { "type": "PowerLoraLoaderHeaderWidget" }, "lora_1": { "on": true, "lora": "KREA\\krea2_turbo_lora_rank_64_bf16.safetensors", "strength": 0.6 }, "lora_2": { "on": true, "lora": "KREA\\snofs_krea_v1_nostrip.safetensors", "strength": 1 }, "➕ Add Lora": "", "model": ["106:1", 0], "clip": ["106:13", 0] }, "class_type": "Power Lora Loader (rgthree)", "_meta": { "title": "Power Lora Loader (rgthree)" } },
+  "57": { "inputs": { "PowerLoraLoaderHeaderWidget": { "type": "PowerLoraLoaderHeaderWidget" }, "lora_1": { "on": false, "lora": "", "strength": 1 }, "lora_2": { "on": true, "lora": "KREA\\snofs_krea_v1_nostrip.safetensors", "strength": 1 }, "➕ Add Lora": "", "model": ["106:1", 0], "clip": ["106:13", 0] }, "class_type": "Power Lora Loader (rgthree)", "_meta": { "title": "Power Lora Loader (rgthree)" } },
   "104": { "inputs": { "text": "", "clip": ["57", 1] }, "class_type": "CLIPTextEncode", "_meta": { "title": "Positive Prompt" } },
   "106:4": { "inputs": { "vae_name": "qwen_image_vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Load VAE" } },
   "106:10": { "inputs": { "width": 832, "height": 1216, "batch_size": 1 }, "class_type": "EmptyLatentImage", "_meta": { "title": "Empty Latent Image" } },
   "106:13": { "inputs": { "clip_name": "qwen3vl_4b_fp8_scaled.safetensors", "type": "krea2", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
-  "106:1": { "inputs": { "unet_name": "krea2_raw_fp8_scaled.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "Load Diffusion Model" } }
+  "106:1": { "inputs": { "unet_name": "krea2_turbo_fp8_scaled.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "Load Diffusion Model" } }
 };
 
 export const COMFYUI_KREA2_RAW_WORKFLOW_TEMPLATE = {

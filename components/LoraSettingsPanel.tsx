@@ -4,19 +4,23 @@ import { NumberSlider, SelectInput, CheckboxSlider } from './InputComponents';
 import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
 import { MossSettingsPanel } from './MossSettingsPanel';
 import { Krea2EditSettingsPanel } from './Krea2EditSettingsPanel';
+import { ImageStyleControl } from './ImageStyleControl';
+import type { H3ObjectInfo } from '../services/minimaxH3Workflow';
 
 interface LoraSettingsPanelProps {
     options: GenerationOptions;
     updateOptions: (options: Partial<GenerationOptions>) => void;
     isDisabled: boolean;
     availableLoras: string[];
+    comfyUIObjectInfo?: H3ObjectInfo | null;
 }
 
 export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
     options,
     updateOptions,
     isDisabled,
-    availableLoras
+    availableLoras,
+    comfyUIObjectInfo
 }) => {
     const [isOpen, setIsOpen] = useState(true);
     const handleSliderChange = (field: keyof GenerationOptions) => (e: ChangeEvent<HTMLInputElement>) => {
@@ -161,17 +165,19 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
             </button>
 
             {isOpen && <div className="mt-4 space-y-4">
+            {options.comfyModelType === 'krea2-simple' && <ImageStyleControl options={options} updateOptions={updateOptions} info={comfyUIObjectInfo || {}} disabled={isDisabled} mode="krea2-simple" showSamplingControl={false} />}
             {isQwen21 ? <Qwen21SettingsPanel section="loras" options={options} updateOptions={updateOptions} disabled={isDisabled}
                 objectInfo={{ LoraLoaderModelOnly: { input: { required: { lora_name: [availableLoras] } } } }} /> : <>
             <div className="flex items-center gap-2">
                 <input
                     type="checkbox"
                     checked={!!options[`${prefix}UseLora` as keyof GenerationOptions]}
+                    aria-label={options.comfyModelType === 'krea2-simple' ? 'Enable additional LoRAs' : 'Enable LoRAs'}
                     onChange={handleOptionChange(`${prefix}UseLora` as keyof GenerationOptions)}
                     disabled={isDisabled}
                     className="rounded text-accent focus:ring-accent w-4 h-4"
                 />
-                <label className="text-sm font-medium text-text-secondary">Enable LoRAs</label>
+                <label className="text-sm font-medium text-text-secondary">{options.comfyModelType === 'krea2-simple' ? 'Enable additional LoRAs' : 'Enable LoRAs'}</label>
             </div>
 
             {options[`${prefix}UseLora` as keyof GenerationOptions] && (

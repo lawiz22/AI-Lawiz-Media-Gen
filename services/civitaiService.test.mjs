@@ -30,37 +30,346 @@ const archiveSource = read('../components/ArchiveCivitPanel.tsx');
 const inventorySource = read('../components/CivitaiInventoryPanel.tsx');
 const nativeSource = read('../electron/main.cjs');
 const archiveNames = ['FAMILY_OPTIONS', 'inferArchiveFamily', 'getArchiveDestination', 'getArchiveFolder'];
-const archive = await import(compile(`${extract(archiveSource, archiveNames)}\nexport { ${archiveNames.join(',')} };`));
-const inventoryNames = ['FOLDERS', 'itemMatchesFamily', 'inferItemFamily', 'getImageWorkflow', 'getCompatibleBaseModel', 'getComfyOptions'];
-const inventory = await import(compile(`${extract(inventorySource, inventoryNames)}\nexport { ${inventoryNames.join(',')} };`));
-const nativeNames = ['MODEL_SCAN_DIRECTORIES', 'MODEL_FOLDERS', 'MODEL_FAMILIES', 'SCAN_FAMILY_FOLDERS', 'inventoryItemMatchesSelection', 'inferModelFolder', 'inferDestinationFolder'];
+const archive = await import(compile(`import { inferFlux2Variant } from '${serviceUrl}';\n${extract(archiveSource, archiveNames)}\nexport { ${archiveNames.join(',')} };`));
+const inventoryNames = ['FOLDERS', 'itemMatchesFamily', 'inferItemFamily', 'getImageWorkflow', 'getCompatibleBaseModel', 'getComfyOptions', 'getFlux2UseDefaults'];
+const inventory = await import(compile(`import { inventoryItemMatchesFamily, inventoryFlux2Variant, inferFlux2Variant } from '${serviceUrl}';\n${extract(inventorySource, inventoryNames)}\nexport { ${inventoryNames.join(',')} };`));
+test('focused models obey filters and inventory updates do not reset a chosen family', async () => {
+    const tree = ts.createSourceFile('panel.tsx', inventorySource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    let focusEffect;
+    const visit = node => {
+        if (ts.isCallExpression(node) && node.expression.getText(tree) === 'useEffect'
+            && node.arguments[0]?.getText(tree).includes('lastFocus.current = { path:')) focusEffect = node.getText(tree);
+        ts.forEachChild(node, visit);
+    };
+    visit(tree); assert.ok(focusEffect);
+    const api = await import(compile(`
+        import { inventoryItemMatchesFamily } from '${serviceUrl}';
+        ${extract(inventorySource, ['itemMatchesFamily', 'isItemReviewed'])}
+        export const run = (items, focusedItemPath, lastFocus, focusRequestId = 1) => {
+            const inventory = { items }, libraryFamily = 'flux2', libraryKind = 'lora', normalizedQuery = '', filter = 'all', provider = 'regular', view = 'library';
+            let resets = 0;
+            const setQuery = () => {}, setLibraryFamily = () => resets++, setLibraryKind = () => {}, setFilter = () => {}, setDisplayLimit = () => {};
+            const useMemo = fn => fn(), useEffect = fn => fn();
+            ${extract(inventorySource, ['visibleItems'])}
+            ${focusEffect};
+            return { visibleItems, resets };
+        };
+    `));
+    const flux = { path: 'flux', relativePath: 'loras/FLUX2/test.safetensors', kind: 'lora' };
+    const other = { path: 'other', relativePath: 'loras/SDXL/flux2_style.safetensors', fileName: 'flux2_style.safetensors', kind: 'lora' };
+    const lastFocus = { current: null };
+    assert.deepEqual(api.run([flux, other], 'other', lastFocus).visibleItems, [flux]);
+    assert.equal(api.run([{ ...flux }, { ...other }], 'other', lastFocus).resets, 0);
+    assert.equal(api.run([flux, other], 'other', lastFocus, 2).resets, 1);
+    assert.equal(service.inventoryItemMatchesFamily({ ...flux, relativePath: 'FLUX2/test.safetensors' }, 'flux2'), true);
+    assert.equal(service.inventoryItemMatchesFamily({ ...flux, userFamily: 'sdxl' }, 'flux2'), false);
+});
+const nativeNames = ['MODEL_SCAN_DIRECTORIES', 'MODEL_FOLDERS', 'MODEL_FAMILIES', 'SCAN_FAMILY_FOLDERS', 'inferFlux2Variant', 'inventoryFlux2Variant', 'inventoryItemMatchesSelection', 'inferModelFolder', 'inferDestinationFolder'];
 const native = await import(compile(`${extract(nativeSource, nativeNames)}\nexport { ${nativeNames.join(',')} };`));
+test('download indexing reads only one model and retains other entries and concurrent manual edits', async () => {
+    const path = createRequire(import.meta.url)('node:path');
+    const root = path.resolve('test-comfy-root'), target = path.join(root, 'models', 'loras', 'FLUX2', 'new.safetensors');
+    const other = { path: path.join(root, 'models', 'loras', 'SDXL', 'old.safetensors'), usageMetadata: { source: 'manual', steps: 17 }, userFamily: 'sdxl' };
+    const previous = { path: target, installedVersionId: 1, usageMetadata: { source: 'manual', cfg: 2 } };
+    const saved = new Map([
+        ['comfyui_root', root], ['civitai_inventory', { items: [other, previous] }],
+        ['civitai_inventory_hash_cache', {}],
+    ]);
+    const reads = [], hashes = [];
+    const api = await import(compile(`
+        export const run = async (deps, request) => {
+            const { path, store, fs, hashFile, fetchCivitaiJson, assertLocalModelPath } = deps;
+            const MODEL_SCAN_DIRECTORIES = [{ kind: 'lora', directory: 'loras' }], SCAN_FAMILY_FOLDERS = {};
+            const collectModelFiles = () => { throw new Error('Must never enumerate a directory after download'); };
+            const readArchiveSidecar = async () => undefined, readHuggingFaceSidecar = readArchiveSidecar, readUsageSidecar = readArchiveSidecar;
+            const readModelSidecar = async () => ({ versionId: 2 }), findModelPreviewPath = () => undefined;
+            const getLatestCompatibleVersion = model => model.modelVersions[0], getCivitaiPreviewMedia = () => undefined;
+            const getCivitaiContentSafety = () => 'sfw';
+            const scan = ${extract(nativeSource, ['scanCivitaiLibrary'])};
+            return scan({ sender: { isDestroyed: () => true } }, request);
+        };
+    `));
+    const deps = {
+        path, store: { get: (key, fallback) => saved.get(key) ?? fallback, set: (key, value) => saved.set(key, value) },
+        fs: { promises: { stat: async file => { reads.push(file); return { size: 23, mtimeMs: 42 }; } } },
+        assertLocalModelPath: value => { assert.equal(value, target); return { resolvedPath: value }; },
+        hashFile: async file => {
+            hashes.push(file);
+            saved.set('civitai_inventory', { items: [{ ...other, userFamily: 'flux' }, { ...previous, usageMetadata: { source: 'manual', cfg: 4 } }] });
+            saved.set('civitai_inventory_hash_cache', { unrelated: { sha256: 'KEEP' } });
+            return 'NEW';
+        },
+        fetchCivitaiJson: async (_provider, url) => url.includes('model-versions')
+            ? { id: 2, modelId: 10, name: 'v2', files: [] }
+            : { id: 10, modelVersions: [{ id: 2 }] },
+    };
+    const result = await api.run(deps, { provider: 'regular', modelPath: target, kind: 'all', family: 'all' });
+    assert.deepEqual(reads, [target]);
+    assert.deepEqual(hashes, [target]);
+    assert.equal(result.items.length, 2);
+    assert.equal(result.items.find(item => item.path === other.path).userFamily, 'flux');
+    assert.deepEqual(result.items.find(item => item.path === other.path).usageMetadata, other.usageMetadata);
+    const indexed = result.items.find(item => item.path === target);
+    assert.equal(indexed.installedVersionId, 2);
+    assert.equal(indexed.usageMetadata.cfg, 4);
+    assert.equal(saved.get('civitai_inventory_hash_cache').unrelated.sha256, 'KEEP');
+});
+test('Civitai, Archive and update completion index the saved path and open My Library without scanning', async () => {
+    const source = read('../components/CivitaiPanel.tsx');
+    const code = extract(source, ['startDownload', 'completeArchiveDownload', 'updateInventoryItem']);
+    assert.ok(!code.includes('scanCivitaiLibrary'));
+    assert.ok(!code.includes('setIsScanning'));
+    const api = await import(compile(`
+        export const run = async (kind, electron, onOpen) => {
+            const window = { electron }, crypto = { randomUUID: () => 'download' }, useCallback = fn => fn;
+            const comfyUIRoot = 'root', provider = 'regular', family = 'all';
+            const getCivitaiDestinationFolder = () => 'flux2-9b';
+            let inventory = { items: [] }, errors = [];
+            const setDownload = () => {}, setInventory = value => { inventory = typeof value === 'function' ? value(inventory) : value; };
+            const setError = message => errors.push(message), setActiveSection = () => {};
+            const openInventoryItem = item => onOpen(item);
+            const enrichDownloadedItem = async item => { onOpen('enrich'); return { ...item, usageMetadata: { steps: 4 } }; };
+            ${code}
+            if (kind === 'civitai') await startDownload({ id: 1 }, { id: 2, name: 'v1' }, { name: 'new', sizeKB: 2, downloadUrl: 'url' }, 'lora');
+            else if (kind === 'archive') await completeArchiveDownload('new');
+            else await updateInventoryItem({ path: 'old', kind: 'lora' }, 'keep');
+            return { inventory, errors };
+        };
+    `));
+    for (const kind of ['civitai', 'archive', 'update']) {
+        const events = [], requests = [], item = { path: 'new', contentSafety: 'nsfw' };
+        const electron = {
+            downloadCivitaiModel: async () => ({ path: 'new' }),
+            updateCivitaiModel: async () => ({ path: 'new' }),
+            indexCivitaiModel: async request => { requests.push(request); return { items: [item] }; },
+            scanCivitaiLibrary: () => { throw new Error('No automatic scan'); },
+        };
+        const result = await api.run(kind, electron, value => events.push(value));
+        assert.deepEqual(requests, [{ provider: 'regular', modelPath: 'new' }]);
+        assert.equal(events[0], item);
+        assert.deepEqual(result.errors, []);
+        if (kind !== 'update') {
+            assert.equal(events[1], 'enrich');
+            assert.equal(result.inventory.items[0].usageMetadata.steps, 4);
+        }
+    }
+    for (const kind of ['civitai', 'archive']) {
+        const result = await api.run(kind, { downloadCivitaiModel: async () => ({ path: 'new' }) }, () => assert.fail('No indexed card exists yet'));
+        assert.match(result.errors[0], /Restart the Electron desktop app/);
+    }
+});
+test('download Archive enrichment persists into the latest inventory, retaining concurrent edits', async () => {
+    const api = await import(compile(`
+        export const run = async (deps) => {
+            const { store, fetch } = deps;
+            const assertLocalModelPath = () => ({ resolvedPath: 'new' });
+            let handler;
+            const ipcMain = { handle: (_channel, fn) => { handler = fn; } };
+            ${nativeSource.slice(nativeSource.indexOf("ipcMain.handle('fetch-local-model-archive'"), nativeSource.indexOf("ipcMain.handle('fetch-local-model-hugging-face'"))}
+            return handler({}, { modelPath: 'new' });
+        };
+    `));
+    const target = { path: 'new', sha256: 'a'.repeat(64), usageMetadata: { source: 'manual', steps: 8 } };
+    let inventory = { items: [target, { path: 'other', userFamily: 'sdxl' }] };
+    const result = await api.run({
+        store: { get: () => inventory, set: (_key, value) => { inventory = value; } },
+        fetch: async () => {
+            inventory = { items: [{ ...target, usageMetadata: { source: 'manual', steps: 17 } }, { path: 'other', userFamily: 'flux2-9b' }, { path: 'added' }] };
+            return { status: 404 };
+        },
+    });
+    assert.equal(result.items.length, 3);
+    assert.equal(result.items[0].usageMetadata.steps, 17);
+    assert.equal(result.items[1].userFamily, 'flux2-9b');
+    assert.equal(result.items[0].archiveLookupStatus, 'unmatched');
+});
+test('automatic usage enrichment fills missing recommendations without overwriting manual settings', async () => {
+    const path = createRequire(import.meta.url)('node:path');
+    const current = { path: 'new.safetensors', usageMetadata: { source: 'manual', steps: 17, triggerWords: ['mine'] } };
+    let inventory = { items: [current] }, sidecar;
+    const api = await import(compile(`
+        export const run = async (path, store, fs) => {
+            ${extract(nativeSource, ['saveUsageMetadata'])}
+            return saveUsageMetadata('new.safetensors', { source: 'civitai', steps: 4, sampler: 'euler', triggerWords: ['remote'] }, true);
+        };
+    `));
+    const updated = await api.run(path, { get: () => inventory, set: (_key, value) => { inventory = value; } },
+        { promises: { writeFile: async (_file, content) => { sidecar = JSON.parse(content); } } });
+    assert.deepEqual(updated.usageMetadata, { source: 'manual', steps: 17, sampler: 'euler', triggerWords: ['mine'] });
+    assert.deepEqual(sidecar.usageMetadata, updated.usageMetadata);
+    assert.match(read('../electron/preload.cjs'), /indexCivitaiModel:.*index-civitai-model/);
+});
+test('FLUX2 family classification agrees across desktop, library filters and download destinations', () => {
+    const cases = [
+        [{ relativePath: 'loras/FLUX2/style.safetensors' }, 'flux2-9b'],
+        [{ relativePath: 'loras/FLUX2/klein4b.safetensors' }, 'flux2-4b'],
+        [{ relativePath: 'loras/flux2-4b/style.safetensors' }, 'flux2-4b'],
+        [{ relativePath: 'loras/FLUX2/style.safetensors', baseModel: 'Flux.2 Klein 4B', modelName: 'Style for 4B and 9B' }, 'flux2-4b'],
+        [{ relativePath: 'loras/FLUX2/style.safetensors', userFamily: 'flux2-4b' }, 'flux2-4b'],
+        [{ relativePath: 'loras/FLUX2/style.safetensors', userFamily: 'sdxl' }, undefined],
+        [{ relativePath: 'loras/SDXL/flux2_9b.safetensors' }, undefined],
+        [{ relativePath: 'loras/FLUX2/style_4b_9b.safetensors' }, undefined],
+        [{ relativePath: 'diffusion_models/flux2/flux2DevFP8.gguf', kind: 'diffusion' }, undefined],
+    ];
+    for (const [patch, expected] of cases) {
+        const item = { kind: 'lora', ...patch };
+        assert.equal(service.inventoryFlux2Variant(item), expected);
+        assert.equal(native.inventoryFlux2Variant(item), expected);
+        if (expected) {
+            assert.equal(service.inventoryItemMatchesFamily(item, 'flux2'), true);
+            assert.equal(native.inventoryItemMatchesSelection(item, 'all', 'flux2'), true);
+        }
+        for (const family of ['flux2-9b', 'flux2-4b']) {
+            assert.equal(service.inventoryItemMatchesFamily(item, family), expected === family);
+            assert.equal(native.inventoryItemMatchesSelection(item, 'lora', family), expected === family);
+        }
+    }
+    for (const size of ['4B', '9B']) {
+        const family = `flux2-${size.toLowerCase()}`, model = { name: 'Style for FLUX2 4B and 9B', type: 'LORA' }, version = { name: 'v1', baseModel: `Flux.2 Klein ${size}` };
+        assert.equal(service.getCivitaiModelFolder(model, version, 'all'), family);
+        assert.equal(native.inferModelFolder(model, version), family);
+        assert.equal(archive.inferArchiveFamily(version.baseModel, model.name), family);
+        assert.equal(archive.getArchiveFolder(family, 'lora', ''), family);
+        assert.ok(native.MODEL_FOLDERS.has(family));
+        assert.ok(native.MODEL_FAMILIES.has(family));
+    }
+});
 const qwenUrl = compile(read('./qwen21Workflow.ts'));
+const mossGalleryUrl = compile(read('./styleGallery.ts'));
+const mossStyleUrl = compile(read('./mossStyleWorkflow.ts').replace("from './styleGallery'", `from '${mossGalleryUrl}'`));
 const mossUrl = compile(`import { getQwen21Choices } from '${qwenUrl}';\n${read('./mossWorkflow.ts').replace(/^import .*;$/gm, '')}`);
 const photoUrl = compile(read('./mossPhotoWorkflow.ts')
     .replace("import template from '../assets/mossPhotoWorkflow.json';", `const template = ${read('../assets/mossPhotoWorkflow.json')};`)
-    .replace("from './qwen21Workflow'", `from '${qwenUrl}'`));
+    .replace("from './qwen21Workflow'", `from '${qwenUrl}'`).replace("from './mossStyleWorkflow'", `from '${mossStyleUrl}'`));
 const { defaultMossPhotoSettings } = await import(photoUrl);
 const useModel = (await import(compile(`
-    import { getComfyRelativePath, getRecommendedSettingUpdates, selectInventoryLora } from '${serviceUrl}';
+    import { getComfyRelativePath, getRecommendedSettingUpdates, selectInventoryLora, inventoryItemMatchesFamily, inventoryFlux2Variant, inferFlux2Variant } from '${serviceUrl}';
     import { defaultMossSettings } from '${mossUrl}';
     import { defaultMossPhotoSettings, withMossPhotoPrompt } from '${photoUrl}';
     import { defaultQwen21Settings } from '${qwenUrl}';
     ${extract(inventorySource, inventoryNames)}
-    export async function use(item, options = {}, provider = 'regular') {
+    export async function use(item, options = {}, provider = 'regular', objectInfo = {}, destination = 't2i') {
         const actions = [], alerts = [];
-        const store = { getState: () => ({ generation: { options }, app: { comfyUIObjectInfo: {} } }) };
+        const store = { getState: () => ({ generation: { options }, app: { comfyUIObjectInfo: objectInfo } }) };
         const dispatch = action => actions.push(action);
         const window = { alert: message => alerts.push(message) };
         const updateOptions = payload => ({ type: 'options', payload });
         const setGenerationMode = payload => ({ type: 'mode', payload });
         const setActiveTab = payload => ({ type: 'tab', payload });
         const queueLtxTransfer = payload => ({ type: 'ltx', payload });
+        const setUseDestinationOpen = () => {};
         ${extract(inventorySource, ['useModel'])}
-        await useModel();
+        await useModel(destination);
         return { actions, alerts };
     }
 `))).use;
+test('USE selects the matching FLUX2 base and resets previous LoRAs', async () => {
+    const info = { UNETLoader: { input: { required: { unet_name: [['flux2/flux2DevFP8.gguf', 'flux2/klein9b.safetensors', 'flux2/klein4b.safetensors']] } } } };
+    assert.equal(inventory.getCompatibleBaseModel('flux2-simple', info, 'flux2-4b'), 'flux2/klein4b.safetensors');
+    assert.equal(inventory.getCompatibleBaseModel('flux2-simple', info, 'flux2-9b'), 'flux2/klein9b.safetensors');
+    const item = { kind: 'lora', path: 'C:/models/loras/flux2-4b/style.safetensors', relativePath: 'loras/flux2-4b/style.safetensors', fileName: 'style.safetensors', userFamily: 'flux2-4b' };
+    const result = await useModel(item, { comfyFlux2Unet: 'flux2/klein9b.safetensors', comfyFlux2Lora2Name: 'FLUX2/old.safetensors' }, 'regular', info);
+    const options = result.actions.find(action => action.type === 'options').payload;
+    assert.equal(options.comfyFlux2Unet, 'flux2/klein4b.safetensors');
+    assert.equal(options.comfyFlux2Lora2Name, '');
+    assert.deepEqual(result.alerts, []);
+});
+
+test('FLUX2 USE chooses t2i/i2i for 4B/9B and resets destination settings before applying recommendations', async () => {
+    const models = ['flux2\\klein9b.safetensors', 'flux2\\klein4b.safetensors'];
+    const info = { UNETLoader: { input: { required: { unet_name: [models] } } }, KSamplerSelect: { input: { required: { sampler_name: [['euler', 'heun']] } } } };
+    for (const size of ['4b', '9b']) for (const mode of ['t2i', 'i2i']) for (const kind of ['lora', 'diffusion']) {
+        const family = `flux2-${size}`, prefix = mode === 't2i' ? 'comfyFlux2' : 'comfyFlux2Edit';
+        const selected = {
+            kind, path: `C:\\models\\${kind === 'lora' ? 'loras' : 'diffusion_models'}\\flux2\\${kind === 'lora' ? 'style' : `klein${size}`}.safetensors`,
+            relativePath: `${kind === 'lora' ? 'loras' : 'diffusion_models'}\\flux2\\${kind === 'lora' ? 'style' : `klein${size}`}.safetensors`,
+            fileName: `${kind === 'lora' ? 'style' : `klein${size}`}.safetensors`,
+            userFamily: family, usageMetadata: { triggerWords: ['NEW_TRIGGER'], steps: 8, cfg: 0, sampler: 'heun' },
+        };
+        const before = { comfyModelType: 'sdxl', numImages: 4, comfySeed: 12, comfySeedControl: 'fixed',
+            [prefix + 'Style']: { id: 'old' }, [prefix + 'StyleStrength']: 0.3,
+            [mode === 't2i' ? 'comfyFlux2UseStyleSettings' : 'comfyFlux2EditUseStyleSettings']: true,
+            [prefix + 'Lora1Name']: 'old.safetensors', [prefix + 'Lora2Name']: 'another.safetensors',
+            comfyFlux2EditUseCacheDit: true, comfyFlux2EditPreserveSourceStyle: true,
+            comfyFlux2EditReferenceRoles: ['identity', 'pose'], comfyFlux2EditReferenceDescriptions: ['person', 'jump'],
+        };
+        const result = await useModel(selected, before, 'red', info, mode);
+        const updates = result.actions.find(action => action.type === 'options').payload;
+        assert.equal(updates.comfyModelType, mode === 't2i' ? 'flux2-simple' : 'flux2-edit');
+        assert.equal(updates[prefix + 'Unet'], `flux2\\klein${size}.safetensors`);
+        assert.equal(updates[prefix + 'Clip'], size === '9b' ? 'qwen38BFluxKlein9BTE_38b.safetensors'
+            : mode === 't2i' ? 'qwen3vl_4b_fp8_scaled.safetensors' : 'qwen_3_4b.safetensors');
+        assert.equal(updates[prefix + 'Style'], undefined);
+        assert.ok(Object.hasOwn(updates, prefix + 'Style'), 'patch explicitly clears existing style');
+        assert.equal(updates[mode === 't2i' ? 'comfyFlux2UseStyleSettings' : 'comfyFlux2EditUseStyleSettings'], false);
+        assert.equal(updates[prefix + 'Lora2Name'], '');
+        assert.equal(updates[prefix + 'Lora1Name'], kind === 'lora' ? 'flux2\\style.safetensors' : '');
+        assert.equal(updates[prefix + 'Prompt'], kind === 'lora' ? 'NEW_TRIGGER' : '');
+        const samplingPrefix = mode === 't2i' ? 'comfy' : 'comfyFlux2Edit';
+        assert.equal(updates[samplingPrefix + 'Steps'], 8);
+        assert.equal(updates[samplingPrefix + 'Cfg'], 0);
+        assert.equal(updates[samplingPrefix + 'Sampler'], 'heun');
+        assert.equal(updates.numImages, 1); assert.equal(updates.comfySeed, undefined);
+        assert.equal(updates.comfyPromptExampleSource.modelPath, selected.path);
+        assert.equal(updates.comfyPromptExampleSource.provider, 'red');
+        assert.equal(result.actions.find(action => action.type === 'mode').payload, mode);
+        assert.equal(updates.comfyFlux2EditReferenceRoles, undefined, 'reference roles are not reset');
+        assert.equal(updates.comfyFlux2EditReferenceDescriptions, undefined);
+        if (mode === 'i2i') {
+            assert.equal(updates.comfyFlux2EditUseCacheDit, false);
+            assert.equal(updates.comfyFlux2EditPreserveSourceStyle, false);
+        }
+        assert.deepEqual(result.alerts, []);
+    }
+    const defaults = service.getRecommendedSettingUpdates('flux2-edit', undefined, info);
+    assert.deepEqual(defaults, { comfyFlux2EditSteps: 4, comfyFlux2EditCfg: 1, comfyFlux2EditSampler: 'euler' });
+    assert.ok(inventorySource.includes("useModel('t2i')")); assert.ok(inventorySource.includes("useModel('i2i')"));
+});
+
+test('library cards read and dispatch through the mounted Redux Provider, not an imported store', async () => {
+    const resolve = name => pathToFileURL(createRequire(import.meta.url).resolve(name)).href;
+    const { probe } = await import(compile(`
+        import React from '${resolve('react')}';
+        import { Provider, useStore, useDispatch } from '${resolve('react-redux')}';
+        export function probe(providerStore, capture) {
+            const Card = () => {
+                ${extract(inventorySource, ['dispatch', 'store'])}
+                capture({ store, dispatch });
+                return null;
+            };
+            return React.createElement(Provider, { store: providerStore }, React.createElement(Card));
+        }
+    `));
+    const state = { app: { comfyUIObjectInfo: { UNETLoader: {} } } };
+    const providerStore = { getState: () => state, dispatch: action => action, subscribe: () => () => {} };
+    let captured;
+    renderToStaticMarkup(probe(providerStore, value => { captured = value; }));
+    assert.equal(captured.store, providerStore);
+    assert.equal(captured.dispatch, providerStore.dispatch);
+    assert.equal(captured.store.getState(), state);
+});
+
+test('USE accepts the installed Klein 9B INT8 model but still blocks a missing or incompatible base', async () => {
+    const model = 'flux2\\flux2Klein9BInt8_v10.safetensors';
+    const item = {
+        kind: 'lora', path: 'C:\\models\\loras\\flux2\\1950s_scifi_flux2_klein_r64_100.safetensors',
+        relativePath: 'loras\\flux2\\1950s_scifi_flux2_klein_r64_100.safetensors',
+        fileName: '1950s_scifi_flux2_klein_r64_100.safetensors',
+        baseModel: 'Flux.2 Klein 9B Base v1.0', userFamily: 'flux2-9b',
+    };
+    const catalog = models => ({ UNETLoader: { input: { required: { unet_name: [models] } } } });
+    const result = await useModel(item, {}, 'regular', catalog(['flux-2-klein-4b-fp8.safetensors', model]));
+    const options = result.actions.find(action => action.type === 'options').payload;
+    assert.equal(options.comfyFlux2Unet, model);
+    assert.equal(options.comfyFlux2Clip, 'qwen38BFluxKlein9BTE_38b.safetensors');
+    assert.equal(options.comfyFlux2Lora1Name, 'flux2\\1950s_scifi_flux2_klein_r64_100.safetensors');
+    assert.deepEqual(result.alerts, []);
+    for (const models of [[], ['flux-2-klein-4b-fp8.safetensors', 'flux2\\flux2DevFP8GGUF_ggufQ2K.gguf']]) {
+        const blocked = await useModel(item, {}, 'regular', catalog(models));
+        assert.deepEqual(blocked.actions, []);
+        assert.match(blocked.alerts[0], /No installed FLUX2-9B base model/);
+    }
+});
 
 const families = [
     { id: 'qwen21', baseModels: ['Qwen 2.1'], folder: 'qwen21', file: 'qwen_image_2.1_int8.safetensors' },
@@ -270,6 +579,7 @@ const scanHarnessUrl = compile(`
         const roots = [];
         const store = { get: (key, fallback) => state.has(key) ? state.get(key) : fallback, set: (key, value) => state.set(key, value) };
         const collectModelFiles = async (directory, kind) => { roots.push({ directory, kind }); };
+        ${extract(nativeSource, ['scanCivitaiLibrary'])}
         const scan = ${scanHandler};
         return { scan, roots, root, state };
     }
@@ -356,6 +666,7 @@ const optionsHelpersUrl = compile(`
     export { getSelectedLoraNames };
     export async function sourcesFor(options, inventory, cached = []) {
         const active = true;
+        const styleInventory = inventory;
         const selectedLoraNames = getSelectedLoraNames(options);
         let result;
         const setPromptExampleSources = value => { result = value; };
@@ -376,8 +687,132 @@ const optionsHelpersUrl = compile(`
         applyPromptExample(example);
         return { result, open };
     }
+    export function promptRequests() {
+        const state = {}, pending = [], promptExampleRequest = { current: 0 };
+        const window = { electron: { getLocalModelPromptExamples: request => new Promise(resolve => pending.push({ request, resolve })) } };
+        const setActivePromptExampleSource = value => { state.source = value; };
+        const setPromptExamplesOpen = value => { state.open = value; };
+        const setPromptExamplesLoading = value => { state.loading = value; };
+        const setPromptExamplesError = value => { state.error = value; };
+        const setPromptExamples = value => { state.examples = value; };
+        const setPromptExamplesStorage = value => { state.storage = value; };
+        ${extract(optionsSource, ['openPromptExamples'])}
+        return { state, pending, open: openPromptExamples, invalidate: () => promptExampleRequest.current++ };
+    }
 `);
 const optionsHelpers = await import(optionsHelpersUrl);
+
+test('FLUX2 local prompt discovery includes the style LoRA in both modes and deduplicates additional slots', async () => {
+    const lora = { path: 'C:/models/loras/FLUX2/ink.safetensors', relativePath: 'loras/FLUX2/ink.safetensors', fileName: 'ink.safetensors', kind: 'lora', modelName: 'Ink style', usageMetadata: { triggerWords: ['INK'] } };
+    for (const [modelType, prefix] of [['flux2-simple', 'comfyFlux2'], ['flux2-edit', 'comfyFlux2Edit']]) {
+        const options = { comfyModelType: modelType, [`${prefix}Style`]: { lora: 'FLUX2/ink.safetensors' }, [`${prefix}Lora1Name`]: 'FLUX2/ink.safetensors' };
+        assert.deepEqual(optionsHelpers.getSelectedLoraNames(options), ['FLUX2/ink.safetensors']);
+        const found = await optionsHelpers.sourcesFor(options, { items: [lora] }, [lora.path]);
+        assert.equal(found.length, 1); assert.equal(found[0].hasLocalPrompts, true);
+        assert.equal(found[0].modelName, 'Ink style');
+        const remote = await optionsHelpers.sourcesFor(options, { items: [lora] });
+        assert.equal(remote.length, 1);
+        assert.equal(remote[0].hasLocalPrompts, false);
+        assert.deepEqual(remote[0].sources, ['civitai']);
+        const applied = optionsHelpers.apply(options, { positive: 'A red coat', negative: 'blur', source: 'civitai' }, ['INK']);
+        assert.equal(applied.result[`${prefix}Prompt`], 'A red coat, INK');
+        assert.equal(applied.result.comfyPrompt, undefined);
+        assert.equal(applied.result[`${prefix}Style`], undefined);
+    }
+    assert.deepEqual(optionsHelpers.getSelectedLoraNames({ comfyModelType: 'flux2-simple', comfyFlux2UseLora: false, comfyFlux2Style: { lora: 'style' }, comfyFlux2Lora1Name: 'disabled' }), ['style']);
+});
+
+test('KREA2 USE respects shared family matching and clears the Simple style before applying Library recommendations', async () => {
+    for (const patch of [
+        { relativePath: 'loras/KREA/ink.safetensors' },
+        { relativePath: 'loras/KREA2/ink.safetensors' },
+        { relativePath: 'loras/custom/ink.safetensors', baseModel: 'Krea 2' },
+        { relativePath: 'loras/custom/ink.safetensors', userFamily: 'krea2' },
+    ]) {
+        const selected = { path: 'C:/models/loras/ink.safetensors', fileName: 'ink.safetensors', kind: 'lora',
+            usageMetadata: { triggerWords: ['INK'], steps: 8, cfg: 2, sampler: 'Euler' }, ...patch };
+        assert.equal(inventory.getImageWorkflow(selected).modelType, 'krea2-simple');
+        const result = await useModel(selected, { comfyModelType: 'krea2-simple', comfyKreaStyle: { title: 'Old style' }, comfyKreaUseStyleSettings: true });
+        const updates = result.actions[0].payload;
+        assert.equal(updates.comfyKreaStyle, undefined);
+        assert.equal(updates.comfyKreaUseStyleSettings, false);
+        assert.equal(updates.comfyKreaStyleStrength, undefined);
+        assert.equal(updates.comfyKreaPrompt, 'INK');
+        assert.equal(updates.comfyKreaUnet, 'krea2_turbo_fp8_scaled.safetensors');
+        assert.equal(updates.comfySteps, 8);
+        assert.equal(updates.comfyKreaLora1Name, service.getComfyRelativePath(selected));
+    }
+});
+
+test('Simple KREA prompt examples follow current style and retain active extras/base sources without touching RAW', async () => {
+    const old = { kind: 'lora', path: 'C:/models/loras/KREA/old.safetensors', relativePath: 'loras/KREA/old.safetensors', fileName: 'old.safetensors' };
+    const current = { ...old, path: 'C:/models/loras/KREA/ink.safetensors', relativePath: 'loras/KREA/ink.safetensors', fileName: 'ink.safetensors', modelName: 'Krea ink' };
+    const base = { kind: 'diffusion', path: 'C:/models/diffusion_models/krea2.safetensors', relativePath: 'diffusion_models/krea2.safetensors', fileName: 'krea2.safetensors' };
+    const inventory = { items: [old, current, base] };
+    const options = { comfyModelType: 'krea2-simple', comfyKreaStyle: { lora: 'KREA/ink.safetensors' }, comfyKreaLora1Name: 'KREA/ink.safetensors',
+        comfyPromptExampleSource: { modelPath: old.path, modelName: 'Old', sources: ['civitai'] } };
+    assert.deepEqual(optionsHelpers.getSelectedLoraNames(options), ['KREA/ink.safetensors']);
+    const sources = await optionsHelpers.sourcesFor(options, inventory, [current.path, old.path]);
+    assert.deepEqual(sources.map(value => value.modelPath), [current.path]);
+    assert.equal(sources[0].hasLocalPrompts, true);
+    const remote = await optionsHelpers.sourcesFor(options, inventory);
+    assert.equal(remote[0].hasLocalPrompts, false);
+    const cleared = await optionsHelpers.sourcesFor({ ...options, comfyKreaStyle: undefined, comfyKreaLora1Name: '' }, inventory);
+    assert.deepEqual(cleared, []);
+    assert.deepEqual(optionsHelpers.getSelectedLoraNames({ ...options, comfyKreaUseLora: false }), ['KREA/ink.safetensors']);
+    const baseSources = await optionsHelpers.sourcesFor({ ...options, comfyKreaUnet: 'krea2.safetensors',
+        comfyPromptExampleSource: { modelPath: base.path, modelName: 'Krea base', sources: ['civitai'] } }, inventory);
+    assert.deepEqual(baseSources.map(value => value.modelPath), [base.path, current.path]);
+    assert.deepEqual(optionsHelpers.getSelectedLoraNames({ comfyModelType: 'krea2-raw', comfyKreaStyle: options.comfyKreaStyle }), []);
+});
+
+test('FLUX2 prompt sources follow the current style, retain active extras/base models and offer remote examples', async () => {
+    const old = { kind: 'lora', path: 'C:\\models\\loras\\FLUX2\\scifi.safetensors', relativePath: 'loras/FLUX2/scifi.safetensors', fileName: 'scifi.safetensors', modelName: '1950s SciFi' };
+    const current = { ...old, path: 'C:\\models\\loras\\FLUX2\\ghibli.safetensors', relativePath: 'loras/FLUX2/ghibli.safetensors', fileName: 'ghibli.safetensors', modelName: 'Retro Ghibli', archiveMirrorUrl: 'https://civitaiarchive.com/model/1', usageMetadata: { triggerWords: ['ghibli'] } };
+    const base = { kind: 'diffusion', path: 'C:\\models\\diffusion_models\\flux2\\klein9b.safetensors', relativePath: 'diffusion_models/flux2/klein9b.safetensors', fileName: 'klein9b.safetensors' };
+    const inventory = { items: [old, current, base] };
+    const source = { modelPath: old.path, modelName: old.modelName, provider: 'red', sources: ['civitai'] };
+    for (const [modelType, prefix] of [['flux2-simple', 'comfyFlux2'], ['flux2-edit', 'comfyFlux2Edit']]) {
+        const options = { comfyModelType: modelType, comfyPromptExampleSource: source, [`${prefix}Style`]: { lora: 'flux2\\ghibli.safetensors' } };
+        const result = await optionsHelpers.sourcesFor(options, inventory, [old.path]);
+        assert.deepEqual(result.map(value => value.modelName), ['Retro Ghibli']);
+        assert.equal(result[0].hasLocalPrompts, false);
+        assert.equal(result[0].provider, 'red');
+        assert.deepEqual(result[0].sources, ['civitai', 'archive']);
+        assert.deepEqual(result[0].triggerWords, ['ghibli']);
+        const extra = await optionsHelpers.sourcesFor({ ...options, [`${prefix}Lora1Name`]: 'FLUX2/scifi.safetensors' }, inventory, [old.path]);
+        assert.equal(extra.length, 2, 'old source remains only when its LoRA is still active');
+        const removed = await optionsHelpers.sourcesFor({ ...options, [`${prefix}Style`]: undefined }, inventory, [old.path]);
+        assert.deepEqual(removed, []);
+        const selectedBase = await optionsHelpers.sourcesFor({ ...options, [`${prefix}Unet`]: 'flux2/klein9b.safetensors', comfyPromptExampleSource: { ...source, modelPath: base.path } }, inventory);
+        assert.equal(selectedBase[0].modelPath, base.path);
+        assert.equal(selectedBase.length, 2);
+    }
+});
+
+test('late prompt requests cannot replace examples from the newly selected source', async () => {
+    const harness = optionsHelpers.promptRequests();
+    const old = { modelPath: 'old', modelName: 'Old', provider: 'regular', sources: ['civitai'] };
+    const current = { modelPath: 'new', modelName: 'New', provider: 'red', sources: ['civitai', 'archive'] };
+    const first = harness.open(old);
+    const second = harness.open(current);
+    harness.pending[0].resolve({ examples: [{ positive: 'old' }], storage: 'sidecar' });
+    await first;
+    assert.equal(harness.state.source, current);
+    assert.deepEqual(harness.state.examples, []);
+    assert.equal(harness.state.loading, true);
+    harness.pending[1].resolve({ examples: [{ positive: 'new' }], storage: 'remote' });
+    await second;
+    assert.deepEqual(harness.state.examples, [{ positive: 'new' }]);
+    assert.equal(harness.state.loading, false);
+    assert.deepEqual(harness.pending[1].request, { modelPath: 'new', provider: 'red', sources: ['civitai', 'archive'] });
+    const third = harness.open(old);
+    harness.invalidate();
+    harness.pending[2].resolve({ examples: [{ positive: 'obsolete' }], storage: 'remote' });
+    await third;
+    assert.deepEqual(harness.state.examples, []);
+    assert.ok(optionsSource.includes('{activePromptExampleSource?.modelName}'));
+});
 
 test('prompt-example discovery reads only enabled LoRAs from MOSS and both Qwen 2.1 modes', async () => {
     const loras = [{ name: 'enabled.safetensors', enabled: true }, { name: 'disabled.safetensors', enabled: false }, { name: '', enabled: true }];
@@ -408,7 +843,7 @@ test('the actual MOSS and Qwen rendering branches include remote and local promp
         import React from '${reactUrl}';
         export function render(modelType, promptExampleSources, isDisabled = false) {
             const options = { comfyModelType: modelType }, activeTab = 'image-generator';
-            const promptExamplesLoading = false, activePromptExampleSource = null;
+            const promptExamplesLoading = false, activePromptExampleSource = null, promptExamplesError = '', promptExamplesOpen = false;
             const openPromptExamples = () => {}, updateOptions = () => {};
             const comfyUIObjectInfo = {}, sourceImage = null, onSourceImageChange = () => {}, onOpenSourceLibrary = () => {};
             const MossSettingsPanel = () => React.createElement('div', null, 'MOSS settings');

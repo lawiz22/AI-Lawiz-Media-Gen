@@ -1,7 +1,9 @@
 import { getQwen21Choices } from './qwen21Workflow';
+import { appendGalleryStylePrompt } from './styleGallery';
+import { mossGalleryStyle, mossStyleLoraMatches, mossStyleSampling, type MossStyleSettings } from './mossStyleWorkflow';
 
 export interface MossLora { name: string; enabled: boolean; strength: number }
-export interface MossSettings {
+export interface MossSettings extends MossStyleSettings {
     unet: string; weightDtype: string; clip: string; clipType: string; clipDevice: string; vae: string;
     negativePrompt: string; width: number; height: number; batchSize: number; filenamePrefix: string;
     loras: MossLora[]; doubleLayers: string; singleLayers: string; startPercent: number; endPercent: number;
@@ -48,6 +50,9 @@ export const defaultMossSettings = (): MossSettings => ({
 });
 
 export const buildMossWorkflow = (settings: MossSettings, prompt: string, seed: number, source?: MossSourceImage): MossWorkflow => {
+    const style = mossGalleryStyle(settings);
+    settings = { ...settings, ...mossStyleSampling(settings) };
+    if (style) prompt = appendGalleryStylePrompt(prompt, style);
     const denoise = settings.refineImage ? settings.refineDenoise ?? 0.5 : settings.denoise;
     if (settings.refineImage && !source?.name.trim()) throw new Error('Choose a source image to refine with MOSS, or disable Refine Image.');
     if (!prompt.trim() || !Number.isSafeInteger(seed) || seed < 0) throw new Error('Enter a MOSS prompt and a valid non-negative seed.');
@@ -67,7 +72,7 @@ export const buildMossWorkflow = (settings: MossSettings, prompt: string, seed: 
         PowerLoraLoaderHeaderWidget: { type: 'PowerLoraLoaderHeaderWidget' }, model: ['19', 0],
     };
     settings.loras.forEach((lora, index) => {
-        if (lora.name.trim()) loraInputs[`lora_${index + 1}`] = { on: lora.enabled, lora: lora.name, strength: lora.strength };
+        if (lora.name.trim()) loraInputs[`lora_${index + 1}`] = { on: lora.enabled && !mossStyleLoraMatches(lora.name, [style?.lora || '']), lora: lora.name, strength: lora.strength };
     });
     loraInputs['➕ Add Lora'] = '';
     const workflow: MossWorkflow = {
@@ -85,6 +90,10 @@ export const buildMossWorkflow = (settings: MossSettings, prompt: string, seed: 
         '19': node('UNETLoader', { unet_name: settings.unet, weight_dtype: settings.weightDtype }),
         '20': node('CLIPLoader', { clip_name: settings.clip, type: settings.clipType, device: settings.clipDevice }),
     };
+    if (style?.lora) {
+        workflow.style_lora = node('LoraLoaderModelOnly', { model: ['19', 0], lora_name: style.lora, strength_model: settings.styleStrength ?? style.strength });
+        workflow['16'].inputs.model = ['style_lora', 0];
+    }
     if (settings.refineImage && source) {
         const dimensions = mossRefineDimensions(source.width, source.height);
         workflow['moss_input'] = node('LoadImage', { image: source.name });
@@ -102,7 +111,7 @@ export const validateMossReadiness = (workflow: MossWorkflow, info: Parameters<t
     const missing = [...new Set(Object.values(workflow).map(node => node.class_type))].filter(name => !info?.[name]);
     if (missing.length) throw new Error(`MOSS requires missing nodes: ${missing.join(', ')}. Update ComfyUI and install the source workflow's custom nodes, then restart and reconnect.`);
     for (const node of Object.values(workflow)) {
-        for (const key of ['unet_name', 'weight_dtype', 'clip_name', 'type', 'device', 'vae_name', 'sampler_name', 'scheduler', 'preview_method', 'vae_decode', 'upscale_method', 'crop']) {
+        for (const key of ['unet_name', 'weight_dtype', 'clip_name', 'type', 'device', 'vae_name', 'lora_name', 'sampler_name', 'scheduler', 'preview_method', 'vae_decode', 'upscale_method', 'crop']) {
             const value = node.inputs[key];
             if (typeof value === 'string' && !getQwen21Choices(info, node.class_type, key).includes(value)) throw new Error(`Unavailable MOSS ${node.class_type}.${key}: ${value}`);
         }

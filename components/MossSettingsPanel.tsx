@@ -6,6 +6,7 @@ import { getImageDimensionsFromFile } from '../utils/imageUtils';
 import { NumberSlider, SelectInput, TextInput } from './InputComponents';
 import { ImageUploader } from './ImageUploader';
 import { ImagePromptButton } from './ImagePromptModal';
+import { ImageStyleControl } from './ImageStyleControl';
 
 export const MossSettingsPanel: React.FC<{
     options: GenerationOptions; updateOptions: (change: Partial<GenerationOptions>) => void;
@@ -54,6 +55,7 @@ export const MossSettingsPanel: React.FC<{
                 {select('VAE', 'vae', 'VAELoader', 'vae_name')}
             </div></details>
             <TextInput label="Positive Prompt" value={options.comfyPrompt || ''} onChange={event => updateOptions({ comfyPrompt: event.target.value })} isTextArea disabled={disabled} />
+            <ImageStyleControl mode="moss-image" options={options} updateOptions={updateOptions} info={objectInfo || {}} disabled={disabled} />
             <TextInput label="Negative Prompt" value={settings.negativePrompt} onChange={event => update({ negativePrompt: event.target.value })} isTextArea disabled={disabled} />
             {checkbox('Refine Image (Image-to-Image)', !!settings.refineImage, refineImage => update({ refineImage }))}
             {settings.refineImage ? <div className="space-y-3 rounded-md border border-border-primary p-3">

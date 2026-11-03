@@ -5,7 +5,8 @@ import ts from 'typescript';
 
 const source = readFileSync(new URL('./minimaxH3Workflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '');
 const bridge = readFileSync(new URL('./videoPromptService.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '');
-const { outputText } = ts.transpileModule(bridge + source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
+const styles = ['./styleGallery.ts', './h3StyleWorkflow.ts'].map(name => readFileSync(new URL(name, import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '')).join('\n');
+const { outputText } = ts.transpileModule(styles + bridge + source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
 export const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 export const ref = (kind, slot) => ({
     id: `${kind}-${slot}`, kind, slot, note: '',

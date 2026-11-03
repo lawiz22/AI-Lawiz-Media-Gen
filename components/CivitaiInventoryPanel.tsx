@@ -1,12 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useDispatch } from 'react-redux';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { inferFlux2Variant, inventoryFlux2Variant, inventoryItemMatchesFamily } from '../services/civitaiService';
+import { useDispatch, useStore } from 'react-redux';
 import { CIVITAI_FAMILIES, CivitaiFamily, CivitaiInventory, CivitaiInventoryItem, CivitaiModelFolder, CivitaiProvider, formatModelSize, getCivitaiModelUrl, getComfyRelativePath, getRecommendedSettingUpdates, selectInventoryLora } from '../services/civitaiService';
 import { defaultMossSettings } from '../services/mossWorkflow';
 import { defaultMossPhotoSettings, withMossPhotoPrompt } from '../services/mossPhotoWorkflow';
 import { defaultQwen21Settings } from '../services/qwen21Workflow';
 import { queueLtxTransfer, setActiveTab } from '../store/appSlice';
 import { setGenerationMode, updateOptions } from '../store/generationSlice';
-import { store, type AppDispatch } from '../store/store';
+import type { AppDispatch, RootState } from '../store/store';
+import { StyleModal } from './StyleBrowser';
 import type { ComfyModelType, GenerationOptions } from '../types';
 import { ImageIcon, SpinnerIcon } from './icons';
 import { MenuSelect } from './MenuSelect';
@@ -33,14 +35,15 @@ interface Props {
     onOpenItem: (item: CivitaiInventoryItem) => void;
     onUpdateItem: (item: CivitaiInventoryItem, mode: 'keep' | 'replace') => Promise<{ fileName: string; versionName: string }>;
     focusedItemPath: string | null;
+    focusRequestId?: number;
     organizeMessage: string;
     localAccessAvailable: boolean;
 }
 
 const FOLDERS: Record<LocalKind, CivitaiModelFolder[]> = {
-    lora: ['sd15', 'SDXL', 'Flux', 'flux2', 'krea', 'QWEN', 'qwen21', 'moss', 'H3', 'ZIT', 'LTX2', 'LTX2_camera_control'],
-    checkpoint: ['SD1.5', 'SDXL', 'FLUX', 'flux-dev', 'flux2', 'krea', 'qwen21', 'moss', 'H3', 'LTX2'],
-    diffusion: ['sd15', 'SDXL', 'Flux', 'flux2', 'krea', 'QWEN', 'qwen21', 'moss', 'H3', 'ZIT', 'LTX2', 'LTX2_camera_control'],
+    lora: ['sd15', 'SDXL', 'Flux', 'flux2-9b', 'flux2-4b', 'flux2', 'krea', 'QWEN', 'qwen21', 'moss', 'H3', 'ZIT', 'LTX2', 'LTX2_camera_control'],
+    checkpoint: ['SD1.5', 'SDXL', 'FLUX', 'flux-dev', 'flux2-9b', 'flux2-4b', 'flux2', 'krea', 'qwen21', 'moss', 'H3', 'LTX2'],
+    diffusion: ['sd15', 'SDXL', 'Flux', 'flux2-9b', 'flux2-4b', 'flux2', 'krea', 'QWEN', 'qwen21', 'moss', 'H3', 'ZIT', 'LTX2', 'LTX2_camera_control'],
 };
 
 const getItemFolder = (item: CivitaiInventoryItem): CivitaiModelFolder | '' => {
@@ -48,7 +51,7 @@ const getItemFolder = (item: CivitaiInventoryItem): CivitaiModelFolder | '' => {
     return FOLDERS[item.kind].find(folder => pathSegments.some(segment => segment.toLowerCase() === folder.toLowerCase())) || '';
 };
 
-const getFolderLabel = (folder: CivitaiModelFolder) => folder === 'flux2' ? 'FLUX2' : folder === 'krea' ? 'KREA2' : folder === 'LTX2' ? 'LTX 2.3 (LTX2)' : folder;
+const getFolderLabel = (folder: CivitaiModelFolder) => folder === 'flux2' ? 'FLUX2 (legacy folder)' : folder.startsWith('flux2-') ? folder.toUpperCase() : folder === 'krea' ? 'KREA2' : folder === 'LTX2' ? 'LTX 2.3 (LTX2)' : folder;
 type ModelFamily = Exclude<CivitaiFamily, 'all'>;
 const MODEL_CATEGORY_OPTIONS = CIVITAI_FAMILIES.filter((family): family is typeof family & { id: ModelFamily } => family.id !== 'all');
 const inferPreviewType = (url?: string | null): 'image' | 'video' => url && /\.(?:mp4|webm|mov)(?:[?#]|$)/i.test(url) ? 'video' : 'image';
@@ -61,13 +64,14 @@ const SCHEDULER_OPTIONS = ['', 'normal', 'karras', 'exponential', 'sgm_uniform',
 
 const getComfyOptions = (widgetInfo: unknown): string[] => Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0]) ? widgetInfo[0] : [];
 
-const getCompatibleBaseModel = (modelType: ComfyModelType, objectInfo: any): string | undefined => {
-    if (modelType === 'flux2-simple') {
+const getCompatibleBaseModel = (modelType: ComfyModelType, objectInfo: any, family?: CivitaiFamily): string | undefined => {
+    if (modelType === 'flux2-simple' || modelType === 'flux2-edit') {
         const models = [
             ...getComfyOptions(objectInfo?.UnetLoaderGGUF?.input?.required?.unet_name),
             ...getComfyOptions(objectInfo?.UnetLoaderGGUF?.input?.required?.gguf_name),
+            ...getComfyOptions(objectInfo?.UNETLoader?.input?.required?.unet_name),
         ];
-        return models.find(model => /flux[-_ ]?2|klein/i.test(model));
+        return models.find(model => /flux[-_ .]?2|klein/i.test(model) && (!family || inferFlux2Variant(model) === family));
     }
     if (modelType === 'krea2-simple' || modelType === 'krea2-raw') {
         return getComfyOptions(objectInfo?.UNETLoader?.input?.required?.unet_name).find(model => /krea[-_ ]?2/i.test(model));
@@ -89,9 +93,33 @@ const getCompatibleBaseModel = (modelType: ComfyModelType, objectInfo: any): str
     return checkpoints.find(model => /sd[._ -]?1[._ -]?5/i.test(model));
 };
 
+const getFlux2UseDefaults = (mode: 't2i' | 'i2i'): Partial<GenerationOptions> => {
+    const prefix = mode === 't2i' ? 'comfyFlux2' : 'comfyFlux2Edit';
+    const defaults: Partial<GenerationOptions> = {
+        numImages: 1, comfySeed: undefined, comfySeedControl: 'randomize', comfySeedIncrement: 1,
+        comfyPrompt: '', comfyPromptExampleSource: undefined,
+        [prefix + 'Prompt']: '', [prefix + 'Style']: undefined, [prefix + 'StyleStrength']: undefined,
+        [mode === 't2i' ? 'comfyFlux2UseStyleSettings' : 'comfyFlux2EditUseStyleSettings']: false,
+    };
+    for (let index = 1; index <= (mode === 't2i' ? 6 : 2); index++) {
+        Object.assign(defaults, { [`${prefix}Lora${index}Name`]: '', [`${prefix}Lora${index}Strength`]: 1 });
+    }
+    return mode === 't2i' ? {
+        ...defaults, comfyFlux2NegativePrompt: '', comfyFlux2Resolution: '832x1216', comfyFlux2UseLora: true,
+        comfySteps: 10, comfyCfg: 1, comfySampler: 'euler',
+    } : {
+        ...defaults, comfyFlux2EditSteps: 4, comfyFlux2EditCfg: 1, comfyFlux2EditSampler: 'euler', comfyFlux2EditMegapixels: 1,
+        comfyFlux2EditRequirePhotorealism: true, comfyFlux2EditPreserveSourceStyle: false,
+        comfyFlux2EditReinforceSourceIdentity: false, comfyFlux2EditIdentityReferenceWeight: 2,
+        comfyFlux2EditUseCacheDit: false, comfyFlux2EditCacheDitModelType: 'Auto',
+        comfyFlux2EditCacheDitWarmupSteps: 0, comfyFlux2EditCacheDitSkipInterval: 0,
+    };
+};
+
 const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelType; loraPrefix: string; checkpointField: keyof GenerationOptions; promptField: keyof GenerationOptions } => {
+    if (inventoryFlux2Variant(item)) return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
     if (item.userFamily === 'flux2') return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
-    if (item.userFamily === 'krea2') return { modelType: 'krea2-simple', loraPrefix: 'comfyKrea', checkpointField: 'comfyKreaUnet', promptField: 'comfyKreaPrompt' };
+    if (inventoryItemMatchesFamily(item, 'krea2')) return { modelType: 'krea2-simple', loraPrefix: 'comfyKrea', checkpointField: 'comfyKreaUnet', promptField: 'comfyKreaPrompt' };
     if (item.userFamily === 'flux') return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
     if (item.userFamily === 'qwen' || item.userFamily === 'qwen-edit') return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet', promptField: 'comfyPrompt' };
     if (item.userFamily === 'zit-base' || item.userFamily === 'zit-turbo') return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet', promptField: 'comfyPrompt' };
@@ -99,7 +127,6 @@ const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelTy
     if (item.userFamily === 'sd15') return { modelType: 'sd1.5', loraPrefix: 'comfySd15', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
     const pathSegments = item.relativePath.replace(/\\/g, '/').toLowerCase().split('/');
     if (pathSegments.includes('flux2')) return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
-    if (pathSegments.includes('krea')) return { modelType: 'krea2-simple', loraPrefix: 'comfyKrea', checkpointField: 'comfyKreaUnet', promptField: 'comfyKreaPrompt' };
     if (pathSegments.includes('qwen')) return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet', promptField: 'comfyPrompt' };
     if (pathSegments.includes('zit')) return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet', promptField: 'comfyPrompt' };
     if (pathSegments.some(segment => segment === 'flux' || segment === 'flux-dev')) return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
@@ -113,7 +140,6 @@ const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelTy
         item.modelName,
     ].filter(Boolean).join(' ').replace(/\\/g, '/').toLowerCase();
     if (/flux[- ._]?2|klein/.test(identity)) return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
-    if (/krea[- ._]?2/.test(identity)) return { modelType: 'krea2-simple', loraPrefix: 'comfyKrea', checkpointField: 'comfyKreaUnet', promptField: 'comfyKreaPrompt' };
     if (/\bflux(?:[ ._-]?1)?\b/.test(identity)) return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
     if (/\bqwen\b/.test(identity)) return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet', promptField: 'comfyPrompt' };
     if (/z[-_ ]?image|\bzit\b/.test(identity)) return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet', promptField: 'comfyPrompt' };
@@ -121,37 +147,11 @@ const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelTy
     return { modelType: 'sd1.5', loraPrefix: 'comfySd15', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
 };
 
-const itemMatchesFamily = (item: CivitaiInventoryItem, family: CivitaiFamily) => {
-    if (family === 'all') return true;
-    const normalizedPath = item.relativePath.replace(/\\/g, '/').toLowerCase();
-    const folders: Record<Exclude<CivitaiFamily, 'all'>, string[]> = {
-        sd15: ['/sd15/', '/sd1.5/'],
-        sdxl: ['/sdxl/'],
-        flux: ['/flux/', '/flux-dev/'],
-        flux2: ['/flux2/'],
-        krea2: ['/krea/'],
-        qwen: ['/qwen/'],
-        'qwen-edit': ['/qwen/'],
-        qwen21: ['/qwen21/'],
-        moss: ['/moss/'],
-        'minimax-h3': ['/h3/'],
-        'zit-base': ['/zit/'],
-        'zit-turbo': ['/zit/'],
-        'ltx-23': ['/ltx2/', '/ltx2_camera_control/'],
-    };
-    if (family === 'ltx-23' && folders[family].some(folder => normalizedPath.includes(folder))) return true;
-    if (item.userFamily) return item.userFamily === family;
-    if (folders[family].some(folder => normalizedPath.includes(folder))) return true;
-    const identity = [item.fileName, item.modelName, item.installedVersionName, item.archiveInfo?.baseModel].filter(Boolean).join(' ').toLowerCase();
-    if (family === 'flux2') return /flux[- ._]?2|klein/.test(identity);
-    if (family === 'krea2') return /krea[- ._]?2/.test(identity);
-    if (family === 'qwen21') return /qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(identity);
-    if (family === 'moss') return /\bmoss(?:image|\b|_)/.test(identity);
-    if (family === 'minimax-h3') return /mini[- ._]*max[- ._]*h3|\bh3(?:\b|_|[a-z])/.test(identity);
-    return false;
-};
+const itemMatchesFamily = inventoryItemMatchesFamily;
 
 const inferItemFamily = (item: CivitaiInventoryItem): ModelFamily => {
+    const flux2 = inventoryFlux2Variant(item);
+    if (flux2) return flux2;
     if (item.userFamily) return item.userFamily;
     const identity = [item.relativePath, item.fileName, item.modelName, item.installedVersionName, item.archiveInfo?.baseModel, item.huggingFaceInfo?.repoId, ...(item.huggingFaceInfo?.tags || [])].filter(Boolean).join(' ').replace(/\\/g, '/').toLowerCase();
     if (/qwen(?:[- ._]*(?:image|edit))*[- ._]*2[._ -]?1(?:\b|_)/.test(identity)) return 'qwen21';
@@ -171,6 +171,8 @@ const inferItemFamily = (item: CivitaiInventoryItem): ModelFamily => {
 
 const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiProvider; focused: boolean; onInventoryChange: (inventory: CivitaiInventory) => void; onItemChange: (item: CivitaiInventoryItem) => void; onClassify: (item: CivitaiInventoryItem, kind: LocalKind, folder: CivitaiModelFolder) => Promise<void>; onUpdate: (item: CivitaiInventoryItem, mode: 'keep' | 'replace') => Promise<{ fileName: string; versionName: string }> }> = React.memo(({ item, provider, focused, onInventoryChange, onItemChange, onClassify, onUpdate }) => {
     const dispatch: AppDispatch = useDispatch();
+    const store = useStore<RootState>();
+    const [useDestinationOpen, setUseDestinationOpen] = useState(false);
     const [preview, setPreview] = useState<string | null>(item.previewPath ? null : item.civitaiPreviewUrl || null);
     const [previewType, setPreviewType] = useState<'image' | 'video'>(item.civitaiPreviewType || inferPreviewType(item.civitaiPreviewUrl));
     const [videoPlaying, setVideoPlaying] = useState(false);
@@ -314,11 +316,12 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
         }
     };
 
-    const useModel = async () => {
+    const useModel = async (destination: 't2i' | 'i2i' = 't2i') => {
+        setUseDestinationOpen(false);
         const modelPath = getComfyRelativePath(item);
         const family = inferItemFamily(item);
         if (family === 'minimax-h3') {
-            window.alert('Select this model or LoRA in Video > Minimax REF2v H3. H3 video models cannot be applied to an image workflow.');
+            window.alert('Select this model or LoRA in Video > Minimax REF2v H3, Ultrafast or MiniMax Advanced. Shared styles are managed in Style Gallery > H3. H3 video models cannot be applied to an image workflow.');
             return;
         }
         const exampleSources: Array<'civitai' | 'archive'> = [
@@ -338,7 +341,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                 const triggers = item.usageMetadata?.triggerWords?.join(', ') || '';
                 if (family === 'moss') {
                     if (current.comfyModelType === 'moss-photo') {
-                        const photo = current.comfyMossPhoto || defaultMossPhotoSettings();
+                        const photo = { ...(current.comfyMossPhoto || defaultMossPhotoSettings()), style: undefined, styleStrength: undefined, useStyleSettings: false };
                         const models = { ...photo.nodes['160'] };
                         if (item.kind === 'lora') {
                             const slots = [1, 2, 3, 4].map(index => ({
@@ -353,7 +356,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                             ...(item.kind === 'lora' && triggers ? { comfyPrompt: triggers, comfyMossPhoto: { ...withMossPhotoPrompt(photo, triggers), nodes: { ...photo.nodes, '160': models } } } : {}),
                         }));
                     } else {
-                    const settings = current.comfyMoss || defaultMossSettings();
+                    const settings = { ...(current.comfyMoss || defaultMossSettings()), style: undefined, styleStrength: undefined, useStyleSettings: false };
                     dispatch(updateOptions({
                         provider: 'comfyui', comfyModelType: 'moss-image',
                         comfyPromptExampleSource: exampleSource,
@@ -407,6 +410,34 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
             setUsageBusy(false);
         }
         const currentState = store.getState();
+        const flux2Family = inventoryFlux2Variant(item);
+        if (flux2Family) {
+            const mode = destination;
+            const modelType = mode === 't2i' ? 'flux2-simple' : 'flux2-edit';
+            const prefix = mode === 't2i' ? 'comfyFlux2' : 'comfyFlux2Edit';
+            const baseModel = item.kind === 'lora' ? getCompatibleBaseModel(modelType, currentState.app.comfyUIObjectInfo, flux2Family) : modelPath;
+            if (!baseModel || inferFlux2Variant(baseModel) !== flux2Family) {
+                window.alert(`No installed ${flux2Family.toUpperCase()} base model was found. Select a compatible model before using this LoRA.`);
+                return;
+            }
+            const triggers = selectedItem.usageMetadata?.triggerWords || [];
+            const updates: Partial<GenerationOptions> = {
+                ...getFlux2UseDefaults(mode),
+                ...getRecommendedSettingUpdates(modelType, selectedItem.usageMetadata, currentState.app.comfyUIObjectInfo),
+                provider: 'comfyui', comfyModelType: modelType,
+                [prefix + 'Unet']: baseModel,
+                [prefix + 'Clip']: flux2Family === 'flux2-9b' ? 'qwen38BFluxKlein9BTE_38b.safetensors'
+                    : mode === 't2i' ? 'qwen3vl_4b_fp8_scaled.safetensors' : 'qwen_3_4b.safetensors',
+                [prefix + 'Vae']: 'flux2-vae.safetensors',
+                [prefix + 'Prompt']: item.kind === 'lora' ? triggers.join(', ') : '',
+                comfyPromptExampleSource: { ...exampleSource, triggerWords: item.kind === 'lora' ? triggers : [] },
+            };
+            if (item.kind === 'lora') Object.assign(updates, { [prefix + 'Lora1Name']: modelPath, [prefix + 'Lora1Strength']: 1 });
+            dispatch(updateOptions(updates));
+            dispatch(setGenerationMode(mode));
+            dispatch(setActiveTab('image-generator'));
+            return;
+        }
         if (workflow.modelType === 'krea2-simple' && currentState.generation.options.comfyModelType === 'krea2-raw') {
             workflow.modelType = 'krea2-raw';
         }
@@ -416,13 +447,23 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
             provider: 'comfyui',
             comfyModelType: workflow.modelType,
             ...recommendedSettings,
+            ...(workflow.modelType === 'krea2-simple' ? {
+                comfyKreaStyle: undefined,
+                comfyKreaStyleStrength: undefined,
+                comfyKreaUseStyleSettings: false,
+            } : {}),
             comfyPromptExampleSource: exampleSources.length ? {
                 ...exampleSource,
                 triggerWords: savedTriggers,
             } : undefined,
         };
         if (item.kind === 'lora') {
-            const compatibleBaseModel = getCompatibleBaseModel(workflow.modelType, currentState.app.comfyUIObjectInfo);
+            const flux2Family = inventoryFlux2Variant(item);
+            const compatibleBaseModel = getCompatibleBaseModel(workflow.modelType, currentState.app.comfyUIObjectInfo, flux2Family);
+            if (workflow.modelType === 'flux2-simple' && flux2Family && !compatibleBaseModel) {
+                window.alert(`No installed ${flux2Family.toUpperCase()} base model was found. Select a compatible model before using this LoRA.`);
+                return;
+            }
             const isQwenLightning = workflow.modelType === 'qwen-t2i-gguf' && /lightning.*(?:4|8)steps|(?:4|8)steps.*lightning/i.test(modelPath);
             if (workflow.modelType === 'qwen-t2i-gguf') {
                 const lightningLora = isQwenLightning ? modelPath : 'QWEN\\Qwen-Image-Lightning-4steps-V2.0.safetensors';
@@ -446,7 +487,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                     comfyKreaUseLora: true,
                     comfyKreaLora1Name: modelPath,
                     comfyKreaLora1Strength: 1,
-                    comfyKreaUnet: 'krea2_raw_fp8_scaled.safetensors',
+                    comfyKreaUnet: workflow.modelType === 'krea2-raw' ? 'krea2_raw_fp8_scaled.safetensors' : 'krea2_turbo_fp8_scaled.safetensors',
                     comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
                     comfyKreaVae: workflow.modelType === 'krea2-raw' ? 'Wan2.1_VAE.safetensors' : 'qwen_image_vae.safetensors',
                     comfyKreaPrompt: savedTriggers.join(', '),
@@ -466,8 +507,23 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
             });
         }
         if (workflow.modelType === 'flux2-simple') {
+            const family = inventoryFlux2Variant(item);
+            const previousFamily = inferFlux2Variant(currentState.generation.options.comfyFlux2Unet || '');
+            let cleared = 0;
+            if (family && item.kind === 'lora') {
+                for (let index = 2; index <= 6; index++) {
+                    const key = `comfyFlux2Lora${index}Name` as keyof GenerationOptions;
+                    const name = currentState.generation.options[key];
+                    if (typeof name !== 'string' || !name) continue;
+                    const variant = inferFlux2Variant(`FLUX2 ${name}`);
+                    if (variant && variant !== family || !variant && previousFamily && previousFamily !== family) {
+                        Object.assign(updates, { [key]: '' }); cleared++;
+                    }
+                }
+            }
+            if (cleared) window.alert(`Switching to ${family?.toUpperCase()} will clear ${cleared} incompatible additional LoRA slot(s).`);
             Object.assign(updates, {
-                comfyFlux2Clip: 'qwen3vl_4b_fp8_scaled.safetensors',
+                comfyFlux2Clip: inventoryFlux2Variant(item) === 'flux2-9b' ? 'qwen38BFluxKlein9BTE_38b.safetensors' : 'qwen3vl_4b_fp8_scaled.safetensors',
                 comfyFlux2Vae: 'flux2-vae.safetensors',
             });
         }
@@ -501,7 +557,14 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
             <div className="p-3 min-w-0 space-y-2">
                 <div className="flex gap-2 justify-between">
                     <div className="min-w-0"><p className="font-bold text-sm text-text-primary truncate" title={item.fileName}>{item.modelName || item.fileName}</p><p className="text-[11px] text-text-muted truncate" title={item.relativePath}>{item.relativePath}</p></div>
-                    <div className="shrink-0 flex items-start gap-1"><button type="button" onClick={useModel} disabled={usageBusy} className="px-2 py-1 rounded bg-accent text-accent-text text-[10px] font-bold disabled:opacity-50">{usageBusy ? 'LOADING...' : 'USE'}</button>{item.hasUpdate && <button type="button" onClick={() => setUpdateDialogOpen(true)} disabled={busy} className="px-2 py-1 rounded bg-amber-400 text-black text-[10px] font-bold disabled:opacity-50">UPDATE</button>}<span className={`h-fit px-2 py-1 rounded text-[10px] font-bold ${item.hasUpdate ? 'bg-amber-400/20 text-amber-400' : isItemReviewed(item) ? 'bg-emerald-500 text-black' : 'bg-bg-tertiary text-text-secondary'}`}>{item.hasUpdate ? 'Update' : item.userOwned ? 'My model' : isItemReviewed(item) ? 'Verified' : 'Review'}</span></div>
+                    <div className="shrink-0 flex items-start gap-1"><button type="button" onClick={() => { if (inventoryFlux2Variant(item)) setUseDestinationOpen(true); else void useModel(); }} disabled={usageBusy} className="px-2 py-1 rounded bg-accent text-accent-text text-[10px] font-bold disabled:opacity-50">{usageBusy ? 'LOADING...' : 'USE'}</button>{item.hasUpdate && <button type="button" onClick={() => setUpdateDialogOpen(true)} disabled={busy} className="px-2 py-1 rounded bg-amber-400 text-black text-[10px] font-bold disabled:opacity-50">UPDATE</button>}<span className={`h-fit px-2 py-1 rounded text-[10px] font-bold ${item.hasUpdate ? 'bg-amber-400/20 text-amber-400' : isItemReviewed(item) ? 'bg-emerald-500 text-black' : 'bg-bg-tertiary text-text-secondary'}`}>{item.hasUpdate ? 'Update' : item.userOwned ? 'My model' : isItemReviewed(item) ? 'Verified' : 'Review'}</span></div>
+                    {useDestinationOpen && <StyleModal title={`Use ${item.modelName || item.fileName}`} onClose={() => setUseDestinationOpen(false)}>
+                        <p className="mb-4 text-sm text-text-secondary">Choose a FLUX2 generator. Its settings, prompt, style and additional LoRAs will be reset before applying this file and its recommendations. Loaded source images and references are kept.</p>
+                        <div className="flex flex-wrap gap-3">
+                            <button type="button" disabled={usageBusy} onClick={() => void useModel('t2i')} className="rounded-lg bg-accent px-5 py-3 font-semibold text-accent-text">Use in t2i</button>
+                            <button type="button" disabled={usageBusy} onClick={() => void useModel('i2i')} className="rounded-lg border border-accent px-5 py-3 font-semibold text-accent">Use in i2i</button>
+                        </div>
+                    </StyleModal>}
                 </div>
                 <p className="text-[11px] text-text-muted">{formatModelSize(item.sizeBytes / 1024)} · {item.installedVersionName || 'Local/custom model'}</p>
                 <div className="flex flex-wrap gap-x-3 gap-y-1">
@@ -547,7 +610,8 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
     );
 });
 
-export const CivitaiInventoryPanel: React.FC<Props> = ({ view, inventory, provider, isScanning, isOrganizing, progress, onScan, onOrganize, onInventoryChange, onItemChange, onClassifyItem, onOpenItem, onUpdateItem, focusedItemPath, organizeMessage, localAccessAvailable }) => {
+export const CivitaiInventoryPanel: React.FC<Props> = ({ view, inventory, provider, isScanning, isOrganizing, progress, onScan, onOrganize, onInventoryChange, onItemChange, onClassifyItem, onOpenItem, onUpdateItem, focusedItemPath, focusRequestId = 0, organizeMessage, localAccessAvailable }) => {
+    const lastFocus = useRef<{ path: string; request: number } | null>(null);
     const [scanKind, setScanKind] = useState<ScanKind>('all');
     const [scanFamily, setScanFamily] = useState<CivitaiFamily>('all');
     const [filter, setFilter] = useState<InventoryFilter>('all');
@@ -560,7 +624,6 @@ export const CivitaiInventoryPanel: React.FC<Props> = ({ view, inventory, provid
     const [displayLimit, setDisplayLimit] = useState(40);
     const normalizedQuery = query.trim().toLowerCase();
     const visibleItems = useMemo(() => inventory.items.filter(item => {
-        if (item.path === focusedItemPath) return true;
         if (filter === 'updates' && !item.hasUpdate) return false;
         if (filter === 'review' && isItemReviewed(item)) return false;
         const effectiveSafety = item.safetyOverride || item.contentSafety;
@@ -601,15 +664,17 @@ export const CivitaiInventoryPanel: React.FC<Props> = ({ view, inventory, provid
     }, [filter, libraryFamily, libraryKind, normalizedQuery, provider, scanFamily, scanKind, toolResultFilter]);
 
     useEffect(() => {
-        if (view !== 'library' || !focusedItemPath) return;
+        if (!focusedItemPath) { lastFocus.current = null; return; }
+        if (view !== 'library' || lastFocus.current?.path === focusedItemPath && lastFocus.current.request === focusRequestId) return;
         const item = inventory.items.find(candidate => candidate.path === focusedItemPath);
         if (!item) return;
+        lastFocus.current = { path: focusedItemPath, request: focusRequestId };
         setQuery('');
         setLibraryFamily('all');
         setLibraryKind('all');
         setFilter('all');
         setDisplayLimit(40);
-    }, [focusedItemPath, inventory.items, view]);
+    }, [focusedItemPath, focusRequestId, inventory.items, view]);
 
     useEffect(() => {
         if (view !== 'library' || !focusedItemPath) return;

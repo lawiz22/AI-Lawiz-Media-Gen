@@ -7,10 +7,12 @@ Create a production prompt independently of video rendering, save its complete p
 ## On this page
 
 - [Video workspace](#video-workspace)
+- [H3 style-aware prompting](#h3-style-aware-prompting)
 - [References and media editing](#references-and-media-editing)
 - [Providers and editable templates](#providers-and-editable-templates)
 - [Original audio and editable lyrics](#original-audio-and-editable-lyrics)
 - [Send to MiniMax H3](#send-to-minimax-h3)
+- [Send to LTX 2.5 Audio-Sync](#send-to-ltx-25-audio-sync)
 - [Library snapshots and restoration](#library-snapshots-and-restoration)
 - [Local draft persistence](#local-draft-persistence)
 - [Screenshots](#screenshots)
@@ -18,7 +20,15 @@ Create a production prompt independently of video rendering, save its complete p
 
 ## Video workspace
 
-- **Video** contains **Video Prompt Generator** (first subtab), **LTX Director**, **Minimax REF2v H3** (violet), **[Ultrafast](minimax-h3.md#ultrafast)** (green), **[MiniMax Advanced](minimax-h3.md#minimax-advanced)** (cyan, FL2V/REF2V), and the independent [Character Swap H3 Shot Planner](character-swap-h3.md) (rose). The prompt generator is not embedded in H3 or required for rendering. Existing Library, TTS and model transfers still open LTX Director inside this workspace.
+- **Video** contains **Video Prompt Generator** (first subtab), **LTX Director**, **[LTX 2.5 Audio-Sync](ltx-and-audio.md#ltx-25-audio-sync)** (orange), **Minimax REF2v H3** (violet), **[Ultrafast](minimax-h3.md#ultrafast)** (green), **[MiniMax Advanced](minimax-h3.md#minimax-advanced)** (cyan, FL2V/REF2V), and the independent [Character Swap H3 Shot Planner](character-swap-h3.md) (rose). The prompt generator is optional for rendering. Existing Library, TTS and model transfers still open LTX Director inside this workspace.
+
+## H3 style-aware prompting
+
+Choose **Prompt style - H3 / MiniMax** to link a Style Gallery entry to prompt generation and H3 transfer. The chosen AI provider receives the style's title, exact triggers, visual directions and notes, plus up to three locally saved LoRA examples when available. No online example search occurs automatically. Era-specific looks should be expressed as concrete camera, lighting, texture, color and motion vocabulary, without replacing the requested subjects or audio.
+
+**Find prompt examples** / **Local prompts** opens the same example dialog as the image generator. **Save all locally** writes the existing desktop LoRA prompt sidecar. **Use prompt** copies an example into the idea, not into models or sampling controls. The desktop app and an indexed My Library LoRA are required for local example storage.
+
+Generated prompts keep their required field structure; the selected trigger leads the visual field body. **Send to H3** carries the style snapshot and actual LoRA into REF2V, Ultrafast or Advanced. Changing style after generation requires regenerating before sending. Saved Library prompts retain the style context and examples. H3 styles remain inactive when LTX Audio-Sync is the destination.
 
 ## References and media editing
 
@@ -45,6 +55,14 @@ Regression checks: `node --test components/VideoWorkspace.test.mjs services/open
 
 - Output can be edited, previewed with colored Picture/Video/Audio/Subject tokens, copied or exported as text. Choose **Minimax REF2v H3**, **Ultrafast**, or **MiniMax Advanced**, then **Send to** that workflow to copy the prompt, optional edited media, target aspect, duration and soundtrack choice to its independent rendering draft. Existing drafts require replacement confirmation. Subsequent generator edits do not affect the renderer, and renderer edits do not affect the generator. Advanced enforces 3 images / 1 video / 2 standalone audios without silently dropping references; choose REF2V for multimodal conditioning. Plain prompts do not require an image.
 - The destination choice is saved locally. Advanced defaults to FL2V and has independent settings. The obsolete Text to video, Character replacement and Audio-driven video preparation cards are no longer shown. Their legacy saved drafts are retained rather than deleted.
+
+## Send to LTX 2.5 Audio-Sync
+
+Use the **generation** template, choose **LTX 2.5 Audio-Sync** in **Send prompt to workflow**, then transfer the result. One edited image and one edited standalone audio are supported; extra references and video/character-replacement inputs are rejected explicitly. Missing inputs can be attached in Audio-Sync after transferring. Apply any pending audio passage first.
+
+The destination keeps an independent prompt/input draft and its own models and seeds. Transfer updates the prompt, aspect and requested duration, **switches local Qwen enhancement off**, and does not overwrite H3/Director. You can explicitly re-enable Qwen in Audio-Sync. Applied audio passages retain the full original, selection and optional words for further editing in its shared H3 waveform/lyrics controls. Later generator edits have no effect until another explicit transfer. Apply the desired audio passage there to synchronize its WAV and duration; transcription is optional and never automatic.
+
+Audio-Sync uses its source workflow's masked audio latent and VAE decode. It does not import H3's **Force original WAV soundtrack** post-render mux setting. See [Audio-Sync behavior and limits](ltx-and-audio.md#ltx-25-audio-sync).
 
 ## Library snapshots and restoration
 

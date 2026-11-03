@@ -6,6 +6,7 @@ import {
 } from './minimaxH3Workflow';
 import { buildH3RenderWorkflow, type H3RenderWorkflow } from './minimaxH3UltrafastWorkflow';
 import { ADVANCED_NODE_SPECS, planAdvancedH3Input } from './minimaxH3AdvancedWorkflow';
+import { appendGalleryStylePrompt } from './styleGallery';
 
 export interface H3Preview { url: string; mime: string; step: number; total: number }
 export interface H3StageVideo { nodeId: string; label: string; videoUrl: string }
@@ -48,7 +49,7 @@ export const minimaxComfyURL = (): string => {
     if (url.search || url.hash || url.username || url.password) throw new Error('Use a ComfyUI base URL without query parameters, fragments or embedded credentials.');
     return url.href.replace(/\/+$/, '');
 };
-const jsonRequest = async (url: string, init: RequestInit = {}): Promise<unknown> => {
+export const jsonRequest = async (url: string, init: RequestInit = {}): Promise<unknown> => {
     const timeout = AbortSignal.timeout(url.endsWith('/upload/image') ? 120000 : 30000);
     const response = await fetch(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout });
     if (!response.ok) throw new Error(`ComfyUI HTTP ${response.status}: ${(await response.text()).slice(0, 1800)}`);
@@ -61,7 +62,7 @@ export const loadH3ObjectInfo = async (signal?: AbortSignal, variant: H3RenderWo
         'ModelPreviewOverrideKJ', 'Power Lora Loader (rgthree)', 'MiniMaxH3ReferencePack', 'MiniMaxH3ReferenceToVideo',
         'BasicGuider', 'RandomNoise', 'KSamplerSelect', 'SamplerCustomAdvanced', 'BetaSamplingScheduler',
         'ExtendIntermediateSigmas', 'VAEDecode', 'VAEDecodeAudio', 'VHS_VideoCombine', 'Display Any (rgthree)',
-        'LoraLoader', 'LoraLoaderModelOnly',
+        'LoraLoader', 'LoraLoaderModelOnly', 'BasicScheduler', 'PrimitiveStringMultiline', 'StringConcatenate',
         ...(variant === 'ultrafast' ? ['LTX_lora_loader', 'ModelAttentionBackend', 'MiniMaxH3SigmaShift',
             'BasicScheduler', 'CreateVideo', 'SaveVideo', 'SpectrumApplyMiniMaxH3', 'RTXVideoSuperResolution'] : []),
         ...(variant === 'advanced' ? ADVANCED_NODE_SPECS.map(spec => spec.classType).concat([
@@ -230,7 +231,10 @@ export const generateMinimaxH3Video = async (
                         currentNode = undefined; report();
                         settled = true; cleanup();
                         onProgress(options.forceOriginalAudio ? 'H3 rendered. Locking the original WAV soundtrack...' : 'H3 video ready.', options.forceOriginalAudio ? 0.9 : 1);
-                        resolve({ videoUrl, ...(videos.size ? { stageVideos: [...videos.values()] } : {}), promptId, workflow, prompt: displayed || resolvedPlan.prompt, promptIsFinal: videoFinishing || !!displayed || options.promptProvider === 'none', seed: options.seed, options: resolvedOptions });
+                        const conditioningPrompt = Object.values(workflow).find(node => ['MiniMaxH3ReferenceToVideo', 'MiniMaxH3ImageToVideo'].includes(node.class_type))?.inputs.prompt;
+                        const fallbackPrompt = typeof conditioningPrompt === 'string' ? conditioningPrompt
+                            : workflow['135'] && resolvedOptions.style ? appendGalleryStylePrompt(resolvedPlan.prompt, resolvedOptions.style) : resolvedPlan.prompt;
+                        resolve({ videoUrl, ...(videos.size ? { stageVideos: [...videos.values()] } : {}), promptId, workflow, prompt: displayed || fallbackPrompt, promptIsFinal: videoFinishing || !!displayed || options.promptProvider === 'none', seed: options.seed, options: resolvedOptions });
                     } else if (status.completed || ending) throw new Error(`H3 finished without a video in ${workflow['119'].class_type} output 119. Check the output format and ComfyUI logs.`);
                 }
             } catch (cause) { fail(cause); }

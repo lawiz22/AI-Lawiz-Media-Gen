@@ -12,6 +12,9 @@ import { DEFAULT_OPENROUTER_MODEL, filterOpenRouterModels, getOpenRouterInputMod
 import { VideoReferenceEditor, useMediaURL } from './VideoReferenceEditor';
 import { buildVideoPromptLibraryItem, restoreMinimaxH3PromptLibraryItem } from '../services/videoPromptLibrary';
 import { MinimaxH3Panel } from './MinimaxH3Panel';
+import { LTXAudioSyncPanel } from './LTXAudioSyncPanel';
+import { LTXRipplePanel } from './LTXRipplePanel';
+import { transferAudioSyncPrompt } from '../services/ltxAudioSyncWorkflow';
 import { AudioLyricsEditor, OriginalAudioSelector } from './VideoAudioControls';
 import { AudioPlayer } from './AudioPlayer';
 import { H3AudioReference } from './H3AudioReference';
@@ -22,6 +25,10 @@ import { getLibraryAssetBlob } from '../services/idbLibraryService';
 import { restoreAdvancedVideoLibraryItem } from '../services/minimaxH3Library';
 import type { AdvancedVideoFinishing } from '../services/minimaxH3AdvancedWorkflow';
 import { VideoReferenceToken as Token, ColoredVideoPrompt as ColoredPrompt } from './VideoPromptText';
+import { VideoPromptStyleControl } from './VideoPromptStyleControl';
+import { useModelInventory } from './useModelInventory';
+import { localStylePromptExamples } from '../services/modelPromptExamples';
+import { h3StyleLoraRemovals } from '../services/h3StyleWorkflow';
 
 const button = 'inline-flex items-center justify-center gap-2 rounded-lg border border-border-primary px-3 py-2 text-sm font-medium transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-40';
 const input = 'w-full rounded-lg border border-border-primary bg-bg-primary p-2.5 text-sm text-text-primary focus:border-accent focus:outline-none';
@@ -70,13 +77,16 @@ export const VideoWorkspace: React.FC<{
     onLeaveDirector: () => void;
     onResetDirector: () => void;
     libraryItem: LibraryItem | null;
-    libraryWorkflow?: H3RenderWorkflow;
+    libraryWorkflow?: H3RenderWorkflow | 'ltx-audio-sync' | 'ltx-ripple-ffaf';
     libraryFinishing?: AdvancedVideoFinishing;
     onLibraryItemLoaded: () => void;
 }> = ({ director, openDirector, onLeaveDirector, onResetDirector, libraryItem, libraryWorkflow: requestedWorkflow, libraryFinishing, onLibraryItemLoaded }) => {
     const dispatch: AppDispatch = useDispatch();
-    const libraryWorkflow: H3RenderWorkflow = requestedWorkflow ?? 'reference';
-    const [tab, setTab] = useState<'prompt' | 'ltx' | 'minimax' | 'ultrafast' | 'advanced' | 'character-swap'>('prompt');
+    const { inventory: styleInventory } = useModelInventory();
+    const libraryWorkflow = requestedWorkflow ?? 'reference';
+    const [tab, setTab] = useState<'prompt' | 'ltx' | 'ltx-audio-sync' | 'ltx-ripple-ffaf' | 'minimax' | 'ultrafast' | 'advanced' | 'character-swap'>('prompt');
+    const [rippleOpened, setRippleOpened] = useState(false);
+    const [audioSyncOpened, setAudioSyncOpened] = useState(false);
     const [swapOpened, setSwapOpened] = useState(false);
     const [draft, setDraft] = useState<VideoPromptDraft>(initialDraft);
     const [ready, setReady] = useState(false);
@@ -109,7 +119,7 @@ export const VideoWorkspace: React.FC<{
         if (loaded.current) return;
         loaded.current = true;
         loadVideoPromptDraft().then(value => {
-            if (value) setDraft({ ...value, workflow: value.workflow === 'advanced' || value.workflow === 'ultrafast' ? value.workflow : 'reference', minimaxLyricsSettings: value.minimaxLyricsSettings ?? { provider: value.provider, model: value.models[value.provider] } });
+            if (value) setDraft({ ...value, workflow: value.workflow === 'advanced' || value.workflow === 'ultrafast' || value.workflow === 'ltx-audio-sync' ? value.workflow : 'reference', minimaxLyricsSettings: value.minimaxLyricsSettings ?? { provider: value.provider, model: value.models[value.provider] } });
             setReady(true);
         }).catch(cause => {
             setStorageError(`Could not restore the video workspace: ${cause instanceof Error ? cause.message : String(cause)}. Reload to retry; saving is disabled to protect the existing draft.`);
@@ -143,7 +153,7 @@ export const VideoWorkspace: React.FC<{
     }, [draft, ready]);
 
     useEffect(() => {
-        if (!libraryItem) return;
+        if (!libraryItem || libraryWorkflow === 'ltx-audio-sync' || libraryWorkflow === 'ltx-ripple-ffaf') return;
         setTab(libraryWorkflow === 'reference' ? 'minimax' : libraryWorkflow);
         if (openDirector) onLeaveDirector();
         if (!ready) return;
@@ -161,6 +171,7 @@ export const VideoWorkspace: React.FC<{
             const renderOptions = sameWorkflow ? options : withH3OriginalAudio({
                 ...defaultH3WorkflowOptions(libraryWorkflow), aspect: options.aspect, duration: options.duration,
                 references: structuredClone(options.references),
+                style: options.style ? structuredClone(options.style) : undefined, styleStrength: options.styleStrength,
             }, options.originalAudioId, options.forceOriginalAudio ?? false);
             if (latestDraft.current.minimaxDrafts[libraryWorkflow] && !window.confirm(`Load this ${libraryFinishing ? 'source video and finishing setup' : 'saved prompt and references'} into ${name}? This replaces only that workflow's draft, not the Library item or Video Prompt Generator.`)) {
                 onLibraryItemLoaded();
@@ -181,9 +192,33 @@ export const VideoWorkspace: React.FC<{
         return () => { cancelled = true; };
     }, [libraryItem, libraryWorkflow, libraryFinishing, ready, onLibraryItemLoaded, openDirector, onLeaveDirector]);
 
+    useEffect(() => {
+        if (!libraryItem || libraryWorkflow !== 'ltx-audio-sync') return;
+        setAudioSyncOpened(true); setTab('ltx-audio-sync');
+        if (openDirector) onLeaveDirector();
+        if (!ready || libraryItem.ltxAudioSyncOptions) return;
+        let cancelled = false;
+        restoreMinimaxH3PromptLibraryItem(libraryItem, getLibraryAssetBlob).then(({ draft: reference }) => {
+            if (cancelled) return;
+            if (latestDraft.current.audioSyncDraft && !window.confirm('Replace the LTX Audio-Sync draft with this saved prompt and its references? Models will be kept and Qwen enhancement switched off.')) return;
+            const transferred = transferAudioSyncPrompt({ ...latestDraft.current, result: reference.prompt, references: reference.references,
+                aspect: reference.aspect, duration: reference.duration, template: reference.template });
+            setDraft(current => ({ ...current, audioSyncDraft: transferred.draft, audioSyncSettings: transferred.settings }));
+            setNotice(transferred.notice);
+        }).catch(cause => { if (!cancelled) setError(`Could not restore Audio-Sync prompt: ${cause instanceof Error ? cause.message : String(cause)}`); })
+            .finally(() => { if (!cancelled) onLibraryItemLoaded(); });
+        return () => { cancelled = true; };
+    }, [libraryItem, libraryWorkflow, ready, openDirector, onLeaveDirector, onLibraryItemLoaded]);
+
+    useEffect(() => {
+        if (!libraryItem || libraryWorkflow !== 'ltx-ripple-ffaf') return;
+        setRippleOpened(true); setTab('ltx-ripple-ffaf');
+        if (openDirector) onLeaveDirector();
+    }, [libraryItem, libraryWorkflow, openDirector, onLeaveDirector]);
+
     const update = (patch: Partial<VideoPromptDraft>) => setDraft(current => ({ ...current, ...patch }));
     const changeSoundtrack = (originalAudioId: string | undefined, forceOriginalAudio: boolean) => update({ originalAudioId, forceOriginalAudio });
-    const chooseTab = (next: typeof tab) => { setTab(next); if (next === 'character-swap') setSwapOpened(true); if (next !== 'ltx' && openDirector) onLeaveDirector(); };
+    const chooseTab = (next: typeof tab) => { setTab(next); if (next === 'ltx-ripple-ffaf') setRippleOpened(true); if (next === 'ltx-audio-sync') setAudioSyncOpened(true); if (next === 'character-swap') setSwapOpened(true); if (next !== 'ltx' && openDirector) onLeaveDirector(); };
     const changeReference = (id: string, patch: Partial<VideoReference>) => setDraft(current => ({
         ...current, references: current.references.map(ref => ref.id === id ? { ...ref, ...patch } : ref),
     }));
@@ -216,7 +251,9 @@ export const VideoWorkspace: React.FC<{
         try {
             const inputs = captureVideoPromptInputs(draft);
             if (hasPendingAudio) throw new Error('Apply the audio selection first. The full song or an older excerpt will not be sent to the prompt model.');
-            const result = await generateVideoPrompt(draft);
+            inputs.styleExamples = inputs.style && inputs.workflow !== 'ltx-audio-sync'
+                ? await localStylePromptExamples(styleInventory, inputs.style.lora, inputs.style.libraryLink?.path) : undefined;
+            const result = await generateVideoPrompt({ ...draft, ...inputs });
             update({ result, generatedInputs: inputs, generatedInputsProvenance: 'generation' });
             setEditOutput(false);
             generated = { text: result, inputs };
@@ -238,6 +275,15 @@ export const VideoWorkspace: React.FC<{
         try {
             const prompt = validateVideoPromptOutput(draft.result, draft.template);
             if (hasPendingAudio) throw new Error('Apply the audio selection before transferring it to H3.');
+            if (draft.workflow === 'ltx-audio-sync') {
+                if (draft.audioSyncDraft && !window.confirm('Replace the existing LTX Audio-Sync draft? Models will be kept and Qwen enhancement switched off.')) return;
+                const transferred = transferAudioSyncPrompt({ ...draft, result: prompt });
+                update({ audioSyncDraft: transferred.draft, audioSyncSettings: transferred.settings });
+                chooseTab('ltx-audio-sync'); setNotice(transferred.notice); return;
+            }
+            if (draft.generatedInputs && JSON.stringify(draft.generatedInputs.style || null) !== JSON.stringify(draft.style || null)) {
+                throw new Error('The selected style changed since this prompt was generated. Generate it again before sending, so the wording and H3 LoRA stay matched.');
+            }
             const destination = draft.workflow === 'advanced' || draft.workflow === 'ultrafast' ? draft.workflow : 'reference';
             const reference = {
                 id: crypto.randomUUID(), workflow: destination, prompt,
@@ -250,6 +296,10 @@ export const VideoWorkspace: React.FC<{
                 ...withH3OriginalAudio((destination === 'advanced' ? draft.advancedH3Options : destination === 'ultrafast' ? draft.ultrafastH3Options : draft.minimaxH3Options) || defaultH3WorkflowOptions(destination), draft.originalAudioId, draft.forceOriginalAudio ?? false),
                 aspect: h3AspectFromPrompt(draft.aspect), duration: draft.duration,
             };
+            const style = draft.generatedInputs?.style || draft.style;
+            options.loras = h3StyleLoraRemovals(options, style);
+            options.style = style ? structuredClone(style) : undefined;
+            options.styleStrength = undefined;
             update({ minimaxDrafts: { ...draft.minimaxDrafts, [destination]: reference },
                 ...(destination === 'advanced' ? { advancedH3Options: options } : destination === 'ultrafast' ? { ultrafastH3Options: options } : { minimaxH3Options: options }),
             });
@@ -282,6 +332,8 @@ export const VideoWorkspace: React.FC<{
                 {([
                     { id: 'prompt', label: 'Video Prompt Generator', color: 'border-sky-400/60 text-sky-300', active: 'bg-sky-400/15' },
                     { id: 'ltx', label: 'LTX Director', color: 'border-amber-400/60 text-amber-300', active: 'bg-amber-400/15' },
+                    { id: 'ltx-audio-sync', label: 'LTX 2.5 Audio-Sync', color: 'border-orange-400/60 text-orange-300', active: 'bg-orange-400/15' },
+                    { id: 'ltx-ripple-ffaf', label: 'LTX-Ripple-FFAF', color: 'border-teal-400/60 text-teal-300', active: 'bg-teal-400/15' },
                     { id: 'minimax', label: 'Minimax REF2v H3', color: 'border-violet-400/60 text-violet-300', active: 'bg-violet-400/15' },
                     { id: 'ultrafast', label: 'Ultrafast', color: 'border-emerald-400/60 text-emerald-300', active: 'bg-emerald-400/15' },
                     { id: 'advanced', label: 'MiniMax Advanced', color: 'border-cyan-400/60 text-cyan-300', active: 'bg-cyan-400/15' },
@@ -298,6 +350,23 @@ export const VideoWorkspace: React.FC<{
         {notice && <p role="status" className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 p-3 text-sm text-emerald-300">{notice}</p>}
 
         <div hidden={tab !== 'character-swap'}>{swapOpened && <CharacterSwapPanel />}</div>
+        <React.Activity mode={tab === 'ltx-ripple-ffaf' ? 'visible' : 'hidden'}>{rippleOpened && <LTXRipplePanel
+            draft={draft.rippleDraft} settings={draft.rippleSettings} ready={ready}
+            onDraftChange={rippleDraft => setDraft(current => ({ ...current, rippleDraft }))}
+            onSettingsChange={rippleSettings => setDraft(current => ({ ...current, rippleSettings }))}
+            libraryItem={libraryWorkflow === 'ltx-ripple-ffaf' ? libraryItem : null}
+            onLibraryItemLoaded={onLibraryItemLoaded}
+        />}</React.Activity>
+        <React.Activity mode={tab === 'ltx-audio-sync' ? 'visible' : 'hidden'}>{audioSyncOpened && <LTXAudioSyncPanel
+            draft={draft.audioSyncDraft} settings={draft.audioSyncSettings} ready={ready}
+            lyricsProvider={draft.audioSyncLyricsSettings?.provider ?? 'openrouter'}
+            lyricsModel={draft.audioSyncLyricsSettings?.model ?? DEFAULT_OPENROUTER_MODEL}
+            onLyricsSettingsChange={(provider, model) => setDraft(current => ({ ...current, audioSyncLyricsSettings: { provider, model: model ?? (provider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-2.5-flash') } }))}
+            onDraftChange={audioSyncDraft => setDraft(current => ({ ...current, audioSyncDraft }))}
+            onSettingsChange={audioSyncSettings => setDraft(current => ({ ...current, audioSyncSettings }))}
+            libraryItem={libraryWorkflow === 'ltx-audio-sync' ? libraryItem : null}
+            onLibraryItemLoaded={onLibraryItemLoaded}
+        />}</React.Activity>
         <React.Activity mode={tab === 'ltx' ? 'visible' : 'hidden'}>
             {!openDirector && <div className="mb-3 flex justify-end"><button type="button" className={`${button} text-red-300`} onClick={onResetDirector}>Reset LTX Director</button></div>}
             {director}
@@ -312,7 +381,7 @@ export const VideoWorkspace: React.FC<{
                                 <button type="button" disabled={!ready || busy} className={button} onClick={() => setSettingsOpen(value => !value)} aria-expanded={settingsOpen}>Templates</button>
                                 <button type="button" disabled={!ready || busy || librarySaving} className={`${button} text-red-300`} onClick={() => {
                                     if (window.confirm('Clear the current idea, references and generated prompt? Templates, provider settings and Minimax drafts will be kept.')) {
-                                        update({ idea: '', references: [], result: '', generatedInputs: undefined, generatedInputsProvenance: undefined }); setLibrarySaved(false);
+                                        update({ idea: '', references: [], result: '', style: undefined, styleExamples: undefined, generatedInputs: undefined, generatedInputsProvenance: undefined }); setLibrarySaved(false);
                                     }
                                 }}>Clear</button>
                             </div>
@@ -354,6 +423,9 @@ export const VideoWorkspace: React.FC<{
                                 <label className="space-y-1 text-sm">Duration (seconds)<input type="number" min={1} max={120} step={1} className={input} value={draft.duration} onChange={event => update({ duration: Number(event.target.value) })} /></label>
                             </div>
                             <label className="block space-y-2 text-sm font-medium">Your idea<textarea ref={ideaRef} className={`${input} min-h-40 resize-y`} placeholder="Describe the scene, action, dialogue and sound. Click a reference badge to insert its token..." value={draft.idea} onChange={event => update({ idea: event.target.value })} /></label>
+                            <VideoPromptStyleControl style={draft.style} disabled={!ready || busy} active={draft.workflow !== 'ltx-audio-sync'}
+                                onSelect={style => update({ style, styleExamples: undefined })}
+                                onUsePrompt={idea => update({ idea })} />
                             <div className="flex flex-wrap gap-2">{draft.references.map(ref => <button type="button" key={ref.id} onClick={() => insertToken(ref)}><Token text={referenceToken(ref)} /></button>)}</div>
                             <OriginalAudioSelector references={draft.references} value={draft.originalAudioId} forced={draft.forceOriginalAudio}
                                 onChange={originalAudioId => changeSoundtrack(originalAudioId, originalAudioId !== undefined)} onForceChange={(forced, originalAudioId) => changeSoundtrack(originalAudioId, forced)} />
@@ -426,9 +498,9 @@ export const VideoWorkspace: React.FC<{
                         <p className="text-xs text-text-secondary">Includes originals and edited media, reference roles, idea, model and editable canvases. Edits to the output can be saved as a new Library item. Older prompts without a generation snapshot save the current setup.</p>
                     </div>
                     <div className="space-y-3 border-t border-border-primary pt-4">
-                        <label className="block space-y-1 text-sm">Send prompt to workflow<select className={input} disabled={busy || !ready} value={draft.workflow} onChange={event => update({ workflow: event.target.value === 'advanced' ? 'advanced' : event.target.value === 'ultrafast' ? 'ultrafast' : 'reference' })}>{VIDEO_WORKFLOWS.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label>
-                        <button type="button" className={`${button} w-full ${draft.workflow === 'advanced' ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300' : draft.workflow === 'ultrafast' ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-violet-400/50 bg-violet-400/10 text-violet-300'}`} disabled={!draft.result || busy || !ready || hasPendingAudio} onClick={transfer}>Send to {h3WorkflowName(draft.workflow === 'advanced' || draft.workflow === 'ultrafast' ? draft.workflow : 'reference')}</button>
-                        <p className="text-xs text-text-secondary">Copies the prompt, optional references, aspect ratio, duration and soundtrack selection. Each workflow keeps its own draft and settings. In Advanced, select REF2V for multimodal references or FL2V for first/last frames.</p>
+                        <label className="block space-y-1 text-sm">Send prompt to workflow<select className={input} disabled={busy || !ready} value={draft.workflow} onChange={event => update({ workflow: VIDEO_WORKFLOWS.find(workflow => workflow.id === event.target.value)?.id || 'reference' })}>{VIDEO_WORKFLOWS.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label>
+                        <button type="button" className={`${button} w-full ${draft.workflow === 'advanced' ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300' : draft.workflow === 'ultrafast' ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-violet-400/50 bg-violet-400/10 text-violet-300'}`} disabled={!draft.result || busy || !ready || hasPendingAudio} onClick={transfer}>Send to {draft.workflow === 'ltx-audio-sync' ? 'LTX 2.5 Audio-Sync' : h3WorkflowName(draft.workflow === 'advanced' || draft.workflow === 'ultrafast' ? draft.workflow : 'reference')}</button>
+                        <p className="text-xs text-text-secondary">Copies the prompt, references, aspect ratio and duration into an independent draft. LTX Audio-Sync accepts one image and one audio (no video references), keeps model settings and switches Qwen enhancement off. You can explicitly re-enable it afterward. In Advanced, select REF2V for multimodal references or FL2V for first/last frames.</p>
                     </div>
                 </section>
             </div>

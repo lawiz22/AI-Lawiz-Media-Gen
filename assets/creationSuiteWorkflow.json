@@ -1,0 +1,632 @@
+{
+    "1":  {
+              "inputs":  {
+                             "unet_name":  "dirtyMoss_bf16.safetensors",
+                             "weight_dtype":  "default"
+                         },
+              "class_type":  "UNETLoader",
+              "_meta":  {
+                            "title":  "Kromoss UNET (Load Diffusion Model)"
+                        }
+          },
+    "3":  {
+              "inputs":  {
+                             "warmup_steps":  8,
+                             "tail_actual_steps":  2,
+                             "window_size":  2,
+                             "flex_window":  0.75,
+                             "max_consecutive_forecasts":  2,
+                             "history_points":  8,
+                             "chebyshev_degree":  4,
+                             "ridge_lambda":  0.1,
+                             "blend_weight":  0.5,
+                             "cache_device":  "main_device",
+                             "force_actual_on_control":  true,
+                             "debug":  false,
+                             "model":  [
+                                           "1",
+                                           0
+                                       ]
+                         },
+              "class_type":  "SpectrumMOSSImageManual",
+              "_meta":  {
+                            "title":  "Spectrum: 2.2× faster (Ctrl+B to bypass)"
+                        }
+          },
+    "4":  {
+              "inputs":  {
+                             "double_layers":  "",
+                             "single_layers":  "22",
+                             "start_percent":  0,
+                             "end_percent":  1,
+                             "model":  [
+                                           "3",
+                                           0
+                                       ]
+                         },
+              "class_type":  "SkipLayerGuidanceDiTSimple",
+              "_meta":  {
+                            "title":  "Skip Layer Guidance: layer 22 (official)"
+                        }
+          },
+    "5":  {
+              "inputs":  {
+                             "clip_name":  "qwen3.5_9b_int8_convrot.safetensors",
+                             "type":  "moss_image",
+                             "device":  "default"
+                         },
+              "class_type":  "CLIPLoader",
+              "_meta":  {
+                            "title":  "Text Encoder (type: moss_image)"
+                        }
+          },
+    "6":  {
+              "inputs":  {
+                             "vae_name":  "flux2-vae.safetensors"
+                         },
+              "class_type":  "VAELoader",
+              "_meta":  {
+                            "title":  "VAE"
+                        }
+          },
+    "9":  {
+              "inputs":  {
+                             "width":  [
+                                           "14",
+                                           0
+                                       ],
+                             "height":  [
+                                            "14",
+                                            1
+                                        ],
+                             "batch_size":  1
+                         },
+              "class_type":  "EmptyFlux2LatentImage",
+              "_meta":  {
+                            "title":  "Flux vide vers latent"
+                        }
+          },
+    "10":  {
+               "inputs":  {
+                              "seed":  500697199210746,
+                              "steps":  50,
+                              "cfg":  3,
+                              "sampler_name":  "dpmpp_2m_sde",
+                              "scheduler":  "sgm_uniform",
+                              "denoise":  1,
+                              "model":  [
+                                            "33",
+                                            0
+                                        ],
+                              "positive":  [
+                                               "30",
+                                               0
+                                           ],
+                              "negative":  [
+                                               "30",
+                                               1
+                                           ],
+                              "latent_image":  [
+                                                   "9",
+                                                   0
+                                               ]
+                          },
+               "class_type":  "KSampler",
+               "_meta":  {
+                             "title":  "KSampler: 50 steps · CFG 3"
+                         }
+           },
+    "11":  {
+               "inputs":  {
+                              "samples":  [
+                                              "10",
+                                              0
+                                          ],
+                              "vae":  [
+                                          "6",
+                                          0
+                                      ]
+                          },
+               "class_type":  "VAEDecode",
+               "_meta":  {
+                             "title":  "VAE Decode"
+                         }
+           },
+    "12":  {
+               "inputs":  {
+                              "filename_prefix":  "kromoss/kromoss-50step-spectrum",
+                              "images":  [
+                                             "11",
+                                             0
+                                         ]
+                          },
+               "class_type":  "SaveImage",
+               "_meta":  {
+                             "title":  "Enregistrer Image"
+                         }
+           },
+    "14":  {
+               "inputs":  {
+                              "aspect_ratio":  "9:16 (Portrait Widescreen)",
+                              "megapixels":  1.5,
+                              "multiple":  8
+                          },
+               "class_type":  "ResolutionSelector",
+               "_meta":  {
+                             "title":  "Sélecteur de résolution"
+                         }
+           },
+    "20":  {
+               "inputs":  {
+                              "value":  "wearing a camo cap , doing the middle finger"
+                          },
+               "class_type":  "PrimitiveStringMultiline",
+               "_meta":  {
+                             "title":  "✏️ YOUR PROMPT · Reference ON: only what to change (pose, clothes) · OFF: full detailed description"
+                         }
+           },
+    "21":  {
+               "inputs":  {
+                              "value":  "beach-day"
+                          },
+               "class_type":  "PrimitiveString",
+               "_meta":  {
+                             "title":  "🏷️ Scene word (Cheap phone only)"
+                         }
+           },
+    "22":  {
+               "inputs":  {
+                              "string_a":  "modern sharp iPhone 16 Pro main camera photo of a 42-year-old very attractive soccer mom",
+                              "string_b":  [
+                                               "20",
+                                               0
+                                           ],
+                              "delimiter":  " "
+                          },
+               "class_type":  "StringConcatenate",
+               "_meta":  {
+                             "title":  "Modern: opener + beauty clause + your text"
+                         }
+           },
+    "23":  {
+               "inputs":  {
+                              "string_a":  [
+                                               "22",
+                                               0
+                                           ],
+                              "string_b":  "The image has the crisp but natural look of a modern iPhone photo: Smart HDR balancing bright highlights and shadowed faces, Photographic Styles warmth, slightly over-sharpened fine detail, natural skin texture with visible pores and faint freckles, accurate colors, mild noise in the shadows, shallow natural depth from the main lens iPhone portrait mode.",
+                              "delimiter":  " "
+                          },
+               "class_type":  "StringConcatenate",
+               "_meta":  {
+                             "title":  "Modern: + closing block"
+                         }
+           },
+    "24":  {
+               "inputs":  {
+                              "string":  [
+                                             "26",
+                                             0
+                                         ],
+                              "find":  "[SCENE]",
+                              "replace":  [
+                                              "21",
+                                              0
+                                          ]
+                          },
+               "class_type":  "StringReplace",
+               "_meta":  {
+                             "title":  "Cheap: fill [SCENE] with Scene word"
+                         }
+           },
+    "25":  {
+               "inputs":  {
+                              "string_a":  "Cheap phone iPhone grainy amateur of a 42-year-old very attractive soccer mom,",
+                              "string_b":  [
+                                               "20",
+                                               0
+                                           ],
+                              "delimiter":  " "
+                          },
+               "class_type":  "StringConcatenate",
+               "_meta":  {
+                             "title":  "Cheap: opener + beauty clause + your text"
+                         }
+           },
+    "26":  {
+               "inputs":  {
+                              "string_a":  [
+                                               "25",
+                                               0
+                                           ],
+                              "string_b":  "Shot on a cheap iPhone, heavy digital grain, slight noise and compression artifacts, imperfect focus, subtle motion softness, realistic skin texture, accurate anatomy, authentic amateur [SCENE] footage.",
+                              "delimiter":  " "
+                          },
+               "class_type":  "StringConcatenate",
+               "_meta":  {
+                             "title":  "Cheap: + closing block"
+                         }
+           },
+    "27":  {
+               "inputs":  {
+                              "switch":  true,
+                              "on_false":  [
+                                               "24",
+                                               0
+                                           ],
+                              "on_true":  [
+                                              "23",
+                                              0
+                                          ]
+                          },
+               "class_type":  "ComfySwitchNode",
+               "_meta":  {
+                             "title":  "🎛️ STYLE: ON = Modern iPhone · OFF = Cheap phone"
+                         }
+           },
+    "28":  {
+               "inputs":  {
+                              "source":  [
+                                             "27",
+                                             0
+                                         ]
+                          },
+               "class_type":  "PreviewAny",
+               "_meta":  {
+                             "title":  "👁️ FINAL PROMPT (what the model sees)"
+                         }
+           },
+    "30":  {
+               "inputs":  {
+                              "prompt":  [
+                                             "27",
+                                             0
+                                         ],
+                              "negative_prompt":  "",
+                              "image_weight":  1,
+                              "vision_megapixels":  1,
+                              "system_prompt":  "",
+                              "print_prompt":  false,
+                              "clip":  [
+                                           "5",
+                                           0
+                                       ],
+                              "image":  [
+                                            "34",
+                                            0
+                                        ]
+                          },
+               "class_type":  "TextEncodeMOSSImageVision",
+               "_meta":  {
+                             "title":  "🖼️ Vision Encode: prompt + reference (negative: leave empty)"
+                         }
+           },
+    "31":  {
+               "inputs":  {
+                              "image":  ""
+                          },
+               "class_type":  "LoadImage",
+               "_meta":  {
+                             "title":  "🖼️ Reference image"
+                         }
+           },
+    "33":  {
+               "inputs":  {
+                              "max_resolution":  768,
+                              "jpeg_quality":  80,
+                              "suppress_default_preview":  true,
+                              "preview_frames":  1,
+                              "preview_fps":  12,
+                              "tiny_vae":  "TAE_Flux2_AcademiaSD.safetensors",
+                              "model":  [
+                                            "4",
+                                            0
+                                        ]
+                          },
+               "class_type":  "ModelPreviewOverrideKJ",
+               "_meta":  {
+                             "title":  "👁️ Model Preview Override (live preview)"
+                         }
+           },
+    "34":  {
+               "inputs":  {
+                              "switch":  true,
+                              "on_true":  [
+                                              "31",
+                                              0
+                                          ]
+                          },
+               "class_type":  "ComfySwitchNode",
+               "_meta":  {
+                             "title":  "🖼️ REFERENCE: ON = steer with this photo (recommended) · OFF = text only"
+                         }
+           },
+    "101":  {
+                "inputs":  {
+                               "unet_name":  "qwen_image_2.1_int8_convrot.safetensors",
+                               "weight_dtype":  "default"
+                           },
+                "class_type":  "UNETLoader",
+                "_meta":  {
+                              "title":  "Charger Modèle Diffusion"
+                          }
+            },
+    "102":  {
+                "inputs":  {
+                               "clip_name":  "qwen3vl_8b_int8_convrot.safetensors",
+                               "type":  "qwen_image",
+                               "device":  "default"
+                           },
+                "class_type":  "CLIPLoader",
+                "_meta":  {
+                              "title":  "Charger CLIP"
+                          }
+            },
+    "103":  {
+                "inputs":  {
+                               "vae_name":  "qwen_image_2.1_vae_bf16.safetensors"
+                           },
+                "class_type":  "VAELoader",
+                "_meta":  {
+                              "title":  "Charger VAE"
+                          }
+            },
+    "104":  {
+                "inputs":  {
+                               "sage_attention":  "auto",
+                               "allow_compile":  true,
+                               "model":  [
+                                             "101",
+                                             0
+                                         ]
+                           },
+                "class_type":  "PathchSageAttentionKJ",
+                "_meta":  {
+                              "title":  "Patch Sage Attention KJ"
+                          }
+            },
+    "105":  {
+                "inputs":  {
+                               "lora_name":  "qwen21\\bfs_head_v1.1_qwen_2.1.safetensors",
+                               "strength_model":  0.9,
+                               "model":  [
+                                             "104",
+                                             0
+                                         ]
+                           },
+                "class_type":  "LoraLoaderModelOnly",
+                "_meta":  {
+                              "title":  "LoRA · BFS head"
+                          }
+            },
+    "106":  {
+                "inputs":  {
+                               "lora_name":  "qwen21\\p_qwen_image_2.1_8step_v0.1.safetensors",
+                               "strength_model":  1,
+                               "model":  [
+                                             "105",
+                                             0
+                                         ]
+                           },
+                "class_type":  "LoraLoaderModelOnly",
+                "_meta":  {
+                              "title":  "LoRA · 8-step"
+                          }
+            },
+    "107":  {
+                "inputs":  {
+                               "multiplier":  0.7,
+                               "model":  [
+                                             "106",
+                                             0
+                                         ]
+                           },
+                "class_type":  "RescaleCFG",
+                "_meta":  {
+                              "title":  "RescaleCFG"
+                          }
+            },
+    "108":  {
+                "inputs":  {
+                               "device":  "auto",
+                               "dtype":  "default",
+                               "model":  [
+                                             "107",
+                                             0
+                                         ]
+                           },
+                "class_type":  "QwenImage21Cache",
+                "_meta":  {
+                              "title":  "Cache Qwen Image 2.1"
+                          }
+            },
+    "110":  {
+                "inputs":  {
+                               "prompt":  "head_swap: start with \u003cimage1\u003e as the base image, keeping its lighting, environment, and background, and her outfit. remove the head from \u003cimage1\u003e completely and replace it with the head from \u003cimage2\u003e, strictly preserving the hair, eye color, nose structure from \u003cimage2\u003e. copy the direction of the eye, head rotation, micro expressions from \u003cimage1\u003e. the face stays the same size and position in the frame, skin texture and lighting on the face matching the scene, high quality, sharp details, 4k",
+                               "negative_prompt":  "airbrushed skin, plastic skin, pasted-on cutout, sticker edge, white halo, dark halo, visible seam at the neck, mismatched skin tone between face and neck, floating feet, missing contact shadow, detached shadow, mismatched perspective, mismatched scale, studio lighting, dramatic rim light, beauty lighting, excessive cleavage, transparent clothing, oversharpened subject, clean digital subject against a noisy background, pursed lips, kissy face, duck face, middle finger, hand covering eyes, hand covering nose, extra limbs, deformed hands, extra fingers, fused fingers, duplicate person, altered body proportions, artificial pose, inconsistent motion blur",
+                               "resolution":  0,
+                               "clip":  [
+                                            "102",
+                                            0
+                                        ],
+                               "images.image_1":  [
+                                                      "111",
+                                                      0
+                                                  ],
+                               "images.image_2":  [
+                                                      "112",
+                                                      0
+                                                  ],
+                               "vae":  [
+                                           "103",
+                                           0
+                                       ]
+                           },
+                "class_type":  "TextEncodeQwenImage21",
+                "_meta":  {
+                              "title":  "Prompt · BFS head swap + new pose / expression ⏱ 14.5s"
+                          }
+            },
+    "111":  {
+                "inputs":  {
+                               "image":  ""
+                           },
+                "class_type":  "LoadImage",
+                "_meta":  {
+                              "title":  "Image 1 · base photo (pose + scene)"
+                          }
+            },
+    "112":  {
+                "inputs":  {
+                               "image":  ""
+                           },
+                "class_type":  "LoadImage",
+                "_meta":  {
+                              "title":  "Image 2 · face / head source ⏱ 0.1s"
+                          }
+            },
+    "115":  {
+                "inputs":  {
+                               "aspect_ratio":  "3:4 (Portrait Standard)",
+                               "megapixels":  1.5,
+                               "multiple":  32
+                           },
+                "class_type":  "ResolutionSelector",
+                "_meta":  {
+                              "title":  "Sélecteur de résolution ⏱ 0.0s"
+                          }
+            },
+    "116":  {
+                "inputs":  {
+                               "width":  [
+                                             "115",
+                                             0
+                                         ],
+                               "height":  [
+                                              "115",
+                                              1
+                                          ],
+                               "batch_size":  1
+                           },
+                "class_type":  "EmptyLatentImage",
+                "_meta":  {
+                              "title":  "Image Latente Vide ⏱ 0.0s"
+                          }
+            },
+    "117":  {
+                "inputs":  {
+                               "switch":  true,
+                               "on_false":  [
+                                                "110",
+                                                2
+                                            ],
+                               "on_true":  [
+                                               "116",
+                                               0
+                                           ]
+                           },
+                "class_type":  "ComfySwitchNode",
+                "_meta":  {
+                              "title":  "Size source: ON = Resolution Selector · OFF = Image 1 ⏱ 0.0s"
+                          }
+            },
+    "120":  {
+                "inputs":  {
+                               "seed":  43,
+                               "steps":  20,
+                               "cfg":  3,
+                               "sampler_name":  "res_multistep",
+                               "scheduler":  "sgm_uniform",
+                               "denoise":  1,
+                               "model":  [
+                                             "141",
+                                             0
+                                         ],
+                               "positive":  [
+                                                "110",
+                                                0
+                                            ],
+                               "negative":  [
+                                                "110",
+                                                1
+                                            ],
+                               "latent_image":  [
+                                                    "117",
+                                                    0
+                                                ]
+                           },
+                "class_type":  "KSampler",
+                "_meta":  {
+                              "title":  "KSampler ⏱ 6m23.4s"
+                          }
+            },
+    "130":  {
+                "inputs":  {
+                               "samples":  [
+                                               "120",
+                                               0
+                                           ],
+                               "vae":  [
+                                           "103",
+                                           0
+                                       ]
+                           },
+                "class_type":  "VAEDecode",
+                "_meta":  {
+                              "title":  "VAE Decode ⏱ 1.3s"
+                          }
+            },
+    "131":  {
+                "inputs":  {
+                               "filename_prefix":  "qwen-2.1/bfs-pose-expr",
+                               "images":  [
+                                              "130",
+                                              0
+                                          ]
+                           },
+                "class_type":  "SaveImage",
+                "_meta":  {
+                              "title":  "Enregistrer Image ⏱ 1.6s"
+                          }
+            },
+    "141":  {
+                "inputs":  {
+                               "max_resolution":  768,
+                               "jpeg_quality":  80,
+                               "suppress_default_preview":  true,
+                               "preview_frames":  1,
+                               "preview_fps":  12,
+                               "tiny_vae":  "none",
+                               "model":  [
+                                             "108",
+                                             0
+                                         ]
+                           },
+                "class_type":  "ModelPreviewOverrideKJ",
+                "_meta":  {
+                              "title":  "👁️ B · Model Preview Override (Qwen 2.1 tiny VAE via core)"
+                          }
+            },
+    "224":  {
+                "inputs":  {
+                               "compare_view":  {
+                                                    "__value__":  [
+                                                                      "",
+                                                                      ""
+                                                                  ]
+                                                },
+                               "image_a":  [
+                                               "111",
+                                               0
+                                           ],
+                               "image_b":  [
+                                               "131",
+                                               0
+                                           ]
+                           },
+                "class_type":  "ImageCompare",
+                "_meta":  {
+                              "title":  "🔍 B · Compare: original (A) vs result (B) ⏱ 0.8s"
+                          }
+            }
+}

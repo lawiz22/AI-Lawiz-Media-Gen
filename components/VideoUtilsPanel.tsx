@@ -29,6 +29,8 @@ const VIDEO_UTILS_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     colors: createAccentStyle('#4ade80', '#86efac', '#16a34a'),
     'resize-crop': createAccentStyle('#facc15', '#fde047', '#ca8a04'),
     'voice-recorder': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
+    outpaint: createAccentStyle('#f66744', '#ff957b', '#df4e2c'),
+    upscale: createAccentStyle('#a3e635', '#bef264', '#65a30d'),
 };
 
 // --- Color Naming Utilities (Client-Side) ---
@@ -230,10 +232,13 @@ interface SubTabsProps {
 }
 
 const SubTabs: React.FC<SubTabsProps> = ({ tabs, activeTab, onTabClick }) => (
-    <div className="flex flex-wrap items-center border-b-2 border-border-primary mb-8 -mt-2">
+    <div role="tablist" aria-label="Tools" className={`flex flex-wrap items-center border-b-2 border-border-primary ${activeTab === 'outpaint' || activeTab === 'upscale' ? '' : 'mb-8 -mt-2'}`}>
         {tabs.map(tab => (
             <button
                 key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
                 onClick={() => onTabClick(tab.id)}
                 className={`px-4 py-2 text-sm font-semibold transition-colors duration-200 border-b-2 ${
                     activeTab === tab.id
@@ -1733,6 +1738,8 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
         { id: 'reference-maker', label: 'Reference Maker' },
         { id: 'colors', label: 'Color Palette Extractor' },
         { id: 'resize-crop', label: 'Resize & Crop' },
+        { id: 'outpaint', label: 'Outpaint' },
+        { id: 'upscale', label: 'Upscale' },
         { id: 'voice-recorder', label: 'Voice Recorder' },
     ];
 
@@ -2026,11 +2033,11 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
             </div>
 
             <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-             <div className="mt-8 pt-4 border-t border-danger-bg">
+             {activeSubTab !== 'outpaint' && activeSubTab !== 'upscale' && <div className="mt-8 pt-4 border-t border-danger-bg">
                 <button onClick={onReset} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors">
                     <ResetIcon className="w-5 h-5" /> Reset All Media Tools
                 </button>
-            </div>
+            </div>}
         </div>
     );
 };

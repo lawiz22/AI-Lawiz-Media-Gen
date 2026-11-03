@@ -96,7 +96,7 @@ export const AudioLyricsEditor: React.FC<{
                 <label className="text-xs">Transcription model<input aria-label="Transcription model" className={input} value={model} disabled={busy} onChange={event => onSettingsChange(provider, event.target.value)} /></label>
             </div>}
             <p className="text-[11px] text-text-secondary">{provider} / {model}. Transcribe sends only the current audio file to this provider using Connection Settings and may incur API charges. No web lyrics lookup. Nothing is requested automatically by Next.</p>
-            {requireAppliedPassage && !reference.audioSelection && <p role="alert" className="text-xs text-amber-300">Apply the desired audio passage first. The full original will not be sent for transcription while the soundtrack is locked.</p>}
+            {requireAppliedPassage && !reference.audioSelection && <p role="alert" className="text-xs text-amber-300">Apply the desired audio passage first. The full original will not be sent for transcription before a passage is applied.</p>}
             {passagePending && <p className="text-xs text-amber-300">Apply the selection before transcribing. No older/full audio will be sent instead.</p>}
             {stale && <p role="alert" className="text-xs text-amber-300">These lyrics belong to a previous passage. Edit, confirm or transcribe the current excerpt before generating.</p>}
             <label className="block text-xs">Words for this passage

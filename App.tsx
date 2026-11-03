@@ -59,6 +59,8 @@ import { VideoWorkspace } from './components/VideoWorkspace';
 import SceneVariationPanel from './components/SceneVariationWorkspace';
 import OutpaintPanel from './components/OutpaintPanel';
 import Qwen21CharacterSheetPanel from './components/Qwen21CharacterSheetPanel';
+import { BlazingFastCharacterPanel } from './components/BlazingFastCharacterPanel';
+import { StyleGalleryPanel } from './components/StyleGalleryPanel';
 import Qwen21RemoveBackgroundPanel from './components/Qwen21RemoveBackgroundPanel';
 import Qwen21MultiPanel, { type Qwen21MultiHandle } from './components/Qwen21MultiPanel';
 import { TtsPanel } from './components/TtsPanel';
@@ -122,7 +124,10 @@ const App: React.FC = () => {
     const [localMammouthKey, setLocalMammouthKey] = useState('');
     const [localOpenRouterSettings, setLocalOpenRouterSettings] = useState<OpenRouterSettings>({ apiKey: '', model: DEFAULT_OPENROUTER_MODEL });
     const [videoPromptToLoad, setVideoPromptToLoad] = useState<LibraryItem | null>(null);
-    const [videoPromptDestination, setVideoPromptDestination] = useState<'reference' | 'ultrafast' | 'advanced'>('reference');
+    const [blazingPreset, setBlazingPreset] = useState<LibraryItem | null>(null);
+    const [modelLibraryRequest, setModelLibraryRequest] = useState<{ path: string; id: number } | null>(null);
+    const [blazingModel, setBlazingModel] = useState('');
+    const [videoPromptDestination, setVideoPromptDestination] = useState<'reference' | 'ultrafast' | 'advanced' | 'ltx-audio-sync' | 'ltx-ripple-ffaf'>('reference');
     const [videoFinishing, setVideoFinishing] = useState<'latent' | 'ltx' | undefined>();
     const handleVideoPromptLoaded = useCallback(() => setVideoPromptToLoad(null), []);
     const handleLeaveVideoDirector = useCallback(() => dispatch(setActiveTab('video')), [dispatch]);
@@ -135,6 +140,7 @@ const App: React.FC = () => {
     const [characterGenerationJobsByKey, setCharacterGenerationJobsByKey] = useState<Record<string, Array<{ label: string; progress: number; message: string; status: 'pending' | 'done' | 'error'; src?: string }>>>({});
     const [characterResultSnapshots, setCharacterResultSnapshots] = useState<Record<string, CharacterResultSnapshot>>({});
     const [characterOutputsContainer, setCharacterOutputsContainer] = useState<HTMLDivElement | null>(null);
+    const [flux2EditWorkspaceContainer, setFlux2EditWorkspaceContainer] = useState<HTMLDivElement | null>(null);
     const [upscaleSourceFile, setUpscaleSourceFile] = useState<File | null>(null);
     const [isUpscalePickerOpen, setIsUpscalePickerOpen] = useState(false);
     const [isInstallationDashboardOpen, setIsInstallationDashboardOpen] = useState(false);
@@ -194,6 +200,9 @@ const App: React.FC = () => {
     const isReadyToGenerate = useSelector(selectIsReadyToGenerate);
     // Determine which options object to use based on the active tab
     const currentOptions = activeTab === 'character-generator' ? characterOptions : options;
+    const activePanelResetKey = activeTab === 'video-utils' && (activeVideoUtilsSubTab === 'outpaint' || activeVideoUtilsSubTab === 'upscale')
+        ? activeVideoUtilsSubTab : activeTab;
+    const isBlazingCharacter = characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'flux2' && characterOptions.comfyCharacterFlux2Tab === 'blazing-fast';
     const handleSheetSourceChange = useCallback((file: File | null) => { dispatch(setSourceImage(file)); }, [dispatch]);
     const qwen21MultiRef = React.useRef<Qwen21MultiHandle>(null);
     const [mossPreview, setMossPreview] = useState<Blob | null>(null);
@@ -263,8 +272,11 @@ const App: React.FC = () => {
         } else if (newOpts.comfyModelType === 'flux2-edit') {
             applyDefaultsIfMissing({
                 comfyFlux2EditPrompt: '',
-                comfyFlux2EditUnet: 'flux-2-klein-4b-Q4_K_M.gguf',
-                comfyFlux2EditClip: 'qwen_3_4b.safetensors',
+                comfyFlux2EditStyle: undefined,
+                comfyFlux2EditStyleStrength: undefined,
+                comfyFlux2EditUseStyleSettings: false,
+                comfyFlux2EditUnet: 'flux2\\flux2Klein9BInt8_v10.safetensors',
+                comfyFlux2EditClip: 'qwen38BFluxKlein9BTE_38b.safetensors',
                 comfyFlux2EditVae: 'flux2-vae.safetensors',
                 comfyFlux2EditSteps: 4,
                 comfyFlux2EditCfg: 1,
@@ -329,9 +341,12 @@ const App: React.FC = () => {
         } else if (newOpts.comfyModelType === 'flux2-simple') {
             applyDefaultsIfMissing({
                 comfyFlux2Prompt: '',
+                comfyFlux2Style: undefined,
+                comfyFlux2StyleStrength: undefined,
+                comfyFlux2UseStyleSettings: false,
                 comfyFlux2NegativePrompt: '',
-                comfyFlux2Unet: 'flux-2-klein-4b-Q4_K_M.gguf',
-                comfyFlux2Clip: 'qwen3vl_4b_fp8_scaled.safetensors',
+                comfyFlux2Unet: 'flux2\\flux2Klein9BInt8_v10.safetensors',
+                comfyFlux2Clip: 'qwen38BFluxKlein9BTE_38b.safetensors',
                 comfyFlux2Vae: 'flux2-vae.safetensors',
                 comfyFlux2Resolution: '832x1216',
                 comfyFlux2UseLora: true,
@@ -354,14 +369,17 @@ const App: React.FC = () => {
         } else if (newOpts.comfyModelType === 'krea2-simple') {
             applyDefaultsIfMissing({
                 comfyKreaPrompt: '',
+                comfyKreaStyle: undefined,
+                comfyKreaStyleStrength: undefined,
+                comfyKreaUseStyleSettings: false,
                 comfyKreaNegativePrompt: '',
-                comfyKreaUnet: 'krea2_raw_fp8_scaled.safetensors',
+                comfyKreaUnet: 'krea2_turbo_fp8_scaled.safetensors',
                 comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
                 comfyKreaVae: 'qwen_image_vae.safetensors',
                 comfyKreaResolution: '832x1216',
                 comfyKreaUseLora: true,
-                comfyKreaLora1Name: 'KREA\\krea2_turbo_lora_rank_64_bf16.safetensors',
-                comfyKreaLora1Strength: 0.6,
+                comfyKreaLora1Name: '',
+                comfyKreaLora1Strength: 1,
                 comfyKreaLora2Name: 'KREA\\snofs_krea_v1_nostrip.safetensors',
                 comfyKreaLora2Strength: 1,
                 comfyKreaLora3Name: '',
@@ -618,10 +636,10 @@ const App: React.FC = () => {
         if (activeTab === 'extractor-tools') dispatch(resetExtractorState());
         if (activeTab === 'fun') dispatch(removeAllFiles());
         if (activeTab === 'logo-theme-generator') dispatch(resetLogoThemeState());
-        if (activeTab === 'video-utils') dispatch(resetVideoUtilsState());
-        if (activeTab === 'upscale') setUpscaleSourceFile(null);
-        setPanelResetVersions(current => ({ ...current, [activeTab]: (current[activeTab] || 0) + 1 }));
-    }, [activeTab, dispatch]);
+        if (activePanelResetKey === 'video-utils') dispatch(resetVideoUtilsState());
+        if (activePanelResetKey === 'upscale') setUpscaleSourceFile(null);
+        setPanelResetVersions(current => ({ ...current, [activePanelResetKey]: (current[activePanelResetKey] || 0) + 1 }));
+    }, [activeTab, activePanelResetKey, dispatch]);
 
     const characterGenerationControllerRef = useRef<AbortController | null>(null);
     const [isCharacterCancelling, setCharacterCancelling] = useState(false);
@@ -913,7 +931,8 @@ const App: React.FC = () => {
             const response = await fetch(imageDataUrl);
             const blob = await response.blob();
             setUpscaleSourceFile(new File([blob], name, { type: blob.type || 'image/png' }));
-            dispatch(setActiveTab('upscale'));
+            dispatch(setActiveVideoUtilsSubTab('upscale'));
+            dispatch(setActiveTab('video-utils'));
         } catch (error) {
             console.error('Error setting upscale source:', error);
             dispatch(setGlobalError({ title: 'File Error', message: 'Could not use the selected image for SeedVR2.' }));
@@ -1033,12 +1052,12 @@ const App: React.FC = () => {
                 ? (characterOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL)
             : characterOptions.provider === 'comfyui'
                 ? characterOptions.comfyCharacterMode === 'flux2'
-                    ? 'FLUX2-Klein-Multi-Angle'
+                    ? isBlazingCharacter ? `Blazing Fast character: ${blazingModel}` : 'FLUX2-Klein-Multi-Angle'
                     : characterOptions.comfyCharacterMode === 'qwen21' ? 'Qwen Image 2.1 - Character Sheet' : characterOptions.comfyCharacterMode === 'qwen21-create' ? 'Qwen Image 2.1 - Create Character' : 'Qwen-Edit-Multi-Angle'
                 : DEFAULT_GEMINI_IMAGE_MODEL;
     } else if (activeTab === 'scene-variation') {
-        activeModel = sceneVariationModel.startsWith('Qwen Image 2.1') ? sceneVariationModel : `FLUX2 Edit: ${sceneVariationModel}`;
-    } else if (activeTab === 'outpaint') {
+        activeModel = sceneVariationModel.startsWith('Qwen Image 2.1') || sceneVariationModel.startsWith('Creation suite') || sceneVariationModel.startsWith('Clothes Switcher') ? sceneVariationModel : `FLUX2 Edit: ${sceneVariationModel}`;
+    } else if (activeTab === 'video-utils' && activeVideoUtilsSubTab === 'outpaint') {
         activeModel = 'Qwen Image 2.1 Outpaint';
     } else if (activeTab === 'fun') {
         activeModel = activeFunSubTab === 'photo-fusion'
@@ -1074,7 +1093,7 @@ const App: React.FC = () => {
                 : null;
         if (extractorGenerationProvider === 'gemini') activeModel = options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL;
         else if (extractorGenerationProvider === 'mammouth') activeModel = options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL;
-        else if (extractorGenerationProvider === 'flux2') activeModel = `FLUX2 Edit · ${options.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf'}`;
+        else if (extractorGenerationProvider === 'flux2') activeModel = `FLUX2 Edit · ${options.comfyFlux2EditUnet || 'flux2\\flux2Klein9BInt8_v10.safetensors'}`;
         else if (activeExtractorSubTab === 'poses') activeModel = extractorState.poseAnalysisProvider === 'mammouth' ? 'MediaPipe + Mammouth' : 'MediaPipe + Gemini 2.5';
         else if (activeExtractorSubTab === 'font') activeModel = DEFAULT_GEMINI_IMAGE_MODEL;
         else activeModel = 'gemini-2.5-flash';
@@ -1082,7 +1101,7 @@ const App: React.FC = () => {
         activeModel = options.provider === 'mammouth' ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL) : DEFAULT_GEMINI_IMAGE_MODEL;
     }
 
-    const activeProvider: Provider = activeTab === 'scene-variation' || activeTab === 'outpaint' ? 'comfyui' : activeTab === 'character-generator'
+    const activeProvider: Provider = activeTab === 'scene-variation' || activeTab === 'video-utils' && (activeVideoUtilsSubTab === 'outpaint' || activeVideoUtilsSubTab === 'upscale') ? 'comfyui' : activeTab === 'character-generator'
         ? characterOptions.provider
         : activeTab === 'extractor-tools' && activeExtractorSubTab === 'clothes'
             ? extractorState.clothesGenerationProvider === 'gemini' ? 'gemini' : extractorState.clothesGenerationProvider === 'mammouth' ? 'mammouth' : 'comfyui'
@@ -1231,8 +1250,8 @@ const App: React.FC = () => {
                     {[
                         { id: 'image-generator', label: 'Image Gen', icon: <ImageGeneratorIcon className="w-4 h-4" />, activeClass: 'border-cyan-400 bg-cyan-400/15 text-cyan-300 shadow-cyan-500/20' },
                         { id: 'character-generator', label: 'Character', icon: <CharacterIcon className="w-4 h-4" />, activeClass: 'border-fuchsia-400 bg-fuchsia-400/15 text-fuchsia-300 shadow-fuchsia-500/20' },
+                        { id: 'style-gallery', label: 'Gestionnaire de styles', icon: <SwatchIcon className="w-4 h-4" />, activeClass: 'border-purple-400 bg-purple-400/15 text-purple-300 shadow-purple-500/20' },
                         { id: 'scene-variation', label: 'Scene Variation', icon: <ImageGeneratorIcon className="w-4 h-4" />, activeClass: 'border-lime-300 bg-lime-300/15 text-lime-200 shadow-lime-400/20' },
-                        { id: 'outpaint', label: 'OUTPAINT', icon: <EnhanceIcon className="w-4 h-4" />, activeClass: 'border-orange-400 bg-orange-400/15 text-orange-300 shadow-orange-500/20' },
                         { id: 'video', label: 'Video', icon: <VideoIcon className="w-4 h-4" />, activeClass: 'border-amber-400 bg-amber-400/15 text-amber-300 shadow-amber-500/20' },
                         { id: 'tts', label: 'TTS', icon: <MicrophoneIcon className="w-4 h-4" />, activeClass: 'border-emerald-400 bg-emerald-400/15 text-emerald-300 shadow-emerald-500/20' },
                         { id: 'prompt-generator', label: 'Prompt', icon: <PromptIcon className="w-4 h-4" />, activeClass: 'border-violet-400 bg-violet-400/15 text-violet-300 shadow-violet-500/20' },
@@ -1240,7 +1259,6 @@ const App: React.FC = () => {
                         { id: 'fun', label: 'Fun', icon: <GroupPhotoFusionIcon className="w-4 h-4" />, activeClass: 'border-rose-400 bg-rose-400/15 text-rose-300 shadow-rose-500/20' },
                         { id: 'logo-theme-generator', label: 'Logo', icon: <SwatchIcon className="w-4 h-4" />, activeClass: 'border-pink-400 bg-pink-400/15 text-pink-300 shadow-pink-500/20' },
                         { id: 'video-utils', label: 'Tools', icon: <VideoUtilsIcon className="w-4 h-4" />, activeClass: 'border-sky-400 bg-sky-400/15 text-sky-300 shadow-sky-500/20' },
-                        { id: 'upscale', label: 'Upscale', icon: <EnhanceIcon className="w-4 h-4" />, activeClass: 'border-lime-400 bg-lime-400/15 text-lime-300 shadow-lime-500/20' },
                         { id: 'civitai', label: 'Models/LoRAs', icon: <DownloadIcon className="w-4 h-4" />, activeClass: 'border-teal-400 bg-teal-400/15 text-teal-300 shadow-teal-500/20' },
                         { id: 'library', label: 'Library', icon: <LibraryIcon className="w-4 h-4" />, activeClass: 'border-indigo-400 bg-indigo-400/15 text-indigo-300 shadow-indigo-500/20' },
                     ].map((tab) => (
@@ -1261,8 +1279,8 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Content Views - Centered Wrapper */}
-                <div className={`w-full mx-auto border-t-2 border-accent pt-3 ${activeTab === 'library' ? 'max-w-none' : 'max-w-7xl'}`} style={getTabAccentStyle(activeTab)}>
-                    {['ltx-director', 'tts', 'prompt-generator', 'video-utils', 'upscale'].includes(activeTab) || (activeTab === 'fun' && (activeFunSubTab === 'photo-fusion' || activeFunSubTab === 'past-forward' || activeFunSubTab === 'swap-anything' || activeFunSubTab === 'stylise-anything')) ? (
+                <div className={`w-full mx-auto border-t-2 border-accent pt-3 ${activeTab === 'library' ? 'max-w-none' : 'max-w-7xl'}`} style={getTabAccentStyle(activePanelResetKey)}>
+                    {['ltx-director', 'tts', 'prompt-generator', 'video-utils'].includes(activeTab) || (activeTab === 'fun' && (activeFunSubTab === 'photo-fusion' || activeFunSubTab === 'past-forward' || activeFunSubTab === 'swap-anything' || activeFunSubTab === 'stylise-anything')) ? (
                         <div className="mb-3 flex justify-end">
                             <button type="button" onClick={handleActivePanelReset} className="flex items-center gap-2 rounded-md border border-danger/50 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white">
                                 <ResetIcon className="h-4 w-4" /> Reset
@@ -1338,7 +1356,7 @@ const App: React.FC = () => {
                             <React.Activity mode={options.provider === 'comfyui' && ['qwen21-remove-background', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(options.comfyModelType || '') ? 'hidden' : 'visible'}>
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                                 <div className="lg:col-span-1 space-y-8">
-                                    {!(currentOptions.provider === 'comfyui' && currentOptions.comfyModelType === 'krea2-edit') && !(currentOptions.provider === 'comfyui'
+                                    {!(currentOptions.provider === 'comfyui' && (currentOptions.comfyModelType === 'krea2-edit' || currentOptions.comfyModelType === 'flux2-edit')) && !(currentOptions.provider === 'comfyui'
                                         && generationMode === 't2i'
                                         && (currentOptions.comfyModelType === 'flux2-simple'
                                             || currentOptions.comfyModelType === 'krea2-simple'
@@ -1427,10 +1445,6 @@ const App: React.FC = () => {
                                             </div>
                                         ) : (
                                             <div className="space-y-2">
-                                                {currentOptions.comfyModelType === 'flux2-edit' && <div className="flex items-center justify-between">
-                                                    <span className="text-sm font-medium text-text-secondary">Image 1</span>
-                                                    <button type="button" onClick={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: true }))} className="rounded-md bg-bg-tertiary p-2 text-text-secondary hover:bg-bg-tertiary-hover" title="Select Image 1 from Library"><LibraryIcon className="h-5 w-5" /></button>
-                                                </div>}
                                                 <ImageUploader
                                                     label={generationMode === 'i2i' ? 'Upload Source Image (Required)' : 'Upload Source Image (Optional for T2I)'}
                                                     id="main-source-upload"
@@ -1493,6 +1507,7 @@ const App: React.FC = () => {
                                         onOpenMaskPicker={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: true }))}
                                         onOpenElementPicker={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: true }))}
                                         hideGeneralSettings={true}
+                                        flux2EditWorkspaceContainer={flux2EditWorkspaceContainer}
                                     />
                                 </div>
                                 <div className="lg:col-span-2 space-y-8">
@@ -1506,6 +1521,7 @@ const App: React.FC = () => {
                                         updateOptions={handleUpdateOptions}
                                     />
                                     {isLoading && (currentOptions.comfyModelType === 'moss-image' || currentOptions.comfyModelType === 'moss-photo') && mossPreview && <MossGenerationPreview image={mossPreview} />}
+                                    {currentOptions.provider === 'comfyui' && currentOptions.comfyModelType === 'flux2-edit' && <div ref={setFlux2EditWorkspaceContainer} data-flux2-edit-workspace="true" className="min-w-0" />}
                                     {isLoading && imageGenerationJobs.length === 0 ? (
                                         <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />
                                     ) : (
@@ -1531,6 +1547,7 @@ const App: React.FC = () => {
                                             updateOptions={(opts) => dispatch(updateOptions(opts))}
                                             isDisabled={isLoading}
                                             availableLoras={availableLoras}
+                                            comfyUIObjectInfo={comfyUIObjectInfo}
                                         />
                                         <SamplerSettingsPanel
                                             options={currentOptions}
@@ -1548,10 +1565,10 @@ const App: React.FC = () => {
                     <React.Activity mode={activeTab === 'scene-variation' ? 'visible' : 'hidden'}>
                         <SceneVariationPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} onModelChange={setSceneVariationModel} pendingPreset={sceneVariationPreset} onPresetLoaded={() => setSceneVariationPreset(null)} />
                     </React.Activity>
-                    <React.Activity mode={activeTab === 'outpaint' ? 'visible' : 'hidden'}>
-                        <OutpaintPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} />
-                    </React.Activity>
 
+                    <React.Activity mode={activeTab === 'style-gallery' ? 'visible' : 'hidden'}>
+                        <StyleGalleryPanel isComfyUIConnected={isComfyUIConnected} onOpenLibrary={path => { setModelLibraryRequest({ path, id: Date.now() }); handleTabChange('civitai'); }} />
+                    </React.Activity>
                     <React.Activity mode={activeTab === 'character-generator' ? 'visible' : 'hidden'}>
                         <>
                         <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-border-primary bg-bg-secondary p-2 shadow-sm">
@@ -1629,13 +1646,19 @@ const App: React.FC = () => {
                                 </button>
                             </div>}
                         </div>
+                        {characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'flux2' && <div role="tablist" aria-label="FLUX2 character workflow" className="mb-4 flex gap-4 border-b border-border-primary">
+                            {([['standard', 'Character Angles'], ['blazing-fast', 'Blazing Fast character']] as const).map(([tab, label]) => <button key={tab} type="button" role="tab" aria-selected={(characterOptions.comfyCharacterFlux2Tab || 'standard') === tab} disabled={isLoading} onClick={() => handleUpdateOptions({ comfyCharacterFlux2Tab: tab })} className={`border-b-2 px-1 py-3 text-sm font-semibold ${(characterOptions.comfyCharacterFlux2Tab || 'standard') === tab ? 'border-accent text-accent' : 'border-transparent text-text-secondary'}`}>{label}</button>)}
+                        </div>}
+                        <React.Activity mode={isBlazingCharacter ? 'visible' : 'hidden'}>
+                            <BlazingFastCharacterPanel isComfyUIConnected={isComfyUIConnected} onManageStyles={() => handleTabChange('style-gallery')} onModelChange={setBlazingModel} pendingPreset={blazingPreset} onPresetLoaded={() => setBlazingPreset(null)} />
+                        </React.Activity>
                         {characterOptions.provider === 'comfyui' && ['qwen21', 'qwen21-create'].includes(characterOptions.comfyCharacterMode || '') && <div role="tablist" aria-label="Qwen 2.1 character workflow" className="flex gap-4 border-b border-border-primary">
                             {([['qwen21', 'Character Sheet'], ['qwen21-create', 'Create Character']] as const).map(([mode, label]) => <button key={mode} type="button" role="tab" aria-selected={characterOptions.comfyCharacterMode === mode} disabled={isLoading} onClick={() => handleUpdateOptions({ comfyCharacterMode: mode })} className={`border-b-2 px-1 py-3 text-sm font-semibold ${characterOptions.comfyCharacterMode === mode ? 'border-accent text-accent' : 'border-transparent text-text-secondary'}`}>{label}</button>)}
                         </div>}
                         <React.Activity mode={characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'qwen21' ? 'visible' : 'hidden'}>
                             <Qwen21CharacterSheetPanel options={characterOptions} onOptionsChange={handleUpdateOptions} sourceFile={sourceImage} onSourceChange={handleSheetSourceChange} onOpenLibrary={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: true }))} characterName={characterName} onNameChange={name => dispatch(setCharacterName(name))} isComfyUIConnected={isComfyUIConnected} objectInfo={comfyUIObjectInfo} />
                         </React.Activity>
-                        <React.Activity mode={characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'qwen21' ? 'hidden' : 'visible'}>
+                        <React.Activity mode={isBlazingCharacter || characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'qwen21' ? 'hidden' : 'visible'}>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                             <div className="lg:col-span-1 space-y-8">
                                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
@@ -1807,6 +1830,21 @@ const App: React.FC = () => {
                             onReset={handleVideoUtilsReset}
                             onOpenLibraryForResizeCrop={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: true }))}
                         />
+                        <div className="mt-4">
+                            <React.Activity mode={activeVideoUtilsSubTab === 'outpaint' ? 'visible' : 'hidden'}>
+                                <OutpaintPanel key={`outpaint-${panelResetVersions.outpaint || 0}`} isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} />
+                            </React.Activity>
+                            <React.Activity mode={activeVideoUtilsSubTab === 'upscale' ? 'visible' : 'hidden'}>
+                                <UpscalePanel
+                                    key={`upscale-${panelResetVersions.upscale || 0}`}
+                                    sourceFile={upscaleSourceFile}
+                                    setSourceFile={setUpscaleSourceFile}
+                                    onOpenLibrary={() => setIsUpscalePickerOpen(true)}
+                                    isComfyUIConnected={isComfyUIConnected}
+                                    comfyUIObjectInfo={comfyUIObjectInfo}
+                                />
+                            </React.Activity>
+                        </div>
                     </React.Activity>
 
                     <React.Activity mode={activeTab === 'video' || activeTab === 'ltx-director' ? 'visible' : 'hidden'}>
@@ -1831,19 +1869,9 @@ const App: React.FC = () => {
 
                     <React.Activity mode={activeTab === 'tts' ? 'visible' : 'hidden'}><TtsPanel key={`tts-${panelResetVersions.tts || 0}`} isComfyUIConnected={isComfyUIConnected} /></React.Activity>
 
-                    <React.Activity mode={activeTab === 'upscale' ? 'visible' : 'hidden'}>
-                        <UpscalePanel
-                            key={`upscale-${panelResetVersions.upscale || 0}`}
-                            sourceFile={upscaleSourceFile}
-                            setSourceFile={setUpscaleSourceFile}
-                            onOpenLibrary={() => setIsUpscalePickerOpen(true)}
-                            isComfyUIConnected={isComfyUIConnected}
-                            comfyUIObjectInfo={comfyUIObjectInfo}
-                        />
-                    </React.Activity>
 
                     <React.Activity mode={activeTab === 'civitai' ? 'visible' : 'hidden'}>
-                        <CivitaiPanel />
+                        <CivitaiPanel libraryRequest={modelLibraryRequest} onLibraryRequestHandled={() => setModelLibraryRequest(null)} />
                     </React.Activity>
 
                     <React.Activity mode={activeTab === 'library' ? 'visible' : 'hidden'}>
@@ -1851,7 +1879,24 @@ const App: React.FC = () => {
                             onUpscaleItem={(item) => handleSendToUpscale(item.media, item.name ? `${item.name}.png` : undefined)}
                             onLoadItem={(item, loadOptions) => {
                                 // Logic to load item back into generator state
-                                if (loadOptions?.videoFinishing || isMinimaxH3PromptLibraryItem(item)) {
+                                if (item.blazingFastOptions) {
+                                    setBlazingPreset(item);
+                                    dispatch(updateCharacterOptions({ provider: 'comfyui', comfyCharacterMode: 'flux2', comfyCharacterFlux2Tab: 'blazing-fast' }));
+                                    dispatch(setActiveTab('character-generator'));
+                                } else if (item.creationSuiteOptions || item.clothesSwitcherOptions) {
+                                    setSceneVariationPreset(item);
+                                    dispatch(setActiveTab('scene-variation'));
+                                } else if (item.ltxRippleOptions) {
+                                    setVideoFinishing(undefined);
+                                    setVideoPromptDestination('ltx-ripple-ffaf');
+                                    setVideoPromptToLoad(item);
+                                    dispatch(setActiveTab('video'));
+                                } else if (item.ltxAudioSyncOptions) {
+                                    setVideoFinishing(undefined);
+                                    setVideoPromptDestination('ltx-audio-sync');
+                                    setVideoPromptToLoad(item);
+                                    dispatch(setActiveTab('video'));
+                                } else if (loadOptions?.videoFinishing || isMinimaxH3PromptLibraryItem(item)) {
                                     setVideoFinishing(loadOptions?.videoFinishing);
                                     setVideoPromptDestination(loadOptions?.videoFinishing ? 'advanced' : loadOptions?.videoWorkflow ?? item.videoPromptOptions?.renderOptions?.variant ?? 'reference');
                                     setVideoPromptToLoad(item);

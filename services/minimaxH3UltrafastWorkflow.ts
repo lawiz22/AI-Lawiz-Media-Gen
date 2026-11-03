@@ -1,6 +1,7 @@
 import type { MinimaxDraft, VideoWorkflow } from './videoPromptService';
 import { buildMinimaxH3Workflow, defaultMinimaxH3Options, type H3Workflow, type MinimaxH3Options } from './minimaxH3Workflow';
 import { buildAdvancedH3Workflow, defaultAdvancedH3Options } from './minimaxH3AdvancedWorkflow';
+import { applyH3GalleryStyle } from './h3StyleWorkflow';
 
 export type H3RenderWorkflow = 'reference' | 'ultrafast' | 'advanced';
 export const h3WorkflowName = (workflow: H3RenderWorkflow): string => workflow === 'advanced' ? 'MiniMax Advanced' : workflow === 'ultrafast' ? 'Ultrafast' : 'Minimax REF2v H3';
@@ -49,7 +50,7 @@ export const buildUltrafastH3Workflow = (draft: MinimaxDraft, options: MinimaxH3
     numeric('denoise', settings.denoise, 0, 1);
     if (!settings.scheduler.trim() || !settings.attention.trim()) throw new Error('Select an Ultrafast scheduler and attention backend.');
     // Reuse the validated multimodal input adapter and stable monitor/output IDs.
-    const workflow = buildMinimaxH3Workflow(draft, { ...options, useLoras: false, extendSigmas: false }, uploads);
+    const workflow = buildMinimaxH3Workflow(draft, { ...options, style: undefined, useLoras: false, extendSigmas: false }, uploads);
     let model: [string, number] = ['135', 0];
     if (options.useLoras) {
         for (const [index, lora] of options.loras.entries()) if (lora.enabled) {
@@ -97,6 +98,7 @@ export const buildUltrafastH3Workflow = (draft: MinimaxDraft, options: MinimaxH3
     workflow['119'] = { class_type: 'SaveVideo', inputs: {
         video: ['ultrafast-video', 0], filename_prefix: filenamePrefix, format: 'auto', 'format.codec': 'auto', codec: 'auto',
     } };
+    applyH3GalleryStyle(workflow, options);
     return workflow;
 };
 export const buildH3RenderWorkflow = (draft: MinimaxDraft, options: MinimaxH3Options, uploads: Record<string, string>): H3Workflow => {
