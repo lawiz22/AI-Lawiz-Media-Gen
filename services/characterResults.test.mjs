@@ -248,8 +248,8 @@ test('ordinary text-to-image Library saves still omit source images', async () =
 });
 
 test('shared Character layout places results between Generate and cancellation, with slots last', () => {
-    const source = read('../App.tsx');
-    const tree = ts.createSourceFile('App.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const source = read('../components/CharacterTab.tsx');
+    const tree = ts.createSourceFile('CharacterTab.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     let slots;
     const visit = node => {
         if (ts.isJsxSelfClosingElement(node) && node.attributes.properties.some(attribute =>
@@ -263,7 +263,7 @@ test('shared Character layout places results between Generate and cancellation, 
     const children = column.children.filter(node => !ts.isJsxText(node) || node.text.trim());
     const generate = children.findIndex(node => node.getText(tree).includes('<ActionControlPanel'));
     const results = children.findIndex(node => node.getText(tree).includes('<ImageGrid'));
-    const cancel = children.findIndex(node => node.getText(tree).includes('onClick={handleCancelCharacterGeneration}'));
+    const cancel = children.findIndex(node => node.getText(tree).includes('onClick={onCancel}'));
     assert.ok(generate >= 0 && results > generate && cancel > results);
     assert.equal(children.at(-1), slots, 'Slots must follow results and cancellation at the bottom');
 });

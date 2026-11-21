@@ -187,7 +187,7 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({ isOpen, 
             <CloseIcon className="w-5 h-5" />
           </button>
         </div>
-        {errorMessage && <div role="alert" className="mb-4 rounded-md border border-danger/50 bg-danger-bg p-3 text-sm text-danger">{errorMessage}</div>}
+        {errorMessage && <div role="alert" className="mb-4 rounded-md border border-danger bg-danger-bg p-3 text-sm text-danger">{errorMessage}</div>}
 
         {/* Content Grid */}
         <div className="flex-grow overflow-y-auto pr-2 -mr-2">

@@ -378,7 +378,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
               <button
                 onClick={handleCopyPrompt}
                 title="Copy Prompt"
-                className="absolute top-2 right-2 flex items-center gap-1.5 bg-bg-primary/80 backdrop-blur-sm text-text-secondary text-xs font-semibold py-1 px-2 rounded-full hover:bg-accent hover:text-accent-text transition-colors duration-200 shadow"
+                className="absolute top-2 right-2 flex items-center gap-1.5 bg-bg-primary backdrop-blur-sm text-text-secondary text-xs font-semibold py-1 px-2 rounded-full hover:bg-accent hover:text-accent-text transition-colors duration-200 shadow"
               >
                 <CopyIcon className="w-3 h-3" />
                 {copyButtonText}
@@ -410,7 +410,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                   <div className="mt-4 h-2 w-full max-w-xs overflow-hidden rounded-full bg-bg-primary"><div className="h-full bg-accent transition-all duration-300" style={{ width: `${Math.round(generationJob.progress * 100)}%` }} /></div>
                   <div className="mt-2 flex w-full max-w-xs justify-between gap-3 text-xs text-text-muted"><span className="truncate" title={generationJob.message}>{generationJob.message}</span><span>{Math.round(generationJob.progress * 100)}%</span></div>
                 </div>}
-                {generationJob?.status === 'error' && <div className="flex min-h-64 flex-col items-center justify-center p-6 text-center"><p className="font-bold text-danger">{characterOutputLabel} failed</p><p className="mt-2 text-xs text-danger/80">{generationJob.message}</p></div>}
+                {generationJob?.status === 'error' && <div className="flex min-h-64 flex-col items-center justify-center p-6 text-center"><p className="font-bold text-danger">{characterOutputLabel} failed</p><p className="mt-2 text-xs text-danger">{generationJob.message}</p></div>}
                 {finalSrc && generationJob?.status !== 'pending' && generationJob?.status !== 'error' && (activeTab !== 'character-generator' && image?.before
                   ? <QwenEditComparison key={finalSrc} before={image.before} after={finalSrc} index={index} />
                   : <img src={finalSrc} alt={`Generated Content ${index + 1}`} className="block w-full max-h-[72vh] object-contain" />)}
@@ -431,7 +431,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                         disabled={savingStatus !== 'idle'}
                         className={`p-2 rounded-full transition-all duration-200 ${savingStatus === 'saved' ? 'bg-green-500 text-white cursor-default' :
                           savingStatus === 'saving' ? 'bg-bg-secondary text-text-secondary cursor-wait' :
-                            'bg-bg-secondary/70 text-text-secondary hover:bg-accent hover:text-accent-text'
+                            'bg-bg-secondary text-text-secondary hover:bg-accent hover:text-accent-text'
                           }`}
                       >
                         {savingStatus === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : savingStatus === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
@@ -455,22 +455,22 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                           <button
                             onClick={() => handleOpenZoom(index)}
                             title="Zoom In"
-                            className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                            className="p-3 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
                           >
                             <ZoomIcon className="w-5 h-5" />
                           </button>
                           <button
                             onClick={() => handleDownload(finalSrc, index)}
                             title="Download Image"
-                            className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                            className="p-3 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
                           >
                             <DownloadIcon className="w-5 h-5" />
                           </button>
-                          <SendToLTXButton imageDataUrl={finalSrc} prompt={lastUsedPrompt} className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
+                          <SendToLTXButton imageDataUrl={finalSrc} prompt={lastUsedPrompt} className="p-3 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
                           <button
                             onClick={() => onSendToUpscale(finalSrc)}
                             title="Upscale with SeedVR2"
-                            className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                            className="p-3 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
                           >
                             <EnhanceIcon className="w-5 h-5" />
                           </button>
@@ -479,7 +479,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
                               onClick={() => handleEnhance(image?.src || finalSrc, index)}
                               disabled={enhancingIndex !== null}
                               title="Enhance Quality"
-                              className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="p-3 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <EnhanceIcon className="w-5 h-5" />
                             </button>
@@ -540,14 +540,14 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
             <>
               <button
                 onClick={(e) => { e.stopPropagation(); handlePrevImage(); }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
                 aria-label="Previous image"
               >
                 <ChevronLeftIcon className="w-8 h-8" />
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleNextImage(); }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
                 aria-label="Next image"
               >
                 <ChevronRightIcon className="w-8 h-8" />
@@ -556,7 +556,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
           )}
 
           <div
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-bg-secondary/80 backdrop-blur-sm p-2 rounded-full shadow-lg"
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-bg-secondary backdrop-blur-sm p-2 rounded-full shadow-lg"
             onClick={e => e.stopPropagation()}
             role="toolbar"
             aria-label="Image actions"
@@ -594,7 +594,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
               </button>
             )}
 
-            <div className="w-px h-5 bg-border-primary/50"></div>
+            <div className="w-px h-5 bg-border-primary"></div>
 
             <button
               onClick={() => handleDownload(currentZoomedSrc, zoomedImageIndex)}

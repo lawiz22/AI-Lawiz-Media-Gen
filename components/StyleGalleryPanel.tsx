@@ -8,8 +8,12 @@ import { PresetTextInput, SelectInput } from './InputComponents';
 import { linkStyleLibrary, matchStyleLibrary, resolveLibraryStyle, styleInstalledLoras, styleLibraryLoras, styleModelFamily, unusedStyleLoras } from '../services/styleLibrary';
 import { getComfyRelativePath } from '../services/civitaiService';
 import { StyleBrowser, StyleLibraryPreview, StyleModal } from './StyleBrowser';
+import { NumberField, TextField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
 
-const input = 'mt-1 w-full rounded-lg border border-border-primary bg-bg-primary p-2 text-sm';
+const input = `mt-1 block ${ui.control}`;
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm hover:bg-bg-tertiary disabled:opacity-40';
 export const StyleGalleryPanel: React.FC<{ isComfyUIConnected: boolean | null; onOpenLibrary?: (path: string) => void }> = ({ isComfyUIConnected, onOpenLibrary }) => {
     const { gallery, error: storageError } = useStyleGallery();
@@ -92,19 +96,19 @@ export const StyleGalleryPanel: React.FC<{ isComfyUIConnected: boolean | null; o
                 }}>Link matching styles</button>
             </div>
         </header>
-        {(storageError || inventoryError || error) && <p role="alert" className="rounded-lg border border-red-500/40 p-3 text-red-400">{storageError || inventoryError || error}</p>}
+        {(storageError || inventoryError || error) && <p role="alert" className="rounded-lg border border-danger p-3 text-danger">{storageError || inventoryError || error}</p>}
         {!window.electron && <p className="text-sm text-text-muted">My Library links use the Electron desktop inventory. Installed ComfyUI LoRAs and manual styles remain available here.</p>}
         {status && <p role="status" className="text-sm text-accent">{status}</p>}
         <div className="flex flex-wrap gap-3">
-            <select aria-label="Style model filter" className={`${input} !w-auto`} value={model} onChange={event => setModel(event.target.value)}><option value="">All models</option>{models.map(name => <option key={name}>{name}</option>)}</select>
+            <Select className="w-48" ariaLabel="Style model filter" value={model} options={[{ value: '', label: 'All models' }, ...models]} onChange={setModel} />
         </div>
         {gallery && <StyleBrowser styles={gallery.styles} inventory={inventory} model={model} onSelect={style => { setEditing(structuredClone(style)); setError(''); setLibraryQuery(''); }} />}
         {editing && <StyleModal title="Edit style" onClose={() => setEditing(null)}>
             <form className="space-y-5" onSubmit={event => { event.preventDefault(); save(); }}>
-                {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
+                {error && <p role="alert" className="text-sm text-danger">{error}</p>}
                 <div className="grid items-start gap-6 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
                 <aside className="min-w-0 space-y-4 md:sticky md:top-20" aria-label="Style preview and library link">
-                    <div className="rounded-xl border border-border-primary bg-bg-primary/40 p-3">
+                    <div className="rounded-xl border border-border-primary p-3">
                         <StyleLibraryPreview item={linked?.item} height={360} fit="contain" />
                         <h4 className="break-words text-lg font-semibold">{linked?.item?.modelName || editing.title || 'New style'}</h4>
                         <p className="mt-1 text-sm text-accent">{normalizeStyleModel(editing.model)}</p>
@@ -133,8 +137,8 @@ export const StyleGalleryPanel: React.FC<{ isComfyUIConnected: boolean | null; o
                 <section className="space-y-4 rounded-xl border border-border-primary p-4">
                 <h4 className="font-semibold text-accent">Style identity</h4>
                 <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="text-sm">Title<input required className={input} value={editing.title} onChange={event => update({ title: event.target.value })} /></label>
-                    <label className="text-sm">Model<input required list="style-models" className={input} value={editing.model} onChange={event => update({ model: event.target.value, libraryLink: undefined, lora: '' })} /></label>
+                    <TextField label="Title" value={editing.title} onChange={title => update({ title })} />
+                    <PresetTextInput label="Model" ariaLabel="Style model" emptyLabel="Select a model" options={models} value={editing.model} onChange={model => update({ model, libraryLink: undefined, lora: '' })} />
                 </div>
                 </section>
                 <div className="space-y-3 rounded-lg border border-border-primary p-3">
@@ -149,18 +153,18 @@ export const StyleGalleryPanel: React.FC<{ isComfyUIConnected: boolean | null; o
                         }} />
                 <PresetTextInput label="Installed LoRA path" ariaLabel="Style LoRA path" emptyLabel="Prompt only — no LoRA" options={loras} value={editing.lora}
                     onChange={lora => update({ lora, libraryLink: undefined })} />
-                <label className="block text-sm">LoRA strength<input type="number" step="0.05" required className={input} value={editing.strength} onChange={event => update({ strength: event.target.valueAsNumber })} /></label>
+                <NumberField label="LoRA strength" value={editing.strength} step={0.05} onChange={strength => update({ strength })} />
                 </div>
                 <section className="space-y-4 rounded-xl border border-border-primary p-4">
                 <h4 className="font-semibold text-accent">Prompt & triggers</h4>
-                <label className="block text-sm">Trigger<textarea rows={3} className={input} placeholder={linked?.style.trigger ? `My Library: ${linked.style.trigger}` : ''} value={editing.trigger} onChange={event => update({ trigger: event.target.value })} /></label>
-                <label className="block text-sm">Style prompt / boosters<textarea rows={4} className={input} value={editing.prompt} onChange={event => update({ prompt: event.target.value })} /></label>
+                <PromptBox kind="positive" label="Trigger" rows={3} placeholder={linked?.style.trigger ? `My Library: ${linked.style.trigger}` : ''} value={editing.trigger} onChange={trigger => update({ trigger })} />
+                <PromptBox kind="positive" label="Style prompt / boosters" rows={4} value={editing.prompt} onChange={prompt => update({ prompt })} />
                 <p className="text-xs text-text-muted">Style triggers are placed first in the actual generation prompt. Style prompt / boosters follow your instructions. Blank sampling fields keep the generator settings. No unverified “best settings” are prefilled.</p>
                 </section>
                 <section className="space-y-4 rounded-xl border border-border-primary p-4">
                 <h4 className="font-semibold text-accent">Optional generation settings</h4>
                 <div className="grid gap-3 sm:grid-cols-2">
-                    {(['steps', 'cfg', 'megapixels'] as const).map(key => <label key={key} className="text-sm">{{ steps: 'Steps', cfg: 'CFG', megapixels: 'Megapixels' }[key]}<input className={input} type="number" step={key === 'steps' ? 1 : 'any'} placeholder={linked?.style.settings[key] !== undefined ? `My Library: ${linked.style.settings[key]}` : 'Generator setting'} value={editing.settings[key] ?? ''} onChange={event => {
+                    {(['steps', 'cfg', 'megapixels'] as const).map(key => <label key={key} className={ui.label}>{{ steps: 'Steps', cfg: 'CFG', megapixels: 'Megapixels' }[key]}<input className={input} type="number" step={key === 'steps' ? 1 : 'any'} placeholder={linked?.style.settings[key] !== undefined ? `My Library: ${linked.style.settings[key]}` : 'Generator setting'} value={editing.settings[key] ?? ''} onChange={event => {
                         const settings = { ...editing.settings };
                         if (!event.target.value) delete settings[key];
                         else settings[key] = event.target.valueAsNumber;
@@ -179,14 +183,14 @@ export const StyleGalleryPanel: React.FC<{ isComfyUIConnected: boolean | null; o
                 {styleModelFamily(editing.model) === 'minimax-h3' && <p className="text-xs text-accent">H3 / MiniMax: h3-beta uses BetaSamplingScheduler with the workflow alpha / beta; other schedulers use BasicScheduler. CFG and megapixels are not applied. Style sampling affects the first pass only, not latent / LTX finishing.</p>}
                 <p className="text-xs text-accent">From My Library: {linked?.filled.join(', ') || 'no missing fields filled'}</p>
                 </section>
-                <label className="block text-sm">Notes<textarea className={input} value={editing.notes} onChange={event => update({ notes: event.target.value })} /></label>
+                <PromptBox kind="neutral" label="Notes" rows={3} value={editing.notes} onChange={notes => update({ notes })} />
                 </div>
                 </div>
                 <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2 border-t border-border-primary bg-bg-secondary py-4">
                     <button type="submit" className={`${button} bg-accent text-accent-text`} disabled={!gallery}>Save style</button>
                     <button type="button" className={button} onClick={() => setEditing(null)}>Close</button>
                     <button type="button" className={button} onClick={() => update({ id: crypto.randomUUID(), title: `${editing.title} (copy)` })}>Duplicate</button>
-                    {gallery?.styles.some(style => style.id === editing.id) && <button type="button" className={`${button} text-red-400`} onClick={() => {
+                    {gallery?.styles.some(style => style.id === editing.id) && <button type="button" className={`${button} text-danger`} onClick={() => {
                         if (!window.confirm(`Delete "${editing.title}"?`)) return;
                         try { saveStyleGallery({ version: 1, styles: gallery.styles.filter(style => style.id !== editing.id) }); setEditing(null); }
                         catch (cause) { setError(String(cause)); }
@@ -194,7 +198,6 @@ export const StyleGalleryPanel: React.FC<{ isComfyUIConnected: boolean | null; o
                 </div>
             </form>
         </StyleModal>}
-        <datalist id="style-models">{models.map(name => <option key={name} value={name} />)}</datalist>
         {gallery?.styles.length === 0 && <button className={button} onClick={() => { try { saveStyleGallery(defaultStyleGallery()); } catch (cause) { setError(String(cause)); } }}>Add the initial 27 FLUX2-9B styles</button>}
     </section>;
 };

@@ -6,6 +6,9 @@ import { getMammouthApiKey } from '../services/mammouthService';
 import { getOpenRouterModels, getOpenRouterSettings } from '../services/openRouterService';
 import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, testOllamaConnection } from '../services/ollamaService';
 import { CloseIcon, CopyIcon, GenerateIcon, SpinnerIcon } from './icons';
+import { TextField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
 
 interface ImagePromptModalProps {
     image: File;
@@ -52,7 +55,6 @@ export const ImagePromptModal: React.FC<ImagePromptModalProps> = ({ image, onClo
     const [status, setStatus] = useState('');
     const [copied, setCopied] = useState(false);
     const dialog = useRef<HTMLDivElement>(null);
-    const firstControl = useRef<HTMLSelectElement>(null);
     const mounted = useRef(true);
     const controller = useRef<AbortController | null>(null);
     useEffect(() => {
@@ -64,7 +66,7 @@ export const ImagePromptModal: React.FC<ImagePromptModalProps> = ({ image, onClo
         setPreview(url);
         return () => URL.revokeObjectURL(url);
     }, [image]);
-    useEffect(() => { firstControl.current?.focus(); }, []);
+    useEffect(() => { dialog.current?.querySelector('select')?.focus(); }, []);
     useEffect(() => {
         const handleKey = (event: KeyboardEvent) => {
             if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); }
@@ -131,7 +133,6 @@ export const ImagePromptModal: React.FC<ImagePromptModalProps> = ({ image, onClo
         try { onUsePrompt?.(prompt); onClose(); }
         catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not apply the prompt.'); }
     };
-    const inputClass = 'mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm disabled:opacity-50';
     return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-labelledby={`${id}-title`} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
         <div ref={dialog} className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-border-primary bg-bg-secondary p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -144,40 +145,28 @@ export const ImagePromptModal: React.FC<ImagePromptModalProps> = ({ image, onClo
                     <p className="mt-2 break-words text-xs text-text-secondary">{image.name}</p>
                 </div>
                 <div className="min-w-0 space-y-3">
-                    <label className="block text-sm text-text-secondary">Prompt format
-                        <select ref={firstControl} value={format} disabled={busy} onChange={event => { setFormat(event.target.value as ImagePromptFormat); resetResult(); }} className={inputClass}>
-                            {IMAGE_PROMPT_FORMATS.map(entry => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
-                        </select>
-                    </label>
-                    <label className="block text-sm text-text-secondary">Analysis service
-                        <select value={provider} disabled={busy} onChange={event => { setProvider(event.target.value as ImagePromptProvider); resetResult(); }} className={inputClass}>
-                            <option value="openrouter">OpenRouter</option><option value="gemini">Gemini</option><option value="mammouth">Mammouth</option><option value="ollama">Local (Ollama)</option>
-                        </select>
-                    </label>
-                    {provider === 'ollama' && <label className="block text-sm text-text-secondary">Ollama URL
-                        <input value={ollamaUrl} disabled={busy} onChange={event => { setOllamaUrl(event.target.value); setChoices(current => ({ ...current, ollama: [] })); resetResult(); }} className={inputClass} />
-                    </label>}
-                    <label className="block text-sm text-text-secondary">Analysis model
-                        <input value={models[provider]} list={`${id}-models`} disabled={busy} onChange={event => { setModels(current => ({ ...current, [provider]: event.target.value })); resetResult(); }} className={inputClass} />
-                        <datalist id={`${id}-models`}>{(choices[provider] || []).map(model => <option key={model} value={model} />)}</datalist>
-                    </label>
+                    <Select<ImagePromptFormat> label="Prompt format" value={format} disabled={busy} options={IMAGE_PROMPT_FORMATS} onChange={next => { setFormat(next); resetResult(); }} />
+                    <Select<ImagePromptProvider> label="Analysis service" value={provider} disabled={busy} onChange={next => { setProvider(next); resetResult(); }}
+                        options={[{ value: 'openrouter', label: 'OpenRouter' }, { value: 'gemini', label: 'Gemini' }, { value: 'mammouth', label: 'Mammouth' }, { value: 'ollama', label: 'Local (Ollama)' }]} />
+                    {provider === 'ollama' && <TextField label="Ollama URL" value={ollamaUrl} disabled={busy} onChange={url => { setOllamaUrl(url); setChoices(current => ({ ...current, ollama: [] })); resetResult(); }} />}
+                    {choices[provider]?.length
+                        ? <Select variant="search" label="Analysis model" value={models[provider]} options={choices[provider] || []} disabled={busy} onChange={model => { setModels(current => ({ ...current, [provider]: model })); resetResult(); }} />
+                        : <TextField label="Analysis model" value={models[provider]} disabled={busy} onChange={model => { setModels(current => ({ ...current, [provider]: model })); resetResult(); }} />}
                     {(provider === 'ollama' || provider === 'openrouter') && <button type="button" disabled={busy} onClick={loadModels} className="text-sm text-accent disabled:opacity-50">Load available models</button>}
                     <p className="text-xs text-text-secondary">{provider === 'ollama' ? 'Requires a vision model, such as Qwen VL, Gemma 3 or LLaVA. The image is sent to the Ollama URL above.' : 'Uses your API key from Connection Settings. The image is sent to the selected service when you click Generate; provider charges may apply.'}</p>
                 </div>
             </div>
-            <button type="button" disabled={busy || !models[provider].trim()} onClick={generate} className="mt-4 inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 font-semibold text-bg-primary disabled:opacity-50">
+            <button type="button" disabled={busy || !models[provider].trim()} onClick={generate} className="mt-4 inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 font-semibold text-accent-text disabled:opacity-50">
                 {busy ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <GenerateIcon className="h-4 w-4" />}Generate Prompt
             </button>
             <p role="status" aria-live="polite" className="mt-2 text-sm text-text-secondary">{status}</p>
             {busy && <p className="mt-1 text-xs text-text-secondary">Closing cancels local analysis. Cloud requests may continue at the provider after closing.</p>}
             {error && <p role="alert" className="mt-3 whitespace-pre-wrap break-words text-sm text-danger">{error}</p>}
             {result !== null && <div className="mt-4 space-y-3">
-                <label className="block text-sm text-text-secondary">Generated positive prompt
-                    <textarea value={result} rows={7} onChange={event => { setResult(event.target.value); setCopied(false); }} className={inputClass} />
-                </label>
+                <PromptBox kind="positive" label="Generated positive prompt" rows={7} value={result} onChange={value => { setResult(value); setCopied(false); }} />
                 <div className="flex flex-wrap gap-3">
                     <button type="button" disabled={!result.trim() || busy} onClick={() => { void copy(result); }} className="inline-flex items-center gap-2 rounded-md border border-border-primary px-3 py-2 text-sm disabled:opacity-50"><CopyIcon className="h-4 w-4" />{copied ? 'Copied!' : 'Copy Prompt'}</button>
-                    {onUsePrompt && <button type="button" disabled={!result.trim() || busy} onClick={() => usePrompt(result)} className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-bg-primary disabled:opacity-50">Use as Positive Prompt</button>}
+                    {onUsePrompt && <button type="button" disabled={!result.trim() || busy} onClick={() => usePrompt(result)} className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-accent-text disabled:opacity-50">Use as Positive Prompt</button>}
                 </div>
                 <p className="text-xs text-text-secondary">Only the positive prompt is replaced. Models, negative prompt, seed, sampler, LoRAs, denoise and source image stay unchanged.</p>
             </div>}

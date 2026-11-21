@@ -15,15 +15,16 @@ import { useMediaURL } from './VideoReferenceEditor';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { VideoOutputFrames } from './VideoOutputFrames';
 import { readVideoDuration } from '../services/videoClipService';
+import { Accordion } from './ui/Accordion';
+import { NumberField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
+import { familyFiles } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed';
-const input = 'mt-1 w-full min-w-0 rounded-lg border border-border-primary bg-bg-primary p-2 text-sm text-text-primary';
-export const RippleAccordion: React.FC<{ title: string; children: () => React.ReactNode }> = ({ title, children }) => {
-    const [open, setOpen] = useState(false);
-    return <details className="rounded-xl border border-border-primary p-3" onToggle={event => setOpen(event.currentTarget.open)}>
-        <summary className="cursor-pointer font-semibold">{title}</summary>{open && <div className="mt-3 space-y-4">{children()}</div>}
-    </details>;
-};
+const input = `mt-1 block ${ui.control}`;
 const groups = [
     { title: 'Resolution, frame count and FPS', ids: ['1331', '937', '936'] },
     { title: 'Models and required Ripple LoRA', ids: ['821', '1318', '822', '448', '1312'] },
@@ -54,6 +55,7 @@ export const LTXRipplePanel: React.FC<{
     libraryItem?: LibraryItem | null; onLibraryItemLoaded: () => void;
 }> = ({ draft: storedDraft, settings: storedSettings, ready, onDraftChange, onSettingsChange, libraryItem, onLibraryItemLoaded }) => {
     const dispatch = useDispatch<AppDispatch>();
+    const { inventory } = useModelInventory();
     const draft: RippleDraft = storedDraft || defaultRippleDraft(), settings: RippleSettings = storedSettings || defaultRippleSettings();
     const latestDraft = useRef(draft), latestSettings = useRef(settings);
     latestDraft.current = draft; latestSettings.current = settings;
@@ -149,23 +151,19 @@ export const LTXRipplePanel: React.FC<{
     const field = (id: string, name: string, value: RippleValue) => {
         const type = RIPPLE_TEMPLATE[id].class_type, schema = h3Input(info, type, name, settings.nodes[id]);
         const config = Array.isArray(schema) && isRecord(schema[1]) ? schema[1] : {};
-        const choices = h3Choices(info, type, name), label = `${nodeTitles[id] || id}: ${name.replaceAll('_', ' ')}`;
-        return <label key={name} className="block min-w-0 text-xs text-text-secondary">{name.replaceAll('_', ' ')}
-            {typeof value === 'boolean' ? <input aria-label={label} type="checkbox" className="ml-2" checked={value} onChange={event => setValue(id, name, event.target.checked)} />
-                : choices.length || ['unet_name', 'clip_name', 'vae_name', 'lora_name', 'sampler_name', 'scheduler'].includes(name) ? <select aria-label={label} className={input} value={String(value)} onChange={event => setValue(id, name, event.target.value)}>
-                    {!choices.includes(String(value)) && <option value={String(value)}>{String(value)} (current / not listed)</option>}
-                    {choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}
-                </select>
-                    : typeof value === 'number' ? <input aria-label={label} className={input} type="number" step={id === '937' ? 8 : Array.isArray(schema) && schema[0] === 'INT' ? 1 : 'any'}
+        const choices = h3Choices(info, type, name), text = name.replaceAll('_', ' '), label = `${nodeTitles[id] || id}: ${text}`;
+        return <div key={name} className="min-w-0">
+            {typeof value === 'boolean' ? <label className="flex items-center gap-2 text-sm text-text-secondary"><input aria-label={label} type="checkbox" checked={value} onChange={event => setValue(id, name, event.target.checked)} />{text}</label>
+                : choices.length || ['unet_name', 'clip_name', 'vae_name', 'lora_name', 'sampler_name', 'scheduler'].includes(name) ? <Select variant="search" label={text} ariaLabel={label} value={String(value)}
+                    options={name === 'unet_name' || name === 'lora_name' ? familyFiles(choices, 'ltx-23', inventory) : choices} onChange={choice => setValue(id, name, choice)} />
+                    // The frame count keeps no max here: setValue explains why a longer clip is refused.
+                    : typeof value === 'number' ? <NumberField label={text} ariaLabel={label} value={value} step={id === '937' ? 8 : Array.isArray(schema) && schema[0] === 'INT' ? 1 : undefined}
                         min={id === '937' ? 9 : typeof config.min === 'number' ? config.min : undefined}
-                        max={id === '937' && !settings.allowExtraFrames ? sourceLimit
-                            : typeof config.max === 'number' ? Math.min(config.max, Number.MAX_SAFE_INTEGER) : undefined}
-                        value={value} onChange={event => {
-                            if (!Number.isFinite(event.target.valueAsNumber)) { setError(`Enter a finite number for ${label}.`); return; }
-                            setValue(id, name, event.target.valueAsNumber);
-                        }} />
-                        : <textarea aria-label={label} rows={name === 'text' ? 3 : 1} className={input} value={value} onChange={event => setValue(id, name, event.target.value)} />}
-        </label>;
+                        max={id === '937' ? undefined : typeof config.max === 'number' ? Math.min(config.max, Number.MAX_SAFE_INTEGER) : undefined}
+                        onChange={number => setValue(id, name, number)} />
+                        : id === '388' && name === 'text' ? <PromptBox kind="negative" label={text} ariaLabel={label} rows={3} value={value} onChange={next => setValue(id, name, next)} />
+                        : <label className={ui.label}>{text}<textarea aria-label={label} rows={name === 'text' ? 3 : 1} className={input} value={value} onChange={event => setValue(id, name, event.target.value)} /></label>}
+        </div>;
     };
     const run = async (action: 'check' | 'export' | 'generate') => {
         if (controller.current) return;
@@ -224,7 +222,7 @@ export const LTXRipplePanel: React.FC<{
             setStatus(`Saved to Library with original source inputs and exact settings. ${warning}`);
         } catch (cause) { report(cause); } finally { setSaving(false); }
     };
-    const loras = h3Choices(info, 'LoraLoaderModelOnly', 'lora_name');
+    const loras = [{ value: '', label: 'Select a LoRA...' }, ...familyFiles(h3Choices(info, 'LoraLoaderModelOnly', 'lora_name'), 'ltx-23', inventory).map(name => ({ value: name, label: name }))];
     let sourceLimit: number | undefined, sourceLimitError = '';
     if (draft.videoDuration !== undefined) {
         try { sourceLimit = rippleSourceFrameLimit(settings, draft.videoDuration); }
@@ -240,7 +238,7 @@ export const LTXRipplePanel: React.FC<{
                 if (!window.confirm('Reset only LTX-Ripple-FFAF inputs, prompt, settings and displayed outputs? Library and ComfyUI files will remain untouched.')) return;
                 onDraftChange(defaultRippleDraft()); onSettingsChange(defaultRippleSettings()); setResult(null); setSavedIds([]); setError(''); setStatus(''); setLive({ completedNodes: [], outputs: {} });
             }}>Start from scratch</button></header>
-        {error && <p role="alert" className="rounded-lg border border-red-400/40 p-3 text-sm text-red-300">{error}</p>}
+        {error && <p role="alert" className="rounded-lg border border-danger bg-danger-bg p-3 text-sm text-danger">{error}</p>}
         {status && <p role="status" className="text-sm text-text-secondary">{status}</p>}
         <fieldset disabled={blocked} className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] disabled:opacity-60">
             <div className="min-w-0 space-y-3">
@@ -253,17 +251,17 @@ export const LTXRipplePanel: React.FC<{
                     <p className="text-xs text-text-secondary">{videoLoading ? 'Reading source video duration...' : draft.videoDuration !== undefined
                         ? `Source: ${draft.videoDuration.toFixed(3)}s${sourceLimit !== undefined ? ` / up to ${sourceLimit} LTX frames with current loading settings` : ''}. Frame count is aligned down to 8n + 1. You can shorten it; extension requires this checkbox.`
                         : 'Upload a video to adapt the frame count automatically. Extension is off by default.'}</p>
-                    {sourceLimitError && <p role="alert" className="text-sm text-red-300">{sourceLimitError}</p>}
+                    {sourceLimitError && <p role="alert" className="text-sm text-danger">{sourceLimitError}</p>}
                 </div>
-                {groups.map(group => <RippleAccordion key={group.title} title={group.title}>{() => group.ids.map(id => <div key={id}><h4 className="mb-2 text-sm text-teal-200">{nodeTitles[id]}</h4>
-                    <div className="grid min-w-0 gap-3 sm:grid-cols-2">{Object.entries<RippleValue>(settings.nodes[id] || {}).map(([name, value]) => field(id, name, value))}</div></div>)}</RippleAccordion>)}
-                <details className="rounded-xl border border-border-primary p-3" open><summary className="cursor-pointer font-semibold">Seed</summary>
-                    <div className="mt-3">{field('1232', 'seed', settings.nodes['1232'].seed)}</div>
-                    <label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.randomizeSeed} onChange={event => onSettingsChange({ ...latestSettings.current, randomizeSeed: event.target.checked })} />Randomize seed</label>
-                </details>
+                {groups.map(group => <div key={group.title}><Accordion title={group.title}>{() => group.ids.map(id => <div key={id}><h4 className="mb-2 text-sm text-teal-200">{nodeTitles[id]}</h4>
+                    <div className="grid min-w-0 gap-3 sm:grid-cols-2">{Object.entries<RippleValue>(settings.nodes[id] || {}).map(([name, value]) => field(id, name, value))}</div></div>)}</Accordion></div>)}
+                <Accordion title="Seed" defaultOpen>
+                    {field('1232', 'seed', settings.nodes['1232'].seed)}
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.randomizeSeed} onChange={event => onSettingsChange({ ...latestSettings.current, randomizeSeed: event.target.checked })} />Randomize seed</label>
+                </Accordion>
             </div>
             <div className="min-w-0 space-y-4">
-                <label className="block text-sm">Editing prompt<textarea aria-label="Ripple editing prompt" rows={6} className={input} value={draft.prompt} onChange={event => updateDraft({ prompt: event.target.value })} /></label>
+                <PromptBox kind="instruction" label="Editing prompt" ariaLabel="Ripple editing prompt" rows={6} value={draft.prompt} onChange={prompt => updateDraft({ prompt })} />
                 <p className="text-xs text-text-secondary">The prompt is sent unchanged. Supply the already edited first frame and its original source video; this workflow does not create that first-frame edit.</p>
                 {(['image', 'video'] as const).map(kind => <div key={kind} className="space-y-2 rounded-xl border border-border-primary p-3">
                     <h3 className="font-semibold">{kind === 'image' ? 'Edited first frame (required)' : 'Source video (required)'}</h3>
@@ -276,26 +274,23 @@ export const LTXRipplePanel: React.FC<{
                     {kind === 'image' && imageURL && <img src={imageURL} alt="Ripple edited first frame" className="max-h-64 w-full object-contain" />}
                     {kind === 'video' && videoURL && <video src={videoURL} controls preload="metadata" className="max-h-64 w-full" />}
                 </div>)}
-                <RippleAccordion title="Additional LoRAs (4 optional slots)">{() => <>
-                    <p className="mt-2 text-xs text-text-secondary">Added after the required Ripple LoRA, before CacheDiT and attention patches. Use LTX 2.5-compatible LoRAs only.</p>
-                    <div className="mt-3 space-y-3">{settings.loras.map((lora, index) => {
+                <Accordion title="Additional LoRAs (4 optional slots)">{() => <>
+                    <p className="text-xs text-text-secondary">Added after the required Ripple LoRA, before CacheDiT and attention patches. Use LTX 2.5-compatible LoRAs only.</p>
+                    <div className="space-y-3">{settings.loras.map((lora, index) => {
                         const update = (patch: Partial<typeof lora>) => onSettingsChange({ ...latestSettings.current, loras: latestSettings.current.loras.map((value, slot) => slot === index ? { ...value, ...patch } : value) });
                         return <div key={index} className="space-y-2 rounded-lg border border-border-primary p-2">
                             <label className="flex gap-2 text-sm"><input type="checkbox" checked={lora.enabled} onChange={event => update({ enabled: event.target.checked })} />LoRA {index + 1}</label>
-                            <select aria-label={`Ripple additional LoRA ${index + 1}`} className={input} value={lora.name} onChange={event => update({ name: event.target.value })}>
-                                <option value="">Select a LoRA...</option>{lora.name && !loras.includes(lora.name) && <option value={lora.name}>{lora.name} (not listed)</option>}
-                                {loras.map(name => <option key={name} value={name}>{name}</option>)}
-                            </select>
-                            <label className="block text-xs">Strength<input aria-label={`Ripple LoRA ${index + 1} strength`} type="number" step="0.05" className={input} value={lora.strength} onChange={event => update({ strength: event.target.valueAsNumber })} /></label>
+                            <Select variant="search" ariaLabel={`Ripple additional LoRA ${index + 1}`} value={lora.name} options={loras} onChange={name => update({ name })} />
+                            <NumberField label="Strength" ariaLabel={`Ripple LoRA ${index + 1} strength`} step={0.05} value={lora.strength} onChange={strength => update({ strength })} />
                         </div>;
                     })}</div>
-                </>}</RippleAccordion>
+                </>}</Accordion>
             </div>
             <div className="space-y-3 xl:col-span-2"><p className="text-sm text-teal-200">{dimensions} · {rippleNumber(settings, '937', 'value')} frames · {rippleNumber(settings, '936', 'value')} FPS · {(rippleNumber(settings, '937', 'value') / rippleNumber(settings, '936', 'value')).toFixed(2)}s</p>
                 <div className="flex flex-wrap gap-2"><button type="button" className={button} onClick={() => void run('check')}>Check nodes and models</button>
                     <button type="button" className={button} onClick={() => void run('export')}>Export API workflow</button>
                     <button type="button" className={button} onClick={() => void save()}>Save setup to Library</button>
-                    <button type="button" className={`${button} border-teal-400/50 bg-teal-400/15 text-teal-200`} onClick={() => void run('generate')}>Generate LTX-Ripple-FFAF</button></div>
+                    <button type="button" className={`${button} border-accent bg-accent text-accent-text`} onClick={() => void run('generate')}>Generate LTX-Ripple-FFAF</button></div>
             </div>
         </fieldset>
         {busy && <div className="space-y-2"><progress className="w-full" max={1} value={progress} /><p className="text-xs">{live.node ? `Node ${live.node}` : 'Preparing / waiting'}{live.total ? ` - ${live.step ?? 0}/${live.total} steps` : ''}</p>

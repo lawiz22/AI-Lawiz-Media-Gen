@@ -6,6 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { uiModules } from '../components/ui/compileForTest.mjs';
 
 const read = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 const compile = source => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(source, {
@@ -36,6 +37,8 @@ const control = await import(compile(`
     import {mossGalleryStyle, mossStyleLoraMatches} from '${mossStyleURL}';
     import {defaultMossSettings} from '${mossURL}';
     import {defaultMossPhotoSettings, mossPhotoPrompt, mossPhotoSampling} from '${photoURL}';
+    import {NumberField} from '${uiModules.fields}';
+    import {ui} from '${uiModules.styles}';
     export let picker, saveButton;
     const useState = value => [value, () => {}], useMemo = fn => fn();
     const inventory = ${JSON.stringify(inventory)}, names = ${JSON.stringify(names)};

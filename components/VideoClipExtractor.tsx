@@ -5,6 +5,7 @@ import { addToLibrary } from '../store/librarySlice';
 import { fileToDataUrl, videoToThumbnail } from '../utils/imageUtils';
 import { canSaveVideoClip, extractVideoClip } from '../services/videoClipService';
 import { FilmIcon, DownloadIcon, SaveIcon, SpinnerIcon, StartFrameIcon, EndFrameIcon, CheckIcon, LibraryIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, ResizeIcon } from './icons';
+import { ui } from './ui/styles';
 
 interface VideoClipExtractorProps {
     videoFile: File | null;
@@ -122,10 +123,10 @@ export const VideoClipExtractor: React.FC<VideoClipExtractorProps> = ({ videoFil
             }
         }
     };
-    const inputClass = 'w-full bg-bg-primary p-2 rounded-md border border-border-primary text-sm';
+    const inputClass = `block ${ui.control}`;
     const buttonClass = 'flex items-center justify-center gap-2 p-3 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary-hover disabled:opacity-50 disabled:cursor-not-allowed';
 
-    return <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">
+    return <div className="p-6 rounded-lg border-l-4 border-accent">
         <div className="flex items-center gap-3 mb-4"><FilmIcon className="w-8 h-8 text-accent" /><h2 className="text-2xl font-bold text-accent">Video Extractor</h2></div>
         <p className="text-sm text-text-secondary mb-6">Extract a video segment as MP4 with its original audio. Processing stays on this device.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
@@ -150,13 +151,13 @@ export const VideoClipExtractor: React.FC<VideoClipExtractorProps> = ({ videoFil
                     <div className="flex items-center gap-2">
                         <button onClick={() => seek(currentTime - 1)} className={buttonClass} title="Seek 1 Second Backward"><ChevronDoubleLeftIcon className="w-5 h-5" /></button>
                         <button onClick={() => seek(currentTime - 1 / fps)} className={buttonClass} title="Previous Frame"><ChevronLeftIcon className="w-5 h-5" /></button>
-                        <input aria-label="Video position" type="range" min={0} max={duration} step={0.001} value={currentTime} onChange={event => seek(Number(event.target.value))} className="w-full" />
+                        <input aria-label="Video position" type="range" min={0} max={duration} step={0.001} value={currentTime} onChange={event => seek(Number(event.target.value))} className={`w-full ${ui.slider}`} />
                         <button onClick={() => seek(currentTime + 1 / fps)} className={buttonClass} title="Next Frame"><ChevronRightIcon className="w-5 h-5" /></button>
                         <button onClick={() => seek(currentTime + 1)} className={buttonClass} title="Seek 1 Second Forward"><ChevronDoubleRightIcon className="w-5 h-5" /></button>
                     </div>
                     <div className="flex items-center justify-between gap-2 text-sm text-text-secondary">
                         <span className="font-mono">{formatTime(currentTime)} / {formatTime(duration)}</span>
-                        <label className="flex items-center gap-2">FPS:<input aria-label="Video frame rate" type="number" min={1} max={240} step="any" value={fps} onChange={event => { const value = Number(event.target.value); if (value >= 1 && value <= 240) setFps(value); }} className="w-20 bg-bg-primary p-1 rounded border border-border-primary" /></label>
+                        <label className="flex items-center gap-2">FPS:<span className="block w-24"><input aria-label="Video frame rate" type="number" min={1} max={240} step="any" value={fps} onChange={event => { const value = Number(event.target.value); if (value >= 1 && value <= 240) setFps(value); }} className={ui.control} /></span></label>
                     </div>
                     <p className="text-xs text-text-muted">Set the source FPS for frame stepping. Variable-frame-rate videos use time-based boundaries.</p>
                     <fieldset disabled={disabled} className="grid grid-cols-2 gap-4">
@@ -189,10 +190,10 @@ export const VideoClipExtractor: React.FC<VideoClipExtractorProps> = ({ videoFil
                         </button>
                     </div>
                     {!canSaveVideoClip(result.duration) && <p className="text-sm text-text-secondary">Library saving is only available for clips shorter than 5 minutes. You can still download this MP4.</p>}
-                </> : <div className="h-64 flex items-center justify-center rounded-lg bg-bg-tertiary/50 text-text-muted">Your extracted MP4 will appear here.</div>}
+                </> : <div className="h-64 flex items-center justify-center rounded-lg bg-bg-tertiary text-text-muted">Your extracted MP4 will appear here.</div>}
                 <p className="text-xs text-text-muted">MP4 (H.264 / AAC). Half-resolution keeps the aspect ratio, rounded to even pixel dimensions. Long or large videos may take time and require substantial memory.</p>
             </div>
         </div>
-        {error && <p role="alert" className="mt-4 text-red-400 whitespace-pre-wrap">{error}</p>}
+        {error && <p role="alert" className="mt-4 text-danger whitespace-pre-wrap">{error}</p>}
     </div>;
 };

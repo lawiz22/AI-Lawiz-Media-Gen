@@ -1,6 +1,12 @@
 import React from 'react';
 import type { GenerationOptions } from '../types';
 import { ImageStyleControl } from './ImageStyleControl';
+import { NumberField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
+import { useModelInventory } from './useModelInventory';
+import { familyFiles } from '../services/styleLibrary';
 import { getQwen21Choices } from '../services/qwen21Workflow';
 import {
     defaultMossPhotoSettings, MOSS_PHOTO_FOCALS, MOSS_PHOTO_LONG_SIDES, MOSS_PHOTO_LOOKS,
@@ -8,7 +14,7 @@ import {
     type MossPhotoSettings, type PhotoPromptRow, type PhotoValue,
 } from '../services/mossPhotoWorkflow';
 
-const field = 'mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm';
+const field = `mt-1 block ${ui.control}`;
 const accordion = 'rounded-xl border border-border-primary bg-bg-secondary p-3';
 export const MossPhotoSettingsPanel: React.FC<{
     options: GenerationOptions; updateOptions: (patch: Partial<GenerationOptions>) => void;
@@ -16,15 +22,14 @@ export const MossPhotoSettingsPanel: React.FC<{
 }> = ({ options, updateOptions, objectInfo, disabled }) => {
     const settings = options.comfyMossPhoto || defaultMossPhotoSettings();
     const [opened, setOpened] = React.useState<Record<string, boolean>>({});
+    const { inventory } = useModelInventory();
     const update = (patch: Partial<MossPhotoSettings>) => updateOptions({ comfyMossPhoto: { ...settings, ...patch } });
     const toggle = (label: string, value: boolean, change: (value: boolean) => void) =>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-accent" checked={value} onChange={event => change(event.target.checked)} />{label}</label>;
     const select = (label: string, value: string, values: readonly string[], change: (value: string) => void) =>
-        <label className="block text-sm">{label}<select aria-label={label} className={field} value={value} onChange={event => change(event.target.value)}>
-            {values.map(entry => <option key={entry} value={entry}>{entry}</option>)}
-        </select></label>;
+        <Select<string> label={label} ariaLabel={label} value={value} options={values} onChange={change} />;
     const numeric = (label: string, value: number, change: (value: number) => void, min: number, max: number, step = 1) =>
-        <label className="block text-sm">{label}<input aria-label={label} type="number" className={field} value={value} min={min} max={max} step={step} onChange={event => change(Number(event.target.value))} /></label>;
+        <NumberField label={label} ariaLabel={label} value={value} min={min} max={max} step={step} onChange={change} />;
     const details = (title: string, content: React.ReactNode | (() => React.ReactNode), initiallyOpen = false) => {
         const open = opened[title] ?? initiallyOpen;
         return <details className={accordion} open={open} onToggle={event => {
@@ -55,21 +60,19 @@ export const MossPhotoSettingsPanel: React.FC<{
                 return !lora || (values[`lora ${lora[1]}`] !== 'None' && values[`lora ${lora[1]}`] !== '');
             }).map(([key, value]) => {
                 const [nodeType, input] = spec.id === '160' ? modelSchema(key) : [spec.classType, key];
+                const listed = /^lora \d$/.test(key) || key === 'model' ? familyFiles(getQwen21Choices(objectInfo, nodeType, input), 'moss', inventory) : getQwen21Choices(objectInfo, nodeType, input);
                 const choices = getQwen21Choices(objectInfo, nodeType, input);
-                const allChoices = [...new Set([String(value), ...(/^lora \d$/.test(key) ? ['None'] : []), ...choices])];
+                const allChoices = [...new Set([String(value), ...(/^lora \d$/.test(key) ? ['None'] : []), ...listed])];
                 const label = `${spec.title} / ${key}`;
                 const schema = objectInfo?.[nodeType]?.input;
                 const definition = schema?.required?.[input] || schema?.optional?.[input];
                 const bounds = Array.isArray(definition) && typeof definition[1] === 'object' && definition[1] !== null ? definition[1] : {};
                 if (typeof value === 'boolean') return <React.Fragment key={key}>{toggle(label, value, next => patch(key, next))}</React.Fragment>;
-                return <label key={key} className="min-w-0 text-xs text-text-secondary">{key}
-                    {typeof value === 'number' ? <input aria-label={label} type="number" className={field} value={value}
+                if (typeof value === 'number') return <div key={key} className="min-w-0 break-words"><NumberField label={key} ariaLabel={label} value={value}
                         min={typeof bounds.min === 'number' ? bounds.min : undefined} max={typeof bounds.max === 'number' ? Math.min(bounds.max, Number.MAX_SAFE_INTEGER) : undefined}
-                        step={Array.isArray(definition) && definition[0] === 'INT' ? 1 : 'any'} onChange={event => patch(key, Number(event.target.value))} />
-                        : choices.length || spec.id === '160' ? <select aria-label={label} className={field} value={value} onChange={event => patch(key, event.target.value)}>
-                            {allChoices.map(choice => <option key={choice} value={choice}>{choice}</option>)}
-                        </select> : <input aria-label={label} className={field} value={value} onChange={event => patch(key, event.target.value)} />}
-                </label>;
+                        step={Array.isArray(definition) && definition[0] === 'INT' ? 1 : undefined} onChange={next => patch(key, next)} /></div>;
+                if (choices.length || spec.id === '160') return <div key={key} className="min-w-0 break-words"><Select<string> variant={spec.id === '160' ? 'search' : 'native'} label={key} ariaLabel={label} value={String(value)} options={allChoices} onChange={next => patch(key, next)} /></div>;
+                return <label key={key} className="min-w-0 break-words text-sm font-medium text-text-secondary">{key}<input aria-label={label} className={field} value={String(value)} onChange={event => patch(key, event.target.value)} /></label>;
             })}</div>
         </section>;
     });
@@ -125,9 +128,7 @@ export const MossPhotoSettingsPanel: React.FC<{
             <p className="text-xs text-text-secondary">One active row is used. Disable look + lens text to send your positive prompt exactly as written. The AI writer model is not loaded.</p>
         </>, true)}
         {details('Look, people, quality & extras', <>
-            <label className="block text-sm">Look - select one<select aria-label="MOSS PHOTO look" className={field} value={settings.look} onChange={event => update({ look: event.target.value })}>
-                {MOSS_PHOTO_LOOKS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-            </select></label>
+            <Select<string> label="Look - select one" ariaLabel="MOSS PHOTO look" value={settings.look} options={MOSS_PHOTO_LOOKS.map(([id, label]) => ({ value: id, label }))} onChange={look => update({ look })} />
             {settings.look === 'F' && details('Your own style', <textarea aria-label="Your own style" className={field} rows={4} value={settings.ownStyle} onChange={event => update({ ownStyle: event.target.value })} />, true)}
             {settings.look === 'E' && details('Aerochrome IR (experimental)', () => group('ir'), true)}
             {settings.look === 'J' && <p className="text-xs text-warning">Polaroid uses its fixed lens look: focal text, sharpening and SeedVR2 detail are bypassed. Their saved settings are retained for other looks.</p>}
@@ -151,9 +152,7 @@ export const MossPhotoSettingsPanel: React.FC<{
         {details('Style Gallery - MOSS (additional style)', () => <ImageStyleControl mode="moss-photo" options={options} updateOptions={updateOptions} info={objectInfo || {}} disabled={disabled} />)}
         {details('Image size + focal length', () => <>
             {select('Aspect ratio', settings.ratio, MOSS_PHOTO_RATIOS, ratio => update({ ratio }))}
-            {settings.ratio !== 'Custom Resolution' && <label className="block text-sm">Size<select aria-label="MOSS PHOTO size" className={field} value={settings.sizeIndex} onChange={event => update({ sizeIndex: Number(event.target.value) })}>
-                {MOSS_PHOTO_LONG_SIDES.map((side, index) => <option key={side} value={index}>{side} px long side</option>)}
-            </select></label>}
+            {settings.ratio !== 'Custom Resolution' && <Select<number> label="Size" ariaLabel="MOSS PHOTO size" value={settings.sizeIndex} options={MOSS_PHOTO_LONG_SIDES.map((side, index) => ({ value: index, label: `${side} px long side` }))} onChange={sizeIndex => update({ sizeIndex })} />}
             {(settings.ratio === 'Custom Ratio' || settings.ratio === 'Custom Resolution') && details(settings.ratio, <div className="grid grid-cols-2 gap-3">
                 {(settings.ratio === 'Custom Ratio' ? settings.customRatio : settings.customResolution).map((value, index) => <React.Fragment key={index}>{numeric(index === 0 ? 'Custom width' : 'Custom height', value, next => {
                     const current = settings.ratio === 'Custom Ratio' ? settings.customRatio : settings.customResolution;
@@ -168,9 +167,7 @@ export const MossPhotoSettingsPanel: React.FC<{
             </div>
             {toggle('Swap width / height', settings.swap, swap => update({ swap }))}
             {settings.look !== 'J' && <>
-                <label className="block text-sm">Focal length<select aria-label="Focal length" className={field} value={settings.focal} onChange={event => update({ focal: event.target.value })}>
-                    {MOSS_PHOTO_FOCALS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-                </select></label>
+                <Select<string> label="Focal length" ariaLabel="Focal length" value={settings.focal} options={MOSS_PHOTO_FOCALS.map(([id, label]) => ({ value: id, label }))} onChange={focal => update({ focal })} />
                 {settings.focal !== 'Off' && details('Lens options', <>
                     {toggle('Auto ratio from lens', settings.autoRatio, autoRatio => update({ autoRatio }))}
                     {settings.focal === '8mm' && select('Fisheye type', settings.fisheye, ['Full-frame', 'Circular'], fisheye => update({ fisheye }))}
@@ -182,7 +179,7 @@ export const MossPhotoSettingsPanel: React.FC<{
         {details('Models & LoRAs', () => group('models'))}
         {details('Sampling & finishing', () => <>{group('sampler')}{group('finish')}</>)}
         {details('Negative prompt, seed & output', () => <>
-            <label className="block text-sm">Negative Prompt<textarea className={field} rows={4} value={settings.negativePrompt} onChange={event => update({ negativePrompt: event.target.value })} /></label>
+            <PromptBox kind="negative" highlight={false} label="Negative Prompt" ariaLabel="MOSS PHOTO Negative Prompt" rows={4} value={settings.negativePrompt} onChange={negativePrompt => update({ negativePrompt })} />
             <label className="block text-sm">Seed<input aria-label="MOSS PHOTO seed" className={field} type="number" min={0} max={Number.MAX_SAFE_INTEGER} step={1} placeholder="Random" value={options.comfySeed ?? ''} onChange={event => updateOptions({ comfySeed: event.target.value === '' ? undefined : Number(event.target.value) })} /></label>
             {select('Seed control', options.comfySeedControl || 'randomize', ['randomize', 'fixed', 'increment', 'decrement'], value => {
                 if (value === 'randomize' || value === 'fixed' || value === 'increment' || value === 'decrement') updateOptions({ comfySeedControl: value });

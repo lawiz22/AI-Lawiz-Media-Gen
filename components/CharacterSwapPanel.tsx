@@ -15,9 +15,15 @@ import {
 } from '../services/characterSwapService';
 import { CharacterSwapComparison } from './CharacterSwapComparison';
 import { LibraryPickerModal } from './LibraryPickerModal';
+import { Accordion } from './ui/Accordion';
+import { NumberField } from './ui/fields';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
+import { familyFiles } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-40';
-const input = 'w-full rounded-lg border border-border-primary bg-bg-primary p-2 text-sm';
+const input = `mt-1 block ${ui.control}`;
 const imageLibraryTypes: LibraryItemType[] = ['image', 'character', 'extracted-frame', 'clothes', 'hair', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo', 'logo', 'banner', 'album-cover'];
 const message = (cause: unknown): string => cause instanceof Error ? cause.message : String(cause);
 const modelInputs: Record<string, [string, string]> = {
@@ -35,6 +41,7 @@ const activeGraphSignature = (project: SwapProject): string =>
 
 export const CharacterSwapPanel: React.FC = () => {
     const dispatch = useDispatch<AppDispatch>();
+    const { inventory } = useModelInventory();
     const [project, setProject] = useState<SwapProject>();
     const current = useRef<SwapProject>();
     const [base, setBase] = useState('');
@@ -438,7 +445,7 @@ export const CharacterSwapPanel: React.FC = () => {
             {(error || project?.job?.error) && <p role="alert" className="whitespace-pre-wrap text-sm text-red-300">{error || project?.job?.error}</p>}
             {storageError && <p role="alert" className="text-sm text-red-300">{storageError} <button className={button} onClick={() => { if (current.current) void persist(current.current).catch(fail); }}>Retry saving</button></p>}
             <p role="status" className="text-sm text-text-secondary">{status || (!ready ? 'Loading saved project…' : plannerReady ? 'Project saved locally. Second pass is off by default.' : 'Loading your installed BFS planner…')}</p>
-            {active && <section aria-label="Character Swap render progress" className="space-y-2 rounded-lg border border-accent/40 bg-bg-primary p-3">
+            {active && <section aria-label="Character Swap render progress" className="space-y-2 rounded-lg border border-border-primary bg-bg-primary p-3">
                 {progressWarning && <p role="alert" className="text-sm text-amber-300">{progressWarning}</p>}
                 <div className="flex flex-wrap justify-between gap-2 text-sm">
                     <span className="font-medium text-accent">{progress.label}</span>
@@ -481,36 +488,32 @@ export const CharacterSwapPanel: React.FC = () => {
                     <p className="text-xs text-text-secondary">Choose saved Library media here. Computer uploads remain available in the planner below.</p></div>
                 <div className="flex flex-wrap items-center gap-2">
                 <button className={button} disabled={!plannerReady || busy || active} onClick={() => setLibraryTarget({ kind: 'video' })}>Choose video from Library</button>
-                <select aria-label="Library reference destination" className="rounded-lg border border-border-primary bg-bg-primary p-2 text-sm"
-                    disabled={!plannerReady || busy || active} value={referenceScope} onChange={event => setReferenceScope(event.target.value === 'shot' ? 'shot' : 'global')}>
-                    <option value="global">Global references</option><option value="shot">Selected shot references</option>
-                </select>
+                <Select<'global' | 'shot'> className="w-56" ariaLabel="Library reference destination" disabled={!plannerReady || busy || active} value={referenceScope}
+                    options={[{ value: 'global', label: 'Global references' }, { value: 'shot', label: 'Selected shot references' }]} onChange={setReferenceScope} />
                 <button className={button} disabled={!plannerReady || busy || active} onClick={() => pickReference('ref')}>Choose photo 1 from Library</button>
                 <button className={button} disabled={!plannerReady || busy || active} onClick={() => pickReference('ref2')}>Choose photo 2 from Library</button>
                 </div>
                 {(!plannerReady || busy || active) && <p className="text-xs text-amber-300">{active ? 'Finish or stop the current render before replacing its inputs.' : busy ? 'Wait for the current import or operation to finish.' : 'Library imports become available when the installed planner is connected. Use Reconnect planner if loading fails.'}</p>}
             </section>
-            <details>
-                <summary className="cursor-pointer text-sm font-medium">Character Swap workflow settings</summary>
-                <fieldset disabled={busy || active} className="mt-3 grid gap-3 md:grid-cols-3">
+            <Accordion title="Character Swap workflow settings">
+                <fieldset disabled={busy || active} className="grid gap-3 md:grid-cols-3">
                     {project && Object.entries(project.settings).filter(([key]) => key !== 'secondPass'
                         && (isRecord(project.plan.second_pass) && project.plan.second_pass.enabled === true || !/^(secondPass|upscale)/.test(key))).map(([key, value]) => {
                         const schema = modelInputs[key];
                         const choices = schema ? h3Choices(info, schema[0], schema[1]) : [];
-                        return <label key={key} className="min-w-0 space-y-1 text-xs text-text-secondary">{key.replace(/([A-Z])/g, ' $1')}
-                            {typeof value === 'boolean' ? <input className="ml-2" type="checkbox" checked={value} onChange={event => {
-                                if (current.current) void persist({ ...current.current, settings: { ...current.current.settings, [key]: event.target.checked } }).catch(fail);
-                            }} /> : <>
-                                <input className={input} type={typeof value === 'number' ? 'number' : 'text'} step="any" list={choices.length ? `swap-${key}` : undefined} value={String(value)} onChange={event => {
-                                    const next = typeof value === 'number' ? Number(event.target.value) : event.target.value;
-                                    if (current.current) void persist({ ...current.current, settings: { ...current.current.settings, [key]: next } }).catch(fail);
-                                }} />
-                                {choices.length > 0 && <datalist id={`swap-${key}`}>{choices.map(choice => <option key={choice} value={choice} />)}</datalist>}
-                            </>}
-                        </label>;
+                        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, first => first.toUpperCase()), name = `Character Swap ${label}`;
+                        const change = (next: string | number | boolean) => { if (current.current) void persist({ ...current.current, settings: { ...current.current.settings, [key]: next } }).catch(fail); };
+                        return <div key={key} className="min-w-0">
+                            {typeof value === 'boolean' ? <label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={value} onChange={event => change(event.target.checked)} />{label}</label>
+                                : typeof value === 'number' ? <NumberField label={label} ariaLabel={name} value={value} onChange={change} />
+                                // Without a loaded catalog the file name stays editable by hand.
+                                : choices.length ? <Select variant="search" label={label} ariaLabel={name} value={String(value)} onChange={change}
+                                    options={key === 'model' || /Lora$/.test(key) ? familyFiles(choices, 'minimax-h3', inventory) : choices} />
+                                : <label className={ui.label}>{label}<input aria-label={name} className={input} type="text" value={String(value)} onChange={event => change(event.target.value)} /></label>}
+                        </div>;
                     })}
                 </fieldset>
-            </details>
+            </Accordion>
         </section>
         <fieldset disabled={busy || active} inert={busy || active} className="min-w-0">
             <div className="overflow-x-auto rounded-xl border border-border-primary">

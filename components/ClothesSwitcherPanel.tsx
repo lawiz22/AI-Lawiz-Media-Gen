@@ -25,9 +25,16 @@ import { CreationSuiteResult as ResultImage } from './CreationSuiteResult';
 import { PresetSaveModal } from './PresetSaveModal';
 import { ConfirmationModal } from './ConfirmationModal';
 import { SaveIcon, TrashIcon } from './icons';
+import { Accordion } from './ui/Accordion';
+import { NumberField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
+import { familyFiles, flux2Family } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed';
-const input = 'mt-1 w-full min-w-0 rounded-lg border border-border-primary bg-bg-primary p-2 text-sm text-text-primary';
+const input = `mt-1 block ${ui.control}`;
 const initial = (): ClothesSwitcherDraft => ({ settings: defaultClothesSwitcherSettings() });
 const errorText = (cause: unknown) => cause instanceof Error ? cause.message : String(cause);
 const download = (blob: Blob, name: string) => {
@@ -39,12 +46,6 @@ const titles: Record<string, string> = {
     '148': 'Depth Anything V2 model', '161': 'Canny', '144': 'LoRA 1 - REMC', '165': 'LoRA 2 - kathl',
     '166': 'LoRA 3 - snofs', '168': 'LoRA 4', '167': 'CacheDiT', '9': 'Output',
 };
-const Accordion: React.FC<{ title: string; children: () => React.ReactNode }> = ({ title, children }) => {
-    const [open, setOpen] = useState(false);
-    return <details className="rounded-xl border border-border-primary p-4" onToggle={event => setOpen(event.currentTarget.open)}>
-        <summary className="cursor-pointer font-semibold">{title}</summary>{open && <div className="mt-4 space-y-4">{children()}</div>}
-    </details>;
-};
 export const ClothesSwitcherPanel: React.FC<{
     isComfyUIConnected: boolean | null;
     onModelChange: (model: string) => void;
@@ -52,6 +53,7 @@ export const ClothesSwitcherPanel: React.FC<{
     onPresetLoaded?: () => void;
 }> = ({ isComfyUIConnected, onModelChange, pendingPreset, onPresetLoaded }) => {
     const dispatch = useDispatch<AppDispatch>(), globalBusy = useSelector((state: RootState) => state.generation.isLoading);
+    const { inventory } = useModelInventory();
     const presets = useSelector((state: RootState) => state.library.items).filter(item => item.mediaType === 'preset' && item.clothesSwitcherOptions?.kind === 'parameters');
     const [selectedPresetId, setSelectedPresetId] = useState(''), [presetSaveOpen, setPresetSaveOpen] = useState(false), [presetDeleteOpen, setPresetDeleteOpen] = useState(false);
     const [draft, setDraft] = useState<ClothesSwitcherDraft>(initial), [ready, setReady] = useState(false);
@@ -126,17 +128,16 @@ export const ClothesSwitcherPanel: React.FC<{
         <div className="grid gap-3 sm:grid-cols-2">{Object.entries(settings.nodes[id]).filter(([name]) => !omit.includes(name)).map(([name, value]) => {
             const type = CLOTHES_SWITCHER_CONTROLS[id].class_type, choices = h3Choices(info, type, name);
             const schema = h3Input(info, type, name), config = Array.isArray(schema) && isRecord(schema[1]) ? schema[1] : {};
-            const label = `${titles[id]}: ${name.replaceAll('_', ' ')}`;
-            return <label key={name} className="min-w-0 text-xs text-text-secondary">{name.replaceAll('_', ' ')}
-                {typeof value === 'boolean' ? <input aria-label={label} type="checkbox" className="ml-2" checked={value} onChange={event => setValue(id, name, event.target.checked)} />
-                : choices.length || ['unet_name', 'clip_name', 'vae_name', 'lora_name', 'model'].includes(name) ? <select aria-label={label} className={input} value={String(value)} onChange={event => setValue(id, name, event.target.value)}>
-                    {!choices.includes(String(value)) && <option value={String(value)}>{String(value) || 'Select a model'} (current / not listed)</option>}
-                    {choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}
-                </select> : <input aria-label={label} className={input} type={typeof value === 'number' ? 'number' : 'text'} value={value}
-                    min={typeof config.min === 'number' ? config.min : undefined} max={typeof value === 'number' ? Math.min(typeof config.max === 'number' ? config.max : Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER) : undefined}
-                    step={Array.isArray(schema) && schema[0] === 'INT' || ['seed', 'steps', 'width', 'height', 'multiple_of'].includes(name) ? 1 : 'any'}
-                    onChange={event => setValue(id, name, typeof value === 'number' ? Number(event.target.value) : event.target.value)} />}
-            </label>;
+            const text = name.replaceAll('_', ' '), label = `${titles[id]}: ${text}`;
+            return <div key={name} className="min-w-0">
+                {typeof value === 'boolean' ? <label className="flex items-center gap-2 text-sm text-text-secondary"><input aria-label={label} type="checkbox" checked={value} onChange={event => setValue(id, name, event.target.checked)} />{text}</label>
+                : choices.length || ['unet_name', 'clip_name', 'vae_name', 'lora_name', 'model'].includes(name) ? <Select variant="search" label={text} ariaLabel={label} placeholder="Select a model" value={String(value)} onChange={choice => setValue(id, name, choice)}
+                    options={name === 'unet_name' ? familyFiles(choices, 'flux2', inventory) : name === 'lora_name' ? familyFiles(choices, flux2Family(String(settings.nodes['106'].unet_name)), inventory) : choices} />
+                : typeof value === 'number' ? <NumberField label={text} ariaLabel={label} value={value} onChange={number => setValue(id, name, number)}
+                    min={typeof config.min === 'number' ? config.min : undefined} max={Math.min(typeof config.max === 'number' ? config.max : Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)}
+                    step={Array.isArray(schema) && schema[0] === 'INT' || ['seed', 'steps', 'width', 'height', 'multiple_of'].includes(name) ? 1 : undefined} />
+                : <label className={ui.label}>{text}<input aria-label={label} className={input} type="text" value={value} onChange={event => setValue(id, name, event.target.value)} /></label>}
+            </div>;
         })}</div>
     </div>;
     const check = async () => {
@@ -214,26 +215,26 @@ export const ClothesSwitcherPanel: React.FC<{
             setSelectedPresetId(''); setStatus('Clothes Switcher parameter preset deleted.');
         } catch (cause) { setError(errorText(cause)); } finally { busy.current = false; setWorking(false); }
     };
-    return <section ref={root} className="min-w-0 space-y-5 rounded-2xl border border-accent/20 bg-bg-secondary p-4 sm:p-5">
+    return <section ref={root} className="min-w-0 space-y-5 rounded-2xl border border-border-primary bg-bg-secondary p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-accent">Clothes Switcher</h2>
             <p className="mt-1 text-sm text-text-secondary">The supplied FLUX2 Klein 9B workflow: original photo + depth + Canny references, with no automatic prompt rewriting.</p></div>
             <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-            <select aria-label="Clothes Switcher preset" className={`${input} !mt-0 !w-auto max-w-full sm:max-w-64`} disabled={locked}
-                value={presets.some(item => String(item.id) === selectedPresetId) ? selectedPresetId : ''} onChange={event => {
+            <Select className="w-64 max-w-full" ariaLabel="Clothes Switcher preset" disabled={locked}
+                value={presets.some(item => String(item.id) === selectedPresetId) ? selectedPresetId : ''}
+                options={[{ value: '', label: 'Load Preset...' }, ...presets.map(item => ({ value: String(item.id), label: item.name?.replace(/^CLOTHES-SWITCHER_FLUX2_Param_/, '') || `Preset ${item.id}` }))]}
+                onChange={value => {
                     if (locked || busy.current) return;
-                    const item = presets.find(candidate => String(candidate.id) === event.target.value);
+                    const item = presets.find(candidate => String(candidate.id) === value);
                     if (item) void restore(item).catch(cause => setError(errorText(cause))); else setSelectedPresetId('');
-                }}>
-                <option value="">Load Preset...</option>{presets.map(item => <option key={item.id} value={item.id}>{item.name?.replace(/^CLOTHES-SWITCHER_FLUX2_Param_/, '') || `Preset ${item.id}`}</option>)}
-            </select>
+                }} />
             <button type="button" className={button} title="Save Current Parameters as Preset" aria-label="Save Clothes Switcher preset" disabled={locked} onClick={() => setPresetSaveOpen(true)}><SaveIcon className="h-4 w-4" /></button>
             {presets.some(item => String(item.id) === selectedPresetId) && <button type="button" className={button} title="Delete Selected Preset" aria-label="Delete Clothes Switcher preset" disabled={locked} onClick={() => setPresetDeleteOpen(true)}><TrashIcon className="h-4 w-4" /></button>}
             <button type="button" className={button} disabled={locked} onClick={() => {
                 if (!window.confirm('Reset only Clothes Switcher to the supplied workflow defaults and clear its input/results?')) return;
                 setDraft(initial()); setSelectedPresetId(''); clearResults(); setError(''); setStatus('');
             }}>Start from scratch</button></div></div>
-        {error && <p role="alert" className="whitespace-pre-wrap rounded-lg border border-red-400/40 p-3 text-sm text-red-300">{error}</p>}
-        {storageError && <p role="alert" className="text-sm text-red-300">{storageError}</p>}
+        {error && <p role="alert" className="whitespace-pre-wrap rounded-lg border border-danger bg-danger-bg p-3 text-sm text-danger">{error}</p>}
+        {storageError && <p role="alert" className="text-sm text-danger">{storageError}</p>}
         {status && <p role="status" className="text-sm text-text-secondary">{status}</p>}
         <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
             <aside aria-label="Clothes Switcher options" className="order-2 min-w-0 lg:order-1">
@@ -255,7 +256,7 @@ export const ClothesSwitcherPanel: React.FC<{
                         {settings.nodes['167'].enable === true && fields('167', ['enable'])}</>}</Accordion>
                     <Accordion title="Sampling and seed">{() => <>{fields('138')}<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.randomizeSeed} onChange={event => setDraft(current => ({ ...current, settings: { ...current.settings, randomizeSeed: event.target.checked } }))} />Randomize seed</label></>}</Accordion>
                     <Accordion title="Resize, Depth Anything V2 and Canny">{() => <>{['146', '148', '161'].map(id => fields(id))}</>}</Accordion>
-                    <Accordion title="Negative prompt and output">{() => <><label className="block text-sm">Negative prompt<textarea aria-label="Clothes Switcher negative prompt" className={input} rows={4} value={String(settings.nodes['109'].text)} onChange={event => setValue('109', 'text', event.target.value)} /></label>{fields('9')}</>}</Accordion>
+                    <Accordion title="Negative prompt and output">{() => <><PromptBox kind="negative" label="Negative prompt" ariaLabel="Clothes Switcher negative prompt" rows={4} value={String(settings.nodes['109'].text)} onChange={value => setValue('109', 'text', value)} />{fields('9')}</>}</Accordion>
                     <div className="flex flex-wrap gap-2"><button type="button" className={button} onClick={() => void check()}>Check workflow</button>
                         <button type="button" className={button} onClick={() => void run(true)}>Export API workflow</button>
                         <button type="button" className={button} onClick={() => void save()}>Save setup to Library</button>
@@ -265,9 +266,9 @@ export const ClothesSwitcherPanel: React.FC<{
             <div aria-label="Clothes Switcher prompt and generation" className="order-1 min-w-0 space-y-4 lg:order-2">
                 <fieldset disabled={locked} className="min-w-0 space-y-4 disabled:opacity-60">
                     <legend className="mb-3 font-bold">Prompt and generation</legend>
-                    <label className="block text-sm">Describe the clothing change<textarea aria-label="Clothes Switcher prompt" className={input} rows={7} placeholder="Describe the outfit you want..." value={String(settings.nodes['108'].text)} onChange={event => setValue('108', 'text', event.target.value)} /></label>
+                    <PromptBox label="Describe the clothing change" ariaLabel="Clothes Switcher prompt" rows={7} placeholder="Describe the outfit you want..." value={String(settings.nodes['108'].text)} onChange={value => setValue('108', 'text', value)} />
                     <p className="text-xs text-text-secondary">Sent verbatim to CLIP. Up to four independently enabled LoRAs run in slot order before CacheDiT. The three original slots default to 1 / 0.9 / 0.8; slot 4 starts disabled.</p>
-                    <button type="button" className={`${button} w-full border-accent/50 bg-accent/10 py-3 text-accent`} disabled={!isComfyUIConnected || !draft.file} onClick={() => void run(false)}>Generate Clothes Switcher</button>
+                    <button type="button" className={`${button} w-full border-accent bg-accent py-3 text-accent-text`} disabled={!isComfyUIConnected || !draft.file} onClick={() => void run(false)}>Generate Clothes Switcher</button>
                 </fieldset>
                 {running && <div className="space-y-2"><progress aria-label="Clothes Switcher progress" className="w-full" max={1} value={progress} />
                     <button type="button" className={button} disabled={cancelling} onClick={() => { setCancelling(true); controller.current?.abort(); }}>Cancel this job</button>

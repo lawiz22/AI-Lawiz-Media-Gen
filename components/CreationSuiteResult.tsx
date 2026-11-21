@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CheckIcon, CloseIcon, DownloadIcon, SaveIcon, SpinnerIcon, ZoomIcon } from './icons';
 import { SendToLTXButton } from './SendToLTXButton';
 
-const action = 'rounded-full bg-bg-secondary/90 p-2 text-text-primary shadow-lg transition-colors hover:bg-accent hover:text-accent-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40';
+const action = 'rounded-full bg-bg-secondary p-2 text-text-primary shadow-lg transition-colors hover:bg-accent hover:text-accent-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40';
 export const CreationSuiteResult: React.FC<{
     src: string;
     title: string;

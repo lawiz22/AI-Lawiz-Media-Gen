@@ -3,6 +3,7 @@ import ReactCrop, { centerCrop, makeAspectCrop, type PercentCrop } from 'react-i
 import 'react-image-crop/dist/ReactCrop.css';
 import { extractVideoClip } from '../services/videoClipService';
 import { referenceToken, type VideoReference } from '../services/videoPromptService';
+import { NumberField } from './ui/fields';
 
 export const useMediaURL = (file: Blob | undefined): string => {
     const [url, setURL] = useState('');
@@ -14,7 +15,6 @@ export const useMediaURL = (file: Blob | undefined): string => {
     return url;
 };
 const fullCrop: PercentCrop = { unit: '%', x: 0, y: 0, width: 100, height: 100 };
-const input = 'w-full rounded-lg border border-border-primary bg-bg-primary p-2 text-text-primary';
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm hover:bg-bg-tertiary disabled:opacity-40';
 const even = (value: number) => Math.max(2, Math.min(4096, Math.round(value / 2) * 2));
 
@@ -134,25 +134,25 @@ export const VideoReferenceEditor: React.FC<{
                     <button type="button" className={button} onClick={() => { setRatio('free'); changeCrop(fullCrop); }}>Clear crop</button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                    <label className="text-sm">Width (px)<input aria-label="Output width" type="number" min={2} max={4096} step={2} className={input} value={width} onChange={event => {
-                        const value = Number(event.target.value); setWidth(value); if (lockRatio) setHeight(even(value / cropAspect));
-                    }} /></label>
-                    <label className="text-sm">Height (px)<input aria-label="Output height" type="number" min={2} max={4096} step={2} className={input} value={height} onChange={event => {
-                        const value = Number(event.target.value); setHeight(value); if (lockRatio) setWidth(even(value * cropAspect));
-                    }} /></label>
+                    <NumberField label="Width (px)" ariaLabel="Output width" min={2} max={4096} step={2} value={width} onChange={value => {
+                        setWidth(value); if (lockRatio) setHeight(even(value / cropAspect));
+                    }} />
+                    <NumberField label="Height (px)" ariaLabel="Output height" min={2} max={4096} step={2} value={height} onChange={value => {
+                        setHeight(value); if (lockRatio) setWidth(even(value * cropAspect));
+                    }} />
                 </div>
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={lockRatio} onChange={event => {
                     setLockRatio(event.target.checked); if (event.target.checked) setHeight(even(width / cropAspect));
                 }} />Preserve cropped aspect ratio (uncheck to stretch)</label>
                 {isVideo && <div className="grid grid-cols-2 gap-3">
-                    <label className="text-sm">Start (seconds)<input aria-label="Video trim start" type="number" min={0} max={duration} step={0.01} value={start} onChange={event => setStart(Number(event.target.value))} className={input} /></label>
-                    <label className="text-sm">End (seconds)<input aria-label="Video trim end" type="number" min={0} max={duration} step={0.01} value={end} onChange={event => setEnd(Number(event.target.value))} className={input} /></label>
+                    <NumberField label="Start (seconds)" ariaLabel="Video trim start" min={0} max={duration} step={0.01} value={start} onChange={value => setStart(value)} />
+                    <NumberField label="End (seconds)" ariaLabel="Video trim end" min={0} max={duration} step={0.01} value={end} onChange={value => setEnd(value)} />
                 </div>}
             </fieldset>
-            {error && <p role="alert" className="whitespace-pre-wrap text-sm text-red-400">{error}</p>}
+            {error && <p role="alert" className="whitespace-pre-wrap text-sm text-danger">{error}</p>}
             <div className="flex justify-end gap-2">
                 {busy ? <button type="button" className={button} onClick={() => controller.current?.abort()}>Cancel encoding ({Math.round(progress)}%)</button>
-                    : <><button type="button" className={button} onClick={onClose}>Cancel</button><button type="button" disabled={!size.width} className={`${button} bg-accent/15 text-accent`} onClick={save}>Apply crop & resize</button></>}
+                    : <><button type="button" className={button} onClick={onClose}>Cancel</button><button type="button" disabled={!size.width} className={`${button} border-accent text-accent`} onClick={save}>Apply crop & resize</button></>}
             </div>
         </section>
     </div>;

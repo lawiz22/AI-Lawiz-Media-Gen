@@ -1,10 +1,15 @@
 import type { CSSProperties } from 'react';
 
+// A light base swaps palette colours through --ink-x<hex> (index.html); otherwise the fallback applies.
+const themed = (color: string, fallback = color) => `var(--ink-x${color.slice(1).toLowerCase()}, ${fallback})`;
+
 export const createAccentStyle = (accent: string, light: string, hover: string): CSSProperties => ({
-    '--color-accent': accent,
-    '--color-accent-light': light,
-    '--color-accent-lighter': light,
-    '--color-accent-hover': hover,
+    '--color-accent': themed(accent),
+    '--color-accent-light': themed(light),
+    '--color-accent-lighter': themed(light),
+    // Dark bases put dark text on these pastel accents, so hovering lightens instead of darkening.
+    '--color-accent-hover': themed(hover, light),
+    '--color-accent-text': 'var(--ink-on-accent, #030712)',
 } as CSSProperties);
 
 export const TAB_ACCENT_STYLES: Record<string, CSSProperties> = {

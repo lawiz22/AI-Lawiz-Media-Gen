@@ -141,7 +141,8 @@ test('image generation snapshots keep the original style across progressive resu
     assert.equal(state.generatedContent.image.options, undefined, 'Clearing without a snapshot must not retain old settings.');
     const app = read('../App.tsx');
     assert.match(app, /images: \[\], options: currentOptions/);
-    assert.match(app, /options=\{generatedContent\[imageGeneratorContentKey\]\?\.options \?\? currentOptions\}/);
+    assert.match(app, /content=\{generatedContent\[imageGeneratorContentKey\]\}/);
+    assert.match(read('../components/ImageGeneratorTab.tsx'), /options=\{content\?\.options \?\? options\}/);
 });
 
 test('original and enhanced images retain their source style hashtag without changing enhancement settings', async () => {

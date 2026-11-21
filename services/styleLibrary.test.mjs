@@ -20,6 +20,20 @@ const style = (patch = {}) => ({
     id: 'test', title: 'My style', model: 'FLUX2-9B', lora: 'style.safetensors', strength: 0.7, trigger: '', prompt: 'A drawing',
     notes: '', settings: {}, ...patch,
 });
+test('listbox family filter keeps the family by name or My Library tag, drops the other FLUX2 variant and never empties a list', () => {
+    const names = ['QWEN\\lightning-4steps.safetensors', 'FLUX2\\style-9b.safetensors', 'FLUX2\\style-4b.safetensors', 'FLUX2\\plain.safetensors', 'custom\\portrait.safetensors', 'SDXL\\detail-xl.safetensors'];
+    assert.deepEqual(api.familyFiles(names, 'qwen-edit'), ['QWEN\\lightning-4steps.safetensors']);
+    assert.deepEqual(api.familyFiles(names, 'sdxl'), ['SDXL\\detail-xl.safetensors']);
+    assert.deepEqual(api.familyFiles(names, 'flux2'), ['FLUX2\\style-9b.safetensors', 'FLUX2\\style-4b.safetensors', 'FLUX2\\plain.safetensors']);
+    assert.deepEqual(api.familyFiles(names, 'flux2-9b'), ['FLUX2\\style-9b.safetensors', 'FLUX2\\plain.safetensors']);
+    assert.deepEqual(api.familyFiles(names, 'flux2-4b'), ['FLUX2\\style-4b.safetensors', 'FLUX2\\plain.safetensors']);
+    const tagged = inventory(item('loras/custom/portrait.safetensors', { userFamily: 'qwen-edit' }));
+    assert.deepEqual(api.familyFiles(names, 'qwen-edit', tagged), ['QWEN\\lightning-4steps.safetensors', 'custom\\portrait.safetensors']);
+    assert.deepEqual(api.familyFiles(names, 'moss'), names, 'no MOSS file: the whole list stays available');
+    assert.equal(api.flux2Family('flux2\\flux2Klein9BInt8_v10.safetensors'), 'flux2-9b');
+    assert.equal(api.flux2Family('flux-2-klein-4b-Q4_K_M.gguf'), 'flux2-4b');
+    assert.equal(api.flux2Family('custom-unet.safetensors'), 'flux2');
+});
 test('style triggers lead the prompt, move existing whole-token copies and never remove substrings or interpret regex syntax', () => {
     const selected = style({ trigger: 'INK_TRIGGER', prompt: 'Ink drawing' });
     for (const base of ['A portrait', 'A portrait INK_TRIGGER', 'ink_trigger\nA portrait INK_TRIGGER', 'A portrait INK_TRIGGER\nInk drawing']) {

@@ -4,7 +4,7 @@
 
 **A Windows creative workstation for cloud AI, Ollama, and local ComfyUI production.**
 
-[![Version](https://img.shields.io/badge/version-1.88.0-0ea5e9?style=for-the-badge)](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
+[![Version](https://img.shields.io/badge/version-2.0.0-0ea5e9?style=for-the-badge)](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vite.dev/)
@@ -33,7 +33,18 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 | Library | Save media and exact generation settings, import saved image prompts without changing settings, search/tag/rate assets and back up projects | [Library and backups](docs/features/library.md) / [Prompt import](docs/features/images-and-characters.md#importing-library-prompts) |
 | Installation diagnostics | Check backend connections, feature readiness, required nodes and the connected ComfyUI model inventory | [What's installed](docs/connections.md#installation-overview) |
 
-## What's new in 1.88
+## What's new in 2.0
+
+Version 2.0 reworks the interface and its internals without adding workflows.
+
+- **One layout for every settings panel**: sources first, then the **Models**, **LoRAs**, **Sampler** and **Advanced** sections on the left; prompt, Generate and results on the right. Panels without model settings keep their own layout.
+- **Standard controls**: searchable lists for models, LoRAs and samplers, filtered by model family where possible; sliders with a manual number field; prompt boxes coloured by role with highlighted prompt tokens.
+- **Reliability**: lists and menus are released after a generation, a stop or an error, and switching tabs no longer cancels a running job. Hidden tabs keep their state.
+- **Themes**: Studio Light is readable on every screen; dark themes use dark text on accent buttons; the header and the tab bar are opaque.
+- **Removed**: the FLUX 1, Nunchaku, FLUX Krea and WAN 2.2 workflows. Library items created with them remain visible.
+- **Documentation**: [COMFYUI_REQUIRED_NODES.txt](COMFYUI_REQUIRED_NODES.txt) was rebuilt from the workflows (212 node classes, 45 custom-node packages) and the guides were checked against the code.
+
+## Added in 1.88
 
 ### Latest image and workflow additions
 

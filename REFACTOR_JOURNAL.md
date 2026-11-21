@@ -831,13 +831,974 @@ Captures relues : Swap a Person avec les curseurs ; Swap Anything et Stylise Any
 
 Non vérifié : aucune génération, même simulée, n'a été lancée depuis ces trois panneaux après la migration ; le code de génération n'a pas changé, mais le trajet « réglage modifié → requête envoyée » n'est couvert que jusqu'à l'affichage de la valeur. Aucune exécution dans Electron.
 
-### Reste à faire dans B5e
+### 2026-11-19 — B5e, étape 5 : Photo Fusion
 
-| Panneau | État |
+Fichiers touchés : `components/groupPhotoFusion/GroupPhotoFusionPanel.tsx`, `ImagePreview.tsx`, `PoseSelector.tsx`, `QualitySelector.tsx` (même dossier).
+
+**Écart assumé à la règle de disposition.** Photo Fusion n'a pas de prompt : c'est un parcours par étapes (photos, arrière-plan, pose, qualité, réglages, nombre d'images, génération). Ce parcours est conservé tel quel. Seuls les réglages FLUX2 et QWEN-Edit prennent la forme standard : un titre suivi des sections repliables Models, LoRAs, Sampler et Advanced, fermées au départ, à la place du bloc unique « Advanced Settings ».
+
+- Listes de modèles, LoRA, samplers et schedulers : listbox du kit avec recherche ; même comportement « (not listed) » qu'à l'étape 2.
+- Réglages numériques bornés : curseur avec champ de saisie, mêmes bornes et mêmes pas. Le nombre d'images à générer (1 à 4) devient lui aussi un curseur avec champ.
+- Seed : champ « Seed (-1 = random) », liste Seed Control et curseur Seed Step affiché seulement pour Increment et Decrement, comme avant.
+- Boutons du préréglage Lightning (4 et 8 étapes) conservés.
+- Barre du moteur (modèle, taille et niveau de réflexion Gemini, modèle Mammouth) et choix de l'expression de chaque sujet : listbox du kit, noms accessibles inchangés.
+- Opacité sur couleur du thème : 7 classes remplacées. Une conséquence visible : le détail d'une erreur de génération, jusqu'ici invisible, s'affiche en rouge.
+
+Comparaison avec le relevé d'avant, pour les quatre moteurs : même nombre de contrôles (28, 25, 12 et 10), mêmes noms, mêmes valeurs, même nombre de curseurs ; seul le type des listes change (liste native → listbox du kit).
+
+### 2026-11-19 — B5e, étape 6 : Past Forward
+
+Fichiers touchés : `components/pastForward/PastForwardPanel.tsx`, `scripts/browser/panel-controls-audit.mjs`.
+
+Même écart et même traitement que Photo Fusion : la disposition « 1. Source & Theme » à gauche, résultats par décennie à droite, est conservée.
+
+- Les blocs « FLUX2 Advanced Settings » et « QWEN-Edit Advanced Settings » deviennent un titre suivi des sections standard : Models, Sampler et Advanced pour FLUX2 (ce panneau n'a jamais eu de LoRA FLUX2, aucune n'est ajoutée) ; Models, LoRAs, Sampler et Advanced pour QWEN-Edit. La case « Enable Lightning LoRA » est dans la section LoRAs ; CacheDiT est dans Advanced.
+- Le préréglage Lightning de QWEN-Edit est maintenant visible sans déplier de bloc.
+- Mêmes valeurs par défaut, mêmes bornes et mêmes pas pour les dix réglages numériques, tous en curseur avec champ.
+- Barre du moteur : listbox du kit, noms accessibles inchangés, indicateurs de chargement conservés.
+- Les six groupes de listes par décennie (coiffure, événement historique, vêtements, lieu, type de photo, plan et angle) : listbox du kit, noms accessibles inchangés. Chaque ligne est un `div` au lieu d'un `label` ; cliquer sur « 1950s » ne donne donc plus le focus à la liste.
+- Opacité sur couleur du thème : 9 classes remplacées. Deux conséquences visibles : le texte d'erreur d'une décennie en échec, jusqu'ici invisible, s'affiche en rouge ; le cadre des cartes de résultat actives prend la couleur d'accent au lieu du blanc par défaut (c'est ce que le code demandait).
+- Retirés : l'état `advancedOpen`, la fonction `withCurrent`, les imports `NumberSlider` et `SelectInput`.
+
+Harnais : une variante peut enchaîner des clics (boutons, cases). Past Forward a six relevés : les quatre moteurs, puis « woman reimagined » et « historical », qui font apparaître les listes conditionnelles.
+
+Comparaison avec le relevé d'avant, pour les quatre moteurs : même nombre de contrôles (36, 38, 10 et 8), mêmes valeurs, même nombre de curseurs (5 et 5) ; les 12 listes de vêtements et de lieux ont les mêmes noms, valeurs et nombres de choix. Limite : les listes de coiffure, d'événement historique, de type de photo et de plan n'ont pas de relevé « avant » (les variantes qui les affichent ont été ajoutées après la migration). Elles sont vérifiées par l'exercice et par relecture du code.
+
+### 2026-11-19 — Vérification finale de B5e
+
+| Vérification | Étapes 1 à 4 | Maintenant |
+| --- | --- | --- |
+| Tests `npm test` | 971 tests : 957 réussis, 0 en échec, 14 ignorés | Identique |
+| `npm run typecheck` | 18 erreurs | 18 erreurs, mêmes 9 fichiers |
+| Build Vite (dossier temporaire) | Réussi | Réussi en 5,83 s |
+| `check:panels` avec exercice | 6 relevés sur 6 | 14 relevés sur 14 : Photo Fusion 22, 20, 6 et 5 contrôles modifiés ; Past Forward 26, 28, 3, 1, 44 et 32 ; Swap Anything 26 ; Swap a Person 28 et 22 ; Stylise Anything 13 |
+| `check:locks`, `check:tab-jobs`, `check:ui` | 13/13, 6/6, 12/12 | 13/13, 6/6, 12/12 |
+| `check:tabs` | Relevé identique | Relevé identique (26 lignes de visite, 0 différence) |
+| `profile:renders` | 5 vérifications réussies | 5 vérifications réussies |
+
+Les deux remplacements de classe dans `PoseSelector.tsx` et `QualitySelector.tsx` ont été faits après ces passages ; le typecheck a été relancé ensuite (18 erreurs, mêmes fichiers).
+
+Captures relues : Photo Fusion (FLUX2), Past Forward (QWEN-Edit et « woman reimagined »), Swap Anything et Stylise Anything avec les curseurs. Dans le ComfyUI simulé, le sampler par défaut de Swap Anything (`ddim`) s'affiche « (not listed) » parce que le catalogue simulé ne le contient pas.
+
+Non vérifié : aucune génération, même simulée, n'a été lancée depuis les cinq panneaux après la migration ; le code de génération n'a pas changé, mais le trajet « réglage modifié → requête envoyée » n'est couvert que jusqu'à l'affichage de la valeur. Les états en cours de génération, les cartes de résultat remplies et les messages d'erreur n'ont pas été vus à l'écran. Aucune exécution dans Electron.
+
+### État de B5e
+
+**Terminé.** Les cinq panneaux de l'onglet Fun utilisent le kit : plus aucun `select` brut ni composant de `InputComponents` pour les listes et les curseurs (`TextInput` reste utilisé dans Swap Anything et Stylise Anything), plus aucune classe d'opacité sur couleur du thème dans ces fichiers.
+
+Reste de B5, dans l'ordre prévu : B5a Image Generator, B5b Character, B5c Scene Variation, B5d Video, B5f Tools, B5g Library / Models / Settings.
+
+### 2026-11-19 — B5a (Image Generator), étape 1 : relevé de référence
+
+Fichier touché : `scripts/browser/panel-controls-audit.mjs`.
+
+- Nouveau groupe `image` (`LAWIZ_AUDIT_GROUP=image`) : 22 variantes, une par workflow (SD 1.5 T2I, Refine, I2I ; SDXL ; QWEN T2I et Edit ; QWEN 2.1 T2I et Turbo ; Z-Image ; FLUX2 Simple et Edit ; KREA2 Simple, RAW et Edit ; MOSS Image et PHOTO) et par fournisseur cloud (Mammouth et Gemini, T2I et I2I, Inpaint, Compose).
+- Le relevé contient maintenant les bornes et le pas de chaque curseur et de chaque champ numérique.
+- Le catalogue simulé propose deux modèles valides par famille. Un listbox passe l'exercice dès qu'un autre choix est conservé (voir le constat ci-dessous).
+- Relevé pris avant toute modification : `%TEMP%\lawiz-image-controls-before.json`, captures dans `%TEMP%\lawiz-image-shots-before`.
+
+Constat (existant, non modifié) : dans Image Generator, la liste des modèles propose tous les fichiers du type (par exemple tous les GGUF), mais un effet du panneau remet aussitôt un modèle de la famille du workflow si on en choisit un d'une autre famille. La liste offre donc des choix qui ne peuvent pas être gardés. À décider : filtrer la liste, ou laisser choisir librement.
+
+### 2026-11-19 — B5a, étape 2 : tous les anciens curseurs passent au kit
+
+Fichiers touchés : `components/InputComponents.tsx`, `components/ui/fields.tsx`, `services/styleSampling.test.mjs`.
+
+`NumberSlider` et `CheckboxSlider` deviennent des enveloppes du curseur du kit, comme `SelectInput`, `TextInput` et `MenuSelect` depuis B4. **Effet dans tous les onglets, y compris ceux qui ne sont pas encore migrés** : chaque curseur a son champ de saisie manuelle (beaucoup n'en avaient pas), le même style, et un nom accessible (le champ porte le nom du réglage, le curseur le même nom suivi de « slider »). Le libellé n'affiche plus la valeur (« Steps: 10 » devient « Steps »), puisque le champ la montre.
+
+Bornes, pas, valeurs par défaut et fonctions appelées : inchangés. Le test `styleSampling` lisait « Steps: 10 » dans le balisage ; il lit maintenant la valeur du curseur.
+
+### 2026-11-19 — B5a, étape 3 : disposition standard d'Image Generator
+
+Fichiers touchés : `App.tsx`, `components/OptionsPanel.tsx`, `components/LoraSettingsPanel.tsx`, `components/SamplerSettingsPanel.tsx`, `components/Qwen21SettingsPanel.tsx`, `components/MossSettingsPanel.tsx`, `components/Krea2EditSettingsPanel.tsx`, `components/ActionControlPanel.tsx`, `components/ImageGeneratorHeader.tsx`, et trois tests (`styleSampling`, `krea2Style`, `civitaiService`).
+
+Ce qui change pour l'utilisateur :
+
+- **Colonne de gauche** : image source, puis les sections repliables Models, LoRAs, Sampler et Advanced, dans cet ordre. Les panneaux LoRA et Sampler, qui étaient à droite sous les résultats, sont maintenant à gauche. Ils restent ouverts par défaut comme avant ; Models et Advanced restent fermés comme avant.
+- **Colonne de droite** : une carte « Prompt » (prompts, bouton Import Library Prompt, exemples de prompts, « Generate Prompt from Source »), puis la barre Generate, puis les résultats. Les prompts étaient à gauche.
+- **Listes de modèles, LoRA, samplers et schedulers** : listbox du kit avec recherche. Un modèle absent de l'installation s'affiche « (not listed) ».
+- **Barre Generate** : format, résolution et nombre d'images sont des contrôles du kit avec leur libellé ; le nombre d'images, les mégapixels de Z-Image et de FLUX2 Edit ont un curseur et un champ.
+- **Refine** (SD 1.5, SDXL, QWEN, Z-Image) : Denoise Strength et Megapixels ont un curseur et un champ.
+- **Liste des presets** de l'en-tête : listbox du kit.
+- **KREA2 Edit, MOSS Image, QWEN 2.1** : même découpage (Models, LoRAs, Sampler, Advanced à gauche ; prompts à droite). Dans KREA2 Edit, le constructeur de prompt est dans la carte Prompt. Tous leurs `select` bruts passent au kit.
+- **Cloud (Mammouth, Gemini)** : le prompt, l'instruction d'édition, la tâche d'inpainting et les instructions de composition sont dans la carte Prompt ; le modèle, le masque et les images d'éléments restent à gauche.
+
+Écarts assumés, à confirmer par l'utilisateur :
+
+1. **FLUX2 Edit garde sa disposition** : instruction d'édition à gauche ; style, source, références et LoRA additionnels dans l'espace de travail de droite. Un test existant décrit cette disposition comme voulue (`flux2Style` : « i2i keeps the editing prompt on the left… »). Seuls ses réglages passent en sections Models / Sampler / Advanced.
+2. **MOSS PHOTO n'est pas migré** : ce panneau a sa propre structure guidée et un test qui en vérifie l'ordre. Ses curseurs sont au kit (étape 2), ses 5 `select` bruts et ses champs numériques restent à faire.
+3. Les quatre panneaux QWEN 2.1 I2I (Multi Images, Consistency, Turbo, Remove Background) sont affichés dans Image Generator mais appartiennent à B5c dans le plan ; ils ne sont pas touchés.
+
+Détails techniques :
+
+- `OptionsPanel` reçoit `promptContainer` (élément de la colonne de droite qui reçoit la carte Prompt par portail, même mécanisme que l'espace de travail FLUX2 Edit) et `settingsSlot` (sections LoRAs et Sampler, placées entre Models et Advanced). Sans ces propriétés, l'onglet Character garde exactement son rendu.
+- `Qwen21SettingsPanel`, `MossSettingsPanel` et `Krea2EditSettingsPanel` acceptent les sections `models`, `prompt` et `advanced` en plus de `main`, `loras` et `sampler`.
+- Trois tests lisaient l'ancien balisage : `styleSampling` (valeur du scheduler), `krea2Style` (composants fournis au panneau LoRA ; le titre ne dit plus « right-hand »), `civitaiService` (composants fournis aux branches MOSS et QWEN). Leurs vérifications de comportement sont inchangées.
+
+Comparaison avec le relevé d'avant, sans exercice, sur les 22 variantes : aucun contrôle nommé manquant, aucune valeur différente, tous les curseurs retrouvés avec les mêmes bornes, le même pas et la même valeur. Différences, toutes expliquées : le nombre d'images et les mégapixels de FLUX2 Edit gagnent un curseur ; les listes sans nom (preset, format, résolution) ont maintenant un nom ; le checkpoint SD 1.5 a une valeur parce que le catalogue simulé en propose désormais ; une liste de modèles vide affiche « Select a model » au lieu de « Select... » (BBOX et SAM) ; la case CacheDiT de FLUX2 Edit apparaît parce que le harnais sait maintenant déplier la section Advanced.
+
+### 2026-11-19 — Vérification de B5a, étapes 1 à 3
+
+| Vérification | Fin de B5e | Maintenant |
+| --- | --- | --- |
+| Tests `npm test` | 971 tests : 957 réussis, 0 en échec, 14 ignorés | Identique |
+| `npm run typecheck` | 18 erreurs | 18 erreurs, mêmes 9 fichiers |
+| Build Vite (dossier temporaire) | Réussi | Réussi en 5,85 s |
+| `check:panels` Image Generator, avec exercice | — | 22 variantes sur 22, aucune erreur de page |
+| `check:panels` Fun, avec exercice | 14/14 | 14/14 |
+| `check:locks`, `check:tab-jobs`, `check:ui` | 13/13, 6/6, 12/12 | 13/13, 6/6, 12/12 |
+| `check:tabs` | Relevé de référence | Seules les deux lignes d'Image Gen changent : 11 listes natives → 3 natives + 8 du kit (10 → 3 + 7 au retour), aucune désactivée ni vide. Nouvelle référence enregistrée |
+| `profile:renders` | 5 vérifications réussies | 5 vérifications réussies |
+
+Captures relues : SDXL, KREA2 Edit, FLUX2 Edit, Gemini Inpaint. Après ces captures, Steps et CFG de la section Sampler sont passés sur toute la largeur (ils étaient à l'étroit côte à côte) ; ce dernier ajustement n'a pas été revu en capture.
+
+Non vérifié : aucune génération, même simulée, n'a été lancée depuis Image Generator après ces changements ; le code de génération n'a pas été modifié, mais le trajet « réglage modifié → requête envoyée » n'est couvert que jusqu'à l'affichage de la valeur. Chargement d'un preset, « Generate Prompt from Source », exemples de prompts et import d'un prompt de la Library : non exercés dans le navigateur. Les captures des 18 autres variantes n'ont pas été relues. Aucune exécution dans Electron.
+
+### 2026-11-19 — B5a, étape 4 : décisions de l'utilisateur sur les trois écarts
+
+Décisions : (1) FLUX2 Edit s'aligne sur la règle ; (2) toujours filtrer les listes quand c'est possible, surtout les LoRA ; (3) MOSS PHOTO garde son ordre, seuls ses contrôles changent. Les écarts 1 et 2 de l'étape 3 sont donc levés.
+
+Fichiers touchés : `components/OptionsPanel.tsx`, `App.tsx`, `services/styleLibrary.ts`, `components/LoraSettingsPanel.tsx`, `components/Qwen21SettingsPanel.tsx`, `components/MossSettingsPanel.tsx`, `components/Krea2EditSettingsPanel.tsx`, `components/MossPhotoSettingsPanel.tsx`, les cinq panneaux Fun, et quatre tests (`flux2Style`, `krea2Style`, `mossPhotoWorkflow`, `styleLibrary`).
+
+**1. FLUX2 Edit à la disposition standard.** À gauche : style, image source et références, puis Models, LoRAs (les deux LoRA additionnels), Sampler, Advanced. À droite : la carte Prompt avec l'instruction d'édition, puis Generate et les résultats. L'espace de travail séparé de droite n'existe plus (`flux2EditWorkspaceContainer` retiré). Le test `flux2Style` qui décrivait l'ancienne disposition est réécrit : il vérifie maintenant l'ordre des sections et que l'instruction va dans la carte Prompt.
+
+**2. Listes filtrées par famille.** Nouvelle fonction partagée `familyFiles(fichiers, famille, inventaire)` dans `services/styleLibrary.ts`. Un fichier appartient à la famille si My Library le dit (famille choisie par l'utilisateur, dossier, modèle de base) ou si son nom la porte. Pour FLUX2, les fichiers reconnus comme l'autre variante (4B quand le modèle choisi est 9B, et inversement) sont retirés. **Si aucun fichier ne peut être attribué à la famille, la liste complète reste proposée** : une liste n'est jamais vidée par le filtre. La valeur déjà choisie reste toujours affichée.
+
+| Liste | Avant | Maintenant |
+| --- | --- | --- |
+| LoRA d'Image Generator (SD 1.5, SDXL, QWEN, Z-Image, FLUX2 Simple, KREA2) | Filtre par nom seulement ; liste vide si aucun nom ne correspond | `familyFiles` : nom ou My Library, variante FLUX2, jamais vide |
+| LoRA de QWEN 2.1, MOSS Image, MOSS PHOTO, KREA2 Edit | Tous les LoRA | Famille du workflow |
+| LoRA de Swap a Person (les deux workflows), Photo Fusion (FLUX2 et Lightning), Past Forward (Lightning) | Tous les LoRA | FLUX2 de la variante du modèle choisi, ou QWEN |
+| LoRA de Swap Anything | Filtre par nom, vide si aucun | `familyFiles` |
+| Modèle de diffusion d'Image Generator | Tous les fichiers du type ; le panneau remettait ensuite un modèle de la famille | Exactement les modèles que le panneau accepte (même liste que celle de la réparation automatique) ; FLUX2 : famille FLUX2 |
+| Modèle de diffusion de QWEN 2.1, MOSS, KREA2 Edit et des cinq panneaux Fun | Tous les fichiers du type | Famille du workflow |
+
+Non filtrées : les listes CLIP / encodeur de texte et VAE. Leurs noms ne suivent pas la famille (FLUX2 Klein utilise un encodeur nommé « qwen »), donc un filtre par nom cacherait des fichiers valides. Les LoRA additionnels de FLUX2 Edit gardaient déjà leur filtre strict par variante (inchangé).
+
+Règle pour la suite de B5 : toute liste de modèles de diffusion ou de LoRA passe par `familyFiles`.
+
+**3. MOSS PHOTO.** Même structure, mêmes sections, même ordre (le test d'ordre passe sans changement de ses vérifications). Les `select` bruts deviennent des listbox du kit (avec recherche pour les modèles et les LoRA), les champs numériques et de texte prennent le style du kit, le prompt négatif devient une boîte de prompt du kit. Les noms accessibles sont inchangés. Les champs numériques restent de simples champs : ce panneau n'avait pas de curseurs et leurs bornes viennent du catalogue ComfyUI. Les longs noms de paramètres passent à la ligne dans leur colonne.
+
+Dans `OptionsPanel`, la liste des modèles acceptés par workflow (`workflowModels`) est calculée une seule fois et sert à la fois à la réparation automatique et à l'affichage.
+
+### 2026-11-19 — Vérification de B5a, étape 4
+
+| Vérification | Après l'étape 3 | Maintenant |
+| --- | --- | --- |
+| Tests `npm test` | 971 tests : 957 réussis, 0 en échec, 14 ignorés | 972 tests : 958 réussis, 0 en échec, 14 ignorés (un test ajouté pour `familyFiles`) |
+| `npm run typecheck` | 18 erreurs | 18 erreurs, mêmes 9 fichiers |
+| Build Vite (dossier temporaire) | Réussi | Réussi en 5,83 s |
+| `check:panels` Image Generator, avec exercice | 22/22 | 22/22, aucune erreur de page |
+| `check:panels` Fun, avec exercice | 14/14 | 14/14 (exécuté après les filtres, avant le dernier ajustement d'affichage de MOSS PHOTO) |
+| `check:locks`, `check:tab-jobs`, `check:ui` | 13/13, 6/6, 12/12 | 13/13, 6/6, 12/12 |
+| `check:tabs` | Nouvelle référence | Identique à la référence |
+| `profile:renders` | 5 vérifications réussies | 5 vérifications réussies |
+
+Comparaison avec le relevé d'avant B5a, sans exercice : aucun contrôle manquant, mêmes valeurs, mêmes bornes de curseurs. Seules différences : celles déjà expliquées à l'étape 3, et le libellé « Str » des LoRA devenu « Strength ».
+
+Captures relues : FLUX2 Edit et MOSS PHOTO.
+
+Non vérifié : le filtre par My Library n'a été exercé que par le test unitaire ; dans le navigateur, l'inventaire est vide et seul le filtre par nom agit. FLUX2 Edit n'a pas été vu avec des images de référence chargées (la ligne d'une référence est maintenant dans une colonne plus étroite). Aucune génération lancée, aucune exécution dans Electron.
+
+### Reste à faire dans B5a
+
+| Élément | État |
 | --- | --- |
-| Swap a Person, Swap Anything, Stylise Anything | **Faits** |
-| Photo Fusion (`GroupPhotoFusionPanel`, 728 lignes : 4 `select` bruts, 13 `SelectInput`, 5 classes d'opacité sans effet) | À faire |
-| Past Forward (`PastForwardPanel`, 1503 lignes : 10 `select` bruts, 11 `SelectInput`, 10 classes d'opacité sans effet) | À faire |
+| Disposition standard, sections, listes, curseurs, barre Generate, en-tête | **Faits** |
+| FLUX2 Edit à la disposition standard | **Fait** (étape 4) |
+| Listes filtrées par famille | **Fait** (étape 4) |
+| MOSS PHOTO : contrôles du kit, ordre conservé | **Fait** (étape 4) |
+| Sortir l'onglet Image Generator de `App.tsx` | **Fait** (étape 5) |
+| Classes d'opacité sans effet dans `OptionsPanel` | **Fait** (étape 5) |
+| `CloudImageProviderBar` : utilisé par Extractor et Logo, pas par Image Generator ; déplacé dans B5f | Reporté |
+
+### 2026-11-19 — B5a, étape 5 : l'onglet sort de `App.tsx`, classes d'opacité
+
+Fichier créé : `components/ImageGeneratorTab.tsx`. Fichiers touchés : `App.tsx` (1984 → 1766 lignes), `components/OptionsPanel.tsx`, `components/ImageStyleControl.tsx`, et trois tests (`flux2Style`, `libraryTags`, `LibraryPickerHost`).
+
+**L'onglet sort de `App.tsx`.** `ImageGeneratorTab` contient l'en-tête, les quatre panneaux QWEN 2.1 I2I et la disposition à deux colonnes. `App` garde les options, les résultats et les fonctions de génération, et les lui passe. L'état propre à l'onglet (génération du prompt depuis la source, emplacement de la carte Prompt, référence du panneau Multi Images) vit maintenant dans l'onglet. Le relevé des contrôles des 22 variantes est identique, octet pour octet, à celui pris juste avant le déplacement. Les trois tests qui lisaient ce balisage dans `App.tsx` lisent le nouveau fichier.
+
+**Classes d'opacité.** Mesure faite dans l'application avant de remplacer : un fond avec opacité sur une couleur du thème est transparent ; une bordure avec opacité retombe sur un gris clair par défaut (rgb 229, 231, 235), donc une ligne claire et vive sur le thème sombre, ce qui n'était pas voulu. Les 12 classes de `OptionsPanel` et celle de `ImageStyleControl` sont remplacées :
+
+- fonds : classe retirée (aspect inchangé) ;
+- trait sous les titres de section, cadre d'une sortie désactivée : couleur de bordure du thème. **Visible** : le trait gris clair sous les titres devient un trait discret ;
+- cadre d'avertissement et cadre du LoRA de style actif : couleur d'avertissement / d'accent pleine.
+
+Ces classes touchent aussi les sections Character d'`OptionsPanel` (même fichier).
+
+Vérification : 972 tests (958 réussis, 0 en échec, 14 ignorés) ; typecheck 18 erreurs, mêmes fichiers ; build réussi ; `check:panels` Image Generator 22/22 avec exercice ; `check:locks` 13/13, `check:tab-jobs` 6/6, `check:ui` 12/12 ; `check:tabs` identique ; `profile:renders` 5 vérifications réussies.
+
+Non vérifié : aucune capture relue après le changement des bordures ; aucune génération lancée ; aucune exécution dans Electron.
+
+### État de B5a
+
+**Terminé**, sauf `CloudImageProviderBar` (reporté dans B5f) et les quatre panneaux QWEN 2.1 I2I (B5c, comme prévu au plan).
+
+### 2026-11-19 — B5b (Character), étape 1 : relevé de référence
+
+Fichier touché : `scripts/browser/panel-controls-audit.mjs`. Nouveau groupe `character` (`LAWIZ_AUDIT_GROUP=character`) : 7 variantes — QWEN, FLUX2 Character Angles, FLUX2 Blazing Fast, QWEN 2.1 Character Sheet, QWEN 2.1 Create Character, Mammouth, Gemini. Le bloc « Advanced » est ouvert dans le relevé d'avant, donc tous ses réglages y figurent. Relevé : `%TEMP%\lawiz-character-controls-before.json`, captures dans `%TEMP%\lawiz-character-shots-before`.
+
+L'onglet Character avait déjà la bonne disposition : source et options à gauche ; Generate, résultats et les huit sorties (angle, pose, expression) à droite. Il n'a pas de prompt à déplacer. Un test existant fixe l'ordre de la colonne de droite ; il n'est pas touché.
+
+### 2026-11-19 — B5b, étape 2 : sections standard dans les options Character
+
+Fichiers touchés : `components/OptionsPanel.tsx`, `components/InputComponents.tsx`.
+
+Ce qui change pour l'utilisateur, dans QWEN, FLUX2 Character Angles et QWEN 2.1 Create Character :
+
+- **Le bouton « Advanced +/− » et son gros bloc unique disparaissent.** À la place, quatre sections repliables dans l'ordre standard : Models, LoRAs, Sampler, Advanced. Elles sont fermées au départ, comme l'était le bloc.
+- **Listes de modèles, LoRA, samplers et schedulers** : listbox du kit avec recherche.
+- **Listes filtrées par famille** (règle de l'étape 4 de B5a) : LoRA et modèle de diffusion de QWEN Edit, de QWEN 2.1 et de FLUX2 (variante 9B ou 4B du modèle choisi pour les LoRA). Avant, les trois workflows proposaient tous les LoRA installés.
+- **Sorties FLUX2** : la liste « Prompt mode » et le prompt complet d'une sortie utilisent le kit.
+- **Listes Camera Angle, Pose et Facial Expression** des huit sorties : `PresetTextInput` devient une enveloppe du listbox du kit (même liste, même option « Custom... », même champ de saisie libre). Ce composant sert aussi ailleurs dans l'application.
+- `border-border-secondary` n'est pas une couleur du thème : les quatre cadres qui l'utilisaient dans `OptionsPanel` avaient une bordure claire et vive ; ils prennent la bordure du thème.
+
+Répartition des réglages (aucun retiré, mêmes valeurs par défaut, mêmes bornes) :
+
+| Workflow | Models | LoRAs | Sampler | Advanced |
+| --- | --- | --- | --- | --- |
+| QWEN | UNET, CLIP, VAE | Lightning, Multiple Angles, LoRA additionnel | Sampler, Scheduler, Steps, CFG | AuraFlow Shift, Source Megapixels |
+| FLUX2 Character Angles | modèle, CLIP, VAE | case + LoRA 1 et 2 | Sampler, Steps, CFG | Source Megapixels, CacheDiT |
+| QWEN 2.1 Create Character | modèle, dtype, CLIP, device, VAE, cache, attention | LoRA 1 à 4 | Sampler, Scheduler, Steps, CFG, Denoise | Encoder Resolution, Negative Prompt |
+
+Comparaison avec le relevé d'avant, sans exercice, sur les 7 variantes : **aucune différence** — mêmes contrôles (56, 57, 54, 33, 65, 38, 40), mêmes noms, mêmes valeurs, mêmes états désactivés, mêmes bornes et pas.
+
+### 2026-11-19 — Vérification de B5b, étapes 1 et 2
+
+| Vérification | Fin de B5a | Maintenant |
+| --- | --- | --- |
+| Tests `npm test` | 972 tests : 958 réussis, 0 en échec, 14 ignorés | Identique |
+| `npm run typecheck` | 18 erreurs | 18 erreurs, mêmes 9 fichiers |
+| Build Vite (dossier temporaire) | Réussi | Réussi en 5,91 s |
+| `check:panels` Character, avec exercice | — | 7/7, aucune erreur de page |
+| `check:panels` Image Generator et Fun, avec exercice | 22/22, 14/14 | 22/22, 14/14 |
+| `check:locks`, `check:tab-jobs`, `check:ui` | 13/13, 6/6, 12/12 | 13/13, 6/6, 12/12 |
+| `check:tabs` | Référence | Identique |
+| `profile:renders` | 5 vérifications réussies | 5 vérifications réussies |
+
+Captures relues : FLUX2 Character Angles et QWEN 2.1 Create Character, sections dépliées.
+
+Non vérifié : aucune génération lancée ; aucune exécution dans Electron ; le filtre par My Library n'agit pas dans le navigateur de test (inventaire vide) ; les captures QWEN, Mammouth et Gemini n'ont pas été relues ; le mode « Full workflow prompt » d'une sortie FLUX2 n'a pas été affiché.
+
+Constat (existant, non modifié) : dans QWEN 2.1 Create Character, le titre « General Settings » s'affiche sans rien dessous.
+
+### 2026-11-19 — B5b, étape 3 : Character Sheet, Blazing Fast et sortie de l'onglet
+
+Fichiers touchés : `components/Qwen21CharacterSheetPanel.tsx`, `components/BlazingFastCharacterPanel.tsx`, `components/CharacterTab.tsx` (nouveau), `App.tsx`, et trois tests adaptés (`components/BlazingFastCharacterPanel.test.mjs`, `services/characterResults.test.mjs`, `components/LibraryPickerHost.test.mjs`).
+
+**QWEN 2.1 Character Sheet**
+
+- Sections repliables du kit dans l'ordre standard : Models, Sampler, Advanced (l'ancien « Reference Settings »). Fermées au départ, comme avant.
+- Les onze listes venant de ComfyUI ont la recherche ; le modèle de diffusion est filtré sur la famille QWEN 2.1. Separator, Orientation, Size et View Count restent des listes courtes du kit.
+- Les quatre blocs du prompt, le prompt négatif et le prompt combiné utilisent la boîte à prompt du kit (repère vert, rouge, cadre pointillé en lecture seule avec bouton Copy).
+- **Déplacement** : le prompt négatif quitte la section Sampler et s'affiche à droite sous les quatre blocs, toujours visible (règle : les prompts à droite).
+- Une valeur enregistrée absente de ComfyUI s'affiche maintenant « (not listed) » au lieu d'être glissée en tête de liste comme si elle était installée.
+- Curseurs conservés tels quels (Steps, CFG, Denoise, Resolution Steps, Encoder Resolution, Split).
+
+**Blazing Fast character** — structure et ordre conservés (ses tests les fixent, comme MOSS PHOTO)
+
+- Les quatre champs de modèle étaient des zones de texte avec suggestions ; ce sont des listbox avec recherche. Le modèle de diffusion est filtré sur la famille FLUX2. **Conséquence** : on ne peut plus taper un nom de fichier libre ; un nom enregistré absent de la liste reste affiché « (not listed) ».
+- Sampler et les quatre LoRA : listbox avec recherche. La liste des LoRA était déjà filtrée par variante FLUX2 ; ce filtre est inchangé.
+- Steps, CFG, Megapixels, Seed, Identity tokens, Caption tokens et les forces de LoRA : champ numérique du kit. Une saisie vide ou hors borne n'est plus enregistrée (avant, un champ vidé enregistrait une valeur invalide). Pas de curseur ajouté : ces champs n'ont jamais eu de borne haute.
+- Prompts au kit : instruction d'édition, aperçus par pose, prompts système, prompt réel de la dernière exécution, légende finale.
+- « Prompt preview », « Pose N prompt », « Vision & caption prompts » et « Latest run » sont des sections du kit. « Poses & expressions » garde son balisage (même apparence) parce que ses tests lisent son contenu fermé.
+- Couleurs : cadres en bordure du thème au lieu des bordures claires ; le bloc du style choisi reçoit un cadre ; l'alerte utilise les couleurs d'erreur du thème.
+
+**Onglet Character**
+
+- Le JSX de l'onglet sort d'`App.tsx` vers `components/CharacterTab.tsx`. `App.tsx` passe de 1766 à 1607 lignes.
+- Champ « Character Name » au style du kit, avec un vrai libellé.
+- Le bouton « Auto-generate name » avait des classes cassées (`p - 2 rounded - md`) : il n'avait ni marge intérieure ni coins arrondis. Corrigé.
+
+Comparaison avec le relevé d'avant : même nombre de contrôles dans les 7 variantes (56, 57, 54, 33, 65, 38, 40), mêmes valeurs. Seuls des noms changent : dans Blazing Fast, « identityTokens » → « Identity tokens », « Blazing sampler » → « Sampler », etc. ; ailleurs, le champ du nom a maintenant un libellé au lieu de son seul texte d'exemple.
+
+### 2026-11-19 — Vérification finale de B5b
+
+| Vérification | Fin de B5a | Maintenant |
+| --- | --- | --- |
+| Tests `npm test` | 972 tests : 958 réussis, 0 en échec, 14 ignorés | Identique |
+| `npm run typecheck` | 18 erreurs | 18 erreurs, mêmes 9 fichiers |
+| Build Vite (dossier temporaire) | Réussi | Réussi en 5,93 s |
+| `check:panels` Character, avec exercice | — | 7/7, aucune erreur de page |
+| `check:panels` Image Generator et Fun, avec exercice | 22/22, 14/14 | 22/22, 14/14 |
+| `check:locks`, `check:tab-jobs`, `check:ui` | 13/13, 6/6, 12/12 | 13/13, 6/6, 12/12 |
+| `check:tabs` | Référence | Identique |
+| `profile:renders` | 5 vérifications réussies | 5 vérifications réussies |
+
+Captures relues : Character Sheet et Blazing Fast, sections dépliées.
+
+Non vérifié : aucune génération lancée ; aucune exécution dans Electron ; le filtre par My Library n'agit pas dans le navigateur de test (inventaire vide) ; Blazing Fast et Character Sheet n'ont pas été vus avec un résultat (prompt réel, légende finale, découpe des vues) ; le chargement d'un preset Blazing Fast depuis Library n'a pas été rejoué ; les captures QWEN, Mammouth et Gemini n'ont pas été relues.
+
+### État de B5b
+
+**Terminé.** Prochaine brique : B5c (Scene Variation).
+
+### 2026-11-20 — B5c (Scene Variation et QWEN 2.1 I2I), étape 1 : relevés de référence
+
+Fichier touché : `scripts/browser/panel-controls-audit.mjs`. Deux nouveaux groupes :
+
+- `scene` (`LAWIZ_AUDIT_GROUP=scene`) : les quatre sous-onglets de Scene Variation. Relevé : `%TEMP%\lawiz-scene-controls-before.json` (32, 41, 107 et 43 contrôles).
+- `qwen21` : les quatre panneaux QWEN 2.1 I2I d'Image Generator (Multi Images, Consistency, Turbo, Remove Background). Relevé : `%TEMP%\lawiz-qwen21-controls-before.json` (48, 42, 50 et 28 contrôles).
+
+La variante « Scene Variation avec le moteur Qwen 2.1 » a été ajoutée au harnais après la migration : elle n'a **pas** de relevé d'avant.
+
+`OutpaintPanel` était prévu dans B5c mais il s'affiche dans l'onglet Tools : il passe dans B5f.
+
+### 2026-11-20 — B5c, étape 2 : QWEN 2.1 I2I et Character in a Scene (disposition standard)
+
+Fichiers touchés : `components/Qwen21RemoveBackgroundPanel.tsx` (Remove Background, I2I Consistency, I2I Turbo), `components/Qwen21MultiPanel.tsx`, `components/CharacterScenePanel.tsx`.
+
+Les cinq écrans avaient la même forme : des blocs repliables « Models & CLIP », « Reference Settings » et « Sampler Settings » à gauche, et un bloc « LoRA Settings » à droite **sous** les résultats. Ils suivent maintenant la règle :
+
+- **Gauche** : sources, taille et seed, puis Models, LoRAs, Sampler, Advanced. Les LoRA passent donc de la colonne de droite à la colonne de gauche, après Models ; la section reste ouverte au départ, comme avant.
+- **Droite** : prompts, Generate, résultats.
+- **Prompt négatif** : il était caché dans la section Sampler ; il s'affiche à droite sous le prompt (repère rouge).
+- **Advanced** reçoit l'ancien « Reference Settings » (Reference Upscale Method, Resolution Steps, Encoder Resolution, Character Reference MP).
+- Listes venant de ComfyUI : listbox avec recherche. Modèle de diffusion et LoRA filtrés sur la famille QWEN 2.1 (avant : tous les LoRA installés).
+- Prompts : boîte à prompt du kit. Dans Multi Images et Character in a Scene, le prompt calculé est en lecture seule (cadre pointillé) tant que « Manual prompt » n'est pas coché, comme avant.
+- Curseurs conservés (mêmes bornes et pas).
+
+### 2026-11-20 — B5c, étape 3 : Scene Variation
+
+Fichier touché : `components/SceneVariationPanel.tsx`.
+
+- Les réglages étaient dans un seul bloc « FLUX2 Advanced Settings » ou « Qwen 2.1 Advanced Settings », à droite sous les choix de variation. Ils passent à gauche, sous la source et l'analyse, en quatre sections fermées au départ : Models, LoRAs, Sampler (avec le seed), Advanced.
+- La colonne de droite garde les choix de variation, les masques, Generate et la progression. Les résultats restent en dessous.
+- Le listbox local du panneau est supprimé ; tout passe par le kit. Modèles, LoRA, samplers et checkpoint SAM3 ont la recherche. Modèles et LoRA filtrés par famille (FLUX2 selon la variante 9B/4B du modèle, ou QWEN 2.1).
+- « Images » (1 à 8) : curseur + champ, selon la règle des nombres bornés.
+- Les champs de l'analyse (lieu, style, description des personnes…) gardent leur limite de longueur ; seul leur style change.
+
+### 2026-11-20 — B5c, étape 4 : Creation suite et Clothes Switcher
+
+Fichiers touchés : `components/CreationSuitePanel.tsx`, `components/ClothesSwitcherPanel.tsx` et leurs deux tests.
+
+Structure et ordre **conservés** : leurs tests fixent les colonnes et les titres des sections (même traitement que MOSS PHOTO et Blazing Fast). Ces deux panneaux affichent les réglages bruts des nœuds du workflow.
+
+- Leur section repliable locale (deux copies identiques) est remplacée par celle du kit.
+- Listes : listbox avec recherche. Modèle de diffusion et LoRA filtrés par famille (FLUX2 pour Clothes Switcher ; MOSS pour la scène et QWEN 2.1 pour le swap de Creation suite).
+- Nombres : champ numérique du kit. Pas de curseur ajouté : les bornes viennent de ComfyUI et sont des maximums techniques (10 000 étapes, etc.).
+- Prompts : boîte à prompt du kit, y compris les blocs du « Phone prompt builder » et les prompts négatifs.
+- Boutons Generate : couleur d'accent pleine, comme dans les autres panneaux. Celui de Clothes Switcher avait un fond et une bordure sans effet ; celui de Creation suite était vert lime.
+- Alertes : couleurs d'erreur du thème.
+- Les cadres lime (scène) et cyan (swap) de Creation suite sont conservés : ils distinguent les deux pipelines.
+
+### 2026-11-20 — Vérification de B5c
+
+Comparaison avec les relevés d'avant, sans exercice :
+
+| Écran | Contrôles avant → après | Écart |
+| --- | --- | --- |
+| Scene Variation (FLUX2) | 32 → 33 | Le curseur ajouté à « Images » |
+| Character in a Scene | 41 → 41 | Aucun |
+| Creation suite | 107 → 107 | Aucun |
+| Clothes Switcher | 43 → 43 | Aucun |
+| QWEN 2.1 Multi / Consistency / Turbo / Remove Background | 48, 42, 50, 28 → identiques | Aucun |
+
+Mêmes noms, mêmes valeurs, mêmes états désactivés partout. Seule différence d'affichage : une valeur absente de ComfyUI se lit « (not listed) » au lieu de « (current / not listed) » ou d'apparaître comme installée.
+
+| Vérification | Fin de B5b | Maintenant |
+| --- | --- | --- |
+| Tests `npm test` | 972 tests : 958 réussis, 0 en échec, 14 ignorés | Identique |
+| `npm run typecheck` | 18 erreurs | 18 erreurs, mêmes 9 fichiers |
+| Build Vite (dossier temporaire) | Réussi | Réussi en 6,54 s |
+| `check:panels` Scene Variation, avec exercice | — | 5/5, aucune erreur de page |
+| `check:panels` QWEN 2.1 I2I, avec exercice | — | 4/4, aucune erreur de page |
+| `check:panels` Character, Image Generator, Fun, avec exercice | 7/7, 22/22, 14/14 | 7/7, 22/22, 14/14 |
+| `check:locks`, `check:tab-jobs`, `check:ui` | 13/13, 6/6, 12/12 | 13/13, 6/6, 12/12 |
+| `check:tabs` | Référence | Une seule ligne change : Scene Variation, 12 listes natives → 6. Les six autres sont dans les sections fermées, qui ne montent leur contenu qu'à l'ouverture. Nouvelle référence enregistrée. |
+| `profile:renders` | 5 vérifications réussies | 5 vérifications réussies |
+
+Captures relues : Scene Variation (FLUX2 et Qwen 2.1), Character in a Scene, Clothes Switcher, I2I Consistency, I2I Multi Images.
+
+Non vérifié :
+
+- aucune génération ni analyse d'image lancée ; aucune exécution dans Electron ;
+- Scene Variation avec le moteur Qwen 2.1 n'a pas de relevé d'avant (exercice et capture seulement) ;
+- le mode « Masked by person » de Scene Variation et tout ce qui apparaît après une analyse (choix par personne, analyse éditable, « Who to replace », « Placement ») n'ont pas été affichés : ils demandent une image analysée ;
+- les captures de Creation suite, I2I Turbo et Remove Background n'ont pas été relues ;
+- le chargement d'un preset (Scene Variation, Clothes Switcher) et la restauration d'une composition depuis Library n'ont pas été rejoués ;
+- le filtre par My Library n'agit pas dans le navigateur de test (inventaire vide).
+
+### État de B5c
+
+**Terminé**, sauf `OutpaintPanel` (déplacé dans B5f). Prochaine brique : B5d (Video).
+
+### 2026-11-20 — B5d (Video), étape 1 : relevé de référence
+
+Fichier touché : `scripts/browser/panel-controls-audit.mjs`. Nouveau groupe `video` (`LAWIZ_AUDIT_GROUP=video`) : les huit sous-onglets — Video Prompt Generator, LTX Director, LTX-Ripple-FFAF, LTX 2.5 Audio-Sync, Minimax REF2v H3, Ultrafast, MiniMax Advanced, Character Swap H3. Relevé : `%TEMP%\lawiz-video-controls-before.json` (17, 3, 123, 72, 60, 57, 81 et 25 contrôles).
+
+Le relevé de LTX Director ne couvre que son écran vide (3 contrôles) : ses réglages apparaissent après « Advanced » ou l'ajout d'un clip.
+
+### 2026-11-20 — B5d, étape 2 : LTX-Ripple-FFAF et LTX 2.5 Audio-Sync
+
+Fichiers touchés : `components/LTXRipplePanel.tsx`, `components/LTXAudioSyncPanel.tsx`, leurs deux tests, `services/styleLibrary.ts`.
+
+Structure et ordre conservés (leurs tests fixent les titres des sections). Ces panneaux affichent les réglages bruts des nœuds du workflow.
+
+- Leurs deux sections repliables locales sont remplacées par celle du kit.
+- Listes : listbox avec recherche. Modèle de diffusion et LoRA filtrés sur la famille LTX. Les textes d'aide qui annonçaient une liste « unfiltered » sont corrigés.
+- `services/styleLibrary.ts` : le filtre par famille reconnaît maintenant les fichiers LTX (`ltx` dans le nom) et H3 (`h3` ou `minimax`), en plus de My Library. Comme ailleurs, la liste complète reste affichée si aucun fichier n'est reconnu.
+- Nombres : champ numérique du kit. Force des LoRA d'Audio-Sync (−20 à 20) : curseur + champ.
+- Prompts : boîte à prompt du kit (prompt vidéo, prompt d'édition, prompts négatifs).
+- Ripple, « Frame count » : le champ n'a volontairement pas de maximum. Une valeur trop longue pour la vidéo source est ainsi refusée avec le message d'explication existant, au lieu d'être ignorée en silence.
+- Boutons Generate en couleur d'accent ; alertes aux couleurs d'erreur du thème.
+
+### 2026-11-20 — B5d, étape 3 : Minimax REF2v H3, Ultrafast, MiniMax Advanced
+
+Fichiers touchés : `components/MinimaxH3Panel.tsx`, `components/AdvancedH3Settings.tsx`, `components/H3StyleControl.tsx`, `components/VideoAudioControls.tsx`, `components/VideoPromptText.tsx`, et trois tests adaptés.
+
+- Les trois écrans partagent le même panneau. Ses contrôles locaux (liste, champ numérique, champ texte) rendent maintenant ceux du kit : aucun réglage n'a bougé.
+- Listes : listbox avec recherche. Le modèle de diffusion est filtré sur la famille H3. Les LoRA étaient déjà filtrés sur H3 ; inchangé. Dans Advanced, les LoRA de l'étape LTX Refine sont filtrés sur LTX.
+- Curseur + champ ajoutés aux nombres à échelle humaine : Megapixels, H3 duration, Denoise, RTX scale, Preview JPEG quality, force des LoRA, force du LoRA de style. Les autres bornes sont des maximums techniques (seed, 10 000 étapes, 8192 px) : champ seul.
+- Force d'un LoRA H3 : le curseur passe sous la liste du fichier, sur toute la largeur (il ne tenait pas dans la colonne de 90 px).
+- Soundtrack mode, Original soundtrack, Transcription provider, Input, Stage order, Mode, LTX decode mode : listes courtes du kit.
+- Prompts : « ReferencePack system prompt » et « Words for this passage » au kit. L'éditeur de prompt vidéo garde ses couleurs par référence (une couleur par image, vidéo ou audio, la même que sur les pastilles) ; seul son cadre est aligné sur celui du kit.
+- Les sections repliables de ces panneaux gardent leur balisage : elles avaient déjà l'apparence du kit, et leur état ouvert/fermé est piloté par le panneau et lu par ses tests.
+- Boutons Generate en couleur d'accent (avant : violet, émeraude ou cyan selon l'écran) ; alertes aux couleurs d'erreur du thème.
+
+### 2026-11-20 — B5d, étape 4 : Video Prompt Generator et Character Swap H3
+
+Fichiers touchés : `components/VideoWorkspace.tsx`, `components/CharacterSwapPanel.tsx`, `components/ui/PromptBox.tsx`.
+
+- Video Prompt Generator : Target video model, Generation mode, Provider, Canvas, Aspect ratio et « Send prompt to workflow » sont des listes du kit. Duration (1 à 120 s) : curseur + champ.
+- « Your idea », les deux gabarits et le prompt généré en mode édition utilisent la boîte à prompt du kit. Les jetons `<Picture 1>` y sont colorés.
+- `PromptBox` reçoit une option `inputRef` : le clic sur une pastille de référence insère toujours le jeton à la position du curseur.
+- Le bouton « Generate video prompt » avait un fond sans effet (opacité sur une couleur du thème) : il prend la couleur d'accent pleine.
+- **Exception** : la liste des modèles OpenRouter garde sa structure (champ de recherche séparé + liste native). Ses tests imposent ce comportement précis : le modèle choisi reste affiché même s'il est incompatible ou absent du catalogue, et n'est jamais remplacé en silence. Elle reçoit seulement le style du kit.
+- Character Swap H3 : la section des réglages est celle du kit. Quand le catalogue ComfyUI est chargé, modèles, LoRA, sampler et attention sont des listbox avec recherche (modèle et LoRA filtrés sur H3) ; avant, c'étaient des zones de texte avec suggestions. Sans catalogue, le nom reste saisissable à la main.
+
+### 2026-11-20 — Vérification de B5d (sans LTX Director)
+
+Comparaison avec le relevé d'avant, sans exercice :
+
+| Écran | Contrôles avant → après | Écart |
+| --- | --- | --- |
+| Video Prompt Generator | 17 → 18 | Curseur de Duration |
+| LTX Director | 3 → 3 | Non touché |
+| LTX-Ripple-FFAF | 123 → 123 | Aucun |
+| LTX 2.5 Audio-Sync | 72 → 76 | Quatre curseurs de force de LoRA |
+| Minimax REF2v H3 | 60 → 63 | Curseurs Megapixels, H3 duration, JPEG quality |
+| Ultrafast | 57 → 61 | Les trois mêmes + Denoise |
+| MiniMax Advanced | 81 → 84 | Les trois mêmes |
+| Character Swap H3 | 25 → 25 | Aucun |
+
+Mêmes valeurs et mêmes états désactivés partout. Cinq champs H3 changent de nom : leur texte d'aide n'est plus collé au libellé (« Resolution multiple » au lieu de « Resolution multipleH3 requires… »).
+
+| Vérification | Fin de B5c | Maintenant |
+| --- | --- | --- |
+| Tests `npm test` | 972 tests : 958 réussis, 0 en échec, 14 ignorés | Identique |
+| `npm run typecheck` | 18 erreurs | 18 erreurs, mêmes 9 fichiers |
+| Build Vite (dossier temporaire) | Réussi | Réussi en 5,92 s |
+| `check:panels` Video, avec exercice | — | 8/8, aucune erreur de page |
+| `check:panels` Scene Variation, QWEN 2.1 I2I, Character, Image Generator, Fun, avec exercice | 5/5, 4/4, 7/7, 22/22, 14/14 | Identique |
+| `check:locks`, `check:tab-jobs`, `check:ui` | 13/13, 6/6, 12/12 | 13/13, 6/6, 12/12 |
+| `check:tabs` | Référence | Identique |
+| `profile:renders` | 5 vérifications réussies | 5 vérifications réussies |
+
+Cinq tests adaptés pour charger le kit ; trois assertions de balisage réécrites (liste des LoRA H3, titre de section Audio-Sync, section repliable de Ripple), les autres inchangées.
+
+Captures relues : Video Prompt Generator, Minimax REF2v H3, LTX 2.5 Audio-Sync.
+
+Non vérifié :
+
+- aucune génération, analyse ni transcription lancée ; aucune exécution dans Electron ;
+- les écrans avec un média chargé : références H3, éditeur de paroles, passage audio, vidéo source de Ripple, résultats ;
+- le curseur de force du LoRA de style H3 (visible seulement avec un style choisi) et les options de ReferencePack avec OpenRouter ;
+- Character Swap H3 avec son catalogue chargé : le navigateur de test n'a pas le planner BFS, donc ses listbox n'ont pas été affichées ;
+- les captures de Ripple, Ultrafast, Advanced et Character Swap n'ont pas été relues ;
+- le filtre par My Library (inventaire de test vide).
+
+### LTX Director — décision demandée
+
+LTX Director (1 312 lignes, 12 listes natives, 7 champs numériques, 4 curseurs sans champ) était écrit avec une palette sombre fixe (gris zinc et ambre) qui ignorait le thème de l'application. Y poser les contrôles du kit, qui suivent le thème, aurait donné dans le thème « Studio Light » des libellés sombres sur fond noir, donc illisibles.
+
+Deux options proposées à l'utilisateur (point ouvert 10) :
+
+1. Convertir tout LTX Director aux couleurs du thème, comme le reste de l'application.
+2. Garder son apparence sombre fixe et y épingler une palette sombre locale pour les contrôles du kit.
+
+**Décision du 2026-11-20 : option 1.**
+
+### 2026-11-20 — B5d, étape 5 : LTX Director aux couleurs du thème
+
+Fichiers touchés : `components/LTXDirectorPanel.tsx` (1 277 lignes), `components/VideoWorkspace.tsx` (bouton « Reset LTX Director » à la couleur d'alerte du thème), `scripts/browser/panel-controls-audit.mjs`.
+
+Ce qui change à l'écran :
+
+- Tout le panneau suit le thème : fonds, bordures, textes, boutons. Generate et « Generate Prompt » prennent la couleur d'accent ; les boutons à deux positions (LTX 2.3 / 2.5, Standard / Tiled, Landscape / Portrait, relation entre clips) ont le même style partout.
+- Le bouton « Advanced » de l'en-tête disparaît. Les réglages sont trois sections repliables toujours présentes, dans l'ordre standard : **Models**, **LoRAs**, **Advanced**. Models et LoRAs s'ouvrent d'elles-mêmes quand on change de version de modèle ou qu'un LoRA est envoyé depuis un autre onglet, comme l'ancien panneau.
+- Toutes les listes de modèles et de LoRA sont des listbox avec recherche. Le checkpoint et les LoRA sont filtrés sur la famille LTX ; encodeurs de texte, VAE et upscaler ne le sont pas.
+- Les quatre anciens curseurs sans champ ont maintenant un champ de saisie : Guide strength, Output scale, durée du clip, force de chaque LoRA. Les trois réglages CacheDiT (Warmup steps, Skip interval, Noise scale) gagnent un curseur.
+- Les quatre listes du clip (Visual theme, Sub-theme, Camera style, Audio style) ont la recherche ; le prompt du clip est la zone de prompt du kit.
+- La colonne de gauche passe de 280 à 320 px pour loger curseur et champ côte à côte.
+
+Gardé sombre volontairement, quel que soit le thème : l'aperçu vidéo (fond noir) et le bloc de forme d'onde audio. Ce sont des surfaces de média ; leurs textes ont des couleurs fixes lisibles sur noir.
+
+Inchangé : la logique, les valeurs par défaut, le graphe envoyé à ComfyUI, les presets, les noms accessibles des contrôles existants.
+
+Harnais : trois variantes LTX Director dans le groupe `video` (écran vide, sections ouvertes, avec un clip prompt). Nouvelle variable `LAWIZ_AUDIT_THEME` pour prendre les captures dans un autre thème.
+
+Une erreur de ma part, corrigée : la première capture « Studio Light » était en fait sombre. Le thème était écrit dans le stockage local avant le démarrage, mais l'application le remplace au chargement. Le harnais change maintenant le thème par le store, après le chargement. La capture a été reprise et relue.
+
+### 2026-11-20 — Vérification finale de B5d
+
+Comparaison de LTX Director avec un relevé pris juste avant sa conversion :
+
+| Écran | Contrôles avant → après | Écart |
+| --- | --- | --- |
+| Écran vide | 3 → 43 | Les réglages sont toujours présents (sections), plus derrière un bouton |
+| Réglages ouverts | 38 → 43 | Trois curseurs CacheDiT, deux champs (Guide strength, Output scale) |
+| Avec un clip | 44 → 50 | Les cinq mêmes, plus le champ de durée du clip |
+
+Mêmes valeurs. La comparaison automatique signale à tort cinq lignes « LoRA N » : la case à cocher et la liste portent maintenant le même nom dans le relevé ; les deux contrôles existent bien.
+
+| Vérification | Avant LTX Director | Maintenant |
+| --- | --- | --- |
+| Tests `npm test` | 972 tests : 958 réussis, 0 en échec, 14 ignorés | Identique |
+| `npm run typecheck` | 18 erreurs | 18 erreurs, mêmes 9 fichiers |
+| Build Vite (dossier temporaire) | Réussi | Réussi en 6,12 s |
+| `check:panels` Video, avec exercice | 8/8 | 10/10 (deux variantes ajoutées), aucune erreur de page |
+| `check:panels` Scene Variation, QWEN 2.1 I2I, Character, Image Generator, Fun, avec exercice | 5/5, 4/4, 7/7, 22/22, 14/14 | Identique |
+| `check:locks`, `check:tab-jobs`, `check:ui` | 13/13, 6/6, 12/12 | 13/13, 6/6, 12/12 |
+| `check:tabs` | Référence | Identique |
+| `profile:renders` | 5 vérifications réussies | 5 vérifications réussies |
+
+Captures relues : LTX Director avec un clip, dans le thème par défaut et dans « Studio Light ». Dans les deux, libellés, listes, curseurs, champs et boutons sont lisibles.
+
+Constat hors LTX Director, non corrigé : dans « Studio Light », les onglets actifs (« Video », « LTX », « LTX Director ») sont peu lisibles, texte ambre clair sur fond ambre clair. Ces boutons viennent de `App.tsx` et `VideoWorkspace.tsx` (couleurs fixes de la palette). Ajouté à « À régler ».
+
+Non vérifié pour LTX Director :
+
+- aucune génération lancée ; aucune exécution dans Electron ;
+- un clip avec photo ou avec bande-son : forme d'onde, découpage, voix, verrou de durée par l'audio n'ont pas été affichés ;
+- la fenêtre d'exemples de prompt des LoRA, les résultats, l'enregistrement et le rechargement d'un preset ;
+- le passage à LTX 2.5 et l'envoi d'un LoRA depuis un autre onglet (ouverture automatique des sections) : lus dans le code, pas rejoués ;
+- les thèmes « Synthwave » et « 70s Groove » ;
+- le filtre par My Library (inventaire de test vide).
+
+### État de B5d
+
+**Terminé.** Les huit sous-onglets Video sont au kit. Exception connue : la liste des modèles OpenRouter du Video Prompt Generator (structure imposée par ses tests).
+
+### 2026-11-20 — B5f (TTS, Prompt, Extractor, Logo, Tools), étape 1 : relevés de référence
+
+Demande de l'utilisateur : faire B5f au complet. La brique couvre cinq onglets : TTS, Prompt, Extractor, Logo et Tools (dix outils, dont Outpaint et Upscale).
+
+Fichier touché : `scripts/browser/panel-controls-audit.mjs`.
+
+- Cinq nouveaux groupes : `tts` (4 écrans), `prompt` (6), `extractor` (8), `logo` (3), `tools` (14).
+- Nouvelle étape `upload` : le harnais charge une image, une vidéo ou un son d'essai dans l'outil affiché. Sans cela, la plupart des outils de Tools n'affichent aucun réglage.
+- Deux fichiers d'essai créés dans le dossier temporaire de Windows avec le ffmpeg déjà installé sur le poste : `sample.mp4` (3 s, 640 × 360, avec son) et `sample.wav`. Rien n'est ajouté au dépôt.
+- Relevés d'avant : `%TEMP%\lawiz-{tts,prompt,extractor,logo,tools}-controls-before.json`, avec captures.
+
+### 2026-11-20 — B5f, étape 2 : TTS
+
+Fichiers touchés : `components/TtsPanel.tsx`, `components/TtsAdvancedPanel.tsx`, `components/ui/fields.tsx` (nouveau champ texte `TextField`).
+
+- TTS Voice Clone : « Advanced » devient une section repliable du kit. Les trois curseurs ont un champ de saisie ; « Max characters per chunk » et « Silence between chunks » gagnent un curseur. Language a la recherche. Le texte à dire est la zone de prompt du kit. Le seed utilise le champ standard (bouton « Random »).
+- TTS Advanced : « Engine settings » devient la section « Advanced ». Chaque curseur d'émotion garde sa couleur et gagne un champ de saisie. La voix installée et la langue ont la recherche. Les lignes de dialogue sont des zones de prompt.
+- Couleurs fixes remplacées par celles du thème : le bouton « Random Dialogue / Generate selected line » (ambre), « Continue conversation / Change subject » (cyan et fuchsia), les étiquettes AUTO et CUSTOM, l'encadré « Automatic text emotion ». Dans « Studio Light », « Change subject » était presque illisible.
+
+### 2026-11-20 — B5f, étape 3 : Prompt, Extractor, Logo, barre de fournisseur
+
+Fichiers touchés : `components/PromptGeneratorPanel.tsx`, `components/ClothesExtractorPanel.tsx`, `components/LogoThemeGeneratorPanel.tsx`, `components/CloudImageProviderBar.tsx`, `components/ExtractorResultsGrid.tsx`, `components/SendToLTXButton.tsx`, `components/ImageUploader.tsx`.
+
+Ces panneaux n'ont pas de bloc Models / LoRAs / Sampler : leur disposition est conservée, seuls les contrôles changent.
+
+- Prompt : listes Ollama et Florence2 avec recherche. Les trois prompts générés sont des zones de prompt (repère vert ; avant, texte à la couleur de l'onglet). Creativity a un champ de saisie.
+- Extractor : liste Ollama avec recherche ; « People in image », « Max Objects », Steps et CFG de la police ont curseur et champ ; « Style instructions » est une zone de prompt.
+- Logo, Banner, Album Cover : les champs ont maintenant un libellé au-dessus (avant, seulement un texte indicatif dans le champ) ; le concept est une zone de prompt ; « Number of… » a un champ de saisie. « Generate Covers » prend la couleur d'accent comme les deux autres (il était rouge d'alerte).
+- Barre de fournisseur (Extractor et Logo) : modèles Gemini et Mammouth avec recherche.
+- Boutons posés sur les vignettes de résultat (Extractor, Logo) et bouton « Send to LTX » : leur fond utilisait une opacité sans effet, ils étaient donc sans fond sur l'image assombrie. Ils ont maintenant un fond plein. Le message d'erreur d'une vignette d'Extractor est maintenant rouge.
+
+### 2026-11-20 — B5f, étape 4 : Outpaint et Upscale
+
+Fichiers touchés : `components/OutpaintPanel.tsx`, `components/UpscalePanel.tsx`, `components/ZImageCreativeUpscalePanel.tsx`, `components/InputComponents.tsx`, `scripts/browser/lock-release-check.mjs`.
+
+- Outpaint : sections du kit dans l'ordre standard — **Models, LoRAs, Sampler, Advanced** (avant : « Models & CLIP », « LoRA Settings », « Sampler Settings »). Cache, raccord (Stitch) et prompt envoyé passent dans Advanced. Listes avec recherche ; modèle de diffusion et LoRA filtrés sur QWEN 2.1. « Scene » est une zone de prompt, déplacée à droite juste avant le bouton Outpaint.
+- Upscale : le bouton « Advanced » de l'en-tête disparaît. Les réglages sont des sections dans la colonne de gauche : Models et Advanced pour SeedVR2 ; Models, LoRAs, Sampler et Advanced pour Z-Image Creative Upscale, dont le prompt et le bouton passent à droite au-dessus des images. UNET et LoRA de Z-Image filtrés sur leur famille.
+- Les trois seeds utilisent le champ standard. « Aléatoire » se choisit avec la case « New seed for every run » ; avant, il fallait taper −1 (Outpaint) ou vider le champ (Upscale). La valeur enregistrée est la même.
+- `EditableNumberInput` n'a plus d'appelant : supprimé de `InputComponents.tsx`.
+- Le harnais des verrous ouvre les nouvelles sections d'Outpaint et compte aussi les listes avec recherche.
+
+Trois écarts de comportement, à connaître :
+
+1. Une valeur absente du catalogue ComfyUI s'affiche « (not listed) ». Avant, Outpaint et Z-Image l'affichaient comme un choix normal. C'est la règle du kit : jamais de repli silencieux.
+2. Z-Image avait deux champs pour la même valeur : « Prompt Prefix » dans Advanced et « Prompt Direction ». Seul « Prompt Direction » reste.
+3. Un champ numérique du kit n'applique qu'une valeur valide. Avant, vider un champ de Z-Image envoyait 0.
+
+### 2026-11-20 — B5f, étape 5 : outils média de Tools
+
+Fichiers touchés : `components/VideoUtilsPanel.tsx`, `components/ReferenceMakerPanel.tsx`, `components/VoiceRecorderPanel.tsx`, `components/AudioExtractorPanel.tsx`, `components/VideoClipExtractor.tsx`, `components/VideoMergePanel.tsx`, `components/VideoOutputFrames.tsx`, `components/ui/styles.ts`, `components/ui/fields.tsx`.
+
+- Listes au kit : ratio de recadrage (image et vidéo), Reference Maker (ratio, colonnes, résolution), micro du Voice Recorder.
+- Curseur et champ : Resize (image et vidéo), Number of Colors, Spacing. Largeur et hauteur de sortie vidéo, noms de palette, de planche et de voix : champs du kit.
+- **Gardés tels quels, avec le style du kit** : les curseurs de lecture (position dans la vidéo ou le son, fenêtre visible, comparaison avant/après) et les champs de découpe « début / fin en secondes » avec le champ FPS. Ce ne sont pas des réglages : les champs de découpe acceptent exprès une valeur vide ou hors bornes pour afficher leur message (« End must be after start… »), ce que le champ du kit ne fait pas.
+- Les curseurs de réglage et les curseurs de lecture de ces outils partagent maintenant la même classe (`ui.slider`).
+- Couleurs fixes remplacées par le thème : textes et bordures cyan d'Audio Extractor et du sélecteur d'image de sortie, encadré d'aide du Voice Recorder, messages d'erreur rouges fixes.
+
+Deux tests adaptés pour charger les styles du kit (`AudioExtractorPanel.test.mjs`, `VideoOutputFrames.test.mjs`) ; aucune assertion modifiée.
+
+### 2026-11-20 — Vérification de B5f
+
+Comparaison avec les relevés d'avant, sans exercice :
+
+| Onglet | Contrôles avant → après, par écran | Écart |
+| --- | --- | --- |
+| TTS | 15 → 20, 16 → 21, 14 → 30, 16 → 33 | Champs à côté des curseurs. Pour TTS Advanced, le relevé d'avant ne comptait pas les cinq réglages « Engine settings », restés fermés |
+| Prompt | 1, 2, 3, 1, 1 inchangés ; 1 → 2 | Champ de Creativity |
+| Extractor | 3, 4, 2 inchangés ; 2 → 3, 2 → 3, 0, 2, 4 → 6 | Champs à côté des curseurs |
+| Logo | 4 → 5, 4 → 5, 7 → 8 | Champ de « Number of… » |
+| Tools, outils média | 2, 4, 5, 4, 8, 1 inchangés ; 7 → 8, 1 → 2, 2 → 3, 6 → 7 | Champs à côté des curseurs |
+| Tools, Outpaint | 27 → 28, 31 → 32 | Case « New seed for every run » |
+| Tools, Upscale | 29 → 38, 69 → 71 | Champs à côté des curseurs, cases de seed ; « Prompt Prefix » retiré |
+
+Mêmes valeurs par défaut partout. Les seules lignes « changed » sont des listes natives devenues listes avec recherche, et les « (not listed) » décrits plus haut (le catalogue simulé du harnais ne contient pas ces modèles).
+
+| Vérification | Fin de B5d | Maintenant |
+| --- | --- | --- |
+| Tests `npm test` | 972 tests : 958 réussis, 0 en échec, 14 ignorés | Identique |
+| `npm run typecheck` | 18 erreurs | 18 erreurs, mêmes 9 fichiers |
+| Build Vite (dossier temporaire) | Réussi | Réussi en 5,76 s |
+| `check:panels` TTS, Prompt, Extractor, Logo, Tools, avec exercice | — | 4/4, 6/6, 8/8, 3/3, 14/14, aucune erreur de page |
+| `check:panels` Video, Scene Variation, QWEN 2.1 I2I, Character, Image Generator, Fun, avec exercice | 10/10, 5/5, 4/4, 7/7, 22/22, 14/14 | Identique |
+| `check:locks`, `check:tab-jobs`, `check:ui` | 13/13, 6/6, 12/12 | 13/13, 6/6, 12/12 |
+| `check:tabs` | Référence | Seul TTS change : 3 listes natives → 2 natives et 1 avec recherche. Nouvelle référence enregistrée |
+| `profile:renders` | 5 vérifications réussies | 5 vérifications réussies |
+
+Le typecheck ne vérifie pas les propriétés passées à la plupart des composants du kit (champs, sections, zone de prompt) : le projet n'a pas les types de React. Seules celles des listes sont vérifiées. La preuve que les contrôles sont bien branchés vient de l'exercice du harnais : chaque liste, curseur et champ numérique affiché reçoit une nouvelle valeur et doit la montrer. Un second passage (nouvelle option `LAWIZ_AUDIT_TEXT=1`) tape aussi dans chaque champ texte et zone de prompt modifiable des cinq onglets de B5f : 4/4, 6/6, 8/8, 3/3, 14/14. Les cases à cocher ne sont pas exercées.
+
+Captures relues, thème par défaut : TTS Voice Clone, TTS Advanced en dialogue, Album Cover, Outpaint, Z-Image Creative Upscale, Resize & Crop vidéo. Dans « Studio Light » : Audio Extractor, Upscale SeedVR2, TTS Advanced.
+
+Non vérifié :
+
+- aucune génération, analyse, extraction, fusion ni enregistrement lancé ; aucune exécution dans Electron ;
+- les écrans d'après traitement : éléments identifiés d'Extractor, résultats et zoom de Logo, résultat et comparaison d'Outpaint et d'Upscale, prompt Florence2 de Z-Image ;
+- TTS avec des voix installées (le catalogue simulé n'en renvoie aucune) et avec une voix de la Library ;
+- Logo avec références, palette ou police chargées ;
+- le Voice Recorder en enregistrement (pas de micro dans le navigateur de test) ;
+- les autres écrans dans « Studio Light », et les thèmes « Synthwave » et « 70s Groove » ;
+- les captures non citées ci-dessus n'ont pas été relues ;
+- le filtre par My Library (inventaire de test vide).
+
+### État de B5f
+
+**Terminé.** Reste pour B5g (Library, Models/LoRAs, réglages) : 16 listes natives dans 5 fichiers (`LibraryPanel` 10, `ImagePromptModal` 2, `StyleBrowser` 2, `StyleGalleryPanel` 1, `OpenRouterSettings` 1), et 52 classes d'opacité sans effet dans 15 fichiers.
+
+### 2026-11-20 — B5g (Library, Models/LoRAs, Gestionnaire de styles, fenêtres de réglages), étape 1 : relevés de référence
+
+Fichier touché : `scripts/browser/panel-controls-audit.mjs`.
+
+- Quatre nouveaux groupes : `library` (2 écrans), `models` (4), `styles` (2), `settings` (2 : Connection Settings et Visual Settings).
+- Le harnais lit maintenant aussi les contrôles des fenêtres ouvertes (certaines sont affichées hors de la zone de contenu), peut cliquer un bouton de l'en-tête et appuyer sur une touche.
+- Relevés d'avant : `%TEMP%\lawiz-{library,models,styles,settings}-controls-before.json`, avec captures.
+
+Constat du relevé : l'onglet Models/LoRAs était déjà entièrement sur les listes du kit (30 listes par l'enveloppe `MenuSelect` de B4). Il n'y avait rien à y migrer, sauf deux bordures.
+
+### 2026-11-20 — B5g, étape 2 : Library et Gestionnaire de styles
+
+Fichiers touchés : `components/LibraryPanel.tsx`, `components/StyleBrowser.tsx`, `components/StyleGalleryPanel.tsx`, `components/BlazingFastCharacterPanel.test.mjs`.
+
+- Library : les dix listes passent au kit (tri, éléments par page et page en haut et en bas, fournisseur et workflow des filtres Images et Characters, filtre Safety, choix d'un tag existant). Les deux listes de tags ont la recherche. Le champ de recherche et les champs de tag ont le style du kit.
+- **Correction liée aux listes qui se ferment** : les deux barres de pagination de la Library étaient recréées à chaque rafraîchissement de l'onglet (composant déclaré pendant le rendu). Une liste de pagination ouverte se refermait donc dès que la Library se redessinait. Elles ne sont plus recréées. Prouvé par le harnais : avant ce changement, il ne pouvait exercer que 2 des 4 listes (les deux de pagination disparaissaient entre deux actions) ; après, les 4.
+- Le message d'état du projet et le bouton « Detect common terms » utilisent le vert et le jaune du thème : ils étaient presque illisibles dans « Studio Light ».
+- Gestionnaire de styles : filtre de modèle et pagination au kit. Dans la fenêtre d'édition : Title est un champ du kit, Trigger et Style prompt sont des zones de prompt, LoRA strength est un champ numérique du kit.
+- Le champ Model de la fenêtre d'édition était une zone de texte avec suggestions. C'est maintenant une liste des modèles connus avec une entrée « Custom... » pour en taper un autre, comme Installed LoRA path, Sampler et Scheduler juste à côté.
+- Gardés en champs simples, avec le style du kit : Steps, CFG et Megapixels du style. Ils doivent pouvoir rester vides (« réglage du générateur »), ce que le champ numérique du kit ne permet pas.
+
+Les listes de la fenêtre d'édition de style restent des listes natives du kit, sans recherche : cette fenêtre est une boîte de dialogue native du navigateur, et la liste avec recherche s'ouvrirait derrière elle.
+
+Le test Blazing charge le kit pour ces deux fichiers ; aucune assertion modifiée.
+
+### 2026-11-20 — B5g, étape 3 : fenêtres de réglages et de prompt
+
+Fichiers touchés : `components/ComfyUIConnection.tsx`, `components/OpenRouterSettings.tsx`, `components/VisualSettingsModal.tsx`, `components/ImagePromptModal.tsx`, `components/VideoReferenceEditor.tsx`, `components/ImageStyleControl.tsx`, et trois tests (`krea2Style`, `mossStyle`, `styleSampling`).
+
+- Connection Settings : tous les champs ont le style du kit. Le modèle OpenRouter par défaut (476 modèles dans le catalogue reçu pendant l'essai) est une liste avec recherche. Le modèle Ollama par défaut reste une zone de texte ; après « Test », il devient une liste avec recherche des modèles installés (avant : zone de texte avec suggestions).
+- Visual Settings : la taille de l'interface garde son curseur et gagne un champ de saisie.
+- Generate Prompt from Image : listes et champs du kit ; le prompt généré est une zone de prompt. Le modèle d'analyse reste une zone de texte ; après « Load available models », il devient une liste avec recherche. Les deux boutons d'accent avaient un texte de la couleur du fond de page ; ils utilisent la couleur de texte prévue pour l'accent.
+- Éditeur de référence vidéo (onglet Video) et force du LoRA de style (Image Generator) : champs numériques du kit. Ces deux fichiers avaient été oubliés dans B5d et B5a.
+
+Un écart de comportement : une fois la liste des modèles chargée (Ollama, ou modèle d'analyse), on choisit dans la liste et on ne peut plus taper un nom libre. Dans Connection Settings, rouvrir la fenêtre redonne la zone de texte. Dans Generate Prompt from Image, la liste reste jusqu'au rechargement de l'application (pour Ollama, changer l'URL redonne aussi la zone de texte).
+
+### 2026-11-20 — B5g, étape 4 : fin des classes d'opacité sans effet
+
+Fichiers touchés : `components/ImageGrid.tsx`, `components/OAuthHelperModal.tsx`, `components/ComfyUIConnectionHelperModal.tsx`, `components/CivitaiInventoryPanel.tsx`, `components/Loader.tsx`, `components/Header.tsx`, `components/LibraryPickerModal.tsx`, `components/LibraryPromptButton.tsx`, `components/SaveStyleSamplingButton.tsx`, `components/CreationSuiteResult.tsx`, `App.tsx`.
+
+Les 52 classes restantes sont traitées : il n'en reste **aucune** dans l'application (187 au départ).
+
+- Boutons posés sur les images générées (grille de résultats d'Image Generator et de Character) : fond plein, comme dans Extractor et Logo. Ils étaient sans fond.
+- Fonds décoratifs sans effet : retirés, l'affichage ne change pas.
+- **En-tête de l'application et barre d'onglets** : leur fond prévu (demi-opaque) n'a jamais été appliqué ; ils sont transparents avec un flou, et le contenu défile visiblement dessous. J'ai retiré la classe sans effet **sans changer l'affichage**. Les rendre opaques changerait l'allure de toute l'application : décision laissée à l'utilisateur (point ouvert 11).
+
+### 2026-11-20 — Vérification de B5g
+
+Comparaison avec les relevés d'avant, sans exercice :
+
+| Écran | Contrôles avant → après | Écart |
+| --- | --- | --- |
+| Library, par défaut et avec filtres | 8 → 8, 12 → 12 | Noms des listes précisés (« Items per page top », « Image provider filter »…) |
+| Models/LoRAs, quatre sections | 4, 7, 10, 3 inchangés | Aucun |
+| Gestionnaire de styles, galerie et fenêtre d'édition | 6 → 6, 20 → 20 | Model : zone de texte → liste |
+| Connection Settings | 10 → 10 | Modèle OpenRouter : liste native → liste avec recherche |
+| Visual Settings | 2 → 3 | Champ de la taille d'interface |
+
+Mêmes valeurs partout.
+
+| Vérification | Fin de B5f | Maintenant |
+| --- | --- | --- |
+| Tests `npm test` | 972 tests : 958 réussis, 0 en échec, 14 ignorés | Identique |
+| `npm run typecheck` | 18 erreurs | 18 erreurs, mêmes 9 fichiers |
+| Build Vite (dossier temporaire) | Réussi | Réussi en 6,04 s |
+| `check:panels` Library, Models/LoRAs, Styles, Settings, avec exercice et saisie de texte | — | 2/2, 4/4, 2/2, 2/2, aucune erreur de page |
+| `check:panels` des onze autres groupes, avec exercice | 14, 4, 6, 8, 3, 10, 5, 4, 7, 22, 14 | Identique |
+| `check:locks`, `check:tab-jobs`, `check:ui` | 13/13, 6/6, 12/12 | 13/13, 6/6, 12/12 |
+| `check:tabs` | Référence | Identique |
+| `profile:renders` | 5 vérifications réussies | 5 vérifications réussies |
+
+Captures relues, thème par défaut : Library avec filtres, fenêtre d'édition de style, Connection Settings, Visual Settings. Dans « Studio Light » : Library avec filtres (reprise après le changement de couleur du message d'état), fenêtre d'édition de style.
+
+Non vérifié :
+
+- la Library avec des éléments : la Library du navigateur de test est vide. La fiche d'un élément, les deux listes de tags existants, la pagination sur plusieurs pages et les boutons posés sur les vignettes n'ont pas été affichés ;
+- les boutons posés sur les images générées (aucune génération lancée) ;
+- Models/LoRAs avec un inventaire : les cartes de modèle et leurs listes ne sont pas affichées en mode navigateur ;
+- Connection Settings après « Test » d'Ollama, et la fenêtre Generate Prompt from Image : lus dans le code, pas affichés ;
+- l'éditeur de référence vidéo et la force du LoRA de style : pas affichés (il faut une référence chargée, ou un style choisi) ; couverts seulement par le typecheck et, pour le second, par ses trois tests ;
+- les fenêtres d'aide (OAuth, connexion ComfyUI) et l'écran de chargement, où seules des classes sans effet ont été retirées ;
+- aucune exécution dans Electron.
+
+### État de B5g et de B5
+
+**B5g terminé. B5 terminé** : tous les onglets et les fenêtres de réglages utilisent le kit.
+
+Ce qui reste hors kit dans toute l'application, compté le 2026-11-20 :
+
+| Contrôle brut | Reste | Nature |
+| --- | --- | --- |
+| Liste native | 1 | Modèle OpenRouter du Video Prompt Generator : structure imposée par ses tests |
+| Suggestions (`datalist`) | 3 | Video Prompt Generator 2, H3 1 : champs où l'on tape un nom libre |
+| Zone de texte | 14 dans 10 fichiers | Analyses à longueur limitée de Scene Variation (4), MOSS PHOTO (2), éditeurs à jetons colorés, champs compacts des cartes de modèle |
+| Curseur | 20 dans 15 fichiers | Lecture, position, comparaison avant/après, émotions colorées |
+| Champ numérique | 20 dans 11 fichiers | Découpe début/fin et FPS, valeurs qui peuvent rester vides, champs compacts des cartes de modèle |
+
+Ces restes ne sont pas tous des exceptions vérifiées une à une : je n'ai pas rouvert chaque zone de texte et chaque champ numérique des panneaux des briques précédentes pour confirmer sa raison d'être.
+
+### 2026-11-20 — Après B5 : en-tête et barre d'onglets opaques
+
+Décision de l'utilisateur sur le point ouvert 11 : les rendre opaques. Fichiers touchés : `components/Header.tsx`, `App.tsx`.
+
+- L'en-tête a le fond des cartes, la barre d'onglets le fond de page. Le flou est retiré : il ne sert plus sous un fond opaque.
+- **Changement non demandé, conséquence directe** : la barre d'onglets se collait tout en haut de la fenêtre, donc par-dessus l'en-tête. Tant qu'elle était transparente, les deux se superposaient ; opaque, elle cachait le titre, le badge du fournisseur et « Welcome » dès qu'on défilait (vu sur capture). Elle se colle maintenant juste sous l'en-tête, dont elle suit la hauteur. Elle occupe donc 39 px de plus en haut de l'écran quand on défile.
+
+Vérifié : positions mesurées dans les quatre thèmes (en-tête 0 à 120 px, onglets 120 à 159 px après défilement, fonds opaques) ; captures relues en Cyberpunk, Studio Light et 70s Groove (fenêtre de 900 px). 972 tests (958 réussis, 0 en échec, 14 ignorés), typecheck 18 erreurs (mêmes fichiers), build Vite temporaire réussi, `check:locks` 13/13, `check:tab-jobs` 6/6, `check:ui` 12/12, `profile:renders` 5 réussies, `check:tabs` identique, `check:panels` Image 22/22 et Library 2/2.
+
+Non vérifié : Electron ; un en-tête qui passe sur deux lignes (à 900 px de large il reste sur une) ; les menus de l'en-tête, s'ils dépassent sous lui, passent derrière la barre d'onglets comme avant.
+
+### 2026-11-20 — Thème clair : une base claire solide
+
+Demande de l'utilisateur : un thème clair qui fonctionne partout (une autre personne utilise l'application et l'a signalé), et plus tard des thèmes personnalisables sur deux bases, une sombre (Cyberpunk) et une claire.
+
+Fichiers touchés : `index.html`, `utils/accentTheme.ts`, `components/SystemMetricsIndicators.tsx`, `components/FunTab.tsx`, `components/VideoMergePanel.tsx`, `scripts/browser/panel-controls-audit.mjs`.
+
+**Mesure d'abord.** Le harnais `check:panels` sait maintenant mesurer le contraste de chaque texte visible contre le fond réellement peint derrière lui (`LAWIZ_AUDIT_CONTRAST=fichier.json`, norme WCAG : 4,5:1 pour un texte normal, 3:1 comme plancher). Mesuré sur les 107 écrans qu'il sait ouvrir, 11 010 textes :
+
+| Thème | Sous 3:1 avant | Sous 3:1 après | Sous 4,5:1 avant | Sous 4,5:1 après |
+| --- | --- | --- | --- | --- |
+| Studio Light | 2 473 | 3 | 3 075 | 46 |
+| Cyberpunk | 190 | 191 | 915 | 916 |
+
+Dans Studio Light, près d'un texte sur quatre était sous le plancher. Trois causes en expliquaient presque tout : les jauges système de l'en-tête (texte blanc sur gris, 1 070 mesures car l'en-tête est sur chaque écran), la couleur d'accent pastel de chaque onglet, et les textes de couleur claire fixe.
+
+**Le mécanisme, au lieu de 587 remplacements.** Les classes de couleur fixe ne sont pas réécrites :
+
+- Dans `index.html`, les couleurs de la palette utilisées comme encre (texte, bordure, anneau de focus) passent par des variables. Sur une base sombre elles valent exactement la palette d'origine. Sur la base claire, les teintes claires deviennent foncées (100 → 900, 200 → 800, 300 à 500 → 700). Les fonds ne sont pas touchés : un fond teinté reste un fond teinté, un bouton plein reste plein.
+- Les accents par onglet (`utils/accentTheme.ts` et les tables des sous-onglets) suivent la même bascule sans changer aucun appel.
+- Une variante `light:` existe pour les cas particuliers (`light:bg-black/75`). Utilisée deux fois : jauges système, sous-onglets Fun à texte blanc.
+- Couleurs propres au thème Studio Light foncées : texte discret `#6b7280` → `#5d6470`, erreur `#ef4444` → `#b91c1c`, vert `#16a34a` → `#15803d`, jaune `#ca8a04` → `#a16207`.
+
+Pour les futurs thèmes personnalisables : la bascule est attachée à un seul sélecteur (`:root[data-theme="studio-light"]`, deux endroits dans `index.html`). Une « base claire » reviendra à élargir ce sélecteur.
+
+**Preuve que les thèmes sombres ne bougent pas.** Les 194 classes de couleur fixe distinctes du code ont été rendues avant et après dans Cyberpunk : 0 différence. La liste des textes peu contrastés de Cyberpunk est identique sur 106 écrans sur 107 ; le seul écart est le bouton ci-dessous. Synthwave et 70s Groove utilisent les mêmes valeurs par construction ; non mesurés.
+
+**Un changement qui touche aussi les thèmes sombres** : le bouton « Merge videos » (Tools) portait deux fonds contradictoires et s'affichait gris au lieu de la couleur d'accent, donc blanc sur gris clair dans le thème clair. Il a maintenant son fond d'accent dans tous les thèmes.
+
+**Ce qui reste sous 4,5:1 dans Studio Light (46 textes)** :
+
+- 35 entre 4,3 et 4,5 : le badge du fournisseur dans l'en-tête et le libellé de l'onglet actif, sur leur fond teinté ;
+- 4 à 4,24 : le badge vert « ComfyUI » de TTS ;
+- 3 à 2,72 : les consignes grises sur l'aperçu noir de LTX Director (identiques dans Cyberpunk) ;
+- 4 autres entre 3,8 et 4,5 (bouton « Search ArchiveCivit », deux valeurs du redimensionnement vidéo, un libellé de LTX Director).
+
+Vérifié : 972 tests (958 réussis, 0 en échec, 14 ignorés), typecheck 18 erreurs (mêmes fichiers), build Vite temporaire réussi (le script des couleurs est bien dans le `index.html` produit), `check:locks` 13/13, `check:tab-jobs` 6/6, `check:ui` 12/12, `profile:renders` 5 réussies, `check:tabs` identique, `check:panels` avec exercice Fun 14/14 et Tools 14/14, les 15 groupes parcourus dans les deux thèmes sans erreur de page. Captures relues dans le thème clair : Image Generator FLUX2, Video H3, Models/LoRAs Civitai.
+
+Limites de la mesure, donc non vérifié :
+
+- seuls les textes sont mesurés : ni les icônes, ni les bordures, ni les textes d'aide dans les champs vides, ni les contrôles désactivés, ni les textes posés sur une image ou un dégradé ;
+- seuls les états au repos : ni le survol, ni les messages d'erreur ou de progression qui n'apparaissent que pendant un travail ;
+- seuls les écrans que le harnais ouvre : pas la Library avec des éléments, pas les cartes de modèles, pas les résultats de génération, pas les fenêtres d'aide ;
+- 3 captures relues sur 107 ;
+- rien dans Electron.
+
+Constat laissé tel quel (point ouvert 13) : dans Cyberpunk, les 191 textes sous 3:1 sont presque tous du texte blanc sur un bouton d'accent pastel (bouton du fournisseur ou du workflow sélectionné, par exemple blanc sur cyan : 1,81:1).
+
+### 2026-11-20 — Liste « À régler » : les trois derniers points
+
+Demande de l'utilisateur : régler la liste « À régler » avant B6. Fichiers touchés : `components/AudioExtractorPanel.tsx`, `components/OptionsPanel.tsx`, `scripts/browser/ui-kit-check.mjs`.
+
+**Audio Extractor : décimales des champs Start et End (point 5).** Les deux champs affichent maintenant le temps au millième, comme la durée affichée à côté (3.019 au lieu de 3.01859410430839). La valeur exacte est conservée en interne : « Select full track » exporte toujours la piste entière. Cas prévu : retaper la durée arrondie de la piste (3.019 alors que la piste fait 3,0186 s) désigne la fin exacte et ne déclenche pas le message « hors de l'enregistrement ».
+
+Vérifié dans le navigateur avec le fichier d'essai : affichage après chargement, saisie de 1.2345678 (affiché 1.235), saisie de la durée arrondie (acceptée), saisie de 99 (message de validation toujours affiché), « Select full track », saisie dans Start.
+
+Non corrigé, même famille : les champs de découpe de H3 (référence audio), Clips, Merge et Frames peuvent afficher une longue suite de décimales après « Set start here » ou « Set end here ». Non observé avec le fichier d'essai (aucun autre champ à plus de trois décimales sur les 14 écrans Tools), mais ces boutons n'ont pas été cliqués.
+
+**`check:ui` intermittent (point 3).** Cause probable trouvée, non reproduite :
+
+- Mesuré : chaque scénario recharge une page qui attend quatre sites tiers (Tailwind, deux sites de polices, une feuille de style) avant de démarrer, soit 13 chargements par exécution, sans cache partagé.
+- Prouvé : si un seul de ces sites ne répond pas, la page ne se charge pas et le délai expire. C'est exactement le seul échec capturé (délai dépassé au chargement).
+- Non prouvé : que les trois échecs du 2026-11-19 venaient bien de là. Le réseau était rapide pendant les essais d'aujourd'hui.
+
+Correction du harnais : chaque ressource tierce est téléchargée une seule fois par exécution ; si un chargement expire, le message dit quelle adresse était encore en attente ; un échec de la dernière étape (sonde d'opacité et captures) est rapporté comme un échec au lieu d'interrompre le script sans résumé.
+
+Résultat : 25 exécutions de suite, 0 échec, 9,6 s en moyenne (8,7 à 16,2 s). Au taux d'échec d'avant (3 sur 22), 25 réussites de suite arrivent par hasard environ une fois sur 40 : c'est un bon indice, pas une certitude. À rouvrir si un échec revient ; le message dira alors quoi regarder.
+
+Même fragilité, non traitée : la page de l'application attend les mêmes sites tiers à chaque démarrage (même `index.html`). Je n'ai pas essayé l'application hors ligne. C'est un sujet d'empaquetage, pas de harnais (point ouvert 14).
+
+**Expression régulière `Flux|` sans effet (`OptionsPanel.tsx`, notée à la fin de B1).** Retirée : plus aucun code n'envoie de champ LoRA de l'ancien FLUX 1 depuis B1.
+
+Vérifié après les trois changements : 972 tests (958 réussis, 0 en échec, 14 ignorés), typecheck 18 erreurs (mêmes fichiers), build Vite temporaire réussi, `check:locks` 13/13, `check:tab-jobs` 6/6, `profile:renders` 5 réussies, `check:tabs` identique, `check:panels` avec exercice Tools 14/14 et Image 22/22. Rien dans Electron.
+
+### 2026-11-20 — Cyberpunk : texte lisible sur les boutons d'accent
+
+Décision de l'utilisateur sur le point ouvert 13 : « arrange cyberpunk ». Fichiers touchés : `index.html`, `utils/accentTheme.ts`, `components/FunTab.tsx`, `components/LTXDirectorPanel.tsx`, `components/LibraryPanel.tsx`.
+
+- **Boutons d'accent** : sur une base sombre, le texte posé sur la couleur d'accent d'un onglet est maintenant foncé (`#030712`) au lieu de blanc. Les accents par onglet étant les mêmes pastels dans les trois thèmes sombres, Synthwave et 70s Groove en profitent aussi à l'intérieur des onglets. Dans le thème clair rien ne change : texte blanc sur accent foncé.
+- **Survol** : avec un texte foncé, un bouton d'accent qui fonce au survol deviendrait moins lisible. Sur une base sombre il s'éclaircit donc au survol ; sur la base claire il fonce (teinte 800).
+- **Accent propre à Cyberpunk** (fenêtres hors onglet) : même texte foncé.
+- **Sous-onglets de Fun** : Photo Fusion, Past Forward et Swap a Person sélectionnés ont un texte noir, comme l'avaient déjà Swap Anything et Stylise Anything.
+- **Flèches de la visionneuse de la Library** : l'icône prend la couleur du texte d'accent quand le bouton passe à l'accent au survol.
+
+Deux changements au-delà de la question posée, faits parce qu'ils portaient presque tout le reste des textes peu contrastés de Cyberpunk :
+
+- **Texte discret de Cyberpunk** : `#6b7280` → `#8b93a1`. 710 textes d'aide et noms de fichiers étaient entre 3,0 et 4,2:1 sur les trois fonds du thème. C'est une seule ligne de `index.html`, facile à remettre si l'ancien gris est préféré.
+- **Consignes grises sur l'aperçu noir de LTX Director** : un cran plus clair (2,72 → 4,35:1).
+
+Mesure dans Cyberpunk sur les 107 écrans (11 010 textes avant ; 10 874 après, la mesure finale ayant été faite pendant l'exercice des contrôles, qui fait varier quelques textes) :
+
+| | Avant | Après |
+| --- | --- | --- |
+| Sous 3:1 | 191 | 0 |
+| Sous 4,5:1 | 916 | 4 |
+
+Les 4 restants : les trois consignes de LTX Director (4,35:1) et le bouton « Search ArchiveCivit » (blanc sur vert, 3,77:1).
+
+Thème clair remesuré après ces changements : 0 texte sous 3:1 (3 avant : les consignes de LTX Director), 46 sous 4,5:1 (inchangé).
+
+Vérifié :
+
+- couleurs lues dans le navigateur sur le bouton du fournisseur sélectionné d'Image Gen : texte foncé sur cyan pastel dans Cyberpunk, Synthwave et 70s Groove ; blanc sur cyan foncé dans Studio Light ;
+- couleurs de survol d'un bouton d'accent dans cet onglet : cyan plus clair dans Cyberpunk, cyan plus foncé dans Studio Light ;
+- 972 tests (958 réussis, 0 en échec, 14 ignorés), typecheck 18 erreurs (mêmes fichiers), build Vite temporaire réussi, `check:locks` 13/13, `check:tab-jobs` 6/6, `check:ui` 12/12, `profile:renders` 5 réussies, `check:tabs` identique, `check:panels` des 15 groupes avec exercice dans Cyberpunk : 107 écrans sur 107.
+
+Non vérifié :
+
+- Synthwave et 70s Groove n'ont pas été mesurés. Hors des onglets, leur propre couleur d'accent garde un texte blanc, et leur texte discret n'a pas changé ;
+- le survol n'a été lu que dans un onglet ;
+- deux captures Cyberpunk relues (Image Gen FLUX2, Photo Fusion), avant le changement du texte discret ; aucune après ;
+- rien dans Electron.
+
+## B6 — Audit de la documentation et des nœuds ComfyUI requis
+
+### 2026-11-20 — B6, étape 1 : `COMFYUI_REQUIRED_NODES.txt`
+
+Fichier touché : `COMFYUI_REQUIRED_NODES.txt`.
+
+Méthode : un script a relevé chaque classe de nœud écrite dans les workflows de l'application (`constants.ts`, les constructeurs de `services/`, les fichiers `assets/*.json`). Le ComfyUI local (lecture seule de `/object_info`, aucun travail lancé) a donné pour chaque classe le paquet qui la fournit. Les adresses des dépôts viennent des dossiers `custom_nodes` de cette installation.
+
+| | Écrit dans le fichier avant | Mesuré dans le code |
+| --- | --- | --- |
+| Classes de nœuds | 85 (51 natives + 34 externes) | 212 (103 natives + 109 externes) |
+| Paquets externes | 22 | 45 |
+
+Le fichier était donc très en retard : ses sections par fonction citaient les nœuds récents, mais sa liste d'installation et son inventaire ne couvraient que les fonctions d'origine.
+
+Changements :
+
+- En-tête : date, méthode, totaux et limites de l'audit.
+- Liste d'installation : nœuds corrigés pour 7 paquets déjà listés (KJNodes passe de 4 à 11 nœuds, rgthree de 1 à 5, TTS Audio Suite de 2 à 5…), et 22 paquets ajoutés ([26] à [47]) avec leur dépôt, leurs nœuds et les fichiers source qui les utilisent.
+- Inventaire exhaustif : remplacé par les 212 classes. Deux classes natives qui n'étaient plus utilisées par aucun workflow en sortent (`KSamplerAdvanced`, `ModelSamplingSD3`).
+- État de l'installation de référence : les 212 classes sont chargées dans le ComfyUI local.
+- Chemins de navigation mis à jour (« Image Gen », « Video > LTX > … », « Video > H3 > … »).
+
+Vérifié par script après modification : les 212 classes du code sont toutes nommées dans le fichier ; l'inventaire contient exactement ces 212 classes, ni plus ni moins ; aucune classe marquée native n'est externe dans l'installation locale, et inversement ; chaque classe externe figure dans la liste d'installation.
+
+Limites :
+
+- « Native » veut dire fournie par ComfyUI dans l'installation locale à cette date. Un ComfyUI plus ancien peut ne pas avoir les classes récentes.
+- Les sections par fonction (environ 450 lignes de texte) n'ont pas été relues phrase par phrase : seuls leurs noms de classes ont été confrontés au code. Leurs noms de fichiers de modèles et leurs valeurs par défaut ne sont pas vérifiés.
+- Pour les 22 paquets ajoutés, le fichier indique les fichiers source concernés, pas une description de la fonction.
+- Le relevé repose sur la façon dont le code écrit ses nœuds. Une classe construite autrement (nom assemblé à l'exécution) lui échapperait ; je n'en ai pas trouvé.
+
+Constat non traité : `services/installationDiagnostics.ts` (le tableau de bord d'installation) ne cite pas 55 des 212 classes, dont 39 externes, et cite encore `KSamplerAdvanced` et `ModelSamplingSD3`. Ce fichier n'importe aucune liste de nœuds d'un autre module : le tableau de bord ne contrôle donc pas ces 55 classes et peut annoncer une fonction comme prête alors qu'un nœud manque. Je n'ai pas vérifié quelles fonctions sont touchées (point ouvert 15).
+
+### 2026-11-20 — B6, étape 2 : README et `docs/`
+
+Fichiers touchés : `docs/README.md`, `docs/connections.md`, `docs/development.md`, `docs/reference/comfyui-workflows.md` et, dans `docs/features/`, `character-swap-h3.md`, `creative-tools.md`, `images-and-characters.md`, `ltx-and-audio.md`, `minimax-h3.md`, `models-and-loras.md`, `scene-variation.md`, `swap-and-fusion.md`.
+
+Méthode : les 17 documents ont été lus en entier par un sous-agent qui a confronté leurs affirmations au code (libellés, onglets, fournisseurs, nœuds, chemins, commandes, liens). J'ai revérifié dans le code la preuve de presque tous les écarts avant de corriger ; la nouvelle description de la disposition de FLUX2 Edit repose sur le relevé du sous-agent et sur le travail de B5a.
+
+37 corrections dans 12 fichiers. `README.md`, `docs/getting-started.md`, `docs/features/library.md`, `docs/features/video-prompt-generator.md` et `docs/screenshots/README.md` : aucun écart trouvé. Aucune mention de FLUX 1, Nunchaku, FLUX Krea ou WAN 2.2 ne restait.
+
+| Famille d'écart | Exemples |
+| --- | --- |
+| Disposition changée pendant B5 | « right-hand LoRA panel », « LoRA Settings », « Qwen 2.1 Advanced Settings », « FLUX2 settings » → sections **Models**, **LoRAs**, **Sampler**, **Advanced** à gauche ; les modèles SeedVR2 sont dans **Models**, plus dans **Advanced** |
+| Chemins de navigation | « Image Generation » → **Image Gen** (7 endroits) ; « Video > Minimax REF2v H3 » → **Video > H3 > …** ; « Video > LTX-Ripple-FFAF » → **Video > LTX > …** ; Scene Variation « between Character and LTX Director » |
+| Listes incomplètes | Gemini manquait dans Photo Fusion, Past Forward et Image Gen ; Gemini et OpenRouter manquaient dans l'analyse de prompt |
+| Valeurs | CacheDiT de LTX Director : 6 étapes et intervalle 4 pour LTX 2.3, pas 8 et 3 ; « up to three LoRAs » → cinq emplacements ; « Images to Generate » → **Number of Images** |
+| Outils de développement | « There is no `npm test` script » : il existe ; commandes `test`, `typecheck` et vérifications navigateur ajoutées au tableau |
+| Lien | Ancre `#portable-archives` inexistante dans `library.md` |
+
+Non vérifié, donc peut-être encore faux dans les documents :
+
+- la plupart des valeurs par défaut chiffrées, des plages et des noms de fichiers de modèles ;
+- les comportements décrits (annulation, persistance, ordre des validations, contenu d'un instantané Library) ;
+- les dispositions gauche/droite de MiniMax Advanced, de Creation suite et des sorties de Character (`images-and-characters.md` ligne 46 parle encore de « wide right column ») ;
+- les adresses externes et les attributions à des auteurs tiers ;
+- les captures d'écran : le dossier contient trois images ; je n'ai pas regardé si elles montrent encore l'interface actuelle.
+
+Aucun code n'a changé dans B6 : les vérifications de code n'avaient pas à être relancées pour cette brique.
+
+### État de B6
+
+**Terminé**, dans les limites écrites ci-dessus. Reste du plan : B7 (suggestions), optionnel. Points ouverts en attente de l'utilisateur : 14 (sites tiers au démarrage) et 15 (tableau de bord d'installation).
+
+## Version 2.0.0
+
+### 2026-11-20 — Passage à la version 2.0.0 et installateur Windows
+
+Demande de l'utilisateur : passer à la version 2, préparer le message de commit, compiler l'installateur Windows dans `dist`.
+
+Fichiers touchés : `package.json`, `package-lock.json`, `version.json`, `README.md`, `docs/development.md`.
+
+- Version `1.88.0` → `2.0.0` (`package.json`, `package-lock.json`, badge du README, guide de développement). `version.json` passe à `2.0` avec la date du jour et un résumé des changements : c'est le texte de l'infobulle du numéro de version dans l'en-tête.
+- README : nouvelle section « What's new in 2.0 » ; l'ancienne devient « Added in 1.88 ».
+
+Installateur, par la commande du projet `npm run electron:build` :
+
+- `dist\lawiz's-media-generator-v-2 Setup 2.0.0.exe`, 252 Mo, avec son `.blockmap` et `latest.yml`.
+- Cette commande vide `dist` avant de construire : l'installateur 1.88.0 qui s'y trouvait a été remplacé.
+- Le disque C: n'avait que 2,6 Go libres. Les fichiers temporaires de la construction ont été dirigés vers E: le temps de la commande, puis ce dossier temporaire a été supprimé.
+
+Vérifié :
+
+- avant la construction : 972 tests (958 réussis, 0 en échec, 14 ignorés), typecheck 18 erreurs (mêmes fichiers) ;
+- la construction s'est terminée sans erreur ;
+- l'empreinte SHA-512 et la taille de l'installateur correspondent à `latest.yml` ;
+- l'exécutable empaqueté porte la version 2.0.0 ;
+- la page construite contient les changements de thème, et le paquet contient le texte de la version 2.0.
+
+Non vérifié : **l'installateur n'a pas été lancé**, ni l'application empaquetée. Toutes les vérifications du chantier ont été faites dans un navigateur sur le serveur de développement, avec un ComfyUI simulé ; aucune génération réelle n'a été lancée par moi. L'exécutable n'est pas signé par un certificat (comme avant).
+
+État de Git, laissé tel quel (je n'indexe ni ne commite rien) : 155 entrées indexées par l'utilisateur ; les autres changements ne le sont pas, dont deux fichiers nouveaux jamais suivis, `components/CharacterTab.tsx` et `components/ImageGeneratorTab.tsx`, que `App.tsx` importe. Un commit sans eux ne se construirait pas.
 
 ---
 
@@ -851,9 +1812,21 @@ Non vérifié : aucune génération, même simulée, n'a été lancée depuis ce
 4. ~~**Découpage du fichier `App.tsx`**~~ : pendant B5, onglet par onglet (décision du 2026-11-19).
 5. ~~**Catalogue ComfyUI hors du store (2d)**~~ : abandonné (décision du 2026-11-19).
 6. ~~**B1 : approbation de la liste de suppression**~~ : décisions prises le 2026-11-19 ; B1 clos.
+7. ~~**FLUX2 Edit** : garder sa disposition ou l'aligner sur la règle ?~~ Aligné sur la règle (décision du 2026-11-19, B5a étape 4).
+8. ~~**Listes de modèles d'Image Generator** : filtrer sur la famille ?~~ Oui, partout où c'est possible, surtout les LoRA (décision du 2026-11-19, B5a étape 4).
+9. ~~**MOSS PHOTO** : structure guidée ou disposition standard ?~~ Structure et ordre conservés, contrôles au kit (décision du 2026-11-19, B5a étape 4).
+10. ~~**LTX Director** : le convertir aux couleurs du thème, ou garder son apparence sombre fixe ?~~ Converti aux couleurs du thème (décision du 2026-11-20, B5d étape 5).
+11. ~~**En-tête et barre d'onglets transparents** : les rendre opaques, ou les laisser ainsi ?~~ Rendus opaques (décision du 2026-11-20, voir « Après B5 »).
+12. ~~**Couleurs fixes hors thème** : les convertir, et jusqu'où ?~~ Réglé par une bascule de la palette sur la base claire, sans réécrire les classes (2026-11-20, voir « Thème clair »).
+13. ~~**Texte blanc sur les boutons d'accent pastel dans les thèmes sombres** (191 textes sous 3:1 dans Cyberpunk) : passer ce texte en foncé sur les bases sombres ?~~ Oui (décision du 2026-11-20, voir « Cyberpunk »).
+14. **L'application dépend de sites tiers au démarrage** (Tailwind, polices, une feuille de style, chargés depuis Internet par `index.html`) : les embarquer dans l'application ? Non essayé hors ligne. Changement d'empaquetage, à traiter comme une brique à part.
+15. **Tableau de bord d'installation** : `services/installationDiagnostics.ts` ne contrôle pas 55 des 212 classes de nœuds utilisées (39 externes). Le compléter à partir du même relevé ? (voir B6, étape 1).
 
 ### À régler (hors briques en cours)
 
 1. ~~**Library : erreur à la première ouverture après un redémarrage.**~~ Corrigé le 2026-11-19 (voir « Correctif Library »). **Confirmé par l'utilisateur dans Electron.**
-2. **Opacité sur les couleurs du thème sans effet** (constat de B4) : 187 classes dans 51 fichiers. À vérifier et corriger pendant B5.
-3. **`check:ui` échoue par intermittence** (3 exécutions sur 22 le 2026-11-19) : une fois sans aucun résultat affiché, deux fois avec un scénario en échec. Le seul échec capturé est un délai dépassé au chargement de la page du harnais (`page.goto`, 30 s), pas une assertion sur le kit. Cause non identifiée ; je ne sais pas si le défaut existait avant cette session, le harnais ayant été lancé moins souvent.
+2. ~~**Opacité sur les couleurs du thème sans effet**~~ (constat de B4) : 187 classes dans 51 fichiers au départ, aucune après B5g (2026-11-20). Reste la décision du point ouvert 11.
+3. ~~**`check:ui` échoue par intermittence**~~ (3 exécutions sur 22 le 2026-11-19) : harnais corrigé le 2026-11-20, 25 exécutions de suite sans échec ; cause probable trouvée mais non reproduite (voir « Liste À régler »). À rouvrir si un échec revient. Constat d'origine : une fois sans aucun résultat affiché, deux fois avec un scénario en échec. Le seul échec capturé est un délai dépassé au chargement de la page du harnais (`page.goto`, 30 s), pas une assertion sur le kit. Cause non identifiée ; je ne sais pas si le défaut existait avant cette session, le harnais ayant été lancé moins souvent.
+4. ~~**Onglets actifs peu lisibles dans « Studio Light »**~~ (constat du 2026-11-20) : réglé le 2026-11-20 avec l'ensemble du thème clair (voir « Thème clair » ; reste 46 textes entre 2,7 et 4,5:1, listés là). Constat d'origine : la barre d'onglets principale et les sous-onglets Video utilisent des couleurs fixes de la palette (texte ambre clair sur fond ambre clair). Vu sur capture, non corrigé ; les autres barres de sous-onglets n'ont pas été regardées dans ce thème. Plus largement : 226 textes de couleur claire fixe (ambre, émeraude, cyan, rouge… en teinte 200 à 400) dans 37 fichiers, pensés pour un fond sombre ; les plus touchés sont `CivitaiInventoryPanel` 29, `MinimaxH3Panel` 28, `VideoWorkspace` 18, `LibraryPanel` 17. Tous ne sont pas illisibles sur fond clair ; aucun tri fait. Relevé complet du 2026-11-20 (fichiers `.ts` compris) : 587 classes de couleur fixe dans 49 fichiers sur 226 (texte 236, fond 201, bordure 119, autres 31), dont 9 fichiers de plus de 20 classes et 26 de 5 ou moins. Deux causes s'ajoutent aux classes : la table des accents par onglet (`utils/accentTheme.ts`, 17 couleurs pastel identiques dans tous les thèmes, qui remplacent l'accent du thème dans chaque onglet) et les 13 styles d'onglet actif de `App.tsx`. Limite connue : les fonds teintés (`bg-amber-400/15`) n'ont pas d'équivalent en couleur de thème tant que celles-ci n'acceptent pas l'opacité.
+5. ~~**Audio Extractor : le champ « End (s) » affiche toutes les décimales**~~ (constat du 2026-11-20, par exemple 3.01859410430839) : corrigé le 2026-11-20 (voir « Liste À régler »).
+6. **Champs de découpe de H3, Clips, Merge et Frames** : même défaut possible après « Set start here » ou « Set end here », non observé, non corrigé.

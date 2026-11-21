@@ -6,6 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { uiModules } from './ui/compileForTest.mjs';
 
 const require = createRequire(import.meta.url), source = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 const compile = text => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(text, {
@@ -20,6 +21,12 @@ const componentSource = source('./ClothesSwitcherPanel.tsx');
 const component = await import(compile(`
     import React, { useEffect, useRef, useState } from '${reactURL}';
     import { defaultClothesSwitcherSettings } from '${workflowURL}';
+    import { Accordion } from '${uiModules.Accordion}';
+    import { Select } from '${uiModules.Select}';
+    import { NumberField } from '${uiModules.fields}';
+    import { PromptBox } from '${uiModules.PromptBox}';
+    import { ui } from '${uiModules.styles}';
+    const familyFiles = names => names, flux2Family = () => 'flux2', useModelInventory = () => ({ inventory: { items: [] } });
     const useDispatch = () => () => {}, useSelector = selector => selector({generation:{isLoading:false},library:{items:[]}}), useMediaURL = () => '', useUnmountCleanup = () => () => {}, useDraftAutosave = () => {};
     const LibraryPickerModal = () => null, ResultImage = () => null, PresetSaveModal = () => null, ConfirmationModal = () => null, SaveIcon = () => null, TrashIcon = () => null;
     ${componentSource.replace(/import[\s\S]*?from\s+'[^']+';/g, '')}

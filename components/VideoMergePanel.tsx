@@ -7,11 +7,12 @@ import { videoToThumbnail } from '../utils/imageUtils';
 import { inspectMergeVideos, mergeVideoClips, planVideoMerge, type MergeClip, type MergeProgress } from '../services/videoMergeService';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, EndFrameIcon, FilmIcon, LibraryIcon, ResetIcon, SaveIcon, SpinnerIcon, StartFrameIcon } from './icons';
+import { ui } from './ui/styles';
 
 const message = (cause: unknown) => cause instanceof Error ? cause.message : String(cause);
 const time = (value: number) => `${Math.floor(value / 60)}:${(value % 60).toFixed(3).padStart(6, '0')}`;
 const button = 'flex items-center justify-center gap-2 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary-hover p-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed';
-const input = 'w-full bg-bg-primary p-2 rounded-md border border-border-primary text-sm';
+const input = `block ${ui.control}`;
 
 export const VideoMergePanel: React.FC = () => {
     const dispatch = useDispatch<AppDispatch>();
@@ -181,7 +182,7 @@ export const VideoMergePanel: React.FC = () => {
         }
     };
 
-    return <section className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-5">
+    return <section className="p-6 rounded-lg border-l-4 border-accent space-y-5">
         <div className="flex items-center gap-3"><FilmIcon className="w-8 h-8 text-accent" /><h2 className="text-2xl font-bold text-accent">Merge Video</h2></div>
         <p className="text-sm text-text-secondary">Trim, duplicate and reorder clips, then join them locally. Original audio is kept; clips without audio receive silence. Never upscale or stretch: different proportions use black bars.</p>
         <div className="flex flex-wrap gap-3">
@@ -231,11 +232,11 @@ export const VideoMergePanel: React.FC = () => {
                             }
                         }}
                         onError={() => setPreviewError('This browser cannot preview the selected video. Try an H.264 MP4 source; the local encoder may still be able to process it.')} />
-                    {previewError && <p role="alert" className="text-sm text-red-400">{previewError}</p>}
+                    {previewError && <p role="alert" className="text-sm text-danger">{previewError}</p>}
                     <fieldset disabled={disabled} className="space-y-3">
                         <div className="flex gap-2 items-center">
                             <button aria-label="Previous frame" className={button} onClick={() => seek(currentTime - 1 / selected.info.fps)}><ChevronLeftIcon className="w-4 h-4" /></button>
-                            <input aria-label="Merge clip position" type="range" min={0} max={selected.info.duration} step={0.001} value={currentTime} onChange={event => seek(Number(event.target.value))} className="w-full" />
+                            <input aria-label="Merge clip position" type="range" min={0} max={selected.info.duration} step={0.001} value={currentTime} onChange={event => seek(Number(event.target.value))} className={`w-full ${ui.slider}`} />
                             <button aria-label="Next frame" className={button} onClick={() => seek(currentTime + 1 / selected.info.fps)}><ChevronRightIcon className="w-4 h-4" /></button>
                         </div>
                         <p className="text-xs font-mono">{time(currentTime)} / {time(selected.info.duration)}</p>
@@ -260,7 +261,7 @@ export const VideoMergePanel: React.FC = () => {
                 </> : <div className="h-64 flex items-center justify-center rounded-lg bg-bg-tertiary text-text-muted">Select a clip to preview and trim it.</div>}
             </div>
         </div>
-        {planning.error && <p role="alert" className="text-sm text-red-400">{planning.error}</p>}
+        {planning.error && <p role="alert" className="text-sm text-danger">{planning.error}</p>}
         {planning.plan && <div className="rounded-lg border border-border-primary p-4 space-y-3">
             <p className="font-semibold">Output: {planning.plan.width} x {planning.plan.height} / {planning.plan.fps.toFixed(3)} FPS / approximately {time(planning.plan.duration)}</p>
             <p className="text-sm text-text-secondary">MP4 H.264 / AAC stereo 48 kHz. Uses the first clip's proportions, reduced to fit every source, and the lowest source frame rate. Cuts are aligned down to complete output frames.</p>
@@ -271,7 +272,7 @@ export const VideoMergePanel: React.FC = () => {
         </div>}
         <div className="flex flex-wrap gap-3 items-end">
             <label className="text-sm flex-grow space-y-2">Output name<input aria-label="Merged video name" value={name} disabled={disabled} onChange={event => setName(event.target.value)} className={input} /></label>
-            <button className={`${button} bg-accent text-accent-text font-bold`} disabled={disabled || !planning.plan || (planning.plan.needsAdaptation && !allowAdaptation)} onClick={() => void merge()}><FilmIcon className="w-5 h-5" />Merge videos</button>
+            <button className="flex items-center justify-center gap-2 rounded-lg bg-accent hover:bg-accent-hover p-3 text-sm font-bold text-accent-text disabled:opacity-50 disabled:cursor-not-allowed" disabled={disabled || !planning.plan || (planning.plan.needsAdaptation && !allowAdaptation)} onClick={() => void merge()}><FilmIcon className="w-5 h-5" />Merge videos</button>
         </div>
         {busy && <div role="status" className="space-y-2">
             <p className="flex items-center gap-2 text-sm"><SpinnerIcon className="w-5 h-5 animate-spin" />{progress.stage} {Math.floor(progress.percent)}%</p>
@@ -290,7 +291,7 @@ export const VideoMergePanel: React.FC = () => {
                 </button>
             </div>
         </div>}
-        {error && <p role="alert" className="text-red-400 text-sm whitespace-pre-wrap">{error}</p>}
+        {error && <p role="alert" className="text-danger text-sm whitespace-pre-wrap">{error}</p>}
         <p className="text-xs text-text-muted">No media upload, ComfyUI or GPU required. Clips are encoded one at a time; large exports still require browser memory and must remain below the encoder's 2 GB file limit. Work in progress survives tool switches, not app restarts.</p>
         {libraryOpen && <LibraryPickerModal isOpen onClose={() => setLibraryOpen(false)} filter="video" multiSelect
             onSelectItem={item => addLibrary([item])} onSelectMultiple={addLibrary} />}

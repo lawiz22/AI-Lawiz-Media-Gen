@@ -6,6 +6,7 @@ import type { H3GenerationResult } from '../services/minimaxH3Service';
 import { extractVideoFrame } from '../services/videoFrameService';
 import { fileToDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 import { useUnmountCleanup } from './useUnmountCleanup';
+import { ui } from './ui/styles';
 
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed';
 
@@ -83,7 +84,7 @@ export const VideoOutputFrames: React.FC<{ result: Pick<H3GenerationResult, 'vid
             onTimeUpdate={event => { if (!event.currentTarget.paused) selectTime(event.currentTarget); }}
             onEnded={() => setSeconds(null)} />
         <label className="block text-xs text-text-secondary">Frame selector (s)
-            <input aria-label="Output frame position (s)" className="mt-2 w-full" type="range" min="0" max={duration} step="any"
+            <input aria-label="Output frame position (s)" className={`mt-2 block w-full ${ui.slider}`} type="range" min="0" max={duration} step="any"
                 value={seconds ?? duration} disabled={disabled || working || !duration} onChange={event => {
                     const time = Number(event.target.value);
                     if (video.current) { video.current.pause(); video.current.currentTime = time; }
@@ -102,7 +103,7 @@ export const VideoOutputFrames: React.FC<{ result: Pick<H3GenerationResult, 'vid
             {working && <button type="button" className={button} onClick={() => controller.current?.abort()}>Cancel frame extraction</button>}
         </div>
         <p className="text-xs text-text-muted">{atLast ? 'Last frame selected.' : `Selected position: ${seconds.toFixed(3)} s.`} Scrub the video or frame selector to choose another frame. PNG export uses the original resolution; last-frame extraction decodes through the end of the video.</p>
-        {working && <p role="status" className="text-xs text-cyan-300">Decoding the selected frame / saving PNG...</p>}
-        {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+        {working && <p role="status" className="text-xs text-accent">Decoding the selected frame / saving PNG...</p>}
+        {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     </div>;
 };

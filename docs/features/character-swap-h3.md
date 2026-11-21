@@ -2,7 +2,7 @@
 
 [Documentation index](../README.md) | [Video workspace](video-prompt-generator.md)
 
-**Video > Character Swap H3** is independent of Video Prompt Generator and Minimax REF2v H3.
+**Video > H3 > Character Swap H3** is independent of Video Prompt Generator and Minimax REF2v H3.
 
 ## Native Shot Planner
 

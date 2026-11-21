@@ -1,8 +1,14 @@
 import React from 'react';
 import { ADVANCED_NODE_SPECS, ADVANCED_LTX_DECODE_8GB, ADVANCED_LTX_DECODE_DIRECTOR, advancedParameterVisible, type AdvancedH3Settings as Settings, type AdvancedValue } from '../services/minimaxH3AdvancedWorkflow';
 import { h3Choices, h3Input, isRecord, type H3ObjectInfo, type MinimaxH3Options } from '../services/minimaxH3Workflow';
+import { NumberField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
+import { familyFiles } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 
-const field = 'mt-1 w-full rounded-lg border border-border-primary bg-bg-primary p-2 text-sm text-text-primary';
+const field = `mt-1 block ${ui.control}`;
 const accordion = 'rounded-xl border border-border-primary bg-bg-secondary p-4';
 export const AdvancedH3Settings: React.FC<{
     settings: Settings;
@@ -13,6 +19,7 @@ export const AdvancedH3Settings: React.FC<{
     onOptionsChange: (patch: Partial<MinimaxH3Options>) => void;
 }> = ({ settings, options, info, section = 'parameters', onChange, onOptionsChange }) => {
     const [opened, setOpened] = React.useState<Record<string, boolean>>({});
+    const { inventory } = useModelInventory();
     const videoInput = settings.inputMode === 'video';
     const h3Needed = !videoInput || settings.latentUpscale;
     const patch = (value: Partial<Settings>) => onChange({ ...settings, ...value });
@@ -51,14 +58,16 @@ export const AdvancedH3Settings: React.FC<{
                 const modes = key === 'mode' ? ['scale by multiplier', 'target dimensions', 'megapixels'] : key === 'resize_type' ? ['scale by multiplier', 'target dimensions'] : choices;
                 const selection = modes.length > 0 || /(?:_name|_dtype)$/.test(key) || ['device', 'precision', 'attention', 'scheduler'].includes(key);
                 if (typeof value === 'boolean') return <React.Fragment key={key}>{toggle(label, value, next => update(key, next))}</React.Fragment>;
-                return <label key={key} className={`min-w-0 text-xs text-text-secondary ${key === 'text' ? 'sm:col-span-2' : ''}`}>{key}
-                    {typeof value === 'number' ? <input aria-label={label} type="number" className={field} value={value}
+                // The LTX Refine stage loads LTX files; every other stage loads H3 files.
+                const family = key === 'lora_name' || key === 'unet_name' ? name === 'ltx' ? 'ltx-23' : 'minimax-h3' : undefined;
+                return <div key={key} className={`min-w-0 ${key === 'text' ? 'sm:col-span-2' : ''}`}>
+                    {typeof value === 'number' ? <NumberField label={key} ariaLabel={label} value={value} onChange={next => update(key, next)}
                         min={typeof config.min === 'number' ? config.min : undefined} max={typeof config.max === 'number' ? Math.min(config.max, Number.MAX_SAFE_INTEGER) : undefined}
-                        step={Array.isArray(schema) && schema[0] === 'INT' ? 1 : typeof config.step === 'number' ? config.step : 'any'} onChange={event => update(key, Number(event.target.value))} />
-                        : selection ? <select aria-label={label} className={field} value={value} onChange={event => update(key, event.target.value)}>
-                            {!modes.includes(value) && <option value={value}>{value || 'Select a file'}</option>}{modes.map(choice => <option key={choice} value={choice}>{choice}</option>)}
-                        </select> : <textarea aria-label={label} className={field} rows={key === 'text' ? 3 : 1} value={value} onChange={event => update(key, event.target.value)} />}
-                </label>;
+                        step={Array.isArray(schema) && schema[0] === 'INT' ? 1 : typeof config.step === 'number' ? config.step : undefined} />
+                        : selection ? <Select variant="search" label={key} ariaLabel={label} placeholder="Select a file" value={value} options={family ? familyFiles(modes, family, inventory) : modes} onChange={next => update(key, next)} />
+                        : key === 'text' ? <PromptBox kind={/negative/i.test(spec.title) ? 'negative' : 'positive'} label={key} ariaLabel={label} rows={3} value={value} onChange={next => update(key, next)} />
+                        : <label className={ui.label}>{key}<textarea aria-label={label} className={field} rows={1} value={value} onChange={event => update(key, event.target.value)} /></label>}
+                </div>;
             })}</div>
         </section>;
     });
@@ -72,19 +81,14 @@ export const AdvancedH3Settings: React.FC<{
     if (section === 'switches') return <details className={`${accordion} border-cyan-400/50`} open>
         <summary className="cursor-pointer font-semibold text-cyan-300">Advanced mode & switches</summary>
         <div className="mt-3 space-y-3">
-            <label className="block max-w-lg text-sm">Input<select aria-label="Advanced input" className={field} value={settings.inputMode ?? 'generate'} onChange={event => onOptionsChange({
-                advanced: { ...settings, inputMode: event.target.value === 'video' ? 'video' : 'generate' },
-                ...(event.target.value === 'video' ? { originalAudioId: undefined, forceOriginalAudio: false } : {}),
-            })}>
-                <option value="generate">Generate H3 first pass</option><option value="video">Finish an existing video · no H3 first pass</option>
-            </select></label>
-            <label className="block max-w-lg text-sm">Stage order<select aria-label="Advanced stage order" className={field} value={settings.stageOrder ?? 'latent-first'} onChange={event => patch({ stageOrder: event.target.value === 'ltx-first' ? 'ltx-first' : 'latent-first' })}>
-                <option value="ltx-first">LTX Refine → H3 latent upscale</option><option value="latent-first">H3 latent upscale → LTX Refine</option>
-            </select></label>
+            <Select<'generate' | 'video'> className="max-w-lg" label="Input" ariaLabel="Advanced input" value={settings.inputMode ?? 'generate'}
+                options={[{ value: 'generate', label: 'Generate H3 first pass' }, { value: 'video', label: 'Finish an existing video · no H3 first pass' }]}
+                onChange={inputMode => onOptionsChange({ advanced: { ...settings, inputMode }, ...(inputMode === 'video' ? { originalAudioId: undefined, forceOriginalAudio: false } : {}) })} />
+            <Select<'ltx-first' | 'latent-first'> className="max-w-lg" label="Stage order" ariaLabel="Advanced stage order" value={settings.stageOrder ?? 'latent-first'}
+                options={[{ value: 'ltx-first', label: 'LTX Refine → H3 latent upscale' }, { value: 'latent-first', label: 'H3 latent upscale → LTX Refine' }]} onChange={stageOrder => patch({ stageOrder })} />
             <p className="text-xs text-text-muted">Order applies when both stages are enabled. LTX-first re-encodes refined frames with the H3 VAE before H3 latent upscale; it is not a direct transfer of LTX latents.</p>
-            {!videoInput && <><label className="block max-w-lg text-sm">Mode<select aria-label="Advanced mode" className={field} value={settings.mode} onChange={event => patch({ mode: event.target.value === 'ref2v' ? 'ref2v' : 'fl2v' })}>
-                <option value="fl2v">FL2V · First / last frame (default)</option><option value="ref2v">REF2V · Multimodal references</option>
-            </select></label>
+            {!videoInput && <><Select<'fl2v' | 'ref2v'> className="max-w-lg" label="Mode" ariaLabel="Advanced mode" value={settings.mode}
+                options={[{ value: 'fl2v', label: 'FL2V · First / last frame (default)' }, { value: 'ref2v', label: 'REF2V · Multimodal references' }]} onChange={mode => patch({ mode })} />
             <p className="text-xs text-text-secondary">{settings.mode === 'fl2v' ? 'Image 1 = first frame; Image 2 = last frame. Missing frames remain optional. Switch to REF2V for other conditioning references.' : 'Up to 3 images, 1 video and 2 standalone audios.'} Only enabled features show their settings below; hidden settings are retained.</p></>}
             <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-4">
                 {toggle('H3 latent upscale', settings.latentUpscale, latentUpscale => patch({ latentUpscale }))}
@@ -112,9 +116,8 @@ export const AdvancedH3Settings: React.FC<{
             </div>
             <p className="text-xs text-text-muted">Refinement uses incoming frames/FPS and {videoInput ? 'passes the optional source soundtrack through unchanged.' : 'retains source audio through the LTX audio VAE.'}</p>
             <p className="text-xs text-amber-200">LTX also upscales its own latents by 2x. That is roughly 4x the pixels to decode compared with the LTX input, before final RTX. Interpolation can increase the frame count too.</p>
-            <label className="block text-sm">LTX decode mode<select aria-label="LTX decode mode" className={field} value={settings.ltxDecodeMode ?? 'tiled'} onChange={event => patch({ ltxDecodeMode: event.target.value === 'standard' ? 'standard' : 'tiled' })}>
-                <option value="tiled">Tiled · smaller chunks</option><option value="standard">Standard · higher peak VRAM / OOM risk</option>
-            </select></label>
+            <Select<'tiled' | 'standard'> label="LTX decode mode" ariaLabel="LTX decode mode" value={settings.ltxDecodeMode ?? 'tiled'}
+                options={[{ value: 'tiled', label: 'Tiled · smaller chunks' }, { value: 'standard', label: 'Standard · higher peak VRAM / OOM risk' }]} onChange={ltxDecodeMode => patch({ ltxDecodeMode })} />
             {settings.ltxDecodeMode === 'standard' && <p className="text-xs text-amber-300">Standard uses VAEDecode, like Director's Standard mode. It can exceed 8 GB at this graph's output resolution; speed is not guaranteed. Tiled settings are retained.</p>}
             {group('ltx')}
         </>)}

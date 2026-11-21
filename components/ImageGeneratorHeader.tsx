@@ -7,6 +7,7 @@ import { ConfirmationModal } from './ConfirmationModal';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL } from '../services/mammouthService';
 import type { AppDispatch, RootState } from '../store/store';
 import { addToLibrary, deleteFromLibrary } from '../store/librarySlice';
+import { Select } from './ui/Select';
 
 type GenerationMode = 't2i' | 'i2i';
 type ModelFamilyId = 'sd15' | 'sdxl' | 'qwen' | 'qwen21' | 'z-image' | 'flux2' | 'krea2' | 'moss';
@@ -226,18 +227,15 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
                 </div>}
 
                 {/* Preset Manager (ComfyUI Only) */}
-                {options.provider === 'comfyui' && <div className="flex items-center gap-1 bg-bg-tertiary p-1 rounded-md border border-border-primary/50">
-                    <select
+                {options.provider === 'comfyui' && <div className="flex items-center gap-1 bg-bg-tertiary p-1 rounded-md border border-border-primary">
+                    <Select
+                        ariaLabel="Load image preset"
+                        className="w-44"
                         value={selectedPresetId}
-                        onChange={(e) => handleLoadPreset(e.target.value)}
+                        onChange={handleLoadPreset}
                         disabled={isDisabled}
-                        className="bg-transparent text-xs font-medium focus:outline-none text-text-secondary max-w-[120px]"
-                    >
-                        <option value="">Load Preset...</option>
-                        {filteredPresets.map(preset => (
-                            <option key={preset.id} value={preset.id}>{preset.name.replace(`${currentModelPrefix.toUpperCase()}_Param_`, '')}</option>
-                        ))}
-                    </select>
+                        options={[{ value: '', label: 'Load Preset...' }, ...filteredPresets.map(preset => ({ value: String(preset.id), label: preset.name.replace(`${currentModelPrefix.toUpperCase()}_Param_`, '') }))]}
+                    />
                     <button
                         onClick={() => setIsSaveModalOpen(true)}
                         disabled={isDisabled}

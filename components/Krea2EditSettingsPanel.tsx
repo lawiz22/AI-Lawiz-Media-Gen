@@ -7,11 +7,17 @@ import {
 import { getQwen21Choices } from '../services/qwen21Workflow';
 import { ImageUploader } from './ImageUploader';
 import { LibraryPickerModal } from './LibraryPickerModal';
-import { NumberSlider, SelectInput, TextInput } from './InputComponents';
+import { NumberSlider, TextInput } from './InputComponents';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
+import { familyFiles } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
+
+const NAME = 'KREA2 Edit';
 
 export const Krea2EditSettingsPanel: React.FC<{
     options: GenerationOptions; updateOptions: (change: Partial<GenerationOptions>) => void; disabled: boolean;
-    objectInfo?: Krea2EditObjectInfo; availableLoras?: string[]; section?: 'main' | 'loras' | 'sampler';
+    objectInfo?: Krea2EditObjectInfo; availableLoras?: string[]; section?: 'main' | 'models' | 'prompt' | 'advanced' | 'loras' | 'sampler';
     sourceFile?: File | null; secondFile?: File | null; onSourceChange?: (file: File | null) => void; onSecondChange?: (file: File | null) => void;
 }> = ({ options, updateOptions, disabled, objectInfo, availableLoras = [], section = 'main', sourceFile, secondFile, onSourceChange, onSecondChange }) => {
     const [libraryTarget, setLibraryTarget] = useState<1 | 2 | null>(null);
@@ -26,8 +32,9 @@ export const Krea2EditSettingsPanel: React.FC<{
     };
     const number = (label: string, key: 'refBoost' | 'refBoostA' | 'groundingPx' | 'megapixels' | 'batchSize' | 'steps' | 'cfg' | 'denoise', min: number, max: number, step: number) =>
         <NumberSlider label={label} value={settings[key]} min={min} max={max} step={step} allowDirectInput disabled={disabled} onChange={event => update({ [key]: Number(event.target.value) })} />;
+    const { inventory } = useModelInventory();
     const select = (label: string, key: 'unet' | 'weightDtype' | 'clip' | 'clipDevice' | 'vae' | 'sampler' | 'scheduler' | 'fitMode', node: string, input: string, extra: string[] = []) =>
-        <SelectInput label={label} value={settings[key]} options={[...new Set([settings[key], ...extra, ...getQwen21Choices(objectInfo, node, input)])].map(value => ({ value, label: value }))} disabled={disabled} onChange={event => update({ [key]: event.target.value })} />;
+        <Select variant="search" label={label} ariaLabel={`${NAME} ${label}`} value={settings[key]} options={[...new Set([...extra, ...(key === 'unet' ? familyFiles(getQwen21Choices(objectInfo, node, input), 'krea2', inventory) : getQwen21Choices(objectInfo, node, input))])]} disabled={disabled} onChange={value => update({ [key]: value })} />;
     const example = KREA2_EDIT_EXAMPLES.find(entry => entry.id === settings.composer.example);
     let dimensions: { width: number; height: number } | undefined;
     let dimensionError = '';
@@ -58,29 +65,25 @@ export const Krea2EditSettingsPanel: React.FC<{
                         {secondFile && <button type="button" disabled={disabled} onClick={() => onSecondChange?.(null)} className="text-sm text-danger disabled:opacity-50">Remove image 2</button>}</div>
                     <p className="text-xs text-text-secondary">For identity replacement: scene in image 1, person in image 2. When placement controls are supported, use scene aligned and person beside.</p>
                 </>}
-                {settings.secondImage && <label className="block text-sm text-text-secondary">Image 1 placement (scene)
-                    <select value={settings.positionA} disabled={disabled || !capabilities.positionA} onChange={event => update({ positionA: event.target.value as Krea2EditSettings['positionA'] })} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2">{capabilities.positionA ? KREA2_EDIT_POSITIONS.map(value => <option key={value} value={value}>{value}</option>) : <option value={settings.positionA}>Automatic (installed node)</option>}</select>
-                </label>}
-                <label className="block text-sm text-text-secondary">{settings.secondImage ? 'Image 2 placement (person)' : 'Image 1 placement'}
-                    <select value={settings.position} disabled={disabled || !capabilities.position} onChange={event => update({ position: event.target.value as Krea2EditSettings['position'] })} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2">{capabilities.position ? KREA2_EDIT_POSITIONS.map(value => <option key={value} value={value}>{value}</option>) : <option value={settings.position}>Automatic (installed node)</option>}</select>
-                </label>
+                {settings.secondImage && <Select<string> label="Image 1 placement (scene)" ariaLabel={`${NAME} Image 1 placement`} value={settings.positionA} disabled={disabled || !capabilities.positionA}
+                    options={capabilities.positionA ? KREA2_EDIT_POSITIONS : [{ value: settings.positionA, label: 'Automatic (installed node)' }]} onChange={value => update({ positionA: value as Krea2EditSettings['positionA'] })} />}
+                <Select<string> label={settings.secondImage ? 'Image 2 placement (person)' : 'Image 1 placement'} ariaLabel={`${NAME} reference placement`} value={settings.position} disabled={disabled || !capabilities.position}
+                    options={capabilities.position ? KREA2_EDIT_POSITIONS : [{ value: settings.position, label: 'Automatic (installed node)' }]} onChange={value => update({ position: value as Krea2EditSettings['position'] })} />
                 {objectInfo?.Krea2EditModelPatch && (!capabilities.position || (settings.secondImage && !capabilities.positionA)) && <p role="status" className="text-xs text-warning">Your installed ComfyUI-Krea2Edit does not expose these placement controls. Disabled controls use the node's native layout, not the saved placement setting. Image editing remains available. Update the nodes and restart ComfyUI to choose aligned/beside placement.</p>}
                 {number(settings.secondImage ? 'Image 2 reference boost' : 'Reference boost', 'refBoost', 0, 10, 0.1)}
                 {settings.secondImage && number('Image 1 reference boost', 'refBoostA', 0, 10, 0.1)}
                 {select('Reference fit', 'fitMode', 'Krea2EditModelPatch', 'fit_mode', ['fit', 'crop (legacy)'])}
             </div>
+        </>}
+        {section === 'prompt' && <>
             <details open className="rounded-md border border-border-primary p-3"><summary className="cursor-pointer text-sm font-bold">Prompt builder &amp; replacement examples</summary><div className="mt-3 space-y-3">
-                <label className="block text-sm text-text-secondary">Edit example
-                    <select value={settings.composer.example} disabled={disabled} onChange={event => {
-                        const selected = KREA2_EDIT_EXAMPLES.find(entry => entry.id === event.target.value);
+                <Select label="Edit example" ariaLabel={`${NAME} Edit example`} value={settings.composer.example} disabled={disabled} options={KREA2_EDIT_EXAMPLES.map(entry => ({ value: entry.id, label: entry.label }))} onChange={value => {
+                        const selected = KREA2_EDIT_EXAMPLES.find(entry => entry.id === value);
                         if (!selected) return;
                         const next = selected.id === 'custom' ? settings : switchKrea2EditTask(settings, selected.task, loras);
                         const composer: Krea2EditComposer = { ...defaultKrea2EditSettings().composer, example: selected.id, target: selected.target || '', replacement: selected.replacement || '' };
                         updateOptions({ comfyKrea2Edit: { ...next, composer, prompt: selected.id === 'custom' ? settings.prompt : composeKrea2EditPrompt(composer) } });
-                    }} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2">
-                        {KREA2_EDIT_EXAMPLES.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
-                    </select>
-                </label>
+                    }} />
                 {example?.second && !settings.secondImage && <p role="alert" className="text-xs text-warning">This example needs image 2. Enable it above and choose the reference; it is not enabled automatically.</p>}
                 {example?.raw && <p className="text-xs text-warning">Removal works best with Raw, 20 steps and CFG 3. Apply those settings in Sampler Settings.</p>}
                 {(['target', 'replacement', 'scene', 'pose', 'outfit', 'lighting', 'preserve', 'extra'] as const).map(key => <TextInput key={key}
@@ -90,24 +93,30 @@ export const Krea2EditSettingsPanel: React.FC<{
             </div></details>
             <TextInput label="Positive edit instruction" value={settings.prompt} disabled={disabled} isTextArea rows={6} onChange={event => update({ prompt: event.target.value })} />
             <TextInput label="Negative prompt (leave empty for trained unconditional)" value={settings.negativePrompt} disabled={disabled} isTextArea onChange={event => update({ negativePrompt: event.target.value })} />
+        </>}
+        {section === 'main' && <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="block text-sm text-text-secondary">Output aspect ratio<select value={settings.aspect} disabled={disabled} onChange={event => update({ aspect: event.target.value })} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2">{KREA2_EDIT_ASPECTS.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
-                <label className="block text-sm text-text-secondary">Pixel alignment<select value={settings.multiple} disabled={disabled} onChange={event => update({ multiple: Number(event.target.value) })} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2">{[8, 16, 32, 64].map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+                <Select label="Output aspect ratio" ariaLabel={`${NAME} Output aspect ratio`} value={settings.aspect} disabled={disabled} options={KREA2_EDIT_ASPECTS} onChange={aspect => update({ aspect })} />
+                <Select<number> label="Pixel alignment" ariaLabel={`${NAME} Pixel alignment`} value={settings.multiple} disabled={disabled} options={[8, 16, 32, 64]} onChange={multiple => update({ multiple })} />
             </div>
             {number('Output megapixels', 'megapixels', 0.25, 2, 0.25)}
             {dimensions ? <output aria-label="KREA2 edit output size" className="block text-sm text-accent">{dimensions.width} x {dimensions.height} (maximum 2 MP)</output> : <p role="alert" className="text-sm text-danger">{dimensionError}</p>}
             {number('Batch size (per generation)', 'batchSize', 1, 8, 1)}
-            <details className="rounded-md border border-border-primary p-3"><summary className="cursor-pointer text-sm font-bold">Models &amp; grounded encoding</summary><div className="mt-3 space-y-3">
+        </>}
+        {section === 'models' && <>
                 {select('Diffusion model', 'unet', 'UNETLoader', 'unet_name')}
                 {select('Weight dtype', 'weightDtype', 'UNETLoader', 'weight_dtype')}
                 {select('Qwen3-VL CLIP (type krea2)', 'clip', 'CLIPLoader', 'clip_name')}
                 {select('CLIP device', 'clipDevice', 'CLIPLoader', 'device')}
                 {select('VAE', 'vae', 'VAELoader', 'vae_name')}
+        </>}
+        {section === 'advanced' && <>
                 {number('Grounding resolution (0 = native)', 'groundingPx', 0, 4096, 64)}
                 <TextInput label="Grounding system prompt (empty = training default)" value={settings.systemPrompt} disabled={disabled} isTextArea onChange={event => update({ systemPrompt: event.target.value })} />
                 <TextInput label="Output filename prefix" value={settings.filenamePrefix} disabled={disabled} onChange={event => update({ filenamePrefix: event.target.value })} />
                 <p className="text-xs text-text-secondary">768 is recommended. Lower grounding resolution can strengthen scene edits; higher values can improve likeness. Both positive and negative encoders receive the same enabled images.</p>
-            </div></details>
+        </>}
+        {section === 'main' && <>
             <p className="text-xs text-warning">Requires ComfyUI-Krea2Edit v2.0.0+. Identity Edit is not a general remover/recolorer. Use a single task LoRA at 1.0; if deliberately combining both, start near 0.6 each.</p>
             <p className="text-xs text-text-secondary">Edit LoRAs: personal/non-commercial use; commercial use needs the author's license. <a href="https://huggingface.co/conradlocke/krea2-identity-edit" target="_blank" rel="noreferrer" className="text-accent underline">Model license and terms</a></p>
             <LibraryPickerModal isOpen={libraryTarget !== null} onClose={() => setLibraryTarget(null)} filter={['image', 'character', 'extracted-frame', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo']}
@@ -122,18 +131,15 @@ export const Krea2EditSettingsPanel: React.FC<{
                 }} />
         </>}
         {section === 'loras' && <>
-            <label className="block text-sm text-text-secondary">Task LoRA size
-                <select value={settings.rank} disabled={disabled} onChange={event => {
-                    const rank = event.target.value as Krea2EditSettings['rank'];
+            <Select<string> label="Task LoRA size" ariaLabel={`${NAME} Task LoRA size`} value={settings.rank} disabled={disabled} options={[{ value: 'full', label: 'Full' }, { value: 'r128', label: 'r128 - low VRAM (~0.9 GB)' }, { value: 'r64', label: 'r64 - low VRAM (~0.46 GB)' }]} onChange={value => {
+                    const rank = value as Krea2EditSettings['rank'];
                     update({ rank, loras: settings.loras.map((lora, index) => index === 0 ? { ...lora, name: krea2EditLoraName(settings.task, rank, loras), enabled: true } : lora) });
-                }} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2"><option value="full">Full</option><option value="r128">r128 - low VRAM (~0.9 GB)</option><option value="r64">r64 - low VRAM (~0.46 GB)</option></select>
-            </label>
+                }} />
             <p className="text-xs text-text-secondary">Up to four independent LoraLoaderModelOnly nodes in order, before the edit patch. No Power LoRA. Slot 1 is the task LoRA; slots 2-4 are optional.</p>
             {settings.loras.map((lora, index) => <div key={index} className="space-y-3 rounded-md border border-border-primary p-3">
                 <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={lora.enabled} disabled={disabled} onChange={event => update({ loras: settings.loras.map((entry, slot) => slot === index ? { ...entry, enabled: event.target.checked } : entry) })} />LoRA {index + 1}{index === 0 ? ' - task' : ''}</label>
-                <label className="block text-sm text-text-secondary">LoRA {index + 1} model<select value={lora.name} disabled={disabled} onChange={event => update({ loras: settings.loras.map((entry, slot) => slot === index ? { ...entry, name: event.target.value, enabled: !!event.target.value } : entry) })} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2">
-                    <option value="">None</option>{[...new Set([lora.name, ...loras].filter(Boolean))].map(name => <option key={name} value={name}>{name}</option>)}
-                </select></label>
+                <Select variant="search" label={`LoRA ${index + 1} model`} ariaLabel={`${NAME} LoRA ${index + 1} model`} value={lora.name} disabled={disabled} options={[{ value: '', label: 'None' }, ...familyFiles(loras, 'krea2', inventory).map(name => ({ value: name, label: name }))]}
+                    onChange={name => update({ loras: settings.loras.map((entry, slot) => slot === index ? { ...entry, name, enabled: !!name } : entry) })} />
                 <NumberSlider label={`LoRA ${index + 1} strength`} value={lora.strength} min={-2} max={2} step={0.05} allowDirectInput disabled={disabled || !lora.enabled} onChange={event => update({ loras: settings.loras.map((entry, slot) => slot === index ? { ...entry, strength: Number(event.target.value) } : entry) })} />
             </div>)}
             {mixedTaskLoras && <p role="alert" className="text-sm text-warning">Both task LoRAs are enabled. Loading both at 1.0 can break the image; reduce each to about 0.6 or disable one.</p>}
@@ -144,8 +150,8 @@ export const Krea2EditSettingsPanel: React.FC<{
             {select('Sampler', 'sampler', 'KSampler', 'sampler_name')}{select('Scheduler', 'scheduler', 'KSampler', 'scheduler')}
             {number('Denoise', 'denoise', 0, 1, 0.01)}
             <p className="text-xs text-text-secondary">Sampling starts from an empty target latent, as in the supplied workflow. The edit patch supplies source conditioning; denoise is the sampler's control, not a source-VAE latent blend.</p>
-            <label className="block text-sm text-text-secondary">Seed (empty = random)<input type="number" min={0} max={Number.MAX_SAFE_INTEGER} step={1} value={options.comfySeed ?? ''} disabled={disabled} onChange={event => updateOptions({ comfySeed: event.target.value === '' ? undefined : Number(event.target.value) })} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2" /></label>
-            <label className="block text-sm text-text-secondary">Seed control<select value={options.comfySeedControl || 'randomize'} disabled={disabled} onChange={event => updateOptions({ comfySeedControl: event.target.value as GenerationOptions['comfySeedControl'] })} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2">{['randomize', 'fixed', 'increment', 'decrement'].map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+            <label className="block text-sm text-text-secondary">Seed (empty = random)<input type="number" min={0} max={Number.MAX_SAFE_INTEGER} step={1} value={options.comfySeed ?? ''} disabled={disabled} onChange={event => updateOptions({ comfySeed: event.target.value === '' ? undefined : Number(event.target.value) })} className={`mt-1 block ${ui.control}`} /></label>
+            <Select<string> label="Seed control" ariaLabel={`${NAME} Seed control`} value={options.comfySeedControl || 'randomize'} disabled={disabled} options={['randomize', 'fixed', 'increment', 'decrement']} onChange={value => updateOptions({ comfySeedControl: value as GenerationOptions['comfySeedControl'] })} />
             {(options.comfySeedControl === 'increment' || options.comfySeedControl === 'decrement') && <NumberSlider label="Seed change amount" value={options.comfySeedIncrement ?? 1} min={1} max={100} step={1} allowDirectInput disabled={disabled} onChange={event => updateOptions({ comfySeedIncrement: Number(event.target.value) })} />}
         </>}
     </div>;

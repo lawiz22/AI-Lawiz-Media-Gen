@@ -6,6 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { uiModules } from './ui/compileForTest.mjs';
 
 const require = createRequire(import.meta.url);
 const compile = source => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(source, {
@@ -19,6 +20,12 @@ const component = await import(compile(`
     import React, { useEffect, useRef, useState } from '${reactURL}';
     import { AUDIO_SYNC_TEMPLATE, defaultAudioSyncLoras, defaultAudioSyncSettings, audioSyncNumber, audioSyncReference } from '${workflowURL}';
     import { h3Resolution } from '${helpersURL}';
+    import { Accordion } from '${uiModules.Accordion}';
+    import { Select } from '${uiModules.Select}';
+    import { NumberField } from '${uiModules.fields}';
+    import { PromptBox } from '${uiModules.PromptBox}';
+    import { ui } from '${uiModules.styles}';
+    const familyFiles = names => names, useModelInventory = () => ({ inventory: { items: [] } });
     const audioSyncResolution = settings => h3Resolution({aspect:settings.nodes['403'].aspect_ratio, megapixels:settings.nodes['403'].megapixels, multiple:settings.nodes['403'].multiple});
     const useDispatch = () => () => {}, useMediaURL = () => '';
     const H3AudioReference = () => React.createElement('div', null, 'Shared waveform editor');
@@ -45,7 +52,7 @@ test('Audio-Sync default panel exposes source controls, independent Qwen toggle 
 test('disabled Qwen removes its accordion and explicitly describes verbatim prompting', () => {
     const settings = workflow.defaultAudioSyncSettings(); settings.enhancePrompt = false;
     const html = render(settings);
-    assert.ok(!html.includes('<summary class="cursor-pointer font-semibold">Qwen prompt enhancement</summary>'));
+    assert.ok(!html.includes('>Qwen prompt enhancement</summary>'));
     assert.ok(html.includes('Prompt unchanged'));
     assert.ok(html.includes('the Qwen model is not loaded'));
 });

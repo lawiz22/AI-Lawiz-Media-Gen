@@ -10,6 +10,10 @@ import { AudioPlayer } from './AudioPlayer';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { estimateSpeechDuration, generateTtsDialogue, TTS_DIALOGUE_THEMES, type TtsDialogueTheme } from '../services/ttsDialogueService';
 import { TtsAdvancedPanel } from './TtsAdvancedPanel';
+import { Accordion } from './ui/Accordion';
+import { Button, NumberField, SeedField, TextField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
 
 interface TtsPanelProps {
     isComfyUIConnected: boolean | null;
@@ -47,7 +51,6 @@ const TtsVoiceClonePanel: React.FC<TtsPanelProps> = ({ isComfyUIConnected }) => 
     const [isLoadingVoices, setIsLoadingVoices] = useState(false);
     const [voiceLoadError, setVoiceLoadError] = useState('');
     const [options, setOptions] = useState<ChatterboxTtsOptions>(DEFAULT_OPTIONS);
-    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [progress, setProgress] = useState(0);
     const [progressMessage, setProgressMessage] = useState('');
@@ -256,18 +259,13 @@ const TtsVoiceClonePanel: React.FC<TtsPanelProps> = ({ isComfyUIConnected }) => 
                         </div>
                         {referenceSource === 'suite' ? (
                             <div className="rounded-md border border-border-primary bg-bg-primary p-3">
-                                <label className="block text-xs font-semibold text-text-secondary">INSTALLED VOICE
-                                    <select value={selectedSuiteVoice} onChange={(event) => setSelectedSuiteVoice(event.target.value)} disabled={isLoadingVoices || suiteVoices.length === 0} className="mt-1 h-10 w-full rounded-md border border-border-primary bg-bg-tertiary px-3 text-sm text-text-primary outline-none focus:border-accent disabled:opacity-50">
-                                        {isLoadingVoices && <option value="">Loading voices...</option>}
-                                        {!isLoadingVoices && suiteVoices.length === 0 && <option value="">No compatible voices found</option>}
-                                        {suiteVoices.map((voice) => <option key={voice.value} value={voice.value}>{voice.label}</option>)}
-                                    </select>
-                                </label>
+                                <Select variant="search" label="Installed voice" value={selectedSuiteVoice} options={suiteVoices} onChange={setSelectedSuiteVoice} disabled={isLoadingVoices || suiteVoices.length === 0}
+                                    placeholder={isLoadingVoices ? 'Loading voices...' : suiteVoices.length === 0 ? 'No compatible voices found' : 'Select a voice'} />
                                 <p className="mt-2 text-xs text-text-muted">{suiteVoices.length} compatible references found in TTS Audio Suite.</p>
                             </div>
                         ) : (
                             <>
-                                <button onClick={() => audioInput.current?.click()} className={`flex min-h-32 w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed p-4 text-center ${referenceAudio ? 'border-accent bg-accent/5 text-accent' : 'border-border-primary bg-bg-primary text-text-muted hover:border-accent'}`}>
+                                <button onClick={() => audioInput.current?.click()} className={`flex min-h-32 w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed p-4 text-center ${referenceAudio ? 'border-accent bg-bg-primary text-accent' : 'border-border-primary bg-bg-primary text-text-muted hover:border-accent'}`}>
                                     <UploadCloudIcon className="h-8 w-8" />
                                     <span className="max-w-full truncate text-sm font-semibold">{referenceAudio?.name || 'Choose source voice audio'}</span>
                                     <span className="text-xs opacity-70">WAV, MP3, FLAC, M4A or OGG</span>
@@ -288,46 +286,33 @@ const TtsVoiceClonePanel: React.FC<TtsPanelProps> = ({ isComfyUIConnected }) => 
                         {voiceLoadError && <p className="mt-2 text-xs text-danger">{voiceLoadError} Upload remains available.</p>}
                     </div>
 
-                    <button onClick={() => setAdvancedOpen((open) => !open)} aria-expanded={advancedOpen} className="flex w-full items-center justify-between rounded-md border border-border-primary bg-bg-primary px-3 py-2 text-sm font-semibold text-text-secondary hover:border-accent">
-                        <span>Advanced</span><span>{advancedOpen ? '−' : '+'}</span>
-                    </button>
-
-                    {advancedOpen && <div className="mt-3 space-y-4 rounded-md border border-border-primary bg-bg-primary p-4">
-                        <label className="block text-xs font-semibold text-text-secondary">DEVICE<select value={options.device} onChange={(event) => updateOption('device', event.target.value as ChatterboxTtsOptions['device'])} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm"><option value="auto">Auto</option><option value="cuda">CUDA</option><option value="cpu">CPU</option></select></label>
-                        {[['exaggeration', 'EXAGGERATION', 0, 2, 0.01], ['temperature', 'TEMPERATURE', 0.05, 2, 0.01], ['cfgWeight', 'CFG WEIGHT', 0, 1, 0.01]].map(([key, label, min, max, step]) => <label key={String(key)} className="block text-xs font-semibold text-text-secondary">{label} <span className="float-right text-accent">{Number(options[key as keyof ChatterboxTtsOptions]).toFixed(2)}</span><input type="range" min={Number(min)} max={Number(max)} step={Number(step)} value={Number(options[key as keyof ChatterboxTtsOptions])} onChange={(event) => updateOption(key as 'exaggeration', Number(event.target.value))} className="mt-2 w-full accent-accent" /></label>)}
-                        <label className="block text-xs font-semibold text-text-secondary">SEED<div className="mt-1 flex gap-2"><input type="number" value={options.seed} onChange={(event) => updateOption('seed', Number(event.target.value))} className="min-w-0 flex-1 rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" /><button onClick={() => updateOption('seed', Math.floor(Math.random() * 2147483647))} title="Random seed" aria-label="Random seed" className="rounded-md border border-border-primary p-2 text-accent hover:border-accent"><DiceIcon className="h-4 w-4" /></button></div></label>
-                        <label className="block text-xs font-semibold text-text-secondary">AUDIO PROMPT PATH<input type="text" value={options.audioPromptPath} onChange={(event) => updateOption('audioPromptPath', event.target.value)} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" /></label>
-                        <label className="flex items-center gap-2 text-xs font-semibold text-text-secondary"><input type="checkbox" checked={options.enableChunking} onChange={(event) => updateOption('enableChunking', event.target.checked)} className="h-4 w-4 accent-accent" />ENABLE CHUNKING</label>
-                        <label className="block text-xs font-semibold text-text-secondary">MAX CHARACTERS PER CHUNK<input type="number" min="50" max="2000" value={options.maxCharsPerChunk} onChange={(event) => updateOption('maxCharsPerChunk', Number(event.target.value))} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" /></label>
-                        <label className="block text-xs font-semibold text-text-secondary">CHUNK COMBINATION<select value={options.chunkCombinationMethod} onChange={(event) => updateOption('chunkCombinationMethod', event.target.value as ChatterboxTtsOptions['chunkCombinationMethod'])} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm"><option value="auto">Auto</option><option value="concatenate">Concatenate</option><option value="crossfade">Crossfade</option></select></label>
-                        <label className="block text-xs font-semibold text-text-secondary">SILENCE BETWEEN CHUNKS (MS)<input type="number" min="0" max="5000" step="10" value={options.silenceBetweenChunksMs} onChange={(event) => updateOption('silenceBetweenChunksMs', Number(event.target.value))} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" /></label>
-                        <label className="block text-xs font-semibold text-text-secondary">FILENAME PREFIX<input type="text" value={options.filenamePrefix} onChange={(event) => updateOption('filenamePrefix', event.target.value)} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" /></label>
-                    </div>}
+                    <Accordion title="Advanced">
+                        <Select<ChatterboxTtsOptions['device']> label="Device" value={options.device} onChange={device => updateOption('device', device)}
+                            options={[{ value: 'auto', label: 'Auto' }, { value: 'cuda', label: 'CUDA' }, { value: 'cpu', label: 'CPU' }]} />
+                        <NumberField slider label="Exaggeration" value={options.exaggeration} min={0} max={2} step={0.01} onChange={value => updateOption('exaggeration', value)} />
+                        <NumberField slider label="Temperature" value={options.temperature} min={0.05} max={2} step={0.01} onChange={value => updateOption('temperature', value)} />
+                        <NumberField slider label="CFG weight" value={options.cfgWeight} min={0} max={1} step={0.01} onChange={value => updateOption('cfgWeight', value)} />
+                        <SeedField name="TTS" value={options.seed} max={2147483647} onChange={seed => updateOption('seed', seed)} />
+                        <TextField label="Audio prompt path" value={options.audioPromptPath} onChange={value => updateOption('audioPromptPath', value)} />
+                        <label className="flex items-center gap-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={options.enableChunking} onChange={(event) => updateOption('enableChunking', event.target.checked)} className="h-4 w-4 accent-accent" />Enable chunking</label>
+                        <NumberField slider label="Max characters per chunk" value={options.maxCharsPerChunk} min={50} max={2000} step={1} onChange={value => updateOption('maxCharsPerChunk', value)} />
+                        <Select<ChatterboxTtsOptions['chunkCombinationMethod']> label="Chunk combination" value={options.chunkCombinationMethod} onChange={method => updateOption('chunkCombinationMethod', method)}
+                            options={[{ value: 'auto', label: 'Auto' }, { value: 'concatenate', label: 'Concatenate' }, { value: 'crossfade', label: 'Crossfade' }]} />
+                        <NumberField slider label="Silence between chunks (ms)" value={options.silenceBetweenChunksMs} min={0} max={5000} step={10} onChange={value => updateOption('silenceBetweenChunksMs', value)} />
+                        <TextField label="Filename prefix" value={options.filenamePrefix} onChange={value => updateOption('filenamePrefix', value)} />
+                    </Accordion>
                 </aside>
 
                 <div className="p-5">
-                    <div className="mb-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-[140px_minmax(0,1fr)_110px_auto]">
-                        <label className="text-xs font-bold uppercase text-text-secondary">Language
-                            <select value={options.language} onChange={(event) => updateOption('language', event.target.value as ChatterboxLanguage)} className="mt-1 block h-10 w-full rounded-md border border-border-primary bg-bg-primary px-3 text-sm font-medium normal-case text-text-primary outline-none focus:border-accent">
-                                {CHATTERBOX_LANGUAGES.map((language) => <option key={language} value={language}>{language}</option>)}
-                            </select>
-                        </label>
-                        <label className="text-xs font-bold uppercase text-text-secondary">Dialogue style
-                            <select value={dialogueTheme} onChange={(event) => setDialogueTheme(event.target.value as TtsDialogueTheme)} className="mt-1 block h-10 w-full rounded-md border border-border-primary bg-bg-primary px-3 text-sm font-medium normal-case text-text-primary outline-none focus:border-accent">
-                                {TTS_DIALOGUE_THEMES.map((theme) => <option key={theme.value} value={theme.value}>{theme.label}</option>)}
-                            </select>
-                        </label>
-                        <label className="text-xs font-bold uppercase text-text-secondary">Target time
-                            <select value={dialogueDuration} onChange={(event) => setDialogueDuration(Number(event.target.value))} className="mt-1 block h-10 w-full rounded-md border border-border-primary bg-bg-primary px-3 text-sm font-medium normal-case text-text-primary outline-none focus:border-accent">
-                                {Array.from({ length: 13 }, (_, index) => index + 3).map((seconds) => <option key={seconds} value={seconds}>{seconds} sec</option>)}
-                            </select>
-                        </label>
-                        <button onClick={generateRandomDialogue} disabled={isGeneratingDialogue} className="mt-5 flex h-10 items-center justify-center gap-2 rounded-md border border-accent px-4 text-sm font-bold text-accent hover:bg-accent/10 disabled:opacity-50">
+                    <div className="mb-3 grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-[160px_minmax(0,1fr)_110px_auto]">
+                        <Select<ChatterboxLanguage> variant="search" label="Language" value={options.language} options={CHATTERBOX_LANGUAGES} onChange={language => updateOption('language', language)} />
+                        <Select<TtsDialogueTheme> label="Dialogue style" value={dialogueTheme} options={TTS_DIALOGUE_THEMES} onChange={setDialogueTheme} />
+                        <Select<number> label="Target time" value={dialogueDuration} options={Array.from({ length: 13 }, (_, index) => ({ value: index + 3, label: `${index + 3} sec` }))} onChange={setDialogueDuration} />
+                        <Button onClick={generateRandomDialogue} disabled={isGeneratingDialogue} className="h-10">
                             {isGeneratingDialogue ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <DiceIcon className="h-4 w-4" />}{isGeneratingDialogue ? 'Writing...' : 'Random Dialogue'}
-                        </button>
+                        </Button>
                     </div>
-                    <label className="mb-2 block text-xs font-bold uppercase text-text-secondary">Text to speak</label>
-                    <textarea value={text} onChange={(event) => setText(event.target.value)} rows={10} placeholder="Write what the cloned voice should say..." className="w-full resize-y rounded-md border border-border-primary bg-bg-primary p-4 text-base leading-7 outline-none focus:border-accent" />
+                    <PromptBox label="Text to speak" kind="positive" highlight={false} value={text} onChange={setText} rows={10} placeholder="Write what the cloned voice should say..." />
                     <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-text-muted"><span>{text.length} characters</span><span>Approx. speaking time: {estimateSpeechDuration(text, options.language).toFixed(1)} sec</span><span>{options.enableChunking ? `Chunks every ${options.maxCharsPerChunk} characters` : 'Chunking disabled'}</span></div>
 
                     <button onClick={generate} disabled={!text.trim() || (referenceSource === 'suite' ? !selectedSuiteVoice : !referenceAudio) || !isComfyUIConnected || isGenerating} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-accent font-bold text-accent-text hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50">

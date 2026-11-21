@@ -6,6 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { uiModules } from './ui/compileForTest.mjs';
 
 const require = createRequire(import.meta.url);
 const componentSource = readFileSync(new URL('./AudioExtractorPanel.tsx', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '');
@@ -28,6 +29,7 @@ findSave(componentTree);
 assert.ok(saveHandler);
 const { outputText } = ts.transpileModule(`
 import React, { useEffect, useMemo, useRef, useState } from ${JSON.stringify(pathToFileURL(require.resolve('react')).href)};
+import { ui } from ${JSON.stringify(uiModules.styles)};
 const useDispatch = () => () => { throw new Error('SSR must not save Library items'); };
 const useUnmountCleanup = () => () => {};
 ${componentSource}

@@ -14,6 +14,8 @@ import { imageStyleSampling } from '../services/styleSampling';
 import { defaultMossSettings } from '../services/mossWorkflow';
 import { defaultMossPhotoSettings, mossPhotoPrompt, mossPhotoSampling } from '../services/mossPhotoWorkflow';
 import { mossGalleryStyle, mossStyleLoraMatches, type MossStyleSettings } from '../services/mossStyleWorkflow';
+import { NumberField } from './ui/fields';
+import { ui } from './ui/styles';
 
 interface ImageStyleControlProps {
     options: GenerationOptions;
@@ -99,13 +101,13 @@ export const ImageStyleControl = ({ options, updateOptions, info, disabled, mode
         <h4 className="font-semibold">Style Gallery · {model}</h4>
         {!family && <p role="status" className="text-sm text-amber-400">Select an identifiable FLUX2 Klein 9B or 4B model to use gallery styles.</p>}
         <StylePicker styles={styles} inventory={inventory} model={model} selectedId={style?.id} selectedStyle={style} onSelect={select} error={error} disabled={disabled || loading} />
-        {(error || preview.error || galleryError || inventoryError) && <p role="alert" className="text-sm text-red-400">{error || preview.error || galleryError || inventoryError}</p>}
+        {(error || preview.error || galleryError || inventoryError) && <p role="alert" className="text-sm text-danger">{error || preview.error || galleryError || inventoryError}</p>}
         {notice && <p role="status" className="text-xs text-accent">{notice}</p>}
         {style && <>
             <p role="status" className="break-all text-xs text-accent">Next generation: {style.title} · {style.lora || 'Prompt only'}</p>
-            {style.lora && <div className={isKrea || isMoss ? 'space-y-3 rounded-md border border-accent/40 bg-bg-tertiary p-3' : ''}>
-                {(isKrea || isMoss) && <label className="block text-sm font-medium">Style LoRA (gallery)<input aria-label="Active style LoRA" readOnly value={style.lora} title={style.lora} className="mt-1 w-full rounded border border-border-primary bg-bg-primary p-2 text-sm" /></label>}
-                <label className="block text-sm">Style LoRA strength<input aria-label="Style LoRA strength" className="ml-2 w-24 rounded border border-border-primary bg-bg-primary p-2" type="number" step="0.05" value={strength ?? style.strength} disabled={disabled} onChange={event => isMoss ? changeMoss({ styleStrength: event.target.valueAsNumber }) : updateOptions({ [strengthKey]: event.target.valueAsNumber })} /></label>
+            {style.lora && <div className={isKrea || isMoss ? 'space-y-3 rounded-md border border-accent bg-bg-tertiary p-3' : ''}>
+                {(isKrea || isMoss) && <label className="block text-sm font-medium">Style LoRA (gallery)<input aria-label="Active style LoRA" readOnly value={style.lora} title={style.lora} className={`mt-1 block ${ui.control}`} /></label>}
+                <NumberField className="w-40" label="Style LoRA strength" ariaLabel="Style LoRA strength" step={0.05} value={strength ?? style.strength} disabled={disabled} onChange={value => isMoss ? changeMoss({ styleStrength: value }) : updateOptions({ [strengthKey]: value })} />
                 {(isKrea || isMoss) && <p role="status" className="text-xs text-accent">{(strength ?? style.strength) === 0 ? 'Strength 0: the style LoRA has no effect.' : 'Style LoRA active for the next generation, independently of the additional LoRA switch.'} Additional LoRAs stack with this style and can change its visual effect.</p>}
             </div>}
             {showSamplingControl && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!useSampling} disabled={disabled} onChange={event => isMoss ? changeMoss({ useStyleSettings: event.target.checked }) : updateOptions({ [samplingKey]: event.target.checked })} />Apply style sampling overrides</label>}

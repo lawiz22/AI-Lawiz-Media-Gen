@@ -81,10 +81,10 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, id, onImage
         htmlFor={disabled ? undefined : id}
         className={`relative flex flex-col items-center justify-center w-full h-48 overflow-hidden border-2 border-dashed rounded-lg transition-colors duration-200
         ${disabled 
-            ? 'border-border-primary bg-bg-tertiary/50 opacity-50 cursor-not-allowed' 
+            ? 'border-border-primary opacity-50 cursor-not-allowed' 
             : isDragging 
                 ? 'border-accent bg-bg-tertiary' 
-                : 'border-border-primary bg-bg-tertiary/50 hover:bg-bg-tertiary cursor-pointer'}`}
+                : 'border-border-primary hover:bg-bg-tertiary cursor-pointer'}`}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}

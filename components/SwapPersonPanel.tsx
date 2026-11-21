@@ -7,6 +7,8 @@ import { buildQuickSwapPersonPrompt, buildLanPaintPersonPrompt, defaultQuickSwap
 import { defaultSwapAnythingOptions, type SwapAnythingOptions } from '../services/swapAnythingWorkflow';
 import { generateComfyUISwapAnything, generateComfyUILanPaintPerson } from '../services/comfyUIService';
 import { sceneModelOptions } from '../services/sceneVariationService';
+import { familyFiles, flux2Family } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { ImageUploader } from './ImageUploader';
 import { LibraryPickerModal } from './LibraryPickerModal';
@@ -37,6 +39,7 @@ const SwapPersonPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjectInf
     const otherBusy = useSelector((state: RootState) => state.generation.isLoading);
     const [images, setImages] = useState<Record<Side, PersonImage>>({ destination: emptyImage(), donor: emptyImage() });
     const [options, setOptions] = useState(defaultQuickSwapPersonOptions);
+    const { inventory } = useModelInventory();
     const [mode, setMode] = useState<SwapMode>('swap-anything');
     const [lanOptions, setLanOptions] = useState(defaultLanPaintPersonOptions);
     const isLanPaint = mode === 'lanpaint';
@@ -130,7 +133,7 @@ const SwapPersonPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjectInf
     };
 
     const catalog = (node: string, field: string) => sceneModelOptions(comfyUIObjectInfo, node, field);
-    const flux2Models = [...new Set([...catalog('UNETLoader', 'unet_name'), ...catalog('UnetLoaderGGUF', 'unet_name').filter(name => /flux.?2|klein/i.test(name))])];
+    const flux2Models = familyFiles([...new Set([...catalog('UNETLoader', 'unet_name'), ...catalog('UnetLoaderGGUF', 'unet_name').filter(name => /flux.?2|klein/i.test(name))])], 'flux2', inventory);
     const clips = catalog('CLIPLoader', 'clip_name'), vaes = catalog('VAELoader', 'vae_name');
     // The workflows use -1 for "new seed for every run".
     const seedField = (seed: number, change: (seed: number) => void) =>
@@ -145,7 +148,7 @@ const SwapPersonPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjectInf
             { id: 'samCheckpoint', label: 'SAM3 checkpoint', value: options.samCheckpoint || '', choices: catalog('CheckpointLoaderSimple', 'ckpt_name').filter(name => /sam3/i.test(name)) },
         ]} />,
         loras: () => ([1, 2] as const).map(index => <div key={index} className="space-y-2">
-            <Select variant="search" label={`LoRA ${index}`} ariaLabel={`${NAME} LoRA ${index}`} value={options[`lora${index}Name`] || ''} options={noneFirst(catalog('LoraLoader', 'lora_name'))} disabled={locked} onChange={value => updateOption(`lora${index}Name`, value)} />
+            <Select variant="search" label={`LoRA ${index}`} ariaLabel={`${NAME} LoRA ${index}`} value={options[`lora${index}Name`] || ''} options={noneFirst(familyFiles(catalog('LoraLoader', 'lora_name'), flux2Family(options.unet), inventory))} disabled={locked} onChange={value => updateOption(`lora${index}Name`, value)} />
             <NumberField slider label={`LoRA ${index} strength`} ariaLabel={`${NAME} LoRA ${index} strength`} value={options[`lora${index}Strength`]} {...strength} disabled={locked} onChange={value => updateOption(`lora${index}Strength`, value)} />
         </div>),
         sampler: () => <>
@@ -168,7 +171,7 @@ const SwapPersonPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjectInf
             { id: 'vae', label: 'VAE', value: lanOptions.vae, choices: vaes },
         ]} />,
         loras: () => <div className="space-y-2">
-            <Select variant="search" label="Head swap LoRA" ariaLabel={`${NAME} Head swap LoRA`} value={lanOptions.loraName} options={noneFirst(catalog('LoraLoaderModelOnly', 'lora_name'))} disabled={locked} onChange={value => updateLanOption('loraName', value)} />
+            <Select variant="search" label="Head swap LoRA" ariaLabel={`${NAME} Head swap LoRA`} value={lanOptions.loraName} options={noneFirst(familyFiles(catalog('LoraLoaderModelOnly', 'lora_name'), flux2Family(lanOptions.unet), inventory))} disabled={locked} onChange={value => updateLanOption('loraName', value)} />
             <NumberField slider label="LoRA strength" ariaLabel={`${NAME} LoRA strength`} value={lanOptions.loraStrength} {...strength} disabled={locked} onChange={value => updateLanOption('loraStrength', value)} />
         </div>,
         sampler: () => <>

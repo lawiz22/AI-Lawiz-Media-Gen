@@ -82,7 +82,7 @@ export const OAuthHelperModal: React.FC<OAuthHelperModalProps> = ({ isOpen, onCl
         </div>
 
         <div className="flex-grow overflow-y-auto pr-2 -mr-2 space-y-6">
-            <div className="bg-danger-bg/50 border-l-4 border-danger p-4 rounded-md">
+            <div className="bg-danger-bg border-l-4 border-danger p-4 rounded-md">
                 <h3 className="font-bold text-danger text-lg">Troubleshooting: "The API developer key is invalid."</h3>
                 <p className="text-sm text-text-primary mt-2">
                     This specific error is almost always caused by a misconfiguration of your <strong className="text-highlight-yellow">API Key</strong> in the Google Cloud Console, not an issue with the application code. It means Google is rejecting requests from this website's URL.
@@ -99,7 +99,7 @@ export const OAuthHelperModal: React.FC<OAuthHelperModalProps> = ({ isOpen, onCl
                 <p>
                     Ensure both the <strong className="text-highlight-yellow">Google Drive API</strong> and the <strong className="text-highlight-yellow">Google Picker API</strong> are enabled for your project.
                 </p>
-                <div className="mt-2 p-3 bg-bg-primary/50 rounded-lg border border-border-primary grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="mt-2 p-3 rounded-lg border border-border-primary grid grid-cols-1 md:grid-cols-2 gap-4">
                     <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener noreferrer" className="inline-block w-full text-center bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors">
                         Enable Drive API
                     </a>
@@ -119,7 +119,7 @@ export const OAuthHelperModal: React.FC<OAuthHelperModalProps> = ({ isOpen, onCl
                 <p>
                    You need an OAuth 2.0 Client ID for a <strong className="text-highlight-yellow">"Web application"</strong>.
                 </p>
-                <div className="mt-2 p-3 bg-bg-primary/50 rounded-lg border border-border-primary text-sm">
+                <div className="mt-2 p-3 rounded-lg border border-border-primary text-sm">
                     Go to your <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-accent-light underline hover:text-accent">Credentials page</a>. Click <b className="text-text-primary">"+ CREATE CREDENTIALS"</b> &rarr; <b className="text-text-primary">"OAuth client ID"</b> &rarr; select <b className="text-highlight-green">"Web application"</b>.
                 </div>
             </WizardStep>
@@ -128,7 +128,7 @@ export const OAuthHelperModal: React.FC<OAuthHelperModalProps> = ({ isOpen, onCl
                  <p>
                     Tell Google which web addresses can use this Client ID. The URL must match <strong className="text-highlight-yellow">exactly</strong>, including http/https.
                 </p>
-                 <div className="space-y-4 p-4 mt-2 bg-bg-primary/50 rounded-lg border border-border-primary">
+                 <div className="space-y-4 p-4 mt-2 rounded-lg border border-border-primary">
                     <CopyableField label="Your Current App URL (Origin):" value={origin} />
                     <ol className="list-decimal list-inside space-y-2 text-sm">
                         <li>Under <b className="text-highlight-green">"Authorized JavaScript origins"</b>, click <b className="text-text-primary">"+ ADD URI"</b> and paste the URL from above.</li>
@@ -142,7 +142,7 @@ export const OAuthHelperModal: React.FC<OAuthHelperModalProps> = ({ isOpen, onCl
                 <p>
                     This is the most common point of failure for the "invalid key" error. Your API Key must be restricted to allow requests from your production domain.
                 </p>
-                <div className="mt-2 p-3 bg-bg-primary/50 rounded-lg border border-border-primary text-sm space-y-3">
+                <div className="mt-2 p-3 rounded-lg border border-border-primary text-sm space-y-3">
                     <p>
                         On the <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-accent-light underline hover:text-accent">Credentials page</a>, find and edit the API Key used in your `process.env.API_KEY`.
                     </p>
@@ -174,7 +174,7 @@ export const OAuthHelperModal: React.FC<OAuthHelperModalProps> = ({ isOpen, onCl
                 <p>
                    Ensure the correct credentials are used by the application.
                 </p>
-                 <div className="mt-2 p-3 bg-bg-primary/50 rounded-lg border border-border-primary text-sm space-y-2">
+                 <div className="mt-2 p-3 rounded-lg border border-border-primary text-sm space-y-2">
                      <p>
                         1. <b className="text-text-primary">Client ID:</b> Copy your OAuth Client ID from the Google Console. Close this guide, click the <b className="text-text-primary">gear icon</b> (Settings) in the header, paste it into the "Google Client ID" field, and click "Save".
                      </p>

@@ -7,6 +7,8 @@ import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, testOllamaConnection } from '
 import { CloseIcon, SpinnerIcon } from './icons';
 import { OpenRouterSettings } from './OpenRouterSettings';
 import { DEFAULT_OPENROUTER_MODEL, type OpenRouterSettings as OpenRouterConfig } from '../services/openRouterService';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
 
 interface ConnectionSettingsModalProps {
   isOpen: boolean;
@@ -177,7 +179,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
                   setComfyUrl(e.target.value);
                   if (comfyStatus !== 'testing') setComfyStatus('idle');
                 }}
-                className="block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent shadow-sm"
+                className={`block ${ui.control}`}
                 placeholder="http://127.0.0.1:8188"
               />
               <button
@@ -200,14 +202,15 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
             <p className="text-sm text-text-secondary mb-4">Connect to Ollama Desktop for local prompt analysis and Magic Soup.</p>
             <label htmlFor="ollama-url" className="block text-sm font-medium text-text-secondary">Server URL</label>
             <div className="mt-1 flex items-center gap-2">
-              <input id="ollama-url" type="text" value={ollamaUrl} onChange={(event) => { setOllamaUrl(event.target.value); setOllamaStatus('idle'); }} className="block w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" placeholder={DEFAULT_OLLAMA_URL} />
+              <input id="ollama-url" type="text" value={ollamaUrl} onChange={(event) => { setOllamaUrl(event.target.value); setOllamaStatus('idle'); }} className={`block ${ui.control}`} placeholder={DEFAULT_OLLAMA_URL} />
               <button type="button" onClick={handleTestOllama} disabled={ollamaStatus === 'testing' || !ollamaUrl.trim()} className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-bg-tertiary px-4 py-2 font-semibold text-text-secondary hover:bg-bg-tertiary-hover disabled:opacity-50">
                 {ollamaStatus === 'testing' ? <SpinnerIcon className="h-5 w-5 animate-spin" /> : 'Test'}
               </button>
             </div>
-            <label htmlFor="ollama-model" className="mt-3 block text-sm font-medium text-text-secondary">Default Model</label>
-            <input id="ollama-model" type="text" list="ollama-model-options" value={ollamaModel} onChange={(event) => setOllamaModel(event.target.value)} className="mt-1 block w-full rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" placeholder={DEFAULT_OLLAMA_MODEL} />
-            <datalist id="ollama-model-options">{ollamaModels.map((model) => <option key={model} value={model} />)}</datalist>
+            {ollamaModels.length
+              ? <Select variant="search" className="mt-3" label="Default Model" ariaLabel="Ollama default model" value={ollamaModel} options={ollamaModels} onChange={setOllamaModel} />
+              : <><label htmlFor="ollama-model" className="mt-3 block text-sm font-medium text-text-secondary">Default Model</label>
+                <input id="ollama-model" type="text" value={ollamaModel} onChange={(event) => setOllamaModel(event.target.value)} className={`mt-1 block ${ui.control}`} placeholder={DEFAULT_OLLAMA_MODEL} /></>}
             {ollamaStatus !== 'idle' && <p className={`mt-2 text-sm font-medium ${ollamaStatus === 'success' ? 'text-green-400' : ollamaStatus === 'failed' ? 'text-danger' : 'text-accent'}`}>{ollamaStatusMessage || 'Testing connection...'}</p>}
           </div>
 
@@ -225,7 +228,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
               id="gemini-api-key"
               value={geminiApiKey}
               onChange={(e) => setGeminiApiKey(e.target.value)}
-              className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent shadow-sm"
+              className={`mt-1 block ${ui.control}`}
               placeholder="AIzaSy..."
             />
           </div>
@@ -247,7 +250,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
                   setMammouthApiKey(event.target.value);
                   setMammouthStatus('idle');
                 }}
-                className="block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent shadow-sm"
+                className={`block ${ui.control}`}
                 placeholder="Mammouth API key"
               />
               <button
@@ -281,7 +284,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
               id="google-drive-api-key"
               value={googleApiKey}
               onChange={(e) => setGoogleApiKey(e.target.value)}
-              className="mt-1 mb-3 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent shadow-sm"
+              className={`mt-1 mb-3 block ${ui.control}`}
               placeholder="AIzaSy..."
             />
             <label htmlFor="google-client-id" className="block text-sm font-medium text-text-secondary">
@@ -292,7 +295,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
               id="google-client-id"
               value={googleClientId}
               onChange={(e) => setGoogleClientId(e.target.value)}
-              className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent shadow-sm"
+              className={`mt-1 block ${ui.control}`}
               placeholder="xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
             />
           </div>

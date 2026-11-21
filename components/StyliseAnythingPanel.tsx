@@ -13,6 +13,8 @@ import { PHOTOGRAPHIC_ERAS, PHOTOGRAPHIC_PRESETS, type PhotographicPreset } from
 import { Button, ModelFields, NumberField, SamplerFields, SeedField } from './ui/fields';
 import { PromptBox } from './ui/PromptBox';
 import { Select } from './ui/Select';
+import { familyFiles } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 import { SettingsLayout } from './ui/SettingsLayout';
 import { ui } from './ui/styles';
 
@@ -28,6 +30,7 @@ const NAME = 'Stylise Anything';
 
 const StyliseAnythingPanel: React.FC<StyliseAnythingPanelProps> = ({ isComfyUIConnected, comfyUIObjectInfo }) => {
     const dispatch: AppDispatch = useDispatch();
+    const { inventory } = useModelInventory();
     const store = useStore<RootState>();
     const generationOptions = store.getState().generation.options;
     const [sourceImage, setSourceImage] = useState<File | null>(null);
@@ -156,7 +159,7 @@ const StyliseAnythingPanel: React.FC<StyliseAnythingPanelProps> = ({ isComfyUICo
                     <Button className="w-full" onClick={() => setLibraryOpen(true)} disabled={isGenerating}><LibraryIcon className="h-4 w-4" />Choose from Library</Button>
                 </div>}
                 models={() => <ModelFields name={NAME} disabled={isGenerating} onChange={(id, value) => updateAdvanced(id as 'comfyFlux2EditUnet' | 'comfyFlux2EditClip' | 'comfyFlux2EditVae', value)} fields={[
-                    { id: 'comfyFlux2EditUnet', label: 'FLUX2 Model', value: advanced.comfyFlux2EditUnet || '', choices: models },
+                    { id: 'comfyFlux2EditUnet', label: 'FLUX2 Model', value: advanced.comfyFlux2EditUnet || '', choices: familyFiles(models, 'flux2', inventory) },
                     { id: 'comfyFlux2EditClip', label: 'CLIP', value: advanced.comfyFlux2EditClip || '', choices: clips },
                     { id: 'comfyFlux2EditVae', label: 'VAE', value: advanced.comfyFlux2EditVae || '', choices: vaes },
                 ]} />}

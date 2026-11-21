@@ -26,7 +26,7 @@ export const SaveStyleSamplingButton: React.FC<{
     return <div className="space-y-2">
         <button type="button" disabled={disabled || !style || !gallery} onClick={save}
             title={style ? `Save the current editable sampling controls as "${style.title}" defaults. Prompt, LoRA, seed and resolution are kept.` : 'Select a style in the Style Gallery first.'}
-            className="rounded-lg border border-accent/50 px-3 py-2 text-sm font-semibold text-accent hover:bg-bg-tertiary disabled:opacity-40">
+            className="rounded-lg border border-accent px-3 py-2 text-sm font-semibold text-accent hover:bg-bg-tertiary disabled:opacity-40">
             Save sampling as style default
         </button>
         {(error || galleryError) && <p role="alert" className="text-xs text-red-400">{error || galleryError}</p>}

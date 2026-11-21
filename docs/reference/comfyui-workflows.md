@@ -52,7 +52,7 @@ Update ComfyUI for `TextGenerate`, `PreviewAny`, FLUX2 scheduling/latents, `Refe
 
 ## KREA2 Identity and General Edit V2
 
-Open **Image Generation > ComfyUI > KREA2 > I2I Edit / Identity**. Install [ComfyUI-Krea2Edit](https://github.com/lbouaraba/comfyui-krea2edit) **v2.0.0+** and restart the server. Both `Krea2EditModelPatch` and `Krea2EditGroundedEncode` are required; ordinary text encoding cannot replace their image conditioning. The app checks live input schemas, reference-placement choices, models, enabled LoRAs and sampler options before uploading references.
+Open **Image Gen > ComfyUI > KREA2 > I2I Edit / Identity**. Install [ComfyUI-Krea2Edit](https://github.com/lbouaraba/comfyui-krea2edit) **v2.0.0+** and restart the server. Both `Krea2EditModelPatch` and `Krea2EditGroundedEncode` are required; ordinary text encoding cannot replace their image conditioning. The app checks live input schemas, reference-placement choices, models, enabled LoRAs and sampler options before uploading references.
 
 **General Edit** defaults to Turbo, 8 steps, CFG 1, reference boost 4 and grounding 768. **Identity** changes the first LoRA to Identity Edit V2, sets reference boost 2 and uses beside placement to allow restaging. Task switches preserve the prompt and other custom LoRAs, but disable extra Identity/General Edit task LoRAs. Full, r128 and r64 task weights are selectable; r64 is the initial low-VRAM choice. Four independently enabled `LoraLoaderModelOnly` slots are chained before the edit patch; no Power LoRA is used. Use one task LoRA at strength 1.0; if deliberately combining both, start around 0.6 each, not both at 1.0.
 
@@ -66,7 +66,7 @@ Generation, export, presets and history use the same nested settings. Seed contr
 
 ## MOSS PHOTO
 
-Select **Image Generation > ComfyUI > MOSS > MOSS PHOTO**. See [PHOTO controls and behavior](../features/images-and-characters.md#moss-photo).
+Select **Image Gen > ComfyUI > MOSS > MOSS PHOTO**. See [PHOTO controls and behavior](../features/images-and-characters.md#moss-photo).
 
 PHOTO defaults to Clean, AI writing enabled, 1024 x 768, 25 steps, CFG 3, `er_sde` / `simple`, batch 1 and no LoRAs. Second pass, face/hand fixes, SeedVR2 and general JPEG crunch start disabled. This is a separate graph from the Efficient-sampler MOSS Image workflow below.
 
@@ -86,11 +86,11 @@ The supplied graph is adapted for API operation: panel-only controls are transla
 
 ## MOSS Image 1.0
 
-Select **Image Generation > ComfyUI > MOSS > MOSS Image**. This preserves the supplied MOSS graph, including `SkipLayerGuidanceDiTSimple`, `Power Lora Loader (rgthree)`, `KSampler (Efficient)` and the explicit `VAEDecode` from sampler output 3. Install/update Efficiency Nodes and rgthree, plus a ComfyUI version that exposes `moss_image` in `CLIPLoader.type`, `EmptyFlux2LatentImage`, and SLG. The selected Efficient sampler must expose `seeds_2` and `beta57` for the source defaults. Missing nodes, weights, enabled LoRAs or sampler choices produce an explicit error before queueing; weights are not downloaded automatically.
+Select **Image Gen > ComfyUI > MOSS > MOSS Image**. This preserves the supplied MOSS graph, including `SkipLayerGuidanceDiTSimple`, `Power Lora Loader (rgthree)`, `KSampler (Efficient)` and the explicit `VAEDecode` from sampler output 3. Install/update Efficiency Nodes and rgthree, plus a ComfyUI version that exposes `moss_image` in `CLIPLoader.type`, `EmptyFlux2LatentImage`, and SLG. The selected Efficient sampler must expose `seeds_2` and `beta57` for the source defaults. Missing nodes, weights, enabled LoRAs or sampler choices produce an explicit error before queueing; weights are not downloaded automatically.
 
 Source models are `mossImageINT8INT6_mossImageINT8.safetensors`, `qwen3.5_9b_int8_convrot.safetensors`, and `flux2-vae.safetensors`. All model filenames, weight dtype, CLIP type/device, positive/negative prompts, resolution, batch size, output prefix, SLG layers/range, steps, CFG, sampler/scheduler, denoise, preview method and sampler VAE decode are editable. **Orientation** offers Portrait, Landscape and Square, followed by valid resolution presets aligned to 16 pixels; no side exceeds **1280 px**. Portrait/landscape switching reverses the current dimensions when a matching preset exists. Older saved sizes outside the presets must be reselected explicitly. LoRAs have independent enable and strength controls, with add/remove support. The four source LoRAs and their exact strengths/enabled states are restored by **Restore workflow defaults** (the positive prompt and shared seed are retained).
 
-Defaults: **1280 x 848** (intentionally capped from the source JSON's 1296 x 864), batch 1, 10 steps, CFG 1.2, `seeds_2`, `beta57`, denoise 1, SLG single layer 22 from 0 to 0.5, preview `auto`, VAE decode `true`. Seed controls support fixed, increment, decrement and randomize across generations. The total number of saved images is **Images to Generate x Batch size**. Settings participate in per-model persistence, presets, history and workflow export.
+Defaults: **1280 x 848** (intentionally capped from the source JSON's 1296 x 864), batch 1, 10 steps, CFG 1.2, `seeds_2`, `beta57`, denoise 1, SLG single layer 22 from 0 to 0.5, preview `auto`, VAE decode `true`. Seed controls support fixed, increment, decrement and randomize across generations. The total number of saved images is **Number of Images x Batch size**. Settings participate in per-model persistence, presets, history and workflow export.
 
 The MOSS Image sampling controls use **1-50 steps** in whole-step increments and **CFG 0-5** in **0.1** increments for fine adjustment, with matching direct numeric inputs. Existing workflow defaults are unchanged.
 
@@ -118,7 +118,7 @@ LTX Director requires the latest WhatDreamsCost LTX Director, ComfyUI-LTXVideo, 
 
 ## LTX-Ripple-FFAF
 
-**Video > LTX-Ripple-FFAF** uses the imported [Ripple API graph](../../assets/ltxRippleFFAFWorkflow.json). It requires a recent ComfyUI with LTX 2.5, `SeedNode`, `BatchImagesNode`, `TextOverlay`, `ResolutionSelector`, `ComfyNumberConvert`, `ComfyMathExpression` and the native sampling/AV nodes. By default, the active graph adds an actual-loaded-frame-count clamp and a source slice so it cannot extend a short video; explicit **Allow extra frames** restores the original requested-length behavior.
+**Video > LTX > LTX-Ripple-FFAF** uses the imported [Ripple API graph](../../assets/ltxRippleFFAFWorkflow.json). It requires a recent ComfyUI with LTX 2.5, `SeedNode`, `BatchImagesNode`, `TextOverlay`, `ResolutionSelector`, `ComfyNumberConvert`, `ComfyMathExpression` and the native sampling/AV nodes. By default, the active graph adds an actual-loaded-frame-count clamp and a source slice so it cannot extend a short video; explicit **Allow extra frames** restores the original requested-length behavior.
 
 Additional packs used by the supplied graph:
 - **ComfyUI-LTXVideo**: `LTXAddVideoICLoRAGuide`.
@@ -137,7 +137,7 @@ NVFP4, Sage attention and Triton still require compatible hardware/runtime suppo
 
 ## LTX 2.5 Audio-Sync
 
-Select **Video > LTX 2.5 Audio-Sync**. This separate ImageAudioToVideo v10 graph needs a recent ComfyUI with LTX 2.5 and native text generation support; it does not require the Director, KJ preview or H3 nodes.
+Select **Video > LTX > LTX 2.5 Audio-Sync**. This separate ImageAudioToVideo v10 graph needs a recent ComfyUI with LTX 2.5 and native text generation support; it does not require the Director, KJ preview or H3 nodes.
 
 Default weights:
 

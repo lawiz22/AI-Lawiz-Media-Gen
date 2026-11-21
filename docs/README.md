@@ -32,7 +32,7 @@ The README is the short introduction. This index is the entry point for setup, w
 - **Render in H3:** [workflow settings](features/minimax-h3.md#workflow-settings-and-six-loras), [reference limits](features/minimax-h3.md#reference-limits-and-token-mapping), then [save the result](features/minimax-h3.md#save-rendered-output-to-library).
 - **Animate an image to audio:** [LTX 2.5 Audio-Sync](features/ltx-and-audio.md#ltx-25-audio-sync), optionally [starting with Video Prompt Generator](features/video-prompt-generator.md#send-to-ltx-25-audio-sync).
 - **Restore a saved prompt:** [Library snapshots and restoration](features/video-prompt-generator.md#library-snapshots-and-restoration).
-- **Back up your work:** [portable archives](features/library.md#portable-archives) or [Library Folder projects](features/library.md#library-folder-projects).
+- **Back up your work:** [JSON backups](features/library.md#json-backups-and-legacy-archives) or [Library Folder projects](features/library.md#library-folder-projects).
 - **Prepare ComfyUI:** [connection setup](connections.md#comfyui), [workflow dependencies](reference/comfyui-workflows.md) and the [complete node list](../COMFYUI_REQUIRED_NODES.txt).
 - **Build the Windows setup:** [production build](development.md#production-build).
 - **Add screenshots:** [capture index and instructions](screenshots/README.md).

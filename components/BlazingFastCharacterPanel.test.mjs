@@ -6,7 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
-import { withUiKit } from './ui/compileForTest.mjs';
+import { uiModules, withUiKit } from './ui/compileForTest.mjs';
 
 const require = createRequire(import.meta.url), source = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 const compile = text => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(text, {
@@ -26,15 +26,19 @@ const constantsURL = compile(source('../constants.ts'));
 const styleLibraryURL = compile(source('../services/styleLibrary.ts').replace("from './civitaiService'", `from '${civitaiURL}'`)
     .replace("from './styleGallery'", `from '${stylesURL}'`));
 const inputsURL = compile(withUiKit(source('./InputComponents.tsx')));
-const browserURL = compile(source('./StyleBrowser.tsx').replace("from 'react'", `from '${reactURL}'`)
-    .replace("from 'react-dom'", `from '${pathToFileURL(require.resolve('react-dom')).href}'`)
+const browserURL = compile(withUiKit(source('./StyleBrowser.tsx'))
     .replace("from '../services/styleGallery'", `from '${stylesURL}'`).replace("from '../services/styleLibrary'", `from '${styleLibraryURL}'`));
 const componentSource = source('./BlazingFastCharacterPanel.tsx');
 const component = await import(compile(`
     import React, { useEffect, useMemo, useRef, useState } from '${reactURL}';
     import { SelectInput, PresetTextInput } from '${inputsURL}';
+    import { Select } from '${uiModules.Select}';
+    import { Accordion } from '${uiModules.Accordion}';
+    import { NumberField } from '${uiModules.fields}';
+    import { PromptBox } from '${uiModules.PromptBox}';
+    import { ui } from '${uiModules.styles}';
     import { defaultBlazingSettings, randomBlazingPose, blazingOutputs, blazingPoseCount, blazingPrompts } from '${workflowURL}';
-    import { resolveLibraryStyle, styleInstalledLoras } from '${styleLibraryURL}';
+    import { familyFiles, resolveLibraryStyle, styleInstalledLoras } from '${styleLibraryURL}';
     import { inferFlux2Variant } from '${civitaiURL}';
     import { StylePicker } from '${browserURL}';
     import { BACKGROUND_OPTIONS } from '${constantsURL}';
@@ -118,10 +122,10 @@ test('sampler choices retain the entire legacy and COMBO catalogs without a name
             names.map(value => ({ value, label: value })));
     }
 });
-test('four LoRA slots reuse the standard dropdown instead of the large datalist', () => {
+test('four LoRA slots reuse the standard searchable listbox instead of the large datalist', () => {
     const html = render();
     for (let i = 1; i <= 4; i++) {
-        assert.match(html, new RegExp(`<select aria-label="Blazing LoRA ${i} filename"`));
+        assert.match(html, new RegExp(`aria-label="Blazing LoRA ${i} filename" aria-haspopup="listbox"`));
     }
     assert.ok(!html.includes('blazing-loras'));
     assert.ok(html.includes('compatible installed LoRAs'));
@@ -162,14 +166,13 @@ test('memoized LoRA choices filter a 2500+ inventory by the exact FLUX2 folder',
         [{ value: '', label: 'None' }, ...flux2.map(name => ({ value: name, label: name }))]);
     assert.deepEqual(choices({}), [{ value: '', label: 'None' }]);
 });
-test('standard dropdown displays a saved unavailable LoRA without offering it for reselection', async () => {
-    const { SelectInput } = await import(inputsURL);
-    const html = renderToStaticMarkup(React.createElement(SelectInput, {
-        label: 'Blazing LoRA 1 filename', value: 'SDXL/old.safetensors', onChange() {},
-        options: [{ value: '', label: 'None' }, { value: 'SDXL/old.safetensors', label: 'Saved; unavailable in FLUX2 list', disabled: true }],
-    }));
-    assert.match(html, /<option value="SDXL\/old.safetensors" disabled="" selected="">Saved; unavailable in FLUX2 list<\/option>/);
-    assert.ok(componentSource.includes('enabled: !!event.target.value && value.enabled'));
+test('standard listbox displays a saved unavailable LoRA without listing it as an installed choice', async () => {
+    const { Select, selectItems } = await import(uiModules.Select);
+    const options = [{ value: '', label: 'None' }];
+    const html = renderToStaticMarkup(React.createElement(Select, { variant: 'search', ariaLabel: 'Blazing LoRA 1 filename', value: 'SDXL/old.safetensors', onChange() {}, options }));
+    assert.match(html, /SDXL\/old\.safetensors \(not listed\)/);
+    assert.equal(selectItems(options, 'SDXL/old.safetensors')[0].missing, true);
+    assert.ok(componentSource.includes('enabled: !!name && value.enabled'));
     assert.ok(componentSource.includes('disabled={!lora.name}'));
 });
 test('cancel is outside locked fieldsets; source snapshots, automatic saves and retries are wired', () => {
@@ -181,10 +184,10 @@ test('cancel is outside locked fieldsets; source snapshots, automatic saves and 
     assert.ok(componentSource.includes("item.mediaType === 'prompt' && item.linkedResultId === image.id"));
 });
 test('root navigation and Library restore stay separate from existing Character Angles', () => {
-    const app = source('../App.tsx'), library = source('./LibraryPanel.tsx');
+    const app = source('../App.tsx'), tab = source('./CharacterTab.tsx'), library = source('./LibraryPanel.tsx');
     assert.ok(app.includes("label: 'Gestionnaire de styles'"));
-    assert.ok(app.includes("['standard', 'Character Angles'], ['blazing-fast', 'Blazing Fast character']"));
-    assert.ok(app.includes('mode={isBlazingCharacter ?'));
+    assert.ok(tab.includes("['standard', 'Character Angles'], ['blazing-fast', 'Blazing Fast character']"));
+    assert.ok(tab.includes('mode={isBlazingCharacter ?'));
     assert.ok(app.includes('if (item.blazingFastOptions)'));
     assert.ok(library.includes('Download associated TXT'));
     assert.ok(library.includes("'Open in Blazing Fast character'"));
@@ -203,6 +206,10 @@ test('Library classifies Blazing snapshots without fabricating legacy generation
 const galleryComponent = await import(compile(`
     import React, { useEffect, useMemo, useState } from '${reactURL}';
     import { PresetTextInput, SelectInput } from '${inputsURL}';
+    import { Select } from '${uiModules.Select}';
+    import { NumberField, TextField } from '${uiModules.fields}';
+    import { PromptBox } from '${uiModules.PromptBox}';
+    import { ui } from '${uiModules.styles}';
     import { linkStyleLibrary, matchStyleLibrary, resolveLibraryStyle, styleLibraryLoras, styleInstalledLoras } from '${styleLibraryURL}';
     import { StyleBrowser, StyleLibraryPreview, StyleModal } from '${browserURL}';
     import { getComfyRelativePath } from '${civitaiURL}';

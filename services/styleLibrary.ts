@@ -1,4 +1,4 @@
-import { getComfyRelativePath, inventoryItemMatchesFamily, inventoryFlux2Variant, resolveComfyOption, type CivitaiFamily, type CivitaiInventory, type CivitaiInventoryItem } from './civitaiService';
+import { getComfyRelativePath, inferFlux2Variant, inventoryItemMatchesFamily, inventoryFlux2Variant, resolveComfyOption, type CivitaiFamily, type CivitaiInventory, type CivitaiInventoryItem } from './civitaiService';
 import { isH3LoraPath, type GalleryStyle } from './styleGallery';
 
 const normalize = (value: string) => value.trim().replace(/\\/g, '/').toLowerCase();
@@ -31,6 +31,24 @@ export const styleInstalledLoras = (names: string[], model: string, inventory?: 
         }
         return normalize(name).split('/')[0] === normalize(model);
     });
+};
+const FAMILY_NAMES: Partial<Record<CivitaiFamily, RegExp>> = {
+    sd15: /sd[ _-]?1\.?5/i, sdxl: /xl/i, qwen: /qwen/i, 'qwen-edit': /qwen/i, qwen21: /qwen/i, krea2: /krea/i, moss: /moss/i,
+    'zit-base': /z[-_ ]?image|zit/i, flux2: /flux[-_ .]?2|klein/i, 'ltx-23': /ltx/i, 'minimax-h3': /h3|minimax/i,
+};
+/** FLUX2 family of a UNET file: its 9B or 4B variant when the name tells, any FLUX2 otherwise. */
+export const flux2Family = (unet: string | undefined): CivitaiFamily => inferFlux2Variant(unet || '') || 'flux2';
+/** Files a workflow of this family can load, for its listbox: attributed by My Library or by file name. The whole list when none is attributed. */
+export const familyFiles = (names: readonly string[], family: CivitaiFamily, inventory?: CivitaiInventory): string[] => {
+    const indexed = new Map(inventory?.items.map(item => [normalize(getComfyRelativePath(item)), item]));
+    const other = family === 'flux2-9b' ? 'flux2-4b' : family === 'flux2-4b' ? 'flux2-9b' : undefined;
+    const base = other ? 'flux2' : family;
+    const matches = names.filter(name => {
+        const item = indexed.get(normalize(name));
+        if (other && (item ? inventoryFlux2Variant(item) : inferFlux2Variant(name)) === other) return false;
+        return (item && inventoryItemMatchesFamily(item, base)) || !!FAMILY_NAMES[base]?.test(name);
+    });
+    return matches.length ? matches : [...names];
 };
 export const matchStyleLibrary = (style: GalleryStyle, inventory: CivitaiInventory): { item?: CivitaiInventoryItem; warning: string } => {
     if (!style.lora) return { warning: '' };

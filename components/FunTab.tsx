@@ -11,10 +11,10 @@ import { TabActivity } from './TabActivity';
 export type FunSubTab = 'photo-fusion' | 'past-forward' | 'swap-anything' | 'swap-person' | 'stylise-anything';
 
 const SUB_TABS: Array<{ id: FunSubTab; label: string; Icon: React.FC<{ className?: string }>; selected: string; hover: string; accent: React.CSSProperties }> = [
-    { id: 'photo-fusion', label: 'Photo Fusion', Icon: GroupPhotoFusionIcon, selected: 'bg-rose-500 text-white', hover: 'hover:text-rose-300', accent: createAccentStyle('#fb7185', '#fda4af', '#e11d48') },
-    { id: 'past-forward', label: 'Past Forward', Icon: PastForwardIcon, selected: 'bg-cyan-500 text-white', hover: 'hover:text-cyan-300', accent: createAccentStyle('#22d3ee', '#67e8f9', '#0891b2') },
+    { id: 'photo-fusion', label: 'Photo Fusion', Icon: GroupPhotoFusionIcon, selected: 'bg-rose-500 text-black light:bg-rose-700 light:text-white', hover: 'hover:text-rose-300', accent: createAccentStyle('#fb7185', '#fda4af', '#e11d48') },
+    { id: 'past-forward', label: 'Past Forward', Icon: PastForwardIcon, selected: 'bg-cyan-500 text-black light:bg-cyan-700 light:text-white', hover: 'hover:text-cyan-300', accent: createAccentStyle('#22d3ee', '#67e8f9', '#0891b2') },
     { id: 'swap-anything', label: 'Swap Anything', Icon: EnhanceIcon, selected: 'bg-amber-500 text-black', hover: 'hover:text-amber-300', accent: createAccentStyle('#f59e0b', '#fbbf24', '#d97706') },
-    { id: 'swap-person', label: 'Swap a Person', Icon: GroupPhotoFusionIcon, selected: 'bg-rose-500 text-white', hover: 'hover:text-rose-300', accent: createAccentStyle('#fb7185', '#fda4af', '#e11d48') },
+    { id: 'swap-person', label: 'Swap a Person', Icon: GroupPhotoFusionIcon, selected: 'bg-rose-500 text-black light:bg-rose-700 light:text-white', hover: 'hover:text-rose-300', accent: createAccentStyle('#fb7185', '#fda4af', '#e11d48') },
     { id: 'stylise-anything', label: 'Stylise Anything', Icon: SwatchIcon, selected: 'bg-emerald-500 text-black', hover: 'hover:text-emerald-300', accent: createAccentStyle('#34d399', '#6ee7b7', '#059669') },
 ];
 

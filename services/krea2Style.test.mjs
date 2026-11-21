@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import test from 'node:test';
 import ts from 'typescript';
+import { uiModules } from '../components/ui/compileForTest.mjs';
 
 const read = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 const compile = (source, jsx = ts.JsxEmit.None) => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(source, {
@@ -197,6 +198,8 @@ const { default: React } = await import(reactURL);
 const controlURL = compile(`
     import React, { useMemo, useState } from '${reactURL}';
     import { krea2StyleOptions, krea2StyleLoraRemovals } from '${workflowURL}';
+    import { NumberField } from '${uiModules.fields}';
+    import { ui } from '${uiModules.styles}';
     const useStyleGallery = () => ({ gallery: { styles: [] }, error: '' });
     const useModelInventory = () => ({ inventory: { items: [] }, loading: false, error: '' });
     const StylePicker = () => React.createElement('button', {}, 'Choose KREA2 style');
@@ -206,12 +209,14 @@ const { ImageStyleControl } = await import(controlURL);
 const loraPanelURL = compile(`
     import React, { useMemo, useState } from '${reactURL}';
     import { ImageStyleControl } from '${controlURL}';
-    const SelectInput = ({ label, value }) => React.createElement('label', {}, label, React.createElement('input', { value, readOnly: true }));
+    const Select = ({ label, value }) => React.createElement('label', {}, label, React.createElement('input', { value, readOnly: true }));
+    const Accordion = ({ title, children }) => React.createElement('section', {}, title, children);
+    const useModelInventory = () => ({ inventory: { items: [] } }), familyFiles = names => names, flux2Family = () => 'flux2';
     const NumberSlider = ({ label, value }) => React.createElement('label', {}, label, React.createElement('input', { value, readOnly: true }));
     ${read('../components/LoraSettingsPanel.tsx').replace(/^import .*;\r?$/gm, '')}
 `, ts.JsxEmit.React);
 const { LoraSettingsPanel } = await import(loraPanelURL);
-test('right-hand KREA LoRA panel visibly lists style path and effective strength even with additional LoRAs off', () => {
+test('KREA LoRA section visibly lists style path and effective strength even with additional LoRAs off', () => {
     const html = renderToStaticMarkup(React.createElement(LoraSettingsPanel, {
         options: { ...options, comfyKreaStyle: style, comfyKreaStyleStrength: 1.25, comfyKreaUseLora: false },
         updateOptions: () => {}, isDisabled: false, availableLoras: [], comfyUIObjectInfo: {},

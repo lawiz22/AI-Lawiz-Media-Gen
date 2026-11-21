@@ -23,6 +23,13 @@ import { LibraryPickerModal } from './LibraryPickerModal';
 import { PresetSaveModal } from './PresetSaveModal';
 import { ConfirmationModal } from './ConfirmationModal';
 import { NumberSlider } from './InputComponents';
+import { Accordion } from './ui/Accordion';
+import { NumberField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
+import { familyFiles, flux2Family } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 import { SendToLTXButton } from './SendToLTXButton';
 import { CheckIcon, CloseIcon, DiceIcon, DownloadIcon, GenerateIcon, LibraryIcon, RefreshIcon, SaveIcon, SpinnerIcon, TrashIcon, ZoomIcon } from './icons';
 
@@ -36,22 +43,16 @@ interface Result extends SceneJob {
     source: File;
     sourcePreview: string;
 }
-const inputClass = 'mt-1 w-full min-w-0 rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm text-text-primary disabled:opacity-50';
+const inputClass = `mt-1 block ${ui.control}`;
 const buttonClass = 'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border-primary px-3 py-2 text-sm text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40';
 const labels: Record<SceneAxis, string> = { pose: 'Pose', expression: 'Facial expression', lighting: 'Lighting & ambience', camera: 'Camera angle', season: 'Season' };
 
-const Select: React.FC<{ label: string; value: string; values: Array<{ value: string; label: string }>; onChange: (value: string) => void; disabled?: boolean }> = ({ label, value, values, onChange, disabled }) => (
-    <label className="block min-w-0 text-sm text-text-secondary">{label}<select aria-label={label} className={inputClass} value={value} onChange={event => onChange(event.target.value)} disabled={disabled}>
-        {!values.some(item => item.value === value) && <option value={value}>{value || '(none)'} - unavailable</option>}
-        {values.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-    </select></label>
-);
 const Toggle: React.FC<{ label: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }> = ({ label, checked, onChange, disabled }) => (
     <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 text-sm text-text-secondary"><input type="checkbox" className="rounded text-accent focus:ring-accent" checked={checked} onChange={event => onChange(event.target.checked)} disabled={disabled} />{label}</label>
 );
 const ChoiceControl: React.FC<{ label: string; control: SceneControl; choices: SceneChoice[]; onChange: (updates: Partial<SceneControl>) => void; disabled: boolean }> = ({ label, control, choices, onChange, disabled }) => (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-        <Select label={label} value={control.value} values={[{ value: 'auto', label: 'Auto' }, ...choices.map(choice => ({ value: choice.instruction, label: choice.label }))]} onChange={value => onChange({ value })} disabled={disabled || !control.enabled || !choices.length} />
+        <Select label={label} value={control.value} options={[{ value: 'auto', label: 'Auto' }, ...choices.map(choice => ({ value: choice.instruction, label: choice.label }))]} onChange={value => onChange({ value })} disabled={disabled || !control.enabled || !choices.length} />
         <button type="button" title={`Randomize ${label}`} aria-label={`Randomize ${label}`} className={`${buttonClass} h-10 w-10 !p-2`} disabled={disabled || !control.enabled || !choices.length} onClick={() => onChange({ value: randomSceneChoice(choices, control.value) })}><DiceIcon className="h-5 w-5" /></button>
     </div>
 );
@@ -59,6 +60,7 @@ const ChoiceControl: React.FC<{ label: string; control: SceneControl; choices: S
 const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjectInfo, onModelChange, pendingPreset, onPresetLoaded }) => {
     const dispatch: AppDispatch = useDispatch();
     const otherGenerationBusy = useSelector((state: RootState) => state.generation.isLoading);
+    const { inventory } = useModelInventory();
     const libraryItems = useSelector((state: RootState) => state.library.items);
     const presets = libraryItems.filter(item => item.mediaType === 'preset' && item.sceneVariationPreset);
     const [selectedPresetId, setSelectedPresetId] = useState('');
@@ -356,8 +358,8 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
         axis === 'pose' || axis === 'expression'
             ? analysis.subjects.some(subject => controls[`${axis}:${subject.id}`]?.enabled && sceneChoices(analysis, axis, intensity, subject).length > 0)
             : sceneChoices(analysis, axis, intensity).length > 0));
-    const selectSettings = (label: string, field: keyof GenerationOptions, values: string[], allowNone = false) => <Select key={field} label={label} value={String(settings[field] ?? '')}
-        values={[...(allowNone ? [{ value: '', label: 'None' }] : []), ...Array.from(new Set(values.filter(value => value && value !== 'None'))).map(value => ({ value, label: value }))]}
+    const selectSettings = (label: string, field: keyof GenerationOptions, values: string[], allowNone = false) => <Select variant="search" label={label} ariaLabel={`Scene Variation ${label}`} value={String(settings[field] ?? '')}
+        options={[...(allowNone ? [{ value: '', label: 'None' }] : []), ...Array.from(new Set(values.filter(value => value && value !== 'None'))).map(value => ({ value, label: value }))]}
         onChange={value => updateSettings({ [field]: value })} disabled={locked} />;
     const numberSetting = (label: string, field: keyof GenerationOptions, min: number, max: number, step: number, fallback: number, disabled = false) => <NumberSlider key={field} label={label}
         value={Number(settings[field] ?? fallback)} onChange={event => updateSettings({ [field]: Number(event.target.value) })} min={min} max={max} step={step} disabled={locked || disabled} allowDirectInput />;
@@ -365,8 +367,74 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
     const qwenSelect = (label: string, key: keyof Qwen21MultiOptions, node: string, field: string) => {
         const fixed = qwenTurbo && (key === 'sampler' || key === 'scheduler');
         const value = fixed ? qwenTurboSampling[key] : qwenSettings[key];
-        return <Select label={label} value={String(value)} values={[...new Set([String(value), ...getQwen21Choices(comfyUIObjectInfo, node, field)])].map(value => ({ value, label: value }))} onChange={value => updateQwen({ [key]: value })} disabled={locked || fixed} />;
+        const choices = getQwen21Choices(comfyUIObjectInfo, node, field);
+        return <Select variant="search" label={label} ariaLabel={`Scene Variation ${label}`} value={String(value)} options={fixed ? [String(value)] : key === 'unet' ? familyFiles(choices, 'qwen21', inventory) : choices} onChange={value => updateQwen({ [key]: value })} disabled={locked || fixed} />;
     };
+    const qwenSlider = (key: 'steps' | 'cfg' | 'denoise' | 'referenceResolution') => <NumberSlider key={key} label={key === 'steps' ? 'Steps' : key === 'cfg' ? 'CFG' : key === 'denoise' ? 'Denoise' : 'Encoder Resolution'} value={qwenTurbo && key !== 'referenceResolution' ? qwenTurboSampling[key] : qwenSettings[key]} min={key === 'steps' ? 1 : 0} max={key === 'steps' ? 100 : key === 'cfg' ? 20 : key === 'denoise' ? 1 : 4096} step={key === 'steps' ? 1 : key === 'referenceResolution' ? 32 : 0.1} allowDirectInput disabled={locked || (qwenTurbo && key !== 'referenceResolution')} onChange={event => updateQwen({ [key]: Number(event.target.value) })} />;
+    const seedField = <NumberField label="Seed (-1 = random)" ariaLabel="Scene Variation Seed" min={-1} max={Number.MAX_SAFE_INTEGER} step={1} value={settings.comfySeed ?? -1} onChange={value => updateSettings({ comfySeed: value < 0 ? undefined : value })} disabled={locked} />;
+    const qwenLoras = [{ value: '', label: 'None' }, ...familyFiles([...new Set([...getQwen21Choices(comfyUIObjectInfo, 'LoraLoader', 'lora_name'), ...getQwen21Choices(comfyUIObjectInfo, 'LoraLoaderModelOnly', 'lora_name')])], 'qwen21', inventory).map(value => ({ value, label: value }))];
+    // Standard order: Models, LoRAs, Sampler, Advanced.
+    const modelSettings = isQwen ? <>
+        <Accordion title="Models">
+            {qwenSelect('Diffusion Model', 'unet', 'UNETLoader', 'unet_name')}
+            {qwenSelect('CLIP', 'clip', 'CLIPLoader', 'clip_name')}
+            {qwenSelect('VAE', 'vae', 'VAELoader', 'vae_name')}
+            {qwenSelect('Weight Dtype', 'weightDtype', 'UNETLoader', 'weight_dtype')}
+            {qwenSelect('CLIP Device', 'clipDevice', 'CLIPLoader', 'device')}
+            {qwenSelect('Cache Device', 'cacheDevice', 'QwenImage21Cache', 'device')}
+            {qwenSelect('Cache Dtype', 'cacheDtype', 'QwenImage21Cache', 'dtype')}
+            {qwenSelect('Attention', 'attention', 'ModelAttentionBackend', 'attention')}
+        </Accordion>
+        <Accordion title="LoRAs">{qwenSettings.loras.map((lora, index) => <div key={index} className="min-w-0 space-y-3 border-b border-border-primary pb-3">
+            <Toggle label={`Enable Qwen LoRA ${index + 1}`} checked={lora.enabled} disabled={locked} onChange={enabled => updateQwen({ loras: qwenSettings.loras.map((entry, position) => position === index ? { ...entry, enabled } : entry) })} />
+            <Select variant="search" label={`Qwen LoRA ${index + 1}`} ariaLabel={`Scene Variation Qwen LoRA ${index + 1}`} value={lora.name} options={qwenLoras} disabled={locked} onChange={name => updateQwen({ loras: qwenSettings.loras.map((entry, position) => position === index ? { ...entry, name, enabled: !!name } : entry) })} />
+            {(['modelStrength', 'clipStrength'] as const).map(key => <NumberSlider key={key} label={`Qwen LoRA ${index + 1} ${key === 'modelStrength' ? 'Model' : 'CLIP'} Strength`} value={lora[key]} min={-2} max={2} step={0.05} allowDirectInput disabled={locked || !lora.enabled} onChange={event => updateQwen({ loras: qwenSettings.loras.map((entry, position) => position === index ? { ...entry, [key]: Number(event.target.value) } : entry) })} />)}
+        </div>)}</Accordion>
+        <Accordion title="Sampler">
+            <div>
+                <Toggle label="Turbo (Viggle)" checked={qwenTurbo} disabled={locked} onChange={enabled => updateSettings({ comfyQwen21CreateTurbo: enabled })} />
+                <p className="mt-2 text-xs text-text-muted">Turbo accelerates sampling; it does not guarantee camera movement. Camera requests require visual verification of the result.</p>
+            </div>
+            {qwenSelect('Sampler', 'sampler', 'KSampler', 'sampler_name')}
+            {qwenSelect('Scheduler', 'scheduler', 'KSampler', 'scheduler')}
+            {(['steps', 'cfg', 'denoise'] as const).filter(key => !qwenTurbo || key !== 'cfg').map(qwenSlider)}
+            {seedField}
+        </Accordion>
+        <Accordion title="Advanced">
+            <Select<number> label="Working Resolution (source aspect ratio)" ariaLabel="Scene Variation Working Resolution" value={qwenSettings.sizeIndex} options={QWEN21_MULTI_SIZES.map(([width, height], index) => ({ value: index, label: `${(width * height / (1024 * 1024)).toFixed(2)} MP` }))} onChange={sizeIndex => updateQwen({ sizeIndex })} disabled={locked} />
+            <p className="text-xs text-text-muted">Working dimensions follow the source aspect ratio. Final output matches the source dimensions without cropping.</p>
+            {qwenSlider('referenceResolution')}
+            {!qwenTurbo && <PromptBox kind="negative" label="Negative Prompt" ariaLabel="Qwen Scene Negative Prompt" rows={3} value={qwenSettings.negativePrompt} disabled={locked} onChange={negativePrompt => updateQwen({ negativePrompt })} />}
+        </Accordion>
+    </> : <>
+        <Accordion title="Models">
+            {selectSettings('FLUX2 Model (GGUF / Safetensors)', 'comfyFlux2EditUnet', familyFiles(modelList, 'flux2', inventory))}
+            {selectSettings('CLIP', 'comfyFlux2EditClip', sceneModelOptions(comfyUIObjectInfo, 'CLIPLoader', 'clip_name'))}
+            {selectSettings('VAE', 'comfyFlux2EditVae', sceneModelOptions(comfyUIObjectInfo, 'VAELoader', 'vae_name'))}
+        </Accordion>
+        <Accordion title="LoRAs">
+            {([1, 2] as const).map(index => <div key={index} className="min-w-0 space-y-3">
+                {selectSettings(`LoRA ${index}`, `comfyFlux2EditLora${index}Name`, familyFiles(sceneModelOptions(comfyUIObjectInfo, 'LoraLoaderModelOnly', 'lora_name'), flux2Family(settings.comfyFlux2EditUnet), inventory), true)}
+                {numberSetting(`LoRA ${index} strength`, `comfyFlux2EditLora${index}Strength`, -2, 2, 0.05, 1, !settings[`comfyFlux2EditLora${index}Name`])}
+            </div>)}
+            {(settings.comfyFlux2EditLora1Name || settings.comfyFlux2EditLora2Name) && <p className="text-xs text-highlight-yellow">Selected LoRAs may alter the source style.</p>}
+        </Accordion>
+        <Accordion title="Sampler">
+            {selectSettings('Sampler', 'comfyFlux2EditSampler', sceneModelOptions(comfyUIObjectInfo, 'KSamplerSelect', 'sampler_name'))}
+            {numberSetting('Steps', 'comfyFlux2EditSteps', 1, 40, 1, 4)}
+            {numberSetting('CFG', 'comfyFlux2EditCfg', 0.1, 10, 0.1, 1)}
+            {seedField}
+        </Accordion>
+        <Accordion title="Advanced">
+            {numberSetting('Source megapixels', 'comfyFlux2EditMegapixels', 0.25, 4, 0.25, 1)}
+            <Toggle label="Enable CacheDiT Accelerator" checked={!!settings.comfyFlux2EditUseCacheDit} onChange={comfyFlux2EditUseCacheDit => updateSettings({ comfyFlux2EditUseCacheDit })} disabled={locked} />
+            {settings.comfyFlux2EditUseCacheDit && <>
+                {selectSettings('CacheDiT model type', 'comfyFlux2EditCacheDitModelType', sceneModelOptions(comfyUIObjectInfo, 'CacheDiT_Model_Optimizer', 'model_type'))}
+                {numberSetting('CacheDiT warmup steps', 'comfyFlux2EditCacheDitWarmupSteps', 0, 20, 1, 0)}
+                {numberSetting('CacheDiT skip interval', 'comfyFlux2EditCacheDitSkipInterval', 0, 10, 1, 0)}
+            </>}
+        </Accordion>
+    </>;
 
     return <section aria-label="Scene Variation" className="min-w-0 space-y-5">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border-primary pb-3">
@@ -376,11 +444,9 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
                 </button>)}
             </div></div>
             <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-                <select aria-label="Scene Variation preset" className={`${inputClass} !mt-0 !w-auto max-w-full sm:max-w-64`} value={presets.some(item => String(item.id) === selectedPresetId) ? selectedPresetId : ''} disabled={locked || otherGenerationBusy}
-                    onChange={event => { const item = presets.find(candidate => String(candidate.id) === event.target.value); if (item) loadPreset(item); else setSelectedPresetId(''); }}>
-                    <option value="">Load Preset...</option>
-                    {presets.map(item => <option key={item.id} value={item.id}>{item.name?.replace(/^SCENE-VARIATION_(?:FLUX2|QWEN21)_Param_/, '') || `Preset ${item.id}`}</option>)}
-                </select>
+                <Select className="w-64 max-w-full" ariaLabel="Scene Variation preset" value={presets.some(item => String(item.id) === selectedPresetId) ? selectedPresetId : ''} disabled={locked || otherGenerationBusy}
+                    options={[{ value: '', label: 'Load Preset...' }, ...presets.map(item => ({ value: String(item.id), label: item.name?.replace(/^SCENE-VARIATION_(?:FLUX2|QWEN21)_Param_/, '') || `Preset ${item.id}` }))]}
+                    onChange={value => { const item = presets.find(candidate => String(candidate.id) === value); if (item) loadPreset(item); else setSelectedPresetId(''); }} />
                 <button type="button" className={buttonClass} title="Save Scene Variation preset" aria-label="Save Scene Variation preset" disabled={locked || otherGenerationBusy} onClick={() => setPresetSaveOpen(true)}>{presetBusy ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <SaveIcon className="h-4 w-4" />}</button>
                 {presets.some(item => String(item.id) === selectedPresetId) && <button type="button" className={buttonClass} title="Delete Scene Variation preset" aria-label="Delete Scene Variation preset" disabled={locked || otherGenerationBusy} onClick={() => setPresetDeleteOpen(true)}><TrashIcon className="h-4 w-4" /></button>}
                 <button type="button" className={buttonClass} onClick={reset} disabled={generating || segmenting || presetBusy}><RefreshIcon className="h-4 w-4" />Reset</button>
@@ -397,13 +463,13 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
                 <ImageUploader id="scene-variation-source" label="Source image" sourceFile={source} onImageUpload={file => { void changeSource(file); }} disabled={busy} />
                 <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setLibraryOpen(true)} disabled={busy} className={buttonClass}><LibraryIcon className="h-4 w-4" />Library</button>
                     {sourcePreview && <button type="button" className={buttonClass} onClick={() => setZoom(sourcePreview)} title="View original image"><ZoomIcon className="h-4 w-4" />Original</button>}</div>
-                <Select label="Image analysis" value={provider} values={['gemini', 'mammouth', 'ollama'].map(value => ({ value, label: value === 'gemini' ? 'Gemini' : value === 'mammouth' ? 'Mammouth' : 'Ollama' }))} onChange={value => { invalidateAnalysis(); setProvider(value as SceneProvider); setAnalysis(null); setControls(createSceneControls()); setError(''); }} disabled={busy} />
+                <Select label="Image analysis" value={provider} options={['gemini', 'mammouth', 'ollama'].map(value => ({ value, label: value === 'gemini' ? 'Gemini' : value === 'mammouth' ? 'Mammouth' : 'Ollama' }))} onChange={value => { invalidateAnalysis(); setProvider(value as SceneProvider); setAnalysis(null); setControls(createSceneControls()); setError(''); }} disabled={busy} />
                 {provider === 'ollama' && <label className="block text-sm text-text-secondary">Ollama vision model<input className={inputClass} value={ollamaModel} onChange={event => { invalidateAnalysis(); setOllamaModel(event.target.value); setAnalysis(null); }} disabled={busy} /></label>}
                 {!analysisReady && <p role="status" className="text-sm text-highlight-yellow">{provider === 'ollama' ? 'Select a vision model.' : `Configure the ${provider === 'gemini' ? 'Gemini' : 'Mammouth'} API key in Connection Settings.`}</p>}
                 <div className="flex flex-wrap gap-2"><button type="button" className={buttonClass} onClick={analyze} disabled={!source || !analysisReady || locked}>{analyzing ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <GenerateIcon className="h-4 w-4" />}Analyze</button>
                     {analyzing && <button type="button" className={buttonClass} onClick={() => { invalidateAnalysis(); setMessage('Analysis cancelled locally.'); }}>Cancel analysis</button>}</div>
-                {analysis && <details open className="space-y-3 border-t border-border-primary pt-3"><summary className="cursor-pointer text-sm font-semibold text-text-primary">Scene analysis</summary>
-                    <Select label="Environment" value={analysis.environment} values={['indoor', 'outdoor', 'unknown'].map(value => ({ value, label: value }))} onChange={value => setAnalysis({ ...analysis, environment: value as SceneAnalysis['environment'] })} disabled={locked} />
+                {analysis && <Accordion defaultOpen title="Scene analysis">
+                    <Select label="Environment" value={analysis.environment} options={['indoor', 'outdoor', 'unknown']} onChange={value => setAnalysis({ ...analysis, environment: value as SceneAnalysis['environment'] })} disabled={locked} />
                     {(['location', 'style', 'lighting', 'camera', 'season'] as const).map(field => <label key={field} className="block text-sm capitalize text-text-secondary">{field}<textarea className={inputClass} rows={field === 'location' || field === 'style' ? 3 : 2} maxLength={1600} value={analysis[field]} onChange={event => setAnalysis({ ...analysis, [field]: event.target.value })} disabled={locked} /></label>)}
                     <label className="block text-sm text-text-secondary">Fixed location anchors<textarea className={inputClass} rows={3} value={analysis.anchors.join('\n')} onChange={event => setAnalysis({ ...analysis, anchors: event.target.value.split('\n') })} disabled={locked} /></label>
                     {analysis.uncertainty && <p className="whitespace-pre-wrap text-sm text-highlight-yellow">{analysis.uncertainty}</p>}
@@ -414,12 +480,13 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
                         <Toggle label={`${subject.id} face visible`} checked={subject.faceVisible} onChange={faceVisible => updateSubject(subject.id, { faceVisible })} disabled={locked} />
                     </div>)}</div>
                     <button type="button" onClick={addPerson} className={buttonClass} disabled={locked || analysis.subjects.length >= 20}>Add detected person</button>
-                </details>}
+                </Accordion>}
+                {modelSettings}
             </div>
             <div className="min-w-0 space-y-5">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Select label="Variation amplitude" value={intensity} values={SCENE_INTENSITIES.map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }))} onChange={value => { setIntensity(value as SceneIntensity); setControls(current => Object.fromEntries(Object.entries<SceneControl>(current).map(([key, control]) => [key, { ...control, value: 'auto' }]))); }} disabled={locked} />
-                    <label className="block text-sm text-text-secondary">Images<input className={inputClass} type="number" min={1} max={8} step={1} value={count} onChange={event => setCount(Math.min(8, Math.max(1, Math.round(Number(event.target.value) || 1))))} disabled={locked} /></label>
+                    <Select label="Variation amplitude" value={intensity} options={SCENE_INTENSITIES.map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }))} onChange={value => { setIntensity(value as SceneIntensity); setControls(current => Object.fromEntries(Object.entries<SceneControl>(current).map(([key, control]) => [key, { ...control, value: 'auto' }]))); }} disabled={locked} />
+                    <NumberField slider label="Images" ariaLabel="Scene Variation Images" min={1} max={8} step={1} value={count} onChange={value => setCount(Math.round(value))} disabled={locked} />
                 </div>
                 {(['pose', 'expression'] as const).map(axis => <section key={axis} aria-label={labels[axis]} className="space-y-3 border-t border-border-primary pt-3">
                     <div className="flex flex-wrap items-center justify-between gap-2"><Toggle label={`Vary ${labels[axis].toLowerCase()}`} checked={controls[axis].enabled} onChange={enabled => updateControl(axis, { enabled })} disabled={locked || !analysis?.subjects.some(subject => sceneChoices(analysis, axis, intensity, subject).length)} />
@@ -437,7 +504,7 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
                 </section>)}
                 {mode === 'masked' && <section aria-label="Person masks" className="space-y-3 border-t border-border-primary pt-3">
                     <h3 className="text-sm font-semibold text-text-primary" title="SAM3 calculates a region for each selected person. Inspect every overlay: incorrect detections can edit the wrong person. Pose margins exclude other detected bodies; large movements may require a manual correction.">Person masks</h3>
-                    <Select label="SAM3 checkpoint" value={selectedSam} values={samModels.map(value => ({ value, label: value }))} onChange={setSamCheckpoint} disabled={locked} />
+                    <Select variant="search" label="SAM3 checkpoint" value={selectedSam} options={samModels} onChange={setSamCheckpoint} disabled={locked} />
                     <fieldset disabled={locked || !hasPoseMasks} className="min-w-0 space-y-1">
                         <legend className="text-sm text-text-secondary">Pose edit area</legend>
                         <div className="flex flex-wrap gap-2">
@@ -473,58 +540,6 @@ const SceneVariationPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjec
                         {axis === 'season' && analysis && analysis.environment !== 'outdoor' && <p className="text-xs text-text-muted">Unavailable: {analysis.environment} scene</p>}
                     </section>;
                 })}
-                {isQwen ? <details className="space-y-4 border-t border-border-primary pt-3"><summary className="cursor-pointer text-sm font-semibold text-text-primary">Qwen 2.1 Advanced Settings</summary>
-                    <div className="pt-3">
-                        <Toggle label="Turbo (Viggle)" checked={qwenTurbo} disabled={locked} onChange={enabled => updateSettings({ comfyQwen21CreateTurbo: enabled })} />
-                        <p className="mt-2 text-xs text-text-muted">Turbo accelerates sampling; it does not guarantee camera movement. Camera requests require visual verification of the result.</p>
-                    </div>
-                    <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-                        {qwenSelect('Diffusion Model', 'unet', 'UNETLoader', 'unet_name')}
-                        {qwenSelect('CLIP', 'clip', 'CLIPLoader', 'clip_name')}
-                        {qwenSelect('VAE', 'vae', 'VAELoader', 'vae_name')}
-                        {qwenSelect('Weight Dtype', 'weightDtype', 'UNETLoader', 'weight_dtype')}
-                        {qwenSelect('CLIP Device', 'clipDevice', 'CLIPLoader', 'device')}
-                        {qwenSelect('Cache Device', 'cacheDevice', 'QwenImage21Cache', 'device')}
-                        {qwenSelect('Cache Dtype', 'cacheDtype', 'QwenImage21Cache', 'dtype')}
-                        {qwenSelect('Attention', 'attention', 'ModelAttentionBackend', 'attention')}
-                        {qwenSelect('Sampler', 'sampler', 'KSampler', 'sampler_name')}
-                        {qwenSelect('Scheduler', 'scheduler', 'KSampler', 'scheduler')}
-                        <Select label="Working Resolution (source aspect ratio)" value={String(qwenSettings.sizeIndex)} values={QWEN21_MULTI_SIZES.map(([width, height], index) => ({ value: String(index), label: `${(width * height / (1024 * 1024)).toFixed(2)} MP` }))} onChange={value => updateQwen({ sizeIndex: Number(value) })} disabled={locked} />
-                        <p className="text-xs text-text-muted">Working dimensions follow the source aspect ratio. Final output matches the source dimensions without cropping.</p>
-                        {(['steps', 'cfg', 'denoise', 'referenceResolution'] as const).filter(key => !qwenTurbo || key !== 'cfg').map(key => <NumberSlider key={key} label={key === 'steps' ? 'Steps' : key === 'cfg' ? 'CFG' : key === 'denoise' ? 'Denoise' : 'Encoder Resolution'} value={qwenTurbo && key !== 'referenceResolution' ? qwenTurboSampling[key] : qwenSettings[key]} min={key === 'steps' ? 1 : 0} max={key === 'steps' ? 100 : key === 'cfg' ? 20 : key === 'denoise' ? 1 : 4096} step={key === 'steps' ? 1 : key === 'referenceResolution' ? 32 : 0.1} allowDirectInput disabled={locked || (qwenTurbo && key !== 'referenceResolution')} onChange={event => updateQwen({ [key]: Number(event.target.value) })} />)}
-                        <label className="block text-sm text-text-secondary">Seed (-1 = random)<input className={inputClass} type="number" min={-1} max={Number.MAX_SAFE_INTEGER} step={1} value={settings.comfySeed ?? -1} onChange={event => updateSettings({ comfySeed: Number(event.target.value) < 0 ? undefined : Number(event.target.value) })} disabled={locked} /></label>
-                    </div>
-                    {!qwenTurbo && <label className="block text-sm text-text-secondary">Negative Prompt<textarea aria-label="Qwen Scene Negative Prompt" className={inputClass} value={qwenSettings.negativePrompt} disabled={locked} onChange={event => updateQwen({ negativePrompt: event.target.value })} /></label>}
-                    <div className="space-y-3 border-t border-border-primary pt-3"><h3 className="text-sm font-semibold">Additional LoRAs</h3>{qwenSettings.loras.map((lora, index) => <div key={index} className="grid min-w-0 gap-3 sm:grid-cols-2">
-                        <Toggle label={`Enable Qwen LoRA ${index + 1}`} checked={lora.enabled} disabled={locked} onChange={enabled => updateQwen({ loras: qwenSettings.loras.map((entry, position) => position === index ? { ...entry, enabled } : entry) })} />
-                        <Select label={`Qwen LoRA ${index + 1}`} value={lora.name} values={[...new Set(['', lora.name, ...getQwen21Choices(comfyUIObjectInfo, 'LoraLoader', 'lora_name'), ...getQwen21Choices(comfyUIObjectInfo, 'LoraLoaderModelOnly', 'lora_name')])].map(value => ({ value, label: value || 'None' }))} disabled={locked} onChange={name => updateQwen({ loras: qwenSettings.loras.map((entry, position) => position === index ? { ...entry, name, enabled: !!name } : entry) })} />
-                        {(['modelStrength', 'clipStrength'] as const).map(key => <NumberSlider key={key} label={`Qwen LoRA ${index + 1} ${key === 'modelStrength' ? 'Model' : 'CLIP'} Strength`} value={lora[key]} min={-2} max={2} step={0.05} allowDirectInput disabled={locked || !lora.enabled} onChange={event => updateQwen({ loras: qwenSettings.loras.map((entry, position) => position === index ? { ...entry, [key]: Number(event.target.value) } : entry) })} />)}
-                    </div>)}</div>
-                </details> : <details className="space-y-4 border-t border-border-primary pt-3"><summary className="cursor-pointer text-sm font-semibold text-text-primary">FLUX2 Advanced Settings</summary>
-                    <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-                        {selectSettings('FLUX2 Model (GGUF / Safetensors)', 'comfyFlux2EditUnet', modelList)}
-                        {selectSettings('CLIP', 'comfyFlux2EditClip', sceneModelOptions(comfyUIObjectInfo, 'CLIPLoader', 'clip_name'))}
-                        {selectSettings('VAE', 'comfyFlux2EditVae', sceneModelOptions(comfyUIObjectInfo, 'VAELoader', 'vae_name'))}
-                        {selectSettings('Sampler', 'comfyFlux2EditSampler', sceneModelOptions(comfyUIObjectInfo, 'KSamplerSelect', 'sampler_name'))}
-                        {numberSetting('Steps', 'comfyFlux2EditSteps', 1, 40, 1, 4)}
-                        {numberSetting('CFG', 'comfyFlux2EditCfg', 0.1, 10, 0.1, 1)}
-                        {numberSetting('Source megapixels', 'comfyFlux2EditMegapixels', 0.25, 4, 0.25, 1)}
-                        <label className="block text-sm text-text-secondary">Seed (-1 = random)<input className={inputClass} type="number" min={-1} max={Number.MAX_SAFE_INTEGER} step={1} value={settings.comfySeed ?? -1} onChange={event => updateSettings({ comfySeed: Number(event.target.value) < 0 ? undefined : Number(event.target.value) })} disabled={locked} /></label>
-                    </div>
-                    <div className="space-y-3 border-t border-border-primary pt-3"><h3 className="text-sm font-semibold text-text-primary">Additional LoRAs</h3>
-                        {([1, 2] as const).map(index => <div key={index} className="grid min-w-0 gap-3 sm:grid-cols-2">
-                            {selectSettings(`LoRA ${index}`, `comfyFlux2EditLora${index}Name`, sceneModelOptions(comfyUIObjectInfo, 'LoraLoaderModelOnly', 'lora_name'), true)}
-                            {numberSetting(`LoRA ${index} strength`, `comfyFlux2EditLora${index}Strength`, -2, 2, 0.05, 1, !settings[`comfyFlux2EditLora${index}Name`])}
-                        </div>)}
-                        {(settings.comfyFlux2EditLora1Name || settings.comfyFlux2EditLora2Name) && <p className="text-xs text-highlight-yellow">Selected LoRAs may alter the source style.</p>}
-                    </div>
-                    <Toggle label="Enable CacheDiT Accelerator" checked={!!settings.comfyFlux2EditUseCacheDit} onChange={comfyFlux2EditUseCacheDit => updateSettings({ comfyFlux2EditUseCacheDit })} disabled={locked} />
-                    {settings.comfyFlux2EditUseCacheDit && <div className="grid min-w-0 gap-3 sm:grid-cols-3">
-                        {selectSettings('CacheDiT model type', 'comfyFlux2EditCacheDitModelType', sceneModelOptions(comfyUIObjectInfo, 'CacheDiT_Model_Optimizer', 'model_type'))}
-                        {numberSetting('CacheDiT warmup steps', 'comfyFlux2EditCacheDitWarmupSteps', 0, 20, 1, 0)}
-                        {numberSetting('CacheDiT skip interval', 'comfyFlux2EditCacheDitSkipInterval', 0, 10, 1, 0)}
-                    </div>}
-                </details>}
                 {!isComfyUIConnected && <p className="text-sm text-highlight-yellow">ComfyUI is not connected.</p>}
                 {readiness.length > 0 && <details><summary className="cursor-pointer text-sm text-highlight-yellow">ComfyUI requirements ({readiness.length})</summary><ul className="list-inside list-disc break-words text-xs text-highlight-yellow">{readiness.map(item => <li key={item}>{item}</li>)}</ul></details>}
                 {error && <p role="alert" className="whitespace-pre-wrap break-words text-sm text-danger">{error}</p>}

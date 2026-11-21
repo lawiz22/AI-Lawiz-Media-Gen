@@ -12,10 +12,25 @@ const origin = process.env.LAWIZ_ORIGIN || 'http://127.0.0.1:3000';
 const shots = process.env.LAWIZ_SCREENSHOT_DIR;
 const theme = process.env.LAWIZ_THEME || 'cyberpunk';
 
+// index.html waits on four third-party sites (Tailwind, fonts, a stylesheet): each resource is fetched once per run, not once per scenario.
+const external = new Map();
+const serveOnce = async route => {
+    const url = route.request().url();
+    if (/\/\/(apis|accounts)\.google\.com\//.test(url)) return route.fulfill({ contentType: 'application/javascript', body: '' });
+    if (!external.has(url)) external.set(url, route.fetch().then(async response => ({ status: response.status(), headers: response.headers(), body: await response.body() })));
+    try { await route.fulfill(await external.get(url)); }
+    catch { external.delete(url); await route.abort().catch(() => {}); }
+};
+
 const bootstrap = async page => {
     const html = (await (await page.request.get(origin)).text()).replace(/<script[^>]+src="\/index.tsx[^"]*"[^>]*><\/script>/, '');
+    await page.route(url => !url.href.startsWith(origin), serveOnce);
     await page.route('**/__ui-kit', route => route.fulfill({ contentType: 'text/html', body: html }));
-    await page.goto(`${origin}/__ui-kit`, { waitUntil: 'domcontentloaded' });
+    const loading = new Set();
+    page.on('request', request => loading.add(request.url()));
+    for (const event of ['requestfinished', 'requestfailed']) page.on(event, request => loading.delete(request.url()));
+    await page.goto(`${origin}/__ui-kit`, { waitUntil: 'domcontentloaded' })
+        .catch(error => { throw new Error(`${String(error.message).split('\n')[0]} Still loading: ${[...loading].join(', ') || 'nothing'}`); });
     // The application sets the theme on the root element; without it no theme color is defined.
     await page.evaluate(name => document.documentElement.setAttribute('data-theme', name), theme);
     await page.evaluate(async () => {
@@ -278,18 +293,20 @@ try {
     }
     if (!only || shots) {
         const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
-        await bootstrap(page);
-        console.log(`\nOpacity modifier on a theme color (bg-accent/10) computes to: ${await page.evaluate(() => getComputedStyle(document.getElementById('tint')).backgroundColor)}`);
-        if (shots) {
-            for (const title of ['LoRAs', 'Sampler', 'Advanced']) await page.locator('summary', { hasText: new RegExp(`^${title}$`) }).click();
-            await page.waitForTimeout(500);
-            await page.screenshot({ path: path.join(shots, `ui-kit-${theme}.png`) });
-            await trigger(page, 'LoRA').click();
-            await page.getByLabel('Filter LoRA', { exact: true }).fill('style 12');
-            await page.waitForTimeout(300);
-            await page.screenshot({ path: path.join(shots, `ui-kit-${theme}-list.png`) });
-            console.log(`Screenshots saved in ${shots}`);
-        }
+        try {
+            await bootstrap(page);
+            console.log(`\nOpacity modifier on a theme color (bg-accent/10) computes to: ${await page.evaluate(() => getComputedStyle(document.getElementById('tint')).backgroundColor)}`);
+            if (shots) {
+                for (const title of ['LoRAs', 'Sampler', 'Advanced']) await page.locator('summary', { hasText: new RegExp(`^${title}$`) }).click();
+                await page.waitForTimeout(500);
+                await page.screenshot({ path: path.join(shots, `ui-kit-${theme}.png`) });
+                await trigger(page, 'LoRA').click();
+                await page.getByLabel('Filter LoRA', { exact: true }).fill('style 12');
+                await page.waitForTimeout(300);
+                await page.screenshot({ path: path.join(shots, `ui-kit-${theme}-list.png`) });
+                console.log(`Screenshots saved in ${shots}`);
+            }
+        } catch (error) { failures++; console.log(`FAIL  Opacity probe and screenshots\n      ${String(error?.message || error).split('\n')[0]}`); }
         await page.close();
     }
 } finally { await browser.close(); }

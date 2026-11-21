@@ -16,7 +16,7 @@ Prompt analysis, visual transformations, local media utilities and upscaling are
 
 ## Prompt tools and extraction
 
-- Prompt analysis through Mammouth AI, Ollama vision models, or ComfyUI Florence2.
+- Prompt analysis through Gemini, Mammouth AI, OpenRouter, Ollama vision models, or ComfyUI Florence2.
 - Local Ollama background and subject extraction with selectable installed models.
 - Creative Magic Soup generation through Mammouth AI or Ollama, with adjustable creativity and color attribution for multiple numbered Main, Background, and Subject ingredients.
 - Clothes, subject, object, background, pose, mannequin, and font extraction.
@@ -24,7 +24,7 @@ Prompt analysis, visual transformations, local media utilities and upscaling are
 
 ## PastForward transformations
 
-- PastForward decade, hairstyle, fantasy, superhero, and historical transformations with local FLUX2 selected by default, local Qwen Edit, or Mammouth AI.
+- PastForward decade, hairstyle, fantasy, superhero, and historical transformations with local FLUX2 selected by default, local Qwen Edit, Gemini, or Mammouth AI.
 - Choose the PastForward source from the computer or the Library with any engine, select any combination of decades, regenerate individual results, or export an album containing only the active decades.
 - Track each selected decade independently with named progress and error details, and open generated results in a full-size uncropped preview.
 - FLUX2 uses theme-specific editing prompts and optional reinforced source conditioning to preserve identity while changing hairstyles, clothing, backgrounds, or visual eras.
@@ -41,7 +41,7 @@ Prompt analysis, visual transformations, local media utilities and upscaling are
 
 - Stylise Anything transforms one source image through the existing local FLUX2 Edit workflow using 120 photographic presets grouped from the 1950s through the 2020s.
 - Every Stylise Anything preset field remains editable, including its name, photo type, camera type, film or media, visual style, and additional instructions. Source composition can be preserved or freely restyled, with advanced FLUX2 model and sampling controls available in the same panel.
-- Logo, banner, album-cover, and theme generation.
+- Logo, banner and album-cover generation.
 
 ## Local media tools
 
@@ -65,7 +65,7 @@ The root **Tools** tab also contains **Outpaint** and **Upscale**. Outpaint open
 Open **Tools > Upscale**, then choose **Upscale SeedVR2** or **Z-Image Creative Upscale**. Existing image and Library upscale shortcuts open this location with the selected image.
 
 - SeedVR2 and Z-Image creative upscaling workflows.
-- SeedVR2 lists all DiT and VAE models reported by the connected ComfyUI server and selects the first available model by default. Choose another model in **Advanced**; a valid selection is preserved when the lists refresh. Removed models fall back to the first available model, and upscaling is blocked with a message if either list is empty.
+- SeedVR2 lists all DiT and VAE models reported by the connected ComfyUI server and selects the first available model by default. Choose another model in **Models**; a valid selection is preserved when the lists refresh. Removed models fall back to the first available model, and upscaling is blocked with a message if either list is empty.
 
 ## Screenshots
 

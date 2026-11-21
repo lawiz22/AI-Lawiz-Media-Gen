@@ -6,6 +6,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { withUiKit } from '../components/ui/compileForTest.mjs';
 
 const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
@@ -329,8 +330,10 @@ test('PHOTO generation/export use the real service entry points, seed modes, bat
 
 const require = createRequire(import.meta.url);
 const reactUrl = pathToFileURL(require.resolve('react')).href;
-const panelSource = readFileSync(new URL('../components/MossPhotoSettingsPanel.tsx', import.meta.url), 'utf8')
+const panelSource = withUiKit(readFileSync(new URL('../components/MossPhotoSettingsPanel.tsx', import.meta.url), 'utf8'))
     .replace("import { ImageStyleControl } from './ImageStyleControl';", 'const ImageStyleControl = () => null;')
+    .replace("import { useModelInventory } from './useModelInventory';", 'const useModelInventory = () => ({ inventory: { items: [] } });')
+    .replace("import { familyFiles } from '../services/styleLibrary';", 'const familyFiles = names => names;')
     .replace("from 'react'", `from '${reactUrl}'`)
     .replace("from '../services/qwen21Workflow'", `from '${qwenUrl}'`)
     .replace("from '../services/mossPhotoWorkflow'", `from '${photoModuleUrl}'`);

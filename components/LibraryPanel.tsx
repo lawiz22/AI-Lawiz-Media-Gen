@@ -28,6 +28,8 @@ import { LIBRARY_CATEGORY_ACCENT_STYLES } from '../utils/accentTheme';
 import { isMinimaxH3PromptLibraryItem } from '../services/videoPromptLibrary';
 import { downloadBlazingBlob } from '../services/blazingFastCharacterLibrary';
 import { normalizeLibraryTag as normalizeTag } from '../services/libraryTags';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
 
 // --- Confirmation Modal Component (defined in-file to avoid adding new files) ---
 interface ConfirmationModalProps {
@@ -245,7 +247,7 @@ const DetailItem: React.FC<{ label: string; value?: string | number | boolean | 
 const LoraDetail: React.FC<{ label: string; name?: string; strength?: number; enabled?: boolean }> = ({ label, name, strength, enabled = true }) => {
   if (!enabled || !name) return null;
   return (
-    <div className="pl-4 border-l-2 border-border-primary/50 ml-2 py-1">
+    <div className="pl-4 border-l-2 border-border-primary ml-2 py-1">
       <p className="text-xs text-text-secondary">{label}:</p>
       <p className="text-xs font-mono text-text-primary ml-2">{name} (Strength: {strength})</p>
     </div>
@@ -291,7 +293,7 @@ const renderOptionsDetails = (options?: GenerationOptions, mediaType?: LibraryIt
             <DetailItem label="Prompt" value={comfyPositivePrompt} isCode />
             {comfyNegativePrompt && <DetailItem label="Negative Prompt" value={comfyNegativePrompt} isCode />}
             {(['sdxl', 'sd1.5', 'flux', 'qwen-t2i-gguf', 'z-image', 'flux2-simple', 'krea2-simple', 'krea2-raw'] as const).includes(options.comfyModelType as any) && (
-              <div className="space-y-2 p-2 mt-2 border-t border-border-primary/50">
+              <div className="space-y-2 p-2 mt-2 border-t border-border-primary">
                 <DetailItem label="Steps" value={options.comfySteps} />
                 <DetailItem label="CFG" value={options.comfyCfg} />
                 <DetailItem label="Sampler" value={options.comfySampler} />
@@ -1375,16 +1377,12 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
       <div className={`flex flex-wrap items-center justify-between gap-3 border-border-primary ${placement === 'top' ? 'mb-4 border-b pb-3' : 'mt-6 border-t pt-4'}`}>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <label htmlFor={`items-per-page-${placement}`} className="text-xs font-semibold text-text-secondary">Items per page</label>
-            <select id={`items-per-page-${placement}`} value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="h-8 bg-bg-tertiary border border-border-primary rounded-md px-2 text-xs focus:ring-accent focus:border-accent">
-            <option value={12}>12</option><option value={20}>20</option><option value={48}>48</option><option value={96}>96</option>
-            </select>
+            <span className="text-xs font-semibold text-text-secondary">Items per page</span>
+            <Select<number> className="w-20" ariaLabel={`Items per page ${placement}`} value={itemsPerPage} options={[12, 20, 48, 96]} onChange={setItemsPerPage} />
           </div>
           <div className="flex items-center gap-2">
-            <label htmlFor={`page-select-${placement}`} className="text-xs font-semibold text-text-secondary">Page</label>
-            <select id={`page-select-${placement}`} value={Math.min(currentPage, pageCount)} onChange={(e) => setCurrentPage(Number(e.target.value))} className="h-8 min-w-16 bg-bg-tertiary border border-border-primary rounded-md px-2 text-xs focus:ring-accent focus:border-accent">
-              {Array.from({ length: pageCount }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
-            </select>
+            <span className="text-xs font-semibold text-text-secondary">Page</span>
+            <Select<number> className="w-20" ariaLabel={`Library page ${placement}`} value={Math.min(currentPage, pageCount)} options={Array.from({ length: pageCount }, (_, index) => index + 1)} onChange={setCurrentPage} />
             <span className="text-xs text-text-muted">of {pageCount} · {filteredItems.length} item(s)</span>
           </div>
         </div>
@@ -1410,7 +1408,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                 <LibraryIcon className="h-4 w-4 text-accent" />
                 <span>Project: <strong className="text-text-primary">{activeLibraryFolderName || 'Local Library (no folder)'}</strong></span>
               </div>
-              <p role={projectStatus.phase === 'error' ? 'alert' : 'status'} className={`mt-1 max-w-lg text-xs ${projectStatus.phase === 'error' ? 'text-danger' : projectStatus.phase === 'saved' ? 'text-emerald-300' : 'text-amber-300'}`}>
+              <p role={projectStatus.phase === 'error' ? 'alert' : 'status'} className={`mt-1 max-w-lg text-xs ${projectStatus.phase === 'error' ? 'text-danger' : projectStatus.phase === 'saved' ? 'text-highlight-green' : 'text-highlight-yellow'}`}>
                 {projectStatus.message}{projectStatus.phase === 'saved' && projectStatus.lastSavedAt ? ` · ${new Date(projectStatus.lastSavedAt).toLocaleTimeString()}` : ''}
               </p>
             </div>
@@ -1420,14 +1418,9 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
               <button onClick={() => setViewMode('list')} className={`p-2 rounded-full transition-colors ${viewMode === 'list' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary'}`} title="List View"><ListBulletIcon className="w-5 h-5" /></button>
             </div>
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-border-primary bg-bg-primary p-1.5">
-              <label className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary">
-                Sort by
-                <select aria-label="Sort Library by" value={sortField} onChange={(event) => setSortField(event.target.value as LibrarySortField)} className="h-8 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs text-text-primary focus:border-accent focus:ring-accent">
-                  <option value="date">Date</option>
-                  <option value="name">Name</option>
-                  <option value="rating">Rating</option>
-                </select>
-              </label>
+              <span className="text-xs font-semibold text-text-secondary">Sort by</span>
+              <Select<LibrarySortField> className="w-28" ariaLabel="Sort Library by" value={sortField} onChange={setSortField}
+                options={[{ value: 'date', label: 'Date' }, { value: 'name', label: 'Name' }, { value: 'rating', label: 'Rating' }]} />
               <button type="button" onClick={() => setSortDirection(previous => previous === 'asc' ? 'desc' : 'asc')} aria-label={`Change sort order to ${sortDirection === 'asc' ? 'descending' : 'ascending'}`} className="flex h-8 items-center gap-1.5 rounded-md border border-border-primary bg-bg-tertiary px-2.5 text-xs font-semibold text-text-primary hover:bg-bg-tertiary-hover" title="Toggle ascending or descending order">
                 <ChevronRightIcon className={`h-4 w-4 transition-transform ${sortDirection === 'asc' ? '-rotate-90' : 'rotate-90'}`} />
                 {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
@@ -1504,7 +1497,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
 
         {(isSyncing || isImporting || isExporting) && <p className="text-sm text-accent text-center mb-4">{isImporting || isExporting ? importMessage : syncMessage}</p>}
         {operationNotice && (
-          <div role={operationNotice.type === 'error' ? 'alert' : 'status'} className={`mb-4 flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${operationNotice.type === 'error' ? 'border-danger/50 bg-danger-bg text-danger' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'}`}>
+          <div role={operationNotice.type === 'error' ? 'alert' : 'status'} className={`mb-4 flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${operationNotice.type === 'error' ? 'border-danger bg-danger-bg text-danger' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'}`}>
             <p>{operationNotice.message}</p>
             <button type="button" onClick={() => setOperationNotice(null)} aria-label="Dismiss notification" className="flex-shrink-0 rounded p-0.5 opacity-75 hover:bg-black/10 hover:opacity-100">
               <CloseIcon className="h-4 w-4" />
@@ -1519,13 +1512,13 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
         )}
 
         {/* Filters */}
-        <div className="mb-4 p-3 bg-bg-primary/50 rounded-lg border border-border-primary/50">
+        <div className="mb-4 p-3 rounded-lg border border-border-primary">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
-            <input type="search" aria-label="Search Library" placeholder="Search all text..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="h-9 w-full shrink-0 bg-bg-tertiary border border-border-primary rounded-md px-3 text-sm focus:ring-accent focus:border-accent sm:w-64" />
+            <input type="search" aria-label="Search Library" placeholder="Search all text..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`${ui.control} shrink-0 sm:!w-64`} />
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               <p className="text-sm font-semibold text-text-secondary mr-2">Filter:</p>
               {FILTER_BUTTONS.map(({ id, label, icon }) => (
-                <button key={id} onClick={() => handleFilterClick(id)} title={label} style={LIBRARY_CATEGORY_ACCENT_STYLES[id]} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${filter.includes(id) ? 'bg-accent text-accent-text' : 'bg-bg-tertiary text-accent hover:bg-accent/15'}`}>
+                <button key={id} onClick={() => handleFilterClick(id)} title={label} style={LIBRARY_CATEGORY_ACCENT_STYLES[id]} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${filter.includes(id) ? 'bg-accent text-accent-text' : 'bg-bg-tertiary text-accent hover:bg-bg-tertiary-hover'}`}>
                   {icon}<span>{label}</span><span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] leading-none ${filter.includes(id) ? 'bg-black/25' : 'bg-bg-primary text-text-muted'}`}>{categoryItemCounts.get(id) || 0}</span>
                 </button>
               ))}
@@ -1534,44 +1527,24 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
             </div>
           </div>
           {filter.includes('image') && (
-            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border-primary/50 pt-3">
+            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border-primary pt-3">
               <span className="text-xs font-bold uppercase text-text-muted">Images</span>
-              <label className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
-                Provider
-                <select value={imageProvider} onChange={(event) => { setImageProvider(event.target.value); setImageWorkflow(''); }} className="h-8 min-w-32 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs focus:border-accent focus:ring-accent">
-                  <option value="">All providers</option>
-                  {imageProviders.map(provider => <option key={provider} value={provider}>{provider}</option>)}
-                </select>
-              </label>
-              <label className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
-                Workflow
-                <select value={imageWorkflow} onChange={(event) => setImageWorkflow(event.target.value)} className="h-8 min-w-40 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs focus:border-accent focus:ring-accent">
-                  <option value="">All workflows</option>
-                  {imageWorkflows.map(workflow => <option key={workflow} value={workflow}>{workflow}</option>)}
-                </select>
-              </label>
+              <span className="text-xs font-semibold text-text-secondary">Provider</span>
+              <Select className="w-44" ariaLabel="Image provider filter" value={imageProvider} options={[{ value: '', label: 'All providers' }, ...imageProviders]} onChange={provider => { setImageProvider(provider); setImageWorkflow(''); }} />
+              <span className="text-xs font-semibold text-text-secondary">Workflow</span>
+              <Select className="w-56" ariaLabel="Image workflow filter" value={imageWorkflow} options={[{ value: '', label: 'All workflows' }, ...imageWorkflows]} onChange={setImageWorkflow} />
             </div>
           )}
           {filter.includes('character') && (
-            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border-primary/50 pt-3">
+            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border-primary pt-3">
               <span className="text-xs font-bold uppercase text-text-muted">Characters</span>
-              <label className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
-                Provider
-                <select value={characterProvider} onChange={(event) => { setCharacterProvider(event.target.value); setCharacterWorkflow(''); }} className="h-8 min-w-32 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs focus:border-accent focus:ring-accent">
-                  <option value="">All providers</option>
-                  {characterProviders.map(provider => <option key={provider} value={provider}>{provider}</option>)}
-                </select>
-              </label>
-              <label className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
-                Workflow
-                <select value={characterWorkflow} onChange={(event) => setCharacterWorkflow(event.target.value)} className="h-8 min-w-40 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs focus:border-accent focus:ring-accent">
-                  <option value="">All workflows</option>
-                  {characterWorkflows.map(workflow => <option key={workflow} value={workflow}>{workflow}</option>)}
-                </select>
-              </label>
+              <span className="text-xs font-semibold text-text-secondary">Provider</span>
+              <Select className="w-44" ariaLabel="Character provider filter" value={characterProvider} options={[{ value: '', label: 'All providers' }, ...characterProviders]} onChange={provider => { setCharacterProvider(provider); setCharacterWorkflow(''); }} />
+              <span className="text-xs font-semibold text-text-secondary">Workflow</span>
+              <Select className="w-56" ariaLabel="Character workflow filter" value={characterWorkflow} options={[{ value: '', label: 'All workflows' }, ...characterWorkflows]} onChange={setCharacterWorkflow} />
             </div>
           )}
-          <div className="mt-3 border-t border-border-primary/50 pt-3">
+          <div className="mt-3 border-t border-border-primary pt-3">
             <button type="button" onClick={() => setIsSafetyTagsOpen(previous => !previous)} aria-expanded={isSafetyTagsOpen} aria-controls="library-safety-tags-controls" className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left hover:bg-bg-tertiary">
               <span className="text-xs font-bold uppercase text-text-muted">Safety & Tags</span>
               <span className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
@@ -1581,17 +1554,13 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
             </button>
             {isSafetyTagsOpen && <div id="library-safety-tags-controls" className="mt-2 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <select aria-label="Safety filter" value={safetyFilter} onChange={(event) => setSafetyFilter(event.target.value as SafetyFilter)} className="h-8 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs focus:border-accent focus:ring-accent">
-                <option value="all">All safety</option>
-                <option value="sfw">SFW</option>
-                <option value="nsfw">NSFW</option>
-                <option value="unrated">Unrated</option>
-              </select>
-              <button type="button" onClick={() => void classifyVisibleItems()} disabled={isUpdatingTags || visibleTaggableCount === 0} className="h-8 rounded-md border border-amber-400/60 px-3 text-xs font-bold text-amber-300 hover:bg-amber-400/10 disabled:opacity-50" title="Classify unrated visible items from names, prompts and generation metadata">Detect common terms</button>
+              <Select<SafetyFilter> className="w-32" ariaLabel="Safety filter" value={safetyFilter} onChange={setSafetyFilter}
+                options={[{ value: 'all', label: 'All safety' }, { value: 'sfw', label: 'SFW' }, { value: 'nsfw', label: 'NSFW' }, { value: 'unrated', label: 'Unrated' }]} />
+              <button type="button" onClick={() => void classifyVisibleItems()} disabled={isUpdatingTags || visibleTaggableCount === 0} className="h-8 rounded-md border border-highlight-yellow px-3 text-xs font-bold text-highlight-yellow hover:bg-bg-tertiary disabled:opacity-50" title="Classify unrated visible items from names, prompts and generation metadata">Detect common terms</button>
               <button type="button" onClick={() => setSelectedItemIds(new Set(currentPageTaggableItems.map(item => item.id)))} disabled={currentPageTaggableItems.length === 0} title={`Select the ${currentPageTaggableItems.length} selectable item(s) displayed on this page`} className="h-8 rounded-md border border-border-primary px-3 text-xs font-semibold text-text-secondary hover:bg-bg-tertiary disabled:opacity-50">Select page</button>
-              <button type="button" onClick={() => setSelectedItemIds(new Set(filteredTaggableItems.map(item => item.id)))} disabled={filteredTaggableItems.length === 0} title={`Select all ${filteredTaggableItems.length} item(s) matching the current filters and search`} className="h-8 rounded-md border border-accent/60 px-3 text-xs font-bold text-accent hover:bg-accent/10 disabled:opacity-50">Select all results</button>
+              <button type="button" onClick={() => setSelectedItemIds(new Set(filteredTaggableItems.map(item => item.id)))} disabled={filteredTaggableItems.length === 0} title={`Select all ${filteredTaggableItems.length} item(s) matching the current filters and search`} className="h-8 rounded-md border border-accent px-3 text-xs font-bold text-accent hover:bg-bg-tertiary disabled:opacity-50">Select all results</button>
               <button type="button" onClick={() => setSelectedItemIds(new Set())} disabled={selectedItems.length === 0} title="Clear the complete selection" className="h-8 rounded-md border border-border-primary px-3 text-xs font-semibold text-text-secondary hover:bg-bg-tertiary disabled:opacity-50">Deselect all</button>
-              <button type="button" onClick={handleDeleteCheckedItems} disabled={selectedItems.length === 0 || isDeletingSelected} title={selectedItems.length === 0 ? 'Check one or more Library items first' : `Delete exactly ${selectedItems.length} checked item(s)`} className="flex h-8 items-center gap-1.5 rounded-md border border-danger/60 px-3 text-xs font-bold text-danger hover:bg-danger-bg disabled:opacity-50">
+              <button type="button" onClick={handleDeleteCheckedItems} disabled={selectedItems.length === 0 || isDeletingSelected} title={selectedItems.length === 0 ? 'Check one or more Library items first' : `Delete exactly ${selectedItems.length} checked item(s)`} className="flex h-8 items-center gap-1.5 rounded-md border border-danger px-3 text-xs font-bold text-danger hover:bg-danger-bg disabled:opacity-50">
                 {isDeletingSelected ? <SpinnerIcon className="h-3.5 w-3.5 animate-spin" /> : <TrashIcon className="h-3.5 w-3.5" />} Delete selected
               </button>
               <span className={`text-xs font-semibold ${selectedItems.length ? 'text-accent' : 'text-text-muted'}`}>{selectedItems.length ? `${selectedItems.length} selected` : `${visibleTaggableCount} matching`}</span>
@@ -1600,13 +1569,11 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
               <button type="button" onClick={() => confirmVisibleSafety('sfw')} disabled={isUpdatingTags || actionTargetCount === 0} className="h-8 rounded-md bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-500 disabled:opacity-50">Mark SFW</button>
               <button type="button" onClick={() => confirmVisibleSafety('nsfw')} disabled={isUpdatingTags || actionTargetCount === 0 || !hasMutableSafetyTargets} className="h-8 rounded-md bg-red-600 px-3 text-xs font-bold text-white hover:bg-red-500 disabled:opacity-50">Mark NSFW</button>
               <button type="button" onClick={() => confirmVisibleSafety(undefined)} disabled={isUpdatingTags || actionTargetCount === 0 || !hasMutableSafetyTargets} className="h-8 rounded-md border border-border-primary px-3 text-xs font-semibold text-text-secondary hover:bg-bg-tertiary disabled:opacity-50">Clear safety</button>
-              {availableTags.length > 0 && <select aria-label="Choose existing tag for bulk edit" value="" onChange={(event) => setBulkTag(event.target.value)} className="h-8 min-w-36 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs focus:border-accent focus:ring-accent">
-                <option value="">Existing tag...</option>
-                {availableTags.map(tag => <option key={tag} value={tag}>#{tag}</option>)}
-              </select>}
-              <input aria-label="Bulk custom tag" value={bulkTag} onChange={(event) => setBulkTag(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void addTagToVisibleItems(); }} placeholder="Custom tag..." className="h-8 w-40 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs focus:border-accent focus:ring-accent" />
+              {availableTags.length > 0 && <Select variant="search" className="w-44" ariaLabel="Choose existing tag for bulk edit" value="" onChange={setBulkTag}
+                options={[{ value: '', label: 'Existing tag...' }, ...availableTags.map(tag => ({ value: tag, label: `#${tag}` }))]} />}
+              <input aria-label="Bulk custom tag" value={bulkTag} onChange={(event) => setBulkTag(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void addTagToVisibleItems(); }} placeholder="Custom tag..." className={`${ui.control} !w-40`} />
               <button type="button" onClick={() => void addTagToVisibleItems()} disabled={isUpdatingTags || actionTargetCount === 0 || !normalizeTag(bulkTag)} className="h-8 rounded-md bg-accent px-3 text-xs font-bold text-accent-text hover:bg-accent-hover disabled:opacity-50">Add tag</button>
-              <button type="button" onClick={() => void removeTagFromVisibleItems()} disabled={isUpdatingTags || actionTargetCount === 0 || !normalizeTag(bulkTag)} className="h-8 rounded-md border border-danger/50 px-3 text-xs font-bold text-danger hover:bg-danger-bg disabled:opacity-50">Remove tag</button>
+              <button type="button" onClick={() => void removeTagFromVisibleItems()} disabled={isUpdatingTags || actionTargetCount === 0 || !normalizeTag(bulkTag)} className="h-8 rounded-md border border-danger px-3 text-xs font-bold text-danger hover:bg-danger-bg disabled:opacity-50">Remove tag</button>
               {isUpdatingTags && <SpinnerIcon className="h-4 w-4 animate-spin text-accent" />}
             </div>
             {availableTags.length > 0 && <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Tag filters">
@@ -1620,9 +1587,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
           </div>
         </div>
 
-        <PaginationControls placement="top" />
+        {/* Called, not mounted: a component declared during render remounts its lists at every render. */}
+        {PaginationControls({ placement: 'top' })}
         {renderItemViews()}
-        <PaginationControls placement="bottom" />
+        {PaginationControls({ placement: 'bottom' })}
 
         <div className="mt-8 pt-4 border-t border-danger-bg">
           <button onClick={handleClearLibrary} disabled={isImporting || isSyncing} className="flex items-center gap-2 text-sm text-danger font-semibold bg-danger-bg py-2 px-4 rounded-lg hover:bg-danger hover:text-white transition-colors disabled:opacity-50">
@@ -1772,7 +1740,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                           <button type="button" onClick={() => void updateSelectedItemMetadata({ safetyRating: undefined })} className="rounded-md border border-border-primary px-3 py-1.5 text-xs font-semibold text-text-secondary">Unrated</button>
                         </>}
                     </div></div>
-                    <div><h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">Custom Tags</h4><div className="mt-2 flex flex-wrap gap-1">{selectedItemModal.tags?.length ? selectedItemModal.tags.map(tag => <button key={tag} type="button" onClick={() => void removeSelectedItemTag(tag)} title={`Remove ${tag}`} className="rounded bg-bg-tertiary px-2 py-1 text-xs text-text-secondary hover:text-danger">#{tag} ×</button>) : <span className="text-xs text-text-muted">No custom tags</span>}</div><div className="mt-2 flex flex-wrap gap-2">{availableTags.some(tag => !selectedItemModal.tags?.includes(tag)) && <select aria-label="Choose existing tag for item" value="" onChange={(event) => setItemTag(event.target.value)} className="h-8 min-w-36 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs"><option value="">Existing tag...</option>{availableTags.filter(tag => !selectedItemModal.tags?.includes(tag)).map(tag => <option key={tag} value={tag}>#{tag}</option>)}</select>}<input aria-label="Item custom tag" value={itemTag} onChange={(event) => setItemTag(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void addSelectedItemTag(); }} placeholder="Add tag..." className="h-8 min-w-32 flex-1 rounded-md border border-border-primary bg-bg-tertiary px-2 text-xs" /><button type="button" onClick={() => void addSelectedItemTag()} disabled={!normalizeTag(itemTag)} className="rounded-md bg-accent px-3 text-xs font-bold text-accent-text disabled:opacity-50">Add</button></div></div>
+                    <div><h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">Custom Tags</h4><div className="mt-2 flex flex-wrap gap-1">{selectedItemModal.tags?.length ? selectedItemModal.tags.map(tag => <button key={tag} type="button" onClick={() => void removeSelectedItemTag(tag)} title={`Remove ${tag}`} className="rounded bg-bg-tertiary px-2 py-1 text-xs text-text-secondary hover:text-danger">#{tag} ×</button>) : <span className="text-xs text-text-muted">No custom tags</span>}</div><div className="mt-2 flex flex-wrap gap-2">{availableTags.some(tag => !selectedItemModal.tags?.includes(tag)) && <Select variant="search" className="w-44" ariaLabel="Choose existing tag for item" value="" onChange={setItemTag} options={[{ value: '', label: 'Existing tag...' }, ...availableTags.filter(tag => !selectedItemModal.tags?.includes(tag)).map(tag => ({ value: tag, label: `#${tag}` }))]} />}<input aria-label="Item custom tag" value={itemTag} onChange={(event) => setItemTag(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void addSelectedItemTag(); }} placeholder="Add tag..." className={`${ui.control} flex-1`} /><button type="button" onClick={() => void addSelectedItemTag()} disabled={!normalizeTag(itemTag)} className="rounded-md bg-accent px-3 text-xs font-bold text-accent-text disabled:opacity-50">Add</button></div></div>
                   </div>}
                   {selectedItemModal.mediaType === 'prompt' && selectedItemModal.promptParts?.length ? (
                     <div className="mb-2">
@@ -1995,8 +1963,8 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
                 : <img src={activeMedia.src} alt={activeMedia.label} className={mediaViewerScale === 'fit' ? 'max-h-full max-w-full object-contain' : 'mx-auto block max-h-none max-w-none'} />}
             </div>
             {visualMedia.length > 1 && <>
-              <button type="button" onClick={showPreviousMedia} className="fixed left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/70 p-3 text-white shadow-lg hover:bg-accent" aria-label="Previous media"><ChevronLeftIcon className="h-8 w-8" /></button>
-              <button type="button" onClick={showNextMedia} className="fixed right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/70 p-3 text-white shadow-lg hover:bg-accent" aria-label="Next media"><ChevronRightIcon className="h-8 w-8" /></button>
+              <button type="button" onClick={showPreviousMedia} className="fixed left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/70 p-3 text-white shadow-lg hover:bg-accent hover:text-accent-text" aria-label="Previous media"><ChevronLeftIcon className="h-8 w-8" /></button>
+              <button type="button" onClick={showNextMedia} className="fixed right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/70 p-3 text-white shadow-lg hover:bg-accent hover:text-accent-text" aria-label="Next media"><ChevronRightIcon className="h-8 w-8" /></button>
             </>}
           </div>
 

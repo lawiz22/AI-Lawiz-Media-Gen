@@ -20,7 +20,7 @@ Compose LTX timelines, animate an image with LTX 2.5 Audio-Sync, and reuse speec
 - Add photos and soundtrack audio from local files or directly from the Library.
 - Import Advanced TTS dialogue as speaker-aware clips with optional per-character reference photos.
 - Add generated speech context and control frame rate and guidance.
-- Configure the LTX checkpoint and up to three LoRAs.
+- Configure the LTX checkpoint and up to five LoRAs (three are preset for each LTX version).
 - Model lists are not filtered by LTX version, filename, or extension. Select checkpoints or diffusion models in Safetensors/GGUF format; Director chooses the corresponding ComfyUI loader. Select both the text encoder and text projection for LTX 2.3, or the single encoder for LTX 2.5. Encoder choices and model selections are retained in saved projects and Library presets. Unfiltered choices still require models compatible with the selected LTX version.
 - Reduce final decode VRAM usage with tiled VAE decoding and an adjustable tile size.
 - Accelerate both LTX profiles with optional CacheDiT settings shared across LTX 2.3 and LTX 2.5.

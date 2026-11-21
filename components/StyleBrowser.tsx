@@ -3,9 +3,10 @@ import { createPortal } from 'react-dom';
 import { normalizeStyleModel, type GalleryStyle } from '../services/styleGallery';
 import { matchStyleLibrary } from '../services/styleLibrary';
 import type { CivitaiInventory, CivitaiInventoryItem } from '../services/civitaiService';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
 
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm hover:bg-bg-tertiary disabled:opacity-40';
-const input = 'rounded-lg border border-border-primary bg-bg-primary p-2 text-sm';
 export const StyleModal: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => {
     const ref = useRef<HTMLDialogElement>(null), heading = useId();
     useEffect(() => {
@@ -81,18 +82,18 @@ export const StyleBrowser: React.FC<{
     const pagination = (placement: string) => <nav aria-label={`Style pages ${placement}`} className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span>{filtered.length ? start + 1 : 0}–{Math.min(start + display.perPage, filtered.length)} / {filtered.length} styles</span>
         <div className="flex flex-wrap items-center gap-2">
-            <label>Per page <select aria-label={`Styles per page ${placement}`} className={input} value={display.perPage} onChange={event => changeDisplay({ perPage: Number(event.target.value) })}>{[12, 24, 48, 96].map(count => <option key={count}>{count}</option>)}</select></label>
+            <span>Per page</span><Select<number> className="w-20" ariaLabel={`Styles per page ${placement}`} value={display.perPage} options={[12, 24, 48, 96]} onChange={perPage => changeDisplay({ perPage })} />
             <button type="button" className={button} disabled={current === 1} onClick={() => setPage(1)} aria-label={`First style page ${placement}`}>«</button>
             <button type="button" className={button} disabled={current === 1} onClick={() => setPage(current - 1)} aria-label={`Previous style page ${placement}`}>‹</button>
-            <label>Page <select aria-label={`Style page ${placement}`} className={input} value={current} onChange={event => setPage(Number(event.target.value))}>{Array.from({ length: pages }, (_, index) => <option key={index + 1}>{index + 1}</option>)}</select> / {pages}</label>
+            <span>Page</span><Select<number> className="w-20" ariaLabel={`Style page ${placement}`} value={current} options={Array.from({ length: pages }, (_, index) => index + 1)} onChange={setPage} /><span>/ {pages}</span>
             <button type="button" className={button} disabled={current === pages} onClick={() => setPage(current + 1)} aria-label={`Next style page ${placement}`}>›</button>
             <button type="button" className={button} disabled={current === pages} onClick={() => setPage(pages)} aria-label={`Last style page ${placement}`}>»</button>
         </div>
     </nav>;
     return <div className="space-y-4">
-        {display.error && <p role="alert" className="text-sm text-red-400">{display.error}</p>}
+        {display.error && <p role="alert" className="text-sm text-danger">{display.error}</p>}
         <div className="flex flex-wrap items-center gap-3">
-            <input aria-label="Search styles" className={`${input} min-w-0 flex-1`} placeholder="Search styles, triggers or LoRAs..." value={query} onChange={event => setQuery(event.target.value)} />
+            <input aria-label="Search styles" className={`${ui.control} flex-1`} placeholder="Search styles, triggers or LoRAs..." value={query} onChange={event => setQuery(event.target.value)} />
             <div role="group" aria-label="Style card size" className="flex gap-1">{(Object.keys(sizes) as CardSize[]).map(size =>
                 <button type="button" key={size} aria-pressed={display.size === size} onClick={() => changeDisplay({ size })} className={`${button} ${display.size === size ? 'border-accent text-accent' : ''}`}>{sizes[size].label}</button>)}</div>
         </div>
@@ -124,7 +125,7 @@ export const StylePicker: React.FC<{
         </button>
         {selectedId && !compatible && <p role="alert" className="text-sm text-amber-400">Select a compatible {model} style or remove the saved selection.</p>}
         {open && <StyleModal title={`Choose style · ${model}`} onClose={() => setOpen(false)}>
-            {error && <p role="alert" className="mb-4 text-sm text-red-400">{error}</p>}
+            {error && <p role="alert" className="mb-4 text-sm text-danger">{error}</p>}
             <button type="button" className={`${button} mb-4`} onClick={() => { if (onSelect(null) !== false) setOpen(false); }}>No style · keep generator instructions</button>
             <StyleBrowser styles={styles} inventory={inventory} model={model} selectedId={selectedId} onSelect={style => { if (onSelect(style) !== false) setOpen(false); }} />
         </StyleModal>}

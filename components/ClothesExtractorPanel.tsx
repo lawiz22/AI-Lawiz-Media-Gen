@@ -21,6 +21,9 @@ import { SendToLTXButton } from './SendToLTXButton';
 import { createAccentStyle } from '../utils/accentTheme';
 import { OllamaActivityPanel } from './OllamaActivityPanel';
 import { useUnmountCleanup } from './useUnmountCleanup';
+import { NumberField, TextField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
 
 const EXTRACTOR_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     clothes: createAccentStyle('#fb923c', '#fdba74', '#ea580c'),
@@ -721,19 +724,12 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
 
     const renderOllamaControls = () => (
         <div className="mt-3 space-y-2">
-            <label className="block text-xs font-bold text-text-secondary">Ollama model</label>
-            <select
-                value={ollamaModel}
-                onChange={event => {
-                    setOllamaModel(event.target.value);
-                    localStorage.setItem('ollama_model', event.target.value);
-                    onOllamaModelChange(event.target.value);
-                }}
-                disabled={isOllamaConnected !== true}
-                className="block w-full rounded-md border border-border-primary bg-bg-primary p-2 text-sm disabled:opacity-50"
-            >
-                {[...new Set([ollamaModel, ...ollamaModels])].filter(Boolean).map(model => <option key={model} value={model}>{model}</option>)}
-            </select>
+            <Select variant="search" label="Ollama model" value={ollamaModel} options={[...new Set([ollamaModel, ...ollamaModels])].filter(Boolean)} disabled={isOllamaConnected !== true}
+                onChange={model => {
+                    setOllamaModel(model);
+                    localStorage.setItem('ollama_model', model);
+                    onOllamaModelChange(model);
+                }} />
             {isOllamaConnected === null && <p className="text-xs text-text-muted">Checking Ollama connection...</p>}
             {isOllamaConnected === false && <p className="text-xs text-danger">Ollama is not connected. Check its URL in Connection Settings.</p>}
         </div>
@@ -767,7 +763,7 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                         </button>
                         
                         {identifiedItems.length > 0 && (
-                            <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary/50">
+                            <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary">
                                 <h4 className="text-sm font-bold text-text-primary">Select Items to Extract</h4>
                                 {identifiedItems.map((item, idx) => (
                                     <label key={idx} className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer p-2 hover:bg-bg-primary rounded">
@@ -803,8 +799,7 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                     <div className="lg:col-span-1 space-y-6">
                         <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Source Image" id="hair-source" onImageUpload={file => { setHairGenerationJobs([]); dispatch(updateExtractorState({ hairSourceFile: file, generatedHair: [] })); }} sourceFile={hairSourceFile} /></div><button onClick={onOpenLibraryForHair} title="Choose from Library" className="mt-8 self-center bg-bg-tertiary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6" /></button></div>
                         <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-1">People in image: {hairPersonCount}</label>
-                            <input type="range" min="1" max="10" value={hairPersonCount} onChange={event => dispatch(updateExtractorState({ hairPersonCount: Number(event.target.value) }))} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
+                            <NumberField slider label="People in image" value={hairPersonCount} min={1} max={10} step={1} onChange={value => dispatch(updateExtractorState({ hairPersonCount: value }))} />
                             <p className="mt-2 text-xs text-text-muted">People are processed from left to right.</p>
                         </div>
                         <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border-primary bg-bg-tertiary p-4">
@@ -839,14 +834,14 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                             {objectAnalysisProvider === 'ollama' && renderOllamaControls()}
                             {objectAnalysisProvider === 'gemini' && !getApiKey() && <p className="mt-2 text-xs text-danger">Configure Gemini in Connection Settings.</p>}
                         </div>
-                        <div><label className="block text-sm font-medium text-text-secondary mb-1">Focus/Hints (Optional)</label><input type="text" value={objectHints} onChange={e => dispatch(updateExtractorState({ objectHints: e.target.value }))} placeholder="e.g., furniture, electronics" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm"/></div>
-                        <div><label className="block text-sm font-medium text-text-secondary mb-1">Max Objects: {maxObjects}</label><input type="range" min="1" max="10" value={maxObjects} onChange={e => dispatch(updateExtractorState({ maxObjects: Number(e.target.value) }))} className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"/></div>
+                        <TextField label="Focus/Hints (Optional)" value={objectHints} placeholder="e.g., furniture, electronics" onChange={value => dispatch(updateExtractorState({ objectHints: value }))} />
+                        <NumberField slider label="Max Objects" value={maxObjects} min={1} max={10} step={1} onChange={value => dispatch(updateExtractorState({ maxObjects: value }))} />
                         <button onClick={handleIdentifyObjects} disabled={!objectSourceFile || isIdentifyingObjects || (objectAnalysisProvider === 'ollama' && isOllamaConnected !== true) || (objectAnalysisProvider === 'gemini' && !getApiKey())} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">
                             {isIdentifyingObjects ? <><SpinnerIcon className="w-5 h-5 animate-spin"/>Scanning...</> : 'Identify Objects'}
                         </button>
 
                         {identifiedObjects.length > 0 && (
-                            <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary/50">
+                            <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary">
                                 <h4 className="text-sm font-bold text-text-primary">Select Objects</h4>
                                 {identifiedObjects.map((obj, idx) => (
                                     <label key={idx} className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer p-2 hover:bg-bg-primary rounded">
@@ -898,24 +893,14 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                         )}
                         
                         {poseOutputMode === 'mannequin-image' && (
-                            <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary/50">
+                            <div className="space-y-4 p-4 bg-bg-tertiary rounded-lg border border-border-primary">
                                 <h4 className="text-sm font-bold text-text-primary">Target Style</h4>
                                 <div className="flex items-center gap-2"><div className="flex-grow"><ImageUploader label="Style Reference (Optional)" id="mannequin-ref" onImageUpload={file => dispatch(updateExtractorState({ mannequinReferenceFile: file }))} sourceFile={mannequinReferenceFile} infoText="Upload an image to copy its style" /></div><button onClick={onOpenLibraryForMannequinRef} className="mt-8 self-center bg-bg-primary p-3 rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"><LibraryIcon className="w-6 h-6"/></button></div>
-                                <div>
-                                    <label className="block text-xs font-medium text-text-secondary mb-1">Mannequin preset</label>
-                                    <select
-                                        value={MANNEQUIN_STYLE_PRESETS.some(preset => preset.value === mannequinPromptHint) ? mannequinPromptHint : 'custom'}
-                                        onChange={event => dispatch(updateExtractorState({ mannequinPromptHint: event.target.value === 'custom' ? '' : event.target.value }))}
-                                        className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm"
-                                    >
-                                        {MANNEQUIN_STYLE_PRESETS.map(preset => <option key={preset.label} value={preset.value}>{preset.label}</option>)}
-                                        <option value="custom">Custom style...</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-text-secondary mb-1">Style instructions</label>
-                                    <textarea value={mannequinPromptHint} onChange={(e) => dispatch(updateExtractorState({ mannequinPromptHint: e.target.value }))} placeholder="Describe a custom mannequin style or refine the selected preset..." rows={3} className="w-full resize-y bg-bg-primary border border-border-primary rounded-md p-2 text-sm" />
-                                </div>
+                                <Select label="Mannequin preset" value={MANNEQUIN_STYLE_PRESETS.some(preset => preset.value === mannequinPromptHint) ? mannequinPromptHint : 'custom'}
+                                    options={[...MANNEQUIN_STYLE_PRESETS.map(preset => ({ value: preset.value, label: preset.label })), { value: 'custom', label: 'Custom style...' }]}
+                                    onChange={value => dispatch(updateExtractorState({ mannequinPromptHint: value === 'custom' ? '' : value }))} />
+                                <PromptBox label="Style instructions" kind="instruction" rows={3} value={mannequinPromptHint} placeholder="Describe a custom mannequin style or refine the selected preset..."
+                                    onChange={value => dispatch(updateExtractorState({ mannequinPromptHint: value }))} />
                             </div>
                         )}
 
@@ -943,24 +928,10 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
                         {fontGenerationProvider === 'flux2' && (
                             <div className="space-y-4 rounded-md border border-border-primary bg-bg-tertiary p-3">
                                 <h4 className="text-sm font-semibold text-text-primary">Flux2 Font Settings</h4>
-                                <div>
-                                    <label className="mb-1 block text-xs font-medium text-text-secondary">Steps: {fontFlux2Steps}</label>
-                                    <input type="range" min="4" max="20" step="1" value={fontFlux2Steps} onChange={event => dispatch(updateExtractorState({ fontFlux2Steps: Number(event.target.value) }))} className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-bg-primary" />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-medium text-text-secondary">CFG: {fontFlux2Cfg.toFixed(1)}</label>
-                                    <input type="range" min="0.8" max="2" step="0.1" value={fontFlux2Cfg} onChange={event => dispatch(updateExtractorState({ fontFlux2Cfg: Number(event.target.value) }))} className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-bg-primary" />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-medium text-text-secondary">Sampler</label>
-                                    <select value={fontFlux2Sampler} onChange={event => dispatch(updateExtractorState({ fontFlux2Sampler: event.target.value }))} className="w-full rounded-md border border-border-primary bg-bg-primary p-2 text-sm">
-                                        <option value="euler">Euler</option>
-                                        <option value="euler_ancestral">Euler Ancestral</option>
-                                        <option value="heun">Heun</option>
-                                        <option value="dpmpp_2m">DPM++ 2M</option>
-                                        <option value="dpmpp_2m_sde">DPM++ 2M SDE</option>
-                                    </select>
-                                </div>
+                                <NumberField slider label="Steps" value={fontFlux2Steps} min={4} max={20} step={1} onChange={value => dispatch(updateExtractorState({ fontFlux2Steps: value }))} />
+                                <NumberField slider label="CFG" value={fontFlux2Cfg} min={0.8} max={2} step={0.1} onChange={value => dispatch(updateExtractorState({ fontFlux2Cfg: value }))} />
+                                <Select label="Sampler" value={fontFlux2Sampler} onChange={value => dispatch(updateExtractorState({ fontFlux2Sampler: value }))}
+                                    options={[{ value: 'euler', label: 'Euler' }, { value: 'euler_ancestral', label: 'Euler Ancestral' }, { value: 'heun', label: 'Heun' }, { value: 'dpmpp_2m', label: 'DPM++ 2M' }, { value: 'dpmpp_2m_sde', label: 'DPM++ 2M SDE' }]} />
                             </div>
                         )}
                         <button onClick={handleGenerateFont} disabled={!fontSourceFile || isGeneratingFont || (fontGenerationProvider === 'gemini' && !getApiKey())} className="w-full flex items-center justify-center gap-2 bg-accent text-accent-text font-bold py-3 px-4 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50">

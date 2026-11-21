@@ -19,16 +19,17 @@ import { useDraftAutosave } from './useDraftAutosave';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { CreationSuiteResult as CreationSuiteResultImage } from './CreationSuiteResult';
 import { CreationSuiteLivePreview } from './CreationSuiteLivePreview';
+import { Accordion } from './ui/Accordion';
+import { NumberField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
+import { familyFiles } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed';
-const input = 'mt-1 w-full min-w-0 rounded-lg border border-border-primary bg-bg-primary p-2 text-sm text-text-primary';
+const input = `mt-1 block ${ui.control}`;
 const initial = (): CreationSuiteDraft => ({ settings: defaultCreationSuiteSettings(), files: {} });
-const Accordion: React.FC<{ title: string; children: () => React.ReactNode }> = ({ title, children }) => {
-    const [open, setOpen] = useState(false);
-    return <details className="rounded-xl border border-border-primary p-4" onToggle={event => setOpen(event.currentTarget.open)}>
-        <summary className="cursor-pointer font-semibold">{title}</summary>{open && <div className="mt-4 space-y-4">{children()}</div>}
-    </details>;
-};
 const download = (blob: Blob, name: string) => {
     const url = URL.createObjectURL(blob), anchor = document.createElement('a');
     anchor.href = url; anchor.download = name; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -47,6 +48,7 @@ export const CreationSuitePanel: React.FC<{
 }> = ({ isComfyUIConnected, onModelChange, pendingPreset, onPresetLoaded }) => {
     const dispatch = useDispatch<AppDispatch>();
     const globalBusy = useSelector((state: RootState) => state.generation.isLoading);
+    const { inventory } = useModelInventory();
     const [draft, setDraft] = useState<CreationSuiteDraft>(initial);
     const [ready, setReady] = useState(false), [running, setRunning] = useState(false), [checking, setChecking] = useState(false), [saving, setSaving] = useState(false);
     const [error, setError] = useState(''), [storageError, setStorageError] = useState(''), [status, setStatus] = useState('');
@@ -123,17 +125,20 @@ export const CreationSuitePanel: React.FC<{
             const schema = h3Input(info, CREATION_SUITE_TEMPLATE[key].class_type, name, settings.nodes[key]);
             const choices = h3Choices(info, CREATION_SUITE_TEMPLATE[key].class_type, name);
             const config = Array.isArray(schema) && isRecord(schema[1]) ? schema[1] : {};
-            const label = `${titles[key] || CREATION_SUITE_BYPASS[key]?.title || key}: ${name.replaceAll('_', ' ')}`;
-            return <label key={name} className="min-w-0 text-xs text-text-secondary">{name.replaceAll('_', ' ')}
-                {typeof value === 'boolean' ? <input aria-label={label} type="checkbox" className="ml-2" checked={value} onChange={event => setValue(key, name, event.target.checked)} />
-                    : choices.length || ['unet_name', 'clip_name', 'vae_name', 'lora_name', 'tiny_vae'].includes(name) ? <select aria-label={label} className={input} value={String(value)} onChange={event => setValue(key, name, event.target.value)}>
-                        {!choices.includes(String(value)) && <option value={String(value)}>{String(value) || 'Select a file'} (current / not listed)</option>}
-                        {choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}
-                    </select> : typeof value === 'number' ? <input aria-label={label} className={input} type="number" value={value}
+            const text = name.replaceAll('_', ' '), label = `${titles[key] || CREATION_SUITE_BYPASS[key]?.title || key}: ${text}`;
+            const prompt = typeof value === 'string' && (name.includes('prompt') || name.startsWith('string_'));
+            // Scene Creation runs MOSS; every other model and LoRA belongs to the Qwen 2.1 swap.
+            const family = name === 'unet_name' && key === '1' ? 'moss' : name === 'unet_name' || name === 'lora_name' ? 'qwen21' : '';
+            return <div key={name} className={`min-w-0 ${prompt ? 'sm:col-span-2' : ''}`}>
+                {typeof value === 'boolean' ? <label className="flex items-center gap-2 text-sm text-text-secondary"><input aria-label={label} type="checkbox" checked={value} onChange={event => setValue(key, name, event.target.checked)} />{text}</label>
+                    : choices.length || ['unet_name', 'clip_name', 'vae_name', 'lora_name', 'tiny_vae'].includes(name) ? <Select variant="search" label={text} ariaLabel={label} placeholder="Select a file" value={String(value)}
+                        options={family ? familyFiles(choices, family, inventory) : choices} onChange={choice => setValue(key, name, choice)} />
+                    : typeof value === 'number' ? <NumberField label={text} ariaLabel={label} value={value} onChange={number => setValue(key, name, number)}
                         min={typeof config.min === 'number' ? config.min : undefined} max={typeof config.max === 'number' ? Math.min(config.max, Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER}
-                        step={Array.isArray(schema) && schema[0] === 'INT' ? 1 : 'any'} onChange={event => setValue(key, name, Number(event.target.value))} />
-                        : <textarea aria-label={label} className={input} rows={name.includes('prompt') || name.startsWith('string_') ? 4 : 2} value={value} onChange={event => setValue(key, name, event.target.value)} />}
-            </label>;
+                        step={Array.isArray(schema) && schema[0] === 'INT' ? 1 : undefined} />
+                    : prompt ? <PromptBox kind={name.includes('negative') ? 'negative' : name.includes('system') ? 'instruction' : 'positive'} label={text} ariaLabel={label} rows={4} value={value} onChange={next => setValue(key, name, next)} />
+                    : <label className={ui.label}>{text}<textarea aria-label={label} className={input} rows={2} value={value} onChange={event => setValue(key, name, event.target.value)} /></label>}
+            </div>;
         })}</div>
     </div>;
     const optional = (key: string) => <div key={key} className="space-y-3">
@@ -207,8 +212,8 @@ export const CreationSuitePanel: React.FC<{
                 if (!window.confirm('Reset only Creation suite to the supplied workflow defaults and clear its inputs and displayed results?')) return;
                 setDraft(initial()); setResult(null); setResultDraft(null); setLive(emptyCreationSuiteLive()); setError(''); setStatus('');
             }}>Start from scratch</button></div>
-        {error && <p role="alert" className="whitespace-pre-wrap rounded-lg border border-red-400/40 p-3 text-sm text-red-300">{error}</p>}
-        {storageError && <p role="alert" className="text-sm text-red-300">{storageError}</p>}
+        {error && <p role="alert" className="whitespace-pre-wrap rounded-lg border border-danger bg-danger-bg p-3 text-sm text-danger">{error}</p>}
+        {storageError && <p role="alert" className="text-sm text-danger">{storageError}</p>}
         {status && <p role="status" className="text-sm text-text-secondary">{status}</p>}
         <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
         <aside aria-label="Creation suite options" className="order-2 min-w-0 space-y-4 lg:order-1">
@@ -221,8 +226,8 @@ export const CreationSuitePanel: React.FC<{
             <p className="text-xs text-text-secondary">{settings.sceneEnabled && settings.swapEnabled ? 'Both enabled: the decoded MOSS image becomes Qwen image 1 directly. The scene and final swap are both saved by ComfyUI; no intermediate re-upload.' : settings.sceneEnabled ? 'Scene Creation only: Qwen models and face inputs are omitted.' : settings.swapEnabled ? 'Swap only: choose a base photo and a face/head source. MOSS is not loaded.' : 'Enable at least one pipeline.'}</p>
             {settings.sceneEnabled && <div className="min-w-0 space-y-4 rounded-xl border border-lime-300/20 p-3">
                 <h3 className="font-bold text-lime-200">Scene Creation settings</h3>
-                <label className="block text-sm">Phone style<select aria-label="Scene phone style" className={input} value={settings.modernStyle ? 'modern' : 'cheap'} onChange={event => update({ modernStyle: event.target.value === 'modern' })}><option value="modern">Modern iPhone</option><option value="cheap">Cheap phone</option></select></label>
-                {!settings.modernStyle && <label className="block text-sm">Scene word<input aria-label="Cheap phone scene word" className={input} value={String(settings.nodes['21'].value)} onChange={event => setValue('21', 'value', event.target.value)} /></label>}
+                <Select<'modern' | 'cheap'> label="Phone style" ariaLabel="Scene phone style" value={settings.modernStyle ? 'modern' : 'cheap'} options={[{ value: 'modern', label: 'Modern iPhone' }, { value: 'cheap', label: 'Cheap phone' }]} onChange={style => update({ modernStyle: style === 'modern' })} />
+                {!settings.modernStyle && <label className={ui.label}>Scene word<input aria-label="Cheap phone scene word" className={input} value={String(settings.nodes['21'].value)} onChange={event => setValue('21', 'value', event.target.value)} /></label>}
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.useReference} onChange={event => update({ useReference: event.target.checked })} />Use scene reference image</label>
                 <Accordion title="Scene models and resolution">{() => <>{['1', '5', '6', '14'].map(key => fields(key))}</>}</Accordion>
                 <Accordion title="Scene sampling and vision conditioning">{() => <>{fields('10')}<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.randomizeSceneSeed} onChange={event => update({ randomizeSceneSeed: event.target.checked })} />Randomize Scene seed</label>{fields('30')}</>}</Accordion>
@@ -251,15 +256,15 @@ export const CreationSuitePanel: React.FC<{
             {settings.sceneEnabled && <div className="space-y-3 rounded-xl border border-lime-300/20 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold text-lime-200">1. Scene Creation</h3>
                     <div className="flex flex-wrap gap-2"><button type="button" className={button} onClick={() => setHelper('18')}>Modern iPhone helper</button><button type="button" className={button} onClick={() => setHelper('19')}>Cheap phone helper</button></div></div>
-                <label className="block text-sm">Your subject / scene prompt<textarea aria-label="Scene Creation prompt" className={input} rows={5} value={String(settings.nodes['20'].value)} onChange={event => setValue('20', 'value', event.target.value)} /></label>
-                <details><summary className="cursor-pointer text-xs text-text-secondary">Assembled scene prompt</summary><textarea aria-label="Assembled scene prompt" readOnly className={input} rows={6} value={creationSuitePrompt(settings)} /></details>
+                <PromptBox label="Your subject / scene prompt" ariaLabel="Scene Creation prompt" rows={5} value={String(settings.nodes['20'].value)} onChange={value => setValue('20', 'value', value)} />
+                <details><summary className="cursor-pointer text-xs text-text-secondary">Assembled scene prompt</summary><PromptBox kind="readonly" label="Assembled scene prompt" ariaLabel="Assembled scene prompt" rows={6} value={creationSuitePrompt(settings)} /></details>
             </div>}
             {settings.swapEnabled && <div className="space-y-3 rounded-xl border border-cyan-300/20 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold text-cyan-200">2. Swap face-Change expression</h3><button type="button" className={button} onClick={() => setHelper('223')}>Head swap helper</button></div>
-                <label className="block text-sm">Head swap / expression prompt<textarea aria-label="Swap face expression prompt" className={input} rows={7} value={String(settings.nodes['110'].prompt)} onChange={event => setValue('110', 'prompt', event.target.value)} /></label>
+                <PromptBox kind="instruction" label="Head swap / expression prompt" ariaLabel="Swap face expression prompt" rows={7} value={String(settings.nodes['110'].prompt)} onChange={value => setValue('110', 'prompt', value)} />
                 <p className="text-xs text-text-secondary">Keep the head_swap training caption. Use the HEAD SWAP helper for expression/pose edits and negative-prompt conflicts. Image 1 is the base; image 2 supplies the face/head.</p>
             </div>}
-            <button type="button" className={`${button} w-full border-lime-300/50 bg-lime-300/10 py-3 text-lime-200`} disabled={!isComfyUIConnected || !settings.sceneEnabled && !settings.swapEnabled} onClick={() => void run(false)}>Generate Creation suite</button>
+            <button type="button" className={`${button} w-full border-accent bg-accent py-3 text-accent-text`} disabled={!isComfyUIConnected || !settings.sceneEnabled && !settings.swapEnabled} onClick={() => void run(false)}>Generate Creation suite</button>
         </fieldset>
         {running && <div className="space-y-2"><progress aria-label="Creation suite progress" className="w-full" max={1} value={progress} /><button type="button" className={button} disabled={cancelling} onClick={() => { setCancelling(true); controller.current?.abort(); }}>Cancel this job</button><p className="text-xs text-text-secondary">Cancels only this job, without interrupting other workflows.</p></div>}
         <div className="flex flex-wrap gap-4 text-sm">

@@ -1,26 +1,32 @@
 LAWIZ MEDIA GENERATOR - COMFYUI REQUIRED NODES
 ================================================
 
-Audit date: 2026-09-05
-Source audited: every class_type used in constants.ts,
-services/comfyUIService.ts, services/characterAnglesWorkflow.ts and
-services/ltxDirectorWorkflow.ts, including dedicated feature workflow builders.
+Audit date: 2026-11-20
+Source audited: every node class written in the application's workflows:
+constants.ts, the workflow builders in services/ and the workflow files in
+assets/ (*.json). The package that supplies each class was read from the
+reference installation (/object_info, python_module).
 
 SUMMARY
 -------
 
-The baseline audit above found 97 distinct ComfyUI node classes, before the
-LanPaint and Qwen Image 2.1 additions documented below.
+The audit found 212 distinct ComfyUI node classes.
 
-2026-11-19: the FLUX 1, Nunchaku, FLUX Krea and WAN 2.2 workflows were removed
-from Lawiz. Their 12 node classes and 2 packages (ComfyUI-nunchaku,
-VRGameDevGirl Custom Nodes) were deleted from this file and the figures below
-were reduced accordingly. No new audit was run.
+- 103 are included in a current ComfyUI installation (core + comfy_extras).
+- 109 are supplied by external custom-node packs.
+- The 109 external classes come from 45 external repositories.
 
-- 51 are included in a current ComfyUI installation (core + comfy_extras).
-- 34 are supplied by external custom-node packs.
-- The audited feature set used 22 external repositories when the LTX Director
-  compatibility dependency is included.
+Earlier figures in this file (97 classes on 2026-09-05; 51 native and 34
+external after FLUX 1, Nunchaku, FLUX Krea and WAN 2.2 were removed on
+2026-11-19) only covered part of the workflows and are superseded.
+
+Limits of this audit:
+- "Native" means supplied by ComfyUI itself in the reference installation on
+  the audit date. An older ComfyUI can lack the most recent classes.
+- The complete install list and the exhaustive inventory at the end of this
+  file were rebuilt from the code. The per-feature sections in between were
+  not re-verified sentence by sentence: only their class names were checked.
+- Models, LoRAs and other weights are not part of this audit.
 
 IMPORTANT: update ComfyUI before installing custom nodes. Recent versions include
 Qwen Image/Edit, FLUX2, LTX audio/video and advanced sampler nodes that older
@@ -67,8 +73,8 @@ Cancel targets /api/jobs/{prompt_id}/cancel; no global interrupt fallback.
 
 LTX 2.5 AUDIO-SYNC - VIDEO
 -------------------------
-Video > LTX 2.5 Audio-Sync is separate from LTX Director and H3.
-Video > LTX-Ripple-FFAF is a separate first-frame-edit propagation workflow.
+Video > LTX > LTX 2.5 Audio-Sync is separate from LTX Director and H3.
+Video > LTX > LTX-Ripple-FFAF is a separate first-frame-edit propagation workflow.
 Ripple requires ComfyUI-LTXVideo (LTXAddVideoICLoRAGuide), RES4LYF (Frames Slice),
 KJNodes (INTConstant, ImageResizeKJv2, VAELoaderKJ, ImageConcatMulti,
 PathchSageAttentionKJ, LTX2MemoryEfficientSageAttentionPatch), VideoHelperSuite
@@ -108,7 +114,7 @@ that a render will run or fit in VRAM. No automatic downloads are performed.
 
 KREA2 IDENTITY / GENERAL EDIT V2 - IMAGE GENERATOR
 ------------------------------------------------
-Image Generation > ComfyUI > KREA2 > I2I Edit / Identity.
+Image Gen > ComfyUI > KREA2 > I2I Edit / Identity.
 Install/update https://github.com/lbouaraba/comfyui-krea2edit (v2.0.0+),
 then restart ComfyUI. Both Krea2EditModelPatch and Krea2EditGroundedEncode
 are mandatory; stock CLIPTextEncode cannot replace image conditioning.
@@ -131,7 +137,7 @@ See the upstream model license for non-commercial/commercial restrictions.
 
 MOSS IMAGE 1.0 - IMAGE GENERATOR
 ------------------------------
-Image Generation > ComfyUI > MOSS > MOSS Image uses the supplied MOSS graph.
+Image Gen > ComfyUI > MOSS > MOSS Image uses the supplied MOSS graph.
 Update ComfyUI for CLIPLoader type=moss_image, EmptyFlux2LatentImage,
 SkipLayerGuidanceDiTSimple, UNETLoader, VAELoader, CLIPTextEncode,
 VAEDecode and SaveImage.
@@ -158,7 +164,7 @@ No weights or custom nodes are installed automatically.
 
 MOSS PHOTO - IMAGE GENERATOR
 ---------------------------
-Image Generation > ComfyUI > MOSS > MOSS PHOTO is separate from MOSS Image.
+Image Gen > ComfyUI > MOSS > MOSS PHOTO is separate from MOSS Image.
 Base: recent ComfyUI MOSS support, UNETLoader, CLIPLoader, VAELoader,
 EmptyFlux2LatentImage, ModelSamplingAuraFlow, KSampler (er_sde/simple),
 CLIPTextEncode, VAEDecode, SaveImage, core primitives/string/regex nodes,
@@ -187,7 +193,7 @@ No weights or custom nodes are installed automatically by the integration.
 
 MINIMAX H3 - REF2V VIDEO WORKSPACE
 ---------------------------------
-Video > Minimax H3 > Reference to video executes the supplied 00-rEF2V
+Video > H3 > Minimax REF2v H3 executes the supplied 00-rEF2V
 graph, not a first/last-frame interpolation graph. Other H3 slots are
 reserved for future workflows.
 
@@ -220,7 +226,7 @@ Review selected weights/LoRA licenses before commercial use.
 
 MINIMAX H3 - CHARACTER SWAP SHOT PLANNER
 ---------------------------------------
-Video > Character Swap H3 is separate from REF2V. Requires BFSNodes:
+Video > H3 > Character Swap H3 is separate from REF2V. Requires BFSNodes:
 BFSShotPlanner, BFSShotUnpack, BFSShotRepack, BFSShotH3ConditioningSimple,
 BFSShotJoin, the native web/js Shot Planner modules, and /bfs/shotloop APIs.
 Display Any (rgthree) receives the final file path and triggers the join
@@ -272,7 +278,7 @@ Qwen 2.1, Viggle and any additional LoRA licenses before commercial use.
 
 QWEN IMAGE 2.1 - MULTI IMAGE EDIT
 -------------------------------
-Image Generation > ComfyUI > QWEN 2.1 > I2I Multi Images.
+Image Gen > ComfyUI > QWEN 2.1 > I2I Multi Images.
 Same UNET, CLIP and VAE as Qwen 2.1 T2I. Required native nodes:
 UNETLoader, CLIPLoader, VAELoader, TextEncodeQwenImage21,
 EmptyLatentImage, KSampler, VAEDecode, ModelAttentionBackend,
@@ -390,7 +396,7 @@ No extension installation. Original depth loader may fetch missing weights.
 
 QWEN IMAGE 2.1 - SINGLE IMAGE EDIT
 --------------------------------
-Image Generation > ComfyUI > QWEN 2.1 > I2I Consistency / I2I Turbo.
+Image Gen > ComfyUI > QWEN 2.1 > I2I Consistency / I2I Turbo.
 Same native/Pixaroma nodes and UNET/CLIP/VAE as Remove Background below,
 plus PixaromaLoraLoader and a LoRA catalog (LoraLoader/LoraLoaderModelOnly).
 Consistency: QWEN\qwen-image-2.1-consistency.safetensors, strength 1,
@@ -409,7 +415,7 @@ No automatic downloads. Check model/LoRA licenses before commercial use.
 
 QWEN IMAGE 2.1 - REMOVE BACKGROUND
 --------------------------------
-Image Generation > ComfyUI > QWEN 2.1 > Remove Background.
+Image Gen > ComfyUI > QWEN 2.1 > Remove Background.
 Same default UNET, CLIP and VAE weights as Qwen Image 2.1 T2I above.
 Required Pixaroma nodes: PixaromaLoadImageMini, PixaromaDropdown,
 PixaromaPrompt, PixaromaSeed, PixaromaResizeCrop, PixaromaPreview,
@@ -547,10 +553,12 @@ Used by: Z-Image creative upscale.
 
 [08] ComfyUI-KJNodes
 Repository: https://github.com/kijai/ComfyUI-KJNodes
-Lawiz nodes: DrawMaskOnImage, LTX2SamplingPreviewOverride, PathchSageAttentionKJ,
-VAELoaderKJ
-Used by: Swap Anything mask visualization, LTX Director, SageAttention
-and advanced VAE loading.
+Lawiz nodes: DrawMaskOnImage, ImageConcatMulti, ImageResizeKJv2, INTConstant,
+LTX2MemoryEfficientSageAttentionPatch, LTX2SamplingPreviewOverride,
+MiniMaxChunkFeedForward, ModelPreviewOverrideKJ, PathchSageAttentionKJ,
+VAELoaderKJ, VRAM_Debug
+Used by: Swap Anything mask visualization, LTX Director, LTX-Ripple-FFAF,
+MiniMax H3, Blazing Fast Character, SageAttention and advanced VAE loading.
 
 [09] WhatDreamsCost-ComfyUI
 Repository: https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI
@@ -559,21 +567,24 @@ Used by: LTX 2.3 and LTX 2.5 Director timeline workflows.
 
 [10] ComfyUI-LTXVideo
 Repository: https://github.com/Lightricks/ComfyUI-LTXVideo
-Used by: required compatibility dependency of WhatDreamsCost LTX Director.
+Lawiz node: LTXAddVideoICLoRAGuide
+Used by: LTX-Ripple-FFAF, and required compatibility dependency of
+WhatDreamsCost LTX Director.
 Important: WhatDreamsCost requires the latest ComfyUI-LTXVideo and latest
 ComfyUI-KJNodes even though recent ComfyUI versions provide several LTX classes
 natively.
 
 [11] ComfyUI-VideoHelperSuite
 Repository: https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite
-Lawiz node: VHS_VideoCombine
-Used by: MiniMax H3 and LTX Ripple video output encoding.
+Lawiz nodes: VHS_LoadVideo, VHS_VideoCombine, VHS_VideoInfo
+Used by: MiniMax H3 and LTX Ripple video loading and output encoding.
 FFmpeg must also be available to ComfyUI.
 
 [12] ComfyUI Impact Pack
 Repository: https://github.com/ltdrdata/ComfyUI-Impact-Pack
-Lawiz nodes: FaceDetailer, SAMLoader
-Used by: SD 1.5 Face Detailer.
+Lawiz nodes: FaceDetailer, ImpactExecutionOrderController, SAMLoader
+Used by: SD 1.5 Face Detailer; MiniMax H3 advanced workflow
+(ImpactExecutionOrderController).
 
 [13] ComfyUI Impact Subpack
 Repository: https://github.com/ltdrdata/ComfyUI-Impact-Subpack
@@ -583,8 +594,10 @@ This is separate from Impact Pack and must also be installed.
 
 [14] rgthree-comfy
 Repository: https://github.com/rgthree/rgthree-comfy
-Lawiz node: Power Lora Loader (rgthree)
-Used by: KREA2, MOSS Image, Blazing Fast Character and MiniMax H3 LoRA stacks.
+Lawiz nodes: Any Switch (rgthree), Display Any (rgthree),
+Image Comparer (rgthree), Power Lora Loader (rgthree), Seed (rgthree)
+Used by: KREA2, MOSS Image, Blazing Fast Character and MiniMax H3 LoRA stacks,
+and the helper nodes of the supplied graphs.
 
 [15] ControlAltAI Nodes
 Repository: https://github.com/gseth/ControlAltAI-Nodes
@@ -602,8 +615,9 @@ Used by: Character Angles source-image loading and metadata handling.
 
 [18] TTS Audio Suite
 Repository: https://github.com/diodiogod/TTS-Audio-Suite
-Lawiz nodes: ChatterBoxOfficial23LangEngineNode, UnifiedTTSTextNode
-Used by: multilingual ChatterBox TTS mode.
+Lawiz nodes: ChatterBoxOfficial23LangEngineNode, IndexTTSEmotionOptionsNode,
+IndexTTSEngineNode, QwenEmotionNode, UnifiedTTSTextNode
+Used by: multilingual ChatterBox TTS mode and the advanced TTS engines.
 Special note: install with Manager so its install.py can resolve Python and audio
 dependencies correctly.
 
@@ -626,8 +640,8 @@ Used by: optional DWPose structure extraction in FLUX2 Character Angles.
 
 [22] ComfyUI-CacheDiT
 Repository: https://github.com/Jasonzzt/ComfyUI-CacheDiT
-Lawiz node: CacheDiT_Model_Optimizer
-Used by: optional acceleration for Z-Image and FLUX2 Character Angles.
+Lawiz nodes: CacheDiT_LTX2_Optimizer, CacheDiT_Model_Optimizer
+Used by: optional acceleration for Z-Image, FLUX2 Character Angles and LTX.
 
 [23] Masquerade Nodes
 Repository: https://github.com/BadCafeCode/masquerade-nodes-comfyui
@@ -645,9 +659,139 @@ Lawiz node: LanPaint_KSampler
 Used by: the optional LanPaint (Head Swap) mode in Swap a Person.
 Install this package in ComfyUI, then restart and reconnect Lawiz.
 
+Packages [26] to [47] were added by the 2026-11-20 audit. "Written in" names
+the source files of Lawiz whose workflows contain the nodes.
+
+[26] comfyui_aerochrome
+Repository: https://github.com/Lo-res/comfyui_aerochrome
+Lawiz nodes: AerochromeIRFilm, AerochromeIRPrep
+Written in: assets/mossPhotoWorkflow.json
+
+[27] ComfyUI_essentials
+Repository: https://github.com/cubiq/ComfyUI_essentials
+Lawiz node: ImageResize+
+Written in: assets/clothesSwitcherWorkflow.json
+
+[28] Comfyui_Minimax_h3_latent_Upscaler
+Repository: https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler
+Lawiz node: MinimaxH3LatentUpscaler3D
+Written in: services/minimaxH3AdvancedWorkflow.ts
+
+[29] ComfyUI-BFSNodes
+Repository: https://github.com/alisson-anjos/ComfyUI-BFSNodes
+Lawiz nodes: BFSShotH3ConditioningSimple, BFSShotJoin, BFSShotPlanner,
+BFSShotRepack, BFSShotUnpack
+Written in: services/characterSwapWorkflow.ts
+
+[30] ComfyUI-Custom-Scripts
+Repository: https://github.com/pythongosssss/ComfyUI-Custom-Scripts
+Lawiz node: ShowText|pysssss
+Written in: services/comfyUIService.ts
+
+[31] ComfyUI-DepthAnythingV2
+Repository: https://github.com/kijai/ComfyUI-DepthAnythingV2
+Lawiz nodes: DepthAnything_V2, DownloadAndLoadDepthAnythingV2Model
+Written in: assets/clothesSwitcherWorkflow.json
+
+[32] comfyui-krea2edit
+Repository: https://github.com/lbouaraba/comfyui-krea2edit
+Lawiz nodes: Krea2EditGroundedEncode, Krea2EditModelPatch
+Written in: services/krea2EditWorkflow.ts
+
+[33] ComfyUI-Kreative-Moss
+Repository: https://github.com/Lo-res/ComfyUI-Kreative-Moss
+Lawiz nodes: GenTimerLap, GenTimerReport, KreativePromptMulti,
+KreativeResolutionFocal, KreativeShowText
+Written in: assets/mossPhotoWorkflow.json
+
+[34] ComfyUI-Kreative-Studio
+Repository: https://github.com/Lo-res/ComfyUI-Kreative-Studio
+Lawiz nodes: KreativeControlPanel, KreativeDetailMix, KreativeImageOnOff,
+KreativeJPEGCrunch, KreativeKeep, KreativeModelPanel, KreativeMyPrompt,
+KreativeSeed
+Written in: assets/mossPhotoWorkflow.json
+
+[35] ComfyUI-MiniMaxRefPack
+Repository: https://github.com/Hearmeman24/ComfyUI-MiniMaxRefPack
+Lawiz node: MiniMaxH3ReferencePack
+Written in: services/minimaxH3Workflow.ts
+
+[36] ComfyUI-MOSSImageTextEncoder
+Repository: https://github.com/ThetaCursed/ComfyUI-MOSSImageTextEncoder
+Lawiz node: TextEncodeMOSSImageVision
+Written in: assets/creationSuiteWorkflow.json
+
+[37] ComfyUI-Pixaroma
+Repository: https://github.com/pixaroma/ComfyUI-Pixaroma
+Lawiz nodes: PixaromaCompare, PixaromaDropdown, PixaromaLoadImageMini,
+PixaromaLoraLoader, PixaromaOutpaint, PixaromaOutpaintStitch, PixaromaPreview,
+PixaromaPrompt, PixaromaResizeCrop, PixaromaRunTimer, PixaromaSeed,
+PixaromaSizes, PixaromaTextJoinFour
+Written in: services/qwen21CharacterSceneWorkflow.ts,
+services/qwen21Workflow.ts
+
+[38] ComfyUI-PlagueKind-Nodes
+Repository: https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes
+Lawiz nodes: LTX_lora_loader, MMH3LatentUpscaleWithModelParams,
+MMH3UltimateUpscale
+Written in: services/characterSwapWorkflow.ts, services/h3StyleWorkflow.ts,
+services/minimaxH3UltrafastWorkflow.ts, services/minimaxH3Workflow.ts
+
+[39] comfyui-propost
+Repository: https://github.com/digitaljohn/comfyui-propost
+Lawiz node: ProPostFilmGrain
+Written in: assets/mossPhotoWorkflow.json
+
+[40] ComfyUI-RMBG
+Repository: https://github.com/1038lab/ComfyUI-RMBG
+Lawiz node: BiRefNetRMBG
+Written in: services/characterSwapWorkflow.ts
+
+[41] ComfyUI-SolAttn_triton
+Repository: https://github.com/kijai/ComfyUI-SolAttn_triton
+Lawiz node: SolAttnPatch
+Written in: services/minimaxH3AdvancedWorkflow.ts
+
+[42] ComfyUI-Spectrum-MiniMax-H3
+Repository: https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3
+Lawiz node: SpectrumApplyMiniMaxH3
+Written in: services/minimaxH3UltrafastWorkflow.ts
+
+[43] ComfyUI-Spectrum-MOSS
+Repository: https://github.com/Rkkss/ComfyUI-Spectrum-MOSS
+Lawiz node: SpectrumMOSSImageManual
+Written in: assets/creationSuiteWorkflow.json
+
+[44] ComfyUI-VFI
+Repository: https://github.com/GACLove/ComfyUI-VFI
+Lawiz node: RIFEInterpolation
+Written in: services/minimaxH3AdvancedWorkflow.ts
+
+[45] efficiency-nodes-comfyui
+Repository: https://github.com/jags111/efficiency-nodes-comfyui
+Lawiz node: KSampler (Efficient)
+Written in: services/comfyUIService.ts, services/mossWorkflow.ts
+
+[46] Nvidia_RTX_Nodes_ComfyUI
+Repository: https://github.com/Comfy-Org/Nvidia_RTX_Nodes_ComfyUI
+Lawiz node: RTXVideoSuperResolution
+Written in: services/minimaxH3AdvancedWorkflow.ts,
+services/minimaxH3UltrafastWorkflow.ts
+
+[47] RES4LYF
+Repository: https://github.com/ClownsharkBatwing/RES4LYF
+Lawiz nodes: ClownsharKSampler_Beta, Frames Slice
+Written in: assets/ltxRippleFFAFWorkflow.json, constants.ts,
+services/ltxRippleWorkflow.ts
+
 
 PACKAGES BY LAWIZ FEATURE
 -------------------------
+
+This list covers the original features only. Each later feature (KREA2 edit,
+MOSS, MOSS PHOTO, MiniMax H3, Qwen Image 2.1, LTX 2.5, Clothes Switcher,
+Creation suite, Swap a Person...) has its own section earlier in this file,
+and the complete install list above names the source file of every package.
 
 Basic SD 1.5 / SDXL
   - Current ComfyUI only; no custom nodes required.
@@ -710,104 +854,161 @@ CURRENT REFERENCE INSTALLATION STATUS
 ComfyUI checked at: http://127.0.0.1:8188/object_info
 ComfyUI root checked: C:\ComfyUI_windows_portable\ComfyUI
 
-Saved result from the previous 88-node audit: 85 of 88 node classes were loaded.
-The three missing classes belonged to ComfyUI-nunchaku, which Lawiz no longer
-uses. The four FLUX2 Character additions have not been rechecked against this
-saved installation status. Reconnect Lawiz to ComfyUI to refresh node
-availability.
+2026-11-20: all 212 node classes of the inventory below were loaded in the
+reference installation (7343 classes reported by /object_info). Reconnect
+Lawiz to ComfyUI to refresh node availability on another installation.
 
 
 EXHAUSTIVE NODE CLASS INVENTORY
 -------------------------------
 
-Native in current ComfyUI / comfy_extras (51):
-  AddTextPrefix
-  BasicGuider
-  BasicScheduler
-  CFGGuider
-  CFGNorm
-  CheckpointLoaderSimple
-  CLIPLoader
-  CLIPTextEncode
-  ConditioningZeroOut
-  CreateVideo
-  DualCLIPLoader
-  EmptyFlux2LatentImage
-  EmptyLatentImage
-  EmptySD3LatentImage
-  FluxGuidance
-  Flux2Scheduler
-  GetImageSize
-  ImageScaleBy
-  ImageScaleToTotalPixels
-  KSampler
-  KSamplerAdvanced
-  KSamplerSelect
-  LatentUpscaleModelLoader
-  LoadAudio
-  LoadImage
-  LoraLoader
-  LoraLoaderModelOnly
-  LTXVAudioVAEDecode
-  LTXVConcatAVLatent
-  LTXVConditioning
-  LTXVCropGuides
-  LTXVLatentUpsampler
-  LTXVSeparateAVLatent
-  MaskToImage
-  ModelSamplingAuraFlow
-  ModelSamplingFlux
-  ModelSamplingSD3
-  PreviewImage
-  RandomNoise
-  ReferenceLatent
-  SAM3_Detect
-  SamplerCustomAdvanced
-  SaveAudio
-  SaveImage
-  SaveVideo
-  TextEncodeQwenImageEditPlus
-  UNETLoader
-  UpscaleModelLoader
-  VAEDecode
-  VAEEncode
+Native in current ComfyUI / comfy_extras (103):
+  AddTextPrefix                     BasicGuider                       BasicScheduler
+  BatchImagesNode                   BetaSamplingScheduler             Canny
+  CFGGuider                         CFGNorm                           CheckpointLoaderSimple
+  CLIPLoader                        CLIPTextEncode                    ComfyMathExpression
+  ComfyNumberConvert                ComfySwitchNode                   ConditioningZeroOut
+  CreateVideo                       CustomCombo                       DualCLIPLoader
+  EmptyFlux2LatentImage             EmptyImage                        EmptyLatentImage
+  EmptyLTXVLatentVideo              EmptySD3LatentImage               ExtendIntermediateSigmas
+  Flux2Scheduler                    FluxGuidance                      GetImageSize
+  GrowMask                          ImageAddNoise                     ImageCompare
+  ImageCompositeMasked              ImageFromBatch                    ImageScale
+  ImageScaleBy                      ImageScaleToTotalPixels           ImageSharpen
+  ImageToMask                       KSampler                          KSamplerSelect
+  LatentUpscaleModelLoader          LoadAudio                         LoadImage
+  LoraLoader                        LoraLoaderModelOnly               LTXVAudioVAEDecode
+  LTXVAudioVAEEncode                LTXVConcatAVLatent                LTXVConditioning
+  LTXVCropGuides                    LTXVDualCFGGuider                 LTXVEmptyLatentAudio
+  LTXVImgToVideoInplace             LTXVLatentUpsampler               LTXVPreprocess
+  LTXVSeparateAVLatent              ManualSigmas                      MaskToImage
+  MiniMaxH3ImageToVideo             MiniMaxH3ReferenceToVideo         MiniMaxH3SigmaShift
+  ModelAttentionBackend             ModelSamplingAuraFlow             ModelSamplingFlux
+  PreviewAny                        PreviewImage                      PrimitiveBoolean
+  PrimitiveFloat                    PrimitiveInt                      PrimitiveString
+  PrimitiveStringMultiline          QwenImage21Cache                  RandomNoise
+  ReferenceLatent                   RegexReplace                      RepeatLatentBatch
+  RescaleCFG                        ResizeImageMaskNode               ResolutionSelector
+  SAM3_Detect                       SamplerCustomAdvanced             SaveAudio
+  SaveImage                         SaveVideo                         SeedNode
+  SetLatentNoiseMask                SkipLayerGuidanceDiTSimple        SolidMask
+  SplitImageWithAlpha               StringConcatenate                 StringReplace
+  TextEncodeQwenImage21             TextEncodeQwenImageEditPlus       TextGenerate
+  TextGenerateLTX2Prompt            TextOverlay                       TrimAudioDuration
+  UNETLoader                        UpscaleModelLoader                VAEDecode
+  VAEDecodeAudio                    VAEDecodeTiled                    VAEEncode
   VAELoader
 
-External custom nodes (34):
-  AIO_Preprocessor                        - ComfyUI ControlNet Aux
-  CacheDiT_Model_Optimizer                - ComfyUI-CacheDiT
-  ChatterBoxOfficial23LangEngineNode       - TTS Audio Suite
-  ChatterBoxVoiceTTS                       - ComfyUI_ChatterBox_Voice
-  CLIPLoaderGGUF                           - ComfyUI-GGUF
-  CLIPLoaderMultiGPU                       - ComfyUI-MultiGPU
-  Cut By Mask                              - Masquerade Nodes
-  DownloadAndLoadFlorence2Model            - ComfyUI-Florence2
-  DualCLIPLoaderGGUF                       - ComfyUI-GGUF
-  DrawMaskOnImage                          - ComfyUI-KJNodes
-  easy cleanGpuUsed                        - ComfyUI-Easy-Use
-  easy clearCacheAll                       - ComfyUI-Easy-Use
-  easy showAnything                        - ComfyUI-Easy-Use
-  FaceDetailer                             - ComfyUI Impact Pack
-  Florence2Run                             - ComfyUI-Florence2
-  FluxResolutionNode                       - ControlAltAI Nodes
-  Image to RGB [RvTools]                   - ComfyUI-RvTools v2
-  LTX2SamplingPreviewOverride              - ComfyUI-KJNodes
-  LTXDirector                              - WhatDreamsCost-ComfyUI
-  LTXDirectorGuide                         - WhatDreamsCost-ComfyUI
-  PathchSageAttentionKJ                    - ComfyUI-KJNodes
-  Power Lora Loader (rgthree)              - rgthree-comfy
-  SAMLoader                                - ComfyUI Impact Pack
-  SeedVR2LoadDiTModel                      - ComfyUI-SeedVR2_VideoUpscaler
-  SeedVR2LoadVAEModel                      - ComfyUI-SeedVR2_VideoUpscaler
-  SeedVR2VideoUpscaler                     - ComfyUI-SeedVR2_VideoUpscaler
-  SimpleReadableMetadataSG                 - Simple Readable Metadata-SG
-  String Literal                           - comfy-image-saver / ComfyLiterals
-  UltralyticsDetectorProvider              - ComfyUI Impact Subpack
-  UnetLoaderGGUF                           - ComfyUI-GGUF
-  UnifiedTTSTextNode                       - TTS Audio Suite
-  VAELoaderKJ                              - ComfyUI-KJNodes
-  VHS_VideoCombine                         - ComfyUI-VideoHelperSuite
-  ZImageTurboProgressiveLockedUpscale      - Z-Image Progressive Locked Upscale
+External custom nodes (109):
+  AerochromeIRFilm                       - comfyui_aerochrome
+  AerochromeIRPrep                       - comfyui_aerochrome
+  AIO_Preprocessor                       - ComfyUI ControlNet Aux
+  Any Switch (rgthree)                   - rgthree-comfy
+  BFSShotH3ConditioningSimple            - ComfyUI-BFSNodes
+  BFSShotJoin                            - ComfyUI-BFSNodes
+  BFSShotPlanner                         - ComfyUI-BFSNodes
+  BFSShotRepack                          - ComfyUI-BFSNodes
+  BFSShotUnpack                          - ComfyUI-BFSNodes
+  BiRefNetRMBG                           - ComfyUI-RMBG
+  CacheDiT_LTX2_Optimizer                - ComfyUI-CacheDiT
+  CacheDiT_Model_Optimizer               - ComfyUI-CacheDiT
+  ChatterBoxOfficial23LangEngineNode     - TTS Audio Suite
+  ChatterBoxVoiceTTS                     - ComfyUI_ChatterBox_Voice
+  CLIPLoaderGGUF                         - ComfyUI-GGUF
+  CLIPLoaderMultiGPU                     - ComfyUI-MultiGPU
+  ClownsharKSampler_Beta                 - RES4LYF
+  Cut By Mask                            - Masquerade Nodes
+  DepthAnything_V2                       - ComfyUI-DepthAnythingV2
+  Display Any (rgthree)                  - rgthree-comfy
+  DownloadAndLoadDepthAnythingV2Model    - ComfyUI-DepthAnythingV2
+  DownloadAndLoadFlorence2Model          - ComfyUI-Florence2
+  DrawMaskOnImage                        - ComfyUI-KJNodes
+  DualCLIPLoaderGGUF                     - ComfyUI-GGUF
+  easy cleanGpuUsed                      - ComfyUI-Easy-Use
+  easy clearCacheAll                     - ComfyUI-Easy-Use
+  easy showAnything                      - ComfyUI-Easy-Use
+  FaceDetailer                           - ComfyUI Impact Pack
+  Florence2Run                           - ComfyUI-Florence2
+  FluxResolutionNode                     - ControlAltAI Nodes
+  Frames Slice                           - RES4LYF
+  GenTimerLap                            - ComfyUI-Kreative-Moss
+  GenTimerReport                         - ComfyUI-Kreative-Moss
+  Image Comparer (rgthree)               - rgthree-comfy
+  Image to RGB [RvTools]                 - ComfyUI-RvTools v2
+  ImageConcatMulti                       - ComfyUI-KJNodes
+  ImageResize+                           - ComfyUI_essentials
+  ImageResizeKJv2                        - ComfyUI-KJNodes
+  ImpactExecutionOrderController         - ComfyUI Impact Pack
+  IndexTTSEmotionOptionsNode             - TTS Audio Suite
+  IndexTTSEngineNode                     - TTS Audio Suite
+  INTConstant                            - ComfyUI-KJNodes
+  Krea2EditGroundedEncode                - comfyui-krea2edit
+  Krea2EditModelPatch                    - comfyui-krea2edit
+  KreativeControlPanel                   - ComfyUI-Kreative-Studio
+  KreativeDetailMix                      - ComfyUI-Kreative-Studio
+  KreativeImageOnOff                     - ComfyUI-Kreative-Studio
+  KreativeJPEGCrunch                     - ComfyUI-Kreative-Studio
+  KreativeKeep                           - ComfyUI-Kreative-Studio
+  KreativeModelPanel                     - ComfyUI-Kreative-Studio
+  KreativeMyPrompt                       - ComfyUI-Kreative-Studio
+  KreativePromptMulti                    - ComfyUI-Kreative-Moss
+  KreativeResolutionFocal                - ComfyUI-Kreative-Moss
+  KreativeSeed                           - ComfyUI-Kreative-Studio
+  KreativeShowText                       - ComfyUI-Kreative-Moss
+  KSampler (Efficient)                   - efficiency-nodes-comfyui
+  LanPaint_KSampler                      - LanPaint
+  LTX_lora_loader                        - ComfyUI-PlagueKind-Nodes
+  LTX2MemoryEfficientSageAttentionPatch  - ComfyUI-KJNodes
+  LTX2SamplingPreviewOverride            - ComfyUI-KJNodes
+  LTXAddVideoICLoRAGuide                 - ComfyUI-LTXVideo
+  LTXDirector                            - WhatDreamsCost-ComfyUI
+  LTXDirectorGuide                       - WhatDreamsCost-ComfyUI
+  MiniMaxChunkFeedForward                - ComfyUI-KJNodes
+  MinimaxH3LatentUpscaler3D              - Comfyui_Minimax_h3_latent_Upscaler
+  MiniMaxH3ReferencePack                 - ComfyUI-MiniMaxRefPack
+  MMH3LatentUpscaleWithModelParams       - ComfyUI-PlagueKind-Nodes
+  MMH3UltimateUpscale                    - ComfyUI-PlagueKind-Nodes
+  ModelPreviewOverrideKJ                 - ComfyUI-KJNodes
+  PathchSageAttentionKJ                  - ComfyUI-KJNodes
+  PixaromaCompare                        - ComfyUI-Pixaroma
+  PixaromaDropdown                       - ComfyUI-Pixaroma
+  PixaromaLoadImageMini                  - ComfyUI-Pixaroma
+  PixaromaLoraLoader                     - ComfyUI-Pixaroma
+  PixaromaOutpaint                       - ComfyUI-Pixaroma
+  PixaromaOutpaintStitch                 - ComfyUI-Pixaroma
+  PixaromaPreview                        - ComfyUI-Pixaroma
+  PixaromaPrompt                         - ComfyUI-Pixaroma
+  PixaromaResizeCrop                     - ComfyUI-Pixaroma
+  PixaromaRunTimer                       - ComfyUI-Pixaroma
+  PixaromaSeed                           - ComfyUI-Pixaroma
+  PixaromaSizes                          - ComfyUI-Pixaroma
+  PixaromaTextJoinFour                   - ComfyUI-Pixaroma
+  Power Lora Loader (rgthree)            - rgthree-comfy
+  ProPostFilmGrain                       - comfyui-propost
+  QwenEmotionNode                        - TTS Audio Suite
+  RIFEInterpolation                      - ComfyUI-VFI
+  RTXVideoSuperResolution                - Nvidia_RTX_Nodes_ComfyUI
+  SAMLoader                              - ComfyUI Impact Pack
+  Seed (rgthree)                         - rgthree-comfy
+  SeedVR2LoadDiTModel                    - ComfyUI-SeedVR2_VideoUpscaler
+  SeedVR2LoadVAEModel                    - ComfyUI-SeedVR2_VideoUpscaler
+  SeedVR2VideoUpscaler                   - ComfyUI-SeedVR2_VideoUpscaler
+  ShowText|pysssss                       - ComfyUI-Custom-Scripts
+  SimpleReadableMetadataSG               - Simple Readable Metadata-SG
+  SolAttnPatch                           - ComfyUI-SolAttn_triton
+  SpectrumApplyMiniMaxH3                 - ComfyUI-Spectrum-MiniMax-H3
+  SpectrumMOSSImageManual                - ComfyUI-Spectrum-MOSS
+  String Literal                         - comfy-image-saver / ComfyLiterals
+  TextEncodeMOSSImageVision              - ComfyUI-MOSSImageTextEncoder
+  UltralyticsDetectorProvider            - ComfyUI Impact Subpack
+  UnetLoaderGGUF                         - ComfyUI-GGUF
+  UnifiedTTSTextNode                     - TTS Audio Suite
+  VAELoaderKJ                            - ComfyUI-KJNodes
+  VHS_LoadVideo                          - ComfyUI-VideoHelperSuite
+  VHS_VideoCombine                       - ComfyUI-VideoHelperSuite
+  VHS_VideoInfo                          - ComfyUI-VideoHelperSuite
+  VRAM_Debug                             - ComfyUI-KJNodes
+  ZImageTurboProgressiveLockedUpscale    - Z-Image Progressive Locked Upscale
 
 
 WHAT THIS FILE DOES NOT INSTALL

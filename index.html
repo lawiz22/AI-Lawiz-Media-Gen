@@ -51,11 +51,11 @@
     --color-border: #374151;
     --color-text-primary: #f9fafb;
     --color-text-secondary: #9ca3af;
-    --color-text-muted: #6b7280;
+    --color-text-muted: #8b93a1;
     --color-accent: #06b6d4;
     --color-accent-light: #38c7e0;
     --color-accent-lighter: #69d8eb;
-    --color-accent-text: #ffffff;
+    --color-accent-text: #030712;
     --color-accent-hover: #0891b2;
     --color-danger: #f87171;
     --color-danger-bg: rgba(127, 29, 29, 0.2);
@@ -95,19 +95,24 @@
     --color-border: #d1d5db;
     --color-text-primary: #111827;
     --color-text-secondary: #4b5563;
-    --color-text-muted: #6b7280;
+    --color-text-muted: #5d6470;
     --color-accent: #2563eb;
     --color-accent-light: #5182f0;
     --color-accent-lighter: #7da1f5;
     --color-accent-text: #ffffff;
     --color-accent-hover: #1d4ed8;
-    --color-danger: #ef4444;
+    --color-danger: #b91c1c;
     --color-danger-bg: rgba(239, 68, 68, 0.1);
     --color-banner-fill: #1e3a8a;
     --color-banner-glow-1: #2563eb;
     --color-banner-glow-2: #1e40af;
-    --color-highlight-green: #16a34a;
-    --color-highlight-yellow: #ca8a04;
+    --color-highlight-green: #15803d;
+    --color-highlight-yellow: #a16207;
+    /* Custom accent of the Outpaint tool, which is not a palette colour. */
+    --ink-xf66744: #c2410c;
+    --ink-xff957b: #c2410c;
+    --ink-xdf4e2c: #9a3412;
+    --ink-on-accent: #ffffff;
   }
   :root[data-theme="70s-groove"] {
     --color-bg-primary: #3B2F2F;
@@ -145,9 +150,35 @@
   }
 </style>
 <script>
+    // Palette colours used as ink (text, borders, rings) read variables, so that a light base can swap light shades for dark ones.
+    const ink = {};
+    {
+      const lightShade = { 50: 950, 100: 900, 200: 800, 300: 700, 400: 700, 500: 700 };
+      const triplet = hex => [1, 3, 5].map(at => parseInt(hex.slice(at, at + 2), 16)).join(' ');
+      const dark = [], light = [];
+      for (const name of ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']) {
+        ink[name] = {};
+        for (const [shade, hex] of Object.entries(tailwind.colors[name])) {
+          ink[name][shade] = `rgb(var(--ink-${name}-${shade}) / <alpha-value>)`;
+          dark.push(`--ink-${name}-${shade}:${triplet(hex)}`);
+          if (!lightShade[shade]) continue;
+          const swapped = tailwind.colors[name][lightShade[shade]];
+          // --ink-x<hex> gives the same swap to colours set in code (per-tab accents).
+          light.push(`--ink-${name}-${shade}:${triplet(swapped)}`, `--ink-x${hex.slice(1)}:${swapped}`);
+        }
+        // Accent hover (shade 600) must stay darker than the swapped accent.
+        light.push(`--ink-x${tailwind.colors[name][600].slice(1)}:${tailwind.colors[name][800]}`);
+      }
+      document.head.appendChild(Object.assign(document.createElement('style'), { textContent: `:root{${dark.join(';')}}:root[data-theme="studio-light"]{${light.join(';')}}` }));
+    }
     tailwind.config = {
+      plugins: [tailwind.plugin(({ addVariant }) => addVariant('light', ':root[data-theme="studio-light"] &'))],
       theme: {
         extend: {
+          textColor: ink,
+          borderColor: ink,
+          ringColor: ink,
+          fill: ink,
           colors: {
             'bg-primary': 'var(--color-bg-primary)',
             'bg-secondary': 'var(--color-bg-secondary)',

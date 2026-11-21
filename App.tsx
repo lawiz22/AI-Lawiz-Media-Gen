@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSelector, useDispatch, shallowEqual } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
-import { clearGenerationJobs, setGenerationJobs, setGenerationPreview, useHasGenerationJobs, type GenerationJob } from './store/generationJobs';
+import { clearGenerationJobs, setGenerationJobs, setGenerationPreview, type GenerationJob } from './store/generationJobs';
 import {
     setCurrentUser, setTheme, setFontSize, setProjectName, setActiveTab, setIsComfyUIConnected, setIsMammouthConnected, setComfyUIObjectInfo, setVersionInfo,
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
@@ -10,8 +10,7 @@ import {
     setModalOpen, addSessionTokenUsage, resetSessionTokenUsage, queueLtxTransfer, clearLtxTransfer
 } from './store/appSlice';
 import {
-    setSourceImage, setGenerationMode, setCharacterName, setShouldGenerateCharacterName,
-    setClothingImage, setBackgroundImage, setCharacterPoseImage, setPreviewedBackgroundImage, setPreviewedClothingImage,
+    setSourceImage, setGenerationMode, setCharacterName,
     setMaskImage, setElementImages, setOptions, updateOptions, setCharacterOptions, updateCharacterOptions, setLoadingState,
     switchComfyModelOptions, updateProgress, setGeneratedImages, setLastUsedPrompt, resetGenerationState,
     selectIsReadyToGenerate
@@ -36,10 +35,9 @@ import { removedImageWorkflowMessage } from './constants';
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile, Provider } from './types';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
-import { DEFAULT_GEMINI_IMAGE_MODEL, generatePortraits, generateCharacterNameForImage, updateGeminiApiKey, getApiKey, generatePromptFromImage, getGeminiAspectRatios } from './services/geminiService';
-import { generateComfyUICharacterAngles, generateComfyUIPortraits, exportComfyUIWorkflow, getComfyUIObjectInfo, subscribeComfyUIObjectInfo, checkConnection, cancelComfyUIExecution, generateComfyUIPromptFromSource } from './services/comfyUIService';
+import { DEFAULT_GEMINI_IMAGE_MODEL, generatePortraits, generateCharacterNameForImage, updateGeminiApiKey, getApiKey } from './services/geminiService';
+import { generateComfyUICharacterAngles, generateComfyUIPortraits, exportComfyUIWorkflow, getComfyUIObjectInfo, subscribeComfyUIObjectInfo, checkConnection, cancelComfyUIExecution } from './services/comfyUIService';
 import { clearH3CatalogCache } from './services/minimaxH3Service';
-import { CloseIcon as CancelCharacterIcon } from './components/icons';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, generateMammouthImages, getMammouthApiKey, testMammouthConnection, updateMammouthApiKey } from './services/mammouthService';
 import { DEFAULT_OPENROUTER_MODEL, updateOpenRouterSettings, type OpenRouterSettings } from './services/openRouterService';
 import { CHARACTER_ANGLES, getEnabledCharacterAngles } from './services/characterAnglesWorkflow';
@@ -47,9 +45,6 @@ import { generateCloudCharacterAngles } from './services/cloudCharacterService';
 import { createCharacterResultSnapshot, getCharacterResultKey, type CharacterResultSnapshot } from './services/characterResults';
 import { Login } from './components/Login';
 import { Header } from './components/Header';
-import { ImageUploader } from './components/ImageUploader';
-import { OptionsPanel } from './components/OptionsPanel';
-import { GenerationLivePreview, GenerationProgress, ImageGridWithJobs } from './components/GenerationProgress';
 import { ConnectionSettingsModal } from './components/ComfyUIConnection';
 import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, testOllamaConnection } from './services/ollamaService';
 import { LibraryPanel } from './components/LibraryPanel';
@@ -59,11 +54,7 @@ import { LTXDirectorPanel } from './components/LTXDirectorPanel';
 import { VideoWorkspace } from './components/VideoWorkspace';
 import SceneVariationPanel from './components/SceneVariationWorkspace';
 import OutpaintPanel from './components/OutpaintPanel';
-import Qwen21CharacterSheetPanel from './components/Qwen21CharacterSheetPanel';
-import { BlazingFastCharacterPanel } from './components/BlazingFastCharacterPanel';
 import { StyleGalleryPanel } from './components/StyleGalleryPanel';
-import Qwen21RemoveBackgroundPanel from './components/Qwen21RemoveBackgroundPanel';
-import Qwen21MultiPanel, { type Qwen21MultiHandle } from './components/Qwen21MultiPanel';
 import { TtsPanel } from './components/TtsPanel';
 import { createLtxScenePrompt, formatIndexTtsTranscript } from './utils/ttsTranscript';
 import { UpscalePanel } from './components/UpscalePanel';
@@ -72,6 +63,8 @@ import versionData from './version.json';
 import { LibraryPickerModal } from './components/LibraryPickerModal';
 import { LibraryPickerHost } from './components/LibraryPickerHost';
 import { TabActivity } from './components/TabActivity';
+import { ImageGeneratorTab } from './components/ImageGeneratorTab';
+import { CharacterTab } from './components/CharacterTab';
 import { isMinimaxH3PromptLibraryItem } from './services/videoPromptLibrary';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
@@ -82,11 +75,7 @@ import { VisualSettingsModal } from './components/VisualSettingsModal';
 import { InstallationDashboardModal } from './components/InstallationDashboardModal';
 import { DriveFolderCreateModal } from './components/DriveFolderCreateModal';
 import { ImageGeneratorIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, MicrophoneIcon, DownloadIcon, ResetIcon } from './components/icons';
-import { ImageGeneratorHeader } from './components/ImageGeneratorHeader';
-import { ActionControlPanel } from './components/ActionControlPanel';
 import { CloudImageProviderBar } from './components/CloudImageProviderBar';
-import { SamplerSettingsPanel } from './components/SamplerSettingsPanel';
-import { LoraSettingsPanel } from './components/LoraSettingsPanel';
 import * as driveService from './services/googleDriveService';
 import { clearDriveFileReferences, setDriveService, syncLibraryFromDrive, syncLibraryToDrive } from './services/libraryService';
 import { FunTab, type FunSubTab } from './components/FunTab';
@@ -115,11 +104,8 @@ const App: React.FC = () => {
     const [localOllamaUrl, setLocalOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || DEFAULT_OLLAMA_URL);
     const [localOllamaModel, setLocalOllamaModel] = useState(() => localStorage.getItem('ollama_model') || DEFAULT_OLLAMA_MODEL);
     const [isOllamaConnected, setIsOllamaConnected] = useState<boolean | null>(null);
-    const [isGeneratingRefinePrompt, setIsGeneratingRefinePrompt] = useState(false);
     const [generationTimes, setGenerationTimes] = useState<Record<string, number | null>>({});
     const [characterResultSnapshots, setCharacterResultSnapshots] = useState<Record<string, CharacterResultSnapshot>>({});
-    const [characterOutputsContainer, setCharacterOutputsContainer] = useState<HTMLDivElement | null>(null);
-    const [flux2EditWorkspaceContainer, setFlux2EditWorkspaceContainer] = useState<HTMLDivElement | null>(null);
     const [upscaleSourceFile, setUpscaleSourceFile] = useState<File | null>(null);
     const [isUpscalePickerOpen, setIsUpscalePickerOpen] = useState(false);
     const [isInstallationDashboardOpen, setIsInstallationDashboardOpen] = useState(false);
@@ -184,13 +170,10 @@ const App: React.FC = () => {
         ? activeVideoUtilsSubTab : activeTab;
     const isBlazingCharacter = characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'flux2' && characterOptions.comfyCharacterFlux2Tab === 'blazing-fast';
     const handleSheetSourceChange = useCallback((file: File | null) => { dispatch(setSourceImage(file)); }, [dispatch]);
-    const qwen21MultiRef = React.useRef<Qwen21MultiHandle>(null);
     const imageGeneratorContentKey = options.provider === 'comfyui'
         ? `image-generator:${options.comfyModelType || 'sdxl'}`
         : 'image-generator';
     const characterGeneratorContentKey = getCharacterResultKey(characterOptions);
-    const hasImageGenerationJobs = useHasGenerationJobs(IMAGE_JOBS_KEY);
-    const hasCharacterGenerationJobs = useHasGenerationJobs(characterGeneratorContentKey);
     const characterResultSnapshot = characterResultSnapshots[characterGeneratorContentKey];
     const activeGenerationContentKey = activeTab === 'image-generator' ? imageGeneratorContentKey
         : activeTab === 'character-generator' ? characterGeneratorContentKey : activeTab;
@@ -1123,6 +1106,15 @@ const App: React.FC = () => {
         return Array.from(modelSet);
     }, [comfyUIObjectInfo]);
 
+    // The tab bar sticks under the header, whose height changes when it wraps.
+    const stickUnderHeader = useCallback((bar: HTMLDivElement | null) => {
+        const header = document.querySelector('header');
+        if (!bar || !header) return undefined;
+        const observer = new ResizeObserver(() => { bar.style.top = `${header.offsetHeight}px`; });
+        observer.observe(header);
+        return () => observer.disconnect();
+    }, []);
+
     if (!currentUser) {
         return <Login onLogin={handleLogin} />;
     }
@@ -1223,7 +1215,7 @@ const App: React.FC = () => {
                 />
 
                 {/* Navigation Tabs */}
-                <div className="flex flex-nowrap justify-start xl:justify-center gap-0.5 mb-4 sticky top-0 z-[11] bg-bg-primary/95 backdrop-blur-md p-1 rounded-lg border border-border-primary shadow-sm mx-auto w-full max-w-7xl overflow-x-auto">
+                <div ref={stickUnderHeader} className="flex flex-nowrap justify-start xl:justify-center gap-0.5 mb-4 sticky top-0 z-[11] bg-bg-primary p-1 rounded-lg border border-border-primary shadow-sm mx-auto w-full max-w-7xl overflow-x-auto">
                     {[
                         { id: 'image-generator', label: 'Image Gen', icon: <ImageGeneratorIcon className="w-4 h-4" />, activeClass: 'border-cyan-400 bg-cyan-400/15 text-cyan-300 shadow-cyan-500/20' },
                         { id: 'character-generator', label: 'Character', icon: <CharacterIcon className="w-4 h-4" />, activeClass: 'border-fuchsia-400 bg-fuchsia-400/15 text-fuchsia-300 shadow-fuchsia-500/20' },
@@ -1259,7 +1251,7 @@ const App: React.FC = () => {
                 <div className={`w-full mx-auto border-t-2 border-accent pt-3 ${activeTab === 'library' ? 'max-w-none' : 'max-w-7xl'}`} style={getTabAccentStyle(activePanelResetKey)}>
                     {['ltx-director', 'tts', 'prompt-generator', 'video-utils'].includes(activeTab) || (activeTab === 'fun' && (activeFunSubTab === 'photo-fusion' || activeFunSubTab === 'past-forward' || activeFunSubTab === 'swap-anything' || activeFunSubTab === 'stylise-anything')) ? (
                         <div className="mb-3 flex justify-end">
-                            <button type="button" onClick={handleActivePanelReset} className="flex items-center gap-2 rounded-md border border-danger/50 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white">
+                            <button type="button" onClick={handleActivePanelReset} className="flex items-center gap-2 rounded-md border border-danger bg-danger-bg px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white">
                                 <ResetIcon className="h-4 w-4" /> Reset
                             </button>
                         </div>
@@ -1292,252 +1284,42 @@ const App: React.FC = () => {
                                     : { clothesGenerationProvider: provider }))}
                             disabled={isLoading || extractorState.isGenerating || extractorState.isGeneratingHair || extractorState.isGeneratingObjects || extractorState.isGeneratingPoses || extractorState.isGeneratingFont}
                             action={
-                                <button type="button" onClick={handleActivePanelReset} className="flex items-center gap-2 rounded-md border border-danger/50 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white">
+                                <button type="button" onClick={handleActivePanelReset} className="flex items-center gap-2 rounded-md border border-danger bg-danger-bg px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white">
                                     <ResetIcon className="h-4 w-4" /> Reset
                                 </button>
                             }
                         />
                     )}
                     <TabActivity mode={activeTab === 'image-generator' ? 'visible' : 'hidden'}>
-                        <>
-                            <ImageGeneratorHeader
-                                options={currentOptions}
-                                updateOptions={handleUpdateOptions}
-                                restoreOptions={handleSetOptions}
-                                switchComfyModel={handleSwitchComfyModel}
-                                generationMode={generationMode}
-                                setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
-                                onExportWorkflow={() => {
-                                    if (currentOptions.provider === 'comfyui' && currentOptions.comfyModelType === 'qwen21-i2i-multi') { void qwen21MultiRef.current?.exportWorkflow(); return; }
-                                    const generatedImages = generatedContent[imageGeneratorContentKey]?.images || [];
-                                    const lastImage = generatedImages.length > 0 ? generatedImages[generatedImages.length - 1] as any : null;
-                                    const optionsToExport = lastImage && lastImage.seed !== undefined
-                                        ? { ...currentOptions, comfySeed: lastImage.seed }
-                                        : currentOptions;
-                                    void handleExportImageWorkflow(optionsToExport);
-                                }}
-                                isDisabled={isLoading}
-                            />
-                            <TabActivity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-remove-background' ? 'visible' : 'hidden'}>
-                                <Qwen21RemoveBackgroundPanel options={options} updateOptions={handleUpdateOptions} sourceFile={sourceImage} onSourceChange={handleSheetSourceChange} isComfyUIConnected={isComfyUIConnected} objectInfo={comfyUIObjectInfo} />
-                            </TabActivity>
-                            <TabActivity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-i2i-consistency' ? 'visible' : 'hidden'}>
-                                <Qwen21RemoveBackgroundPanel editMode="consistency" options={options} updateOptions={handleUpdateOptions} sourceFile={sourceImage} onSourceChange={handleSheetSourceChange} isComfyUIConnected={isComfyUIConnected} objectInfo={comfyUIObjectInfo} />
-                            </TabActivity>
-                            <TabActivity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-i2i-turbo' ? 'visible' : 'hidden'}>
-                                <Qwen21RemoveBackgroundPanel editMode="turbo" options={options} updateOptions={handleUpdateOptions} sourceFile={sourceImage} onSourceChange={handleSheetSourceChange} isComfyUIConnected={isComfyUIConnected} objectInfo={comfyUIObjectInfo} />
-                            </TabActivity>
-                            <TabActivity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-i2i-multi' ? 'visible' : 'hidden'}>
-                                <Qwen21MultiPanel ref={qwen21MultiRef} options={options} updateOptions={handleUpdateOptions} isComfyUIConnected={isComfyUIConnected} objectInfo={comfyUIObjectInfo} />
-                            </TabActivity>
-                            <TabActivity mode={options.provider === 'comfyui' && ['qwen21-remove-background', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(options.comfyModelType || '') ? 'hidden' : 'visible'}>
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                                <div className="lg:col-span-1 space-y-8">
-                                    {!(currentOptions.provider === 'comfyui' && (currentOptions.comfyModelType === 'krea2-edit' || currentOptions.comfyModelType === 'flux2-edit')) && !(currentOptions.provider === 'comfyui'
-                                        && generationMode === 't2i'
-                                        && (currentOptions.comfyModelType === 'flux2-simple'
-                                            || currentOptions.comfyModelType === 'krea2-simple'
-                                            || currentOptions.comfyModelType === 'krea2-raw'
-                                            || currentOptions.comfyModelType === 'qwen21-t2i'
-                                            || currentOptions.comfyModelType === 'qwen21-turbo'
-                                            || currentOptions.comfyModelType === 'moss-image'
-                                            || currentOptions.comfyModelType === 'moss-photo')) && (
-                                    <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                                        <div className="mb-4 flex flex-wrap items-center gap-3">
-                                            <h2 className="text-xl font-bold text-accent">
-                                                {currentOptions.provider === 'comfyui' && generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image')
-                                                    ? '1. Refine (Optional)'
-                                                    : '1. Source & Context'}
-                                            </h2>
-                                        </div>
-
-                                        {currentOptions.provider === 'comfyui' && generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image') ? (
-                                            <div className="space-y-4">
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="checkbox"
-                                                        id="useRefine"
-                                                        checked={currentOptions.useRefine || false}
-                                                        onChange={(e) => dispatch(updateOptions({ useRefine: e.target.checked }))}
-                                                        className="w-5 h-5 rounded border-border-primary text-accent focus:ring-accent"
-                                                    />
-                                                    <label htmlFor="useRefine" className="text-sm font-medium text-text-primary cursor-pointer">
-                                                        Enable Refine (Image-to-Image)
-                                                    </label>
-                                                </div>
-
-                                                {currentOptions.useRefine && (
-                                                    <div className="animate-fade-in space-y-4">
-                                                        <div className="flex items-center justify-between">
-                                                            <label className="text-sm font-medium text-text-secondary">Source Image</label>
-                                                            <button
-                                                                onClick={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: true }))}
-                                                                className="p-2 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover text-text-secondary"
-                                                                title="Load from Library"
-                                                            >
-                                                                <LibraryIcon className="w-5 h-5" />
-                                                            </button>
-                                                        </div>
-                                                        <ImageUploader
-                                                            label="Upload Source Image to Refine"
-                                                            id="refine-source-upload"
-                                                            onImageUpload={(file) => dispatch(setSourceImage(file))}
-                                                            sourceFile={sourceImage}
-                                                        />
-
-                                                        <div>
-                                                            <div className="flex justify-between mb-1">
-                                                                <label className="text-sm font-medium text-text-secondary">Denoise Strength</label>
-                                                                <span className="text-sm font-bold text-accent">{currentOptions.refineDenoise || 0.5}</span>
-                                                            </div>
-                                                            <input
-                                                                type="range"
-                                                                min="0.01"
-                                                                max="1.0"
-                                                                step="0.01"
-                                                                value={currentOptions.refineDenoise || 0.5}
-                                                                onChange={(e) => dispatch(updateOptions({ refineDenoise: parseFloat(e.target.value) }))}
-                                                                className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer accent-accent"
-                                                            />
-                                                            <p className="text-xs text-text-muted mt-1">Lower values keep more of the original image structure.</p>
-                                                        </div>
-                                                        <div>
-                                                            <div className="flex justify-between mb-1">
-                                                                <label className="text-sm font-medium text-text-secondary">Megapixels (Resize)</label>
-                                                                <span className="text-sm font-bold text-accent">{currentOptions.refineMegapixels || 0.5} MP</span>
-                                                            </div>
-                                                            <input
-                                                                type="range"
-                                                                min="0.1"
-                                                                max="2.0"
-                                                                step="0.1"
-                                                                value={currentOptions.refineMegapixels || 0.5}
-                                                                onChange={(e) => dispatch(updateOptions({ refineMegapixels: parseFloat(e.target.value) }))}
-                                                                className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer accent-accent"
-                                                            />
-                                                            <p className="text-xs text-text-muted mt-1">Target resolution in megapixels (0.5 is approx 700x700).</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-2">
-                                                <ImageUploader
-                                                    label={generationMode === 'i2i' ? 'Upload Source Image (Required)' : 'Upload Source Image (Optional for T2I)'}
-                                                    id="main-source-upload"
-                                                    onImageUpload={(file) => dispatch(setSourceImage(file))}
-                                                    sourceFile={sourceImage}
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-                                    )}
-                                    <OptionsPanel
-                                        options={currentOptions}
-                                        setOptions={handleSetOptions}
-                                        updateOptions={handleUpdateOptions}
-                                        generationMode={generationMode}
-                                        setGenerationMode={(mode) => dispatch(setGenerationMode(mode))}
-                                        previewedBackgroundImage={previewedBackgroundImage}
-                                        setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
-                                        previewedClothingImage={previewedClothingImage}
-                                        setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
-                                        onGenerate={handleGenerate}
-                                        onReset={handleReset}
-                                        onGeneratePrompt={async () => {
-                                            if (!sourceImage) return;
-
-                                            setIsGeneratingRefinePrompt(true);
-                                            try {
-                                                let prompt = "";
-                                                if (currentOptions.provider === 'comfyui') {
-                                                    prompt = await generateComfyUIPromptFromSource(sourceImage, currentOptions.comfyModelType || 'sdxl');
-                                                } else {
-                                                    prompt = await generatePromptFromImage(sourceImage);
-                                                }
-                                                dispatch(updateOptions(currentOptions.comfyModelType === 'krea2-simple' || currentOptions.comfyModelType === 'krea2-raw'
-                                                    ? { comfyKreaPrompt: prompt }
-                                                    : currentOptions.comfyModelType === 'flux2-simple'
-                                                        ? { comfyFlux2Prompt: prompt }
-                                                        : { comfyPrompt: prompt }));
-                                            } catch (error) {
-                                                console.error("Failed to generate prompt:", error);
-                                                dispatch(setGlobalError({ title: "Prompt Generation Failed", message: "Could not generate prompt from image." }));
-                                            } finally {
-                                                setIsGeneratingRefinePrompt(false);
-                                            }
-                                        }}
-                                        onExportWorkflow={() => { void handleExportImageWorkflow(options); }}
-                                        isDisabled={isLoading}
-                                        isReady={isReadyToGenerate}
-                                        isGeneratingPrompt={isGeneratingRefinePrompt}
-                                        comfyUIObjectInfo={comfyUIObjectInfo}
-                                        comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
-                                        sourceImage={sourceImage}
-                                        onSourceImageChange={handleSheetSourceChange}
-                                        onOpenSourceLibrary={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: true }))}
-                                        activeTab={activeTab}
-                                        maskImage={maskImage}
-                                        setMaskImage={(file) => dispatch(setMaskImage(file))}
-                                        elementImages={elementImages}
-                                        setElementImages={(files) => dispatch(setElementImages(files))}
-                                        onOpenMaskPicker={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: true }))}
-                                        onOpenElementPicker={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: true }))}
-                                        hideGeneralSettings={true}
-                                        flux2EditWorkspaceContainer={flux2EditWorkspaceContainer}
-                                    />
-                                </div>
-                                <div className="lg:col-span-2 space-y-8">
-                                    <ActionControlPanel
-                                        options={currentOptions}
-                                        generationMode={generationMode}
-                                        onGenerate={handleGenerate}
-                                        onReset={handleReset}
-                                        isReady={isReadyToGenerate}
-                                        isDisabled={isLoading}
-                                        updateOptions={handleUpdateOptions}
-                                    />
-                                    {isLoading && (currentOptions.comfyModelType === 'moss-image' || currentOptions.comfyModelType === 'moss-photo') && <GenerationLivePreview />}
-                                    {currentOptions.provider === 'comfyui' && currentOptions.comfyModelType === 'flux2-edit' && <div ref={setFlux2EditWorkspaceContainer} data-flux2-edit-workspace="true" className="min-w-0" />}
-                                    {isLoading && !hasImageGenerationJobs ? (
-                                        <GenerationProgress onCancel={cancelComfyUIExecution} />
-                                    ) : (
-                                        <>
-                                            {isLoading && <GenerationProgress onCancel={cancelComfyUIExecution} />}
-                                            <ImageGridWithJobs
-                                                jobsKey={IMAGE_JOBS_KEY}
-                                                showJobs={isLoading}
-                                                images={generatedContent[imageGeneratorContentKey]?.images || []}
-                                                onSendToI2I={handleSendToI2I}
-                                                onSendToCharacter={handleSendToCharacter}
-                                                onSendToUpscale={handleSendToUpscale}
-                                                lastUsedPrompt={generatedContent[imageGeneratorContentKey]?.lastUsedPrompt}
-                                                options={generatedContent[imageGeneratorContentKey]?.options ?? currentOptions}
-                                                sourceImage={sourceImage}
-                                                activeTab={imageGeneratorContentKey}
-                                                generationTime={generationTimes[imageGeneratorContentKey]}
-                                            />
-                                        </>
-                                    )}
-                                    {currentOptions.provider === 'comfyui' && <>
-                                        <LoraSettingsPanel
-                                            options={currentOptions}
-                                            updateOptions={(opts) => dispatch(updateOptions(opts))}
-                                            isDisabled={isLoading}
-                                            availableLoras={availableLoras}
-                                            comfyUIObjectInfo={comfyUIObjectInfo}
-                                        />
-                                        <SamplerSettingsPanel
-                                            options={currentOptions}
-                                            updateOptions={(opts) => dispatch(updateOptions(opts))}
-                                            isDisabled={isLoading}
-                                            comfyUIObjectInfo={comfyUIObjectInfo}
-                                        />
-                                    </>}
-                                </div>
-                            </div>
-                            </TabActivity>
-                        </>
+                        <ImageGeneratorTab
+                            options={options}
+                            generationMode={generationMode}
+                            sourceImage={sourceImage}
+                            maskImage={maskImage}
+                            elementImages={elementImages}
+                            previewedBackgroundImage={previewedBackgroundImage}
+                            previewedClothingImage={previewedClothingImage}
+                            isLoading={isLoading}
+                            isReady={isReadyToGenerate}
+                            isComfyUIConnected={isComfyUIConnected}
+                            comfyUIObjectInfo={comfyUIObjectInfo}
+                            availableLoras={availableLoras}
+                            activeTab={activeTab}
+                            content={generatedContent[imageGeneratorContentKey]}
+                            contentKey={imageGeneratorContentKey}
+                            generationTime={generationTimes[imageGeneratorContentKey]}
+                            jobsKey={IMAGE_JOBS_KEY}
+                            updateOptions={handleUpdateOptions}
+                            restoreOptions={handleSetOptions}
+                            switchComfyModel={handleSwitchComfyModel}
+                            onGenerate={handleGenerate}
+                            onReset={handleReset}
+                            onExportWorkflow={handleExportImageWorkflow}
+                            onSourceChange={handleSheetSourceChange}
+                            onSendToI2I={handleSendToI2I}
+                            onSendToCharacter={handleSendToCharacter}
+                            onSendToUpscale={handleSendToUpscale}
+                        />
                     </TabActivity>
 
                     <TabActivity mode={activeTab === 'scene-variation' ? 'visible' : 'hidden'}>
@@ -1548,188 +1330,38 @@ const App: React.FC = () => {
                         <StyleGalleryPanel isComfyUIConnected={isComfyUIConnected} onOpenLibrary={path => { setModelLibraryRequest({ path, id: Date.now() }); handleTabChange('civitai'); }} />
                     </TabActivity>
                     <TabActivity mode={activeTab === 'character-generator' ? 'visible' : 'hidden'}>
-                        <>
-                        <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-border-primary bg-bg-secondary p-2 shadow-sm">
-                            <div className="flex gap-1 rounded-lg bg-bg-tertiary p-1">
-                                <button
-                                    type="button"
-                                    onClick={() => handleUpdateOptions({ provider: 'comfyui' })}
-                                    disabled={isLoading}
-                                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${currentOptions.provider === 'comfyui'
-                                        ? 'bg-accent text-accent-text shadow-sm'
-                                        : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
-                                        } disabled:cursor-not-allowed disabled:opacity-50`}
-                                >
-                                    ComfyUI
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleUpdateOptions({ provider: 'mammouth' })}
-                                    disabled={isLoading}
-                                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${currentOptions.provider === 'mammouth'
-                                        ? 'bg-accent text-accent-text shadow-sm'
-                                        : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
-                                        } disabled:cursor-not-allowed disabled:opacity-50`}
-                                >
-                                    Mammouth
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const geminiModel = currentOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL;
-                                        const aspectRatio = getGeminiAspectRatios(geminiModel).includes(currentOptions.aspectRatio)
-                                            ? currentOptions.aspectRatio
-                                            : '1:1';
-                                        handleUpdateOptions({ provider: 'gemini', geminiMode: 'i2i', geminiI2iMode: 'character', aspectRatio });
-                                    }}
-                                    disabled={isLoading}
-                                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${currentOptions.provider === 'gemini'
-                                        ? 'bg-accent text-accent-text shadow-sm'
-                                        : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
-                                        } disabled:cursor-not-allowed disabled:opacity-50`}
-                                >
-                                    Gemini
-                                </button>
-                            </div>
-                            {currentOptions.provider === 'comfyui' && <div role="tablist" aria-label="ComfyUI character workflow" className="flex gap-1 rounded-lg bg-bg-tertiary p-1">
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={(currentOptions.comfyCharacterMode || 'qwen') === 'qwen'}
-                                    onClick={() => handleUpdateOptions({ comfyCharacterMode: 'qwen' })}
-                                    disabled={isLoading}
-                                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${(currentOptions.comfyCharacterMode || 'qwen') === 'qwen' ? 'bg-accent text-accent-text shadow-sm' : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'} disabled:cursor-not-allowed disabled:opacity-50`}
-                                >
-                                    QWEN
-                                </button>
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={currentOptions.comfyCharacterMode === 'flux2'}
-                                    onClick={() => handleUpdateOptions({ comfyCharacterMode: 'flux2' })}
-                                    disabled={isLoading}
-                                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${currentOptions.comfyCharacterMode === 'flux2' ? 'bg-accent text-accent-text shadow-sm' : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'} disabled:cursor-not-allowed disabled:opacity-50`}
-                                >
-                                    FLUX2
-                                </button>
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={currentOptions.comfyCharacterMode === 'qwen21' || currentOptions.comfyCharacterMode === 'qwen21-create'}
-                                    onClick={() => handleUpdateOptions({ comfyCharacterMode: currentOptions.comfyCharacterMode === 'qwen21-create' ? 'qwen21-create' : 'qwen21' })}
-                                    disabled={isLoading}
-                                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${currentOptions.comfyCharacterMode === 'qwen21' || currentOptions.comfyCharacterMode === 'qwen21-create' ? 'bg-accent text-accent-text shadow-sm' : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'} disabled:cursor-not-allowed disabled:opacity-50`}
-                                >
-                                    QWEN 2.1
-                                </button>
-                            </div>}
-                        </div>
-                        {characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'flux2' && <div role="tablist" aria-label="FLUX2 character workflow" className="mb-4 flex gap-4 border-b border-border-primary">
-                            {([['standard', 'Character Angles'], ['blazing-fast', 'Blazing Fast character']] as const).map(([tab, label]) => <button key={tab} type="button" role="tab" aria-selected={(characterOptions.comfyCharacterFlux2Tab || 'standard') === tab} disabled={isLoading} onClick={() => handleUpdateOptions({ comfyCharacterFlux2Tab: tab })} className={`border-b-2 px-1 py-3 text-sm font-semibold ${(characterOptions.comfyCharacterFlux2Tab || 'standard') === tab ? 'border-accent text-accent' : 'border-transparent text-text-secondary'}`}>{label}</button>)}
-                        </div>}
-                        <TabActivity mode={isBlazingCharacter ? 'visible' : 'hidden'}>
-                            <BlazingFastCharacterPanel isComfyUIConnected={isComfyUIConnected} onManageStyles={() => handleTabChange('style-gallery')} onModelChange={setBlazingModel} pendingPreset={blazingPreset} onPresetLoaded={() => setBlazingPreset(null)} />
-                        </TabActivity>
-                        {characterOptions.provider === 'comfyui' && ['qwen21', 'qwen21-create'].includes(characterOptions.comfyCharacterMode || '') && <div role="tablist" aria-label="Qwen 2.1 character workflow" className="flex gap-4 border-b border-border-primary">
-                            {([['qwen21', 'Character Sheet'], ['qwen21-create', 'Create Character']] as const).map(([mode, label]) => <button key={mode} type="button" role="tab" aria-selected={characterOptions.comfyCharacterMode === mode} disabled={isLoading} onClick={() => handleUpdateOptions({ comfyCharacterMode: mode })} className={`border-b-2 px-1 py-3 text-sm font-semibold ${characterOptions.comfyCharacterMode === mode ? 'border-accent text-accent' : 'border-transparent text-text-secondary'}`}>{label}</button>)}
-                        </div>}
-                        <TabActivity mode={characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'qwen21' ? 'visible' : 'hidden'}>
-                            <Qwen21CharacterSheetPanel options={characterOptions} onOptionsChange={handleUpdateOptions} sourceFile={sourceImage} onSourceChange={handleSheetSourceChange} onOpenLibrary={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: true }))} characterName={characterName} onNameChange={name => dispatch(setCharacterName(name))} isComfyUIConnected={isComfyUIConnected} objectInfo={comfyUIObjectInfo} />
-                        </TabActivity>
-                        <TabActivity mode={isBlazingCharacter || characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'qwen21' ? 'hidden' : 'visible'}>
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                            <div className="lg:col-span-1 space-y-8">
-                                <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h2 className="text-xl font-bold text-accent">1. Character Source</h2>
-                                        <button onClick={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: true }))} className="p-2 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover" title="Load from Library"><LibraryIcon className="w-5 h-5" /></button>
-                                    </div>
-                                    <ImageUploader label="Upload Face/Character Reference" id="char-source-upload" onImageUpload={(file) => dispatch(setSourceImage(file))} sourceFile={sourceImage} />
-                                    <div className="mt-4">
-                                        <label className="block text-sm font-medium text-text-secondary mb-1">Character Name</label>
-                                        <div className="flex gap-2">
-                                            <input type="text" value={characterName} onChange={(e) => dispatch(setCharacterName(e.target.value))} placeholder="Enter or Auto-Generate" className="flex-grow bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm" />
-                                            <button onClick={() => dispatch(setShouldGenerateCharacterName(!shouldGenerateCharacterName))} className={`p - 2 rounded - md border ${shouldGenerateCharacterName ? 'bg-accent text-accent-text border-accent' : 'bg-bg-tertiary text-text-secondary border-border-primary'} `} title="Auto-generate name"><CharacterIcon className="w-5 h-5" /></button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <OptionsPanel
-                                    options={currentOptions}
-                                    setOptions={handleSetOptions}
-                                    updateOptions={handleUpdateOptions}
-                                    generationMode="i2i" // Always I2I for character gen
-                                    setGenerationMode={() => { }} // No-op, locked to I2I
-                                    previewedBackgroundImage={previewedBackgroundImage}
-                                    setPreviewedBackgroundImage={(url) => dispatch(setPreviewedBackgroundImage(url))}
-                                    previewedClothingImage={previewedClothingImage}
-                                    setPreviewedClothingImage={(url) => dispatch(setPreviewedClothingImage(url))}
-                                    onGenerate={handleGenerate}
-                                    onReset={handleReset}
-                                    onGeneratePrompt={() => { }}
-                                    onExportWorkflow={() => { }}
-                                    onOpenPosePicker={() => dispatch(setModalOpen({ modal: 'isPosePickerOpen', isOpen: true }))}
-                                    isDisabled={isLoading}
-                                    isReady={isReadyToGenerate}
-                                    isGeneratingPrompt={false}
-                                    comfyUIObjectInfo={comfyUIObjectInfo}
-                                    comfyUIUrl={localStorage.getItem('comfyui_url') || ''}
-                                    sourceImage={sourceImage}
-                                    hideProviderSwitch={true}
-                                    hideGenerationModeSwitch={true} // Hide mode switch, locked to I2I
-                                    title="2. Character Options"
-                                    characterOutputsContainer={characterOutputsContainer}
-                                    activeTab={activeTab}
-                                    maskImage={null} // Not used in this simple view
-                                    setMaskImage={() => { }}
-                                    elementImages={[]}
-                                    setElementImages={() => { }}
-                                    onOpenMaskPicker={() => { }}
-                                    onOpenElementPicker={() => { }}
-                                    // New props passed for Character Generator Image Uploads
-                                    clothingImage={clothingImage}
-                                    setClothingImage={(file) => dispatch(setClothingImage(file))}
-                                    backgroundImage={backgroundImage}
-                                    setBackgroundImage={(file) => dispatch(setBackgroundImage(file))}
-                                    characterPoseImage={characterPoseImage}
-                                    setCharacterPoseImage={(file) => dispatch(setCharacterPoseImage(file))}
-                                    onOpenClothingLibrary={() => dispatch(setModalOpen({ modal: 'isClothingPickerOpen', isOpen: true }))}
-                                    onOpenBackgroundLibrary={() => dispatch(setModalOpen({ modal: 'isBackgroundPickerOpen', isOpen: true }))}
-                                />
-                            </div>
-                            <div className="lg:col-span-2 min-w-0 space-y-8">
-                                <ActionControlPanel
-                                    options={currentOptions}
-                                    generationMode="i2i"
-                                    onGenerate={handleGenerate}
-                                    onReset={handleReset}
-                                    isReady={isReadyToGenerate}
-                                    isDisabled={isLoading}
-                                />
-                                {isLoading && !hasCharacterGenerationJobs ? (
-                                    <GenerationProgress />
-                                ) : (
-                                    <ImageGridWithJobs
-                                        key={characterGeneratorContentKey}
-                                        jobsKey={characterGeneratorContentKey}
-                                        contentKey={characterGeneratorContentKey}
-                                        images={generatedContent[characterGeneratorContentKey]?.images || []}
-                                        onSendToI2I={handleSendToI2I}
-                                        onSendToCharacter={handleSendToCharacter}
-                                        onSendToUpscale={handleSendToUpscale}
-                                        lastUsedPrompt={generatedContent[characterGeneratorContentKey]?.lastUsedPrompt}
-                                        options={characterResultSnapshot?.options ?? characterOptions}
-                                        sourceImage={characterResultSnapshot ? characterResultSnapshot.sourceImage : sourceImage}
-                                        characterName={characterResultSnapshot ? characterResultSnapshot.characterName : characterName}
-                                        activeTab="character-generator"
-                                        generationTime={generationTimes[characterGeneratorContentKey]}
-                                    />
-                                )}
-                                {isLoading && currentOptions.provider === 'comfyui' && <div className="flex justify-end"><button type="button" onClick={handleCancelCharacterGeneration} disabled={isCharacterCancelling} className="inline-flex items-center justify-center gap-2 rounded-md border border-danger bg-danger-bg px-4 py-2 text-sm font-semibold text-danger hover:bg-danger hover:text-white disabled:opacity-50"><CancelCharacterIcon className="h-4 w-4" />{isCharacterCancelling ? 'Cancelling...' : 'Cancel Generation'}</button></div>}
-                                <div ref={setCharacterOutputsContainer} data-character-outputs="true" className="min-w-0" />
-                            </div>
-                        </div>
-                        </TabActivity>
-                        </>
+                        <CharacterTab
+                            options={characterOptions}
+                            sourceImage={sourceImage}
+                            clothingImage={clothingImage}
+                            backgroundImage={backgroundImage}
+                            characterPoseImage={characterPoseImage}
+                            previewedBackgroundImage={previewedBackgroundImage}
+                            previewedClothingImage={previewedClothingImage}
+                            characterName={characterName}
+                            shouldGenerateCharacterName={shouldGenerateCharacterName}
+                            isLoading={isLoading}
+                            isReady={isReadyToGenerate}
+                            isCancelling={isCharacterCancelling}
+                            isComfyUIConnected={isComfyUIConnected}
+                            comfyUIObjectInfo={comfyUIObjectInfo}
+                            content={generatedContent[characterGeneratorContentKey]}
+                            contentKey={characterGeneratorContentKey}
+                            generationTime={generationTimes[characterGeneratorContentKey]}
+                            resultSnapshot={characterResultSnapshot}
+                            blazingPreset={blazingPreset}
+                            onBlazingPresetLoaded={() => setBlazingPreset(null)}
+                            onBlazingModelChange={setBlazingModel}
+                            onManageStyles={() => handleTabChange('style-gallery')}
+                            updateOptions={handleUpdateOptions}
+                            restoreOptions={handleSetOptions}
+                            onGenerate={handleGenerate}
+                            onReset={handleReset}
+                            onCancel={handleCancelCharacterGeneration}
+                            onSendToI2I={handleSendToI2I}
+                            onSendToCharacter={handleSendToCharacter}
+                            onSendToUpscale={handleSendToUpscale}
+                        />
                     </TabActivity>
 
                     <FunTab active={activeTab === 'fun'} subTab={activeFunSubTab} onSubTabChange={setActiveFunSubTab} resetVersion={panelResetVersions.fun || 0} isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} />

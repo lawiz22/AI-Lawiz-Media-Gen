@@ -78,7 +78,7 @@ export const SystemMetricsIndicators: React.FC = () => {
                 aria-valuenow={value ?? undefined}
                 aria-valuetext={value === null ? `Unavailable. ${detail}` : text}
                 title={`${indicator.description}: ${text}\n${detail}`}
-                className="relative h-8 w-[60px] overflow-hidden rounded-sm border border-white/10 bg-black/40">
+                className="relative h-8 w-[60px] overflow-hidden rounded-sm border border-white/10 bg-black/40 light:bg-black/75">
                 <div className="absolute inset-y-0 left-0 transition-[width] duration-500" style={{
                     backgroundColor: indicator.color,
                     width: `${value === null ? 0 : Math.max(0, Math.min(100, value))}%`,

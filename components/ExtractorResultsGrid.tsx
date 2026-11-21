@@ -129,7 +129,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                                 {item.error ? (
                                     <>
                                         <p className="text-sm font-bold text-danger">Generation failed</p>
-                                        <p className="mt-2 line-clamp-4 text-xs text-danger/80" title={item.error}>{item.error}</p>
+                                        <p className="mt-2 line-clamp-4 text-xs text-danger" title={item.error}>{item.error}</p>
                                     </>
                                 ) : (
                                     <>
@@ -178,14 +178,14 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                                             <>
                                                 <button 
                                                     onClick={() => handleDownload(item.skeletonImage || '', `${item.description}_skeleton`)} 
-                                                    className="p-2 rounded-full bg-bg-secondary/90 text-text-primary hover:bg-accent hover:text-accent-text transition-colors shadow-lg"
+                                                    className="p-2 rounded-full bg-bg-secondary text-text-primary hover:bg-accent hover:text-accent-text transition-colors shadow-lg"
                                                     title="Download Skeleton"
                                                 >
                                                     <DownloadIcon className="w-4 h-4"/>
                                                 </button>
                                                 <button 
                                                     onClick={() => handleDownloadText(JSON.stringify(item.poseJson, null, 2), `${item.description}_pose.json`)} 
-                                                    className="p-2 rounded-full bg-bg-secondary/90 text-text-primary hover:bg-accent hover:text-accent-text transition-colors shadow-lg"
+                                                    className="p-2 rounded-full bg-bg-secondary text-text-primary hover:bg-accent hover:text-accent-text transition-colors shadow-lg"
                                                     title="Download JSON"
                                                 >
                                                     <CodeBracketIcon className="w-4 h-4"/>
@@ -194,7 +194,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                                         ) : (
                                             <button 
                                                 onClick={() => handleDownload(image, name)} 
-                                                className="p-2 rounded-full bg-bg-secondary/90 text-text-primary hover:bg-accent hover:text-accent-text transition-colors shadow-lg"
+                                                className="p-2 rounded-full bg-bg-secondary text-text-primary hover:bg-accent hover:text-accent-text transition-colors shadow-lg"
                                                 title="Download Image"
                                             >
                                                 <DownloadIcon className="w-4 h-4"/>
@@ -204,7 +204,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                                         <button
                                             onClick={() => onSave(item, index)}
                                             disabled={item.saved !== 'idle'}
-                                            className={`p-2 rounded-full transition-colors shadow-lg ${item.saved === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-secondary/90 text-text-primary hover:bg-accent hover:text-accent-text'}`}
+                                            className={`p-2 rounded-full transition-colors shadow-lg ${item.saved === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-secondary text-text-primary hover:bg-accent hover:text-accent-text'}`}
                                             title={item.saved === 'saved' ? 'Saved' : 'Save to Library'}
                                         >
                                             {item.saved === 'saving' ? <SpinnerIcon className="w-4 h-4 animate-spin"/> : item.saved === 'saved' ? <CheckIcon className="w-4 h-4"/> : <SaveIcon className="w-4 h-4"/>}
@@ -222,10 +222,10 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                 <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={handleCloseModals}>
                     {items.length > 1 && (
                         <>
-                            <button onClick={(e) => { e.stopPropagation(); handlePrevItem(); }} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text transition-colors z-50" aria-label="Previous">
+                            <button onClick={(e) => { e.stopPropagation(); handlePrevItem(); }} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary text-text-primary hover:bg-accent hover:text-accent-text transition-colors z-50" aria-label="Previous">
                                 <ChevronLeftIcon className="w-8 h-8" />
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); handleNextItem(); }} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 text-text-primary hover:bg-accent hover:text-accent-text transition-colors z-50" aria-label="Next">
+                            <button onClick={(e) => { e.stopPropagation(); handleNextItem(); }} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary text-text-primary hover:bg-accent hover:text-accent-text transition-colors z-50" aria-label="Next">
                                 <ChevronRightIcon className="w-8 h-8" />
                             </button>
                         </>
@@ -245,7 +245,7 @@ export const ExtractorResultsGrid: React.FC<ExtractorResultsGridProps> = ({ item
                             <div className="flex flex-col lg:flex-row gap-6 h-full">
                                 
                                 {/* Image Column */}
-                                <div className="lg:w-1/2 flex items-center justify-center bg-black/20 rounded-lg p-2 h-1/2 lg:h-full overflow-hidden relative border border-border-primary/30 flex-shrink-0">
+                                <div className="lg:w-1/2 flex items-center justify-center bg-black/20 rounded-lg p-2 h-1/2 lg:h-full overflow-hidden relative border border-border-primary flex-shrink-0">
                                     <img 
                                         src={getModalImage(selectedItemModal)} 
                                         alt="Result" 

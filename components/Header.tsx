@@ -105,7 +105,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="bg-bg-secondary/50 backdrop-blur-sm p-3 shadow-lg sticky top-0 z-10 border-b border-border-primary" style={getTabAccentStyle(activeTab)}>
+    <header className="bg-bg-secondary p-3 shadow-lg sticky top-0 z-10 border-b border-border-primary" style={getTabAccentStyle(activeTab)}>
       <div className="container mx-auto flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-3">
         <div className="flex items-center gap-4">

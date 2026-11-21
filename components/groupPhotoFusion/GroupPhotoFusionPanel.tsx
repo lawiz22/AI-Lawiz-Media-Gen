@@ -29,6 +29,8 @@ import { SendToLTXButton } from '../SendToLTXButton';
 import { Accordion } from '../ui/Accordion';
 import { ModelFields, NumberField, SamplerFields } from '../ui/fields';
 import { Select } from '../ui/Select';
+import { familyFiles, flux2Family } from '../../services/styleLibrary';
+import { useModelInventory } from '../useModelInventory';
 
 const NAME = 'Photo Fusion';
 const getOptions = (input: any): string[] => Array.isArray(input?.[0]) ? input[0] : Array.isArray(input?.[1]?.options) ? input[1].options : [];
@@ -62,6 +64,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
   const [geminiModels, setGeminiModels] = useState<string[]>([...GEMINI_IMAGE_MODELS]);
   const [mammouthModels, setMammouthModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
   const [isLoadingMammouthModels, setIsLoadingMammouthModels] = useState(false);
+  const { inventory } = useModelInventory();
   const ggufModels = Array.from(new Set([
     ...getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name),
     ...getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.gguf_name),
@@ -559,7 +562,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
             {provider === 'comfyui' && <div className="mx-auto w-full max-w-4xl space-y-3">
               <h3 className="text-sm font-bold text-text-secondary">FLUX2 settings</h3>
               <Accordion title="Models">{() => <ModelFields name={NAME} disabled={isLoading} onChange={(id, value) => updateFlux2Option({ [id as 'comfyFlux2EditUnet']: value })} fields={[
-                { id: 'comfyFlux2EditUnet', label: 'FLUX2 Model (GGUF / Safetensors)', value: selectedFlux2Model, choices: flux2Models },
+                { id: 'comfyFlux2EditUnet', label: 'FLUX2 Model (GGUF / Safetensors)', value: selectedFlux2Model, choices: familyFiles([...new Set([...ggufModels, ...unetModels])], 'flux2', inventory) },
                 { id: 'comfyFlux2EditClip', label: 'CLIP', value: generationOptions.comfyFlux2EditClip || 'qwen_3_4b.safetensors', choices: clips },
                 { id: 'comfyFlux2EditVae', label: 'VAE', value: generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors', choices: vaes },
               ]} />}</Accordion>
@@ -568,7 +571,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
                   const nameField = `comfyFlux2EditLora${index}Name` as const, strengthField = `comfyFlux2EditLora${index}Strength` as const;
                   const selectedName = generationOptions[nameField] || '';
                   return <div key={index} className="space-y-2">
-                    <Select variant="search" label={`LoRA ${index}`} ariaLabel={`${NAME} LoRA ${index}`} value={selectedName} options={[{ value: '', label: 'None' }, ...qwenLoras.map(value => ({ value, label: value }))]} disabled={isLoading} onChange={value => updateFlux2Option({ [nameField]: value })} />
+                    <Select variant="search" label={`LoRA ${index}`} ariaLabel={`${NAME} LoRA ${index}`} value={selectedName} options={[{ value: '', label: 'None' }, ...familyFiles(qwenLoras, flux2Family(selectedFlux2Model), inventory).map(value => ({ value, label: value }))]} disabled={isLoading} onChange={value => updateFlux2Option({ [nameField]: value })} />
                     <NumberField slider label={`LoRA ${index} Strength`} ariaLabel={`${NAME} LoRA ${index} strength`} value={generationOptions[strengthField] ?? 1} min={-2} max={2} step={0.05} disabled={isLoading || !selectedName} onChange={value => updateFlux2Option({ [strengthField]: value })} />
                   </div>;
                 })}
@@ -609,12 +612,12 @@ const GroupPhotoFusionPanel: React.FC = () => {
                   <p className="text-xs text-text-muted">Switches the installed Lightning LoRA and sampling steps together.</p>
                 </div>
               <Accordion title="Models">{() => <ModelFields name={NAME} disabled={isLoading} onChange={(id, value) => updateFlux2Option({ [id as 'comfyQwenEditUnet']: value })} fields={[
-                { id: 'comfyQwenEditUnet', label: 'Qwen Edit Model', value: generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors', choices: qwenModels },
+                { id: 'comfyQwenEditUnet', label: 'Qwen Edit Model', value: generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors', choices: familyFiles(qwenModels, 'qwen-edit', inventory) },
                 { id: 'comfyQwenEditClip', label: 'CLIP', value: generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors', choices: clips },
                 { id: 'comfyQwenEditVae', label: 'VAE', value: generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors', choices: vaes },
               ]} />}</Accordion>
               <Accordion title="LoRAs">{() => <>
-                <Select variant="search" label="Lightning LoRA" ariaLabel={`${NAME} Lightning LoRA`} value={generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8]} options={qwenLoras} disabled={isLoading} onChange={value => updateFlux2Option({ comfyQwenEditUseLora: true, comfyQwenEditLora1Name: value })} />
+                <Select variant="search" label="Lightning LoRA" ariaLabel={`${NAME} Lightning LoRA`} value={generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8]} options={familyFiles(qwenLoras, 'qwen-edit', inventory)} disabled={isLoading} onChange={value => updateFlux2Option({ comfyQwenEditUseLora: true, comfyQwenEditLora1Name: value })} />
                 <NumberField slider label="LoRA Strength" ariaLabel={`${NAME} LoRA Strength`} value={generationOptions.comfyQwenEditLora1Strength ?? 1} min={0} max={2} step={0.05} disabled={isLoading} onChange={value => updateFlux2Option({ comfyQwenEditLora1Strength: value })} />
               </>}</Accordion>
               <Accordion title="Sampler">{() => <SamplerFields name={NAME} disabled={isLoading} samplers={samplers} schedulers={schedulers} limits={{ steps: { min: 1, max: 40, step: 1 }, cfg: { min: 0.1, max: 10, step: 0.1 } }}

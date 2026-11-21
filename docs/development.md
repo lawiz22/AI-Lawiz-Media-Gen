@@ -21,6 +21,9 @@ Contributor commands, project structure, Windows setup builds and validation. En
 | `npm run build` | Create the optimized web bundle |
 | `npm run preview` | Preview the optimized web bundle |
 | `npm run electron:build` | Build the web bundle and package the Windows app |
+| `npm test` | Run the Node test files under `components`, `services`, `utils` and `electron` |
+| `npm run typecheck` | Run `tsc --noEmit` |
+| `npm run check:locks`, `check:tabs`, `check:tab-jobs`, `check:ui`, `check:panels`, `profile:renders` | Browser checks in `scripts/browser/`. They need the Vite server on port 3000 and Playwright in the folder named by `LAWIZ_PLAYWRIGHT_DIR` |
 
 Project layout:
 
@@ -70,7 +73,7 @@ npm run build
 git diff --check
 ```
 
-The Scene Variation suite runs directly with Node's test runner and covers prompt generation, SAM3 single-target encoding, mask validation, masked workflows, and sequential generation. There is no `npm test` script. These tests do not run live AI models; production validation also requires the Vite build and a smoke test of the packaged Electron application and configured provider connections.
+The Scene Variation suite runs directly with Node's test runner and covers prompt generation, SAM3 single-target encoding, mask validation, masked workflows, and sequential generation. `npm test` runs every test file of the repository. These tests do not run live AI models; production validation also requires the Vite build and a smoke test of the packaged Electron application and configured provider connections.
 
 ## Technology
 
@@ -84,7 +87,7 @@ The Scene Variation suite runs directly with Node's test runner and covers promp
 ## Repository and licensing
 
 - Source: [github.com/lawiz22/AI-Lawiz-Media-Gen](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
-- Current application version: `1.88.0`
+- Current application version: `2.0.0`
 - Default development port: `3000`
 - Default ComfyUI endpoint: `http://127.0.0.1:8188`
 - Default Ollama endpoint: `http://127.0.0.1:11434`

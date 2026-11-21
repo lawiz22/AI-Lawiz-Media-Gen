@@ -6,6 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { uiModules } from '../components/ui/compileForTest.mjs';
 
 const read = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 const strip = text => text.replace(/import[\s\S]*?from\s+'[^']+';/g, '');
@@ -235,6 +236,8 @@ const control = await import(compile(`
     import { h3Choices, h3LoraCatalog, h3LoraChoices, h3GalleryStyle, h3StyleLoraRemovals, h3StyleSampling, appendGalleryStylePrompt,
         isH3LoraPath, resolveStyleLora, styleLoraMatches } from '${apiURL}';
     import { resolveLibraryStyle, styleInstalledLoras } from '${libraryURL}';
+    import { NumberField } from '${uiModules.fields}';
+    import { ui } from '${uiModules.styles}';
     export let picker, saveButton;
     export const stateWrites = [];
     const useState = value => [value, next => stateWrites.push(next)], useMemo = fn => fn();

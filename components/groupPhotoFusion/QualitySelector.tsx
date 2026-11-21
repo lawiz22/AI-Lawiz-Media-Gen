@@ -42,7 +42,7 @@ const QualitySelector: React.FC<QualitySelectorProps> = ({ selectedQuality, onSe
               }`}
             >
               <h3 className={`font-bold ${isSelected ? 'text-accent-text' : 'text-text-primary'}`}>{quality.title}</h3>
-              <p className={`text-sm ${isSelected ? 'text-accent-text/80' : 'text-text-secondary'} mt-1`}>{quality.description}</p>
+              <p className={`text-sm ${isSelected ? 'text-accent-text' : 'text-text-secondary'} mt-1`}>{quality.description}</p>
             </button>
           );
         })}

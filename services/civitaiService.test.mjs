@@ -862,6 +862,8 @@ test('the actual MOSS and Qwen rendering branches include remote and local promp
             const comfyUIObjectInfo = {}, sourceImage = null, onSourceImageChange = () => {}, onOpenSourceLibrary = () => {};
             const MossSettingsPanel = () => React.createElement('div', null, 'MOSS settings');
             const Qwen21SettingsPanel = () => React.createElement('div', null, 'Qwen settings');
+            const Accordion = ({ children }) => React.createElement('div', null, children);
+            const settingsSlot = null, promptCard = content => content;
             ${extract(optionsSource, ['renderPromptExampleButtons', 'renderComfyUIOptions'])}
             return renderComfyUIOptions();
         }

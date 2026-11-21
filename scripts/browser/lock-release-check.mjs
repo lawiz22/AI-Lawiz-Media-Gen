@@ -79,12 +79,12 @@ const bootstrap = async page => {
     const source = await page.evaluate(() => window.__lock.source);
     await page.locator('#outpaint-source').setInputFiles({ name: 'source.png', mimeType: 'image/png', buffer: Buffer.from(source.split(',')[1], 'base64') });
     await page.getByLabel('Outpaint preview', { exact: true }).waitFor();
-    for (const title of ['Models & CLIP', 'LoRA Settings', 'Sampler Settings']) await page.getByRole('button', { name: title, exact: true }).click();
+    for (const title of ['Models', 'LoRAs', 'Sampler', 'Advanced']) await page.locator('section[aria-label="Outpaint"] summary').filter({ hasText: new RegExp(`^${title}$`) }).click();
 };
 
 const snapshot = page => page.evaluate(() => {
     const test = window.__lock;
-    const selects = [...document.querySelectorAll('section[aria-label="Outpaint"] select')];
+    const selects = [...document.querySelectorAll('section[aria-label="Outpaint"] select, section[aria-label="Outpaint"] button[aria-haspopup="listbox"]')];
     const generate = [...document.querySelectorAll('section[aria-label="Outpaint"] button')].find(button => /^Outpaint(ing\.\.\.)?$/.test(button.textContent.trim()));
     return {
         globalLock: test.store.getState().generation.isLoading,

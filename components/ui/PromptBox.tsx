@@ -23,6 +23,8 @@ export interface PromptBoxProps {
     hint?: React.ReactNode;
     title?: string;
     className?: string;
+    /** Gives the caller the text area, e.g. to insert text at the cursor. */
+    inputRef?: React.Ref<HTMLTextAreaElement>;
 }
 
 const KINDS: Record<PromptKind, { edge: string; dot: string }> = {
@@ -49,7 +51,7 @@ export const promptParts = (text: string): PromptPart[] =>
 /** The single prompt field of the application: role color, syntax coloring and a stable accessible name. */
 export const PromptBox: React.FC<PromptBoxProps> = ({
     label, value, onChange, kind = 'positive', ariaLabel, rows = 4, placeholder, disabled, highlight = kind !== 'neutral',
-    copyable, clearable, actions, hint, title, className,
+    copyable, clearable, actions, hint, title, className, inputRef,
 }) => {
     const id = useId(), layer = useRef<HTMLDivElement>(null);
     const [copyState, setCopyState] = useState('');
@@ -75,7 +77,7 @@ export const PromptBox: React.FC<PromptBoxProps> = ({
                 {parts.map((part, index) => part.className ? <span key={index} className={`rounded-sm ${part.className}`}>{part.text}</span> : <React.Fragment key={index}>{part.text}</React.Fragment>)}
                 {'\n'}
             </div>}
-            <textarea id={id} aria-label={ariaLabel ?? label} value={value} rows={rows} placeholder={placeholder} disabled={disabled} readOnly={readOnly} spellCheck={!parts}
+            <textarea ref={inputRef} id={id} aria-label={ariaLabel ?? label} value={value} rows={rows} placeholder={placeholder} disabled={disabled} readOnly={readOnly} spellCheck={!parts}
                 className={`relative block w-full resize-y rounded-md border-0 bg-transparent placeholder:text-text-muted focus:outline-none focus:ring-0 disabled:cursor-not-allowed ${parts ? 'text-transparent caret-accent' : 'text-text-primary'} ${TEXT}`}
                 style={{ scrollbarGutter: 'stable' }}
                 onChange={event => onChange?.(event.target.value, event)}

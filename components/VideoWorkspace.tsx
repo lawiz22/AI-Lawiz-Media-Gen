@@ -34,9 +34,13 @@ import { VideoPromptStyleControl } from './VideoPromptStyleControl';
 import { useModelInventory } from './useModelInventory';
 import { localStylePromptExamples } from '../services/modelPromptExamples';
 import { h3StyleLoraRemovals } from '../services/h3StyleWorkflow';
+import { NumberField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
 
 const button = 'inline-flex items-center justify-center gap-2 rounded-lg border border-border-primary px-3 py-2 text-sm font-medium transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-40';
-const input = 'w-full rounded-lg border border-border-primary bg-bg-primary p-2.5 text-sm text-text-primary focus:border-accent focus:outline-none';
+const input = `block ${ui.control}`;
 const panel = 'rounded-2xl border border-border-primary bg-bg-secondary p-4 md:p-5';
 const videoToolGroups = {
     ltx: [
@@ -72,7 +76,7 @@ const ReferenceCard: React.FC<{
     return <article className="min-w-0 overflow-hidden rounded-xl border border-border-primary bg-bg-primary">
         <div className="flex items-center justify-between gap-1 p-2">
             <button type="button" title="Insert reference into your idea" disabled={disabled} onClick={onInsert}><Token text={referenceToken(reference)} /></button>
-            <button type="button" aria-label={`Remove ${referenceToken(reference)}`} disabled={disabled} onClick={onRemove} className="rounded px-2 text-text-secondary hover:text-red-400">X</button>
+            <button type="button" aria-label={`Remove ${referenceToken(reference)}`} disabled={disabled} onClick={onRemove} className="rounded px-2 text-text-secondary hover:text-danger">X</button>
         </div>
         <div className="flex h-36 items-center justify-center bg-black/40">
             {url && (reference.kind === 'image' ? <img src={url} alt={referenceToken(reference)} className="h-full w-full object-contain" />
@@ -427,10 +431,10 @@ export const VideoWorkspace: React.FC<{
             {videoToolGroups[group].map(item => <button key={item.id} type="button" onClick={() => chooseTab(item.id)} aria-pressed={tab === item.id}
                 className={`${button} ${tab === item.id ? group === 'ltx' ? 'border-amber-400/60 bg-amber-400/15 text-amber-300' : 'border-violet-400/60 bg-violet-400/15 text-violet-300' : 'text-text-secondary'}`}>{item.label}</button>)}
         </nav>}
-        {storageError && <div role="alert" className="rounded-xl border border-red-400/40 bg-red-400/10 p-3 text-sm text-red-300">{storageError}
+        {storageError && <div role="alert" className="rounded-xl border border-danger bg-danger-bg p-3 text-sm text-danger">{storageError}
             {ready && <button type="button" className={`${button} ml-3`} onClick={() => setDraft(current => ({ ...current }))}>Retry saving</button>}
         </div>}
-        {error && <p role="alert" className="rounded-xl border border-red-400/40 bg-red-400/10 p-3 text-sm text-red-300">{error}</p>}
+        {error && <p role="alert" className="rounded-xl border border-danger bg-danger-bg p-3 text-sm text-danger">{error}</p>}
         {notice && <p role="status" className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 p-3 text-sm text-emerald-300">{notice}</p>}
 
         <div hidden={tab !== 'character-swap'}>{swapOpened && <CharacterSwapPanel />}</div>
@@ -452,7 +456,7 @@ export const VideoWorkspace: React.FC<{
             onLibraryItemLoaded={onLibraryItemLoaded}
         />}</React.Activity>
         <React.Activity mode={tab === 'ltx' ? 'visible' : 'hidden'}>
-            {!openDirector && <div className="mb-3 flex justify-end"><button type="button" className={`${button} text-red-300`} onClick={onResetDirector}>Reset LTX Director</button></div>}
+            {!openDirector && <div className="mb-3 flex justify-end"><button type="button" className={`${button} text-danger`} onClick={onResetDirector}>Reset LTX Director</button></div>}
             {director}
         </React.Activity>
         <React.Activity mode={tab === 'prompt' ? 'visible' : 'hidden'}>
@@ -472,12 +476,9 @@ export const VideoWorkspace: React.FC<{
                         </div>
                         <fieldset disabled={!ready || busy || transferring} className="space-y-4 disabled:opacity-50">
                             <div className="grid gap-3 sm:grid-cols-2">
-                                <label className="space-y-1 text-sm">Target video model<select aria-label="Target video model" className={input} value={family} onChange={event => changeTarget(event.target.value as VideoPromptFamily, mode)}>
-                                    <option value="h3">H3 / MiniMax</option><option value="ltx">LTX 2 / LTX 2.5</option>
-                                </select></label>
-                                <label className="space-y-1 text-sm">Generation mode<select aria-label="Generation mode" className={input} value={mode} onChange={event => changeTarget(family, event.target.value as VideoPromptMode)}>
-                                    <option value="t2v">T2V - Text to video</option><option value="fi2v">FI2V - First image to video</option><option value="ref2v">REF2V - References to video</option><option value="v2v">V2V - Video to video</option>
-                                </select></label>
+                                <Select<VideoPromptFamily> label="Target video model" ariaLabel="Target video model" value={family} options={[{ value: 'h3', label: 'H3 / MiniMax' }, { value: 'ltx', label: 'LTX 2 / LTX 2.5' }]} onChange={value => changeTarget(value, mode)} />
+                                <Select<VideoPromptMode> label="Generation mode" ariaLabel="Generation mode" value={mode} onChange={value => changeTarget(family, value)}
+                                    options={[{ value: 't2v', label: 'T2V - Text to video' }, { value: 'fi2v', label: 'FI2V - First image to video' }, { value: 'ref2v', label: 'REF2V - References to video' }, { value: 'v2v', label: 'V2V - Video to video' }]} />
                             </div>
                             <p className="text-xs text-text-secondary">{mode === 'ref2v'
                                 ? 'REF2V uses references for identity, appearance, style or other assigned roles in a new scene. No reference is imposed as the first frame; pose and framing come from your idea.'
@@ -486,9 +487,7 @@ export const VideoWorkspace: React.FC<{
                                         : 'H3 keeps its existing structured multimodal format and styles. T2V establishes a new scene; V2V edits a source video. Use REF2V for independent references, or FI2V for a starting image.'}</p>
                             {family === 'ltx' && mode === 'ref2v' && <p role="status" className="text-xs text-amber-300">You can compose and copy/export a reference-aware LTX prompt, but the connected LTX renderers only support first-frame/source-video conditioning. REF2V transfer is unavailable; references will not silently become starting frames.</p>}
                             <div className="grid gap-3 sm:grid-cols-2">
-                                <label className="space-y-1 text-sm">Provider<select className={input} value={draft.provider} onChange={event => update({ provider: event.target.value as VideoPromptProvider })}>
-                                    <option value="openrouter">OpenRouter</option><option value="gemini">Gemini</option><option value="mammouth">Mammouth</option>
-                                </select></label>
+                                <Select<VideoPromptProvider> label="Provider" ariaLabel="Video prompt provider" value={draft.provider} options={[{ value: 'openrouter', label: 'OpenRouter' }, { value: 'gemini', label: 'Gemini' }, { value: 'mammouth', label: 'Mammouth' }]} onChange={provider => update({ provider })} />
                                 {draft.provider === 'openrouter' ? <div className="min-w-0 space-y-2">
                                     <label className="block space-y-1 text-sm">Search OpenRouter models<input type="search" className={input} value={modelSearch} onChange={event => setModelSearch(event.target.value)} placeholder="Name, model ID or input type (video, audio...)" /></label>
                                     <label className="block space-y-1 text-sm">Model<select aria-label="OpenRouter model" aria-describedby="video-openrouter-model-help" className={input} disabled={loadingModels} value={draft.models.openrouter} onChange={event => update({ models: { ...draft.models, openrouter: event.target.value } })}>
@@ -510,17 +509,17 @@ export const VideoWorkspace: React.FC<{
                                     {unsupportedInputs.length > 0 && <p role="alert" className="text-amber-300">Selected model cannot read {unsupportedInputs.join(' + ')} references. Choose a compatible model from the list; your selection will not be changed automatically.</p>}
                                     {!loadingModels && models.length > 0 && !selectedModel && <p role="alert" className="text-amber-300">The selected model is not in the current catalog. Choose an available OpenRouter model.</p>}
                                     {models.length > 0 && filteredModels.length === 0 && <p role="status">No matching models. Clear the search, adjust the references or choose another provider.</p>}
-                                    {modelError && <p role="alert" className="text-red-400">{modelError}</p>}
+                                    {modelError && <p role="alert" className="text-danger">{modelError}</p>}
                                     <p>Video/audio require a compatible model. Audio: WAV or MP3.</p></>}
                                 {draft.provider === 'gemini' && <p>Images, video and audio are sent as native media to Gemini.</p>}
                                 {draft.provider === 'mammouth' && <p className="text-amber-300">Mammouth: image references only in this integration. Choose Gemini or a compatible OpenRouter model for video/audio.</p>}
                             </div>
                             <div className="grid gap-3 sm:grid-cols-3">
-                                <label className="space-y-1 text-sm">Canvas<select className={input} value={draft.template} onChange={event => update({ template: event.target.value as VideoTemplate })}><option value="generation">Audio + video generation</option><option value="replacement">Character replacement</option></select></label>
-                                <label className="space-y-1 text-sm">Aspect ratio<select className={input} value={draft.aspect} onChange={event => update({ aspect: event.target.value })}>{VIDEO_PROMPT_ASPECTS.map(value => <option key={value}>{value}</option>)}</select></label>
-                                <label className="space-y-1 text-sm">Duration (seconds)<input type="number" min={1} max={120} step={1} className={input} value={draft.duration} onChange={event => update({ duration: Number(event.target.value) })} /></label>
+                                <Select<VideoTemplate> label="Canvas" ariaLabel="Video prompt canvas" value={draft.template} options={[{ value: 'generation', label: 'Audio + video generation' }, { value: 'replacement', label: 'Character replacement' }]} onChange={template => update({ template })} />
+                                <Select label="Aspect ratio" ariaLabel="Video prompt aspect ratio" value={draft.aspect} options={VIDEO_PROMPT_ASPECTS} onChange={aspect => update({ aspect })} />
+                                <NumberField slider className="sm:col-span-3" label="Duration (seconds)" ariaLabel="Video prompt duration" min={1} max={120} step={1} value={draft.duration} onChange={duration => update({ duration })} />
                             </div>
-                            <label className="block space-y-2 text-sm font-medium">Your idea<textarea ref={ideaRef} className={`${input} min-h-40 resize-y`} placeholder="Describe the scene, action, dialogue and sound. Click a reference badge to insert its token..." value={draft.idea} onChange={event => update({ idea: event.target.value })} /></label>
+                            <PromptBox inputRef={ideaRef} label="Your idea" ariaLabel="Video idea" rows={7} placeholder="Describe the scene, action, dialogue and sound. Click a reference badge to insert its token..." value={draft.idea} onChange={idea => update({ idea })} />
                             <VideoPromptStyleControl style={draft.style} disabled={!ready || busy} active={family === 'h3'}
                                 onSelect={style => update({ style, styleExamples: undefined })}
                                 onUsePrompt={idea => update({ idea })} />
@@ -534,10 +533,10 @@ export const VideoWorkspace: React.FC<{
                         <h3 className="mb-2 font-semibold">Editable prompt templates - {family === 'ltx' ? 'LTX' : 'H3'}</h3>
                         <p className="mb-3 text-xs text-text-secondary">Saved in this local workspace. Keep the listed output field names and order; the response validator uses that contract.</p>
                         <fieldset disabled={!ready || busy} className="space-y-3">
-                            {(['generation', 'replacement'] as const).map(key => <label key={key} className="block space-y-2 text-sm">{key === 'generation' ? 'Audio + video generation' : 'Character replacement'}
-                                <textarea aria-label={key === 'generation' ? 'Audio + video generation template' : 'Character replacement template'} className={`${input} min-h-64 font-mono !text-xs`} value={templates[key]} onChange={event => changeTemplates({ ...templates, [key]: event.target.value })} />
-                                <button type="button" className={`${button} !text-xs`} onClick={() => { if (window.confirm('Restore this default template?')) changeTemplates({ ...templates, [key]: (family === 'ltx' ? DEFAULT_LTX_VIDEO_TEMPLATES : DEFAULT_VIDEO_TEMPLATES)[key] }); }}>Restore default</button>
-                            </label>)}
+                            {(['generation', 'replacement'] as const).map(key => <div key={key}><PromptBox kind="instruction" highlight={false} rows={14}
+                                label={key === 'generation' ? 'Audio + video generation' : 'Character replacement'} ariaLabel={key === 'generation' ? 'Audio + video generation template' : 'Character replacement template'}
+                                value={templates[key]} onChange={text => changeTemplates({ ...templates, [key]: text })}
+                                actions={<button type="button" className={`${button} !py-1 !text-xs`} onClick={() => { if (window.confirm('Restore this default template?')) changeTemplates({ ...templates, [key]: (family === 'ltx' ? DEFAULT_LTX_VIDEO_TEMPLATES : DEFAULT_VIDEO_TEMPLATES)[key] }); }}>Restore default</button>} /></div>)}
                         </fieldset>
                     </section>}
                     <section className={`${panel} space-y-5`}>
@@ -580,7 +579,7 @@ export const VideoWorkspace: React.FC<{
                         </div>)}
                         <p className="text-xs text-text-secondary">Generation sends your idea, selected template, reference notes and edited media to the chosen provider. Maximum 18 MB total media per request; originals stay local. Provider usage may be billed.</p>
                         {hasPendingAudio && <p role="alert" className="text-xs text-amber-300">Apply the audio selection first. Only an applied excerpt will be sent, not an older/full track.</p>}
-                        <button type="button" className={`${button} w-full border-accent bg-accent/15 !py-3 text-accent`} disabled={!ready || busy || librarySaving || hasPendingAudio || !draft.idea.trim() || openRouterModelBlocked} onClick={generate}>{busy ? 'Composing your video prompt...' : 'Generate video prompt'}</button>
+                        <button type="button" className={`${button} w-full border-accent bg-accent !py-3 text-accent-text`} disabled={!ready || busy || librarySaving || hasPendingAudio || !draft.idea.trim() || openRouterModelBlocked} onClick={generate}>{busy ? 'Composing your video prompt...' : 'Generate video prompt'}</button>
                         <p className="text-xs text-text-secondary">Successful generations are automatically saved to Library &gt; Prompts with the exact generation setup and all references.</p>
                     </section>
                 </div>
@@ -591,7 +590,7 @@ export const VideoWorkspace: React.FC<{
                     {!draft.result ? <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border-primary p-6 text-center">
                         <span className="text-3xl text-accent">[ Shot 1 ]</span><p className="text-sm text-text-secondary">Your shot plan, soundscape and music will appear here with colored reference tokens.</p>
                     </div> : editOutput
-                        ? <textarea aria-label="Generated video prompt" className={`${input} min-h-96 font-mono`} disabled={busy} value={draft.result} onChange={event => { update({ result: event.target.value }); setLibrarySaved(false); }} />
+                        ? <PromptBox label="Prompt text" ariaLabel="Generated video prompt" rows={18} disabled={busy} value={draft.result} onChange={result => { update({ result }); setLibrarySaved(false); }} />
                         : <div className="max-h-[65vh] overflow-y-auto rounded-xl bg-bg-primary p-4"><ColoredPrompt text={draft.result} /></div>}
                     <div className="my-3 flex flex-wrap gap-2"><button type="button" className={button} disabled={!draft.result} onClick={() => copy(draft.result)}>Copy</button><button type="button" className={button} disabled={!draft.result} onClick={() => download(draft.result, 'video-prompt.txt')}>Export .txt</button></div>
                     <div className="mb-4 space-y-2">
@@ -599,10 +598,8 @@ export const VideoWorkspace: React.FC<{
                         <p className="text-xs text-text-secondary">Includes originals and edited media, reference roles, idea, model and editable canvases. Edits to the output can be saved as a new Library item. Older prompts without a generation snapshot save the current setup.</p>
                     </div>
                     <div className="space-y-3 border-t border-border-primary pt-4">
-                        <label className="block space-y-1 text-sm">Send prompt to workflow<select className={input} disabled={busy || !ready} value={draft.workflow} onChange={event => {
-                            const workflow = destinations.find(item => item.id === event.target.value);
-                            if (workflow) update({ workflow: workflow.id });
-                        }}>{destinations.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label>
+                        <Select label="Send prompt to workflow" ariaLabel="Send prompt to workflow" disabled={busy || !ready} value={draft.workflow} options={destinations.map(workflow => ({ value: workflow.id, label: workflow.name }))}
+                            onChange={id => { const workflow = destinations.find(item => item.id === id); if (workflow) update({ workflow: workflow.id }); }} />
                         <button type="button" className={`${button} w-full ${family === 'ltx' ? 'border-amber-400/50 bg-amber-400/10 text-amber-300' : draft.workflow === 'advanced' ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300' : draft.workflow === 'ultrafast' ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-violet-400/50 bg-violet-400/10 text-violet-300'}`} disabled={!draft.result || busy || transferring || !ready || hasPendingAudio || family === 'ltx' && mode === 'ref2v'} onClick={() => void transfer()}>Send to {VIDEO_WORKFLOWS.find(workflow => workflow.id === draft.workflow)?.name ?? 'Minimax REF2v H3'}</button>
                         <p className="text-xs text-text-secondary">Copies the prompt, references, aspect ratio and duration into an independent draft. LTX Audio-Sync accepts one image and one audio (no video references), keeps model settings and switches Qwen enhancement off. You can explicitly re-enable it afterward. In Advanced, select REF2V for multimodal references or FL2V for first/last frames.</p>
                     </div>

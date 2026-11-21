@@ -19,6 +19,9 @@ import { VideoClipExtractor } from './VideoClipExtractor';
 import { ReferenceMakerPanel } from './ReferenceMakerPanel';
 import { VideoMergePanel } from './VideoMergePanel';
 import { AudioExtractorPanel } from './AudioExtractorPanel';
+import { NumberField, TextField } from './ui/fields';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
 
 const VIDEO_UTILS_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     frames: createAccentStyle('#38bdf8', '#7dd3fc', '#0284c7'),
@@ -205,7 +208,7 @@ const VideoUploader: React.FC<{ onVideoUpload: (file: File | null) => void; sour
             <label htmlFor={inputId} className="block text-sm font-medium text-text-secondary mb-2">Upload Video</label>
             <label
                 htmlFor={inputId}
-                className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg transition-colors duration-200 ${isDragging ? 'border-accent bg-bg-tertiary' : 'border-border-primary bg-bg-tertiary/50 hover:bg-bg-tertiary cursor-pointer'}`}
+                className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg transition-colors duration-200 ${isDragging ? 'border-accent bg-bg-tertiary' : 'border-border-primary hover:bg-bg-tertiary cursor-pointer'}`}
                 onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
             >
                 <div className="flex flex-col items-center justify-center pt-5 pb-6 text-text-secondary">
@@ -834,7 +837,7 @@ const ResizeCropTool: React.FC<{
     const videoControlsDisabled = videoIsLoading || videoSaveStatus === 'saving';
 
     return (
-        <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">
+        <div className="p-6 rounded-lg border-l-4 border-accent">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                 <div className="flex items-center gap-3">
                     <CropIcon className="w-8 h-8 text-accent" />
@@ -888,10 +891,7 @@ const ResizeCropTool: React.FC<{
                         </div>
                         {resizeCrop.sourceFile && (
                             <div className="space-y-4 pt-4 border-t border-border-primary">
-                                <div>
-                                    <label className="block text-sm font-medium text-text-secondary">Resize: {resizeCrop.scale}%</label>
-                                    <input type="range" min="10" max="200" step="1" value={resizeCrop.scale} onChange={(e) => dispatch(updateResizeCropState({ scale: Number(e.target.value) }))} disabled={resizeCrop.isLoading} className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer" />
-                                </div>
+                                <NumberField slider label="Resize (%)" ariaLabel="Image resize (%)" value={resizeCrop.scale} min={10} max={200} step={1} disabled={resizeCrop.isLoading} onChange={scale => dispatch(updateResizeCropState({ scale }))} />
                                 <div className="space-y-2">
                                     <label className="block text-sm font-medium text-text-secondary">Crop Aspect Ratio</label>
                                     <div className="flex flex-wrap gap-1.5">
@@ -904,7 +904,7 @@ const ResizeCropTool: React.FC<{
                                                 aria-pressed={resizeCrop.aspectRatio === ratio.value}
                                                 className={`px-2.5 py-1.5 rounded-md text-xs font-semibold border transition-colors ${
                                                     resizeCrop.aspectRatio === ratio.value
-                                                        ? 'border-accent bg-accent/15 text-accent'
+                                                        ? 'border-accent text-accent'
                                                         : 'border-border-primary bg-bg-tertiary text-text-secondary hover:text-text-primary'
                                                 }`}
                                             >
@@ -912,11 +912,7 @@ const ResizeCropTool: React.FC<{
                                             </button>
                                         ))}
                                     </div>
-                                    <select value={resizeCrop.aspectRatio} onChange={e => handleImageAspectRatioChange(e.target.value)} disabled={resizeCrop.isLoading} className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm">
-                                        {RESIZE_CROP_ASPECT_RATIOS.map(ratio => (
-                                            <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
-                                        ))}
-                                    </select>
+                                    <Select ariaLabel="Image crop aspect ratio" value={resizeCrop.aspectRatio} options={RESIZE_CROP_ASPECT_RATIOS.map(ratio => ({ value: ratio.value, label: ratio.label }))} disabled={resizeCrop.isLoading} onChange={handleImageAspectRatioChange} />
                                 </div>
                                 <button onClick={handleApplyChanges} disabled={resizeCrop.isLoading} style={!resizeCrop.isLoading ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
                                     {resizeCrop.isLoading ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <GenerateIcon className="w-5 h-5" />}
@@ -978,7 +974,7 @@ const ResizeCropTool: React.FC<{
                         {videoFile && (
                             <div className="space-y-4 pt-4 border-t border-border-primary">
                                 {videoDimensions.width > 0 && (
-                                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-text-secondary bg-bg-tertiary/60 p-2.5 rounded-lg">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-text-secondary bg-bg-tertiary p-2.5 rounded-lg">
                                         <span>Source: <strong className="text-text-primary">{videoDimensions.width} × {videoDimensions.height} px</strong></span>
                                         <span>Output: <strong className="text-accent">{effectiveVideoOutputWidth} × {effectiveVideoOutputHeight} px</strong></span>
                                     </div>
@@ -1006,7 +1002,7 @@ const ResizeCropTool: React.FC<{
                                                 aria-pressed={videoAspectRatio === ratio.value}
                                                 className={`px-2.5 py-1.5 rounded-md text-xs font-semibold border transition-colors disabled:opacity-50 ${
                                                     videoAspectRatio === ratio.value
-                                                        ? 'border-accent bg-accent/15 text-accent'
+                                                        ? 'border-accent text-accent'
                                                         : 'border-border-primary bg-bg-tertiary text-text-secondary hover:text-text-primary'
                                                 }`}
                                             >
@@ -1014,17 +1010,7 @@ const ResizeCropTool: React.FC<{
                                             </button>
                                         ))}
                                     </div>
-                                    <select
-                                        aria-label="Video crop aspect ratio"
-                                        value={videoAspectRatio}
-                                        onChange={e => handleVideoAspectRatioChange(e.target.value)}
-                                        disabled={videoControlsDisabled || !videoDimensions.width}
-                                        className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm disabled:opacity-50"
-                                    >
-                                        {RESIZE_CROP_ASPECT_RATIOS.map(ratio => (
-                                            <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
-                                        ))}
-                                    </select>
+                                    <Select ariaLabel="Video crop aspect ratio" value={videoAspectRatio} options={RESIZE_CROP_ASPECT_RATIOS.map(ratio => ({ value: ratio.value, label: ratio.label }))} disabled={videoControlsDisabled || !videoDimensions.width} onChange={handleVideoAspectRatioChange} />
                                 </div>
 
                                 <div className="space-y-3 pt-2 border-t border-border-primary">
@@ -1065,63 +1051,22 @@ const ResizeCropTool: React.FC<{
 
                                     {videoResizeMode === 'scale' ? (
                                         <div>
-                                            <label className="block text-sm font-medium text-text-secondary">
-                                                Resize: {videoScale}% ({effectiveVideoOutputWidth} × {effectiveVideoOutputHeight} px)
-                                            </label>
-                                            <input
-                                                type="range"
-                                                min="10"
-                                                max="200"
-                                                step="1"
-                                                value={videoScale}
-                                                onChange={(e) => handleVideoScaleChange(Number(e.target.value))}
-                                                disabled={videoControlsDisabled || !videoDimensions.width}
-                                                className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
-                                            />
+                                            <NumberField slider label="Resize (%)" ariaLabel="Video resize (%)" value={videoScale} min={10} max={200} step={1} disabled={videoControlsDisabled || !videoDimensions.width} onChange={handleVideoScaleChange} />
+                                            <p className={ui.hint}>Output: {effectiveVideoOutputWidth} × {effectiveVideoOutputHeight} px</p>
                                         </div>
                                     ) : (
                                         <div className="space-y-2">
                                             <div className="grid grid-cols-2 gap-3">
-                                                <label className="text-xs text-text-secondary">
-                                                    Width (px)
-                                                    <input
-                                                        aria-label="Video output width"
-                                                        type="number"
-                                                        min={2}
-                                                        max={4096}
-                                                        step={2}
-                                                        value={videoOutputWidth}
-                                                        disabled={videoControlsDisabled || !videoDimensions.width}
-                                                        onChange={e => {
-                                                            const val = Number(e.target.value);
-                                                            setVideoOutputWidth(val);
-                                                            if (videoLockRatio && val > 0) {
-                                                                setVideoOutputHeight(clampEvenVideoDimension(val / videoCropAspect));
-                                                            }
-                                                        }}
-                                                        className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm text-text-primary"
-                                                    />
-                                                </label>
-                                                <label className="text-xs text-text-secondary">
-                                                    Height (px)
-                                                    <input
-                                                        aria-label="Video output height"
-                                                        type="number"
-                                                        min={2}
-                                                        max={4096}
-                                                        step={2}
-                                                        value={videoOutputHeight}
-                                                        disabled={videoControlsDisabled || !videoDimensions.width}
-                                                        onChange={e => {
-                                                            const val = Number(e.target.value);
-                                                            setVideoOutputHeight(val);
-                                                            if (videoLockRatio && val > 0) {
-                                                                setVideoOutputWidth(clampEvenVideoDimension(val * videoCropAspect));
-                                                            }
-                                                        }}
-                                                        className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm text-text-primary"
-                                                    />
-                                                </label>
+                                                <NumberField label="Width (px)" ariaLabel="Video output width" value={videoOutputWidth} min={2} max={4096} step={2} disabled={videoControlsDisabled || !videoDimensions.width}
+                                                    onChange={val => {
+                                                        setVideoOutputWidth(val);
+                                                        if (videoLockRatio) setVideoOutputHeight(clampEvenVideoDimension(val / videoCropAspect));
+                                                    }} />
+                                                <NumberField label="Height (px)" ariaLabel="Video output height" value={videoOutputHeight} min={2} max={4096} step={2} disabled={videoControlsDisabled || !videoDimensions.width}
+                                                    onChange={val => {
+                                                        setVideoOutputHeight(val);
+                                                        if (videoLockRatio) setVideoOutputWidth(clampEvenVideoDimension(val * videoCropAspect));
+                                                    }} />
                                             </div>
                                             <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
                                                 <input
@@ -1160,7 +1105,8 @@ const ResizeCropTool: React.FC<{
                                                     const val = Number(e.target.value);
                                                     if (val >= 1 && val <= 240) setVideoFps(val);
                                                 }}
-                                                className="w-16 bg-bg-tertiary p-1 rounded border border-border-primary text-center text-text-primary"
+                                                className={ui.control}
+                                                style={{ width: '5rem' }}
                                             />
                                         </label>
                                     </div>
@@ -1193,7 +1139,7 @@ const ResizeCropTool: React.FC<{
                                             value={videoCurrentTime}
                                             disabled={videoControlsDisabled || !videoDuration}
                                             onChange={e => seekVideo(Number(e.target.value))}
-                                            className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
+                                            className={`w-full ${ui.slider}`}
                                         />
                                         <button
                                             type="button"
@@ -1228,7 +1174,7 @@ const ResizeCropTool: React.FC<{
                                                     value={Number.isFinite(videoStart) ? videoStart : ''}
                                                     disabled={videoControlsDisabled || !videoDuration}
                                                     onChange={e => setVideoStart(e.target.value === '' ? NaN : Number(e.target.value))}
-                                                    className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm text-text-primary"
+                                                    className={`mt-1 block ${ui.control}`}
                                                 />
                                             </label>
                                             <button
@@ -1253,7 +1199,7 @@ const ResizeCropTool: React.FC<{
                                                     value={Number.isFinite(videoEnd) ? videoEnd : ''}
                                                     disabled={videoControlsDisabled || !videoDuration}
                                                     onChange={e => setVideoEnd(e.target.value === '' ? NaN : Number(e.target.value))}
-                                                    className="mt-1 w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm text-text-primary"
+                                                    className={`mt-1 block ${ui.control}`}
                                                 />
                                             </label>
                                             <button
@@ -1761,7 +1707,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
             </div>
             {/* --- Frame Extractor --- */}
             <div className={activeSubTab === 'frames' ? 'block' : 'hidden'}>
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">
+                <div className="p-6 rounded-lg border-l-4 border-accent">
                     <div className="flex items-center gap-3 mb-4">
                         <FilmIcon className="w-8 h-8 text-accent"/>
                         <h2 className="text-2xl font-bold text-accent">Frame Extractor</h2>
@@ -1813,7 +1759,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                                                         videoRef.current.currentTime = parseFloat(e.target.value);
                                                     }
                                                 }}
-                                                className="w-full h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
+                                                className={`w-full ${ui.slider}`}
                                             />
                                             <button onClick={() => handleFrameStep('forward')} className="p-2 rounded-full bg-bg-primary hover:bg-bg-tertiary-hover transition-colors" title="Next Frame">
                                                 <ChevronRightIcon className="w-5 h-5" />
@@ -1834,7 +1780,8 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                                                     value={frameRate}
                                                     onChange={(e) => setFrameRate(Number(e.target.value) || 24)}
                                                     min="1"
-                                                    className="w-16 bg-bg-primary p-1 text-sm rounded-md border border-border-primary text-center"
+                                                    className={ui.control}
+                                                    style={{ width: '5rem' }}
                                                     title="Set the video's frames per second for accurate stepping"
                                                 />
                                             </div>
@@ -1853,7 +1800,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                         </div>
                         <div className="space-y-4">
                             {extractedFrame ? (
-                            <div className="text-center p-4 bg-bg-primary/50 rounded-lg space-y-4">
+                            <div className="text-center p-4 rounded-lg space-y-4">
                                     <h3 className="text-lg font-semibold text-text-primary">Frame Preview</h3>
                                     <img src={extractedFrame} alt="Extracted Frame" className="max-w-full mx-auto rounded-md shadow-lg" />
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
@@ -1894,7 +1841,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
 
             {/* --- Color Palette Extractor --- */}
              <div className={activeSubTab === 'colors' ? 'block' : 'hidden'}>
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent">
+                <div className="p-6 rounded-lg border-l-4 border-accent">
                     <div className="flex items-center gap-3 mb-4">
                         <PaletteIcon className="w-8 h-8 text-accent" />
                         <h2 className="text-2xl font-bold text-accent">Color Palette Extractor</h2>
@@ -1929,16 +1876,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                         </div>
                         {/* --- Right Column: Results --- */}
                         <div className="lg:col-span-1 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-text-secondary">Number of Colors: {colorPicker.colorCount}</label>
-                                <input
-                                    type="range" min="2" max="16" step="1"
-                                    value={colorPicker.colorCount}
-                                    onChange={e => dispatch(updateColorPickerState({colorCount: Number(e.target.value)}))}
-                                    className="w-full h-2 mt-1 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
-                                    disabled={colorPicker.isExtracting}
-                                />
-                            </div>
+                            <NumberField slider label="Number of Colors" value={colorPicker.colorCount} min={2} max={16} step={1} disabled={colorPicker.isExtracting} onChange={colorCount => dispatch(updateColorPickerState({ colorCount }))} />
                             <button
                                 onClick={handleExtractPalette}
                                 disabled={!colorPicker.imageFile || colorPicker.isExtracting}
@@ -1980,17 +1918,7 @@ export const VideoUtilsPanel: React.FC<VideoUtilsPanelProps> = ({
                                         ))}
                                     </div>
                                     <div className="pt-4 space-y-4">
-                                        <div>
-                                            <label htmlFor="palette-name" className="block text-sm font-medium text-text-secondary">Palette Name</label>
-                                            <input
-                                                id="palette-name"
-                                                type="text"
-                                                value={colorPicker.paletteName}
-                                                onChange={(e) => dispatch(updateColorPickerState({ paletteName: e.target.value }))}
-                                                className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent"
-                                                placeholder="Enter a name for your palette"
-                                            />
-                                        </div>
+                                        <TextField label="Palette Name" value={colorPicker.paletteName} placeholder="Enter a name for your palette" onChange={paletteName => dispatch(updateColorPickerState({ paletteName }))} />
                                         <div className="grid grid-cols-2 gap-2">
                                             <button
                                                 onClick={handleShuffle}

@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useId, useState, type ChangeEvent } from 'react';
 import { Select } from './Select';
 import { ui } from './styles';
 
@@ -10,7 +10,7 @@ export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
     ({ variant = 'secondary', type = 'button', className = '', ...props }) => <button type={type} className={`${ui.buttons[variant]} ${className}`} {...props} />;
 
 export const NumberField: React.FC<Range & {
-    label: string; value: number; onChange: (value: number) => void; ariaLabel?: string; disabled?: boolean; className?: string;
+    label: string; value: number; onChange: (value: number, event?: ChangeEvent<HTMLInputElement>) => void; ariaLabel?: string; disabled?: boolean; className?: string;
     /** Adds a slider beside the field; needs min and max. */
     slider?: boolean;
 }> = ({ label, value, onChange, ariaLabel, min, max, step, disabled, className, slider }) => {
@@ -21,17 +21,27 @@ export const NumberField: React.FC<Range & {
         return text.trim() !== '' && Number.isFinite(number) && (min === undefined || number >= min) && (max === undefined || number <= max);
     };
     const field = <input id={id} aria-label={ariaLabel} type="number" min={min} max={max} step={step ?? 'any'} value={draft} disabled={disabled} className={`block ${ui.control}`}
-        onChange={event => { setDraft(event.target.value); if (valid(event.target.value)) onChange(Number(event.target.value)); }}
+        onChange={event => { setDraft(event.target.value); if (valid(event.target.value)) onChange(Number(event.target.value), event); }}
         onBlur={() => { if (!valid(draft)) setDraft(String(value)); }}
         onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} />;
     return <div className={className}>
         <label htmlFor={id} className={ui.label}>{label}</label>
         {slider ? <div className="mt-1 flex items-center gap-2">
             <input type="range" aria-label={`${ariaLabel ?? label} slider`} min={min} max={max} step={step ?? 'any'} value={value} disabled={disabled}
-                className="h-2 min-w-0 flex-1 cursor-pointer appearance-none rounded-lg border border-border-primary bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
-                onChange={event => onChange(Number(event.target.value))} />
+                className={`${ui.slider} flex-1`}
+                onChange={event => onChange(Number(event.target.value), event)} />
             <div className="w-24 shrink-0">{field}</div>
         </div> : <div className="mt-1">{field}</div>}
+    </div>;
+};
+
+export const TextField: React.FC<{
+    label: string; value: string; onChange: (value: string) => void; ariaLabel?: string; placeholder?: string; disabled?: boolean; className?: string;
+}> = ({ label, value, onChange, ariaLabel, placeholder, disabled, className }) => {
+    const id = useId();
+    return <div className={className}>
+        <label htmlFor={id} className={ui.label}>{label}</label>
+        <input id={id} aria-label={ariaLabel} type="text" value={value} placeholder={placeholder} disabled={disabled} className={`mt-1 block ${ui.control}`} onChange={event => onChange(event.target.value)} />
     </div>;
 };
 

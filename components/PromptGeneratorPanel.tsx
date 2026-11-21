@@ -18,6 +18,9 @@ import { OllamaActivityPanel } from './OllamaActivityPanel';
 import { useUnmountCleanup } from './useUnmountCleanup';
 import { getOpenRouterSettings } from '../services/openRouterService';
 import { buildPromptSoupIngredients, getPromptSoupSourceClass, getPromptSoupSourceHex } from '../utils/promptSoup';
+import { NumberField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
 
 
 type PromptModelType = 'sd1.5' | 'sdxl' | 'flux2-simple' | 'gemini';
@@ -556,12 +559,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
 
     const renderOllamaControls = (currentType: PromptModelType, setType: (type: PromptModelType) => void) => (
         <div className="space-y-3">
-            <div>
-                <label className="mb-1 block text-sm font-medium text-text-secondary">Ollama Model</label>
-                <select value={ollamaModel} onChange={(event) => { setOllamaModel(event.target.value); localStorage.setItem('ollama_model', event.target.value); }} className="block w-full rounded-md border border-border-primary bg-bg-primary p-2 text-sm">
-                    {[...new Set([ollamaModel, ...ollamaModels])].filter(Boolean).map((model) => <option key={model} value={model}>{model}</option>)}
-                </select>
-            </div>
+            <Select variant="search" label="Ollama Model" value={ollamaModel} options={[...new Set([ollamaModel, ...ollamaModels])].filter(Boolean)} onChange={model => { setOllamaModel(model); localStorage.setItem('ollama_model', model); }} />
             <div>
                 <label className="mb-2 block text-sm font-medium text-text-secondary">Prompt Type</label>
                 {renderPromptTypeButtons(currentType, setType)}
@@ -580,7 +578,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             ...(activeSubTab === 'from-image' ? [{ id: 'comfyui' as AnalysisProvider, label: 'Florence2' }] : []),
         ];
         return (
-            <div className="mb-4 flex flex-col gap-2 border border-border-primary bg-bg-primary/50 p-3 sm:flex-row sm:items-center">
+            <div className="mb-4 flex flex-col gap-2 border border-border-primary p-3 sm:flex-row sm:items-center">
                 <span className="shrink-0 text-sm font-semibold text-text-secondary">Analysis Provider</span>
                 <div className="flex flex-1 flex-wrap rounded-md border border-border-primary bg-bg-primary p-1">
                     {providers.map(provider => (
@@ -605,20 +603,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                 </div>
             ) : analysisProvider === 'ollama' ? renderOllamaControls(currentType, setType) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                        <label className="mb-1 block text-sm font-medium text-text-secondary">Florence2 Model</label>
-                        <select value={florenceModel} onChange={(event) => setFlorenceModel(event.target.value)} disabled={florenceModels.length === 0} className="block w-full rounded-md border border-border-primary bg-bg-primary p-2 text-sm disabled:opacity-50">
-                            {florenceModels.length === 0 && <option value={florenceModel}>{florenceModel}</option>}
-                            {florenceModels.map((model) => <option key={model} value={model}>{model}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="mb-1 block text-sm font-medium text-text-secondary">Florence2 Task</label>
-                        <select value={florenceTask} onChange={(event) => setFlorenceTask(event.target.value)} disabled={florenceTasks.length === 0} className="block w-full rounded-md border border-border-primary bg-bg-primary p-2 text-sm disabled:opacity-50">
-                            {florenceTasks.length === 0 && <option value={florenceTask}>{florenceTask}</option>}
-                            {florenceTasks.map((task) => <option key={task} value={task}>{task}</option>)}
-                        </select>
-                    </div>
+                    <Select variant="search" label="Florence2 Model" value={florenceModel} options={florenceModels.length ? florenceModels : [florenceModel]} disabled={florenceModels.length === 0} onChange={setFlorenceModel} />
+                    <Select variant="search" label="Florence2 Task" value={florenceTask} options={florenceTasks.length ? florenceTasks : [florenceTask]} disabled={florenceTasks.length === 0} onChange={setFlorenceTask} />
                     {isComfyUIConnected !== true && <p className="text-xs text-danger sm:col-span-2">Connect ComfyUI to use Florence2.</p>}
                     {isComfyUIConnected === true && !hasFlorenceNodes && <p className="text-xs text-danger sm:col-span-2">Install Florence2 and pysssss ShowText custom nodes, then reconnect ComfyUI.</p>}
                 </div>
@@ -643,7 +629,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             )}
 
             {activeSubTab === 'from-image' && (
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
+                <div className="p-6 rounded-lg border-l-4 border-accent space-y-8">
                     <h2 className="text-xl font-bold text-accent">Generate Prompt from Image</h2>
                     <p className="text-sm text-text-secondary -mt-6">
                         Upload a photo to generate a descriptive prompt using AI. Choose a prompt type optimized for your target model.
@@ -679,18 +665,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             </button>
                         </div>
                         <div className="space-y-4">
-                            <div>
-                                <label htmlFor="generated-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Prompt</label>
-                                <textarea
-                                    id="generated-prompt"
-                                    value={prompt}
-                                    onChange={(e) => dispatch(updatePromptGenState({ prompt: e.target.value }))}
-                                    readOnly={isLoading}
-                                    placeholder="Your generated prompt will appear here..."
-                                    className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-accent font-medium"
-                                    rows={10}
-                                />
-                            </div>
+                            <PromptBox label="Generated Prompt" kind="positive" rows={10} value={prompt} placeholder="Your generated prompt will appear here..."
+                                onChange={isLoading ? undefined : value => dispatch(updatePromptGenState({ prompt: value }))} />
                             {error && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{error}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <button onClick={() => handleSavePrompt(prompt, 'image', modelType, image)} disabled={!prompt || isLoading || promptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${promptSaveStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
@@ -710,7 +686,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             )}
 
             {activeSubTab === 'extract-background' && (
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
+                <div className="p-6 rounded-lg border-l-4 border-accent space-y-8">
                     <h2 className="text-xl font-bold text-accent">Extract Background from Image</h2>
                     <p className="text-sm text-text-secondary -mt-6">
                         Upload a photo to generate a prompt describing only the background. This is useful for creating consistent environments.
@@ -729,10 +705,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             </button>
                         </div>
                         <div className="space-y-4">
-                            <div>
-                                <label htmlFor="generated-bg-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Background Prompt</label>
-                                <textarea id="generated-bg-prompt" value={bgPrompt} onChange={(e) => dispatch(updatePromptGenState({ bgPrompt: e.target.value }))} readOnly={isBgLoading} placeholder="Your generated background prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-accent font-medium" rows={10}/>
-                            </div>
+                            <PromptBox label="Generated Background Prompt" kind="positive" rows={10} value={bgPrompt} placeholder="Your generated background prompt will appear here..."
+                                onChange={isBgLoading ? undefined : value => dispatch(updatePromptGenState({ bgPrompt: value }))} />
                             {bgError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{bgError}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <button onClick={() => handleSavePrompt(bgPrompt, 'background', bgModelType, bgImage)} disabled={!bgPrompt || isBgLoading || bgPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${bgPromptSaveStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
@@ -752,7 +726,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
             )}
 
             {activeSubTab === 'extract-subject' && (
-                <div className="bg-bg-primary/50 p-6 rounded-lg border-l-4 border-accent space-y-8">
+                <div className="p-6 rounded-lg border-l-4 border-accent space-y-8">
                     <h2 className="text-xl font-bold text-accent">Extract Subject or Object from Image</h2>
                      <p className="text-sm text-text-secondary -mt-6">
                         Upload a photo to generate a prompt describing only the main subject(s). This is useful for isolating characters or objects from their environment.
@@ -771,10 +745,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             </button>
                         </div>
                         <div className="space-y-4">
-                            <div>
-                                <label htmlFor="generated-subject-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Subject Prompt</label>
-                                <textarea id="generated-subject-prompt" value={subjectPrompt} onChange={(e) => dispatch(updatePromptGenState({ subjectPrompt: e.target.value }))} readOnly={isSubjectLoading} placeholder="Your generated subject prompt will appear here..." className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent min-h-[228px] text-accent font-medium" rows={10}/>
-                            </div>
+                            <PromptBox label="Generated Subject Prompt" kind="positive" rows={10} value={subjectPrompt} placeholder="Your generated subject prompt will appear here..."
+                                onChange={isSubjectLoading ? undefined : value => dispatch(updatePromptGenState({ subjectPrompt: value }))} />
                             {subjectError && <div className="bg-danger-bg text-danger text-sm p-3 rounded-md"><p className="font-bold">Error</p><p>{subjectError}</p></div>}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <button onClick={() => handleSavePrompt(subjectPrompt, 'subject', subjectModelType, subjectImage)} disabled={!subjectPrompt || isSubjectLoading || subjectPromptSaveStatus !== 'idle'} className={`flex items-center justify-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${subjectPromptSaveStatus === 'saved' ? 'bg-green-500 text-white cursor-default' : 'bg-bg-primary text-text-secondary hover:bg-bg-tertiary-hover'}`}>
@@ -800,7 +772,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         Mash up the prompts generated in other tabs into a new, unique, and often surprising creation. Adjust the creativity to control how wild the result is!
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                        <div className="space-y-6 bg-bg-tertiary p-6 rounded-lg border border-border-primary/50">
+                        <div className="space-y-6 bg-bg-tertiary p-6 rounded-lg border border-border-primary">
                             {renderAnalysisControls(soupModelType, setSoupModelType)}
                             {soupIngredients.length > 0 && (
                                 <div>
@@ -815,8 +787,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                                 </div>
                             )}
                             <div>
-                                <label className="block text-sm font-medium text-text-secondary">Creativity: {soupCreativity}</label>
-                                <input type="range" min="0" max="1" step="0.1" value={soupCreativity} onChange={(e) => setSoupCreativity(parseFloat(e.target.value))} disabled={isSoupLoading} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" />
+                                <NumberField slider label="Creativity" value={soupCreativity} min={0} max={1} step={0.1} disabled={isSoupLoading} onChange={setSoupCreativity} />
                                 <p className="text-xs text-text-muted mt-1">Higher values lead to more unexpected combinations.</p>
                             </div>
                             <button onClick={handleGenerateSoup} disabled={soupIngredients.length === 0 || isSoupLoading || isOllamaUnavailable} style={soupIngredients.length === 0 || isSoupLoading || isOllamaUnavailable ? {} : { backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-bg-tertiary text-text-secondary">
@@ -825,8 +796,8 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                         </div>
                         <div className="space-y-4">
                             <div>
-                                <label htmlFor="generated-soup-prompt" className="block text-sm font-medium text-text-secondary mb-1">Generated Soup Prompt</label>
-                                <div id="generated-soup-prompt" className="w-full bg-bg-primary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent min-h-[184px] whitespace-pre-wrap">
+                                <p className="block text-sm font-medium text-text-secondary mb-1">Generated Soup Prompt</p>
+                                <div aria-label="Generated Soup Prompt" className="w-full bg-bg-primary border border-dashed border-border-primary rounded-md p-3 text-sm min-h-[184px] whitespace-pre-wrap">
                                     {soupPromptParts.length > 0 ? soupPromptParts.map((part, index) => <span key={index} className={getPromptSoupSourceClass(part.source)}>{part.text + ' '}</span>) : soupPrompt ? <span className="text-text-primary">{soupPrompt}</span> : <span className="text-text-muted">Your magical prompt soup will appear here...</span>}
                                 </div>
                             </div>
@@ -846,7 +817,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
                             {soupHistory.length > 0 && (
                                 <div className="mt-4">
                                     <h4 className="text-md font-semibold text-text-secondary mb-2">Recent Soups</h4>
-                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-bg-primary/50 p-2 rounded-md border border-border-primary/50">
+                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2 p-2 rounded-md border border-border-primary">
                                         {soupHistory.map((soup, index) => (
                                             <div key={index} className="group bg-bg-tertiary p-2 rounded-md flex items-center justify-between gap-2">
                                                 <p className="text-xs text-text-secondary truncate cursor-pointer hover:text-text-primary transition-colors" title={soup} onClick={() => { dispatch(updatePromptGenState({soupPrompt: soup})); setSoupPromptParts([]); }}>{soup}</p>

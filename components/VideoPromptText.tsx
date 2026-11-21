@@ -30,16 +30,17 @@ export const VideoPromptEditor: React.FC<{
     placeholder?: string;
 }> = ({ value, onChange, label, placeholder }) => {
     const highlight = useRef<HTMLDivElement>(null);
-    const textLayout = 'whitespace-pre-wrap break-words border p-2 font-mono text-xs leading-6';
-    return <div className="relative mt-1 rounded-lg bg-bg-primary">
-        <div ref={highlight} aria-hidden="true" data-video-prompt-highlight className={`pointer-events-none absolute inset-0 overflow-hidden rounded-lg border-transparent text-text-primary ${textLayout}`} style={{ scrollbarGutter: 'stable' }}>
+    const textLayout = 'whitespace-pre-wrap break-words border border-transparent p-2 font-mono text-xs leading-6';
+    // Same frame as the kit prompt box; the per-reference token colors stay specific to video prompts.
+    return <div className="relative mt-1 rounded-md border border-l-4 border-border-primary border-l-highlight-green bg-bg-tertiary focus-within:ring-1 focus-within:ring-accent">
+        <div ref={highlight} aria-hidden="true" data-video-prompt-highlight className={`pointer-events-none absolute inset-0 overflow-hidden rounded-md text-text-primary ${textLayout}`} style={{ scrollbarGutter: 'stable' }}>
             {parts(value).map((part, index) => isToken(part)
                 ? <span key={index} className={tokenClass(part).split(' ').filter(style => !style.startsWith('border-')).join(' ')}>{part}</span>
                 : <React.Fragment key={index}>{part}</React.Fragment>)}
             {'\n'}
         </div>
         <textarea aria-label={label} value={value} placeholder={placeholder} spellCheck={false}
-            className={`relative block min-h-48 w-full resize-y rounded-lg border-border-primary bg-transparent text-transparent caret-accent placeholder:text-text-muted focus:border-accent focus:outline-none ${textLayout}`}
+            className={`relative block min-h-48 w-full resize-y rounded-md bg-transparent text-transparent caret-accent placeholder:text-text-muted focus:outline-none focus:ring-0 ${textLayout}`}
             style={{ scrollbarGutter: 'stable' }}
             onChange={event => onChange(event.target.value)}
             onScroll={event => {

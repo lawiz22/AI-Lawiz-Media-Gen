@@ -2,6 +2,8 @@ import React from 'react';
 import { GenerationOptions } from '../types';
 import { ASPECT_RATIO_OPTIONS, FLUX2_RESOLUTION_OPTIONS, KREA2_RAW_RESOLUTION_OPTIONS, KREA2_RESOLUTION_OPTIONS, MAX_IMAGES } from '../constants';
 import { GenerateIcon, ResetIcon } from './icons';
+import { NumberField } from './ui/fields';
+import { Select } from './ui/Select';
 import { DEFAULT_GEMINI_IMAGE_MODEL, getGeminiAspectRatios } from '../services/geminiService';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL } from '../services/mammouthService';
 import { defaultQwen21Settings, QWEN21_SIZES, qwen21Dimensions } from '../services/qwen21Workflow';
@@ -78,14 +80,10 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                     Active Model: <span className="text-accent font-bold">{activeModelName}</span>
                 </span>
             </div>
-            <div className="flex w-full flex-wrap items-center justify-start gap-4 border-t border-border-primary pt-4">
+            <div className="flex w-full flex-wrap items-end justify-start gap-4 border-t border-border-primary pt-4">
                 {updateOptions && <>
                     {options.provider === 'comfyui' && options.comfyModelType === 'z-image' && (
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-text-secondary">MP:</label>
-                            <input type="range" min="0.1" max="2" step="0.1" value={options.megapixel || 1} onChange={(event) => updateOptions({ megapixel: Number(event.target.value) })} disabled={isDisabled} className="w-20 accent-accent" />
-                            <span className="w-8 text-right text-xs text-text-secondary">{(options.megapixel || 1).toFixed(1)}</span>
-                        </div>
+                        <NumberField slider className="w-56" label="Megapixels" ariaLabel="Image Megapixels" value={options.megapixel || 1} min={0.1} max={2} step={0.1} disabled={isDisabled} onChange={megapixel => updateOptions({ megapixel })} />
                     )}
                     {options.provider === 'comfyui' && options.comfyModelType === 'krea2-edit' ? (
                         <span className="text-xs text-text-secondary">Edit | {options.comfyKrea2Edit?.aspect || '3:4'} | {options.comfyKrea2Edit?.megapixels ?? 1} MP | Batch: {options.comfyKrea2Edit?.batchSize ?? 1} | Total: {options.numImages * (options.comfyKrea2Edit?.batchSize ?? 1)} images</span>
@@ -94,59 +92,29 @@ export const ActionControlPanel: React.FC<ActionControlPanelProps> = ({
                     ) : options.provider === 'comfyui' && options.comfyModelType === 'moss-image' ? (
                         <span className="text-xs text-text-secondary">{moss.refineImage ? 'Refine: source proportions, max 1280 px' : `Resolution: ${moss.width} x ${moss.height}`} | Batch: {moss.batchSize} | Total: {options.numImages * moss.batchSize} images</span>
                     ) : options.provider === 'comfyui' && options.comfyModelType === 'flux2-edit' ? (
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-text-secondary">Source MP:</label>
-                            <input type="number" min={0.25} max={4} step={0.25} value={options.comfyFlux2EditMegapixels ?? 1} onChange={(event) => updateOptions({ comfyFlux2EditMegapixels: Number(event.target.value) })} disabled={isDisabled} className="w-16 rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-center text-xs focus:border-accent focus:ring-accent" />
-                        </div>
+                        <NumberField slider className="w-56" label="Source Megapixels" ariaLabel="Image Source Megapixels" value={options.comfyFlux2EditMegapixels ?? 1} min={0.25} max={4} step={0.25} disabled={isDisabled} onChange={comfyFlux2EditMegapixels => updateOptions({ comfyFlux2EditMegapixels })} />
                     ) : options.provider === 'comfyui' && (options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw') ? (
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-text-secondary">Resolution:</label>
-                            <select value={options.comfyKreaResolution || (options.comfyModelType === 'krea2-raw' ? '1920x1088' : '832x1216')} onChange={(event) => updateOptions({ comfyKreaResolution: event.target.value })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs focus:border-accent focus:ring-accent">
-                                {(options.comfyModelType === 'krea2-raw' ? KREA2_RAW_RESOLUTION_OPTIONS : KREA2_RESOLUTION_OPTIONS).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                            </select>
-                        </div>
+                        <Select className="w-64" label="Resolution" ariaLabel="Image Resolution" value={options.comfyKreaResolution || (options.comfyModelType === 'krea2-raw' ? '1920x1088' : '832x1216')} onChange={comfyKreaResolution => updateOptions({ comfyKreaResolution })} disabled={isDisabled}
+                            options={options.comfyModelType === 'krea2-raw' ? KREA2_RAW_RESOLUTION_OPTIONS : KREA2_RESOLUTION_OPTIONS} />
                     ) : options.provider === 'comfyui' && options.comfyModelType === 'flux2-simple' ? (
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-text-secondary">Resolution:</label>
-                            <select value={options.comfyFlux2Resolution || '832x1216'} onChange={(event) => updateOptions({ comfyFlux2Resolution: event.target.value })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs focus:border-accent focus:ring-accent">
-                                {FLUX2_RESOLUTION_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                            </select>
-                        </div>
+                        <Select className="w-64" label="Resolution" ariaLabel="Image Resolution" value={options.comfyFlux2Resolution || '832x1216'} onChange={comfyFlux2Resolution => updateOptions({ comfyFlux2Resolution })} disabled={isDisabled} options={FLUX2_RESOLUTION_OPTIONS} />
                     ) : options.provider === 'comfyui' && (options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo') ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <select aria-label="Quick Orientation" value={qwen21Settings.orientation} onChange={event => updateOptions({ [qwen21Key]: { ...qwen21Settings, orientation: event.target.value as 'landscape' | 'portrait' } })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs">
-                                <option value="landscape">Landscape</option><option value="portrait">Portrait</option>
-                            </select>
-                            <select aria-label="Quick Size" value={String(qwen21Settings.sizeIndex)} onChange={event => updateOptions({ [qwen21Key]: { ...qwen21Settings, sizeIndex: Number(event.target.value) } })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs">
-                                {QWEN21_SIZES[qwen21Mode].map((_, sizeIndex) => {
+                        <div className="flex flex-wrap items-end gap-2">
+                            <Select<string> className="w-36" label="Orientation" ariaLabel="Quick Orientation" value={qwen21Settings.orientation} onChange={orientation => updateOptions({ [qwen21Key]: { ...qwen21Settings, orientation: orientation as 'landscape' | 'portrait' } })} disabled={isDisabled}
+                                options={[{ value: 'landscape', label: 'Landscape' }, { value: 'portrait', label: 'Portrait' }]} />
+                            <Select<number> className="w-40" label="Size" ariaLabel="Quick Size" value={qwen21Settings.sizeIndex} onChange={sizeIndex => updateOptions({ [qwen21Key]: { ...qwen21Settings, sizeIndex } })} disabled={isDisabled}
+                                options={QWEN21_SIZES[qwen21Mode].map((_, sizeIndex) => {
                                     const { width, height } = qwen21Dimensions(qwen21Mode, { ...qwen21Settings, sizeIndex });
-                                    return <option key={sizeIndex} value={String(sizeIndex)}>{width} x {height}</option>;
-                                })}
-                            </select>
+                                    return { value: sizeIndex, label: `${width} x ${height}` };
+                                })} />
                         </div>
                     ) : (
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-text-secondary">Ratio:</label>
-                            <select value={options.aspectRatio} onChange={(event) => updateOptions({ aspectRatio: event.target.value })} disabled={isDisabled} className="rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-xs focus:border-accent focus:ring-accent">
-                                {aspectRatioOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                            </select>
-                        </div>
+                        <Select<string> className="w-56" label="Aspect Ratio" ariaLabel="Image Aspect Ratio" value={options.aspectRatio} onChange={aspectRatio => updateOptions({ aspectRatio: aspectRatio as GenerationOptions['aspectRatio'] })} disabled={isDisabled} options={aspectRatioOptions} />
                     )}
-                    <div className="flex items-center gap-2">
-                        <label className="text-xs font-medium text-text-secondary">Count:</label>
-                        <input
-                            type="number"
-                            min={1}
-                            max={MAX_IMAGES}
-                            value={options.numImages}
-                            onChange={(event) => {
-                                const count = Math.min(Math.max(1, Number.parseInt(event.target.value, 10) || 1), MAX_IMAGES);
-                                updateOptions({ numImages: count, poseSelection: options.poseSelection.slice(0, count) });
-                            }}
-                            disabled={isDisabled}
-                            className="w-12 rounded-md border border-border-primary bg-bg-tertiary px-2 py-1 text-center text-xs focus:border-accent focus:ring-accent"
-                        />
-                    </div>
+                    <NumberField slider className="w-52" label="Number of Images" ariaLabel="Image Number of Images" value={options.numImages} min={1} max={MAX_IMAGES} step={1} disabled={isDisabled} onChange={value => {
+                        const count = Math.min(Math.max(1, Math.round(value)), MAX_IMAGES);
+                        updateOptions({ numImages: count, poseSelection: options.poseSelection.slice(0, count) });
+                    }} />
                 </>}
                 <button
                     onClick={onReset}

@@ -8,6 +8,8 @@ import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { drawReferenceSheet, initialReferenceCrop, MAX_REFERENCE_PHOTOS, referenceAspect, REFERENCE_RATIOS, type ReferenceCrop, type ReferenceRatio, type ReferenceSheetSettings } from '../utils/referenceSheet';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, LibraryIcon, SaveIcon, SpinnerIcon, ResetIcon } from './icons';
+import { NumberField, TextField } from './ui/fields';
+import { Select } from './ui/Select';
 
 interface ReferencePhoto {
     id: string;
@@ -212,9 +214,8 @@ export const ReferenceMakerPanel: React.FC = () => {
         }
     };
     const button = 'flex items-center justify-center gap-2 rounded-lg bg-bg-tertiary px-3 py-2 text-sm font-semibold text-text-secondary hover:bg-bg-tertiary-hover disabled:cursor-not-allowed disabled:opacity-50';
-    const input = 'w-full rounded-md border border-border-primary bg-bg-primary p-2 text-sm';
 
-    return <section className="rounded-lg border-l-4 border-accent bg-bg-primary/50 p-4 sm:p-6">
+    return <section className="rounded-lg border-l-4 border-accent p-4 sm:p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div><h2 className="text-2xl font-bold text-accent">Reference Maker</h2><p className="mt-1 text-sm text-text-secondary">Compose up to {MAX_REFERENCE_PHOTOS} photos locally. Each photo has its own aspect ratio and movable crop. The preview updates automatically.</p></div>
             <button type="button" onClick={reset} disabled={saveStatus === 'saving'} className={button}><ResetIcon className="h-4 w-4" />Reset Reference Maker</button>
@@ -238,13 +239,10 @@ export const ReferenceMakerPanel: React.FC = () => {
                     </button>)}
                 </div>}
                 {selected && <>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <label className="min-w-[150px] flex-1 text-sm text-text-secondary">Photo aspect ratio
-                            <select aria-label="Photo aspect ratio" value={selected.ratio} onChange={event => changeRatio(event.target.value as ReferenceRatio)} className={`${input} mt-1`}>
-                                {REFERENCE_RATIOS.map(ratio => <option key={ratio} value={ratio}>{ratio === 'original' ? 'Original ratio' : ratio === 'free' ? 'Free crop' : ratio}</option>)}
-                            </select>
-                        </label>
-                        <button type="button" onClick={() => updatePhoto({ crop: initialReferenceCrop(selected.ratio, selected.image.naturalWidth, selected.image.naturalHeight) })} className={`${button} mt-5`}>Reset crop</button>
+                    <div className="flex flex-wrap items-end gap-2">
+                        <Select<ReferenceRatio> className="min-w-[150px] flex-1" label="Photo aspect ratio" ariaLabel="Photo aspect ratio" value={selected.ratio} onChange={changeRatio}
+                            options={REFERENCE_RATIOS.map(ratio => ({ value: ratio, label: ratio === 'original' ? 'Original ratio' : ratio === 'free' ? 'Free crop' : ratio }))} />
+                        <button type="button" onClick={() => updatePhoto({ crop: initialReferenceCrop(selected.ratio, selected.image.naturalWidth, selected.image.naturalHeight) })} className={button}>Reset crop</button>
                     </div>
                     <div className="flex min-h-48 items-center justify-center overflow-hidden rounded-lg bg-black/30 p-2" aria-label="Photo crop editor">
                         <ReactCrop key={selected.id} crop={selected.crop} aspect={referenceAspect(selected.ratio, selected.image.naturalWidth, selected.image.naturalHeight)}
@@ -262,14 +260,12 @@ export const ReferenceMakerPanel: React.FC = () => {
                     </div>
                 </>}
                 <div className="grid grid-cols-2 gap-3">
-                    <label className="space-y-1 text-sm text-text-secondary">Columns<select aria-label="Reference sheet columns" value={settings.columns} onChange={event => setSettings(current => ({ ...current, columns: Number(event.target.value) }))} className={input}>
-                        <option value={0}>Auto</option>{Array.from({ length: MAX_REFERENCE_PHOTOS }, (_, i) => i + 1).map(count => <option key={count} value={count}>{count}</option>)}
-                    </select></label>
-                    <label className="space-y-1 text-sm text-text-secondary">Output resolution<select aria-label="Reference sheet resolution" value={settings.megapixels} onChange={event => setSettings(current => ({ ...current, megapixels: Number(event.target.value) }))} className={input}>
-                        {[0.5, 1, 2, 4, 8].map(mp => <option key={mp} value={mp}>{mp} MP maximum</option>)}
-                    </select></label>
-                    <label className="space-y-1 text-sm text-text-secondary">Spacing: {settings.gap}<input aria-label="Reference sheet spacing" type="range" min={0} max={100} step={1} value={settings.gap} onChange={event => setSettings(current => ({ ...current, gap: Number(event.target.value) }))} className="w-full" /></label>
-                    <label className="space-y-1 text-sm text-text-secondary">Background<input aria-label="Reference sheet background" type="color" value={settings.background} onChange={event => setSettings(current => ({ ...current, background: event.target.value }))} className="h-10 w-full rounded border border-border-primary bg-bg-primary" /></label>
+                    <Select<number> label="Columns" ariaLabel="Reference sheet columns" value={settings.columns} onChange={columns => setSettings(current => ({ ...current, columns }))}
+                        options={[{ value: 0, label: 'Auto' }, ...Array.from({ length: MAX_REFERENCE_PHOTOS }, (_, i) => ({ value: i + 1, label: String(i + 1) }))]} />
+                    <Select<number> label="Output resolution" ariaLabel="Reference sheet resolution" value={settings.megapixels} onChange={megapixels => setSettings(current => ({ ...current, megapixels }))}
+                        options={[0.5, 1, 2, 4, 8].map(mp => ({ value: mp, label: `${mp} MP maximum` }))} />
+                    <NumberField slider className="col-span-2" label="Spacing" ariaLabel="Reference sheet spacing" value={settings.gap} min={0} max={100} step={1} onChange={gap => setSettings(current => ({ ...current, gap }))} />
+                    <label className="col-span-2 space-y-1 text-sm font-medium text-text-secondary">Background<input aria-label="Reference sheet background" type="color" value={settings.background} onChange={event => setSettings(current => ({ ...current, background: event.target.value }))} className="h-10 w-full rounded border border-border-primary bg-bg-primary" /></label>
                 </div>
             </fieldset>
             <div className="min-w-0 space-y-4">
@@ -280,7 +276,7 @@ export const ReferenceMakerPanel: React.FC = () => {
                 </div>
                 <p role="status" className="text-xs text-text-secondary">{layout && photos.length ? `${photos.length} photos · ${layout.width} x ${layout.height} · ${(layout.width * layout.height / 1_000_000).toFixed(2)} MP · ${layout.columns} columns / ${layout.rows} rows${ready ? '' : ' · Updating...'}` : 'No photos loaded.'}</p>
                 <p className="text-xs text-text-muted">The sheet preserves each crop without stretching. Photos share a row height; incomplete rows are centered. Spacing scales with output resolution. Maximum canvas dimension: 8192 pixels.</p>
-                <label className="block text-sm text-text-secondary">Reference sheet name<input aria-label="Reference sheet name" type="text" value={name} disabled={busy} onChange={event => { setName(event.target.value); setSaveStatus('idle'); }} className={`${input} mt-1`} /></label>
+                <TextField label="Reference sheet name" ariaLabel="Reference sheet name" value={name} disabled={busy} onChange={value => { setName(value); setSaveStatus('idle'); }} />
                 <div className="grid grid-cols-2 gap-3">
                     <button type="button" onClick={download} disabled={!ready || busy} className={button}><DownloadIcon className="h-5 w-5" />Download PNG</button>
                     <button type="button" onClick={save} disabled={!ready || busy || saveStatus === 'saved'} className={button}>

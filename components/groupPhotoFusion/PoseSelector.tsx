@@ -29,7 +29,7 @@ const PoseSelector: React.FC<PoseSelectorProps> = ({ poses, selectedPose, onSele
               title={isDisabled ? 'This pose requires exactly 2 subjects.' : pose.description}
             >
               <h3 className={`font-bold ${isSelected ? 'text-accent-text' : 'text-text-primary'}`}>{pose.title}</h3>
-              <p className={`text-sm ${isSelected ? 'text-accent-text/80' : 'text-text-secondary'} mt-1`}>{pose.description}</p>
+              <p className={`text-sm ${isSelected ? 'text-accent-text' : 'text-text-secondary'} mt-1`}>{pose.description}</p>
             </button>
           );
         })}

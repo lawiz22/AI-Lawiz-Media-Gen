@@ -7,10 +7,14 @@ import { buildAudioWaveform, decodeMediaAudio, exportAudioExcerpt } from '../ser
 import { readLibraryMediaFile } from '../services/libraryMediaService';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { useUnmountCleanup } from './useUnmountCleanup';
+import { ui } from './ui/styles';
 
 const button = 'rounded-lg border border-border-primary bg-bg-tertiary px-3 py-2 text-sm hover:bg-bg-tertiary-hover disabled:opacity-40 disabled:cursor-not-allowed';
-const field = 'mt-1 w-full rounded-lg border border-border-primary bg-bg-primary p-2 text-sm';
+const field = `mt-1 block ${ui.control}`;
 const clock = (time: number) => `${Math.floor(time / 60)}:${(time % 60).toFixed(3).padStart(6, '0')}`;
+const shown = (time: number) => Number(time.toFixed(3));
+// The rounded track length typed back means the exact end of the track, which may be slightly shorter.
+const typed = (text: string, duration: number) => Number(text) === shown(duration) ? duration : Number(text);
 const message = (cause: unknown) => cause instanceof Error ? cause.message : String(cause);
 const wavThumbnail = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" fill="#101416"/><path d="M48 112v32m20-56v80m20-112v144m20-104v64m20-128v192m20-144v96m20-128v160m20-112v64m20-48v32" stroke="#22d3ee" stroke-width="9" stroke-linecap="round"/><text x="128" y="242" text-anchor="middle" fill="#fafafa" font-family="sans-serif" font-size="20">WAV</text></svg>')}`;
 
@@ -191,7 +195,7 @@ export const AudioExtractorPanel: React.FC<{ active: boolean }> = ({ active }) =
         </div>
         <p className="text-xs text-text-muted">The first audio track is used. WAV PCM16 export, with decoded sample rate/channels. Full-track decoding uses memory; very long sources may exceed browser limits. Unsupported codecs and videos without audio report an error.</p>
         {file && <p className="break-all text-sm">{file.name}{audio ? ` · ${clock(duration)} · ${audio.sampleRate} Hz · ${audio.numberOfChannels} channel(s)` : ''}</p>}
-        {status && <p role="status" className="text-sm text-cyan-300">{status}</p>}
+        {status && <p role="status" className="text-sm text-accent">{status}</p>}
         {error && <p role="alert" className="rounded-lg bg-danger-bg p-3 text-sm text-danger">{error}</p>}
         {audio && <fieldset disabled={busy} className="min-w-0 space-y-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -201,7 +205,7 @@ export const AudioExtractorPanel: React.FC<{ active: boolean }> = ({ active }) =
                 <button type="button" className={button} disabled={!!validation} onClick={() => { setZoom(Math.max(1, Math.min(64, duration / (selection.end - selection.start)))); setOffset(selection.start); }}>Zoom to selection</button>
                 <span className="text-xs text-text-secondary">{zoom.toFixed(1)}x · {clock(visibleStart)} - {clock(visibleEnd)}</span>
             </div>
-            <svg aria-label="Audio waveform" role="img" viewBox="0 0 1000 160" preserveAspectRatio="none" className="h-48 w-full touch-none rounded-xl border border-cyan-400/30 bg-bg-primary select-none"
+            <svg aria-label="Audio waveform" role="img" viewBox="0 0 1000 160" preserveAspectRatio="none" className="h-48 w-full touch-none rounded-xl border border-border-primary bg-bg-primary select-none"
                 onPointerDown={event => {
                     const time = pointerTime(event), tolerance = span * 12 / event.currentTarget.getBoundingClientRect().width;
                     drag.current = { start: time, x: event.clientX, moved: false, mode: Math.abs(time - selection.start) <= tolerance ? 'start' : Math.abs(time - selection.end) <= tolerance ? 'end' : 'range' };
@@ -227,30 +231,30 @@ export const AudioExtractorPanel: React.FC<{ active: boolean }> = ({ active }) =
                 <path d={`M${x(position)},0V160`} stroke="#f87171" strokeWidth="2" />
             </svg>
             {!peaks.length && <p className="text-xs text-text-muted">Drawing waveform...</p>}
-            <label className="block text-sm">Visible window start (s)<input aria-label="Visible window start (s)" type="range" className="mt-2 w-full accent-cyan-400" min="0" max={Math.max(0, duration - span)} step="any" value={visibleStart} disabled={zoom === 1} onChange={event => setOffset(Number(event.target.value))} /></label>
+            <label className="block text-sm">Visible window start (s)<input aria-label="Visible window start (s)" type="range" className={`mt-2 block w-full ${ui.slider}`} min="0" max={Math.max(0, duration - span)} step="any" value={visibleStart} disabled={zoom === 1} onChange={event => setOffset(Number(event.target.value))} /></label>
             <p className="text-xs text-text-secondary">Drag to select a passage. Drag yellow boundaries to resize it. Click to move the red playhead, or use the numeric fields below.</p>
             <div className="grid gap-3 sm:grid-cols-3">
-                <label className="text-sm">Start (s)<input aria-label="Audio start (s)" className={field} type="number" min="0" max={duration} step="0.001" value={selection.start} onChange={event => change({ ...selection, start: Number(event.target.value) })} /></label>
-                <label className="text-sm">End (s)<input aria-label="Audio end (s)" className={field} type="number" min="0" max={duration} step="0.001" value={selection.end} onChange={event => change({ ...selection, end: Number(event.target.value) })} /></label>
+                <label className="text-sm">Start (s)<input aria-label="Audio start (s)" className={field} type="number" min="0" max={duration} step="0.001" value={shown(selection.start)} onChange={event => change({ ...selection, start: typed(event.target.value, duration) })} /></label>
+                <label className="text-sm">End (s)<input aria-label="Audio end (s)" className={field} type="number" min="0" max={duration} step="0.001" value={shown(selection.end)} onChange={event => change({ ...selection, end: typed(event.target.value, duration) })} /></label>
                 <div className="text-sm">Selected duration<p className="mt-3 font-mono">{validation ? '--' : clock(selection.end - selection.start)}</p></div>
             </div>
             {validation && <p role="alert" className="text-sm text-danger">{validation}</p>}
-            <label className="block text-sm">Playhead: {clock(position)}<input aria-label="Audio playhead (s)" type="range" min="0" max={duration} step="any" value={position} className="mt-2 w-full accent-cyan-400" onChange={event => { stop(); setPosition(Number(event.target.value)); }} /></label>
+            <label className="block text-sm">Playhead: {clock(position)}<input aria-label="Audio playhead (s)" type="range" min="0" max={duration} step="any" value={position} className={`mt-2 block w-full ${ui.slider}`} onChange={event => { stop(); setPosition(Number(event.target.value)); }} /></label>
             <div className="flex flex-wrap gap-2">
                 <button type="button" className={button} disabled={!!validation} onClick={() => { if (playing) stop(); else void play(false); }}>{playing ? 'Pause audio' : 'Play audio'}</button>
                 <button type="button" className={button} disabled={!!validation} onClick={() => void play(true)}>Play selection</button>
                 <button type="button" className={button} onClick={() => change({ ...selection, start: position })}>Set start at playhead</button>
                 <button type="button" className={button} onClick={() => change({ ...selection, end: position })}>Set end at playhead</button>
                 <button type="button" className={button} onClick={() => change({ start: 0, end: duration })}>Select full track</button>
-                <button type="button" className={`${button} border-cyan-400/50 text-cyan-300`} disabled={!!validation} onClick={() => void extract()}>Extract WAV</button>
+                <button type="button" className={`${button} border-accent text-accent`} disabled={!!validation} onClick={() => void extract()}>Extract WAV</button>
             </div>
         </fieldset>}
-        {result && resultURL && <div className="space-y-3 rounded-xl border border-cyan-400/40 bg-bg-primary p-4">
+        {result && resultURL && <div className="space-y-3 rounded-xl border border-accent bg-bg-primary p-4">
             <p className="break-all text-sm">{result.name}</p>
             <audio ref={resultAudio} controls src={resultURL} preload="metadata" aria-label="Extracted audio preview" className="w-full" onPlay={() => stop(false)} />
             <div className="flex flex-wrap gap-2">
-                <a className={`${button} inline-block text-cyan-300`} href={resultURL} download={result.name}>Download WAV</a>
-                <button type="button" className={`${button} border-cyan-400/50 text-cyan-300`}
+                <a className={`${button} inline-block text-accent`} href={resultURL} download={result.name}>Download WAV</a>
+                <button type="button" className={`${button} border-accent text-accent`}
                     disabled={saveState?.status === 'saving' || saveState?.file === result && saveState.status === 'saved'}
                     onClick={() => void saveToLibrary()}>
                     {saveState?.status === 'saving' ? 'Saving...' : saveState?.file === result && saveState.status === 'saved' ? 'Saved to Library' : 'Save to Library'}

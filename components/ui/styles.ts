@@ -5,6 +5,7 @@ const button = 'inline-flex items-center justify-center gap-2 rounded-md px-3 py
 export const ui = {
     label: 'block text-sm font-medium text-text-secondary',
     control,
+    slider: 'h-2 min-w-0 cursor-pointer appearance-none rounded-lg border border-border-primary bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50',
     hint: 'mt-1 text-xs text-text-muted',
     error: 'mt-1 text-xs text-danger',
     section: 'rounded-xl border border-border-primary p-4',

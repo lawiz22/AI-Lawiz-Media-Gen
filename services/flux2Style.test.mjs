@@ -87,24 +87,26 @@ test('style changes remove old/new style duplicates but retain independent LoRAs
     }
 });
 
-test('i2i keeps the editing prompt on the left and style, references and LoRAs on the right', () => {
+test('i2i follows the standard layout: style, source and references on the left, LoRAs in their section, editing prompt in the prompt card', () => {
     const text = read('../components/OptionsPanel.tsx');
     const tree = ts.createSourceFile('options.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-    let workspace;
+    const blocks = {};
     const visit = node => {
-        if (ts.isVariableDeclaration(node) && node.name.getText(tree) === 'flux2EditWorkspace') workspace = node.initializer.getText(tree);
+        if (ts.isVariableDeclaration(node) && ['flux2EditSources', 'flux2EditLoraSlots', 'promptBlock'].includes(node.name.getText(tree))) blocks[node.name.getText(tree)] = node.initializer.getText(tree);
         ts.forEachChild(node, visit);
     };
     visit(tree);
-    for (const control of ['ImageStyleControl', 'ImageUploader', 'Flux2ReferenceManager', 'Additional LoRAs']) assert.ok(workspace.includes(control), control);
-    assert.ok(!workspace.includes('Additional Editing Instructions'), 'editing prompt is outside the right portal');
-    assert.ok(!workspace.includes('renderPromptExampleButtons'), 'prompt examples stay beside the editing prompt');
-    assert.match(text, /modelType === 'flux2-edit' \? <>\s*\{renderPromptExampleButtons\(\)\}\s*<TextInput label="Additional Editing Instructions" value=\{options\.comfyFlux2EditPrompt \|\| ''\} onChange=\{handleOptionChange\('comfyFlux2EditPrompt'\)\}/);
-    assert.ok(!workspace.includes('flux2EditAdvancedOpen'), 'LoRAs are not hidden in Advanced');
-    assert.ok(text.includes('createPortal(flux2EditWorkspace, flux2EditWorkspaceContainer)'));
-    const app = read('../App.tsx');
-    assert.ok(app.includes('flux2EditWorkspaceContainer={flux2EditWorkspaceContainer}'));
-    assert.ok(app.includes('data-flux2-edit-workspace="true"'));
+    for (const control of ['ImageStyleControl', 'ImageUploader', 'Flux2ReferenceManager']) assert.ok(blocks.flux2EditSources.includes(control), control);
+    assert.ok(blocks.flux2EditLoraSlots.includes('Additional LoRA'));
+    assert.ok(!blocks.flux2EditSources.includes('Additional Editing Instructions'), 'the editing prompt is not among the sources');
+    assert.match(blocks.promptBlock, /modelType === 'flux2-edit' \? <>\s*\{renderPromptExampleButtons\(\)\}\s*<TextInput label="Additional Editing Instructions" value=\{options\.comfyFlux2EditPrompt \|\| ''\} onChange=\{handleOptionChange\('comfyFlux2EditPrompt'\)\}/);
+    const layout = text.slice(text.indexOf('{flux2EditSources}'));
+    const order = ['{flux2EditSources}', '<Accordion title="Models">', '{settingsSlot}', '<Accordion title="LoRAs" defaultOpen>{flux2EditLoraSlots}</Accordion>', '<Accordion title="Sampler" defaultOpen>{flux2EditSampler}</Accordion>', '<Accordion title="Advanced">', '{promptCard(promptBlock)}'].map(part => layout.indexOf(part));
+    assert.ok(order.every((position, index) => position >= 0 && (index === 0 || position > order[index - 1])), `sections out of order: ${order}`);
+    const tab = read('../components/ImageGeneratorTab.tsx');
+    assert.ok(tab.includes('promptContainer={promptContainer}'));
+    assert.ok(tab.includes('data-image-prompt="true"'));
+    assert.ok(!tab.includes('flux2-edit-workspace') && !text.includes('flux2EditWorkspace'), 'the separate right-hand workspace is gone');
 });
 test('t2i and i2i default graphs use Klein 9B and its paired CLIP, while explicit 4B/custom settings remain usable', () => {
     const t2i = buildT2i({}), i2i = api.buildFlux2EditWorkflow('source.png', [], {}).workflow;

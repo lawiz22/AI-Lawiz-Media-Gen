@@ -7,6 +7,8 @@ import { useStyleGallery } from './useStyleGallery';
 import { useModelInventory } from './useModelInventory';
 import { StylePicker } from './StyleBrowser';
 import { SaveStyleSamplingButton } from './SaveStyleSamplingButton';
+import { NumberField } from './ui/fields';
+import { ui } from './ui/styles';
 
 export const H3StyleControl: React.FC<{
     options: MinimaxH3Options;
@@ -57,15 +59,14 @@ export const H3StyleControl: React.FC<{
         <h4 className="font-semibold">Style Gallery · H3 / MiniMax</h4>
         <StylePicker styles={styles} inventory={inventory} model="H3" selectedId={style?.id} selectedStyle={style}
             onSelect={select} error={error} disabled={disabled || loading} />
-        {(error || preview.error || galleryError || inventoryError) && <p role="alert" className="text-sm text-red-400">{error || preview.error || galleryError || inventoryError}</p>}
+        {(error || preview.error || galleryError || inventoryError) && <p role="alert" className="text-sm text-danger">{error || preview.error || galleryError || inventoryError}</p>}
         {notice && <p role="status" className="text-xs text-accent">{notice}</p>}
         {style && <>
             <p role="status" className="break-all text-xs text-accent">Next generation: {style.title} · {style.lora || 'Prompt only'}</p>
-            {style.lora && <div className="space-y-3 rounded-lg border border-accent/40 bg-bg-tertiary p-3">
-                <label className="block text-sm">Style LoRA (gallery)<input aria-label="Active style LoRA" readOnly value={style.lora} className="mt-1 w-full rounded border border-border-primary bg-bg-primary p-2 text-sm" /></label>
-                <label className="block text-sm">Style LoRA strength<input aria-label="Style LoRA strength" type="number" min={-20} max={20} step="0.05"
-                    className="ml-2 w-24 rounded border border-border-primary bg-bg-primary p-2" value={options.styleStrength ?? style.strength} disabled={disabled}
-                    onChange={event => onChange({ styleStrength: event.target.valueAsNumber })} /></label>
+            {style.lora && <div className="space-y-3 rounded-lg border border-border-primary bg-bg-tertiary p-3">
+                <label className={ui.label}>Style LoRA (gallery)<input aria-label="Active style LoRA" readOnly value={style.lora} className={`mt-1 block ${ui.control}`} /></label>
+                <NumberField slider label="Style LoRA strength" ariaLabel="Style LoRA strength" min={-20} max={20} step={0.05} value={options.styleStrength ?? style.strength} disabled={disabled}
+                    onChange={styleStrength => onChange({ styleStrength })} />
                 <p role="status" className="text-xs text-accent">{(options.styleStrength ?? style.strength) === 0 ? 'Strength 0: the style LoRA has no effect.' : 'Style LoRA patches the H3 model and CLIP independently of the additional LoRA and patched-CLIP switches.'} Your six additional slots are kept; the same style LoRA is not loaded twice.</p>
             </div>}
             {primarySampling && <>

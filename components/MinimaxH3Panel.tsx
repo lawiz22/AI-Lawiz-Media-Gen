@@ -24,24 +24,25 @@ import { extractLastVideoFrame } from '../services/videoFrameService';
 import { VideoOutputFrames } from './VideoOutputFrames';
 import { H3StyleControl } from './H3StyleControl';
 import { ModelPromptExamplesButton } from './ModelPromptExamples';
+import { NumberField as KitNumberField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
+import { familyFiles } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 
-const input = 'mt-1 w-full rounded-lg border border-border-primary bg-bg-primary p-2 text-sm text-text-primary focus:border-accent focus:outline-none';
+const input = `mt-1 block ${ui.control}`;
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed';
 const box = 'rounded-xl border border-border-primary bg-bg-secondary p-4';
 const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({ label, children, hint }) =>
-    <label className="block min-w-0 text-xs text-text-secondary">{label}{children}{hint && <span className="mt-1 block text-[11px] text-text-muted">{hint}</span>}</label>;
+    <label className={`min-w-0 ${ui.label}`}>{label}{children}{hint && <span className={`block ${ui.hint}`}>{hint}</span>}</label>;
 const Toggle: React.FC<{ label: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }> = ({ label, checked, onChange, disabled }) =>
     <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-violet-400" checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)} />{label}</label>;
-const NumberField: React.FC<{ label: string; value: number; onChange: (value: number) => void; min?: number; max?: number; step?: number; hint?: string }> = ({ label, value, onChange, min, max, step = 1, hint }) =>
-    <Field label={label} hint={hint}><input type="number" aria-label={label} className={input} value={value} min={min} max={max} step={step} onChange={event => onChange(Number(event.target.value))} /></Field>;
-const Choice: React.FC<{ label: string; value: string; choices: string[]; onChange: (value: string) => void; editable?: boolean; id?: string }> = ({ label, value, choices, onChange, editable, id }) => {
-    const entries = React.useMemo(() => choices.map(choice => <option key={choice} value={choice}>{choice}</option>), [choices]);
-    return <Field label={label}>{editable ? <><input aria-label={label} className={input} value={value} list={id} onChange={event => onChange(event.target.value)} /><datalist id={id}>{entries}</datalist></>
-        : <select aria-label={label} className={input} value={value} onChange={event => onChange(event.target.value)}>
-            {!choices.includes(value) && <option value={value}>{value}</option>}
-            {entries}
-        </select>}</Field>;
-};
+const NumberField: React.FC<{ label: string; value: number; onChange: (value: number) => void; min?: number; max?: number; step?: number; hint?: string; slider?: boolean; className?: string }> = ({ label, value, onChange, min, max, step = 1, hint, slider, className = '' }) =>
+    <div className={`min-w-0 ${className}`}><KitNumberField slider={slider} label={label} ariaLabel={label} value={value} min={min} max={max} step={step} onChange={onChange} />{hint && <p className={ui.hint}>{hint}</p>}</div>;
+const Choice: React.FC<{ label: string; value: string; choices: string[]; onChange: (value: string) => void; editable?: boolean; id?: string }> = ({ label, value, choices, onChange, editable, id }) =>
+    editable ? <Field label={label}><input aria-label={label} className={input} value={value} list={id} onChange={event => onChange(event.target.value)} /><datalist id={id}>{choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}</datalist></Field>
+        : <Select variant="search" label={label} ariaLabel={label} value={value} options={choices} onChange={onChange} />;
 
 export const MinimaxH3Panel: React.FC<{
     variant?: H3RenderWorkflow;
@@ -57,6 +58,7 @@ export const MinimaxH3Panel: React.FC<{
     onLyricsSettingsChange: (provider: VideoPromptProvider, model?: string) => void;
 }> = ({ variant: requestedVariant, draft, onDraftChange, options: savedOptions, onOptionsChange, ready, onClearDraft, onStartFromScratch, lyricsProvider, lyricsModel, onLyricsSettingsChange }) => {
     const dispatch = useDispatch<AppDispatch>();
+    const { inventory } = useModelInventory();
     const variant: H3RenderWorkflow = requestedVariant ?? 'reference';
     const options = savedOptions || defaultH3WorkflowOptions(variant);
     const ultrafast = variant === 'ultrafast';
@@ -278,6 +280,7 @@ export const MinimaxH3Panel: React.FC<{
         };
     }, [info]);
     const loraNames = React.useMemo(() => h3LoraChoices(info), [info]);
+    const diffusionModels = React.useMemo(() => familyFiles(lists('UNETLoader', 'unet_name'), 'minimax-h3', inventory), [lists, inventory]);
     const changeFormat = (format: string) => {
         const formatOptions: MinimaxH3Options['formatOptions'] = {};
         for (const widget of h3FormatWidgets(info, format)) {
@@ -331,7 +334,7 @@ export const MinimaxH3Panel: React.FC<{
             return <div key={ref.id} className={`min-w-0 rounded-lg border border-border-primary bg-bg-primary p-2 ${ref.kind === 'audio' ? 'sm:col-span-2' : ''}`}>
                 <div className="mb-2 flex items-center justify-between gap-2">
                     <Toggle label={referenceToken(ref)} checked={control.enabled} onChange={enabled => update({ references: { ...options.references, [ref.id]: { ...control, enabled } } })} />
-                    <button type="button" className="text-xs text-red-300" onClick={() => { if (window.confirm(`Remove ${referenceToken(ref)}? Update the prompt if it mentions this reference.`)) patchDraft({ references: draft.references.filter(item => item.id !== ref.id) }); }}>Remove</button>
+                    <button type="button" className="text-xs text-danger" onClick={() => { if (window.confirm(`Remove ${referenceToken(ref)}? Update the prompt if it mentions this reference.`)) patchDraft({ references: draft.references.filter(item => item.id !== ref.id) }); }}>Remove</button>
                 </div>
                 <H3Media reference={ref} />
                 {ref.kind === 'audio' && <H3AudioReference reference={ref} videoDuration={options.duration}
@@ -358,7 +361,7 @@ export const MinimaxH3Panel: React.FC<{
             <div className="flex flex-wrap gap-2">
                 <button type="button" className={button} disabled={!ready || busy || loading} onClick={() => void refresh()}>{loading ? 'Refreshing...' : 'Refresh nodes / models'}</button>
                 <button type="button" className={button} disabled={resetBlocked} title="Restore settings while keeping the current prompt, references and output" onClick={() => { if (window.confirm(`Restore all ${name} workflow settings to the supplied defaults? Prompt and media will be retained.`)) onOptionsChange(defaultH3WorkflowOptions(variant)); }}>Reset settings only</button>
-                <button type="button" className={`${button} border-red-400/40 text-red-300`} disabled={resetBlocked} onClick={startFromScratch}>Start from scratch</button>
+                <button type="button" className={`${button} border-danger text-danger`} disabled={resetBlocked} onClick={startFromScratch}>Start from scratch</button>
             </div>
         </div>
         {advanced && advancedSettings && <section aria-label="Video saving" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-cyan-400/60 bg-cyan-400/10 p-4">
@@ -375,7 +378,7 @@ export const MinimaxH3Panel: React.FC<{
             </button>
         </section>}
         {!info && <p className="rounded-lg border border-sky-400/30 p-3 text-xs text-sky-200">Refresh nodes / models to load your installed files and format options, or use Check workflow. Generation always validates the live ComfyUI schema before uploading.</p>}
-        {error && <p role="alert" className="whitespace-pre-wrap rounded-lg border border-red-400/40 bg-red-400/10 p-3 text-sm text-red-300">{error}</p>}
+        {error && <p role="alert" className="whitespace-pre-wrap rounded-lg border border-danger bg-danger-bg p-3 text-sm text-danger">{error}</p>}
         {status && <p role="status" className="text-xs text-text-secondary">{status}</p>}
         {advanced && options.advanced && <fieldset disabled={!ready}><AdvancedH3Settings section="switches" settings={options.advanced} options={options} info={info} onChange={value => update({ advanced: value })} onOptionsChange={update} /></fieldset>}
         <div className={`grid gap-4 ${advanced ? 'lg:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.3fr)]' : 'xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,1fr)]'}`}>
@@ -392,13 +395,13 @@ export const MinimaxH3Panel: React.FC<{
                     <Toggle label="Realtime preview" checked={options.preview} onChange={preview => update({ preview })} />
                     <Toggle label="RTX upscaler" checked={acceleration.rtxUpscale} onChange={rtxUpscale => updateAcceleration({ rtxUpscale })} />
                     {acceleration.rtxUpscale && <div className="grid gap-3 sm:grid-cols-2">
-                        <NumberField label="RTX scale" value={acceleration.rtxScale} min={1} max={4} step={0.25} onChange={rtxScale => updateAcceleration({ rtxScale })} />
+                        <NumberField slider label="RTX scale" value={acceleration.rtxScale} min={1} max={4} step={0.25} onChange={rtxScale => updateAcceleration({ rtxScale })} />
                         <Choice label="RTX quality" value={acceleration.rtxQuality} choices={['LOW', 'MEDIUM', 'HIGH', 'ULTRA']} onChange={rtxQuality => updateAcceleration({ rtxQuality })} />
                     </div>}
                     <p className="text-xs text-text-muted">Spectrum and RTX are optional additions, off by default. RTX runs after decoding and requires a compatible NVIDIA GPU. Disabled accelerators are removed from the submitted graph.</p>
                 </section>}
                 {h3Needed && <details className={box} open={!advanced}><summary className="cursor-pointer font-semibold">Models & conditioning</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <Choice label="Diffusion model" value={options.model} choices={lists('UNETLoader', 'unet_name')} onChange={model => update({ model })} />
+                    <Choice label="Diffusion model" value={options.model} choices={diffusionModels} onChange={model => update({ model })} />
                     <Choice label="Weight dtype" value={options.weightDtype} choices={lists('UNETLoader', 'weight_dtype', ['default', 'fp8_e4m3fn', 'fp8_e4m3fn_fast', 'fp8_e5m2'])} onChange={weightDtype => update({ weightDtype })} />
                     <Choice label="Text encoder (MiniMax)" value={options.clip} choices={lists('CLIPLoader', 'clip_name')} onChange={clip => update({ clip })} />
                     <Choice label="CLIP device" value={options.clipDevice} choices={lists('CLIPLoader', 'device', ['default', 'cpu'])} onChange={clipDevice => update({ clipDevice })} />
@@ -412,9 +415,9 @@ export const MinimaxH3Panel: React.FC<{
                 </div></details>}
                 {!videoInput && <details className={box} open={!advanced}><summary className="cursor-pointer font-semibold">Resolution & sampling</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <Choice label="H3 aspect ratio" value={options.aspect} choices={H3_ASPECTS} onChange={aspect => update({ aspect })} />
-                    <NumberField label="Megapixels" value={options.megapixels} min={0.1} max={16} step={0.1} onChange={megapixels => update({ megapixels })} />
+                    <NumberField slider label="Megapixels" value={options.megapixels} min={0.1} max={16} step={0.1} onChange={megapixels => update({ megapixels })} />
                     <NumberField label="Resolution multiple" value={options.multiple} min={8} max={128} step={4} onChange={multiple => update({ multiple })} hint="H3 requires resulting dimensions divisible by 32." />
-                    <NumberField label="H3 duration (seconds)" value={options.duration} min={0.25} max={60} step={0.25} onChange={duration => update({ duration })} hint={frames} />
+                    <NumberField slider className="sm:col-span-2" label="H3 duration (seconds)" value={options.duration} min={0.25} max={60} step={0.25} onChange={duration => update({ duration })} hint={frames} />
                     <p className="col-span-full text-xs text-violet-300">{dimensions}. Native timing is 24 fps; changing output FPS changes playback duration.</p>
                     <NumberField label="H3 seed" value={options.seed} min={0} max={Number.MAX_SAFE_INTEGER} onChange={seed => update({ seed })} />
                     <Toggle label="Random seed each generation" checked={options.randomizeSeed} onChange={randomizeSeed => update({ randomizeSeed })} />
@@ -426,7 +429,7 @@ export const MinimaxH3Panel: React.FC<{
                     </>}
                     {ultrafast && acceleration && <>
                         <Choice label="Ultrafast scheduler" value={acceleration.scheduler} choices={lists('BasicScheduler', 'scheduler', ['beta'])} onChange={scheduler => updateAcceleration({ scheduler })} />
-                        <NumberField label="Denoise" value={acceleration.denoise} min={0} max={1} step={0.01} onChange={denoise => updateAcceleration({ denoise })} />
+                        <NumberField slider label="Denoise" value={acceleration.denoise} min={0} max={1} step={0.01} onChange={denoise => updateAcceleration({ denoise })} />
                         <NumberField label="Video sigma shift" value={acceleration.shiftVideo} min={0.01} max={100} step={0.01} onChange={shiftVideo => updateAcceleration({ shiftVideo })} />
                         <NumberField label="Audio sigma shift" value={acceleration.shiftAudio} min={0.01} max={100} step={0.01} onChange={shiftAudio => updateAcceleration({ shiftAudio })} />
                         <Choice label="Attention backend" value={acceleration.attention} choices={lists('ModelAttentionBackend', 'attention', ['comfy kitchen attention', 'pytorch attention'])} onChange={attention => updateAcceleration({ attention })} />
@@ -445,13 +448,13 @@ export const MinimaxH3Panel: React.FC<{
                     <p className="text-xs text-text-muted">The supplied graph patches the model only at conditioning time. Patched CLIP is an explicit opt-in; all six slots start disabled.</p>
                     {options.useLoras ? <fieldset className="space-y-3">{options.loras.map((lora, index) => {
                         const patch = (value: Partial<typeof lora>) => update({ loras: options.loras.map((item, i) => i === index ? { ...item, ...value } : item) });
-                        return <div key={index} className="grid grid-cols-[auto_minmax(0,1fr)_90px] items-end gap-2">
+                        return <div key={index} className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-2">
                             <Toggle label={`${index + 1}`} checked={lora.enabled} onChange={enabled => patch({ enabled })} />
                             {lora.enabled ? <>
                                 <Choice label={`LoRA ${index + 1} file`} value={lora.name} choices={loraNames} onChange={name => patch({ name })} />
-                                <NumberField label={`Strength ${index + 1}`} value={lora.strength} min={-20} max={20} step={0.05} onChange={strength => patch({ strength })} />
+                                <NumberField slider className="col-span-full" label={`Strength ${index + 1}`} value={lora.strength} min={-20} max={20} step={0.05} onChange={strength => patch({ strength })} />
                                 <div className="col-span-full"><ModelPromptExamplesButton name={lora.name} disabled={!ready || busy} onUsePrompt={prompt => patchDraft({ prompt })} /></div>
-                            </> : <p className="col-span-2 text-xs text-text-muted">Disabled · enable this slot to select its LoRA.</p>}
+                            </> : <p className="text-xs text-text-muted">Disabled · enable this slot to select its LoRA.</p>}
                         </div>;
                     })}</fieldset> : <p className="text-xs text-text-muted">Enable the LoRA chain, then enable a slot to choose its file and strength. Saved selections are retained while disabled.</p>}
                 </div>}</details>}
@@ -473,7 +476,7 @@ export const MinimaxH3Panel: React.FC<{
                         <Field label="Local model ID"><input aria-label="Local model ID" className={input} value={options.localModelSlug} onChange={event => update({ localModelSlug: event.target.value })} /></Field>
                         <p className="text-xs text-amber-300">This node sends video as still frames and does not send audio to local prompt models.</p>
                     </div>}
-                    <Field label="ReferencePack system prompt"><textarea aria-label="ReferencePack system prompt" className={`${input} min-h-32`} value={options.systemPrompt} onChange={event => update({ systemPrompt: event.target.value })} /></Field>
+                    <PromptBox kind="instruction" label="ReferencePack system prompt" ariaLabel="ReferencePack system prompt" rows={5} value={options.systemPrompt} onChange={systemPrompt => update({ systemPrompt })} />
                     <Toggle label="Display generated prompt node" checked={options.displayPrompt} onChange={displayPrompt => update({ displayPrompt })} />
                 </div></details>}
                 {h3Needed && (!advanced || options.preview) && <details className={box}><summary className="cursor-pointer font-semibold">Live preview · KJ WebSocket</summary><div className="mt-3 space-y-3">
@@ -481,7 +484,7 @@ export const MinimaxH3Panel: React.FC<{
                     <fieldset disabled={!options.preview} className="space-y-3 disabled:opacity-40">
                         <div className="grid gap-3 sm:grid-cols-2">
                             <NumberField label="Preview max resolution" value={options.previewMaxResolution} min={0} max={8192} step={8} onChange={previewMaxResolution => update({ previewMaxResolution })} hint="0 = full sampler resolution" />
-                            <NumberField label="Preview JPEG quality" value={options.previewQuality} min={30} max={100} onChange={previewQuality => update({ previewQuality })} />
+                            <NumberField slider label="Preview JPEG quality" value={options.previewQuality} min={30} max={100} onChange={previewQuality => update({ previewQuality })} />
                             <Toggle label="Suppress standard preview" checked={options.suppressDefaultPreview} onChange={suppressDefaultPreview => update({ suppressDefaultPreview })} />
                             <Toggle label="Preview all video frames" checked={options.previewAllFrames} onChange={previewAllFrames => update({ previewAllFrames })} />
                             <NumberField label="Preview frames" value={options.previewFrames} min={1} max={1024} onChange={previewFrames => update({ previewFrames, previewAllFrames: false })} />
@@ -539,8 +542,8 @@ export const MinimaxH3Panel: React.FC<{
                         <p className="text-xs text-text-secondary">Preview step {preview.step}/{preview.total} · {preview.mime}</p>
                     </> : <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-border-primary p-4 text-center text-sm text-text-secondary">{busy ? 'Waiting for KJ preview frames...' : 'Animated previews appear during sampling, when emitted by KJ.'}</div>)}
                     {busy && <progress aria-label="H3 generation progress" value={progress} max={1} className="h-2 w-full accent-violet-400" />}
-                    {busy ? <button type="button" disabled={cancelling} className={`${button} w-full border-red-400/50 text-red-300`} onClick={() => { setCancelling(true); controller.current?.abort(); }}>{cancelling ? 'Cancelling safely...' : 'Cancel H3 generation'}</button>
-                        : <button type="button" className={`${button} w-full ${accent} ${advanced ? 'bg-cyan-400/15' : ultrafast ? 'bg-emerald-400/15' : 'bg-violet-400/15'} !py-3`} disabled={!ready || copyingFrame || hasPendingAudio || saveStatus === 'saving' || (videoInput ? !hasSourceVideo : !draft?.prompt.trim()) || !!mappingError} onClick={generate}>{videoInput ? 'Process source video' : `Generate ${advanced ? options.advanced?.mode === 'fl2v' ? 'FL2V' : 'Advanced REF2V' : ultrafast ? 'Ultrafast' : 'REF2V'} video`}</button>}
+                    {busy ? <button type="button" disabled={cancelling} className={`${button} w-full border-danger text-danger`} onClick={() => { setCancelling(true); controller.current?.abort(); }}>{cancelling ? 'Cancelling safely...' : 'Cancel H3 generation'}</button>
+                        : <button type="button" className={`${button} w-full border-accent bg-accent text-accent-text !py-3`} disabled={!ready || copyingFrame || hasPendingAudio || saveStatus === 'saving' || (videoInput ? !hasSourceVideo : !draft?.prompt.trim()) || !!mappingError} onClick={generate}>{videoInput ? 'Process source video' : `Generate ${advanced ? options.advanced?.mode === 'fl2v' ? 'FL2V' : 'Advanced REF2V' : ultrafast ? 'Ultrafast' : 'REF2V'} video`}</button>}
                     {hasPendingAudio && <p role="alert" className="text-xs text-amber-300">Apply the audio selection first. No older/full track will be submitted instead.</p>}
                     <div className="flex flex-wrap gap-2"><button type="button" className={button} disabled={!ready || busy || copyingFrame || checking} onClick={check}>{checking ? 'Checking...' : 'Check workflow'}</button><button type="button" className={button} disabled={!draft || busy || copyingFrame} onClick={exportWorkflow}>Export API workflow</button></div>
                     <p className="text-xs text-text-muted">Generation uploads enabled edited references to your ComfyUI server. Model/GPU cost and memory depend on resolution, length, reference size and preview settings.</p>

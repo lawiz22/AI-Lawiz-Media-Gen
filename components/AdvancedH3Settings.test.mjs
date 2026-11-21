@@ -5,11 +5,18 @@ import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { uiModules } from './ui/compileForTest.mjs';
 
 const require = createRequire(import.meta.url);
 const source = ['../services/videoPromptService.ts', '../services/minimaxH3Workflow.ts', '../services/minimaxH3AdvancedWorkflow.ts', './AdvancedH3Settings.tsx']
     .map(file => readFileSync(new URL(file, import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '')).join('\n');
-const { outputText } = ts.transpileModule(`import React from ${JSON.stringify(pathToFileURL(require.resolve('react')).href)};\n${source}
+const { outputText } = ts.transpileModule(`import React from ${JSON.stringify(pathToFileURL(require.resolve('react')).href)};
+import { NumberField } from ${JSON.stringify(uiModules.fields)};
+import { PromptBox } from ${JSON.stringify(uiModules.PromptBox)};
+import { Select } from ${JSON.stringify(uiModules.Select)};
+import { ui } from ${JSON.stringify(uiModules.styles)};
+const familyFiles = names => names, useModelInventory = () => ({ inventory: { items: [] } });
+${source}
 export const render = (options, info = null, section = 'parameters') => <AdvancedH3Settings section={section} settings={options.advanced} options={options} info={info} onChange={() => {}} onOptionsChange={() => {}} />;`,
 { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } });
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);

@@ -21,6 +21,10 @@ import { AudioPlayer } from './AudioPlayer';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { CheckIcon, DiceIcon, DownloadIcon, GenerateIcon, LibraryIcon, MicrophoneIcon, PhotographIcon, SaveIcon, SpinnerIcon, TrashIcon, UploadCloudIcon } from './icons';
 import { generateTtsConversationLine, generateTtsDialogue, TTS_DIALOGUE_THEMES, type TtsDialogueTheme } from '../services/ttsDialogueService';
+import { Accordion } from './ui/Accordion';
+import { Button, NumberField, SeedField, TextField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
 
 type VoiceSource = 'suite' | 'upload' | 'library';
 type LineEmotionMode = 'character' | 'manual' | 'qwen';
@@ -174,10 +178,10 @@ const EmotionEditor: React.FC<{
     <EmotionRadar values={values} onChange={onChange} />
     <p className="mt-1 text-center text-[10px] text-text-muted">Drag a colored point or click its axis.</p>
     <div className="mt-3 grid gap-x-4 gap-y-2 sm:grid-cols-2">
-        {INDEX_TTS_EMOTIONS.map((emotion) => <label key={emotion} className="text-[11px] font-semibold text-text-secondary">
-            <span className="flex justify-between"><span style={{ color: EMOTION_COLORS[emotion] }}>{emotion}</span><span style={{ color: EMOTION_COLORS[emotion] }}>{values[emotion].toFixed(2)}</span></span>
-            <input type="range" min="0" max="1" step="0.01" value={values[emotion]} onChange={(event) => onChange({ ...values, [emotion]: Number(event.target.value) })} style={{ accentColor: EMOTION_COLORS[emotion] }} className="mt-1 w-full" />
-        </label>)}
+        {INDEX_TTS_EMOTIONS.map((emotion) => <div key={emotion} className="flex items-end gap-2">
+            <input type="range" aria-label={`${emotion} slider`} min="0" max="1" step="0.01" value={values[emotion]} onChange={(event) => onChange({ ...values, [emotion]: Number(event.target.value) })} style={{ accentColor: EMOTION_COLORS[emotion] }} className="mb-3 min-w-0 flex-1" />
+            <NumberField className="w-20 shrink-0" label={emotion} value={Math.round(values[emotion] * 100) / 100} min={0} max={1} step={0.01} onChange={(value) => onChange({ ...values, [emotion]: value })} />
+        </div>)}
     </div>
 </div>;
 
@@ -305,7 +309,6 @@ export const TtsAdvancedPanel: React.FC<TtsAdvancedPanelProps> = ({ isComfyUICon
     const [dialogueDuration, setDialogueDuration] = useState(8);
     const [conversationDirection, setConversationDirection] = useState<'continue' | 'new-topic'>('continue');
     const [isGeneratingDialogue, setIsGeneratingDialogue] = useState(false);
-    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [progress, setProgress] = useState(0);
     const [progressMessage, setProgressMessage] = useState('');
@@ -626,7 +629,7 @@ export const TtsAdvancedPanel: React.FC<TtsAdvancedPanelProps> = ({ isComfyUICon
                 <aside className="border-b border-border-primary p-4 xl:border-b-0 xl:border-r">
                     <div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-bold uppercase text-text-secondary">Characters</h3>{mode === 'dialogue' && <button onClick={addCharacter} className="rounded border border-accent px-2 py-1 text-xs font-bold text-accent">+ Add</button>}</div>
                     <div className="space-y-3">
-                        {(mode === 'solo' ? characters.slice(0, 1) : characters).map((character, index) => <article key={character.id} onClick={() => setSelectedCharacterId(character.id)} className={`rounded-md border p-3 ${selectedCharacter?.id === character.id ? 'border-accent bg-accent/5' : 'border-border-primary bg-bg-primary'}`}>
+                        {(mode === 'solo' ? characters.slice(0, 1) : characters).map((character, index) => <article key={character.id} onClick={() => setSelectedCharacterId(character.id)} className={`rounded-md border p-3 ${selectedCharacter?.id === character.id ? 'border-accent' : 'border-border-primary bg-bg-primary'}`}>
                             <div className="flex items-center gap-2">
                                 {character.thumbnail ? <img src={character.thumbnail} alt="" className="h-9 w-9 rounded object-cover" /> : <div className="flex h-9 w-9 items-center justify-center rounded bg-bg-tertiary"><MicrophoneIcon className="h-4 w-4 text-accent" /></div>}
                                 <input value={character.name} onChange={(event) => updateCharacter(character.id, { name: event.target.value })} onClick={(event) => event.stopPropagation()} aria-label={`Character ${index + 1} name`} className="min-w-0 flex-1 border-b border-border-primary bg-transparent py-1 text-sm font-bold outline-none focus:border-accent" />
@@ -637,7 +640,7 @@ export const TtsAdvancedPanel: React.FC<TtsAdvancedPanelProps> = ({ isComfyUICon
                                 <button onClick={() => { setVoiceTargetId(character.id); setLibraryOpen(true); }} className={`h-7 rounded text-[10px] font-bold ${character.voiceSource === 'library' ? 'bg-accent text-accent-text' : 'text-text-muted'}`}>Library</button>
                                 <button onClick={() => beginUpload(character.id)} className={`h-7 rounded text-[10px] font-bold ${character.voiceSource === 'upload' ? 'bg-accent text-accent-text' : 'text-text-muted'}`}>Upload</button>
                             </div>
-                            {character.voiceSource === 'suite' && <select value={character.suiteVoice} onChange={(event) => updateCharacter(character.id, { suiteVoice: event.target.value })} className="mt-2 h-9 w-full rounded border border-border-primary bg-bg-tertiary px-2 text-xs"><option value="">Choose installed voice</option>{suiteVoices.map((voice) => <option key={voice.value} value={voice.value}>{voice.label}</option>)}</select>}
+                            {character.voiceSource === 'suite' && <div onClick={(event) => event.stopPropagation()}><Select variant="search" className="mt-2" ariaLabel={`Character ${index + 1} installed voice`} value={character.suiteVoice} options={suiteVoices} placeholder="Choose installed voice" onChange={(suiteVoice) => updateCharacter(character.id, { suiteVoice })} /></div>}
                             {character.voiceSource === 'library' && <button onClick={() => { setVoiceTargetId(character.id); setLibraryOpen(true); }} className="mt-2 w-full truncate rounded border border-border-primary px-2 py-2 text-xs text-text-secondary"><LibraryIcon className="mr-1 inline h-3.5 w-3.5" />{character.referenceName || 'Choose Library voice'}</button>}
                             {character.voiceSource === 'upload' && <div className="mt-2 space-y-2">
                                 <button onClick={() => beginUpload(character.id)} className="flex min-h-16 w-full items-center justify-center gap-2 rounded border border-dashed border-border-primary bg-bg-tertiary px-2 text-xs text-text-secondary hover:border-accent"><UploadCloudIcon className="h-4 w-4 flex-none" /><span className="min-w-0 truncate">{character.referenceFile?.name || 'Choose voice audio'}</span></button>
@@ -652,59 +655,46 @@ export const TtsAdvancedPanel: React.FC<TtsAdvancedPanelProps> = ({ isComfyUICon
                     <input ref={uploadInput} type="file" accept="audio/*" className="hidden" onChange={(event) => selectUploadedVoice(event.target.files?.[0] || null)} />
                     <input ref={thumbnailInput} type="file" accept="image/*" className="hidden" onChange={(event) => void selectReferenceThumbnail(event.target.files?.[0] || null)} />
 
-                    <button onClick={() => setAdvancedOpen((open) => !open)} className="mt-4 flex w-full items-center justify-between rounded-md border border-border-primary bg-bg-primary px-3 py-2 text-xs font-bold text-text-secondary"><span>Engine settings</span><span>{advancedOpen ? '−' : '+'}</span></button>
-                    {advancedOpen && <div className="mt-2 space-y-3 rounded-md border border-border-primary bg-bg-primary p-3">
-                        <label className="block text-[10px] font-bold text-text-secondary">MODEL<input value={engine.modelPath} onChange={(event) => setEngine((current) => ({ ...current, modelPath: event.target.value }))} className="mt-1 w-full rounded border border-border-primary bg-bg-tertiary p-2 text-xs" /></label>
+                    <Accordion title="Advanced" className="mt-4">
+                        <TextField label="Model" value={engine.modelPath} onChange={(modelPath) => setEngine((current) => ({ ...current, modelPath }))} />
                         <p className="rounded bg-bg-tertiary p-2 text-[10px] leading-4 text-text-muted">{usesIndexTtsLanguage ? 'IndexTTS 2.5 · full emotion radar and Auto Qwen' : 'ChatterBox multilingual · voice cloning and dialogue; detailed IndexTTS emotions are unavailable'}</p>
-                        <label className="block text-[10px] font-bold text-text-secondary">TEMPERATURE <span className="float-right text-accent">{engine.temperature.toFixed(2)}</span><input type="range" min="0.1" max="1.5" step="0.05" value={engine.temperature} onChange={(event) => setEngine((current) => ({ ...current, temperature: Number(event.target.value) }))} className="mt-1 w-full accent-accent" /></label>
-                        <label className="block text-[10px] font-bold text-text-secondary">EMOTION STRENGTH <span className="float-right text-accent">{engine.emotionAlpha.toFixed(2)}</span><input type="range" min="0" max="1" step="0.05" value={engine.emotionAlpha} onChange={(event) => setEngine((current) => ({ ...current, emotionAlpha: Number(event.target.value) }))} className="mt-1 w-full accent-accent" /></label>
-                        <label className="block text-[10px] font-bold text-text-secondary">SPEED <span className="float-right text-accent">{engine.durationFactor.toFixed(2)}×</span><input type="range" min="0.5" max="1.5" step="0.05" value={engine.durationFactor} onChange={(event) => setEngine((current) => ({ ...current, durationFactor: Number(event.target.value) }))} className="mt-1 w-full accent-accent" /></label>
-                        <label className="block text-[10px] font-bold text-text-secondary">SEED<div className="mt-1 flex gap-2"><input type="number" value={engine.seed} onChange={(event) => setEngine((current) => ({ ...current, seed: Number(event.target.value) }))} className="min-w-0 flex-1 rounded border border-border-primary bg-bg-tertiary p-2 text-xs" /><button onClick={() => setEngine((current) => ({ ...current, seed: Math.floor(Math.random() * 2147483647) }))} title="Random seed" aria-label="Random seed" className="rounded border border-border-primary p-2 text-accent"><DiceIcon className="h-4 w-4" /></button></div></label>
-                    </div>}
+                        <NumberField slider label="Temperature" value={engine.temperature} min={0.1} max={1.5} step={0.05} onChange={(temperature) => setEngine((current) => ({ ...current, temperature }))} />
+                        <NumberField slider label="Emotion strength" value={engine.emotionAlpha} min={0} max={1} step={0.05} onChange={(emotionAlpha) => setEngine((current) => ({ ...current, emotionAlpha }))} />
+                        <NumberField slider label="Speed" value={engine.durationFactor} min={0.5} max={1.5} step={0.05} onChange={(durationFactor) => setEngine((current) => ({ ...current, durationFactor }))} />
+                        <SeedField name="TTS Advanced" value={engine.seed} max={2147483647} onChange={(seed) => setEngine((current) => ({ ...current, seed }))} />
+                    </Accordion>
                 </aside>
 
                 <main className="border-b border-border-primary p-4 xl:border-b-0 xl:border-r">
                     <div className="mb-4 grid gap-2 rounded-md border border-border-primary bg-bg-primary p-3 sm:grid-cols-3">
-                        <label className="text-[10px] font-bold uppercase text-text-secondary">Language
-                            <select value={engine.language} onChange={(event) => selectLanguage(event.target.value)} className="mt-1 block h-9 w-full rounded border border-border-primary bg-bg-tertiary px-2 text-xs font-medium normal-case text-text-primary">
-                                {CHATTERBOX_LANGUAGES.map((language) => <option key={language} value={language}>{language}</option>)}
-                            </select>
-                        </label>
-                        <label className="text-[10px] font-bold uppercase text-text-secondary">Dialogue style
-                            <select value={dialogueTheme} onChange={(event) => setDialogueTheme(event.target.value as TtsDialogueTheme)} className="mt-1 block h-9 w-full rounded border border-border-primary bg-bg-tertiary px-2 text-xs font-medium normal-case text-text-primary">
-                                {TTS_DIALOGUE_THEMES.map((theme) => <option key={theme.value} value={theme.value}>{theme.label}</option>)}
-                            </select>
-                        </label>
-                        <label className="text-[10px] font-bold uppercase text-text-secondary">Target time
-                            <select value={dialogueDuration} onChange={(event) => setDialogueDuration(Number(event.target.value))} className="mt-1 block h-9 w-full rounded border border-border-primary bg-bg-tertiary px-2 text-xs font-medium normal-case text-text-primary">
-                                {Array.from({ length: 13 }, (_, index) => index + 3).map((seconds) => <option key={seconds} value={seconds}>{seconds} sec</option>)}
-                            </select>
-                        </label>
+                        <Select variant="search" label="Language" value={engine.language} options={CHATTERBOX_LANGUAGES} onChange={selectLanguage} />
+                        <Select<TtsDialogueTheme> label="Dialogue style" value={dialogueTheme} options={TTS_DIALOGUE_THEMES} onChange={setDialogueTheme} />
+                        <Select<number> label="Target time" value={dialogueDuration} options={Array.from({ length: 13 }, (_, index) => ({ value: index + 3, label: `${index + 3} sec` }))} onChange={setDialogueDuration} />
                         {mode === 'dialogue' && <div className="grid grid-cols-2 rounded border border-border-primary bg-bg-tertiary p-1 sm:col-span-3" role="group" aria-label="Conversation direction">
-                            <button onClick={() => setConversationDirection('continue')} aria-pressed={conversationDirection === 'continue'} className={`h-8 rounded text-[10px] font-bold ${conversationDirection === 'continue' ? 'bg-cyan-500 text-zinc-950' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>Continue conversation</button>
-                            <button onClick={() => setConversationDirection('new-topic')} aria-pressed={conversationDirection === 'new-topic'} className={`h-8 rounded text-[10px] font-bold ${conversationDirection === 'new-topic' ? 'bg-fuchsia-500 text-white' : 'text-fuchsia-300 hover:bg-fuchsia-500/10'}`}>Change subject</button>
+                            <button onClick={() => setConversationDirection('continue')} aria-pressed={conversationDirection === 'continue'} className={`h-8 rounded text-[10px] font-bold ${conversationDirection === 'continue' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:text-text-primary'}`}>Continue conversation</button>
+                            <button onClick={() => setConversationDirection('new-topic')} aria-pressed={conversationDirection === 'new-topic'} className={`h-8 rounded text-[10px] font-bold ${conversationDirection === 'new-topic' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:text-text-primary'}`}>Change subject</button>
                         </div>}
-                        <button onClick={generateRandomDialogue} disabled={isGeneratingDialogue || !selectedLine} className="flex h-10 items-center justify-center gap-2 rounded bg-amber-400 text-xs font-bold text-zinc-950 hover:bg-amber-300 disabled:opacity-40 sm:col-span-3">
+                        <Button onClick={generateRandomDialogue} disabled={isGeneratingDialogue || !selectedLine} className="h-10 sm:col-span-3">
                             {isGeneratingDialogue ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <DiceIcon className="h-4 w-4" />}{isGeneratingDialogue ? 'Writing...' : mode === 'solo' ? 'Random Dialogue' : 'Generate selected line'}
-                        </button>
+                        </Button>
                     </div>
                     <div className="mb-3 flex items-center justify-between"><div><h3 className="text-xs font-bold uppercase text-text-secondary">{mode === 'solo' ? 'Text to speak' : 'Dialogue lines'}</h3><p className="mt-1 text-[11px] text-text-muted">Select a line to control its emotion.</p></div>{mode === 'dialogue' && <button onClick={addLine} className="rounded border border-accent px-3 py-2 text-xs font-bold text-accent">+ Add line</button>}</div>
                     <div className="space-y-3">
                         {activeLines.map((line, index) => {
                             const lineCharacter = characters.find((character) => character.id === line.characterId);
-                            return <article key={line.id} onClick={() => { setSelectedLineId(line.id); setSelectedCharacterId(line.characterId); }} className={`rounded-md border p-3 ${selectedLine?.id === line.id ? 'border-accent bg-accent/5' : 'border-border-primary bg-bg-primary'}`}>
+                            return <article key={line.id} onClick={() => { setSelectedLineId(line.id); setSelectedCharacterId(line.characterId); }} className={`rounded-md border p-3 ${selectedLine?.id === line.id ? 'border-accent' : 'border-border-primary bg-bg-primary'}`}>
                             <div className="mb-2 flex items-center gap-2">
                                 <span className="flex h-7 w-7 items-center justify-center rounded bg-bg-tertiary text-xs font-bold text-accent">{index + 1}</span>
                                 {lineCharacter?.thumbnail ? <img src={lineCharacter.thumbnail} alt={`${lineCharacter.name} thumbnail`} className={`h-8 w-8 flex-none rounded object-cover ring-1 ${selectedLine?.id === line.id ? 'ring-accent' : 'ring-border-primary'}`} /> : <span title={`${lineCharacter?.name || 'Character'} has no thumbnail`} className={`flex h-8 w-8 flex-none items-center justify-center rounded bg-bg-tertiary ring-1 ${selectedLine?.id === line.id ? 'ring-accent' : 'ring-border-primary'}`}><MicrophoneIcon className="h-3.5 w-3.5 text-text-muted" /></span>}
-                                {mode === 'dialogue' && <select value={line.characterId} onChange={(event) => { updateLine(line.id, { characterId: event.target.value }); setSelectedCharacterId(event.target.value); }} className="min-w-0 flex-1 rounded border border-border-primary bg-bg-tertiary px-2 py-1 text-xs font-bold">{characters.map((character) => <option key={character.id} value={character.id}>{character.name}</option>)}</select>}
-                                {line.emotionMode === 'qwen' && <span className="rounded bg-cyan-500/15 px-2 py-1 text-[9px] font-bold text-cyan-300">AUTO</span>}
-                                {line.emotionMode === 'manual' && <span className="rounded bg-amber-500/15 px-2 py-1 text-[9px] font-bold text-amber-300">CUSTOM</span>}
+                                {mode === 'dialogue' && <Select className="min-w-0 flex-1" ariaLabel={`Line ${index + 1} character`} value={line.characterId} options={characters.map((character) => ({ value: character.id, label: character.name }))} onChange={(characterId) => { updateLine(line.id, { characterId }); setSelectedCharacterId(characterId); }} />}
+                                {line.emotionMode === 'qwen' && <span className="rounded border border-accent px-2 py-1 text-[9px] font-bold text-accent">AUTO</span>}
+                                {line.emotionMode === 'manual' && <span className="rounded border border-border-primary px-2 py-1 text-[9px] font-bold text-text-secondary">CUSTOM</span>}
                                 {mode === 'dialogue' && <><button onClick={() => moveLine(line.id, -1)} disabled={index === 0} title="Move line up" className="h-7 w-7 rounded border border-border-primary text-xs disabled:opacity-30">↑</button><button onClick={() => moveLine(line.id, 1)} disabled={index === activeLines.length - 1} title="Move line down" className="h-7 w-7 rounded border border-border-primary text-xs disabled:opacity-30">↓</button>{lines.length > 1 && <button onClick={() => removeLine(line.id)} title="Remove line" aria-label="Remove line" className="p-1 text-danger"><TrashIcon className="h-4 w-4" /></button>}</>}
                             </div>
-                            <textarea value={line.text} onChange={(event) => updateLine(line.id, { text: event.target.value })} rows={mode === 'solo' ? 9 : 3} placeholder={mode === 'solo' ? 'Write what the voice should say...' : 'Write this character’s line...'} className="w-full resize-y rounded border border-border-primary bg-bg-tertiary p-3 text-sm leading-6 outline-none focus:border-accent" />
+                            <PromptBox label={mode === 'solo' ? 'Text' : `Line ${index + 1} text`} kind="positive" highlight={false} value={line.text} onChange={(text) => updateLine(line.id, { text })} rows={mode === 'solo' ? 9 : 3} placeholder={mode === 'solo' ? 'Write what the voice should say...' : 'Write this character’s line...'} />
                         </article>})}
                     </div>
-                    {mode === 'dialogue' && <label className="mt-4 block text-xs font-bold text-text-secondary">PAUSE BETWEEN LINES <span className="float-right text-accent">{pauseMs} ms</span><input type="range" min="0" max="2000" step="50" value={pauseMs} onChange={(event) => setPauseMs(Number(event.target.value))} className="mt-2 w-full accent-accent" /></label>}
+                    {mode === 'dialogue' && <NumberField slider className="mt-4" label="Pause between lines (ms)" value={pauseMs} min={0} max={2000} step={50} onChange={setPauseMs} />}
                     <button onClick={generate} disabled={!canGenerate || isGenerating} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-accent font-bold text-accent-text hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40">{isGenerating ? <SpinnerIcon className="h-5 w-5 animate-spin" /> : <GenerateIcon className="h-5 w-5" />}{isGenerating ? 'Generating IndexTTS...' : mode === 'solo' ? 'Generate voice' : `Generate ${activeLines.length}-line dialogue`}</button>
                     {isGenerating && <div className="mt-3"><div className="mb-1 flex justify-between text-[11px] text-text-muted"><span>{progressMessage}</span><span>{Math.round(progress * 100)}%</span></div><div className="h-1 overflow-hidden rounded bg-bg-primary"><div className="h-full bg-accent" style={{ width: `${Math.max(3, progress * 100)}%` }} /></div></div>}
                     {error && <p className="mt-4 rounded-md bg-danger-bg p-3 text-sm text-danger">{error}</p>}
@@ -717,7 +707,7 @@ export const TtsAdvancedPanel: React.FC<TtsAdvancedPanelProps> = ({ isComfyUICon
                     {selectedLine && <div className="mt-3 grid grid-cols-3 rounded-md border border-border-primary bg-bg-primary p-1">
                         {(['character', 'qwen', 'manual'] as const).map((emotionMode) => <button key={emotionMode} onClick={() => updateLine(selectedLine.id, { emotionMode })} disabled={!usesIndexTtsLanguage && emotionMode !== 'character'} className={`h-8 rounded text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-30 ${selectedLine.emotionMode === emotionMode ? 'bg-accent text-accent-text' : 'text-text-muted'}`}>{emotionMode === 'character' ? 'Character' : emotionMode === 'qwen' ? 'Auto Qwen' : 'Custom'}</button>)}
                     </div>}
-                    {!usesIndexTtsLanguage ? <div className="mt-4 rounded-md border border-border-primary bg-bg-primary p-4"><p className="text-sm font-bold text-text-primary">Multilingual voice mode</p><p className="mt-1 text-xs leading-5 text-text-muted">{engine.language} is generated by ChatterBox because the installed IndexTTS node only accepts English, Chinese, Japanese, Spanish and Arabic. Voice cloning, multiple characters and dialogue mixing remain available.</p></div> : selectedLine?.emotionMode === 'qwen' ? <div className="mt-4 rounded-md border border-cyan-500/30 bg-cyan-500/5 p-4"><p className="text-sm font-bold text-cyan-300">Automatic text emotion</p><p className="mt-1 text-xs leading-5 text-text-muted">Qwen interprets this line and directs IndexTTS automatically.</p><label className="mt-3 block text-[10px] font-bold text-text-secondary">DIRECTION<input value={selectedLine.emotionPrompt} onChange={(event) => updateLine(selectedLine.id, { emotionPrompt: event.target.value })} className="mt-1 w-full rounded border border-border-primary bg-bg-tertiary p-2 text-xs" /></label></div> : <div className="mt-3"><EmotionEditor values={lineEmotionValues} onChange={(emotions) => selectedLine?.emotionMode === 'manual' ? updateLine(selectedLine.id, { emotions }) : selectedCharacter && updateCharacter(selectedCharacter.id, { emotions })} /><p className="mt-3 text-center text-[10px] text-text-muted">{selectedLine?.emotionMode === 'manual' ? 'Custom values for this line' : `Default emotion for ${selectedCharacter?.name}`}</p></div>}
+                    {!usesIndexTtsLanguage ? <div className="mt-4 rounded-md border border-border-primary bg-bg-primary p-4"><p className="text-sm font-bold text-text-primary">Multilingual voice mode</p><p className="mt-1 text-xs leading-5 text-text-muted">{engine.language} is generated by ChatterBox because the installed IndexTTS node only accepts English, Chinese, Japanese, Spanish and Arabic. Voice cloning, multiple characters and dialogue mixing remain available.</p></div> : selectedLine?.emotionMode === 'qwen' ? <div className="mt-4 rounded-md border border-border-primary p-4"><p className="text-sm font-bold text-accent">Automatic text emotion</p><p className="mt-1 text-xs leading-5 text-text-muted">Qwen interprets this line and directs IndexTTS automatically.</p><TextField className="mt-3" label="Direction" value={selectedLine.emotionPrompt} onChange={(emotionPrompt) => updateLine(selectedLine.id, { emotionPrompt })} /></div> : <div className="mt-3"><EmotionEditor values={lineEmotionValues} onChange={(emotions) => selectedLine?.emotionMode === 'manual' ? updateLine(selectedLine.id, { emotions }) : selectedCharacter && updateCharacter(selectedCharacter.id, { emotions })} /><p className="mt-3 text-center text-[10px] text-text-muted">{selectedLine?.emotionMode === 'manual' ? 'Custom values for this line' : `Default emotion for ${selectedCharacter?.name}`}</p></div>}
                 </aside>
             </div>
         </section>

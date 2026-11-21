@@ -601,11 +601,11 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                     <MenuSelect value={safety} onChange={setSafety} ariaLabel="Model safety" options={[{ value: 'auto', label: 'Safety: Auto' }, { value: 'sfw', label: 'Blue · SFW' }, { value: 'nsfw', label: 'Red · NSFW' }]} />
                     <button onClick={applySafety} disabled={busy} className={`px-3 rounded text-xs font-bold border disabled:opacity-50 ${safety === 'nsfw' ? 'border-red-500 text-red-400' : 'border-blue-500 text-blue-400'}`}>Apply</button>
                 </div>
-                <div className="space-y-1 pt-1 border-t border-border-primary/60">
+                <div className="space-y-1 pt-1 border-t border-border-primary">
                     <p className="text-[10px] font-semibold uppercase text-text-muted">Model category · file stays in place</p>
                     <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1.5"><MenuSelect value={category} onChange={setCategory} ariaLabel="Model category" options={MODEL_CATEGORY_OPTIONS.map(value => ({ value: value.id, label: value.label }))} /><button onClick={changeCategory} disabled={busy || !categoryActionAllowed || item.userFamily === category} className="border border-blue-500/60 text-blue-400 rounded px-3 py-1.5 text-xs font-bold hover:bg-blue-500/10 disabled:opacity-50">{categoryActionLabel}</button></div>
                 </div>
-                <div className="space-y-1 pt-1 border-t border-border-primary/60">
+                <div className="space-y-1 pt-1 border-t border-border-primary">
                     <p className="text-[10px] font-semibold uppercase text-text-muted">Move file to folder</p>
                     <div className="grid grid-cols-2 gap-1.5"><MenuSelect value={kind} onChange={next => { setKind(next); setFolder(''); }} ariaLabel="Model type" options={[{ value: 'lora', label: 'LoRA' }, { value: 'checkpoint', label: 'Checkpoint' }, { value: 'diffusion', label: 'Diffusion' }]} /><MenuSelect value={folder} onChange={setFolder} ariaLabel="Model folder" options={[{ value: '', label: 'Choose destination...' }, ...FOLDERS[kind].map(value => ({ value, label: getFolderLabel(value) }))]} /><button onClick={moveModel} disabled={busy || !folder || (kind === item.kind && folder === getItemFolder(item))} className="col-span-2 border border-amber-500/60 text-amber-400 rounded py-1.5 text-xs font-bold hover:bg-amber-500/10 disabled:opacity-50">Move model</button></div>
                 </div>

@@ -91,7 +91,7 @@ const LibraryPromptPicker: React.FC<{ onClose: () => void; onSelectPrompt: (prom
                 <div className="space-y-2 md:min-h-0 md:overflow-y-auto" aria-label="Library prompts">
                     {!filtered.length && <p className="p-4 text-sm text-text-secondary">{query ? 'No matching prompts.' : 'No saved image prompts in the Library yet.'}</p>}
                     {filtered.map(item => <button key={item.id} type="button" disabled={disabled} onMouseEnter={() => setHoveredId(item.id)} onFocus={() => setHoveredId(item.id)} onClick={() => select(item)}
-                        className={`block w-full rounded-lg border p-3 text-left transition-colors disabled:opacity-50 ${hoveredId === item.id ? 'border-accent bg-accent/10' : 'border-border-primary bg-bg-tertiary hover:border-accent'}`}>
+                        className={`block w-full rounded-lg border p-3 text-left transition-colors disabled:opacity-50 ${hoveredId === item.id ? 'border-accent' : 'border-border-primary bg-bg-tertiary hover:border-accent'}`}>
                         <span className="block text-sm font-semibold">{item.name || 'Untitled prompt'}</span>
                         <span className="mt-1 block line-clamp-3 whitespace-pre-wrap break-words text-xs text-text-secondary">{item.media}</span>
                     </button>)}

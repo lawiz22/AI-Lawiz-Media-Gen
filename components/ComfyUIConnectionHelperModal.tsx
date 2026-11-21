@@ -158,7 +158,7 @@ export const ComfyUIConnectionHelperModal: React.FC<ComfyUIConnectionHelperModal
                 <p>
                     Modern browsers require explicit permission for a website (like this app) to connect to a server on your local network (like ComfyUI). This is the most common reason for connection failure.
                 </p>
-                <div className="mt-3 p-3 bg-bg-primary/50 rounded-lg border border-border-primary space-y-2">
+                <div className="mt-3 p-3 rounded-lg border border-border-primary space-y-2">
                     {renderLnaStatus()}
                     <div className="text-sm">{renderLnaInstructions()}</div>
                 </div>
@@ -168,7 +168,7 @@ export const ComfyUIConnectionHelperModal: React.FC<ComfyUIConnectionHelperModal
                 <p>
                    If the permission above is granted but the connection still fails, the next most likely reason is CORS. You <strong className="text-highlight-yellow">must</strong> start your ComfyUI server with a special flag.
                 </p>
-                <div className="mt-2 p-3 bg-bg-primary/50 rounded-lg border border-border-primary text-sm space-y-4">
+                <div className="mt-2 p-3 rounded-lg border border-border-primary text-sm space-y-4">
                     <p>In your ComfyUI startup script (e.g., `run_nvidia_gpu.bat`), find the line <code className="text-xs">COMMANDLINE_ARGS=</code> and add <code className="text-xs text-highlight-green">--enable-cors</code>.</p>
                     <pre className="bg-bg-secondary p-2 rounded-md text-xs text-text-secondary whitespace-pre-wrap font-mono"><code>COMMANDLINE_ARGS=--enable-cors</code></pre>
                     <p className="font-bold text-highlight-yellow">You MUST restart your ComfyUI server after saving the file for this change to take effect.</p>
@@ -181,7 +181,7 @@ export const ComfyUIConnectionHelperModal: React.FC<ComfyUIConnectionHelperModal
                     <li>Check your ComfyUI terminal window to see which address it's running on.</li>
                     <li>The URL we last tried to connect to is:</li>
                 </ul>
-                <div className="mt-2 p-3 bg-bg-primary/50 rounded-lg border border-border-primary space-y-2">
+                <div className="mt-2 p-3 rounded-lg border border-border-primary space-y-2">
                     <CopyableField label="URL We Tested:" value={testedUrl} />
                     <a href={testedUrl} target="_blank" rel="noopener noreferrer" className="inline-block w-full text-center bg-accent text-accent-text font-bold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors">
                         Click to Open URL in New Tab

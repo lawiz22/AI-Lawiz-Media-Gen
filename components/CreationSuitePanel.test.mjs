@@ -6,6 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { uiModules } from './ui/compileForTest.mjs';
 const require = createRequire(import.meta.url);
 const compile = source => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
@@ -25,6 +26,12 @@ const component = await import(compile(`
     import React, { useEffect, useRef, useState } from '${reactURL}';
     import { defaultCreationSuiteSettings, creationSuitePrompt, CREATION_SUITE_HELPERS, CREATION_SUITE_INPUTS } from '${workflowURL}';
     import { CreationSuiteLivePreview } from '${liveURL}';
+    import { Accordion } from '${uiModules.Accordion}';
+    import { Select } from '${uiModules.Select}';
+    import { NumberField } from '${uiModules.fields}';
+    import { PromptBox } from '${uiModules.PromptBox}';
+    import { ui } from '${uiModules.styles}';
+    const familyFiles = names => names, useModelInventory = () => ({ inventory: { items: [] } });
     const emptyCreationSuiteLive = () => ({ phase: 'queued', nodes: [], sigmas: [], deltas: [], stepTimes: [] });
     const useDispatch = () => () => {}, useSelector = () => false, useMediaURL = () => '', useDraftAutosave = () => {};
     const LibraryPickerModal = () => null, CreationSuiteResultImage = () => null;

@@ -21,6 +21,8 @@ import { SendToLTXButton } from '../SendToLTXButton';
 import { Accordion } from '../ui/Accordion';
 import { ModelFields, NumberField, SamplerFields } from '../ui/fields';
 import { Select } from '../ui/Select';
+import { familyFiles } from '../../services/styleLibrary';
+import { useModelInventory } from '../useModelInventory';
 import { CLOTHING_CATALOG, type ClothingAudience } from './clothingCatalog';
 import { HISTORICAL_CAMEO_CATALOG, type HistoricalCameo } from './historicalCameoCatalog';
 
@@ -330,6 +332,7 @@ const PastForwardPanel: React.FC = () => {
     const [geminiModels, setGeminiModels] = useState<string[]>([...GEMINI_IMAGE_MODELS]);
     const [isLoadingGeminiModels, setIsLoadingGeminiModels] = useState(false);
 
+    const { inventory } = useModelInventory();
     const models = getOptions(comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name);
     const qwenModels = getOptions(comfyUIObjectInfo?.UNETLoader?.input?.required?.unet_name);
     const clips = getOptions(comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name);
@@ -880,7 +883,7 @@ const PastForwardPanel: React.FC = () => {
                         {provider === 'comfyui' && <div className="space-y-3">
                             <h3 className="text-sm font-bold text-text-secondary">FLUX2 settings</h3>
                             <Accordion title="Models">{() => <ModelFields name={NAME} disabled={isGenerating} onChange={(id, value) => dispatch(updateOptions({ [id as 'comfyFlux2EditUnet']: value }))} fields={[
-                                { id: 'comfyFlux2EditUnet', label: 'FLUX2 Model', value: generationOptions.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf', choices: models },
+                                { id: 'comfyFlux2EditUnet', label: 'FLUX2 Model', value: generationOptions.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf', choices: familyFiles(models, 'flux2', inventory) },
                                 { id: 'comfyFlux2EditClip', label: 'CLIP', value: generationOptions.comfyFlux2EditClip || 'qwen_3_4b.safetensors', choices: clips },
                                 { id: 'comfyFlux2EditVae', label: 'VAE', value: generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors', choices: vaes },
                             ]} />}</Accordion>
@@ -913,14 +916,14 @@ const PastForwardPanel: React.FC = () => {
                                 <p className="text-xs text-text-muted">Changes the Lightning LoRA and sampling steps together.</p>
                             </div>
                             <Accordion title="Models">{() => <ModelFields name={NAME} disabled={isGenerating} onChange={(id, value) => dispatch(updateOptions({ [id as 'comfyQwenEditUnet']: value }))} fields={[
-                                { id: 'comfyQwenEditUnet', label: 'Qwen Edit Model', value: generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors', choices: qwenModels },
+                                { id: 'comfyQwenEditUnet', label: 'Qwen Edit Model', value: generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors', choices: familyFiles(qwenModels, 'qwen-edit', inventory) },
                                 { id: 'comfyQwenEditClip', label: 'CLIP', value: generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors', choices: clips },
                                 { id: 'comfyQwenEditVae', label: 'VAE', value: generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors', choices: vaes },
                             ]} />}</Accordion>
                             <Accordion title="LoRAs">{() => <>
                                 <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={generationOptions.comfyQwenEditUseLora !== false} onChange={(event) => dispatch(updateOptions({ comfyQwenEditUseLora: event.target.checked }))} disabled={isGenerating} className="rounded text-accent focus:ring-accent" />Enable Lightning LoRA</label>
                                 {generationOptions.comfyQwenEditUseLora !== false && <>
-                                    <Select variant="search" label="Lightning LoRA" ariaLabel={`${NAME} Lightning LoRA`} value={generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8]} options={qwenLoras} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyQwenEditLora1Name: value }))} />
+                                    <Select variant="search" label="Lightning LoRA" ariaLabel={`${NAME} Lightning LoRA`} value={generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8]} options={familyFiles(qwenLoras, 'qwen-edit', inventory)} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyQwenEditLora1Name: value }))} />
                                     <NumberField slider label="LoRA Strength" ariaLabel={`${NAME} LoRA Strength`} value={generationOptions.comfyQwenEditLora1Strength ?? 1} min={0} max={2} step={0.05} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyQwenEditLora1Strength: value }))} />
                                 </>}
                             </>}</Accordion>

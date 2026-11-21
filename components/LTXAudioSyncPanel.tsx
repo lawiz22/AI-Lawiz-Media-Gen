@@ -18,15 +18,16 @@ import { H3AudioReference } from './H3AudioReference';
 import { AudioLyricsEditor } from './VideoAudioControls';
 import type { VideoPromptProvider } from '../services/videoPromptService';
 import { VideoOutputFrames } from './VideoOutputFrames';
+import { Accordion } from './ui/Accordion';
+import { NumberField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { ui } from './ui/styles';
+import { familyFiles } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed';
-const input = 'mt-1 w-full min-w-0 rounded-lg border border-border-primary bg-bg-primary p-2 text-sm text-text-primary';
-const Accordion: React.FC<{ title: string; children: () => React.ReactNode }> = ({ title, children }) => {
-    const [open, setOpen] = useState(false);
-    return <details className="rounded-xl border border-border-primary bg-bg-secondary p-4" onToggle={event => setOpen(event.currentTarget.open)}>
-        <summary className="cursor-pointer font-semibold">{title}</summary>{open && <div className="mt-4 space-y-4">{children()}</div>}
-    </details>;
-};
+const input = `mt-1 block ${ui.control}`;
 const emptyDraft = (): AudioSyncDraft => ({ prompt: '', image: null, audio: null });
 const nodeTitles: Record<string, string> = {
     '403': 'Canvas', '398:384': 'Diffusion model', '398:387': 'Video text encoder', '398:385': 'Video VAE', '398:386': 'Audio VAE',
@@ -60,6 +61,7 @@ export const LTXAudioSyncPanel: React.FC<{
     onLyricsSettingsChange: (provider: VideoPromptProvider, model?: string) => void;
 }> = ({ draft: storedDraft, settings: storedSettings, ready, onDraftChange, onSettingsChange, libraryItem, onLibraryItemLoaded, lyricsProvider, lyricsModel, onLyricsSettingsChange }) => {
     const dispatch = useDispatch<AppDispatch>();
+    const { inventory } = useModelInventory();
     const draft: AudioSyncDraft = storedDraft || emptyDraft();
     const settings: AudioSyncSettings = storedSettings || defaultAudioSyncSettings();
     const [info, setInfo] = useState<H3ObjectInfo | null>(null);
@@ -147,17 +149,17 @@ export const LTXAudioSyncPanel: React.FC<{
         let choices = h3Choices(info, spec.class_type, name);
         if (name === 'unet_name') choices = [...new Set([...choices, ...h3Choices(info, 'UnetLoaderGGUF', 'unet_name')])];
         if (key === '398:387' && name === 'clip_name') choices = [...new Set([...choices, ...h3Choices(info, 'CLIPLoaderGGUF', 'clip_name')])];
-        const label = fieldTitles[name] || name.replaceAll('_', ' ').replaceAll('.', ' / ');
-        return <label key={name} className="block min-w-0 text-xs text-text-secondary">{label}
-            {typeof value === 'boolean' ? <input className="ml-2 accent-amber-400" type="checkbox" checked={value} onChange={event => setValue(key, name, event.target.checked)} />
-                : choices.length || ['unet_name', 'clip_name', 'vae_name', 'model_name'].includes(name) ? <select aria-label={`${nodeTitles[key] || key}: ${label}`} className={input} value={String(value)} onChange={event => setValue(key, name, event.target.value)}>
-                    {!choices.includes(String(value)) && <option value={String(value)}>{String(value)} (current / not listed)</option>}{choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}
-                </select>
-                    : typeof value === 'number' ? <input aria-label={`${nodeTitles[key] || key}: ${label}`} className={input} type="number" value={value}
+        const label = fieldTitles[name] || name.replaceAll('_', ' ').replaceAll('.', ' / '), accessible = `${nodeTitles[key] || key}: ${label}`;
+        return <div key={name} className="min-w-0">
+            {typeof value === 'boolean' ? <label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={value} onChange={event => setValue(key, name, event.target.checked)} />{label}</label>
+                : choices.length || ['unet_name', 'clip_name', 'vae_name', 'model_name'].includes(name) ? <Select variant="search" label={label} ariaLabel={accessible} value={String(value)}
+                    options={name === 'unet_name' ? familyFiles(choices, 'ltx-23', inventory) : choices} onChange={choice => setValue(key, name, choice)} />
+                    : typeof value === 'number' ? <NumberField label={label} ariaLabel={accessible} value={value} onChange={number => setValue(key, name, number)}
                         min={typeof config.min === 'number' ? config.min : undefined} max={typeof config.max === 'number' ? Math.min(config.max, Number.MAX_SAFE_INTEGER) : undefined}
-                        step={Array.isArray(schema) && schema[0] === 'INT' ? 1 : 'any'} onChange={event => setValue(key, name, Number(event.target.value))} />
-                        : <textarea aria-label={`${nodeTitles[key] || key}: ${label}`} rows={name === 'text' ? 4 : 2} className={input} value={value} onChange={event => setValue(key, name, event.target.value)} />}
-        </label>;
+                        step={Array.isArray(schema) && schema[0] === 'INT' ? 1 : undefined} />
+                        : key === '398:373' && name === 'text' ? <PromptBox kind="negative" label={label} ariaLabel={accessible} rows={4} value={value} onChange={next => setValue(key, name, next)} />
+                        : <label className={ui.label}>{label}<textarea aria-label={accessible} rows={name === 'text' ? 4 : 2} className={input} value={value} onChange={event => setValue(key, name, event.target.value)} /></label>}
+        </div>;
     };
     const nodeFields = (...keys: string[]) => keys.map(key => <div key={key} className="space-y-2">
         <h4 className="text-sm font-semibold text-amber-200">{nodeTitles[key] || key}</h4>
@@ -236,10 +238,10 @@ export const LTXAudioSyncPanel: React.FC<{
                 onDraftChange(emptyDraft()); onSettingsChange(defaultAudioSyncSettings()); setResult(null); setResultDraft(null); setSaved(false); setAudioPending(false); setError(''); setStatus('');
             }}>Start from scratch</button>
         </div>
-        {error && <p role="alert" className="rounded-lg border border-red-400/40 p-3 text-sm text-red-300">{error}</p>}
+        {error && <p role="alert" className="rounded-lg border border-danger bg-danger-bg p-3 text-sm text-danger">{error}</p>}
         {status && <p role="status" className="text-sm text-text-secondary">{status}</p>}
         <fieldset disabled={blocked} className="min-w-0 space-y-4 disabled:opacity-60">
-            <label className="block text-sm">Video prompt<textarea aria-label="LTX Audio-Sync video prompt" rows={6} className={input} value={draft.prompt} onChange={event => updateDraft({ prompt: event.target.value })} /></label>
+            <PromptBox label="Video prompt" ariaLabel="LTX Audio-Sync video prompt" rows={6} value={draft.prompt} onChange={prompt => updateDraft({ prompt })} />
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.enhancePrompt} onChange={event => onSettingsChange({ ...settings, enhancePrompt: event.target.checked })} />Enable Qwen prompt enhancement</label>
             <p className="text-xs text-text-secondary">Video Prompt Generator transfers switch Qwen off automatically. You can re-enable it explicitly. Disabled means your prompt is sent unchanged and the Qwen model is not loaded. Optional enabled lyrics are appended separately.</p>
             {settings.enhancePrompt && <Accordion title="Qwen prompt enhancement">{() => nodeFields('398:393', '398:380')}</Accordion>}
@@ -274,9 +276,9 @@ export const LTXAudioSyncPanel: React.FC<{
             </div>}
             {audioPending && <p role="status" className="text-xs text-amber-300">Apply the audio selection before checking, exporting, saving a setup or generating.</p>}
             <div className="grid gap-3 sm:grid-cols-3">
-                <label className="text-sm">Duration (seconds)<input aria-label="Audio-Sync duration" type="number" min={0.01} step="any" disabled={!!draft.audioSelection} className={input} value={audioSyncNumber(settings, 362)} onChange={event => setValue('398:362', 'value', Number(event.target.value))} /></label>
-                <label className="text-sm">Audio start (seconds)<input aria-label="Audio-Sync audio start" type="number" min={0} step="any" disabled={!!draft.audioSelection} className={input} value={audioSyncNumber(settings, 707, 'start_index')} onChange={event => setValue('398:707', 'start_index', Number(event.target.value))} /></label>
-                <label className="text-sm">Frame rate<input aria-label="Audio-Sync frame rate" type="number" min={1} step={1} className={input} value={audioSyncNumber(settings, 361)} onChange={event => setValue('398:361', 'value', Number(event.target.value))} /></label>
+                <NumberField label="Duration (seconds)" ariaLabel="Audio-Sync duration" min={0.01} disabled={!!draft.audioSelection} value={audioSyncNumber(settings, 362)} onChange={value => setValue('398:362', 'value', value)} />
+                <NumberField label="Audio start (seconds)" ariaLabel="Audio-Sync audio start" min={0} disabled={!!draft.audioSelection} value={audioSyncNumber(settings, 707, 'start_index')} onChange={value => setValue('398:707', 'start_index', value)} />
+                <NumberField label="Frame rate" ariaLabel="Audio-Sync frame rate" min={1} step={1} value={audioSyncNumber(settings, 361)} onChange={value => setValue('398:361', 'value', value)} />
             </div>
             <button type="button" className={button} disabled={!!draft.audioSelection} onClick={() => {
                 setMediaLoading(true); setError('');
@@ -287,10 +289,10 @@ export const LTXAudioSyncPanel: React.FC<{
                 }).catch(reportError).finally(() => setMediaLoading(false));
             }}>Use remaining audio duration</button>
             <p className="text-xs text-text-secondary">Apply a waveform passage to set the exact duration. Applied WAV files start at 0 to avoid trimming twice; change their range on the original waveform, or use Next for the following passage. Frame count follows duration x FPS + 1 and LTX latent alignment.</p>
-            <Accordion title="Models">{() => <>{nodeFields('398:384', '398:387', '398:385', '398:386', '398:371')}<p className="text-xs text-text-secondary">Unfiltered installed choices. Models must be compatible with LTX 2.5; GGUF switches to its matching loader. NVFP4 requires compatible GPU/runtime support.</p></>}</Accordion>
+            <Accordion title="Models">{() => <>{nodeFields('398:384', '398:387', '398:385', '398:386', '398:371')}<p className="text-xs text-text-secondary">The diffusion model list shows LTX files when some are recognized by name or by My Library, otherwise every installed file. Models must be compatible with LTX 2.5; GGUF switches to its matching loader. NVFP4 requires compatible GPU/runtime support.</p></>}</Accordion>
             <Accordion title="LoRAs - camera and style (up to 4)">{() => {
                 const loras = settings.loras ?? defaultAudioSyncLoras();
-                const choices = h3Choices(info, 'LoraLoaderModelOnly', 'lora_name');
+                const choices = [{ value: '', label: 'Select a LoRA' }, ...familyFiles(h3Choices(info, 'LoraLoaderModelOnly', 'lora_name'), 'ltx-23', inventory).map(name => ({ value: name, label: name }))];
                 return <>
                     <p className="text-xs text-text-secondary">Enable up to four installed LTX 2.5-compatible LoRAs. They are applied in slot order to the diffusion model in both passes, without modifying Qwen or the text encoder. Disabled slots keep their selections but are not loaded.</p>
                     {Array.from({ length: 4 }, (_, index) => {
@@ -304,26 +306,18 @@ export const LTXAudioSyncPanel: React.FC<{
                         return <div key={index} className="space-y-3 rounded-xl border border-border-primary p-3">
                             <label className="flex items-center gap-2 text-sm"><input type="checkbox" aria-label={`Enable Audio-Sync LoRA ${index + 1}`} checked={lora.enabled}
                                 onChange={event => patch({ enabled: event.target.checked })} />LoRA {index + 1}</label>
-                            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
-                                <label className="min-w-0 text-xs text-text-secondary">File<select aria-label={`Audio-Sync LoRA ${index + 1} file`} className={input} disabled={!lora.enabled} value={lora.name}
-                                    onChange={event => patch({ name: event.target.value })}>
-                                    <option value="">Select a LoRA</option>
-                                    {lora.name && !choices.includes(lora.name) && <option value={lora.name}>{lora.name} (current / not listed)</option>}
-                                    {choices.map(name => <option key={name} value={name}>{name}</option>)}
-                                </select></label>
-                                <label className="text-xs text-text-secondary">Strength<input aria-label={`Audio-Sync LoRA ${index + 1} strength`} className={input} type="number" disabled={!lora.enabled}
-                                    min={-20} max={20} step={0.05} value={lora.strength} onChange={event => patch({ strength: Number(event.target.value) })} /></label>
-                            </div>
+                            <Select variant="search" label="File" ariaLabel={`Audio-Sync LoRA ${index + 1} file`} disabled={!lora.enabled} value={lora.name} options={choices} onChange={name => patch({ name })} />
+                            <NumberField slider label="Strength" ariaLabel={`Audio-Sync LoRA ${index + 1} strength`} disabled={!lora.enabled} min={-20} max={20} step={0.05} value={lora.strength} onChange={strength => patch({ strength })} />
                         </div>;
                     })}
-                    <p className="text-xs text-text-secondary">The list is unfiltered: select LoRAs compatible with your LTX 2.5 model and quantization. No files are downloaded automatically. With every slot disabled, the source model path is unchanged.</p>
+                    <p className="text-xs text-text-secondary">The list shows LTX LoRAs when some are recognized by name or by My Library, otherwise every installed LoRA: select files compatible with your LTX 2.5 model and quantization. No files are downloaded automatically. With every slot disabled, the source model path is unchanged.</p>
                 </>;
             }}</Accordion>
             <Accordion title="Resolution and image conditioning">{() => <>{nodeFields('403', '398:351', '398:350')}{!settings.textToVideo && nodeFields('398:357', '398:349')}</>}</Accordion>
             <Accordion title="Sampling - first and second pass">{() => nodeFields('398:352', '398:397', '398:388', '398:341', '398:396', '398:391', '398:338')}</Accordion>
             <Accordion title="Negative prompt, decode and output">{() => nodeFields('398:373', '398:374', '398:370', '75')}</Accordion>
             <div className="grid gap-3 sm:grid-cols-2">
-                <label className="text-sm">First-pass seed<input aria-label="Audio-Sync seed" type="number" min={0} max={Number.MAX_SAFE_INTEGER} step={1} className={input} value={audioSyncNumber(settings, 339, 'noise_seed')} onChange={event => setValue('398:339', 'noise_seed', Number(event.target.value))} /></label>
+                <NumberField label="First-pass seed" ariaLabel="Audio-Sync seed" min={0} max={Number.MAX_SAFE_INTEGER} step={1} value={audioSyncNumber(settings, 339, 'noise_seed')} onChange={value => setValue('398:339', 'noise_seed', value)} />
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.randomizeSeed} onChange={event => onSettingsChange({ ...settings, randomizeSeed: event.target.checked })} />Randomize first-pass seed</label>
             </div>
             <p className="text-sm text-amber-200">{dimensions} · {audioSyncNumber(settings, 362).toFixed(3)}s · {audioSyncNumber(settings, 361)} fps · {settings.enhancePrompt ? 'Qwen enhancement on' : 'Prompt unchanged'}</p>
@@ -331,7 +325,7 @@ export const LTXAudioSyncPanel: React.FC<{
                 <button type="button" className={button} disabled={audioPending} onClick={() => void run('check')}>Check nodes and models</button>
                 <button type="button" className={button} disabled={audioPending} onClick={() => void run('export')}>Export API workflow</button>
                 <button type="button" className={button} disabled={audioPending} onClick={() => void save(false)}>Save setup to Library</button>
-                <button type="button" className={`${button} border-amber-400/50 bg-amber-400/15 text-amber-200`} disabled={audioPending} onClick={() => void run('generate')}>Generate LTX 2.5 Audio-Sync</button>
+                <button type="button" className={`${button} border-accent bg-accent text-accent-text`} disabled={audioPending} onClick={() => void run('generate')}>Generate LTX 2.5 Audio-Sync</button>
             </div>
         </fieldset>
         {(busy || checking) && <div className="space-y-2"><progress className="w-full" max={1} value={progress} /><button type="button" className={`${button} text-red-300`} disabled={cancelling} onClick={() => { setCancelling(true); controller.current?.abort(); }}>{cancelling ? 'Cancelling safely...' : 'Cancel this operation'}</button></div>}

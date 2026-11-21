@@ -6,7 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
-import { withUiKit } from '../components/ui/compileForTest.mjs';
+import { uiModules, withUiKit } from '../components/ui/compileForTest.mjs';
 
 const read = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 const compile = text => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(text, {
@@ -175,6 +175,8 @@ const panelSource = read('../components/SamplerSettingsPanel.tsx');
 const { SamplerSettingsPanel } = await import(compile(`
     import React, {useMemo, useState} from '${reactURL}';
     import {NumberSlider, SelectInput, TextInput} from '${inputsURL}';
+    import {Accordion} from '${uiModules.Accordion}';
+    import {Select} from '${uiModules.Select}';
     import {SaveStyleSamplingButton} from '${buttonURL}';
     import {imageStyleSampling} from '${samplingURL}';
     const Qwen21SettingsPanel = () => null, MossSettingsPanel = () => null, Krea2EditSettingsPanel = () => null;
@@ -187,8 +189,8 @@ test('KREA and FLUX2 Simple render one button beside controls with matching fall
             comfyKreaStyle: style, comfyFlux2Style: { ...style, model: 'FLUX2-9B' } },
             updateOptions() {}, isDisabled: false, comfyUIObjectInfo: {} }));
         assert.equal(html.split('Save sampling as style default').length - 1, 1);
-        assert.match(html, /Steps: 10/); assert.match(html, /CFG Scale: 1/);
-        assert.match(html, model === 'krea2-simple' ? /value="beta"/ : /Flux2Scheduler \(automatic\)/);
+        assert.match(html, /aria-label="Steps slider"[^>]* value="10"/); assert.match(html, /aria-label="CFG Scale slider"[^>]* value="1"/);
+        assert.match(html, model === 'krea2-simple' ? />beta<\/span>/ : /Flux2Scheduler \(automatic\)/);
         assert.ok(html.indexOf('Scheduler') < html.indexOf('Save sampling as style default'));
     }
     const raw = renderToStaticMarkup(React.createElement(SamplerSettingsPanel, { options: { comfyModelType: 'krea2-raw' },
@@ -219,6 +221,8 @@ const { ImageStyleControl } = await import(compile(`
     import {useStyleGallery} from '${hookURL}';
     import {SaveStyleSamplingButton} from '${buttonURL}';
     import {imageStyleSampling} from '${samplingURL}';
+    import {NumberField} from '${uiModules.fields}';
+    import {ui} from '${uiModules.styles}';
     const useModelInventory = () => ({inventory:{root:'',scannedAt:null,items:[]},loading:false,error:''});
     const inferFlux2Variant = () => 'flux2-9b', StylePicker = () => null;
     const flux2StyleOptions = options => options, krea2StyleOptions = options => options;

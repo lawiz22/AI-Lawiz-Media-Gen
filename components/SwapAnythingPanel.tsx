@@ -13,6 +13,8 @@ import { CheckIcon, DownloadIcon, GenerateIcon, LibraryIcon, RefreshIcon, SaveIc
 import { Button, ModelFields, NumberField, SamplerFields, SeedField } from './ui/fields';
 import { PromptBox } from './ui/PromptBox';
 import { Select } from './ui/Select';
+import { familyFiles, flux2Family } from '../services/styleLibrary';
+import { useModelInventory } from './useModelInventory';
 import { SettingsLayout } from './ui/SettingsLayout';
 import { ui } from './ui/styles';
 
@@ -107,6 +109,7 @@ const SwapAnythingPanel: React.FC<SwapAnythingPanelProps> = ({ isComfyUIConnecte
     const [destinationImage, setDestinationImage] = useState<File | null>(null);
     const [donorImage, setDonorImage] = useState<File | null>(null);
     const [options, setOptions] = useState<SwapAnythingOptions>(DEFAULT_OPTIONS);
+    const { inventory } = useModelInventory();
     const [libraryTarget, setLibraryTarget] = useState<'destination' | 'donor' | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -123,7 +126,7 @@ const SwapAnythingPanel: React.FC<SwapAnythingPanelProps> = ({ isComfyUIConnecte
     const vaes = useMemo(() => getOptions(comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name), [comfyUIObjectInfo]);
     const samModels = useMemo(() => getOptions(comfyUIObjectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name).filter(model => /sam3/i.test(model)), [comfyUIObjectInfo]);
     const samplers = useMemo(() => getOptions(comfyUIObjectInfo?.KSamplerSelect?.input?.required?.sampler_name), [comfyUIObjectInfo]);
-    const loras = useMemo(() => getOptions(comfyUIObjectInfo?.LoraLoader?.input?.required?.lora_name).filter(model => /flux[-_ ]?2|klein/i.test(model)), [comfyUIObjectInfo]);
+    const loras = useMemo(() => familyFiles(getOptions(comfyUIObjectInfo?.LoraLoader?.input?.required?.lora_name), flux2Family(options.unet), inventory), [comfyUIObjectInfo, options.unet, inventory]);
     const activePreset = useMemo(() => SWAP_PRESETS.find(preset =>
         preset.destinationTarget === options.destinationTarget &&
         preset.donorTarget === options.donorTarget &&
@@ -215,7 +218,7 @@ const SwapAnythingPanel: React.FC<SwapAnythingPanelProps> = ({ isComfyUIConnecte
             <SettingsLayout label={NAME} disabled={isGenerating}
                 top={<>{source('destination', 'Picture 1 - Destination', destinationImage, setDestinationImage)}{source('donor', 'Picture 2 - Element Donor', donorImage, setDonorImage)}</>}
                 models={() => <ModelFields name={NAME} disabled={isGenerating} onChange={(id, value) => updateOption(id as 'unet' | 'samCheckpoint' | 'clip' | 'vae', value)} fields={[
-                    { id: 'unet', label: 'FLUX2 Model', value: options.unet, choices: models },
+                    { id: 'unet', label: 'FLUX2 Model', value: options.unet, choices: familyFiles(models, 'flux2', inventory) },
                     { id: 'samCheckpoint', label: 'SAM3.1 Model', value: options.samCheckpoint, choices: samModels },
                     { id: 'clip', label: 'CLIP', value: options.clip, choices: clips },
                     { id: 'vae', label: 'VAE', value: options.vae, choices: vaes },

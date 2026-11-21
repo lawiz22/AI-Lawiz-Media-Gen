@@ -71,7 +71,7 @@ When using browser-only development, local browser security may block Ollama eve
 3. Confirm the connection indicator is active. The application then reads installed checkpoints, LoRAs, UNets, VAEs, text encoders, samplers, schedulers, and custom nodes.
 4. Open **Models/LoRAs** to select the ComfyUI root folder, scan local models, and retrieve metadata.
 
-LTX 2.3 and LTX 2.5 use the same CacheDiT controls. New projects enable acceleration with 8 warmup steps, a skip interval of 3, a noise scale of `0.001`, and summary output enabled. These defaults do not overwrite explicit values restored from saved projects.
+LTX 2.3 and LTX 2.5 use the same CacheDiT controls. New projects enable acceleration with a noise scale of `0.001` and summary output enabled. LTX 2.3, the initial version, starts with 6 warmup steps and a skip interval of 4; LTX 2.5 starts with 8 and 3. These defaults do not overwrite explicit values restored from saved projects.
 
 Large local libraries are indexed from these directories:
 
@@ -83,7 +83,7 @@ ComfyUI/models/loras
 
 FLUX2 and KREA2 diffusion models are indexed directly from `ComfyUI/models/diffusion_models`. Their LoRAs use the dedicated `ComfyUI/models/loras/flux2` and `ComfyUI/models/loras/krea` folders.
 
-In Photo Fusion, choose **FLUX2**, **QWEN-Edit**, or **Mammouth** from the engine control. FLUX2 and Qwen Edit run locally through the configured ComfyUI endpoint and expose their own advanced model and sampling settings. Mammouth sends each subject as a distinct multimodal input and exposes the hosted image-model selector instead.
+In Photo Fusion, choose **FLUX2**, **QWEN-Edit**, **Gemini** or **Mammouth** from the engine control. FLUX2 and Qwen Edit run locally through the configured ComfyUI endpoint and expose their own advanced model and sampling settings. Mammouth sends each subject as a distinct multimodal input and exposes the hosted image-model selector instead.
 
 Model-specific metadata is stored beside the model where applicable. Keep these sidecars with the model when moving files outside the application's organizer.
 

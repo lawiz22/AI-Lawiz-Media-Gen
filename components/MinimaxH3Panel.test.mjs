@@ -6,6 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { uiModules } from './ui/compileForTest.mjs';
 
 const source = readFileSync(new URL('./MinimaxH3Panel.tsx', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('MinimaxH3Panel.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -64,6 +65,8 @@ const generationFinally = declarations.get('generate').body.statements.find(ts.i
 const require = createRequire(import.meta.url);
 const { outputText } = ts.transpileModule(`
     import React from ${JSON.stringify(pathToFileURL(require.resolve('react')).href)};
+    import { Select } from ${JSON.stringify(uiModules.Select)};
+    import { ui } from ${JSON.stringify(uiModules.styles)};
     const input = ${declarations.get('input').getText(tree)};
     const Field = ${declarations.get('Field').getText(tree)};
     export const TestChoice = ${declarations.get('Choice').getText(tree)};
@@ -120,14 +123,13 @@ test('missing job events warn only after two minutes', () => {
     for (const seconds of [120, 121, 180]) assert.equal(showStaleEventWarning(seconds), true);
 });
 
-test('all six LoRA slots use real dropdowns and preserve saved files missing from the current catalog', () => {
+test('all six LoRA slots use the standard searchable listbox and preserve saved files missing from the current catalog', () => {
     assert.ok(loraChoice);
     assert.doesNotMatch(loraChoice, /editable|datalist/);
     const html = renderToStaticMarkup(React.createElement(TestChoice, { label: 'LoRA 1 file', value: 'saved.safetensors', choices: ['installed.safetensors'], onChange: () => {} }));
-    assert.match(html, /<select[^>]*aria-label="LoRA 1 file"/);
-    assert.match(html, /value="installed.safetensors"/);
-    assert.match(html, /value="saved.safetensors" selected/);
-    assert.doesNotMatch(html, /<input|<datalist/);
+    assert.match(html, /aria-label="LoRA 1 file" aria-haspopup="listbox"/);
+    assert.match(html, /saved\.safetensors \(not listed\)/);
+    assert.doesNotMatch(html, /<input|<datalist|<select/);
 });
 
 test('all H3 modes use the shared H3-only choices and only explicit refresh invalidates the catalog', () => {

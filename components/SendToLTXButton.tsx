@@ -15,7 +15,7 @@ interface SendToLTXButtonProps {
 export const SendToLTXButton: React.FC<SendToLTXButtonProps> = ({
     imageDataUrl,
     prompt,
-    className = 'p-2 rounded-full bg-bg-secondary/90 text-text-primary hover:bg-accent hover:text-accent-text transition-colors shadow-lg',
+    className = 'p-2 rounded-full bg-bg-secondary text-text-primary hover:bg-accent hover:text-accent-text transition-colors shadow-lg',
     showLabel = false,
     onSent,
 }) => {

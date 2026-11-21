@@ -1,6 +1,11 @@
-import React, { ChangeEvent, useMemo, useState } from 'react';
+import React, { ChangeEvent, useMemo } from 'react';
 import { GenerationOptions } from '../types';
-import { NumberSlider, SelectInput, CheckboxSlider } from './InputComponents';
+import { NumberSlider } from './InputComponents';
+import { Accordion } from './ui/Accordion';
+import { Select } from './ui/Select';
+import { familyFiles, flux2Family } from '../services/styleLibrary';
+import type { CivitaiFamily } from '../services/civitaiService';
+import { useModelInventory } from './useModelInventory';
 import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
 import { MossSettingsPanel } from './MossSettingsPanel';
 import { Krea2EditSettingsPanel } from './Krea2EditSettingsPanel';
@@ -22,13 +27,11 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
     availableLoras,
     comfyUIObjectInfo
 }) => {
-    const [isOpen, setIsOpen] = useState(true);
     const handleSliderChange = (field: keyof GenerationOptions) => (e: ChangeEvent<HTMLInputElement>) => {
         updateOptions({ [field]: parseFloat(e.target.value) });
     };
 
-    const handleOptionChange = (field: keyof GenerationOptions) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
+    const setOption = (field: keyof GenerationOptions, value: string | boolean) => {
         if (options.comfyModelType === 'qwen-t2i-gguf' && field === 'comfyQwenUseLora') {
             updateOptions({ comfyQwenUseLora: Boolean(value), comfySteps: 4, comfyCfg: 1 });
             return;
@@ -40,44 +43,16 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
         }
         updateOptions({ [field]: value });
     };
+    const handleOptionChange = (field: keyof GenerationOptions) => (e: ChangeEvent<HTMLInputElement>) => setOption(field, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
 
-    // Filter LoRAs based on model type
+    const { inventory } = useModelInventory();
     const filteredLoras = useMemo(() => {
-        if (options.comfyModelType === 'sd1.5') {
-            const lowerQuery = "sd 15";
-            const altQuery = "sd15";
-            const altQuery2 = "sd_15";
-            return availableLoras.filter(lora => {
-                const lowerName = lora.toLowerCase();
-                return lowerName.includes(lowerQuery) || lowerName.includes(altQuery) || lowerName.includes(altQuery2);
-            });
-        } else if (options.comfyModelType === 'sdxl') {
-            const lowerQuery = "sdxl";
-            const altQuery = "xl";
-            return availableLoras.filter(lora => {
-                const lowerName = lora.toLowerCase();
-                return lowerName.includes(lowerQuery) || lowerName.includes(altQuery);
-            });
-        } else if (options.comfyModelType === 'qwen-t2i-gguf' || options.comfyModelType === 'qwen-edit') {
-            const lowerQuery = "qwen";
-            return availableLoras.filter(lora => {
-                const lowerName = lora.toLowerCase();
-                return lowerName.includes(lowerQuery);
-            });
-        } else if (options.comfyModelType === 'z-image') {
-            const queries = ["z-image", "z_image", "zit"];
-            return availableLoras.filter(lora => {
-                const lowerName = lora.toLowerCase();
-                return queries.some(q => lowerName.includes(q));
-            });
-        } else if (options.comfyModelType === 'flux2-simple') {
-            const queries = ['flux2', 'flux-2', 'klein'];
-            return availableLoras.filter(lora => queries.some(query => lora.toLowerCase().includes(query)));
-        } else if (options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw') {
-            return availableLoras.filter(lora => lora.toLowerCase().includes('krea'));
-        }
-        return [];
-    }, [availableLoras, options.comfyModelType]);
+        const family = ({
+            'sd1.5': 'sd15', sdxl: 'sdxl', 'qwen-t2i-gguf': 'qwen', 'qwen-edit': 'qwen-edit', 'z-image': 'zit-base',
+            'flux2-simple': flux2Family(options.comfyFlux2Unet), 'krea2-simple': 'krea2', 'krea2-raw': 'krea2',
+        } as Partial<Record<string, CivitaiFamily>>)[options.comfyModelType || ''];
+        return family ? familyFiles(availableLoras, family, inventory) : [];
+    }, [availableLoras, inventory, options.comfyModelType, options.comfyFlux2Unet]);
 
     const loraSlotCount = options.comfyModelType === 'qwen-edit' ? 5 : options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw' || options.comfyModelType === 'flux2-simple' ? 6 : 4;
     const loraOptions = useMemo(() => {
@@ -97,14 +72,12 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
     }, [filteredLoras, loraSlotCount, options]);
 
     const isQwen21 = options.comfyModelType === 'qwen21-t2i' || options.comfyModelType === 'qwen21-turbo';
-    if (options.comfyModelType === 'krea2-edit') return <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
-        <button type="button" onClick={() => setIsOpen(open => !open)} aria-expanded={isOpen} className="flex w-full justify-between border-b border-accent/30 pb-2 font-bold uppercase text-accent">LoRA Settings (KREA2 Edit)<span>{isOpen ? '-' : '+'}</span></button>
-        {isOpen && <div className="mt-4"><Krea2EditSettingsPanel section="loras" options={options} updateOptions={updateOptions} availableLoras={availableLoras} disabled={isDisabled} /></div>}
-    </div>;
-    if (options.comfyModelType === 'moss-image') return <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
-        <button type="button" onClick={() => setIsOpen(open => !open)} aria-expanded={isOpen} className="flex w-full justify-between border-b border-accent/30 pb-2 font-bold uppercase text-accent">LoRA Settings (MOSS)<span>{isOpen ? '-' : '+'}</span></button>
-        {isOpen && <div className="mt-4"><MossSettingsPanel section="loras" options={options} updateOptions={updateOptions} availableLoras={availableLoras} disabled={isDisabled} /></div>}
-    </div>;
+    if (options.comfyModelType === 'krea2-edit') return <Accordion title="LoRAs" defaultOpen>
+        <Krea2EditSettingsPanel section="loras" options={options} updateOptions={updateOptions} availableLoras={availableLoras} disabled={isDisabled} />
+    </Accordion>;
+    if (options.comfyModelType === 'moss-image') return <Accordion title="LoRAs" defaultOpen>
+        <MossSettingsPanel section="loras" options={options} updateOptions={updateOptions} availableLoras={availableLoras} disabled={isDisabled} />
+    </Accordion>;
     if (!isQwen21 && options.comfyModelType !== 'sd1.5' && options.comfyModelType !== 'sdxl' && options.comfyModelType !== 'qwen-t2i-gguf' && options.comfyModelType !== 'qwen-edit' && options.comfyModelType !== 'z-image' && options.comfyModelType !== 'flux2-simple' && options.comfyModelType !== 'krea2-simple' && options.comfyModelType !== 'krea2-raw') {
         return null;
     }
@@ -117,43 +90,23 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
     const isKrea = options.comfyModelType === 'krea2-simple' || options.comfyModelType === 'krea2-raw';
 
     let prefix = 'comfySd15';
-    let title = 'LoRA Settings (SD 1.5)';
 
-    if (isQwen21) {
-        title = `LoRA Settings (Qwen 2.1 ${options.comfyModelType === 'qwen21-turbo' ? 'Turbo' : 'T2I'})`;
-    } else if (isSdxl) {
+    if (isSdxl) {
         prefix = 'comfySdxl';
-        title = 'LoRA Settings (SDXL)';
     } else if (isQwenEdit) {
         prefix = 'comfyQwenEdit';
-        title = 'LoRA Settings (Qwen Edit)';
     } else if (isQwen) {
         prefix = 'comfyQwen';
-        title = 'LoRA Settings (Qwen)';
     } else if (isZImage) {
         prefix = 'comfyZImage';
-        title = 'LoRA Settings (Z-Image)';
     } else if (isFlux2) {
         prefix = 'comfyFlux2';
-        title = 'LoRA Settings (FLUX2 Simple)';
     } else if (isKrea) {
         prefix = 'comfyKrea';
-        title = `LoRA Settings (${options.comfyModelType === 'krea2-raw' ? 'KREA2 RAW' : 'KREA2 Simple'})`;
     }
 
     return (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
-            <button
-                type="button"
-                onClick={() => setIsOpen(open => !open)}
-                aria-expanded={isOpen}
-                className="flex w-full items-center justify-between border-b border-accent/30 pb-2 text-left text-md font-bold uppercase tracking-wider text-accent"
-            >
-                <span>{title}</span>
-                <span aria-hidden="true">{isOpen ? '−' : '+'}</span>
-            </button>
-
-            {isOpen && <div className="mt-4 space-y-4">
+        <Accordion title="LoRAs" defaultOpen>
             {options.comfyModelType === 'krea2-simple' && <ImageStyleControl options={options} updateOptions={updateOptions} info={comfyUIObjectInfo || {}} disabled={isDisabled} mode="krea2-simple" showSamplingControl={false} />}
             {isQwen21 ? <Qwen21SettingsPanel section="loras" options={options} updateOptions={updateOptions} disabled={isDisabled}
                 objectInfo={{ LoraLoaderModelOnly: { input: { required: { lora_name: [availableLoras] } } } }} /> : <>
@@ -179,17 +132,19 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
                         const currentStrength = options[strengthField] as number | undefined ?? 1.0;
 
                         return (
-                            <div key={index} className="flex flex-col gap-3 rounded-md border border-border-primary/50 bg-bg-tertiary p-3">
-                                <SelectInput
+                            <div key={index} className="flex flex-col gap-3 rounded-md border border-border-primary bg-bg-tertiary p-3">
+                                <Select
+                                    variant="search"
                                     label={`LoRA ${index}`}
+                                    ariaLabel={`Image LoRA ${index}`}
                                     value={currentName}
-                                    onChange={handleOptionChange(nameField)}
+                                    onChange={value => setOption(nameField, value)}
                                     options={loraOptions}
                                     disabled={isDisabled}
                                 />
                                 {currentName && (
                                     <NumberSlider
-                                        label={`Str: ${currentStrength}`}
+                                        label="Strength"
                                         value={currentStrength}
                                         onChange={handleSliderChange(strengthField)}
                                         min={-10} max={10} step={0.5}
@@ -203,7 +158,6 @@ export const LoraSettingsPanel: React.FC<LoraSettingsPanelProps> = ({
                 </div>
             )}
             </>}
-            </div>}
-        </div>
+        </Accordion>
     );
 };

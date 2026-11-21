@@ -12,6 +12,9 @@ import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { BANNER_ASPECT_RATIO_OPTIONS, BANNER_STYLE_OPTIONS, BANNER_LOGO_PLACEMENT_OPTIONS } from '../constants';
 import { SendToLTXButton } from './SendToLTXButton';
 import { createAccentStyle } from '../utils/accentTheme';
+import { NumberField, TextField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
 
 const LOGO_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     logo: createAccentStyle('#f472b6', '#f9a8d4', '#db2777'),
@@ -47,7 +50,7 @@ interface LogoThemeGeneratorPanelProps {
 }
 
 const Section: React.FC<{ title: string; description: string; borderColor: string; children: React.ReactNode }> = ({ title, description, borderColor, children }) => (
-    <div className={`bg-bg-primary/50 p-6 rounded-lg border-l-4`} style={{ borderColor }}>
+    <div className="p-6 rounded-lg border-l-4" style={{ borderColor }}>
         <h2 className="text-2xl font-bold mb-2" style={{ color: borderColor }}>{title}</h2>
         <p className="text-sm text-text-secondary mb-6">{description}</p>
         <div className="space-y-4">
@@ -226,9 +229,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         { id: 'album-cover', label: 'Album Cover Generator' },
     ];
 
-    const handleInputChange = (field: keyof LogoThemeState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        dispatch(updateLogoThemeState({ [field]: e.target.value }));
-    };
+    const update = (changes: Partial<LogoThemeState>) => dispatch(updateLogoThemeState(changes));
     
     const handleStyleChange = (style: LogoStyle) => {
         dispatch(updateLogoThemeState({ logoStyle: style }));
@@ -238,10 +239,6 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
         dispatch(updateLogoThemeState({ backgroundColor: bg }));
     };
     
-    const handleSliderChange = (field: keyof LogoThemeState) => (e: React.ChangeEvent<HTMLInputElement>) => {
-        dispatch(updateLogoThemeState({ [field]: parseInt(e.target.value, 10) }));
-    };
-
     const handleRemoveReference = (id: number, type: 'logo' | 'banner' | 'album-cover') => {
         if (type === 'logo') {
             dispatch(updateLogoThemeState({ referenceItems: state.referenceItems?.filter(item => item.id !== id) }));
@@ -561,10 +558,10 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                             {/* --- Left Column: Controls --- */}
                             <div className="space-y-6">
-                                <textarea value={state.logoPrompt} onChange={handleInputChange('logoPrompt')} placeholder="Describe the logo's core concept, e.g., 'a majestic lion head combined with a shield'" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" rows={3} />
+                                <PromptBox label="Logo concept" kind="positive" rows={3} value={state.logoPrompt || ''} onChange={logoPrompt => update({ logoPrompt })} placeholder="Describe the logo's core concept, e.g., 'a majestic lion head combined with a shield'" />
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <input type="text" value={state.brandName} onChange={handleInputChange('brandName')} placeholder="Brand Name" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" />
-                                    <input type="text" value={state.slogan} onChange={handleInputChange('slogan')} placeholder="Slogan (Optional)" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" />
+                                    <TextField label="Brand Name" value={state.brandName || ''} onChange={brandName => update({ brandName })} />
+                                    <TextField label="Slogan (Optional)" value={state.slogan || ''} onChange={slogan => update({ slogan })} />
                                 </div>
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Logo Style</h3>
@@ -575,7 +572,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Font (Optional)</h3>
                                     {state.fontReferenceImage || state.selectedFont ? (
-                                        <div className="mt-2 p-2 bg-bg-primary/50 rounded-md flex items-center justify-between">
+                                        <div className="mt-2 p-2 rounded-md flex items-center justify-between">
                                             <div className="flex items-center gap-2 overflow-hidden">
                                                 <img 
                                                     src={state.selectedFont ? state.selectedFont.thumbnail : fontPreview!}
@@ -609,18 +606,18 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                             <button onClick={onOpenLibraryForReferences} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors"><LibraryIcon className="w-5 h-5"/> From Library</button>
                                             <label htmlFor="logo-ref-upload" className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors cursor-pointer"><UploadIconSimple className="w-5 h-5"/> Upload File(s)<input id="logo-ref-upload" type="file" multiple accept="image/*" className="hidden" onChange={(e) => handleReferenceUpload(e, 'logo')} /></label>
                                         </div>
-                                        {(state.referenceItems && state.referenceItems.length > 0) && <div className="mt-4 p-2 bg-bg-primary/50 rounded-md"><div className="grid grid-cols-4 gap-2">{state.referenceItems.map(item => <div key={item.id} className="relative group"><img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/><button onClick={() => handleRemoveReference(item.id, 'logo')} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><CloseIcon className="w-3 h-3"/></button></div>)}</div></div>}
+                                        {(state.referenceItems && state.referenceItems.length > 0) && <div className="mt-4 p-2 rounded-md"><div className="grid grid-cols-4 gap-2">{state.referenceItems.map(item => <div key={item.id} className="relative group"><img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/><button onClick={() => handleRemoveReference(item.id, 'logo')} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><CloseIcon className="w-3 h-3"/></button></div>)}</div></div>}
                                     </div>
                                     <div>
                                         <h3 className="text-md font-semibold text-text-secondary mb-2">Color Palette</h3>
                                         <button onClick={onOpenLibraryForPalette} className="w-full flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover transition-colors"><LibraryIcon className="w-5 h-5"/> From Library</button>
-                                        {state.selectedPalette && <div className="mt-4 p-3 bg-bg-primary/50 rounded-md flex items-center justify-between"><div className="flex items-center gap-3"><div className="flex -space-x-2">{selectedPaletteColors.slice(0, 5).map(c => <div key={c.hex} className="w-6 h-6 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}</div><p className="text-sm font-semibold truncate">{state.selectedPalette.name}</p></div><button onClick={() => handleClearPalette('logo')} className="p-1 text-text-secondary hover:text-white"><CloseIcon className="w-4 h-4"/></button></div>}
+                                        {state.selectedPalette && <div className="mt-4 p-3 rounded-md flex items-center justify-between"><div className="flex items-center gap-3"><div className="flex -space-x-2">{selectedPaletteColors.slice(0, 5).map(c => <div key={c.hex} className="w-6 h-6 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}</div><p className="text-sm font-semibold truncate">{state.selectedPalette.name}</p></div><button onClick={() => handleClearPalette('logo')} className="p-1 text-text-secondary hover:text-white"><CloseIcon className="w-4 h-4"/></button></div>}
                                     </div>
                                 </div>
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Settings</h3>
                                     <div className="p-4 bg-bg-tertiary rounded-lg space-y-4">
-                                        <div><label className="block text-sm font-medium text-text-secondary">Number of Logos: {state.numLogos}</label><input type="range" min="1" max="4" step="1" value={state.numLogos} onChange={handleSliderChange('numLogos')} className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer" /></div>
+                                        <NumberField slider label="Number of Logos" value={state.numLogos || 1} min={1} max={4} step={1} onChange={numLogos => update({ numLogos })} />
                                         <div><label className="block text-sm font-medium text-text-secondary mb-2">Background</label><div className="flex items-center gap-2">{BACKGROUND_OPTIONS.map(bg => <button key={bg.id} onClick={() => handleBgChange(bg.id)} className={`flex-1 p-2 text-xs rounded-md ${state.backgroundColor === bg.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{bg.label}</button>)}</div></div>
                                     </div>
                                 </div>
@@ -647,7 +644,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                                 <button
                                                     onClick={() => handleDownloadLogo(logo.src, index)}
                                                     title="Save to Disk"
-                                                    className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                                                    className="p-3 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
                                                 >
                                                     <DownloadIcon className="w-5 h-5" />
                                                 </button>
@@ -658,12 +655,12 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                                     className={`p-3 rounded-full transition-all duration-200 ${
                                                         logo.saved === 'saved' ? 'bg-green-500 text-white cursor-default' : 
                                                         logo.saved === 'saving' ? 'bg-bg-secondary text-text-secondary cursor-wait' :
-                                                        'bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text'
+                                                        'bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text'
                                                     }`}
                                                 >
                                                     {logo.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : logo.saved === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                                 </button>
-                                                <SendToLTXButton imageDataUrl={logo.src} prompt={`Generate a ${state.logoStyle} logo for brand "${state.brandName}". ${state.slogan ? `Slogan: "${state.slogan}".` : ''} ${state.logoPrompt} Background: ${state.backgroundColor}.`} className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
+                                                <SendToLTXButton imageDataUrl={logo.src} prompt={`Generate a ${state.logoStyle} logo for brand "${state.brandName}". ${state.slogan ? `Slogan: "${state.slogan}".` : ''} ${state.logoPrompt} Background: ${state.backgroundColor}.`} className="p-3 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
                                             </div>
                                         </div>
                                     </div>
@@ -680,8 +677,8 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                     >
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                             <div className="space-y-6">
-                                <textarea value={state.bannerPrompt} onChange={handleInputChange('bannerPrompt')} placeholder="Describe the banner's visual concept..." className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm" rows={3} />
-                                <input type="text" value={state.bannerTitle} onChange={handleInputChange('bannerTitle')} placeholder="Banner Title / Main Text" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm" />
+                                <PromptBox label="Banner concept" kind="positive" rows={3} value={state.bannerPrompt || ''} onChange={bannerPrompt => update({ bannerPrompt })} placeholder="Describe the banner's visual concept..." />
+                                <TextField label="Banner Title / Main Text" value={state.bannerTitle || ''} onChange={bannerTitle => update({ bannerTitle })} />
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Banner Style</h3>
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{BANNER_STYLE_OPTIONS.map(style => <button key={style.id} onClick={() => dispatch(updateLogoThemeState({ bannerStyle: style.id }))} title={style.description} className={`p-3 text-center rounded-lg text-sm transition-colors ${state.bannerStyle === style.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-tertiary hover:bg-bg-tertiary-hover'}`}>{style.label}</button>)}</div>
@@ -689,7 +686,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Font (Optional)</h3>
                                     {state.bannerFontReferenceImage || state.bannerSelectedFont ? (
-                                        <div className="mt-2 p-2 bg-bg-primary/50 rounded-md flex items-center justify-between">
+                                        <div className="mt-2 p-2 rounded-md flex items-center justify-between">
                                             <div className="flex items-center gap-2 overflow-hidden">
                                                 <img 
                                                     src={state.bannerSelectedFont ? state.bannerSelectedFont.thumbnail : bannerFontPreview!}
@@ -723,16 +720,16 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                         <button onClick={onOpenLibraryForBannerLogo} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover"><LibraryIcon className="w-5 h-5"/> Logo</button>
                                     </div>
                                     <div className="flex flex-wrap gap-4">
-                                        {state.bannerSelectedLogo && <div className="relative group"><img src={state.bannerSelectedLogo.thumbnail} className="w-16 h-16 object-contain rounded bg-bg-primary/50 p-1"/><button onClick={() => dispatch(updateLogoThemeState({ bannerSelectedLogo: null }))} className="absolute -top-1 -right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>}
-                                        {state.bannerSelectedPalette && <div className="relative group flex items-center gap-2 p-2 rounded-md bg-bg-primary/50"><div className="flex -space-x-2">{bannerSelectedPaletteColors.slice(0, 4).map(c => <div key={c.hex} className="w-8 h-8 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}</div><button onClick={() => handleClearPalette('banner')} className="p-1 text-text-secondary hover:text-white opacity-0 group-hover:opacity-100"><CloseIcon className="w-4 h-4"/></button></div>}
+                                        {state.bannerSelectedLogo && <div className="relative group"><img src={state.bannerSelectedLogo.thumbnail} className="w-16 h-16 object-contain rounded p-1"/><button onClick={() => dispatch(updateLogoThemeState({ bannerSelectedLogo: null }))} className="absolute -top-1 -right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>}
+                                        {state.bannerSelectedPalette && <div className="relative group flex items-center gap-2 p-2 rounded-md"><div className="flex -space-x-2">{bannerSelectedPaletteColors.slice(0, 4).map(c => <div key={c.hex} className="w-8 h-8 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}</div><button onClick={() => handleClearPalette('banner')} className="p-1 text-text-secondary hover:text-white opacity-0 group-hover:opacity-100"><CloseIcon className="w-4 h-4"/></button></div>}
                                     </div>
-                                    {(state.bannerReferenceItems && state.bannerReferenceItems.length > 0) && <div className="p-2 bg-bg-primary/50 rounded-md"><div className="grid grid-cols-4 gap-2">{state.bannerReferenceItems.map(item => <div key={item.id} className="relative group"><img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/><button onClick={() => handleRemoveReference(item.id, 'banner')} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>)}</div></div>}
+                                    {(state.bannerReferenceItems && state.bannerReferenceItems.length > 0) && <div className="p-2 rounded-md"><div className="grid grid-cols-4 gap-2">{state.bannerReferenceItems.map(item => <div key={item.id} className="relative group"><img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/><button onClick={() => handleRemoveReference(item.id, 'banner')} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>)}</div></div>}
                                 </div>
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Settings</h3>
                                     <div className="p-4 bg-bg-tertiary rounded-lg space-y-4">
-                                        <div><label className="block text-sm font-medium text-text-secondary">Number of Banners: {state.numBanners}</label><input type="range" min="1" max="4" step="1" value={state.numBanners} onChange={handleSliderChange('numBanners')} className="w-full h-2 mt-1 bg-bg-primary rounded-lg" /></div>
-                                        <div><label className="block text-sm font-medium text-text-secondary mb-2">Aspect Ratio</label><select value={state.bannerAspectRatio} onChange={(e) => dispatch(updateLogoThemeState({ bannerAspectRatio: e.target.value as BannerAspectRatio }))} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{BANNER_ASPECT_RATIO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                                        <NumberField slider label="Number of Banners" value={state.numBanners || 1} min={1} max={4} step={1} onChange={numBanners => update({ numBanners })} />
+                                        <Select label="Aspect Ratio" value={state.bannerAspectRatio as string} options={BANNER_ASPECT_RATIO_OPTIONS.map(option => ({ value: option.value as string, label: option.label }))} onChange={value => update({ bannerAspectRatio: value as BannerAspectRatio })} />
                                         <div><label className="block text-sm font-medium text-text-secondary mb-2">Logo Placement</label><div className="grid grid-cols-3 gap-2">{BANNER_LOGO_PLACEMENT_OPTIONS.map(opt => <button key={opt.id} onClick={() => dispatch(updateLogoThemeState({ bannerLogoPlacement: opt.id }))} className={`p-2 text-xs rounded-md ${state.bannerLogoPlacement === opt.id ? 'bg-accent text-accent-text font-bold' : 'bg-bg-primary hover:bg-bg-tertiary-hover'}`}>{opt.label}</button>)}</div></div>
                                     </div>
                                 </div>
@@ -758,7 +755,7 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                                 <button
                                                     onClick={() => handleDownloadBanner(banner.src, index)}
                                                     title="Save to Disk"
-                                                    className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
+                                                    className="p-3 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors"
                                                 >
                                                     <DownloadIcon className="w-5 h-5" />
                                                 </button>
@@ -769,12 +766,12 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                                     className={`p-3 rounded-full transition-all duration-200 ${
                                                         banner.saved === 'saved' ? 'bg-green-500 text-white cursor-default' : 
                                                         banner.saved === 'saving' ? 'bg-bg-secondary text-text-secondary cursor-wait' :
-                                                        'bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text'
+                                                        'bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text'
                                                     }`}
                                                 >
                                                     {banner.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : banner.saved === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                                 </button>
-                                                <SendToLTXButton imageDataUrl={banner.src} prompt={`Generate a ${state.bannerStyle} banner for "${state.bannerTitle}". Aspect Ratio: ${state.bannerAspectRatio}. Logo Placement: ${state.bannerLogoPlacement}. ${state.bannerPrompt}`} className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
+                                                <SendToLTXButton imageDataUrl={banner.src} prompt={`Generate a ${state.bannerStyle} banner for "${state.bannerTitle}". Aspect Ratio: ${state.bannerAspectRatio}. Logo Placement: ${state.bannerLogoPlacement}. ${state.bannerPrompt}`} className="p-3 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
                                             </div>
                                         </div>
                                     </div>
@@ -792,27 +789,27 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                             {/* --- Left Column: Controls --- */}
                             <div className="space-y-6">
-                                <textarea value={state.albumPrompt} onChange={handleInputChange('albumPrompt')} placeholder="Describe the album cover's visual concept..." className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" rows={3} />
+                                <PromptBox label="Album cover concept" kind="positive" rows={3} value={state.albumPrompt || ''} onChange={albumPrompt => update({ albumPrompt })} placeholder="Describe the album cover's visual concept..." />
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <input type="text" value={state.albumTitle} onChange={handleInputChange('albumTitle')} placeholder="Album Title" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" />
-                                    <input type="text" value={state.artistName} onChange={handleInputChange('artistName')} placeholder="Artist / Band Name" className="w-full bg-bg-tertiary border border-border-primary rounded-md p-3 text-sm focus:ring-accent focus:border-accent" />
+                                    <TextField label="Album Title" value={state.albumTitle || ''} onChange={albumTitle => update({ albumTitle })} />
+                                    <TextField label="Artist / Band Name" value={state.artistName || ''} onChange={artistName => update({ artistName })} />
                                 </div>
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Style</h3>
                                     <div className="p-4 bg-bg-tertiary rounded-lg space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Music Style</label><select value={state.musicStyle} onChange={(e) => dispatch(updateLogoThemeState({ musicStyle: e.target.value as MusicStyle }))} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{MUSIC_STYLES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
-                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Era</label><select value={state.albumEra} onChange={(e) => dispatch(updateLogoThemeState({ albumEra: e.target.value as AlbumEra }))} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{ALBUM_ERAS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</select></div>
-                                            <div><label className="block text-sm font-medium text-text-primary mb-1">Media Format</label><select value={state.albumMediaType} onChange={(e) => dispatch(updateLogoThemeState({ albumMediaType: e.target.value as AlbumMediaType }))} className="w-full bg-bg-primary border border-border-primary p-2 rounded-md text-sm">{ALBUM_MEDIA_TYPES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
+                                            <Select label="Music Style" value={state.musicStyle as string} options={MUSIC_STYLES.map(style => ({ value: style.id as string, label: style.label }))} onChange={value => update({ musicStyle: value as MusicStyle })} />
+                                            <Select label="Era" value={state.albumEra as string} options={ALBUM_ERAS.map(era => ({ value: era.id as string, label: era.label }))} onChange={value => update({ albumEra: value as AlbumEra })} />
+                                            <Select label="Media Format" value={state.albumMediaType as string} options={ALBUM_MEDIA_TYPES.map(media => ({ value: media.id as string, label: media.label }))} onChange={value => update({ albumMediaType: value as AlbumMediaType })} />
                                         </div>
-                                        {state.musicStyle === 'other' && <input type="text" value={state.customMusicStyle} onChange={handleInputChange('customMusicStyle')} placeholder="Enter custom music style" className="w-full bg-bg-primary border border-border-primary rounded-md p-2 text-sm" />}
+                                        {state.musicStyle === 'other' && <TextField label="Custom music style" value={state.customMusicStyle || ''} onChange={customMusicStyle => update({ customMusicStyle })} />}
                                         {state.albumMediaType === 'vinyl' && <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer pt-2"><input type="checkbox" checked={state.addVinylWear} onChange={(e) => dispatch(updateLogoThemeState({ addVinylWear: e.target.checked }))} className="rounded text-accent focus:ring-accent" />Add wear & tear (scratches, ring wear)</label>}
                                     </div>
                                 </div>
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Font (Optional)</h3>
                                     {state.albumFontReferenceImage || state.albumSelectedFont ? (
-                                        <div className="mt-2 p-2 bg-bg-primary/50 rounded-md flex items-center justify-between">
+                                        <div className="mt-2 p-2 rounded-md flex items-center justify-between">
                                             <div className="flex items-center gap-2 overflow-hidden">
                                                 <img 
                                                     src={state.albumSelectedFont ? state.albumSelectedFont.thumbnail : albumFontPreview!}
@@ -846,28 +843,25 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                         <button onClick={onOpenLibraryForAlbumCoverLogo} className="flex items-center justify-center gap-2 p-3 bg-bg-tertiary rounded-lg hover:bg-bg-tertiary-hover"><LibraryIcon className="w-5 h-5"/> Logo</button>
                                     </div>
                                     <div className="flex flex-wrap gap-4">
-                                        {state.albumSelectedLogo && <div className="relative group"><img src={state.albumSelectedLogo.thumbnail} className="w-16 h-16 object-contain rounded bg-bg-primary/50 p-1"/><button onClick={() => dispatch(updateLogoThemeState({ albumSelectedLogo: null }))} className="absolute -top-1 -right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>}
-                                        {state.albumSelectedPalette && <div className="relative group flex items-center gap-2 p-2 rounded-md bg-bg-primary/50"><div className="flex -space-x-2">{albumSelectedPaletteColors.slice(0, 4).map(c => <div key={c.hex} className="w-8 h-8 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}</div><button onClick={() => handleClearPalette('album-cover')} className="p-1 text-text-secondary hover:text-white opacity-0 group-hover:opacity-100"><CloseIcon className="w-4 h-4"/></button></div>}
+                                        {state.albumSelectedLogo && <div className="relative group"><img src={state.albumSelectedLogo.thumbnail} className="w-16 h-16 object-contain rounded p-1"/><button onClick={() => dispatch(updateLogoThemeState({ albumSelectedLogo: null }))} className="absolute -top-1 -right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>}
+                                        {state.albumSelectedPalette && <div className="relative group flex items-center gap-2 p-2 rounded-md"><div className="flex -space-x-2">{albumSelectedPaletteColors.slice(0, 4).map(c => <div key={c.hex} className="w-8 h-8 rounded-full border-2 border-bg-tertiary" style={{backgroundColor: c.hex}}></div>)}</div><button onClick={() => handleClearPalette('album-cover')} className="p-1 text-text-secondary hover:text-white opacity-0 group-hover:opacity-100"><CloseIcon className="w-4 h-4"/></button></div>}
                                     </div>
-                                    {(state.albumReferenceItems && state.albumReferenceItems.length > 0) && <div className="p-2 bg-bg-primary/50 rounded-md"><div className="grid grid-cols-4 gap-2">{state.albumReferenceItems.map(item => <div key={item.id} className="relative group"><img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/><button onClick={() => handleRemoveReference(item.id, 'album-cover')} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>)}</div></div>}
+                                    {(state.albumReferenceItems && state.albumReferenceItems.length > 0) && <div className="p-2 rounded-md"><div className="grid grid-cols-4 gap-2">{state.albumReferenceItems.map(item => <div key={item.id} className="relative group"><img src={item.thumbnail} alt={item.name} className="w-full aspect-square object-cover rounded"/><button onClick={() => handleRemoveReference(item.id, 'album-cover')} className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100"><CloseIcon className="w-3 h-3"/></button></div>)}</div></div>}
                                 </div>
                                 <div>
                                     <h3 className="text-md font-semibold text-text-secondary mb-2">Settings</h3>
                                     <div className="p-4 bg-bg-tertiary rounded-lg space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-text-secondary">Number of Covers: {state.numAlbumCovers}</label>
-                                            <input type="range" min="1" max="4" step="1" value={state.numAlbumCovers} onChange={handleSliderChange('numAlbumCovers')} className="w-full h-2 mt-1 bg-bg-primary rounded-lg" />
-                                        </div>
+                                        <NumberField slider label="Number of Covers" value={state.numAlbumCovers || 1} min={1} max={4} step={1} onChange={numAlbumCovers => update({ numAlbumCovers })} />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 pt-4">
                                     <button onClick={handleAlbumCoverReset} disabled={state.isGeneratingAlbumCovers} className="flex items-center justify-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-3 px-4 rounded-lg hover:bg-bg-tertiary-hover"><ResetIcon className="w-5 h-5"/> Reset</button>
-                                    <button onClick={handleGenerateAlbumCovers} disabled={state.isGeneratingAlbumCovers} className="flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg bg-danger text-white disabled:opacity-50">{state.isGeneratingAlbumCovers ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <GenerateIcon className="w-5 h-5"/>}{state.isGeneratingAlbumCovers ? 'Generating...' : 'Generate Covers'}</button>
+                                    <button onClick={handleGenerateAlbumCovers} disabled={state.isGeneratingAlbumCovers} className="flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg bg-accent text-accent-text disabled:opacity-50">{state.isGeneratingAlbumCovers ? <SpinnerIcon className="w-5 h-5 animate-spin"/> : <GenerateIcon className="w-5 h-5"/>}{state.isGeneratingAlbumCovers ? 'Generating...' : 'Generate Covers'}</button>
                                 </div>
                             </div>
                             <div className="space-y-4">
                                 {state.albumCoverError && <p className="text-danger text-center bg-danger-bg p-3 rounded-md">{state.albumCoverError}</p>}
-                                {state.isGeneratingAlbumCovers ? <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl h-full min-h-[400px]"><SpinnerIcon className="w-16 h-16 text-danger animate-spin mb-4" /><h3 className="text-lg font-bold text-text-primary">Generating album covers...</h3></div> : (state.generatedAlbumCovers && state.generatedAlbumCovers.length > 0) ? <div className="grid grid-cols-2 gap-4">{state.generatedAlbumCovers.map((cover, index) => (
+                                {state.isGeneratingAlbumCovers ? <div className="flex flex-col items-center justify-center p-8 text-center bg-bg-tertiary rounded-2xl h-full min-h-[400px]"><SpinnerIcon className="w-16 h-16 text-accent animate-spin mb-4" /><h3 className="text-lg font-bold text-text-primary">Generating album covers...</h3></div> : (state.generatedAlbumCovers && state.generatedAlbumCovers.length > 0) ? <div className="grid grid-cols-2 gap-4">{state.generatedAlbumCovers.map((cover, index) => (
                                     <div key={index} className="group relative aspect-square bg-bg-primary p-2 rounded-lg flex items-center justify-center">
                                         <img src={cover.src} alt={`Generated Album Cover ${index + 1}`} className="max-w-full max-h-full object-contain" />
                                         <div 
@@ -876,11 +870,11 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                                             title="Zoom In"
                                         >
                                             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                <button onClick={() => handleDownloadAlbumCover(cover.src, index)} title="Save to Disk" className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text"><DownloadIcon className="w-5 h-5" /></button>
-                                                <button onClick={() => handleSaveAlbumCover(cover.src, index)} title={cover.saved === 'saved' ? 'Saved!' : 'Save to Library'} disabled={cover.saved !== 'idle'} className={`p-3 rounded-full transition-all ${cover.saved === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text'}`}>
+                                                <button onClick={() => handleDownloadAlbumCover(cover.src, index)} title="Save to Disk" className="p-3 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text"><DownloadIcon className="w-5 h-5" /></button>
+                                                <button onClick={() => handleSaveAlbumCover(cover.src, index)} title={cover.saved === 'saved' ? 'Saved!' : 'Save to Library'} disabled={cover.saved !== 'idle'} className={`p-3 rounded-full transition-all ${cover.saved === 'saved' ? 'bg-green-500 text-white' : 'bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text'}`}>
                                                     {cover.saved === 'saving' ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : cover.saved === 'saved' ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
                                                 </button>
-                                                <SendToLTXButton imageDataUrl={cover.src} prompt={`Generate an album cover for "${state.albumTitle}" by "${state.artistName}". Style: ${state.musicStyle === 'other' ? state.customMusicStyle : state.musicStyle}. Era: ${state.albumEra}. Format: ${state.albumMediaType}. ${state.addVinylWear ? 'Add vinyl wear/texture.' : ''} ${state.albumPrompt}`} className="p-3 rounded-full bg-bg-tertiary/80 text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
+                                                <SendToLTXButton imageDataUrl={cover.src} prompt={`Generate an album cover for "${state.albumTitle}" by "${state.artistName}". Style: ${state.musicStyle === 'other' ? state.customMusicStyle : state.musicStyle}. Era: ${state.albumEra}. Format: ${state.albumMediaType}. ${state.addVinylWear ? 'Add vinyl wear/texture.' : ''} ${state.albumPrompt}`} className="p-3 rounded-full bg-bg-tertiary text-text-primary hover:bg-accent hover:text-accent-text transition-colors" />
                                             </div>
                                         </div>
                                     </div>
@@ -890,9 +884,9 @@ export const LogoThemeGeneratorPanel: React.FC<LogoThemeGeneratorPanelProps> = (
                     </Section>
                 </div>
             </div>
-            {currentZoomedLogo && <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={handleCloseLogoZoom}><div className="relative" onClick={e => e.stopPropagation()}><img src={currentZoomedLogo.src} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }}/><button onClick={handleCloseLogoZoom} className="absolute -top-2 -right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75"><CloseIcon className="w-5 h-5"/></button>{state.generatedLogos && state.generatedLogos.length > 1 && <><button onClick={handlePrevLogo} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronLeftIcon className="w-8 h-8"/></button><button onClick={handleNextLogo} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronRightIcon className="w-8 h-8"/></button></>}</div></div>}
-            {currentZoomedBanner && <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={handleCloseBannerZoom}><div className="relative" onClick={e => e.stopPropagation()}><img src={currentZoomedBanner.src} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }}/><button onClick={handleCloseBannerZoom} className="absolute -top-2 -right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75"><CloseIcon className="w-5 h-5"/></button>{state.generatedBanners && state.generatedBanners.length > 1 && <><button onClick={handlePrevBanner} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronLeftIcon className="w-8 h-8"/></button><button onClick={handleNextBanner} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronRightIcon className="w-8 h-8"/></button></>}</div></div>}
-            {currentZoomedAlbumCover && <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={handleCloseAlbumCoverZoom}><div className="relative" onClick={e => e.stopPropagation()}><img src={currentZoomedAlbumCover.src} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }}/><button onClick={handleCloseAlbumCoverZoom} className="absolute -top-2 -right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75"><CloseIcon className="w-5 h-5"/></button>{state.generatedAlbumCovers && state.generatedAlbumCovers.length > 1 && <><button onClick={handlePrevAlbumCover} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronLeftIcon className="w-8 h-8"/></button><button onClick={handleNextAlbumCover} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary/50 hover:bg-accent"><ChevronRightIcon className="w-8 h-8"/></button></>}</div></div>}
+            {currentZoomedLogo && <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={handleCloseLogoZoom}><div className="relative" onClick={e => e.stopPropagation()}><img src={currentZoomedLogo.src} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }}/><button onClick={handleCloseLogoZoom} className="absolute -top-2 -right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75"><CloseIcon className="w-5 h-5"/></button>{state.generatedLogos && state.generatedLogos.length > 1 && <><button onClick={handlePrevLogo} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary hover:bg-accent"><ChevronLeftIcon className="w-8 h-8"/></button><button onClick={handleNextLogo} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary hover:bg-accent"><ChevronRightIcon className="w-8 h-8"/></button></>}</div></div>}
+            {currentZoomedBanner && <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={handleCloseBannerZoom}><div className="relative" onClick={e => e.stopPropagation()}><img src={currentZoomedBanner.src} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }}/><button onClick={handleCloseBannerZoom} className="absolute -top-2 -right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75"><CloseIcon className="w-5 h-5"/></button>{state.generatedBanners && state.generatedBanners.length > 1 && <><button onClick={handlePrevBanner} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary hover:bg-accent"><ChevronLeftIcon className="w-8 h-8"/></button><button onClick={handleNextBanner} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary hover:bg-accent"><ChevronRightIcon className="w-8 h-8"/></button></>}</div></div>}
+            {currentZoomedAlbumCover && <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={handleCloseAlbumCoverZoom}><div className="relative" onClick={e => e.stopPropagation()}><img src={currentZoomedAlbumCover.src} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '80vh', maxWidth: '80vw' }}/><button onClick={handleCloseAlbumCoverZoom} className="absolute -top-2 -right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/75"><CloseIcon className="w-5 h-5"/></button>{state.generatedAlbumCovers && state.generatedAlbumCovers.length > 1 && <><button onClick={handlePrevAlbumCover} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary hover:bg-accent"><ChevronLeftIcon className="w-8 h-8"/></button><button onClick={handleNextAlbumCover} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-secondary hover:bg-accent"><ChevronRightIcon className="w-8 h-8"/></button></>}</div></div>}
         </>
     );
 };

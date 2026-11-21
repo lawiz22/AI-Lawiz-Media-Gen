@@ -6,6 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { uiModules } from './ui/compileForTest.mjs';
 
 const read = file => readFileSync(new URL(file, import.meta.url), 'utf8');
 const compile = source => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(source, {
@@ -22,10 +23,16 @@ const component = await import(compile(`
     import React, { useEffect, useRef, useState } from '${reactURL}';
     import { defaultRippleDraft, defaultRippleSettings, fitRippleToSource, rippleSourceFrameLimit, rippleNumber, rippleResolution, RIPPLE_TEMPLATE } from '${workflowURL}';
     import { h3Choices, h3Input, isRecord } from '${helpersURL}';
+    import { Accordion } from '${uiModules.Accordion}';
+    import { Select } from '${uiModules.Select}';
+    import { NumberField } from '${uiModules.fields}';
+    import { PromptBox } from '${uiModules.PromptBox}';
+    import { ui } from '${uiModules.styles}';
+    const familyFiles = names => names, useModelInventory = () => ({ inventory: { items: [] } });
     const useDispatch = () => () => {}, useMediaURL = () => '';
     const LibraryPickerModal = () => null, VideoOutputFrames = () => null;
     ${source.replace(/import[\s\S]*?from\s+'[^']+';/g, '')}
-    export { groups };
+    export { groups, Accordion };
 `));
 const render = ready => renderToStaticMarkup(React.createElement(component.LTXRipplePanel, {
     ready, onDraftChange() {}, onSettingsChange() {}, onLibraryItemLoaded() {},
@@ -49,7 +56,7 @@ test('all editable graph nodes have accordion controls or a dedicated seed contr
 });
 test('accordions are genuinely lazy and workspace loading locks editing', () => {
     let called = false;
-    renderToStaticMarkup(React.createElement(component.RippleAccordion, { title: 'LoRAs', children: () => { called = true; throw new Error('Must not construct model menus'); } }));
+    renderToStaticMarkup(React.createElement(component.Accordion, { title: 'LoRAs', children: () => { called = true; throw new Error('Must not construct model menus'); } }));
     assert.equal(called, false);
     assert.match(render(false), /<fieldset disabled=""/);
     assert.match(source, /Cancel this operation/);

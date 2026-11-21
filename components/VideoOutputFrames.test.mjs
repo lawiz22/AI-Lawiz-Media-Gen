@@ -6,6 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { uiModules } from './ui/compileForTest.mjs';
 
 const require = createRequire(import.meta.url);
 const source = readFileSync(new URL('./VideoOutputFrames.tsx', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '');
@@ -19,6 +20,7 @@ visit(tree);
 assert.ok(capture);
 const { outputText } = ts.transpileModule(`
 import React, { useEffect, useRef, useState } from ${JSON.stringify(pathToFileURL(require.resolve('react')).href)};
+import { ui } from ${JSON.stringify(uiModules.styles)};
 const useDispatch = () => () => {};
 const useUnmountCleanup = () => () => {};
 ${source}

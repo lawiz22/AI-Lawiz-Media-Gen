@@ -1,6 +1,8 @@
-import React, { ChangeEvent, useMemo, useState } from 'react';
+import React, { ChangeEvent, useMemo } from 'react';
 import { GenerationOptions } from '../types';
 import { NumberSlider, SelectInput, TextInput } from './InputComponents';
+import { Accordion } from './ui/Accordion';
+import { Select } from './ui/Select';
 import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
 import { MossSettingsPanel } from './MossSettingsPanel';
 import { Krea2EditSettingsPanel } from './Krea2EditSettingsPanel';
@@ -27,7 +29,6 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
     isDisabled,
     comfyUIObjectInfo
 }) => {
-    const [isOpen, setIsOpen] = useState(true);
     const handleSliderChange = (field: keyof GenerationOptions) => (event: ChangeEvent<HTMLInputElement>) => {
         updateOptions({ [field]: parseFloat(event.target.value) });
     };
@@ -45,14 +46,12 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
     }, [comfyUIObjectInfo]);
 
     const modelType = options.comfyModelType;
-    if (modelType === 'krea2-edit') return <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
-        <button type="button" onClick={() => setIsOpen(open => !open)} aria-expanded={isOpen} className="flex w-full justify-between border-b border-accent/30 pb-2 font-bold uppercase text-accent">Sampler Settings (KREA2 Edit)<span>{isOpen ? '-' : '+'}</span></button>
-        {isOpen && <div className="mt-4"><Krea2EditSettingsPanel section="sampler" options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} /></div>}
-    </div>;
-    if (modelType === 'moss-image') return <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
-        <button type="button" onClick={() => setIsOpen(open => !open)} aria-expanded={isOpen} className="flex w-full justify-between border-b border-accent/30 pb-2 font-bold uppercase text-accent">Sampler Settings (MOSS)<span>{isOpen ? '-' : '+'}</span></button>
-        {isOpen && <div className="mt-4"><MossSettingsPanel section="sampler" options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} /></div>}
-    </div>;
+    if (modelType === 'krea2-edit') return <Accordion title="Sampler" defaultOpen>
+        <Krea2EditSettingsPanel section="sampler" options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} />
+    </Accordion>;
+    if (modelType === 'moss-image') return <Accordion title="Sampler" defaultOpen>
+        <MossSettingsPanel section="sampler" options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} />
+    </Accordion>;
     const supportedModels = ['sdxl', 'sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'qwen21-t2i', 'qwen21-turbo', 'z-image', 'flux2-simple', 'krea2-simple', 'krea2-raw'];
     if (!modelType || !supportedModels.includes(modelType)) return null;
 
@@ -63,31 +62,20 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
     const isQwen21 = modelType === 'qwen21-t2i' || modelType === 'qwen21-turbo';
 
     return (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 shadow-md">
-            <button
-                type="button"
-                onClick={() => setIsOpen(open => !open)}
-                aria-expanded={isOpen}
-                className="flex w-full items-center justify-between border-b border-accent/30 pb-2 text-left text-md font-bold uppercase tracking-wider text-accent"
-            >
-                <span>Sampler Settings</span>
-                <span aria-hidden="true">{isOpen ? '−' : '+'}</span>
-            </button>
-
-            {isOpen && <div className="mt-4 space-y-4">
+        <Accordion title="Sampler" defaultOpen>
                 {isQwen21 ? <Qwen21SettingsPanel section="sampler" options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} /> : <>
                 {isKreaRaw ? (
                     <p className="text-xs text-text-secondary">RAW sampler stages use the fixed settings from the source workflow.</p>
                 ) : <>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="space-y-4">
                         <NumberSlider label={`Steps: ${styleSampling?.steps ?? options.comfySteps ?? 25}`} value={styleSampling?.steps ?? options.comfySteps ?? 25} onChange={handleSliderChange('comfySteps')} min={1} max={100} step={1} disabled={isDisabled} />
                         <NumberSlider label={`CFG Scale: ${styleSampling?.cfg ?? options.comfyCfg ?? 7}`} value={styleSampling?.cfg ?? options.comfyCfg ?? 7} onChange={handleSliderChange('comfyCfg')} min={0} max={20} step={0.5} disabled={isDisabled} />
                     </div>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <SelectInput label="Sampler" value={styleSampling?.sampler || options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={samplerOptions.map(value => ({ value, label: value }))} disabled={isDisabled} />
+                        <Select variant="search" label="Sampler" ariaLabel="Image Sampler" value={styleSampling?.sampler || options.comfySampler || ''} onChange={value => updateOptions({ comfySampler: value })} options={samplerOptions} disabled={isDisabled} />
                         {modelType === 'flux2-simple'
                             ? <div><span className="mb-1 block text-sm font-medium text-text-secondary">Scheduler</span><div className="rounded-md border border-border-primary bg-bg-tertiary px-3 py-2 text-sm text-text-primary">{styleSampling?.scheduler === 'flux2' ? 'Flux2Scheduler (automatic)' : `${styleSampling?.scheduler} (style override)`}</div></div>
-                            : <SelectInput label="Scheduler" value={styleSampling?.scheduler || options.comfyScheduler || ''} onChange={handleOptionChange('comfyScheduler')} options={schedulerOptions.map(value => ({ value, label: value }))} disabled={isDisabled} />}
+                            : <Select variant="search" label="Scheduler" ariaLabel="Image Scheduler" value={styleSampling?.scheduler || options.comfyScheduler || ''} onChange={value => updateOptions({ comfyScheduler: value })} options={schedulerOptions} disabled={isDisabled} />}
                     </div>
                     {styleSampling && <SaveStyleSamplingButton
                         style={modelType === 'krea2-simple' ? options.comfyKreaStyle : options.comfyFlux2Style}
@@ -99,7 +87,7 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
                         }} />}
                 </>}
 
-                <div className="border-t border-border-primary/50 pt-2">
+                <div className="border-t border-border-primary pt-2">
                     <h4 className="mb-2 text-md font-semibold text-text-secondary">Seed</h4>
                     <div className="grid grid-cols-2 gap-4">
                         <SelectInput label="Control" value={options.comfySeedControl || 'randomize'} onChange={handleOptionChange('comfySeedControl')} options={[{ value: 'fixed', label: 'Fixed' }, { value: 'increment', label: 'Increment' }, { value: 'decrement', label: 'Decrement' }, { value: 'randomize', label: 'Randomize' }]} disabled={isDisabled} />
@@ -108,7 +96,6 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
                     {options.comfySeedControl === 'increment' && <NumberSlider label={`Increment By: ${options.comfySeedIncrement || 1}`} value={options.comfySeedIncrement || 1} onChange={handleSliderChange('comfySeedIncrement')} min={1} max={100} step={1} disabled={isDisabled} />}
                 </div>
                 </>}
-            </div>}
-        </div>
+        </Accordion>
     );
 };
