@@ -17,6 +17,7 @@ import { ensureDirectoryPermission, getActiveLibraryFolderHandle, saveActiveLibr
 import { dataUrlToBlob, dataUrlToThumbnail } from '../utils/imageUtils';
 import * as googleDriveService from './googleDriveService';
 import { generateTitleForImage, summarizePrompt } from './geminiService';
+import { withLibraryStyleTags } from './libraryTags';
 
 // Electron cannot reliably resolve zip.js WASM from its generated data: worker URL.
 configureZip({ useWebWorkers: false, useCompressionStream: true });
@@ -90,7 +91,9 @@ export async function initializeDriveSync(onProgress: (message: string) => void,
 }
 
 export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>, blobs?: Partial<Record<LibraryAssetRole, Blob>>): Promise<LibraryItem> => {
-    const itemToSave = { ...item };
+    await getActiveLibraryFolderHandle();
+    const projectKey = (await idbService.getLibraryProjectBinding())?.projectKey;
+    const itemToSave = { ...withLibraryStyleTags(item) };
 
     // If a name is missing for an image, video, or character, try to generate one.
     if (!itemToSave.name && (item.mediaType === 'image' || item.mediaType === 'video' || item.mediaType === 'character')) {
@@ -127,6 +130,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>, blobs?: Parti
         }
     }
 
+    await idbService.assertLibraryProjectUnchanged(projectKey);
     const newItem = await idbService.saveToLibrary(itemToSave, false, blobs);
 
     if (driveService?.isConnected()) {
@@ -136,6 +140,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>, blobs?: Parti
             if (newItem.mediaType === 'prompt' || newItem.mediaType === 'color-palette' || newItem.mediaType === 'preset') {
                 const driveAssetFileIds = newItem.videoPromptOptions || newItem.ltxAudioSyncOptions || newItem.ltxRippleOptions || newItem.creationSuiteOptions || newItem.clothesSwitcherOptions || newItem.blazingFastOptions ? await uploadLibraryAssetsToDrive(newItem) : newItem.driveAssetFileIds;
                 if (newItem.videoPromptOptions || newItem.ltxAudioSyncOptions || newItem.ltxRippleOptions || newItem.creationSuiteOptions || newItem.clothesSwitcherOptions || newItem.blazingFastOptions) {
+                    await idbService.assertLibraryProjectUnchanged(projectKey);
                     await idbService.updateLibraryItem(newItem.id, { driveAssetFileIds });
                     newItem.driveAssetFileIds = driveAssetFileIds;
                 }
@@ -146,6 +151,7 @@ export const saveToLibrary = async (item: Omit<LibraryItem, 'id'>, blobs?: Parti
 
             const driveAssetFileIds = await uploadLibraryAssetsToDrive(newItem);
             const driveFileId = driveAssetFileIds.media;
+            await idbService.assertLibraryProjectUnchanged(projectKey);
             await idbService.updateLibraryItem(newItem.id, { driveFileId, driveAssetFileIds });
             const { assetRefs, ...metadata } = newItem;
             index.items[newItem.id] = { ...metadata, driveFileId, driveAssetFileIds };
@@ -173,6 +179,7 @@ export interface LibraryImportProgress {
     totalBytes: number;
     importedCount: number;
     currentName?: string;
+    warnings?: string[];
 }
 
 interface LibraryArchiveAsset {
@@ -204,7 +211,7 @@ interface LibraryFolderItem {
     assets: LibraryFolderAsset[];
 }
 
-interface LibraryFolderManifest {
+export interface LibraryFolderManifest {
     format: 'lawiz-library-folder';
     version: 1;
     createdAt: string;
@@ -266,12 +273,9 @@ const selectLibraryFolderHandle = async (mode: 'read' | 'readwrite', persist = t
 
 const getWritableLibraryFolderHandle = async (): Promise<FileSystemDirectoryHandle> => {
     const activeHandle = await getActiveLibraryFolderHandle();
-    try {
-        if (activeHandle && await ensureDirectoryPermission(activeHandle, 'readwrite')) return activeHandle;
-    } catch {
-        // The persisted handle may point to a moved or deleted directory.
-    }
-    return selectLibraryFolderHandle('readwrite');
+    if (!activeHandle) throw new Error('Open or create a project folder first.');
+    if (!await ensureDirectoryPermission(activeHandle, 'readwrite')) throw new Error('Folder permission was denied. Your changes remain saved locally.');
+    return activeHandle;
 };
 
 export const getActiveLibraryFolderName = async (): Promise<string | null> =>
@@ -353,7 +357,31 @@ const validateFolderManifest = (manifest: LibraryFolderManifest | undefined): Li
     if (manifest.format !== 'lawiz-library-folder' || manifest.version !== 1 || !Array.isArray(manifest.items)) {
         throw new Error('Unsupported LAWIZ Library Folder format.');
     }
+    const ids = new Set<number>();
+    for (const item of manifest.items) {
+        if (!item.metadata || !Number.isSafeInteger(item.metadata.id) || typeof item.metadata.mediaType !== 'string'
+            || !Object.prototype.hasOwnProperty.call(LIBRARY_FOLDER_CATEGORY_NAMES, item.metadata.mediaType)
+            || typeof item.metadata.media !== 'string' || !Array.isArray(item.assets) || ids.has(item.metadata.id)) {
+            throw new Error('Invalid or duplicate Library Folder item.');
+        }
+        ids.add(item.metadata.id);
+        const roles = new Set<string>();
+        for (const asset of item.assets) {
+            if (typeof asset.path !== 'string' || !asset.path || asset.path.startsWith('/') || asset.path.includes('\\')
+                || asset.path.split('/').some(part => !part || part === '.' || part === '..')
+                || !/^[a-f0-9]{64}$/i.test(asset.sha256) || !Number.isSafeInteger(asset.size) || asset.size < 0
+                || typeof asset.mimeType !== 'string' || typeof asset.role !== 'string' || !idbService.isLibraryAssetRole(asset.role) || roles.has(asset.role)) {
+                throw new Error(`Invalid Library Folder asset in item ${item.metadata.id}.`);
+            }
+            roles.add(asset.role);
+        }
+    }
     return manifest;
+};
+
+export const readLibraryFolder = async (handle: FileSystemDirectoryHandle): Promise<{ manifest?: LibraryFolderManifest; revision: string | null }> => {
+    const manifest = validateFolderManifest(await readDirectoryJson<LibraryFolderManifest>(handle, 'manifest.json'));
+    return { manifest, revision: manifest ? await hashBlob(new Blob([JSON.stringify(manifest)])) : null };
 };
 
 const structurallyMatchesFolderItem = (item: LibraryItem, folderItem: LibraryFolderItem): boolean => {
@@ -434,6 +462,58 @@ const removeFolderAsset = async (directoryHandle: any, path: string): Promise<vo
     await currentHandle.removeEntry(filename);
 };
 
+export interface LibraryFolderCleanup {
+    handle: FileSystemDirectoryHandle;
+    revision: string | null;
+    previousRevision: string | null;
+    paths: string[];
+    bytes: number;
+}
+
+export const inspectLibraryFolderCleanup = async (): Promise<LibraryFolderCleanup> => {
+    const handle = await getWritableLibraryFolderHandle();
+    const { manifest, revision } = await readLibraryFolder(handle);
+    if (!manifest) throw new Error('The active folder has no project manifest.');
+    const previous = validateFolderManifest(await readDirectoryJson<LibraryFolderManifest>(handle, 'manifest.previous.json'));
+    const retained = new Set([...manifest.items, ...(previous?.items || [])].flatMap(item => item.assets.map(asset => asset.path)));
+    const paths: string[] = [];
+    let bytes = 0;
+    for (const category of Object.values(LIBRARY_FOLDER_CATEGORY_NAMES)) {
+        let directory: FileSystemDirectoryHandle;
+        try { directory = await handle.getDirectoryHandle(category); }
+        catch (error) {
+            if (error instanceof DOMException && error.name === 'NotFoundError') continue;
+            throw error;
+        }
+        for await (const entry of directory.values()) {
+            const path = `${category}/${entry.name}`;
+            if (entry.kind !== 'file' || !/^[a-f0-9]{64}\.[a-z0-9]+$/i.test(entry.name) || retained.has(path)) continue;
+            const file = await (await directory.getFileHandle(entry.name)).getFile();
+            paths.push(path); bytes += file.size;
+        }
+    }
+    return { handle, revision, previousRevision: previous ? await hashBlob(new Blob([JSON.stringify(previous)])) : null, paths, bytes };
+};
+
+export const cleanLibraryFolderMedia = async (plan: LibraryFolderCleanup): Promise<number> => {
+    const current = await readLibraryFolder(plan.handle);
+    const previous = validateFolderManifest(await readDirectoryJson<LibraryFolderManifest>(plan.handle, 'manifest.previous.json'));
+    const previousRevision = previous ? await hashBlob(new Blob([JSON.stringify(previous)])) : null;
+    if (!current.manifest || current.revision !== plan.revision || previousRevision !== plan.previousRevision) throw new Error('The project changed after the cleanup preview. Preview cleanup again; nothing was removed.');
+    const retained = new Set([...current.manifest.items, ...(previous?.items || [])].flatMap(item => item.assets.map(asset => asset.path)));
+    const categories = new Set(Object.values(LIBRARY_FOLDER_CATEGORY_NAMES));
+    for (const path of plan.paths) {
+        const [category, filename, extra] = path.split('/');
+        if (extra || !categories.has(category) || !/^[a-f0-9]{64}\.[a-z0-9]+$/i.test(filename || '') || retained.has(path)) throw new Error(`Unsafe project cleanup path: ${path}`);
+    }
+    let removed = 0;
+    for (const path of plan.paths) {
+        try { await removeFolderAsset(plan.handle, path); removed++; }
+        catch (error) { throw new Error(`Cleanup stopped after ${removed} file(s). Could not remove ${path}: ${error instanceof Error ? error.message : String(error)}`); }
+    }
+    return removed;
+};
+
 export interface LibraryFolderExportResult {
     directoryName: string;
     added: number;
@@ -441,20 +521,24 @@ export interface LibraryFolderExportResult {
     removed: number;
     assetsWritten: number;
     assetsReused: number;
+    revision: string;
 }
 
 export const exportLibraryFolder = async (
     selectedItems?: LibraryItem[],
     onProgress?: (progress: LibraryFolderProgress) => void,
+    destination?: { handle: FileSystemDirectoryHandle; expectedRevision: string | null },
 ): Promise<LibraryFolderExportResult> => {
     if (typeof window.showDirectoryPicker !== 'function') {
         throw new Error('Library Folder requires the desktop app or a Chromium browser with folder access.');
     }
     const isFullSync = selectedItems === undefined;
     const items = selectedItems ?? await idbService.getLibraryItems();
-    if (!isFullSync && items.length === 0) throw new Error('There are no Library items to export.');
-    const directoryHandle = await getWritableLibraryFolderHandle();
-    const existingManifest = validateFolderManifest(await readDirectoryJson<LibraryFolderManifest>(directoryHandle, 'manifest.json'));
+    if (!isFullSync && items.length === 0 && !destination) throw new Error('There are no Library items to export.');
+    const directoryHandle = destination?.handle || await getWritableLibraryFolderHandle();
+    const original = await readLibraryFolder(directoryHandle);
+    if (destination && original.revision !== destination.expectedRevision) throw new Error('The project folder changed outside this app. Open it again or import its changes before saving. Local changes are safe.');
+    const existingManifest = original.manifest;
     const existingById = new Map(existingManifest?.items.map(item => [item.metadata.id, item]) || []);
     const assetsByCategoryHash = new Map<string, LibraryFolderAsset>();
     for (const item of existingManifest?.items || []) {
@@ -480,6 +564,9 @@ export const exportLibraryFolder = async (
     for (const item of items) {
         const existingItem = existingById.get(item.id);
         if (existingItem && await contentMatchesFolderItem(item, existingItem)) {
+            for (const asset of existingItem.assets) {
+                if ((await getFolderAssetFile(directoryHandle, asset.path)).size !== asset.size) throw new Error(`Project asset changed or is damaged: ${asset.path}`);
+            }
             nextItems.push(existingItem);
             assetsReused += existingItem.assets.length;
             continue;
@@ -503,6 +590,8 @@ export const exportLibraryFolder = async (
             const category = LIBRARY_FOLDER_CATEGORY_NAMES[item.mediaType];
             const knownAsset = assetsByCategoryHash.get(`${category}:${sha256}`);
             if (knownAsset) {
+                const file = await getFolderAssetFile(directoryHandle, knownAsset.path);
+                if (file.size !== knownAsset.size) throw new Error(`Project asset changed or is damaged: ${knownAsset.path}`);
                 folderItem.assets.push({ ...knownAsset, role, mimeType: ref.mimeType, size: ref.size, sourceAssetId: ref.id });
                 assetsReused += 1;
                 continue;
@@ -528,10 +617,9 @@ export const exportLibraryFolder = async (
         updatedAt: now,
         items: nextItems,
     };
+    if ((await readLibraryFolder(directoryHandle)).revision !== original.revision) throw new Error('The project changed while saving. Its manifest was not replaced. Your local changes are safe.');
+    if (existingManifest) await writeDirectoryText(directoryHandle, 'manifest.previous.json', JSON.stringify(existingManifest, null, 2));
     await writeDirectoryText(directoryHandle, 'manifest.json', JSON.stringify(manifest, null, 2));
-    const retainedPaths = new Set(manifest.items.flatMap(item => item.assets.map(asset => asset.path)));
-    const obsoletePaths = new Set((existingManifest?.items || []).flatMap(item => item.assets.map(asset => asset.path)).filter(path => !retainedPaths.has(path)));
-    await Promise.allSettled([...obsoletePaths].map(path => removeFolderAsset(directoryHandle, path)));
     return {
         directoryName: directoryHandle.name,
         added,
@@ -539,23 +627,32 @@ export const exportLibraryFolder = async (
         removed,
         assetsWritten,
         assetsReused,
+        revision: await hashBlob(new Blob([JSON.stringify(manifest)])),
     };
 };
 
 export const importLibraryFolder = async (
     onProgress?: (progress: LibraryFolderProgress) => void,
-): Promise<{ imported: number; directoryName: string }> => {
+    source?: { handle: FileSystemDirectoryHandle; categories?: LibraryItem['mediaType'][]; replace?: boolean; previousManifest?: boolean; expectedRevision?: string | null },
+): Promise<{ imported: number; directoryName: string; warnings: string[] }> => {
     if (typeof window.showDirectoryPicker !== 'function') {
         throw new Error('Library Folder requires the desktop app or a Chromium browser with folder access.');
     }
-    const directoryHandle = await selectLibraryFolderHandle('read', false);
-    const manifest = validateFolderManifest(await readDirectoryJson<LibraryFolderManifest>(directoryHandle, 'manifest.json'));
+    const directoryHandle = source?.handle || await selectLibraryFolderHandle('read', false);
+    if (!source?.replace) {
+        const active = await getActiveLibraryFolderHandle();
+        if (active && typeof active.isSameEntry === 'function' && await active.isSameEntry(directoryHandle)) throw new Error('This project is already open. Choose a different source project to import categories.');
+    }
+    const manifest = validateFolderManifest(await readDirectoryJson<LibraryFolderManifest>(directoryHandle, source?.previousManifest ? 'manifest.previous.json' : 'manifest.json'));
     if (!manifest) throw new Error('This folder does not contain a Library Folder manifest.json.');
-    if (manifest.items.length === 0) throw new Error('The Library Folder contains no items.');
-    await saveActiveLibraryFolderHandle(directoryHandle);
-
-    for (let index = 0; index < manifest.items.length; index += 1) {
-        const folderItem = manifest.items[index];
+    if (source?.expectedRevision !== undefined && source.expectedRevision !== await hashBlob(new Blob([JSON.stringify(manifest)]))) throw new Error('The source project changed since category selection. Select its categories again.');
+    const selected = selectLibraryItemsWithDependencies(manifest.items.map(item => item.metadata), source?.categories);
+    const selectedIds = new Set(selected.map(item => item.id));
+    const entries = manifest.items.filter(item => selectedIds.has(item.metadata.id));
+    const stage = await idbService.createLibraryImportStage();
+    try {
+    for (let index = 0; index < entries.length; index += 1) {
+        const folderItem = entries[index];
         if (!folderItem.metadata || !Number.isFinite(folderItem.metadata.id) || !Array.isArray(folderItem.assets)) {
             throw new Error(`Invalid Library Folder item at position ${index + 1}.`);
         }
@@ -564,18 +661,33 @@ export const importLibraryFolder = async (
         for (const asset of folderItem.assets) {
             const file = await getFolderAssetFile(directoryHandle, asset.path);
             if (file.size !== asset.size) throw new Error(`Library Folder asset has an unexpected size: ${asset.path}`);
+            if (await hashBlob(file) !== asset.sha256) throw new Error(`Library Folder asset failed its SHA-256 check: ${asset.path}`);
             blobs[asset.role] = file.type === asset.mimeType ? file : file.slice(0, file.size, asset.mimeType);
             hashes[asset.role] = asset.sha256;
         }
         const { assetRefs: _assetRefs, ...metadata } = folderItem.metadata;
-        const savedItem = await idbService.saveLibraryItemWithBlobs(metadata as LibraryItem, blobs, hashes);
-        for (const asset of folderItem.assets) {
-            const ref = savedItem.assetRefs?.[asset.role];
-            if (ref) knownAssetHashes.set(ref.id, asset.sha256);
-        }
-        onProgress?.({ completed: index + 1, total: manifest.items.length, currentName: metadata.name, stage: 'importing' });
+        await stage.add(metadata as LibraryItem, blobs, hashes);
+        onProgress?.({ completed: index + 1, total: entries.length, currentName: metadata.name, stage: 'importing' });
     }
-    return { imported: manifest.items.length, directoryName: directoryHandle.name };
+    const currentRevision = (await readLibraryFolder(directoryHandle)).revision;
+    if (!source?.previousManifest && currentRevision !== await hashBlob(new Blob([JSON.stringify(manifest)]))) throw new Error('The source project changed during import. Nothing was imported; try again.');
+    const result = await stage.commit(source?.replace ? { handle: directoryHandle, revision: currentRevision, dirty: !!source.previousManifest } : undefined);
+    return { imported: entries.length, directoryName: directoryHandle.name, warnings: result.warnings };
+    } finally { await stage.discard(); }
+};
+
+export const selectLibraryItemsWithDependencies = (items: LibraryItem[], categories?: LibraryItem['mediaType'][]): LibraryItem[] => {
+    if (!categories) return items;
+    return includeLinkedLibraryItems(items, items.filter(item => categories.includes(item.mediaType)));
+};
+export const includeLinkedLibraryItems = (items: LibraryItem[], selection: LibraryItem[]): LibraryItem[] => {
+    const selected = new Set(selection.map(item => item.id));
+    const byId = new Map(items.map(item => [item.id, item]));
+    for (const id of selected) {
+        const linked = byId.get(id)?.linkedResultId;
+        if (linked !== undefined && byId.has(linked)) selected.add(linked);
+    }
+    return items.filter(item => selected.has(item.id));
 };
 
 export const importLibraryJsonFile = async (
@@ -589,11 +701,13 @@ export const importLibraryJsonFile = async (
     let importedCount = 0;
     let pendingWrite = Promise.resolve();
     let parserError: Error | null = null;
+    const stage = await idbService.createLibraryImportStage();
 
     parser.onError = error => { parserError = error; };
     parser.onValue = ({ value }) => {
         const item = value as unknown as LibraryItem;
-        if (!item || typeof item !== 'object' || !Number.isFinite(item.id) || typeof item.mediaType !== 'string' || typeof item.media !== 'string') {
+        if (!item || typeof item !== 'object' || !Number.isFinite(item.id) || typeof item.mediaType !== 'string'
+            || !Object.prototype.hasOwnProperty.call(LIBRARY_FOLDER_CATEGORY_NAMES, item.mediaType) || typeof item.media !== 'string') {
             parserError = new Error(`Invalid Library item at position ${importedCount + 1}.`);
             return;
         }
@@ -603,7 +717,7 @@ export const importLibraryJsonFile = async (
         }
         seenIds.add(item.id);
         pendingWrite = pendingWrite.then(async () => {
-            await idbService.saveToLibrary(item, true);
+            await stage.add(item);
             importedCount += 1;
             onProgress?.({ bytesRead, totalBytes: file.size, importedCount, currentName: item.name });
         });
@@ -623,11 +737,13 @@ export const importLibraryJsonFile = async (
         if (parserError) throw parserError;
         await pendingWrite;
         if (importedCount === 0) throw new Error('The Library backup contains no items.');
+        const result = await stage.commit();
+        onProgress?.({ bytesRead: file.size, totalBytes: file.size, importedCount, warnings: result.warnings });
         return importedCount;
     } catch (error) {
         await reader.cancel().catch(() => undefined);
         throw error;
-    }
+    } finally { await pendingWrite.catch(() => undefined); await stage.discard(); }
 };
 
 const getArchiveName = (projectName: string, selected: boolean) => {
@@ -714,7 +830,7 @@ const mergeItemsIntoArchiveHandle = async (
     try {
         const entries = await zipReader.getEntries();
         const manifestEntry = entries.find(entry => entry.filename === 'manifest.json');
-        if (!manifestEntry?.getData) throw new Error('This is not a valid LAWIZ Library backup.');
+        if (!manifestEntry || !('getData' in manifestEntry)) throw new Error('This is not a valid LAWIZ Library backup.');
         const existingManifest = JSON.parse(await manifestEntry.getData(new TextWriter())) as LibraryArchiveManifest;
         if (existingManifest.format !== 'lawiz-library' || existingManifest.version !== 1 || !Array.isArray(existingManifest.items)) {
             throw new Error('Unsupported LAWIZ Library backup format.');
@@ -737,7 +853,7 @@ const mergeItemsIntoArchiveHandle = async (
         for (const archiveItem of retainedItems) {
             for (const asset of archiveItem.assets) {
                 const entry = entriesByPath.get(asset.path);
-                if (!entry?.getData) throw new Error(`Existing backup asset is missing: ${asset.path}`);
+                if (!entry || !('getData' in entry)) throw new Error(`Existing backup asset is missing: ${asset.path}`);
                 const stream = new TransformStream<Uint8Array, Uint8Array>();
                 await Promise.all([
                     entry.getData(stream.writable),
@@ -870,10 +986,11 @@ export const importLibraryArchive = async (
     onProgress?: (progress: LibraryImportProgress) => void,
 ): Promise<number> => {
     const zipReader = new ZipReader(new BlobReader(file));
+    const stage = await idbService.createLibraryImportStage();
     try {
         const entries = await zipReader.getEntries();
         const manifestEntry = entries.find(entry => entry.filename === 'manifest.json');
-        if (!manifestEntry?.getData) throw new Error('This is not a valid LAWIZ Library backup.');
+        if (!manifestEntry || !('getData' in manifestEntry)) throw new Error('This is not a valid LAWIZ Library backup.');
         const manifest = JSON.parse(await manifestEntry.getData(new TextWriter())) as LibraryArchiveManifest;
         if (manifest.format !== 'lawiz-library' || manifest.version !== 1 || !Array.isArray(manifest.items)) {
             throw new Error('Unsupported LAWIZ Library backup format.');
@@ -881,20 +998,28 @@ export const importLibraryArchive = async (
         const entriesByPath = new Map(entries.map(entry => [entry.filename, entry]));
         let importedCount = 0;
         for (const archiveItem of manifest.items) {
+            if (!archiveItem.metadata || !Object.prototype.hasOwnProperty.call(LIBRARY_FOLDER_CATEGORY_NAMES, archiveItem.metadata.mediaType)
+                || !Array.isArray(archiveItem.assets)) throw new Error('Invalid item in Library archive.');
             const blobs: Partial<Record<LibraryAssetRole, Blob>> = {};
             for (const asset of archiveItem.assets) {
                 const entry = entriesByPath.get(asset.path);
-                if (!entry?.getData) throw new Error(`Backup asset is missing: ${asset.path}`);
-                const blob = await entry.getData(new BlobWriter(asset.mimeType));
+                if (!entry || !('getData' in entry)) throw new Error(`Backup asset is missing: ${asset.path}`);
+                if (!idbService.isLibraryAssetRole(asset.role) || blobs[asset.role]) throw new Error(`Invalid or duplicate backup asset role: ${asset.role}`);
+                const blob = await entry.getData(new BlobWriter(asset.mimeType), { checkSignature: true });
+                if (blob.size !== asset.size) throw new Error(`Backup asset has an unexpected size: ${asset.path}`);
                 blobs[asset.role] = blob;
             }
-            await idbService.saveLibraryItemWithBlobs(archiveItem.metadata, blobs);
+            await stage.add(archiveItem.metadata, blobs);
             importedCount += 1;
             onProgress?.({ bytesRead: importedCount, totalBytes: manifest.items.length, importedCount, currentName: archiveItem.metadata.name });
         }
+        if (!importedCount) throw new Error('The archive contains no Library items.');
+        const result = await stage.commit();
+        onProgress?.({ bytesRead: importedCount, totalBytes: importedCount, importedCount, warnings: result.warnings });
         return importedCount;
     } finally {
         await zipReader.close();
+        await stage.discard();
     }
 };
 

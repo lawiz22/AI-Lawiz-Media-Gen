@@ -5,6 +5,7 @@ import { addToLibrary } from '../store/librarySlice';
 import type { H3GenerationResult } from '../services/minimaxH3Service';
 import { extractVideoFrame } from '../services/videoFrameService';
 import { fileToDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
+import { useUnmountCleanup } from './useUnmountCleanup';
 
 const button = 'rounded-lg border border-border-primary px-3 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed';
 
@@ -20,9 +21,10 @@ export const VideoOutputFrames: React.FC<{ result: Pick<H3GenerationResult, 'vid
     const controller = useRef<AbortController | null>(null);
     const source = useRef<File | null>(null);
     const frame = useRef<{ seconds: number | null; file: File } | null>(null);
+    const root = useUnmountCleanup(() => controller.current?.abort());
     useEffect(() => {
         const player = video.current;
-        return () => { controller.current?.abort(); player?.pause(); };
+        return () => { player?.pause(); };
     }, []);
     const atLast = seconds === null;
     const blocked = disabled || working || seeking || !url;
@@ -72,7 +74,7 @@ export const VideoOutputFrames: React.FC<{ result: Pick<H3GenerationResult, 'vid
             setError(abort.signal.aborted ? 'Frame extraction cancelled.' : `Could not save the video frame: ${cause instanceof Error ? cause.message : String(cause)}`);
         } finally { controller.current = null; setWorking(false); }
     };
-    return <div className="space-y-3">
+    return <div ref={root} className="space-y-3">
         <video ref={video} src={url || undefined} controls preload="metadata" className="w-full rounded-lg bg-black"
             onLoadedMetadata={event => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
             onSeeking={event => { setSeeking(true); selectTime(event.currentTarget); }}

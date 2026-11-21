@@ -7,6 +7,8 @@ import { normalizeStyleModel, prependGalleryStyleTrigger, removeGalleryStyleTrig
 export type ReferenceKind = 'image' | 'video' | 'audio';
 export type VideoPromptProvider = 'openrouter' | 'gemini' | 'mammouth';
 export type VideoTemplate = 'generation' | 'replacement';
+export type VideoPromptFamily = 'h3' | 'ltx';
+export type VideoPromptMode = 't2v' | 'fi2v' | 'ref2v' | 'v2v' | 'i2v';
 export const REFERENCE_LIMITS: Record<ReferenceKind, number> = { image: 6, video: 2, audio: 2 };
 export const VIDEO_PROMPT_ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4', '2:3', '3:2', '21:9'];
 export const VIDEO_WORKFLOWS = [
@@ -14,9 +16,11 @@ export const VIDEO_WORKFLOWS = [
     { id: 'ultrafast', name: 'Ultrafast', description: 'Five-step H3 with up to 6 images, 2 videos and 2 audios.' },
     { id: 'advanced', name: 'MiniMax Advanced', description: 'FL2V / REF2V, latent upscale, LTX refine and final RTX upscale.' },
     { id: 'ltx-audio-sync', name: 'LTX 2.5 Audio-Sync', description: 'One first-frame image and one soundtrack, with optional local Qwen prompt enhancement.' },
+    { id: 'ltx-director', name: 'LTX Director', description: 'Text-to-video or first-frame image animation in an independent timeline segment.' },
+    { id: 'ltx-ripple-ffaf', name: 'LTX-Ripple-FFAF', description: 'Edit a source video using an edited first-frame image.' },
 ] as const;
 // Retain legacy IDs so existing saved preparation drafts remain readable.
-export type VideoWorkflow = 'reference' | 'ultrafast' | 'advanced' | 'ltx-audio-sync' | 'text' | 'replacement' | 'audio';
+export type VideoWorkflow = 'reference' | 'ultrafast' | 'advanced' | 'ltx-audio-sync' | 'ltx-director' | 'ltx-ripple-ffaf' | 'text' | 'replacement' | 'audio';
 export interface AudioLyrics { enabled: boolean; text: string; source: string }
 export interface VideoReference {
     id: string;
@@ -38,6 +42,9 @@ export interface MinimaxDraft {
     template: VideoTemplate;
 }
 export interface VideoPromptDraft {
+    targetFamily?: VideoPromptFamily;
+    promptMode?: VideoPromptMode;
+    ltxTemplates?: Record<VideoTemplate, string>;
     style?: GalleryStyle;
     styleExamples?: string[];
     idea: string;
@@ -67,20 +74,26 @@ export interface VideoPromptDraft {
     ultrafastLyricsSettings?: { provider: VideoPromptProvider; model: string };
     advancedLyricsSettings?: { provider: VideoPromptProvider; model: string };
 }
-export type VideoPromptInputs = Pick<VideoPromptDraft, 'idea' | 'provider' | 'models' | 'aspect' | 'duration' | 'template' | 'templates' | 'references' | 'workflow' | 'originalAudioId' | 'forceOriginalAudio' | 'style' | 'styleExamples'>;
+export type VideoPromptInputs = Pick<VideoPromptDraft, 'targetFamily' | 'promptMode' | 'ltxTemplates' | 'idea' | 'provider' | 'models' | 'aspect' | 'duration' | 'template' | 'templates' | 'references' | 'workflow' | 'originalAudioId' | 'forceOriginalAudio' | 'style' | 'styleExamples'>;
+export const videoPromptFamily = (draft: VideoPromptInputs): VideoPromptFamily => draft.targetFamily ?? (draft.workflow.startsWith('ltx-') ? 'ltx' : 'h3');
+export const videoPromptMode = (draft: VideoPromptInputs): Exclude<VideoPromptMode, 'i2v'> => draft.promptMode === 'i2v' ? 'fi2v' : draft.promptMode
+    ?? (draft.references.some(ref => ref.kind === 'video') ? 'v2v' : draft.references.some(ref => ref.kind === 'image') ? videoPromptFamily(draft) === 'h3' ? 'ref2v' : 'fi2v' : 't2v');
 export const captureVideoPromptInputs = (draft: VideoPromptInputs): VideoPromptInputs => ({
     idea: draft.idea, provider: draft.provider, models: { ...draft.models }, aspect: draft.aspect, duration: draft.duration,
     template: draft.template, templates: { ...draft.templates }, references: draft.references.map(ref => ({
         ...ref, ...(ref.audioSelection ? { audioSelection: { ...ref.audioSelection } } : {}),
         ...(ref.lyrics ? { lyrics: { ...ref.lyrics } } : {}),
     })), workflow: draft.workflow,
+    ...(draft.targetFamily ? { targetFamily: draft.targetFamily } : {}),
+    ...(draft.promptMode ? { promptMode: videoPromptMode(draft) } : {}),
+    ...(draft.ltxTemplates ? { ltxTemplates: { ...draft.ltxTemplates } } : {}),
     ...(draft.originalAudioId !== undefined ? { originalAudioId: draft.originalAudioId } : {}),
     ...(draft.forceOriginalAudio !== undefined ? { forceOriginalAudio: draft.forceOriginalAudio } : {}),
-    ...(draft.style ? { style: structuredClone(draft.style) } : {}),
-    ...(draft.styleExamples ? { styleExamples: [...draft.styleExamples] } : {}),
+    ...(draft.style && videoPromptFamily(draft) === 'h3' ? { style: structuredClone(draft.style) } : {}),
+    ...(draft.styleExamples && videoPromptFamily(draft) === 'h3' ? { styleExamples: [...draft.styleExamples] } : {}),
 });
 export const videoPromptStyle = (draft: VideoPromptInputs): GalleryStyle | undefined => {
-    if (!draft.style || draft.workflow === 'ltx-audio-sync') return undefined;
+    if (!draft.style || videoPromptFamily(draft) === 'ltx') return undefined;
     validateStyleGallery({ version: 1, styles: [draft.style] });
     if (normalizeStyleModel(draft.style.model) !== 'H3') throw new Error('Choose an H3 / MiniMax style for the video prompt generator.');
     return draft.style;
@@ -180,6 +193,31 @@ detailed_description: ...
 overall_soundscape: ...
 non_diegetic_music: ...`,
 };
+const ltxShared = `You are a professional prompt writer for LTX 2 / LTX 2.5 video generation, not MiniMax H3.
+Write concrete, fluent natural-language prose in chronological order: subject and action, environment, lighting, camera framing and movement, then the motion's progression and synchronized sound.
+Prefer one coherent continuous shot unless the user explicitly asks for cuts. Avoid H3 numbered-shot syntax, subject tags, keyword lists, negative prompts and invented camera specifications.
+Use clear present-tense physical actions with achievable motion and temporal continuity. Preserve requested identities, dialogue and soundtrack.
+Reference tokens identify input attachments only: describe their relevant content naturally in the output instead of emitting <Picture N>, <Video N>, <Audio N> or <Subject N> tokens.
+The field headings below are the application's output envelope, not LTX conditioning syntax. Return only these non-empty fields in order, without Markdown fences or commentary.`;
+export const DEFAULT_LTX_VIDEO_TEMPLATES: Record<VideoTemplate, string> = {
+    generation: `${ltxShared}
+Return exactly:
+integrated_multimodal_description: ...
+overall_soundscape: ...
+non_diegetic_music: ...`,
+    replacement: `${ltxShared}
+This is an LTX video edit. Use the source video for motion, framing, timing, environment and camera continuity, and the edited first-frame image for the requested identity or appearance changes.
+Clearly distinguish retained source content from requested changes. Do not invent changes to unrelated actors, objects or audio.
+Return exactly:
+subject_definitions: ...
+summary: ...
+retention_analysis: ...
+detailed_description: ...
+overall_soundscape: ...
+non_diegetic_music: ...`,
+};
+export const videoPromptTemplates = (draft: VideoPromptInputs): Record<VideoTemplate, string> =>
+    videoPromptFamily(draft) === 'ltx' ? draft.ltxTemplates ?? DEFAULT_LTX_VIDEO_TEMPLATES : draft.templates;
 export const referenceToken = (ref: Pick<VideoReference, 'kind' | 'slot'>): string =>
     `<${ref.kind === 'image' ? 'Picture' : ref.kind === 'video' ? 'Video' : 'Audio'} ${ref.slot}>`;
 
@@ -213,7 +251,8 @@ export const buildVideoPromptInstruction = (draft: VideoPromptInputs): string =>
     if (!draft.idea.trim()) throw new Error('Describe your video idea first.');
     if (!Number.isFinite(draft.duration) || draft.duration < 1 || draft.duration > 120) throw new Error('Duration must be between 1 and 120 seconds.');
     if (!VIDEO_PROMPT_ASPECTS.includes(draft.aspect)) throw new Error('Choose a supported aspect ratio.');
-    if (!draft.templates[draft.template].trim()) throw new Error('The selected template is empty.');
+    const templates = videoPromptTemplates(draft);
+    if (!templates[draft.template].trim()) throw new Error('The selected template is empty.');
     validateVideoReferences(draft.references);
     const availableTokens = new Set(draft.references.map(referenceToken));
     for (const token of draft.idea.match(/<(?:Picture|Video|Audio)\s+\d+>/g) || []) {
@@ -222,7 +261,18 @@ export const buildVideoPromptInstruction = (draft: VideoPromptInputs): string =>
     if (draft.template === 'replacement' && (!draft.references.some(ref => ref.kind === 'video') || !draft.references.some(ref => ref.kind === 'image'))) {
         throw new Error('Character replacement requires at least one video and one character image.');
     }
-    return `${draft.templates[draft.template]}\n\nRequested output: ${draft.aspect}, ${draft.duration} seconds.
+    const family = videoPromptFamily(draft), mode = videoPromptMode(draft);
+    if (mode === 'fi2v' && !draft.references.some(ref => ref.kind === 'image')) throw new Error('FI2V requires at least one first-frame image.');
+    if (mode === 'ref2v' && !draft.references.length) throw new Error('REF2V requires at least one image, video or audio reference.');
+    if (draft.promptMode === 'v2v' && !draft.references.some(ref => ref.kind === 'video')) throw new Error('V2V requires a source video.');
+    if (draft.promptMode && draft.template === 'replacement' && mode !== 'v2v') throw new Error('Character replacement requires V2V mode.');
+    const modeInstruction = draft.promptMode || family === 'ltx' ? `\n\nTarget video model: ${family === 'ltx' ? 'LTX 2 / LTX 2.5' : 'MiniMax H3'}. Generation mode: ${mode.toUpperCase()}.
+The selected mode's reference semantics take precedence over generic template wording about starting frames or source motion.
+${mode === 't2v' ? 'Text-to-video: establish the scene, subjects, appearance, composition and action from the idea. There is no conditioned first frame or source motion to preserve; any attached visuals are identity/style context only.'
+        : mode === 'fi2v' ? 'First-image-to-video (FI2V): the first attached image is the starting frame. Preserve its identity, wardrobe, layout, lighting and initial composition. Focus on how subjects and camera move from that frame; do not contradict or redundantly redesign it. Other references supply only their stated roles.'
+            : mode === 'ref2v' ? 'Reference-to-video (REF2V): attachments are independent references, NOT starting frames or a source scene to animate. Use each image only for its stated identity, appearance, wardrobe, object, environment or visual-style role. Do not copy its pose, composition, framing, camera angle, lighting or background unless that attribute is explicitly assigned as its reference role. Video references supply only their stated motion/action/style cues, not a mandatory opening frame or source timeline. Audio references supply their stated voice/sound/rhythm cues. Compose a NEW scene, opening shot, camera framing and action from the user idea, carrying only the requested reference attributes. Never describe a reference image as the starting/first frame, say "animate this image" or begin with "the scene starts from the reference image". Keep each reference linked to the correct subjects and roles without turning it into frame-conditioning instructions.'
+            : 'Video-to-video: the first attached video is the source scene. Specify what changes and what remains, preserving source timing, motion, framing, camera path and continuity unless the user explicitly requests otherwise. Images define only the stated replacements or edited appearance.'}` : '';
+    return `${templates[draft.template]}${modeInstruction}\n\nRequested output: ${draft.aspect}, ${draft.duration} seconds.
 Reference attachments follow in exactly this order (each token refers only to its corresponding attachment):
 ${draft.references.map(ref => `${referenceToken(ref)}: ${ref.file.name}${ref.note.trim() ? ` | Role: ${ref.note.trim()}` : ''}`).join('\n') || 'No references.'}
 
@@ -242,6 +292,15 @@ export const validateVideoPromptOutput = (text: string, template: VideoTemplate)
         throw new Error(`The model did not return the required non-empty fields in order: ${keys.join(', ')}. Adjust the template/model and retry.`);
     }
     return normalized;
+};
+export const ltxVideoPromptText = (text: string, template: VideoTemplate): string => {
+    const validated = validateVideoPromptOutput(text, template);
+    const headings = [...validated.matchAll(/^([a-z][a-z_]*):[ \t]*/gm)];
+    const fields = new Map(headings.map((heading, index) => [
+        heading[1], validated.slice(heading.index! + heading[0].length, headings[index + 1]?.index ?? validated.length).trim(),
+    ]));
+    return [fields.get(template === 'replacement' ? 'detailed_description' : 'integrated_multimodal_description'),
+        fields.get('overall_soundscape'), fields.get('non_diegetic_music')].join('\n\n');
 };
 export const generateVideoPrompt = async (draft: VideoPromptDraft): Promise<string> => {
     const instruction = buildVideoPromptInstruction(draft);

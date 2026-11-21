@@ -14,7 +14,8 @@ const compile = source => `data:text/javascript;base64,${Buffer.from(ts.transpil
 const galleryURL = compile(read('./styleGallery.ts'));
 const mossStyleURL = compile(read('./mossStyleWorkflow.ts').replace("from './styleGallery'", `from '${galleryURL}'`));
 const qwenURL = compile(read('./qwen21Workflow.ts')), civitaiURL = compile(read('./civitaiService.ts'));
-const libraryURL = compile(read('./styleLibrary.ts').replace("from './civitaiService'", `from '${civitaiURL}'`));
+const libraryURL = compile(read('./styleLibrary.ts').replace("from './civitaiService'", `from '${civitaiURL}'`)
+    .replace("from './styleGallery'", `from '${galleryURL}'`));
 const mossURL = compile(read('./mossWorkflow.ts').replace("from './qwen21Workflow'", `from '${qwenURL}'`)
     .replace("from './styleGallery'", `from '${galleryURL}'`).replace("from './mossStyleWorkflow'", `from '${mossStyleURL}'`));
 const photoURL = compile(read('./mossPhotoWorkflow.ts')

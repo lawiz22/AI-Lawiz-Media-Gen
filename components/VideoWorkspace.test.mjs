@@ -28,7 +28,21 @@ let libraryEffect;
 let resetDraft;
 let resetUltrafastDraft;
 let resetAdvancedDraft;
+let topNavigation;
+let groupNavigation;
+let groups;
+let importLibraryReference;
 const visit = node => {
+    if (ts.isVariableDeclaration(node) && node.name.getText(tree) === 'videoToolGroups') groups = node.initializer;
+    if (ts.isJsxElement(node) && node.openingElement.tagName.getText(tree) === 'nav') {
+        if (node.openingElement.attributes.properties.some(attribute => ts.isJsxAttribute(attribute)
+            && attribute.name.getText(tree) === 'aria-label' && attribute.initializer?.getText(tree) === '"Video tools"')) topNavigation = node;
+        if (node.getText(tree).includes('videoToolGroups[group].map')) groupNavigation = node;
+    }
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(tree) === 'LibraryPickerModal') {
+        importLibraryReference = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute)
+            && attribute.name.getText(tree) === 'onSelectItem')?.initializer?.expression;
+    }
     if (ts.isVariableDeclaration(node) && node.name.getText(tree) === 'transfer') transfer = node.initializer;
     if (ts.isVariableDeclaration(node) && node.name.getText(tree) === 'generate') generate = node.initializer;
     if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(tree) === 'MinimaxH3Panel') {
@@ -57,6 +71,7 @@ assert.ok(select, 'OpenRouter must use a native, unfiltered-by-current-value dro
 assert.ok(catalogEffect, 'OpenRouter catalog must load automatically with cancellation');
 assert.equal(calculations.length, names.size);
 assert.ok(transfer && audioSettingsChange);
+assert.ok(topNavigation && groupNavigation && groups && importLibraryReference);
 const audioWorkflowUrl = compile(['../services/styleGallery.ts', '../services/h3StyleWorkflow.ts', '../services/videoPromptService.ts', '../services/minimaxH3Workflow.ts', '../services/minimaxH3AdvancedWorkflow.ts', '../services/minimaxH3UltrafastWorkflow.ts']
     .map(name => readFileSync(new URL(name, import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '')).join('\n'));
 const syncWorkflowUrl = compile(readFileSync(new URL('../services/ltxAudioSyncWorkflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, ''));
@@ -64,8 +79,21 @@ const component = await import(compile(`
     import React from ${JSON.stringify(pathToFileURL(require.resolve('react')).href)};
     import { transferAudioSyncPrompt, defaultAudioSyncSettings } from ${JSON.stringify(syncWorkflowUrl)};
     import { filterOpenRouterModels, getOpenRouterInputModalities } from ${JSON.stringify(serviceUrl)};
-    import { defaultMinimaxH3Options, defaultUltrafastH3Options, defaultH3WorkflowOptions, h3WorkflowName, validateH3ReferenceLimits, withH3OriginalAudio, validateVideoPromptOutput, h3AspectFromPrompt, h3StyleLoraRemovals } from ${JSON.stringify(audioWorkflowUrl)};
+    import { defaultMinimaxH3Options, defaultUltrafastH3Options, defaultH3WorkflowOptions, h3WorkflowName, validateH3ReferenceLimits, withH3OriginalAudio, validateVideoPromptOutput, h3AspectFromPrompt, h3StyleLoraRemovals, videoPromptFamily, videoPromptMode, ltxVideoPromptText, addVideoReferences } from ${JSON.stringify(audioWorkflowUrl)};
     export { defaultMinimaxH3Options, defaultUltrafastH3Options, withH3OriginalAudio, defaultAudioSyncSettings };
+    const videoToolGroups = ${groups.getText(tree)};
+    export const renderNavigation = (group, tab) => {
+        const button = 'button', chooseTab = () => {};
+        const lastLtxTab = { current: 'ltx' }, lastH3Tab = { current: 'minimax' };
+        return <>${topNavigation.getText(tree)}{group !== 'prompt' && ${groupNavigation.getText(tree)}}</>;
+    };
+    export const importReference = async (draft, kind, readLibraryMediaFile) => {
+        let result = draft;
+        const referencePicker = kind, latestDraft = { current: draft };
+        const update = patch => { result = { ...result, ...patch }; }, setNotice = () => {};
+        await (${importLibraryReference.getText(tree)})({ id: 42 });
+        return result;
+    };
     export const changeAudioOptions = (draft, options) => {
         let result;
         const setDraft = action => { result = action(draft); };
@@ -95,13 +123,17 @@ const component = await import(compile(`
         (${resetAdvancedDraft.getText(tree)})();
         return result;
     };
-    export const transferAudioDraft = draft => {
+    export const transferAudioDraft = async draft => {
         let result, error;
         const window = { confirm: () => true }, hasPendingAudio = false;
+        const setTransferring = () => {};
+        const fileToDataUrl = async file => 'data:' + file.type;
+        const queueLtxTransfer = payload => ({ type: 'ltx-transfer', payload });
+        const dispatch = action => { result = action; };
         const update = patch => { result = { ...draft, ...patch }; };
         const setError = value => { error = value; };
         const setNotice = () => {}, setSelectedWorkflow = () => {}, chooseTab = () => {};
-        (${transfer.getText(tree)})();
+        await (${transfer.getText(tree)})();
         if (error) throw new Error(error);
         return result;
     };
@@ -157,14 +189,49 @@ const models = [
 const render = (...args) => renderToStaticMarkup(component.renderPicker(...args));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-test('Audio-Sync transfer disables Qwen while preserving model choices and all H3 settings', () => {
+test('Video navigation shows exactly three main tabs and only the selected family subtools', () => {
+    const prompt = renderToStaticMarkup(component.renderNavigation('prompt', 'prompt'));
+    assert.equal((prompt.match(/<button/g) || []).length, 3);
+    assert.ok(prompt.indexOf('Video Prompt Generator') < prompt.indexOf('>LTX<'));
+    assert.ok(prompt.indexOf('>LTX<') < prompt.indexOf('>H3<'));
+    const ltx = renderToStaticMarkup(component.renderNavigation('ltx', 'ltx-ripple-ffaf'));
+    assert.equal((ltx.match(/<button/g) || []).length, 6);
+    assert.match(ltx, /aria-label="LTX tools"/);
+    for (const name of ['LTX Director', 'LTX-Ripple-FFAF', 'LTX 2.5 Audio-Sync']) assert.ok(ltx.includes(name));
+    assert.doesNotMatch(ltx, /Minimax REF2v|Character Swap/);
+    const h3 = renderToStaticMarkup(component.renderNavigation('h3', 'advanced'));
+    assert.equal((h3.match(/<button/g) || []).length, 7);
+    for (const name of ['Minimax REF2v H3', 'Ultrafast', 'MiniMax Advanced', 'Character Swap H3']) assert.ok(h3.includes(name));
+    assert.doesNotMatch(h3, /LTX Director|LTX-Ripple-FFAF/);
+});
+
+test('Library imports use durable media and reject overflow inside the picker callback before updating the draft', async () => {
+    const image = new File(['image'], 'library.png', { type: 'image/png' });
+    const original = { references: [], idea: 'Keep idea', minimaxDrafts: { reference: { prompt: 'Keep H3' } } };
+    const imported = await component.importReference(original, 'image', async (item, kinds) => {
+        assert.equal(item.id, 42);
+        assert.deepEqual(kinds, ['image']);
+        return image;
+    });
+    assert.equal(imported.references[0].file, image);
+    assert.equal(imported.references[0].original, image);
+    assert.equal(imported.references[0].slot, 1);
+    assert.equal(imported.minimaxDrafts, original.minimaxDrafts);
+    assert.equal(original.references.length, 0);
+    const full = { ...original, references: Array.from({ length: 6 }, (_, index) => ({ ...imported.references[0], slot: index + 1 })) };
+    await assert.rejects(component.importReference(full, 'image', async () => image), /Only 0 image slot/);
+    assert.equal(full.references.length, 6);
+    await assert.rejects(component.importReference(original, 'image', async () => { throw new Error('Missing durable media'); }), /Missing durable media/);
+    assert.equal(original.references.length, 0);
+});
+test('Audio-Sync transfer disables Qwen while preserving model choices and all H3 settings', async () => {
     const sync = component.defaultAudioSyncSettings();
     sync.enhancePrompt = true;
     sync.nodes['398:393'].clip_name = 'selected-writer.safetensors';
     const current = { workflow: 'ltx-audio-sync', template: 'generation', aspect: '9:16', duration: 4, references: [],
         result: 'integrated_multimodal_description: A performer.\noverall_soundscape: Singing.\nnon_diegetic_music: None.',
         audioSyncSettings: sync, minimaxDrafts: { reference: { prompt: 'Keep H3' } }, minimaxH3Options: component.defaultMinimaxH3Options() };
-    const transferred = component.transferAudioDraft(current);
+    const transferred = await component.transferAudioDraft(current);
     assert.equal(transferred.audioSyncDraft.prompt, current.result);
     assert.equal(transferred.audioSyncDraft.audio, null);
     assert.equal(transferred.audioSyncSettings.enhancePrompt, false);
@@ -178,7 +245,7 @@ test('Advanced transfers, cross-variant Library loads and reset keep the other w
         result: 'integrated_multimodal_description: [Shot 1] A quiet street.\noverall_soundscape: Footsteps.\nnon_diegetic_music: None.',
         minimaxDrafts: { reference: { prompt: 'Keep normal' }, ultrafast: { prompt: 'Keep fast' } },
         minimaxH3Options: component.defaultMinimaxH3Options(), ultrafastH3Options: component.defaultUltrafastH3Options() };
-    const transferred = component.transferAudioDraft(current);
+    const transferred = await component.transferAudioDraft(current);
     assert.equal(transferred.advancedH3Options.advanced.mode, 'fl2v');
     assert.equal(transferred.minimaxDrafts.advanced.workflow, 'advanced');
     assert.equal(transferred.minimaxDrafts.reference, current.minimaxDrafts.reference);
@@ -195,12 +262,12 @@ test('Advanced transfers, cross-variant Library loads and reset keep the other w
     assert.equal(loaded.draft.minimaxDrafts.reference, current.minimaxDrafts.reference);
 });
 
-test('composer transfers target Ultrafast without changing the normal H3 draft or settings', () => {
+test('composer transfers target Ultrafast without changing the normal H3 draft or settings', async () => {
     const normal = { prompt: 'Keep normal' }, normalOptions = component.defaultMinimaxH3Options();
     const value = { idea: 'scene', workflow: 'ultrafast', template: 'generation', aspect: '4:3', duration: 2,
         references: [], result: 'integrated_multimodal_description: [Shot 1] A scene.\noverall_soundscape: Quiet.\nnon_diegetic_music: None.',
         minimaxDrafts: { reference: normal }, minimaxH3Options: normalOptions };
-    const transferred = component.transferAudioDraft(value);
+    const transferred = await component.transferAudioDraft(value);
     assert.equal(transferred.minimaxDrafts.ultrafast.workflow, 'ultrafast');
     assert.equal(transferred.ultrafastH3Options.variant, 'ultrafast');
     assert.equal(transferred.ultrafastH3Options.steps, 5);
@@ -213,7 +280,7 @@ test('composer transfers target Ultrafast without changing the normal H3 draft o
     assert.deepEqual(reset.ultrafastH3Options, component.defaultUltrafastH3Options());
 });
 
-test('styled composer transfers match wording and LoRA across every H3 destination, clearing old managed contributions', () => {
+test('styled composer transfers match wording and LoRA across every H3 destination, clearing old managed contributions', async () => {
     const style = { id: 'film', model: 'H3', title: '1920s', trigger: 'FILM', prompt: 'Aged film', lora: 'H3\\film.safetensors',
         strength: 0.6, notes: '', settings: {} };
     const result = 'integrated_multimodal_description: FILM [Shot 1] A scene.\noverall_soundscape: Quiet.\nnon_diegetic_music: None.';
@@ -222,9 +289,9 @@ test('styled composer transfers match wording and LoRA across every H3 destinati
         const previous = { ...component.defaultMinimaxH3Options(), style: { ...style, id: 'old', lora: 'H3\\old.safetensors' }, styleStrength: 1.5, useStyleSettings: true };
         previous.loras[0] = { enabled: true, name: style.lora, strength: 1 };
         previous.loras[1] = { enabled: true, name: 'H3\\detail.safetensors', strength: 0.2 };
-        const draft = { workflow, style, generatedInputs: { style: structuredClone(style) }, result, template: 'generation', references: [],
+        const draft = { workflow, style, generatedInputs: { workflow, references: [], style: structuredClone(style) }, result, template: 'generation', references: [],
             aspect: '4:3', duration: 3, minimaxDrafts: {}, [key]: previous };
-        const transferred = component.transferAudioDraft(draft);
+        const transferred = await component.transferAudioDraft(draft);
         assert.deepEqual(transferred[key].style, style);
         assert.notEqual(transferred[key].style, style);
         assert.equal(transferred[key].styleStrength, undefined);
@@ -232,9 +299,9 @@ test('styled composer transfers match wording and LoRA across every H3 destinati
         assert.equal(transferred[key].loras[0].enabled, false);
         assert.deepEqual(transferred[key].loras[1], previous.loras[1]);
         assert.equal(transferred.minimaxDrafts[workflow].prompt, result);
-        assert.throws(() => component.transferAudioDraft({ ...draft, style: { ...style, id: 'changed' } }), /changed since/);
-        assert.throws(() => component.transferAudioDraft({ ...draft, style: undefined }), /changed since/);
-        const cleared = component.transferAudioDraft({ ...draft, style: undefined, generatedInputs: { style: undefined } });
+        await assert.rejects(component.transferAudioDraft({ ...draft, style: { ...style, id: 'changed' } }), /changed since/);
+        await assert.rejects(component.transferAudioDraft({ ...draft, style: undefined }), /changed since/);
+        const cleared = await component.transferAudioDraft({ ...draft, style: undefined, generatedInputs: { ...draft.generatedInputs, style: undefined } });
         assert.equal(cleared[key].style, undefined);
         assert.equal(previous.style.id, 'old');
     }
@@ -258,7 +325,7 @@ test('Library destination override loads old prompts into Ultrafast using its de
     assert.equal(loaded.draft.minimaxH3Options, normalOptions);
 });
 
-test('H3 audio edits stay independent; explicit transfer copies the composer soundtrack only', () => {
+test('H3 audio edits stay independent; explicit transfer copies the composer soundtrack only', async () => {
     const options = component.withH3OriginalAudio(component.defaultMinimaxH3Options(), 'audio-1', true);
     const value = {
         idea: 'singer', workflow: 'reference', template: 'generation', aspect: '4:3', duration: 4,
@@ -270,7 +337,7 @@ test('H3 audio edits stay independent; explicit transfer copies the composer sou
     assert.equal(synced.originalAudioId, 'audio-1');
     assert.equal(synced.forceOriginalAudio, true);
     for (const source of [value, synced]) {
-        const transferred = component.transferAudioDraft(source);
+        const transferred = await component.transferAudioDraft(source);
         assert.equal(transferred.minimaxH3Options.originalAudioId, 'audio-1');
         assert.equal(transferred.minimaxH3Options.forceOriginalAudio, true);
         assert.deepEqual(transferred.minimaxDrafts.reference.references[0].audioSelection, { start: 4, end: 8 });
@@ -279,10 +346,69 @@ test('H3 audio edits stay independent; explicit transfer copies the composer sou
     assert.equal(unlocked.originalAudioId, 'audio-1', 'Editing H3 must not mutate the generator.');
     assert.equal(unlocked.forceOriginalAudio, true);
     assert.equal(unlocked.minimaxH3Options.originalAudioId, undefined);
-    assert.equal(component.transferAudioDraft(unlocked).minimaxH3Options.originalAudioId, 'audio-1', 'An explicit replacement copies the generator selection.');
-    const plain = component.transferAudioDraft({ ...value, originalAudioId: undefined, forceOriginalAudio: false, references: [] });
+    assert.equal((await component.transferAudioDraft(unlocked)).minimaxH3Options.originalAudioId, 'audio-1', 'An explicit replacement copies the generator selection.');
+    const plain = await component.transferAudioDraft({ ...value, originalAudioId: undefined, forceOriginalAudio: false, references: [] });
     assert.equal(plain.minimaxH3Options.originalAudioId, undefined, 'A transfer without audio cannot retain a missing source from the old H3 draft.');
     assert.equal(plain.minimaxH3Options.forceOriginalAudio, false);
+});
+
+test('LTX transfers strip the application envelope, preserve independent drafts and reject unsupported inputs', async () => {
+    const image = new File(['image'], 'first.png', { type: 'image/png' }), video = new File(['video'], 'source.mp4', { type: 'video/mp4' });
+    const picture = { id: 'p1', kind: 'image', slot: 1, file: image, original: image };
+    const source = { id: 'v1', kind: 'video', slot: 1, file: video, original: video };
+    const result = 'integrated_multimodal_description: A person walks.\noverall_soundscape: Footsteps.\nnon_diegetic_music: None.';
+    const base = { targetFamily: 'ltx', promptMode: 'i2v', workflow: 'ltx-audio-sync', references: [picture],
+        result, template: 'generation', duration: 4, aspect: '9:16', minimaxDrafts: { reference: { prompt: 'Keep H3' } } };
+    const sync = await component.transferAudioDraft(base);
+    assert.equal(sync.audioSyncDraft.prompt, 'A person walks.\n\nFootsteps.\n\nNone.');
+    assert.equal(sync.audioSyncDraft.image, image);
+    assert.equal(sync.audioSyncSettings.textToVideo, false);
+    assert.equal(sync.minimaxDrafts, base.minimaxDrafts);
+    const renamed = await component.transferAudioDraft({ ...base, promptMode: 'fi2v', generatedInputs: { ...base } });
+    assert.equal(renamed.audioSyncDraft.image, image);
+    assert.equal(renamed.audioSyncSettings.textToVideo, false);
+    assert.equal((await component.transferAudioDraft({ ...base, promptMode: 't2v', references: [] })).audioSyncSettings.textToVideo, true);
+    const ripple = await component.transferAudioDraft({ ...base, promptMode: 'v2v', workflow: 'ltx-ripple-ffaf', references: [picture, source] });
+    assert.equal(ripple.rippleDraft.image, image);
+    assert.equal(ripple.rippleDraft.video, video);
+    assert.equal(ripple.rippleDraft.prompt, sync.audioSyncDraft.prompt);
+    const director = await component.transferAudioDraft({ ...base, workflow: 'ltx-director' });
+    assert.equal(director.payload.prompt, sync.audioSyncDraft.prompt);
+    assert.equal(director.payload.promptDurationSeconds, 4);
+    assert.equal(director.payload.imageDataUrl, 'data:image/png');
+    await assert.rejects(component.transferAudioDraft({ ...base, workflow: 'ltx-director', references: [picture, source] }), /no references|No references/i);
+    await assert.rejects(component.transferAudioDraft({ ...base, workflow: 'ltx-director', duration: 16 }), /3-15 seconds/);
+    await assert.rejects(component.transferAudioDraft({ ...base, workflow: 'ltx-ripple-ffaf' }), /one edited first-frame/);
+    await assert.rejects(component.transferAudioDraft({ ...base, generatedInputs: { ...base, targetFamily: 'h3' } }), /target model or generation mode changed/);
+    await assert.rejects(component.transferAudioDraft({ ...base, generatedInputs: { ...base, promptMode: 't2v' } }), /target model or generation mode changed/);
+    for (const workflow of ['ltx-director', 'ltx-audio-sync', 'ltx-ripple-ffaf']) {
+        await assert.rejects(component.transferAudioDraft({ ...base, promptMode: 'ref2v', workflow }), /references were not converted to starting frames/);
+    }
+});
+
+test('REF2V H3 transfers retain reference roles and select Advanced reference conditioning, never first-frame mode', async () => {
+    const file = new File(['image'], 'identity.png', { type: 'image/png' });
+    const picture = { id: 'p1', kind: 'image', slot: 1, file, original: file, note: 'Identity only' };
+    const base = { targetFamily: 'h3', promptMode: 'ref2v', references: [picture], aspect: '4:3', duration: 4,
+        result: 'integrated_multimodal_description: A new scene with <Picture 1> identity.\noverall_soundscape: Quiet.\nnon_diegetic_music: None.',
+        template: 'generation', minimaxDrafts: {} };
+    for (const workflow of ['reference', 'ultrafast', 'advanced']) {
+        const originalSettings = { mode: 'fl2v', inputMode: 'video', ltxRefine: true };
+        const transferred = await component.transferAudioDraft({ ...base, workflow, advancedH3Options: {
+            ...component.defaultMinimaxH3Options(), advanced: originalSettings,
+        } });
+        assert.equal(transferred.minimaxDrafts[workflow].prompt, base.result);
+        assert.equal(transferred.minimaxDrafts[workflow].references[0].note, 'Identity only');
+        if (workflow === 'advanced') {
+            assert.equal(transferred.advancedH3Options.advanced.mode, 'ref2v');
+            assert.equal(transferred.advancedH3Options.advanced.inputMode, 'generate');
+            assert.equal(transferred.advancedH3Options.advanced.ltxRefine, true);
+            assert.equal(originalSettings.mode, 'fl2v');
+            assert.equal(originalSettings.inputMode, 'video');
+        }
+    }
+    await assert.rejects(component.transferAudioDraft({ ...base, workflow: 'reference',
+        generatedInputs: { ...base, promptMode: 'fi2v' } }), /target model or generation mode changed/);
 });
 
 test('initializing H3 does not inherit or clear the independent composer soundtrack', () => {

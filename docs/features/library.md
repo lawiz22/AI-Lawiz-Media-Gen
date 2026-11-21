@@ -8,7 +8,7 @@ Understand what is saved, how to find assets, and which backup format to use. A 
 
 - [Storage and reuse](#storage-and-reuse)
 - [Search and metadata](#search-and-metadata)
-- [Portable archives](#portable-archives)
+- [JSON backups and legacy archives](#json-backups-and-legacy-archives)
 - [Library Folder projects](#library-folder-projects)
 - [Deletion and legacy imports](#deletion-and-legacy-imports)
 - [Categories, voices and Drive](#categories-voices-and-drive)
@@ -27,24 +27,40 @@ Understand what is saved, how to find assets, and which backup format to use. A 
 - Search across names, prompts, models, LoRAs, tags, and other textual metadata. Images and Characters expose dynamic Provider and Workflow subfilters.
 - Classify Library items as SFW, NSFW, or unrated and attach reusable custom tags. The collapsible Safety & Tags panel supports combining multiple tag buttons with search and requires matching items to contain every selected tag. Checkboxes can narrow bulk actions to selected matching items, with separate controls for the current page or every filtered result. Without a selection, actions update every matching item. The local first-pass detector uses explicit common terms and leaves ambiguous items unrated for manual review.
 - Rate Library items from one to five stars in the item detail modal and sort results by date, name, or rating in ascending or descending order. Ratings appear on cards only when set and are included in archives, Drive metadata, and Library Folder synchronization.
+- New images, characters and videos made with a **Style Gallery / Gestionnaire de styles** entry automatically receive its name as a reusable hashtag when saved. Names use the existing tag format (lowercase, collapsed whitespace, up to 48 characters), for example `Retro VHS` becomes `#retro vhs`. Existing tags are kept and equivalent style tags are not duplicated. Use the tag buttons or search for the name / `#retro vhs` to find matching results.
+- Automatic style tags cover FLUX2 generation/editing, KREA2 Simple, MOSS Image/Photo, Blazing Fast characters and H3 REF2V/Ultrafast/Advanced results. Only the active image workflow's style is used; inactive selections for other models are ignored. Image generation keeps a settings snapshot so changing the selected style before saving does not relabel an earlier result. Enhanced images retain their source style tag. Saved tags survive backups and synchronization, independently of later edits to the style manager. Existing Library items are not retroactively retagged.
 
-## Portable archives
+## JSON backups and legacy archives
 
-- Export and restore the binary `.lawiz-library` backup format, which stores a manifest and original media assets without Base64 expansion.
-- Create a new archive or add the full Library/selected categories to an existing `.lawiz-library`; matching item IDs are replaced while other archived items are preserved.
-- Export either complete selected categories or exactly the individually checked Library items into a `.lawiz-library` archive.
-- Export every non-empty category to its own `LMG_<Category>_1.lawiz-library` file in one selected folder, creating missing archives and merging into matching existing files.
+- The main actions are **Project**, **Import...** and **Backup**. Opening changes the active project; importing adds to it; a backup creates an independent portable copy. These are deliberately separate operations.
+- **Backup -> Create JSON backup** is the recommended portable backup. Choose the entire project, selected categories, or checked items and their linked results. Original media and nested original/edited references are embedded as Base64, together with prompts, settings, tags, ratings and thumbnails. Temporary `blob:` URLs and local IndexedDB asset IDs are not portable backups and are not exported as substitutes for missing originals.
+- JSON output retains the historical top-level Library-item array format. Existing Library JSON backups remain importable. With file-picker support, JSON and Base64 are written incrementally instead of building one giant string. Without a save-file picker, the download fallback buffers the output. Video JSON backups are inherently larger than their binary media.
+- **Backup -> Legacy archive options** preserves `.lawiz-library` creation, merge into an existing archive, one archive per category, selected-category export and exact checked-item export. Binary archives avoid Base64 expansion. Merging into an archive still intentionally replaces matching archived IDs; importing into the live Library instead keeps existing items and reassigns conflicting IDs.
+- Google Drive download/upload actions are grouped separately under **Backup -> Google Drive**. A download adds content to the active Library/project; Drive does not open or switch a local project folder. Existing Drive behavior otherwise remains unchanged.
 
 ## Library Folder projects
 
-- Use a **Library Folder** as an incremental project: `manifest.json` tracks the project while content-addressed media is organized in folders such as `Images/`, `Videos/`, `Prompts/`, and `Audio TTS/`. Files are written only when their SHA-256 content is new within that category. A full project update mirrors the local Library, including removing deleted entries and asset files that are no longer referenced.
-- The active Library Folder displays pending local additions, modifications, or deletions directly on the update button. Stored asset hashes let subsequent updates skip unchanged media instead of rescanning the complete project.
-- Open a Library Folder project to import every manifest-referenced item and media Blob into the local Library. The portable `.lawiz-library` archive format remains available separately.
+- **Project -> New project** uses an empty folder. If no folder is active, it adopts the current local Library, so upgrading does not discard existing work. With a project already open, a new project starts empty. **Project -> Open project** replaces the displayed Library, rather than merging two projects. Empty projects are supported.
+- Before switching, choose **Save and open**, **Cancel**, or **Keep local recovery and open** if the old folder is unavailable. The destination is prepared separately, its media sizes and SHA-256 hashes are verified, and its Library plus active folder identity are committed in one IndexedDB transaction. Preparation or activation failure leaves the old project intact.
+- Automatic saving runs centrally even while the Library tab is hidden. Successful local additions, metadata edits and deletions are grouped for one second, then saved incrementally to the active folder. Saves are serialized; edits arriving during a save remain pending for another pass. **Project -> Save now** explicitly retries saving or requests permission.
+- The header distinguishes local-only storage, pending changes, saving, successful folder saves and errors. Permission denial, missing media, disk errors or an externally changed manifest never select another destination or report success. Changes remain local until a successful save. Closing with pending changes, a save, an operation or an unresolved error requests the browser's normal leave-page warning; this is not a guarantee against process termination or power failure.
+- `manifest.json` remains the version-1 project format. Media remains content-addressed under categories such as `Images/`, `Videos/`, `Prompts/` and `Audio TTS/`; cached hashes and unchanged assets are reused. New media is written before the manifest is replaced. An externally changed manifest is detected before replacement rather than automatically merged.
+- On the first use after upgrading, a previously selected folder that differs from the local Library requires an explicit choice: open its contents, or confirm saving the local Library into it. No automatic first-run overwrite is performed.
+- **Import -> Categories from another project** previews available categories and counts directly from its manifest. Choose categories without exporting JSON first. The destination remains the current project; the source folder is read-only. Linked results are included when available, embedded references are preserved, and ID collisions are remapped without replacing existing items. Missing historical linked results are reported rather than silently connected to unrelated local IDs.
+- Library projects cover Library items and their saved setups, not unsaved drafts, app-wide connection settings or every tool's workspace.
+
+### Recovery and disk use
+
+- **Project -> Recovery / deleted items** restores deleted items, the Library before the last open/import, or unsaved-project recoveries. Unsaved work retained when switching projects is kept separately so a later import cannot overwrite its only recovery. Restore operations preserve the current Library before replacing it. Deleted items can also be restored into a different project deliberately.
+- Each folder save retains `manifest.previous.json` and its media. Recovery offers **Restore previous project-folder save** for a valid previous manifest. Local recoveries store Blob references, not additional Base64 copies.
+- Superseded folder media is not immediately deleted during autosave. **Preview cleanup of unused folder media** lists the count and size before confirmation. It removes only generated hash-named files unused by both the current and previous manifests, rejects changed manifests and unsafe paths, and leaves unrelated user files untouched.
+- Deleted-item recoveries and individual project recoveries can be permanently removed only through explicit confirmations. Local recoveries consume browser storage and do not survive clearing that storage; make independent JSON backups, preferably on another disk.
 
 ## Deletion and legacy imports
 
-- Delete every item in the selected Library categories through a count-aware confirmation warning.
-- Import legacy JSON Library backups progressively; each item is migrated into Blob storage as it is read instead of loading the complete backup into memory.
+- Individual, checked-item and category deletions move the original metadata/media into local recovery before removing them from the active Library. Folder auto-save propagates the removal; a synchronized folder is therefore not an independent backup.
+- JSON and binary-archive imports are prepared progressively in staging and committed together only after validation. A truncated JSON, duplicate source ID, damaged asset or quota failure does not leave a half-imported Library. An interrupted, uncommitted staging import is cleaned up at the next startup under the project-operation lock.
+- Compatibility and safety checks: `node --test services/libraryProject.test.mjs services/videoPromptDrive.test.mjs`.
 
 ## Categories, voices and Drive
 

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
 import { deleteFromLibrary, deleteManyFromLibrary, clearLibraryItems, fetchLibrary, updateLibraryItem, updateLibraryItems } from '../store/librarySlice';
@@ -14,17 +14,20 @@ import {
 } from './icons';
 import { createPaletteThumbnail, createVideoPlaceholderThumbnail, normalizeAudioDataUrl } from '../utils/imageUtils';
 import { getPromptSoupSourceClass } from '../utils/promptSoup';
-import { addToExistingLibraryArchive, chooseLibraryFolder, createLibraryAssetObjectUrl, exportLibraryArchive, exportLibraryArchivesByCategory, exportLibraryFolder, getActiveLibraryFolderName, getLibraryFolderSyncStatus, hydrateLibraryItem, importLibraryArchive, importLibraryFolder, importLibraryJsonFile } from '../services/libraryService';
+import { addToExistingLibraryArchive, cleanLibraryFolderMedia, createLibraryAssetObjectUrl, exportLibraryArchive, exportLibraryArchivesByCategory, hydrateLibraryItem, importLibraryArchive, importLibraryFolder, importLibraryJsonFile, inspectLibraryFolderCleanup, readLibraryFolder, selectLibraryItemsWithDependencies, includeLinkedLibraryItems } from '../services/libraryService';
+import { createLibraryProject, getLibraryProjectStatus, openLibraryProject, recoverLibraryProject, restorePreviousLibraryFolder, runLibraryProjectOperation, saveLibraryProjectNow, subscribeLibraryProject } from '../services/libraryProjectService';
+import { exportLibraryJson } from '../services/libraryBackupService';
 import { updateOptions, setGenerationMode, switchComfyModelOptions } from '../store/generationSlice';
 import { setActiveTab } from '../store/appSlice';
 import { setActivePromptToolsSubTab, updatePromptGenState } from '../store/promptGenSlice';
 import { AudioPlayer } from './AudioPlayer';
 import { getPromptDestinationOptions, PROMPT_T2I_WORKFLOWS } from '../utils/promptDestination';
 import { LibraryPickerModal } from './LibraryPickerModal';
-import { requiresSfwLibraryRating } from '../services/idbLibraryService';
+import { clearLibraryTrash, deleteLibraryRecovery, getLibraryRecoveryEntries, requiresSfwLibraryRating } from '../services/idbLibraryService';
 import { LIBRARY_CATEGORY_ACCENT_STYLES } from '../utils/accentTheme';
 import { isMinimaxH3PromptLibraryItem } from '../services/videoPromptLibrary';
 import { downloadBlazingBlob } from '../services/blazingFastCharacterLibrary';
+import { normalizeLibraryTag as normalizeTag } from '../services/libraryTags';
 
 // --- Confirmation Modal Component (defined in-file to avoid adding new files) ---
 interface ConfirmationModalProps {
@@ -35,9 +38,12 @@ interface ConfirmationModalProps {
   message: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
+  disabled?: boolean;
+  secondaryAction?: { label: string; onClick: () => void };
+  errorMessage?: string;
 }
 
-const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm, title, message, confirmText = 'Confirm', cancelText = 'Cancel' }) => {
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm, title, message, confirmText = 'Confirm', cancelText = 'Cancel', disabled = false, secondaryAction, errorMessage }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -74,13 +80,15 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
           </button>
         </div>
 
-        <div className="text-sm text-text-secondary">{message}</div>
+        <div className="max-h-[60vh] overflow-y-auto text-sm text-text-secondary">{message}</div>
+        {errorMessage && <p role="alert" className="mt-3 text-sm text-danger">{errorMessage}</p>}
 
-        <div className="mt-6 flex justify-end gap-4">
+        <div className="mt-6 flex flex-wrap justify-end gap-4">
           <button onClick={onClose} className="bg-bg-tertiary text-text-secondary font-semibold py-2 px-5 rounded-lg hover:bg-bg-tertiary-hover transition-colors">
             {cancelText}
           </button>
-          <button onClick={onConfirm} className="bg-danger text-white font-bold py-2 px-5 rounded-lg hover:bg-red-700 transition-colors">
+          {secondaryAction && <button disabled={disabled} onClick={secondaryAction.onClick} className="rounded-lg border border-border-primary px-4 py-2 text-sm disabled:opacity-50">{secondaryAction.label}</button>}
+          <button disabled={disabled} onClick={onConfirm} className="bg-danger text-white font-bold py-2 px-5 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50">
             {confirmText}
           </button>
         </div>
@@ -536,8 +544,6 @@ const NSFW_TEXT_PATTERN = /\b(?:nsfw|nude|nudity|naked|topless|explicit|porn|por
 const SFW_TEXT_PATTERN = /\b(?:sfw|landscape|nature|architecture|cityscape|product|food|vehicle|animal|wildlife|logo|typography|abstract|still life|paysage|nature|architecture|produit|nourriture|vehicule|animal|logo|typographie|abstrait)\b/i;
 const TAGGABLE_MEDIA_TYPES = new Set<LibraryItemType>(['image', 'character', 'video', 'audio-tts', 'tts-reference', 'logo', 'banner', 'album-cover', 'clothes', 'hair', 'prompt', 'extracted-frame', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo', 'preset', 'color-palette', 'font']);
 
-const normalizeTag = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase().slice(0, 48);
-
 const getValidRating = (value: unknown): LibraryItem['rating'] =>
   Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 5 ? value as LibraryItem['rating'] : undefined;
 
@@ -566,7 +572,7 @@ const getCharacterWorkflow = (item: LibraryItem) => {
 };
 
 const getLibrarySearchText = (item: LibraryItem) => {
-  const values: string[] = [];
+  const values: string[] = (item.tags || []).map(tag => `#${tag}`);
   const visited = new WeakSet<object>();
   const visit = (value: unknown, key = '') => {
     if (value === null || value === undefined || key === 'assetRefs' || key === 'thumbnail' || key === 'sourceImage' || key === 'startFrame' || key === 'endFrame' || key === 'skeletonImage') return;
@@ -602,6 +608,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
   const dispatch: AppDispatch = useDispatch();
   const { items, status: libraryStatus, error: libraryError } = useSelector((state: RootState) => state.library);
   const projectName = useSelector((state: RootState) => state.app.projectName);
+  const projectSwitchBlocked = useSelector((state: RootState) => state.generation.isLoading
+    || state.groupPhotoFusion.isLoading || state.extractor.extractorState.isGenerating || state.extractor.extractorState.isGeneratingHair
+    || state.extractor.extractorState.isGeneratingObjects || state.extractor.extractorState.isGeneratingPoses || state.extractor.extractorState.isGeneratingFont
+    || !!state.logoTheme.logoThemeState.isGeneratingLogos || !!state.logoTheme.logoThemeState.isGeneratingBanners || !!state.logoTheme.logoThemeState.isGeneratingAlbumCovers);
 
   const [filter, setFilter] = useState<LibraryItemType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -632,9 +642,12 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
 
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [activeLibraryFolderName, setActiveLibraryFolderName] = useState<string | null>(null);
-  const [pendingProjectChanges, setPendingProjectChanges] = useState<number | null>(null);
-  const [isCheckingProjectChanges, setIsCheckingProjectChanges] = useState(false);
+  const projectStatus = useSyncExternalStore(subscribeLibraryProject, getLibraryProjectStatus);
+  const activeLibraryFolderName = projectStatus.directoryName;
+  const [projectSwitch, setProjectSwitch] = useState<{ handle: FileSystemDirectoryHandle; create: boolean } | null>(null);
+  const [folderImport, setFolderImport] = useState<{ handle: FileSystemDirectoryHandle; items: LibraryItem[]; categories: LibraryItemType[]; revision: string | null } | null>(null);
+  const [backupScope, setBackupScope] = useState<'all' | 'categories' | 'selected' | null>(null);
+  const [recoveries, setRecoveries] = useState<Awaited<ReturnType<typeof getLibraryRecoveryEntries>> | null>(null);
   const [isDeletingCategories, setIsDeletingCategories] = useState(false);
   const [isDeletingSelected, setIsDeletingSelected] = useState(false);
   const [importMessage, setImportMessage] = useState('');
@@ -689,34 +702,6 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
     return () => clearTimeout(timer);
   }, [libraryStatus]);
 
-  useEffect(() => {
-    void getActiveLibraryFolderName().then(setActiveLibraryFolderName).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!activeLibraryFolderName) {
-      setPendingProjectChanges(null);
-      return;
-    }
-    setIsCheckingProjectChanges(true);
-    void (async () => {
-      try {
-        const quickStatus = await getLibraryFolderSyncStatus(items, false);
-        if (cancelled) return;
-        setPendingProjectChanges(quickStatus?.canRead ? quickStatus.pendingItemIds.length : null);
-        if (!quickStatus?.canRead || quickStatus.pendingItemIds.length > 0) return;
-        const verifiedStatus = await getLibraryFolderSyncStatus(items, true);
-        if (!cancelled) setPendingProjectChanges(verifiedStatus?.canRead ? verifiedStatus.pendingItemIds.length : null);
-      } catch {
-        if (!cancelled) setPendingProjectChanges(null);
-      } finally {
-        if (!cancelled) setIsCheckingProjectChanges(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [activeLibraryFolderName, items]);
-
   // ... (handleImportClick, handleFileSelected, handleFilterClick, handleClearFilters, handleDelete, handleExport, handleClearLibrary logic unchanged) ...
   const handleImportClick = () => { fileInputRef.current?.click(); };
   const resolveAndUseItem = async (item: LibraryItem, callback: (resolvedItem: LibraryItem) => void) => {
@@ -754,14 +739,17 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
     setIsImporting(true);
     setImportMessage(`Reading ${formatFileSize(file.size)} backup...`);
     try {
+      let warnings: string[] = [];
       const importFile = file.name.toLowerCase().endsWith('.json') ? importLibraryJsonFile : importLibraryArchive;
-      await importFile(file, progress => {
+      await runLibraryProjectOperation(() => importFile(file, progress => {
         const percent = progress.totalBytes > 0 ? Math.round((progress.bytesRead / progress.totalBytes) * 100) : 0;
         const current = progress.currentName ? ` · ${progress.currentName}` : '';
         setImportMessage(`Importing ${percent}% · ${progress.importedCount} item(s)${current}`);
-      });
+        if (progress.warnings) warnings = progress.warnings;
+      }));
       setImportMessage('Refreshing...');
-      await dispatch(fetchLibrary());
+      await dispatch(fetchLibrary()).unwrap();
+      setOperationNotice({ type: warnings.length ? 'error' : 'success', message: `Backup imported into ${activeLibraryFolderName || 'the local Library'}; existing items were kept.${warnings.length ? ` Warnings: ${warnings.join(' ')}` : ''}` });
     } catch (err: any) {
       setOperationNotice({ type: 'error', message: `Import failed: ${err.message}` });
     } finally {
@@ -799,7 +787,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
       onConfirm: async () => {
         setConfirmModal(prev => ({ ...prev, isOpen: false })); setDeletingId(id);
         try { await dispatch(deleteFromLibrary(id)).unwrap(); if (selectedItemModal?.id === id) setSelectedItemModal(null); }
-        catch (err) { console.error(err); } finally { setDeletingId(null); }
+        catch (err) { setOperationNotice({ type: 'error', message: err instanceof Error ? err.message : String(err) }); } finally { setDeletingId(null); }
       }
     });
   };
@@ -816,14 +804,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
     }
   };
   const getSelectedCategoryItems = () => {
-    const selectedCategoryItems = items.filter(item => filter.includes(item.mediaType));
-    const linkedResultIds = new Set(selectedCategoryItems
-      .filter(item => item.mediaType === 'prompt' && item.linkedResultId != null)
-      .map(item => item.linkedResultId!));
-    return [...new Map([
-      ...selectedCategoryItems,
-      ...items.filter(item => linkedResultIds.has(item.id)),
-    ].map(item => [item.id, item])).values()];
+    return selectLibraryItemsWithDependencies(items, filter);
   };
   const handleExportSelectedCategories = async () => {
     const selectedItems = getSelectedCategoryItems();
@@ -886,13 +867,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
   const handleUpdateLibraryFolder = async () => {
     setIsExporting(true);
     try {
-      const result = await exportLibraryFolder(undefined, progress => {
-        const action = progress.stage === 'hashing' ? 'Checking' : 'Writing';
-        setImportMessage(`${action} project folder ${progress.completed}/${progress.total}${progress.currentName ? ` · ${progress.currentName}` : ''}`);
-      });
-      setActiveLibraryFolderName(result.directoryName);
-      setPendingProjectChanges(0);
-      setOperationNotice({ type: 'success', message: `Library Folder updated: ${result.added} item(s) added, ${result.replaced} replaced, ${result.removed} removed, ${result.assetsWritten} asset(s) written, and ${result.assetsReused} reused.` });
+      await saveLibraryProjectNow(true);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       setOperationNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unknown Library Folder export error.' });
@@ -904,13 +879,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
   const handleImportLibraryFolder = async () => {
     setIsImporting(true);
     try {
-      const result = await importLibraryFolder(progress => {
-        setImportMessage(`Importing project folder ${progress.completed}/${progress.total}${progress.currentName ? ` · ${progress.currentName}` : ''}`);
-      });
-      setActiveLibraryFolderName(result.directoryName);
-      setImportMessage('Refreshing...');
-      await dispatch(fetchLibrary());
-      setOperationNotice({ type: 'success', message: `${result.imported} item(s) imported from the Library Folder.` });
+      const handle: FileSystemDirectoryHandle = await window.showDirectoryPicker({ mode: 'read' });
+      const { manifest, revision } = await readLibraryFolder(handle);
+      if (!manifest) throw new Error('This folder does not contain a Library project manifest.');
+      setFolderImport({ handle, items: manifest.items.map(item => item.metadata), categories: [], revision });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       setOperationNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unknown Library Folder import error.' });
@@ -919,14 +891,81 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
       setImportMessage('');
     }
   };
-  const handleChooseLibraryFolder = async () => {
+  const handleChooseLibraryFolder = async (create: boolean) => {
     try {
-      setActiveLibraryFolderName(await chooseLibraryFolder());
-      setPendingProjectChanges(null);
+      const handle: FileSystemDirectoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      if (!create && !(await readLibraryFolder(handle)).manifest) throw new Error('This folder does not contain a Library project manifest.');
+      setProjectSwitch({ handle, create });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       setOperationNotice({ type: 'error', message: error instanceof Error ? error.message : 'Could not select the Library Folder.' });
     }
+  };
+  const performProjectSwitch = async (keepRecovery: boolean) => {
+    if (!projectSwitch) return;
+    setOperationNotice(null); setIsImporting(true); setImportMessage('Opening project. The current Library is kept until validation completes...');
+    try {
+      const warnings = await (projectSwitch.create ? createLibraryProject : openLibraryProject)(projectSwitch.handle, keepRecovery);
+      await dispatch(fetchLibrary()).unwrap();
+      setProjectSwitch(null);
+      closeItemModal(); setMediaViewerIndex(null); setSelectedItemIds(new Set()); handleClearFilters();
+      setOperationNotice({ type: warnings.length ? 'error' : 'success', message: `Project ${projectSwitch.handle.name} is open. Automatic folder saving is enabled.${warnings.length ? ` Warnings: ${warnings.join(' ')}` : ''}` });
+    } catch (error) {
+      setOperationNotice({ type: 'error', message: error instanceof Error ? error.message : 'Could not open the project.' });
+    } finally { setIsImporting(false); setImportMessage(''); }
+  };
+  const performFolderImport = async () => {
+    if (!folderImport || !folderImport.categories.length) return;
+    setOperationNotice(null); setIsImporting(true);
+    try {
+      const result = await runLibraryProjectOperation(() => importLibraryFolder(progress => {
+        setImportMessage(`Importing ${progress.completed}/${progress.total} · ${progress.currentName || ''}`);
+      }, { handle: folderImport.handle, categories: folderImport.categories, expectedRevision: folderImport.revision }));
+      await dispatch(fetchLibrary()).unwrap();
+      setFolderImport(null);
+      setOperationNotice({ type: result.warnings.length ? 'error' : 'success', message: `${result.imported} item(s) imported into ${activeLibraryFolderName || 'the local Library'}. Existing items were kept; conflicting IDs were reassigned. The source folder was not modified.${result.warnings.length ? ` Warnings: ${result.warnings.join(' ')}` : ''}` });
+    } catch (error) {
+      setOperationNotice({ type: 'error', message: error instanceof Error ? error.message : 'Could not import the categories.' });
+    } finally { setIsImporting(false); setImportMessage(''); }
+  };
+  const performJsonBackup = async () => {
+    setOperationNotice(null); setIsExporting(true);
+    try {
+      const targets = backupScope === 'categories' ? getSelectedCategoryItems() : backupScope === 'selected' ? includeLinkedLibraryItems(items, selectedItems) : undefined;
+      await exportLibraryJson(activeLibraryFolderName || projectName, targets, (completed, total) => setImportMessage(`JSON backup ${completed}/${total}`));
+      setBackupScope(null);
+      setOperationNotice({ type: 'success', message: 'Portable JSON backup created with original media and generation settings.' });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) setOperationNotice({ type: 'error', message: error instanceof Error ? error.message : 'JSON backup failed.' });
+    } finally { setIsExporting(false); setImportMessage(''); }
+  };
+  const handleRecovery = async (key: string) => {
+    setIsImporting(true); setImportMessage('Restoring local recovery...');
+    try {
+      const warnings = key === 'folder-previous' ? await restorePreviousLibraryFolder() : await recoverLibraryProject(key, !key.startsWith('trash:'), true);
+      await dispatch(fetchLibrary()).unwrap();
+      setRecoveries(null); handleClearFilters();
+      setOperationNotice({ type: warnings.length ? 'error' : 'success', message: `Recovery restored. The previous Library was preserved as a local recovery.${warnings.length ? ` Warnings: ${warnings.join(' ')}` : ''}` });
+    } catch (error) {
+      setOperationNotice({ type: 'error', message: error instanceof Error ? error.message : 'Recovery failed.' });
+    } finally { setIsImporting(false); setImportMessage(''); }
+  };
+  const handleFolderCleanup = async () => {
+    setIsExporting(true);
+    try {
+      const plan = await inspectLibraryFolderCleanup();
+      setRecoveries(null);
+      setConfirmModal({ isOpen: true, title: 'Remove unused project media?', message: `${plan.handle.name}: ${plan.paths.length} generated file(s), ${formatFileSize(plan.bytes)}. Only hash-named media unused by BOTH the current and previous folder manifests will be removed. Other files, local recoveries and JSON backups stay untouched.`, confirmText: `Remove ${plan.paths.length} unused file(s)`, onConfirm: async () => {
+        setConfirmModal(previous => ({ ...previous, isOpen: false }));
+        setIsExporting(true);
+        try {
+          const removed = await runLibraryProjectOperation(() => cleanLibraryFolderMedia(plan));
+          setOperationNotice({ type: 'success', message: `${removed} unused project media file(s) removed.` });
+        } catch (error) { setOperationNotice({ type: 'error', message: String(error) }); }
+        finally { setIsExporting(false); }
+      } });
+    } catch (error) { setOperationNotice({ type: 'error', message: String(error) }); }
+    finally { setIsExporting(false); }
   };
   const handleDeleteSelectedCategories = () => {
     const selectedItems = items.filter(item => filter.includes(item.mediaType));
@@ -935,7 +974,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
     setConfirmModal({
       isOpen: true,
       title: 'Delete Selected Categories',
-      message: <div className="space-y-2"><p>Permanently delete <strong className="text-text-primary">{selectedItems.length} item(s)</strong> from: <strong className="text-text-primary">{categoryLabels}</strong>?</p><p className="font-semibold text-danger">This cannot be undone.</p></div>,
+      message: <div className="space-y-2"><p>Move <strong className="text-text-primary">{selectedItems.length} item(s)</strong> from <strong className="text-text-primary">{categoryLabels}</strong> to local recovery?</p><p>The removal will also be saved to the active project folder. Use Project → Recovery to restore deleted items.</p></div>,
       confirmText: `Delete ${selectedItems.length} item(s)`,
       onConfirm: async () => {
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -954,8 +993,12 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
   };
   const handleClearLibrary = () => {
     setConfirmModal({
-      isOpen: true, title: 'Clear Entire Library', message: 'Permanently delete ALL items?', confirmText: 'Clear All',
-      onConfirm: () => { setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => { } }); dispatch(clearLibraryItems()); }
+      isOpen: true, title: 'Clear Entire Library', message: 'Move ALL items to local recovery? This also empties the active project on the next save. Project → Recovery can restore deleted items.', confirmText: 'Clear All',
+      onConfirm: async () => {
+        setConfirmModal(previous => ({ ...previous, isOpen: false }));
+        try { await dispatch(clearLibraryItems()).unwrap(); closeItemModal(); }
+        catch (error) { setOperationNotice({ type: 'error', message: String(error) }); }
+      }
     });
   };
 
@@ -1054,7 +1097,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
     setConfirmModal({
       isOpen: true,
       title: 'Delete Selected Items',
-      message: <div className="space-y-2"><p>Permanently delete the <strong className="text-text-primary">{itemsToDelete.length} checked item(s)</strong>?</p><p className="font-semibold text-danger">This cannot be undone.</p></div>,
+      message: <div className="space-y-2"><p>Move the <strong className="text-text-primary">{itemsToDelete.length} checked item(s)</strong> to local recovery?</p><p>The removal also applies to the active project folder on its next save. Restore deleted items through Project → Recovery.</p></div>,
       confirmText: `Delete ${itemsToDelete.length} item(s)`,
       onConfirm: async () => {
         setConfirmModal(previous => ({ ...previous, isOpen: false }));
@@ -1181,7 +1224,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
 
   const totalPages = useMemo(() => Math.ceil(filteredItems.length / itemsPerPage), [filteredItems, itemsPerPage]);
   const selectedCategoryItemCount = useMemo(() => items.filter(item => filter.includes(item.mediaType)).length, [filter, items]);
-  const hasPendingProjectChanges = pendingProjectChanges !== null && pendingProjectChanges > 0;
+  const libraryActionsBusy = isImporting || isExporting || isSyncing || projectStatus.phase === 'busy';
   const categoryItemCounts = useMemo(() => {
     const counts = new Map<LibraryItemType, number>();
     for (const item of items) counts.set(item.mediaType, (counts.get(item.mediaType) || 0) + 1);
@@ -1365,9 +1408,11 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
               <h2 className="text-2xl font-bold text-accent">Library</h2>
               <div className="mt-1 flex items-center gap-2 text-xs text-text-secondary">
                 <LibraryIcon className="h-4 w-4 text-accent" />
-                <span>Project folder: <strong className="text-text-primary">{activeLibraryFolderName || 'Not selected'}</strong></span>
-                <button type="button" onClick={handleChooseLibraryFolder} disabled={isImporting || isExporting || isSyncing} className="font-semibold text-accent hover:underline disabled:opacity-50">{activeLibraryFolderName ? 'Change' : 'Choose'}</button>
+                <span>Project: <strong className="text-text-primary">{activeLibraryFolderName || 'Local Library (no folder)'}</strong></span>
               </div>
+              <p role={projectStatus.phase === 'error' ? 'alert' : 'status'} className={`mt-1 max-w-lg text-xs ${projectStatus.phase === 'error' ? 'text-danger' : projectStatus.phase === 'saved' ? 'text-emerald-300' : 'text-amber-300'}`}>
+                {projectStatus.message}{projectStatus.phase === 'saved' && projectStatus.lastSavedAt ? ` · ${new Date(projectStatus.lastSavedAt).toLocaleTimeString()}` : ''}
+              </p>
             </div>
             <div className="flex items-center gap-1 p-1 bg-bg-primary rounded-full">
               <button onClick={() => setViewMode('grid')} className={`p-2 rounded-full transition-colors ${viewMode === 'grid' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-tertiary'}`} title="Large Grid View"><Squares2X2Icon className="w-5 h-5" /></button>
@@ -1400,43 +1445,60 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
               ))}
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {isDriveConfigured && (
-              isSyncing
-                ? <button onClick={onCancelDriveSync} className="flex items-center gap-2 rounded-lg border border-danger/50 bg-danger-bg px-4 py-2 font-semibold text-danger hover:bg-danger hover:text-white"><CloseIcon className="h-5 w-5" />Cancel sync</button>
-                : <div className="flex items-center gap-1 rounded-lg border border-border-primary bg-bg-primary p-1" role="group" aria-label="Google Drive synchronization">
-                    <button onClick={onDownloadFromDrive} disabled={!isDriveConnected || isImporting} title="Download missing items from Google Drive without uploading local items" className="flex items-center gap-2 rounded-md px-3 py-1.5 font-semibold text-text-secondary hover:bg-bg-tertiary-hover disabled:opacity-50"><DownloadIcon className="h-5 w-5" />Download</button>
-                    <button onClick={onBackupToDrive} disabled={!isDriveConnected || isImporting} title="Back up missing local items to Google Drive without downloading remote items" className="flex items-center gap-2 rounded-md bg-accent px-3 py-1.5 font-semibold text-accent-text hover:bg-accent-hover disabled:opacity-50"><UploadIconSimple className="h-5 w-5" />Backup</button>
+          <div className="flex flex-wrap items-center justify-end gap-2" onClick={event => {
+            if (!(event.target instanceof HTMLElement) || !event.target.closest('button')) return;
+            const menu = event.target.closest('details[name="library-actions"]');
+            if (menu instanceof HTMLDetailsElement) menu.open = false;
+          }}>
+            <details name="library-actions" className="relative">
+              <summary className="cursor-pointer rounded-lg border border-border-primary bg-bg-tertiary px-4 py-2 font-semibold">Project</summary>
+              <div className="absolute right-0 z-30 mt-2 flex w-72 flex-col gap-1 rounded-lg border border-border-primary bg-bg-secondary p-2 shadow-xl">
+                <button disabled={libraryActionsBusy || projectSwitchBlocked} onClick={() => void handleChooseLibraryFolder(true)} className="rounded px-3 py-2 text-left hover:bg-bg-tertiary disabled:opacity-50">New project in an empty folder…</button>
+                <button disabled={libraryActionsBusy || projectSwitchBlocked} onClick={() => void handleChooseLibraryFolder(false)} className="rounded px-3 py-2 text-left hover:bg-bg-tertiary disabled:opacity-50">Open project…</button>
+                {projectSwitchBlocked && <p className="px-3 text-xs text-amber-300">Finish the active generation before switching Library projects.</p>}
+                <button disabled={libraryActionsBusy || !activeLibraryFolderName} onClick={() => {
+                  if (projectStatus.phase === 'error') setConfirmModal({ isOpen: true, title: 'Save local Library to project folder?', message: 'This retries saving your local Library to the active folder. For a previously selected legacy folder, its contents will be replaced by the local Library, with the previous manifest preserved. External-change conflicts are never overwritten.', confirmText: 'Save local Library', onConfirm: () => { setConfirmModal(prev => ({ ...prev, isOpen: false })); void handleUpdateLibraryFolder(); } });
+                  else void handleUpdateLibraryFolder();
+                }} className="rounded px-3 py-2 text-left hover:bg-bg-tertiary disabled:opacity-50">Save now</button>
+                <button disabled={libraryActionsBusy} onClick={() => {
+                  void getLibraryRecoveryEntries().then(setRecoveries).catch(error => setOperationNotice({ type: 'error', message: String(error) }));
+                }} className="rounded px-3 py-2 text-left hover:bg-bg-tertiary disabled:opacity-50">Recovery / deleted items…</button>
+              </div>
+            </details>
+            <details name="library-actions" className="relative">
+              <summary className="cursor-pointer rounded-lg border border-border-primary bg-bg-tertiary px-4 py-2 font-semibold">Import…</summary>
+              <div className="absolute right-0 z-30 mt-2 flex w-72 flex-col gap-1 rounded-lg border border-border-primary bg-bg-secondary p-2 shadow-xl">
+                <p className="px-3 py-2 text-xs text-text-muted">Add to {activeLibraryFolderName || 'the local Library'} without changing projects. Existing items are kept.</p>
+                <button disabled={libraryActionsBusy} onClick={handleImportLibraryFolder} className="rounded px-3 py-2 text-left hover:bg-bg-tertiary disabled:opacity-50">Categories from another project…</button>
+                <button disabled={libraryActionsBusy} onClick={handleImportClick} className="rounded px-3 py-2 text-left hover:bg-bg-tertiary disabled:opacity-50">JSON backup or legacy archive…</button>
+              </div>
+            </details>
+            <details name="library-actions" className="relative">
+              <summary className="cursor-pointer rounded-lg bg-accent px-4 py-2 font-semibold text-accent-text">Backup</summary>
+              <div className="absolute right-0 z-30 mt-2 flex w-80 flex-col gap-1 rounded-lg border border-border-primary bg-bg-secondary p-2 shadow-xl">
+                <button disabled={libraryActionsBusy || !items.length} onClick={() => setBackupScope('all')} className="rounded px-3 py-2 text-left font-semibold hover:bg-bg-tertiary disabled:opacity-50">Create JSON backup…</button>
+                <p className="px-3 text-xs text-text-muted">Independent copy with original media. Folder auto-save is not a backup.</p>
+                <details className="rounded border border-border-primary p-2">
+                  <summary className="cursor-pointer text-sm">Legacy archive options</summary>
+                  <div className="mt-2 flex flex-col gap-1 text-sm">
+                    <button disabled={libraryActionsBusy || !items.length} onClick={handleExport} className="rounded p-2 text-left hover:bg-bg-tertiary disabled:opacity-50">New .lawiz-library archive</button>
+                    <button disabled={libraryActionsBusy || !items.length || (filter.length > 0 && !selectedCategoryItemCount)} onClick={handleAddToExistingArchive} className="rounded p-2 text-left hover:bg-bg-tertiary disabled:opacity-50">Merge into existing archive (selected categories or all)</button>
+                    <button disabled={libraryActionsBusy || !items.length} onClick={handleExportByCategory} className="rounded p-2 text-left hover:bg-bg-tertiary disabled:opacity-50">One archive per category</button>
+                    <button disabled={libraryActionsBusy || !selectedCategoryItemCount} onClick={handleExportSelectedCategories} className="rounded p-2 text-left hover:bg-bg-tertiary disabled:opacity-50">Archive selected categories</button>
+                    <button disabled={libraryActionsBusy || !selectedItems.length} onClick={handleExportCheckedItems} className="rounded p-2 text-left hover:bg-bg-tertiary disabled:opacity-50">Archive checked items ({selectedItems.length})</button>
                   </div>
-            )}
-            <button onClick={handleImportClick} disabled={isImporting || isExporting || isSyncing} title="Import a .lawiz-library archive or legacy JSON backup" className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
-              {isImporting ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <UploadIconSimple className="w-5 h-5" />}
-              {isImporting ? 'Importing...' : 'Import archive'}
-            </button>
+                </details>
+                {isDriveConfigured && <details className="rounded border border-border-primary p-2">
+                  <summary className="cursor-pointer text-sm">Google Drive (separate backup)</summary>
+                  <p className="my-2 text-xs text-text-muted">Downloads add to the active project. Drive does not switch project folders.</p>
+                  {isSyncing ? <button onClick={onCancelDriveSync} className="p-2 text-danger">Cancel Drive transfer</button> : <div className="flex gap-2">
+                    <button onClick={onDownloadFromDrive} disabled={!isDriveConnected || libraryActionsBusy} className="p-2 disabled:opacity-50">Import from Drive</button>
+                    <button onClick={onBackupToDrive} disabled={!isDriveConnected || libraryActionsBusy} className="p-2 disabled:opacity-50">Back up to Drive</button>
+                  </div>}
+                </details>}
+              </div>
+            </details>
             <input type="file" ref={fileInputRef} className="hidden" accept=".lawiz-library,.json,application/zip,application/json" onChange={handleFileSelected} />
-            <button onClick={handleImportLibraryFolder} disabled={isImporting || isExporting || isSyncing} title="Import a Library Folder project into the local Library" className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
-              <LoadIcon className="w-5 h-5" /> Open project folder
-            </button>
-            <button onClick={handleUpdateLibraryFolder} disabled={(items.length === 0 && !hasPendingProjectChanges) || isImporting || isExporting || isSyncing || isCheckingProjectChanges} title={hasPendingProjectChanges ? `${pendingProjectChanges} item(s) need to be added, updated, or removed from the project folder` : 'Incrementally update the active Library Folder project'} className={`flex items-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 ${hasPendingProjectChanges ? 'bg-amber-400 text-zinc-950 ring-2 ring-amber-200 hover:bg-amber-300' : 'bg-accent text-accent-text hover:bg-accent-hover'}`}>
-              {isCheckingProjectChanges ? <SpinnerIcon className="w-5 h-5 animate-spin" /> : <LibraryIcon className="w-5 h-5" />}
-              {hasPendingProjectChanges ? 'Sync folder changes' : isCheckingProjectChanges ? 'Checking project...' : 'Update project folder'}
-              {hasPendingProjectChanges && <span className="flex min-w-7 items-center justify-center rounded-full bg-zinc-950 px-1.5 py-0.5 text-xs font-bold text-amber-300" aria-label={`${pendingProjectChanges} pending changes`}>+{pendingProjectChanges}</span>}
-            </button>
-            <button onClick={handleExport} disabled={items.length === 0 || isImporting || isExporting || isSyncing} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
-              <FileExportIcon className="w-5 h-5" /> New archive
-            </button>
-            <button onClick={handleAddToExistingArchive} disabled={items.length === 0 || (filter.length > 0 && selectedCategoryItemCount === 0) || isImporting || isExporting || isSyncing} title={filter.length > 0 ? 'Add the selected categories to an existing archive' : 'Add the entire Library to an existing archive'} className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
-              <LibraryIcon className="w-5 h-5" /> Add to existing
-            </button>
-            <button onClick={handleExportByCategory} disabled={items.length === 0 || isImporting || isExporting || isSyncing} title="Create or update one LMG archive per Library category" className="flex items-center gap-2 bg-bg-tertiary text-text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-bg-tertiary-hover transition-colors duration-200 disabled:opacity-50">
-              <FileExportIcon className="w-5 h-5" /> Export by category
-            </button>
-            <button onClick={handleExportSelectedCategories} disabled={filter.length === 0 || selectedCategoryItemCount === 0 || isImporting || isExporting || isSyncing} title={filter.length === 0 ? 'Select one or more categories first' : 'Export selected categories and linked prompt images'} className="flex items-center gap-2 bg-accent text-accent-text font-semibold py-2 px-4 rounded-lg hover:bg-accent-hover transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50">
-              <FileExportIcon className="w-5 h-5" /> Export categories
-            </button>
-            <button onClick={handleExportCheckedItems} disabled={selectedItems.length === 0 || isImporting || isExporting || isSyncing} title={selectedItems.length === 0 ? 'Check one or more Library items first' : `Export exactly ${selectedItems.length} checked item(s)`} className="flex items-center gap-2 bg-emerald-600 px-4 py-2 font-semibold text-white transition-colors duration-200 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 rounded-lg">
-              <CheckIcon className="h-5 w-5" /> Export checked ({selectedItems.length})
-            </button>
           </div>
         </div>
 
@@ -1570,6 +1632,90 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
       </div>
 
       <ConfirmationModal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} onConfirm={confirmModal.onConfirm} title={confirmModal.title} message={confirmModal.message} confirmText={confirmModal.confirmText} />
+      <ConfirmationModal isOpen={!!projectSwitch} onClose={() => { if (!isImporting) setProjectSwitch(null); }}
+        errorMessage={operationNotice?.type === 'error' ? operationNotice.message : undefined}
+        title={`${projectSwitch?.create ? 'Create' : 'Open'} project ${projectSwitch?.handle.name || ''}?`}
+        message={<div className="space-y-3">
+          <p>Current project: <strong>{activeLibraryFolderName || 'Local Library'}</strong>. {projectStatus.message}</p>
+          <p>{projectSwitch?.create && !activeLibraryFolderName ? 'The current local Library will become the new project.' : 'The displayed Library will be replaced by the target project, not merged.'}</p>
+          <p>Save changes to the current folder before switching. If that folder is unavailable, you can continue with a local recovery copy instead. Make a JSON backup for an independent copy.</p>
+          {isImporting && <p role="status">{importMessage}</p>}
+        </div>}
+        confirmText={activeLibraryFolderName ? 'Save and open' : 'Open project'} disabled={isImporting}
+        onConfirm={() => void performProjectSwitch(false)}
+        secondaryAction={activeLibraryFolderName ? { label: 'Keep local recovery and open', onClick: () => void performProjectSwitch(true) } : undefined} />
+      <ConfirmationModal isOpen={!!folderImport} onClose={() => { if (!isImporting) setFolderImport(null); }}
+        errorMessage={operationNotice?.type === 'error' ? operationNotice.message : undefined}
+        title={`Import categories from ${folderImport?.handle.name || ''}`}
+        message={<div className="space-y-3">
+          <p>Destination: <strong>{activeLibraryFolderName || 'Local Library'}</strong>. The source project stays unchanged.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {FILTER_BUTTONS.map(({ id, label }) => {
+              const count = folderImport?.items.filter(item => item.mediaType === id).length || 0;
+              if (!count) return null;
+              return <label key={id} className="flex items-center gap-2"><input type="checkbox" disabled={isImporting} checked={folderImport?.categories.includes(id) || false} onChange={event => {
+                const checked = event.target.checked;
+                setFolderImport(current => current ? { ...current, categories: checked ? [...current.categories, id] : current.categories.filter(category => category !== id) } : null);
+              }} />{label} ({count})</label>;
+            })}
+          </div>
+          <p>{folderImport ? selectLibraryItemsWithDependencies(folderImport.items, folderImport.categories).length : 0} item(s), including linked results where needed. Embedded original/edited references are included. Existing items are kept; conflicting IDs receive new IDs.</p>
+          {isImporting && <p role="status">{importMessage}</p>}
+        </div>}
+        confirmText="Import selected categories" disabled={isImporting || !folderImport?.categories.length} onConfirm={() => void performFolderImport()} />
+      <ConfirmationModal isOpen={backupScope !== null} onClose={() => { if (!isExporting) setBackupScope(null); }}
+        errorMessage={operationNotice?.type === 'error' ? operationNotice.message : undefined}
+        title="Create portable JSON backup"
+        message={<div className="space-y-3">
+          <p>Contains original media, references and saved settings. Compatible with Library JSON imports. Large video backups can be large because JSON stores Base64.</p>
+          {([
+            ['all', `Entire project (${items.length})`, false],
+            ['categories', `Selected categories (${getSelectedCategoryItems().length}, including linked results)`, !filter.length || !selectedCategoryItemCount],
+            ['selected', `Checked items and linked results (${includeLinkedLibraryItems(items, selectedItems).length})`, !selectedItems.length],
+          ] as const).map(([scope, label, disabled]) => <label key={scope} className="flex items-center gap-2"><input type="radio" name="library-backup-scope" checked={backupScope === scope} disabled={disabled || isExporting} onChange={() => setBackupScope(scope)} />{label}</label>)}
+          {isExporting && <p role="status">{importMessage}</p>}
+        </div>}
+        confirmText="Save JSON backup" disabled={isExporting} onConfirm={() => void performJsonBackup()} />
+      <ConfirmationModal isOpen={recoveries !== null} onClose={() => { if (!isImporting) setRecoveries(null); }}
+        title="Local recovery and deleted items"
+        message={<div className="space-y-3">
+          <p>Local recovery is not an independent backup. Create a JSON backup before clearing application data.</p>
+          {activeLibraryFolderName && <button className="text-accent" disabled={isImporting || projectSwitchBlocked} onClick={() => {
+            setRecoveries(null);
+            setConfirmModal({ isOpen: true, title: 'Restore previous project-folder save?', message: 'Load manifest.previous.json and its retained original media from the active folder. Current local changes are kept in recovery. The restored state will be saved automatically.', confirmText: 'Restore previous folder save', onConfirm: () => {
+              setConfirmModal(previous => ({ ...previous, isOpen: false })); void handleRecovery('folder-previous');
+            } });
+          }}>Restore previous project-folder save…</button>}
+          {activeLibraryFolderName && <button className="block text-accent" disabled={isImporting || isExporting} onClick={() => void handleFolderCleanup()}>Preview cleanup of unused folder media…</button>}
+          {!recoveries?.length && <p>No local recovery is available yet.</p>}
+          {recoveries?.some(entry => entry.key.startsWith('trash:')) && <button className="text-danger" disabled={isImporting} onClick={() => {
+            setRecoveries(null);
+            setConfirmModal({ isOpen: true, title: 'Permanently empty deleted items?', message: 'This removes all locally retained deleted items, including those from other projects. This cannot be undone. Independent JSON backups and the previous-project recovery are not removed.', confirmText: 'Empty deleted items', onConfirm: async () => {
+              setConfirmModal(previous => ({ ...previous, isOpen: false }));
+              try { await clearLibraryTrash(); setOperationNotice({ type: 'success', message: 'Deleted-item recovery storage emptied.' }); }
+              catch (error) { setOperationNotice({ type: 'error', message: String(error) }); }
+            } });
+          }}>Empty deleted items permanently…</button>}
+          {recoveries?.map(entry => <div key={entry.key} className="rounded border border-border-primary p-2">
+            <p>{entry.key === 'previous' ? 'Library before the last open/import' : entry.key.startsWith('project:') ? 'Unsaved project recovery' : 'Deleted item'} · {entry.projectName} · {entry.count} item(s)</p>
+            <p className="text-xs">{new Date(entry.createdAt).toLocaleString()}</p>
+            <button disabled={isImporting || (projectSwitchBlocked && !entry.key.startsWith('trash:'))} className="mt-2 text-accent disabled:opacity-50" onClick={() => { setRecoveries(null); setConfirmModal({
+              isOpen: true, title: 'Restore recovery?', message: !entry.key.startsWith('trash:')
+                ? 'This reopens the recovered Library and its project folder. Current unsaved changes are kept in local recovery, not written to their folder.'
+                : `Restore this deleted item into ${activeLibraryFolderName || 'the local Library'}? Existing items will be kept.`,
+              confirmText: 'Restore', onConfirm: () => { setConfirmModal(previous => ({ ...previous, isOpen: false })); void handleRecovery(entry.key); },
+            }); }}>Restore…</button>
+            {!entry.key.startsWith('trash:') && <button disabled={isImporting} className="ml-4 text-danger disabled:opacity-50" onClick={() => {
+              setRecoveries(null);
+              setConfirmModal({ isOpen: true, title: 'Permanently remove this local recovery?', message: `Remove the recovery for ${entry.projectName} (${entry.count} items)? Unsaved work in this recovery may have no other copy. The active Library and independent JSON backups are not removed.`, confirmText: 'Remove recovery', onConfirm: async () => {
+                setConfirmModal(previous => ({ ...previous, isOpen: false }));
+                try { await deleteLibraryRecovery(entry.key); setOperationNotice({ type: 'success', message: 'Local recovery removed.' }); }
+                catch (error) { setOperationNotice({ type: 'error', message: String(error) }); }
+              } });
+            }}>Remove recovery…</button>}
+          </div>)}
+        </div>}
+        confirmText="Done" disabled={isImporting} onConfirm={() => setRecoveries(null)} />
       {hoveredSource && <div style={{ position: 'fixed', top: hoveredSource.y + 20, left: hoveredSource.x + 20, zIndex: 100 }} className="pointer-events-none animate-fade-in"><img src={hoveredSource.src} className="w-48 h-48 object-cover rounded-lg shadow-2xl border-2 border-accent" alt="Source Preview" /></div>}
       {selectedItemModal && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in" role="dialog" aria-modal="true" aria-labelledby="library-item-title" onClick={closeItemModal}>

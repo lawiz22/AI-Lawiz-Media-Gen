@@ -20,7 +20,7 @@ const componentSource = source('./ClothesSwitcherPanel.tsx');
 const component = await import(compile(`
     import React, { useEffect, useRef, useState } from '${reactURL}';
     import { defaultClothesSwitcherSettings } from '${workflowURL}';
-    const useDispatch = () => () => {}, useSelector = selector => selector({generation:{isLoading:false},library:{items:[]}}), useMediaURL = () => '';
+    const useDispatch = () => () => {}, useSelector = selector => selector({generation:{isLoading:false},library:{items:[]}}), useMediaURL = () => '', useUnmountCleanup = () => () => {}, useDraftAutosave = () => {};
     const LibraryPickerModal = () => null, ResultImage = () => null, PresetSaveModal = () => null, ConfirmationModal = () => null, SaveIcon = () => null, TrashIcon = () => null;
     ${componentSource.replace(/import[\s\S]*?from\s+'[^']+';/g, '')}
     export { Accordion };

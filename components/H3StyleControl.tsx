@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { h3Choices, type H3ObjectInfo, type MinimaxH3Options } from '../services/minimaxH3Workflow';
+import { h3Choices, h3LoraCatalog, h3LoraChoices, type H3ObjectInfo, type MinimaxH3Options } from '../services/minimaxH3Workflow';
 import { h3GalleryStyle, h3StyleLoraRemovals, h3StyleSampling } from '../services/h3StyleWorkflow';
-import { appendGalleryStylePrompt, resolveStyleLora, type GalleryStyle } from '../services/styleGallery';
+import { appendGalleryStylePrompt, isH3LoraPath, resolveStyleLora, styleLoraMatches, type GalleryStyle } from '../services/styleGallery';
 import { resolveLibraryStyle, styleInstalledLoras } from '../services/styleLibrary';
 import { useStyleGallery } from './useStyleGallery';
 import { useModelInventory } from './useModelInventory';
@@ -32,15 +32,21 @@ export const H3StyleControl: React.FC<{
         try {
             let resolved: GalleryStyle | undefined;
             let messages = '';
+            let pathNotice = '';
             if (selected) {
                 const result = resolveLibraryStyle(selected, inventory, h3Choices(info, 'KSamplerSelect', 'sampler_name'));
                 resolved = result.style;
                 if (resolved.lora) {
-                    const names = [...new Set([...h3Choices(info, 'LoraLoaderModelOnly', 'lora_name'), ...h3Choices(info, 'LoraLoader', 'lora_name')])];
-                    resolved = { ...resolved, lora: resolveStyleLora(resolved.lora, styleInstalledLoras(names, 'H3', inventory)) };
+                    // Dropdown folder filtering is not an installation check for an existing style.
+                    const savedPath = resolved.lora;
+                    const exact = h3LoraCatalog(info).filter(name => styleLoraMatches(name, [savedPath]));
+                    const names = exact.length ? exact : styleInstalledLoras(h3LoraChoices(info), 'H3', inventory);
+                    resolved = { ...resolved, lora: resolveStyleLora(savedPath, names) };
+                    if (!isH3LoraPath(resolved.lora)) pathNotice = `Using the installed saved LoRA path outside the H3 folder: ${resolved.lora}`;
                 }
                 h3GalleryStyle({ ...options, style: resolved, styleStrength: undefined });
-                messages = [...(result.filled.length ? [`From My Library: ${result.filled.join(', ')}`] : []), ...result.warnings].join(' · ');
+                messages = [...(result.filled.length ? [`From My Library: ${result.filled.join(', ')}`] : []), ...result.warnings,
+                    ...(pathNotice ? [pathNotice] : [])].join(' · ');
             }
             onChange({ style: resolved, styleStrength: undefined, loras: h3StyleLoraRemovals(options, resolved) });
             setError(''); setNotice(messages);
@@ -60,7 +66,7 @@ export const H3StyleControl: React.FC<{
                 <label className="block text-sm">Style LoRA strength<input aria-label="Style LoRA strength" type="number" min={-20} max={20} step="0.05"
                     className="ml-2 w-24 rounded border border-border-primary bg-bg-primary p-2" value={options.styleStrength ?? style.strength} disabled={disabled}
                     onChange={event => onChange({ styleStrength: event.target.valueAsNumber })} /></label>
-                <p role="status" className="text-xs text-accent">{(options.styleStrength ?? style.strength) === 0 ? 'Strength 0: the style LoRA has no effect.' : 'Style LoRA active independently of the additional LoRA switch.'} Your six additional slots are kept; the same style LoRA is not loaded twice.</p>
+                <p role="status" className="text-xs text-accent">{(options.styleStrength ?? style.strength) === 0 ? 'Strength 0: the style LoRA has no effect.' : 'Style LoRA patches the H3 model and CLIP independently of the additional LoRA and patched-CLIP switches.'} Your six additional slots are kept; the same style LoRA is not loaded twice.</p>
             </div>}
             {primarySampling && <>
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!options.useStyleSettings} disabled={disabled}

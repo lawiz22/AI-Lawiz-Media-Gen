@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector, useDispatch, shallowEqual } from 'react-redux';
 import { RootState, AppDispatch } from './store/store';
+import { clearGenerationJobs, setGenerationJobs, setGenerationPreview, useHasGenerationJobs, type GenerationJob } from './store/generationJobs';
 import {
     setCurrentUser, setTheme, setFontSize, setProjectName, setActiveTab, setIsComfyUIConnected, setIsMammouthConnected, setComfyUIObjectInfo, setVersionInfo,
     setGlobalError, setDriveFolder, setIsSyncing, setSyncMessage, setIsDriveConfigured,
@@ -30,12 +31,14 @@ import {
 } from './store/logoThemeSlice';
 import { fetchLibrary } from './store/librarySlice';
 import { removeAllFiles, setUploadedFiles } from './store/groupPhotoFusionSlice';
+import { removedImageWorkflowMessage } from './constants';
 
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile, Provider } from './types';
 import { fileToDataUrl, fileToResizedDataUrl, dataUrlToFile } from './utils/imageUtils';
 import { decodePose, getRandomPose } from './utils/promptBuilder';
 import { DEFAULT_GEMINI_IMAGE_MODEL, generatePortraits, generateCharacterNameForImage, updateGeminiApiKey, getApiKey, generatePromptFromImage, getGeminiAspectRatios } from './services/geminiService';
-import { generateComfyUICharacterAngles, generateComfyUIPortraits, exportComfyUIWorkflow, getComfyUIObjectInfo, checkConnection, cancelComfyUIExecution, generateComfyUIPromptFromSource } from './services/comfyUIService';
+import { generateComfyUICharacterAngles, generateComfyUIPortraits, exportComfyUIWorkflow, getComfyUIObjectInfo, subscribeComfyUIObjectInfo, checkConnection, cancelComfyUIExecution, generateComfyUIPromptFromSource } from './services/comfyUIService';
+import { clearH3CatalogCache } from './services/minimaxH3Service';
 import { CloseIcon as CancelCharacterIcon } from './components/icons';
 import { DEFAULT_MAMMOUTH_IMAGE_MODEL, generateMammouthImages, getMammouthApiKey, testMammouthConnection, updateMammouthApiKey } from './services/mammouthService';
 import { DEFAULT_OPENROUTER_MODEL, updateOpenRouterSettings, type OpenRouterSettings } from './services/openRouterService';
@@ -46,9 +49,7 @@ import { Login } from './components/Login';
 import { Header } from './components/Header';
 import { ImageUploader } from './components/ImageUploader';
 import { OptionsPanel } from './components/OptionsPanel';
-import { MossGenerationPreview } from './components/MossSettingsPanel';
-import { ImageGrid } from './components/ImageGrid';
-import { Loader } from './components/Loader';
+import { GenerationLivePreview, GenerationProgress, ImageGridWithJobs } from './components/GenerationProgress';
 import { ConnectionSettingsModal } from './components/ComfyUIConnection';
 import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, testOllamaConnection } from './services/ollamaService';
 import { LibraryPanel } from './components/LibraryPanel';
@@ -69,6 +70,8 @@ import { UpscalePanel } from './components/UpscalePanel';
 import { CivitaiPanel } from './components/CivitaiPanel';
 import versionData from './version.json';
 import { LibraryPickerModal } from './components/LibraryPickerModal';
+import { LibraryPickerHost } from './components/LibraryPickerHost';
+import { TabActivity } from './components/TabActivity';
 import { isMinimaxH3PromptLibraryItem } from './services/videoPromptLibrary';
 import { PromptGeneratorPanel } from './components/PromptGeneratorPanel';
 import { LogoThemeGeneratorPanel } from './components/LogoThemeGeneratorPanel';
@@ -78,7 +81,7 @@ import { ComfyUIConnectionHelperModal } from './components/ComfyUIConnectionHelp
 import { VisualSettingsModal } from './components/VisualSettingsModal';
 import { InstallationDashboardModal } from './components/InstallationDashboardModal';
 import { DriveFolderCreateModal } from './components/DriveFolderCreateModal';
-import { ImageGeneratorIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, PastForwardIcon, MicrophoneIcon, EnhanceIcon, DownloadIcon, ResetIcon } from './components/icons';
+import { ImageGeneratorIcon, LibraryIcon, VideoIcon, PromptIcon, ExtractorIcon, VideoUtilsIcon, SwatchIcon, CharacterIcon, CloseIcon, GroupPhotoFusionIcon, MicrophoneIcon, DownloadIcon, ResetIcon } from './components/icons';
 import { ImageGeneratorHeader } from './components/ImageGeneratorHeader';
 import { ActionControlPanel } from './components/ActionControlPanel';
 import { CloudImageProviderBar } from './components/CloudImageProviderBar';
@@ -86,33 +89,11 @@ import { SamplerSettingsPanel } from './components/SamplerSettingsPanel';
 import { LoraSettingsPanel } from './components/LoraSettingsPanel';
 import * as driveService from './services/googleDriveService';
 import { clearDriveFileReferences, setDriveService, syncLibraryFromDrive, syncLibraryToDrive } from './services/libraryService';
-import GroupPhotoFusionPanel from './components/groupPhotoFusion/GroupPhotoFusionPanel';
-import PastForwardPanel from './components/pastForward/PastForwardPanel';
-import SwapAnythingPanel from './components/SwapAnythingPanel';
-import SwapPersonPanel from './components/SwapPersonPanel';
-import StyliseAnythingPanel from './components/StyliseAnythingPanel';
+import { FunTab, type FunSubTab } from './components/FunTab';
 import { PERSONAS } from './groupPhotoFusion/constants';
-import { createAccentStyle, getTabAccentStyle } from './utils/accentTheme';
+import { getTabAccentStyle } from './utils/accentTheme';
 
-const FUN_ACCENT_STYLES = {
-    'photo-fusion': createAccentStyle('#fb7185', '#fda4af', '#e11d48'),
-    'past-forward': createAccentStyle('#22d3ee', '#67e8f9', '#0891b2'),
-    'swap-anything': createAccentStyle('#f59e0b', '#fbbf24', '#d97706'),
-    'swap-person': createAccentStyle('#fb7185', '#fda4af', '#e11d48'),
-    'stylise-anything': createAccentStyle('#34d399', '#6ee7b7', '#059669'),
-};
-
-const getLibraryReferencePrompt = (item: LibraryItem): string => {
-    if (['clothes', 'pose', 'object'].includes(item.mediaType) && item.name?.trim()) return item.name.trim();
-    const candidates = [
-        item.options?.comfyFlux2Prompt,
-        item.options?.comfyPrompt,
-        item.options?.geminiPrompt,
-        item.themeOptions?.prompt,
-        item.name,
-    ];
-    return candidates.find(candidate => candidate?.trim() && !/^(image|character)\s*#?\d+/i.test(candidate.trim()))?.trim() || '';
-};
+const IMAGE_JOBS_KEY = 'image-generator';
 
 const App: React.FC = () => {
     // --- Redux Dispatch ---
@@ -136,8 +117,6 @@ const App: React.FC = () => {
     const [isOllamaConnected, setIsOllamaConnected] = useState<boolean | null>(null);
     const [isGeneratingRefinePrompt, setIsGeneratingRefinePrompt] = useState(false);
     const [generationTimes, setGenerationTimes] = useState<Record<string, number | null>>({});
-    const [imageGenerationJobs, setImageGenerationJobs] = useState<Array<{ label: string; progress: number; message: string; status: 'pending' | 'done' | 'error'; src?: string }>>([]);
-    const [characterGenerationJobsByKey, setCharacterGenerationJobsByKey] = useState<Record<string, Array<{ label: string; progress: number; message: string; status: 'pending' | 'done' | 'error'; src?: string }>>>({});
     const [characterResultSnapshots, setCharacterResultSnapshots] = useState<Record<string, CharacterResultSnapshot>>({});
     const [characterOutputsContainer, setCharacterOutputsContainer] = useState<HTMLDivElement | null>(null);
     const [flux2EditWorkspaceContainer, setFlux2EditWorkspaceContainer] = useState<HTMLDivElement | null>(null);
@@ -146,39 +125,34 @@ const App: React.FC = () => {
     const [isInstallationDashboardOpen, setIsInstallationDashboardOpen] = useState(false);
     const [isDriveFolderCreateOpen, setIsDriveFolderCreateOpen] = useState(false);
     const driveSyncControllerRef = useRef<AbortController | null>(null);
-    const [activeFunSubTab, setActiveFunSubTab] = useState<'photo-fusion' | 'past-forward' | 'swap-anything' | 'swap-person' | 'stylise-anything'>('photo-fusion');
+    const [activeFunSubTab, setActiveFunSubTab] = useState<FunSubTab>('photo-fusion');
     const [panelResetVersions, setPanelResetVersions] = useState<Record<string, number>>({});
     const [sceneVariationModel, setSceneVariationModel] = useState('');
     const [sceneVariationPreset, setSceneVariationPreset] = useState<LibraryItem | null>(null);
 
     // --- App State (from appSlice) ---
+    // The open Library picker is left out: LibraryPickerHost subscribes to it.
     const {
         currentUser, theme, projectName, fontSize, activeTab, isComfyUIConnected, comfyUIObjectInfo, versionInfo, globalError,
         isSettingsModalOpen, isVisualSettingsModalOpen, isOAuthHelperOpen, isComfyUIHelperOpen, isMammouthConnected,
-        isClothingPickerOpen, isBackgroundPickerOpen, isPosePickerOpen, isColorImagePickerOpen, isVideoUtilsPickerOpen,
-        isStartFramePickerOpen, isEndFramePickerOpen, isLogoRefPickerOpen, isLogoPalettePickerOpen, isLogoFontPickerOpen,
-        isPromptGenImagePickerOpen, isPromptGenBgImagePickerOpen, isPromptGenSubjectImagePickerOpen,
-        isNunchakuSourcePickerOpen, isCharacterSourcePickerOpen,
-        isClothesSourcePickerOpen, isHairSourcePickerOpen, isObjectSourcePickerOpen, isPoseSourcePickerOpen,
-        isBannerRefPickerOpen, isBannerPalettePickerOpen, isBannerLogoPickerOpen, isBannerFontPickerOpen,
-        isAlbumCoverRefPickerOpen, isAlbumCoverPalettePickerOpen, isAlbumCoverLogoPickerOpen, isAlbumCoverFontPickerOpen,
-        isMannequinRefPickerOpen, isRefineSourcePickerOpen, isFontSourcePickerOpen, isMaskPickerOpen, isElementPickerOpen,
-        isResizeCropPickerOpen,
-        isGroupFusionPickerOpen,
         driveFolder, isSyncing, syncMessage, isDriveConfigured, sessionTokenUsage
-    } = useSelector((state: RootState) => state.app);
+    } = useSelector((state: RootState) => {
+        const { activePicker, pendingLtxTransfer, ...shell } = state.app;
+        return shell;
+    }, shallowEqual);
 
     // --- Generation State (from generationSlice) ---
+    // Progress text and value are left out: they change on every tick and are read by GenerationProgress.
     const {
         sourceImage, generationMode, characterName, shouldGenerateCharacterName, clothingImage,
         backgroundImage, characterPoseImage, previewedBackgroundImage, previewedClothingImage, maskImage, elementImages,
-        options, characterOptions, isLoading, progressMessage, progressValue, generatedContent
-    } = useSelector((state: RootState) => state.generation);
+        options, characterOptions, isLoading, generatedContent
+    } = useSelector((state: RootState) => {
+        const { progressMessage, progressValue, ...stable } = state.generation;
+        return stable;
+    }, shallowEqual);
 
     // --- Video State (from videoSlice) ---
-    const videoStartFrame = useSelector((state: RootState) => state.video.videoStartFrame);
-    const videoEndFrame = useSelector((state: RootState) => state.video.videoEndFrame);
-    const videoUtilsState = useSelector((state: RootState) => state.video.videoUtilsState);
     const activeVideoUtilsSubTab = useSelector((state: RootState) => state.video.activeVideoUtilsSubTab);
     const groupPhotoFusionProvider = useSelector((state: RootState) => state.groupPhotoFusion.provider);
 
@@ -187,14 +161,20 @@ const App: React.FC = () => {
 
     // --- Extractor State (from extractorSlice) ---
     const activeExtractorSubTab = useSelector((state: RootState) => state.extractor.activeExtractorSubTab);
-    const extractorState = useSelector((state: RootState) => state.extractor.extractorState);
+    // Only what the header and the provider switch read; extraction results do not re-render the application.
+    const extractorState = useSelector((state: RootState) => {
+        const {
+            clothesGenerationProvider, hairGenerationProvider, objectGenerationProvider, poseGenerationProvider, fontGenerationProvider,
+            poseAnalysisProvider, poseOutputMode, isGenerating, isGeneratingHair, isGeneratingObjects, isGeneratingPoses, isGeneratingFont,
+        } = state.extractor.extractorState;
+        return {
+            clothesGenerationProvider, hairGenerationProvider, objectGenerationProvider, poseGenerationProvider, fontGenerationProvider,
+            poseAnalysisProvider, poseOutputMode, isGenerating, isGeneratingHair, isGeneratingObjects, isGeneratingPoses, isGeneratingFont,
+        };
+    }, shallowEqual);
 
     // --- Logo & Theme State (from logoThemeSlice) ---
-    const logoThemeState = useSelector((state: RootState) => state.logoTheme.logoThemeState);
     const activeLogoThemeSubTab = useSelector((state: RootState) => state.logoTheme.activeLogoThemeSubTab);
-
-    // --- Group Photo Fusion State ---
-    const { uploadedFiles } = useSelector((state: RootState) => state.groupPhotoFusion);
 
     // --- Computed State ---
     const isReadyToGenerate = useSelector(selectIsReadyToGenerate);
@@ -205,23 +185,29 @@ const App: React.FC = () => {
     const isBlazingCharacter = characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'flux2' && characterOptions.comfyCharacterFlux2Tab === 'blazing-fast';
     const handleSheetSourceChange = useCallback((file: File | null) => { dispatch(setSourceImage(file)); }, [dispatch]);
     const qwen21MultiRef = React.useRef<Qwen21MultiHandle>(null);
-    const [mossPreview, setMossPreview] = useState<Blob | null>(null);
     const imageGeneratorContentKey = options.provider === 'comfyui'
         ? `image-generator:${options.comfyModelType || 'sdxl'}`
         : 'image-generator';
     const characterGeneratorContentKey = getCharacterResultKey(characterOptions);
-    const characterGenerationJobs = characterGenerationJobsByKey[characterGeneratorContentKey] || [];
+    const hasImageGenerationJobs = useHasGenerationJobs(IMAGE_JOBS_KEY);
+    const hasCharacterGenerationJobs = useHasGenerationJobs(characterGeneratorContentKey);
     const characterResultSnapshot = characterResultSnapshots[characterGeneratorContentKey];
     const activeGenerationContentKey = activeTab === 'image-generator' ? imageGeneratorContentKey
         : activeTab === 'character-generator' ? characterGeneratorContentKey : activeTab;
 
     // --- Memoized Handlers for Redux ---
-    const handleSetOptions = useCallback((newOptions: GenerationOptions) => {
+    const handleSetOptions = useCallback((newOptions: GenerationOptions): boolean => {
+        const removedMessage = newOptions.provider === 'comfyui' ? removedImageWorkflowMessage(newOptions.comfyModelType) : null;
+        if (removedMessage) {
+            dispatch(setGlobalError({ title: 'Workflow removed', message: removedMessage }));
+            return false;
+        }
         if (activeTab === 'character-generator') {
             dispatch(setCharacterOptions(newOptions));
         } else {
             dispatch(setOptions(newOptions));
         }
+        return true;
     }, [dispatch, activeTab]);
 
     const handleUpdateOptions = useCallback((opts: Partial<GenerationOptions>, switchModel = false) => {
@@ -237,20 +223,7 @@ const App: React.FC = () => {
             });
         };
 
-        if (newOpts.comfyModelType === 'flux') {
-            applyDefaultsIfMissing({
-                comfyFluxUseLora: true,
-                comfyFluxLora1Name: "Flux\\flux-turbo.safetensors",
-                comfyFluxLora1Strength: 1.0,
-                comfyFluxClip1: "t5xxl_fp8_e4m3fn_scaled.safetensors",
-                comfyFluxClip2: "clip_l.safetensors",
-                comfyFluxVae: "ae.safetensors",
-                comfyCfg: 1.0,
-                comfySteps: 10,
-                comfySampler: "euler",
-                comfyScheduler: "simple",
-            });
-        } else if (newOpts.comfyModelType === 'qwen-edit') {
+        if (newOpts.comfyModelType === 'qwen-edit') {
             applyDefaultsIfMissing({
                 comfyQwenEditUnet: 'qwen_image_edit_2509_fp8_e4m3fn.safetensors',
                 comfyQwenEditClip: 'qwen_2.5_vl_7b_fp8_scaled.safetensors',
@@ -446,7 +419,7 @@ const App: React.FC = () => {
         dispatch(setIsComfyUIConnected(success));
         if (success) {
             try {
-                const info = await getComfyUIObjectInfo();
+                const info = await getComfyUIObjectInfo(true);
                 dispatch(setComfyUIObjectInfo(info));
             } catch (err) {
                 console.error("Failed to get ComfyUI object info:", err);
@@ -569,6 +542,12 @@ const App: React.FC = () => {
         dispatch(fetchLibrary());
     }, [dispatch]);
 
+    // A changed catalog (new model or LoRA) also drops the per-node schemas cached for the workflow panels.
+    useEffect(() => subscribeComfyUIObjectInfo(info => {
+        try { clearH3CatalogCache(); } catch { /* URL rejected by the workflow panels: they cached nothing. */ }
+        dispatch(setComfyUIObjectInfo(info));
+    }), [dispatch]);
+
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('theme', theme);
@@ -617,7 +596,7 @@ const App: React.FC = () => {
 
     const handleReset = () => {
         dispatch(resetGenerationState());
-        setCharacterGenerationJobsByKey({});
+        clearGenerationJobs();
         setCharacterResultSnapshots({});
         setGenerationTimes({});
     };
@@ -660,12 +639,10 @@ const App: React.FC = () => {
     };
 
     const handleGenerate = async () => {
-        const setCharacterGenerationJobs = (update: React.SetStateAction<(typeof characterGenerationJobsByKey)[string]>) => {
-            setCharacterGenerationJobsByKey(current => ({
-                ...current,
-                [activeGenerationContentKey]: typeof update === 'function' ? update(current[activeGenerationContentKey] || []) : update,
-            }));
-        };
+        type JobsUpdate = GenerationJob[] | ((current: GenerationJob[]) => GenerationJob[]);
+        const setCharacterGenerationJobs = (update: JobsUpdate) => setGenerationJobs(activeGenerationContentKey, update);
+        const setImageGenerationJobs = (update: JobsUpdate) => setGenerationJobs(IMAGE_JOBS_KEY, update);
+        const setMossPreview = setGenerationPreview;
         const characterCancellation = activeTab === 'character-generator' && currentOptions.provider === 'comfyui' ? new AbortController() : null;
         characterGenerationControllerRef.current = characterCancellation;
         setCharacterCancelling(false);
@@ -701,8 +678,8 @@ const App: React.FC = () => {
             setImageGenerationJobs([]);
         }
 
-        dispatch(setLoadingState({ isLoading: true }));
-        dispatch(setGeneratedImages({ tabId: activeGenerationContentKey, images: [] }));
+        dispatch(setLoadingState({ isLoading: true, owner: activeTab }));
+        dispatch(setGeneratedImages({ tabId: activeGenerationContentKey, images: [], options: currentOptions }));
         dispatch(setLastUsedPrompt({ tabId: activeGenerationContentKey, prompt: null }));
         dispatch(setGlobalError(null));
         if (!shouldGenerateCharacterName) {
@@ -845,7 +822,7 @@ const App: React.FC = () => {
                 characterGenerationControllerRef.current = null;
                 setCharacterCancelling(false);
             }
-            dispatch(setLoadingState({ isLoading: false }));
+            dispatch(setLoadingState({ isLoading: false, owner: activeTab }));
         }
     };
 
@@ -1321,7 +1298,7 @@ const App: React.FC = () => {
                             }
                         />
                     )}
-                    <React.Activity mode={activeTab === 'image-generator' ? 'visible' : 'hidden'}>
+                    <TabActivity mode={activeTab === 'image-generator' ? 'visible' : 'hidden'}>
                         <>
                             <ImageGeneratorHeader
                                 options={currentOptions}
@@ -1341,19 +1318,19 @@ const App: React.FC = () => {
                                 }}
                                 isDisabled={isLoading}
                             />
-                            <React.Activity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-remove-background' ? 'visible' : 'hidden'}>
+                            <TabActivity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-remove-background' ? 'visible' : 'hidden'}>
                                 <Qwen21RemoveBackgroundPanel options={options} updateOptions={handleUpdateOptions} sourceFile={sourceImage} onSourceChange={handleSheetSourceChange} isComfyUIConnected={isComfyUIConnected} objectInfo={comfyUIObjectInfo} />
-                            </React.Activity>
-                            <React.Activity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-i2i-consistency' ? 'visible' : 'hidden'}>
+                            </TabActivity>
+                            <TabActivity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-i2i-consistency' ? 'visible' : 'hidden'}>
                                 <Qwen21RemoveBackgroundPanel editMode="consistency" options={options} updateOptions={handleUpdateOptions} sourceFile={sourceImage} onSourceChange={handleSheetSourceChange} isComfyUIConnected={isComfyUIConnected} objectInfo={comfyUIObjectInfo} />
-                            </React.Activity>
-                            <React.Activity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-i2i-turbo' ? 'visible' : 'hidden'}>
+                            </TabActivity>
+                            <TabActivity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-i2i-turbo' ? 'visible' : 'hidden'}>
                                 <Qwen21RemoveBackgroundPanel editMode="turbo" options={options} updateOptions={handleUpdateOptions} sourceFile={sourceImage} onSourceChange={handleSheetSourceChange} isComfyUIConnected={isComfyUIConnected} objectInfo={comfyUIObjectInfo} />
-                            </React.Activity>
-                            <React.Activity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-i2i-multi' ? 'visible' : 'hidden'}>
+                            </TabActivity>
+                            <TabActivity mode={options.provider === 'comfyui' && options.comfyModelType === 'qwen21-i2i-multi' ? 'visible' : 'hidden'}>
                                 <Qwen21MultiPanel ref={qwen21MultiRef} options={options} updateOptions={handleUpdateOptions} isComfyUIConnected={isComfyUIConnected} objectInfo={comfyUIObjectInfo} />
-                            </React.Activity>
-                            <React.Activity mode={options.provider === 'comfyui' && ['qwen21-remove-background', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(options.comfyModelType || '') ? 'hidden' : 'visible'}>
+                            </TabActivity>
+                            <TabActivity mode={options.provider === 'comfyui' && ['qwen21-remove-background', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(options.comfyModelType || '') ? 'hidden' : 'visible'}>
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                                 <div className="lg:col-span-1 space-y-8">
                                     {!(currentOptions.provider === 'comfyui' && (currentOptions.comfyModelType === 'krea2-edit' || currentOptions.comfyModelType === 'flux2-edit')) && !(currentOptions.provider === 'comfyui'
@@ -1368,13 +1345,13 @@ const App: React.FC = () => {
                                     <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
                                         <div className="mb-4 flex flex-wrap items-center gap-3">
                                             <h2 className="text-xl font-bold text-accent">
-                                                {currentOptions.provider === 'comfyui' && generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image')
+                                                {currentOptions.provider === 'comfyui' && generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image')
                                                     ? '1. Refine (Optional)'
                                                     : '1. Source & Context'}
                                             </h2>
                                         </div>
 
-                                        {currentOptions.provider === 'comfyui' && generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'flux' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image') ? (
+                                        {currentOptions.provider === 'comfyui' && generationMode === 't2i' && (currentOptions.comfyModelType === 'sd1.5' || currentOptions.comfyModelType === 'sdxl' || currentOptions.comfyModelType === 'qwen-t2i-gguf' || currentOptions.comfyModelType === 'z-image') ? (
                                             <div className="space-y-4">
                                                 <div className="flex items-center gap-2">
                                                     <input
@@ -1520,21 +1497,22 @@ const App: React.FC = () => {
                                         isDisabled={isLoading}
                                         updateOptions={handleUpdateOptions}
                                     />
-                                    {isLoading && (currentOptions.comfyModelType === 'moss-image' || currentOptions.comfyModelType === 'moss-photo') && mossPreview && <MossGenerationPreview image={mossPreview} />}
+                                    {isLoading && (currentOptions.comfyModelType === 'moss-image' || currentOptions.comfyModelType === 'moss-photo') && <GenerationLivePreview />}
                                     {currentOptions.provider === 'comfyui' && currentOptions.comfyModelType === 'flux2-edit' && <div ref={setFlux2EditWorkspaceContainer} data-flux2-edit-workspace="true" className="min-w-0" />}
-                                    {isLoading && imageGenerationJobs.length === 0 ? (
-                                        <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />
+                                    {isLoading && !hasImageGenerationJobs ? (
+                                        <GenerationProgress onCancel={cancelComfyUIExecution} />
                                     ) : (
                                         <>
-                                            {isLoading && <Loader message={progressMessage} progress={progressValue} onCancel={cancelComfyUIExecution} />}
-                                            <ImageGrid
+                                            {isLoading && <GenerationProgress onCancel={cancelComfyUIExecution} />}
+                                            <ImageGridWithJobs
+                                                jobsKey={IMAGE_JOBS_KEY}
+                                                showJobs={isLoading}
                                                 images={generatedContent[imageGeneratorContentKey]?.images || []}
-                                                generationJobs={isLoading ? imageGenerationJobs : []}
                                                 onSendToI2I={handleSendToI2I}
                                                 onSendToCharacter={handleSendToCharacter}
                                                 onSendToUpscale={handleSendToUpscale}
                                                 lastUsedPrompt={generatedContent[imageGeneratorContentKey]?.lastUsedPrompt}
-                                                options={currentOptions}
+                                                options={generatedContent[imageGeneratorContentKey]?.options ?? currentOptions}
                                                 sourceImage={sourceImage}
                                                 activeTab={imageGeneratorContentKey}
                                                 generationTime={generationTimes[imageGeneratorContentKey]}
@@ -1558,18 +1536,18 @@ const App: React.FC = () => {
                                     </>}
                                 </div>
                             </div>
-                            </React.Activity>
+                            </TabActivity>
                         </>
-                    </React.Activity>
+                    </TabActivity>
 
-                    <React.Activity mode={activeTab === 'scene-variation' ? 'visible' : 'hidden'}>
+                    <TabActivity mode={activeTab === 'scene-variation' ? 'visible' : 'hidden'}>
                         <SceneVariationPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} onModelChange={setSceneVariationModel} pendingPreset={sceneVariationPreset} onPresetLoaded={() => setSceneVariationPreset(null)} />
-                    </React.Activity>
+                    </TabActivity>
 
-                    <React.Activity mode={activeTab === 'style-gallery' ? 'visible' : 'hidden'}>
+                    <TabActivity mode={activeTab === 'style-gallery' ? 'visible' : 'hidden'}>
                         <StyleGalleryPanel isComfyUIConnected={isComfyUIConnected} onOpenLibrary={path => { setModelLibraryRequest({ path, id: Date.now() }); handleTabChange('civitai'); }} />
-                    </React.Activity>
-                    <React.Activity mode={activeTab === 'character-generator' ? 'visible' : 'hidden'}>
+                    </TabActivity>
+                    <TabActivity mode={activeTab === 'character-generator' ? 'visible' : 'hidden'}>
                         <>
                         <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-border-primary bg-bg-secondary p-2 shadow-sm">
                             <div className="flex gap-1 rounded-lg bg-bg-tertiary p-1">
@@ -1649,16 +1627,16 @@ const App: React.FC = () => {
                         {characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'flux2' && <div role="tablist" aria-label="FLUX2 character workflow" className="mb-4 flex gap-4 border-b border-border-primary">
                             {([['standard', 'Character Angles'], ['blazing-fast', 'Blazing Fast character']] as const).map(([tab, label]) => <button key={tab} type="button" role="tab" aria-selected={(characterOptions.comfyCharacterFlux2Tab || 'standard') === tab} disabled={isLoading} onClick={() => handleUpdateOptions({ comfyCharacterFlux2Tab: tab })} className={`border-b-2 px-1 py-3 text-sm font-semibold ${(characterOptions.comfyCharacterFlux2Tab || 'standard') === tab ? 'border-accent text-accent' : 'border-transparent text-text-secondary'}`}>{label}</button>)}
                         </div>}
-                        <React.Activity mode={isBlazingCharacter ? 'visible' : 'hidden'}>
+                        <TabActivity mode={isBlazingCharacter ? 'visible' : 'hidden'}>
                             <BlazingFastCharacterPanel isComfyUIConnected={isComfyUIConnected} onManageStyles={() => handleTabChange('style-gallery')} onModelChange={setBlazingModel} pendingPreset={blazingPreset} onPresetLoaded={() => setBlazingPreset(null)} />
-                        </React.Activity>
+                        </TabActivity>
                         {characterOptions.provider === 'comfyui' && ['qwen21', 'qwen21-create'].includes(characterOptions.comfyCharacterMode || '') && <div role="tablist" aria-label="Qwen 2.1 character workflow" className="flex gap-4 border-b border-border-primary">
                             {([['qwen21', 'Character Sheet'], ['qwen21-create', 'Create Character']] as const).map(([mode, label]) => <button key={mode} type="button" role="tab" aria-selected={characterOptions.comfyCharacterMode === mode} disabled={isLoading} onClick={() => handleUpdateOptions({ comfyCharacterMode: mode })} className={`border-b-2 px-1 py-3 text-sm font-semibold ${characterOptions.comfyCharacterMode === mode ? 'border-accent text-accent' : 'border-transparent text-text-secondary'}`}>{label}</button>)}
                         </div>}
-                        <React.Activity mode={characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'qwen21' ? 'visible' : 'hidden'}>
+                        <TabActivity mode={characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'qwen21' ? 'visible' : 'hidden'}>
                             <Qwen21CharacterSheetPanel options={characterOptions} onOptionsChange={handleUpdateOptions} sourceFile={sourceImage} onSourceChange={handleSheetSourceChange} onOpenLibrary={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: true }))} characterName={characterName} onNameChange={name => dispatch(setCharacterName(name))} isComfyUIConnected={isComfyUIConnected} objectInfo={comfyUIObjectInfo} />
-                        </React.Activity>
-                        <React.Activity mode={isBlazingCharacter || characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'qwen21' ? 'hidden' : 'visible'}>
+                        </TabActivity>
+                        <TabActivity mode={isBlazingCharacter || characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode === 'qwen21' ? 'hidden' : 'visible'}>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                             <div className="lg:col-span-1 space-y-8">
                                 <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg">
@@ -1727,14 +1705,14 @@ const App: React.FC = () => {
                                     isReady={isReadyToGenerate}
                                     isDisabled={isLoading}
                                 />
-                                {isLoading && characterGenerationJobs.length === 0 ? (
-                                    <Loader message={progressMessage} progress={progressValue} />
+                                {isLoading && !hasCharacterGenerationJobs ? (
+                                    <GenerationProgress />
                                 ) : (
-                                    <ImageGrid
+                                    <ImageGridWithJobs
                                         key={characterGeneratorContentKey}
+                                        jobsKey={characterGeneratorContentKey}
                                         contentKey={characterGeneratorContentKey}
                                         images={generatedContent[characterGeneratorContentKey]?.images || []}
-                                        generationJobs={characterGenerationJobs}
                                         onSendToI2I={handleSendToI2I}
                                         onSendToCharacter={handleSendToCharacter}
                                         onSendToUpscale={handleSendToUpscale}
@@ -1750,23 +1728,13 @@ const App: React.FC = () => {
                                 <div ref={setCharacterOutputsContainer} data-character-outputs="true" className="min-w-0" />
                             </div>
                         </div>
-                        </React.Activity>
+                        </TabActivity>
                         </>
-                    </React.Activity>
+                    </TabActivity>
 
-                    {activeTab === 'fun' && <div className="mb-4 flex justify-center"><div className="inline-flex flex-wrap rounded-md border border-rose-400/40 bg-bg-secondary p-1 shadow-sm"><button type="button" onClick={() => setActiveFunSubTab('photo-fusion')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'photo-fusion' ? 'bg-rose-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-rose-300'}`}><GroupPhotoFusionIcon className="h-4 w-4" />Photo Fusion</button><button type="button" onClick={() => setActiveFunSubTab('past-forward')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'past-forward' ? 'bg-cyan-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-cyan-300'}`}><PastForwardIcon className="h-4 w-4" />Past Forward</button><button type="button" onClick={() => setActiveFunSubTab('swap-anything')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'swap-anything' ? 'bg-amber-500 text-black' : 'text-text-secondary hover:bg-bg-tertiary hover:text-amber-300'}`}><EnhanceIcon className="h-4 w-4" />Swap Anything</button><button type="button" onClick={() => setActiveFunSubTab('swap-person')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'swap-person' ? 'bg-rose-500 text-white' : 'text-text-secondary hover:bg-bg-tertiary hover:text-rose-300'}`}><GroupPhotoFusionIcon className="h-4 w-4" />Swap a Person</button><button type="button" onClick={() => setActiveFunSubTab('stylise-anything')} className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${activeFunSubTab === 'stylise-anything' ? 'bg-emerald-500 text-black' : 'text-text-secondary hover:bg-bg-tertiary hover:text-emerald-300'}`}><SwatchIcon className="h-4 w-4" />Stylise Anything</button></div></div>}
+                    <FunTab active={activeTab === 'fun'} subTab={activeFunSubTab} onSubTabChange={setActiveFunSubTab} resetVersion={panelResetVersions.fun || 0} isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} />
 
-                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'past-forward' ? 'visible' : 'hidden'}><div key={`past-forward-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['past-forward']}><PastForwardPanel /></div></React.Activity>
-
-                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'photo-fusion' ? 'visible' : 'hidden'}><div key={`photo-fusion-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['photo-fusion']}><GroupPhotoFusionPanel /></div></React.Activity>
-
-                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'swap-anything' ? 'visible' : 'hidden'}><div key={`swap-anything-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['swap-anything']}><SwapAnythingPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} /></div></React.Activity>
-
-                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'swap-person' ? 'visible' : 'hidden'}><div key={`swap-person-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['swap-person']}><SwapPersonPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} /></div></React.Activity>
-
-                    <React.Activity mode={activeTab === 'fun' && activeFunSubTab === 'stylise-anything' ? 'visible' : 'hidden'}><div key={`stylise-anything-${panelResetVersions.fun || 0}`} style={FUN_ACCENT_STYLES['stylise-anything']}><StyliseAnythingPanel isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} /></div></React.Activity>
-
-                    <React.Activity mode={activeTab === 'prompt-generator' ? 'visible' : 'hidden'}>
+                    <TabActivity mode={activeTab === 'prompt-generator' ? 'visible' : 'hidden'}>
                         <PromptGeneratorPanel
                             key={`prompt-${panelResetVersions['prompt-generator'] || 0}`}
                             activeSubTab={activePromptToolsSubTab}
@@ -1780,9 +1748,9 @@ const App: React.FC = () => {
                             ollamaUrl={localOllamaUrl}
                             defaultOllamaModel={localOllamaModel}
                         />
-                    </React.Activity>
+                    </TabActivity>
 
-                    <React.Activity mode={activeTab === 'extractor-tools' ? 'visible' : 'hidden'}>
+                    <TabActivity mode={activeTab === 'extractor-tools' ? 'visible' : 'hidden'}>
                         <ExtractorToolsPanel
                             key={`extractor-${panelResetVersions['extractor-tools'] || 0}`}
                             onOpenLibraryForClothes={() => dispatch(setModalOpen({ modal: 'isClothesSourcePickerOpen', isOpen: true }))}
@@ -1797,9 +1765,9 @@ const App: React.FC = () => {
                             activeSubTab={activeExtractorSubTab}
                             setActiveSubTab={(id) => dispatch(setActiveExtractorSubTab(id))}
                         />
-                    </React.Activity>
+                    </TabActivity>
 
-                    <React.Activity mode={activeTab === 'logo-theme-generator' ? 'visible' : 'hidden'}>
+                    <TabActivity mode={activeTab === 'logo-theme-generator' ? 'visible' : 'hidden'}>
                         <LogoThemeGeneratorPanel
                             key={`logo-${panelResetVersions['logo-theme-generator'] || 0}`}
                             activeSubTab={activeLogoThemeSubTab}
@@ -1816,9 +1784,9 @@ const App: React.FC = () => {
                             onOpenLibraryForAlbumCoverLogo={() => dispatch(setModalOpen({ modal: 'isAlbumCoverLogoPickerOpen', isOpen: true }))}
                             onOpenLibraryForAlbumCoverFont={() => dispatch(setModalOpen({ modal: 'isAlbumCoverFontPickerOpen', isOpen: true }))}
                         />
-                    </React.Activity>
+                    </TabActivity>
 
-                    <React.Activity mode={activeTab === 'video-utils' ? 'visible' : 'hidden'}>
+                    <TabActivity mode={activeTab === 'video-utils' ? 'visible' : 'hidden'}>
                         <VideoUtilsPanel
                             key={`tools-${panelResetVersions['video-utils'] || 0}`}
                             setStartFrame={handleSetVideoStartFrame}
@@ -1831,10 +1799,10 @@ const App: React.FC = () => {
                             onOpenLibraryForResizeCrop={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: true }))}
                         />
                         <div className="mt-4">
-                            <React.Activity mode={activeVideoUtilsSubTab === 'outpaint' ? 'visible' : 'hidden'}>
+                            <TabActivity mode={activeVideoUtilsSubTab === 'outpaint' ? 'visible' : 'hidden'}>
                                 <OutpaintPanel key={`outpaint-${panelResetVersions.outpaint || 0}`} isComfyUIConnected={isComfyUIConnected} comfyUIObjectInfo={comfyUIObjectInfo} />
-                            </React.Activity>
-                            <React.Activity mode={activeVideoUtilsSubTab === 'upscale' ? 'visible' : 'hidden'}>
+                            </TabActivity>
+                            <TabActivity mode={activeVideoUtilsSubTab === 'upscale' ? 'visible' : 'hidden'}>
                                 <UpscalePanel
                                     key={`upscale-${panelResetVersions.upscale || 0}`}
                                     sourceFile={upscaleSourceFile}
@@ -1843,11 +1811,11 @@ const App: React.FC = () => {
                                     isComfyUIConnected={isComfyUIConnected}
                                     comfyUIObjectInfo={comfyUIObjectInfo}
                                 />
-                            </React.Activity>
+                            </TabActivity>
                         </div>
-                    </React.Activity>
+                    </TabActivity>
 
-                    <React.Activity mode={activeTab === 'video' || activeTab === 'ltx-director' ? 'visible' : 'hidden'}>
+                    <TabActivity mode={activeTab === 'video' || activeTab === 'ltx-director' ? 'visible' : 'hidden'}>
                         <VideoWorkspace
                             libraryItem={videoPromptToLoad}
                             libraryWorkflow={videoPromptDestination}
@@ -1865,16 +1833,16 @@ const App: React.FC = () => {
                             comfyUIObjectInfo={comfyUIObjectInfo}
                             />}
                         />
-                    </React.Activity>
+                    </TabActivity>
 
-                    <React.Activity mode={activeTab === 'tts' ? 'visible' : 'hidden'}><TtsPanel key={`tts-${panelResetVersions.tts || 0}`} isComfyUIConnected={isComfyUIConnected} /></React.Activity>
+                    <TabActivity mode={activeTab === 'tts' ? 'visible' : 'hidden'}><TtsPanel key={`tts-${panelResetVersions.tts || 0}`} isComfyUIConnected={isComfyUIConnected} /></TabActivity>
 
 
-                    <React.Activity mode={activeTab === 'civitai' ? 'visible' : 'hidden'}>
+                    <TabActivity mode={activeTab === 'civitai' ? 'visible' : 'hidden'}>
                         <CivitaiPanel libraryRequest={modelLibraryRequest} onLibraryRequestHandled={() => setModelLibraryRequest(null)} />
-                    </React.Activity>
+                    </TabActivity>
 
-                    <React.Activity mode={activeTab === 'library' ? 'visible' : 'hidden'}>
+                    <TabActivity mode={activeTab === 'library' ? 'visible' : 'hidden'}>
                         <LibraryPanel
                             onUpscaleItem={(item) => handleSendToUpscale(item.media, item.name ? `${item.name}.png` : undefined)}
                             onLoadItem={(item, loadOptions) => {
@@ -1911,8 +1879,13 @@ const App: React.FC = () => {
                                         directorOptions: item.ltxDirectorOptions,
                                     }));
                                 } else if (item.mediaType === 'preset' && item.options) {
+                                    const removedMessage = item.options.provider === 'comfyui' ? removedImageWorkflowMessage(item.options.comfyModelType) : null;
+                                    if (removedMessage) {
+                                        dispatch(setGlobalError({ title: 'Workflow removed', message: removedMessage }));
+                                        return;
+                                    }
                                     const isComfyI2I = item.options.provider === 'comfyui'
-                                        && ['qwen-edit', 'flux2-edit', 'krea2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux'].includes(item.options.comfyModelType || '');
+                                        && ['qwen-edit', 'flux2-edit', 'krea2-edit', 'face-detailer-sd1.5'].includes(item.options.comfyModelType || '');
                                     const isCloudI2I = item.options.provider !== 'comfyui' && item.options.geminiMode === 'i2i';
                                     dispatch(setOptions(item.options));
                                     dispatch(setGenerationMode(isComfyI2I || isCloudI2I ? 'i2i' : 't2i'));
@@ -1922,8 +1895,14 @@ const App: React.FC = () => {
                                     dispatch(setActiveTab('image-generator'));
                                 } else if (item.mediaType === 'image' || item.mediaType === 'character') {
                                     if (item.options) {
+                                        // Character items load into the Character Generator, not the Image Generator.
+                                        const removedMessage = item.mediaType === 'image' && item.options.provider === 'comfyui' ? removedImageWorkflowMessage(item.options.comfyModelType) : null;
+                                        if (removedMessage) {
+                                            dispatch(setGlobalError({ title: 'Workflow removed', message: removedMessage }));
+                                            return;
+                                        }
                                         const isComfyI2I = item.options.provider === 'comfyui'
-                                            && ['qwen-edit', 'flux2-edit', 'krea2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux'].includes(item.options.comfyModelType || '');
+                                            && ['qwen-edit', 'flux2-edit', 'krea2-edit', 'face-detailer-sd1.5'].includes(item.options.comfyModelType || '');
                                         const isCloudI2I = item.options.provider !== 'comfyui' && item.options.geminiMode === 'i2i';
                                         const restoredMode = isComfyI2I || isCloudI2I ? 'i2i' : 't2i';
                                         dispatch(setGenerationMode(restoredMode));
@@ -1990,94 +1969,13 @@ const App: React.FC = () => {
                             syncMessage={syncMessage}
                             isDriveConfigured={isDriveConfigured}
                         />
-                    </React.Activity>
+                    </TabActivity>
                 </div>
             </main>
 
             {/* Modals */}
-            <LibraryPickerModal
-                isOpen={isClothingPickerOpen}
-                onClose={() => dispatch(setModalOpen({ modal: 'isClothingPickerOpen', isOpen: false }))}
-                onSelectItem={async (item) => {
-                    const response = await fetch(item.media);
-                    const blob = await response.blob();
-                    dispatch(setClothingImage(new File([blob], "clothing_ref.jpg", { type: blob.type })));
-                }}
-                filter="clothes"
-            />
-            <LibraryPickerModal
-                isOpen={isBackgroundPickerOpen}
-                onClose={() => dispatch(setModalOpen({ modal: 'isBackgroundPickerOpen', isOpen: false }))}
-                onSelectItem={async (item) => {
-                    const response = await fetch(item.media);
-                    const blob = await response.blob();
-                    dispatch(setBackgroundImage(new File([blob], "background_ref.jpg", { type: blob.type })));
-                }}
-                filter={['image', 'extracted-frame', 'background' as any]}
-            />
-            <LibraryPickerModal
-                isOpen={isPosePickerOpen}
-                onClose={() => dispatch(setModalOpen({ modal: 'isPosePickerOpen', isOpen: false }))}
-                onSelectItem={async (item) => {
-                    if (characterOptions.provider !== 'comfyui' || characterOptions.comfyCharacterMode === 'flux2' || characterOptions.comfyCharacterMode === 'qwen21-create') {
-                        const response = await fetch(item.media);
-                        const blob = await response.blob();
-                        dispatch(setCharacterPoseImage(new File([blob], 'pose_ref.jpg', { type: blob.type })));
-                        return;
-                    }
-                    dispatch(updateCharacterOptions({
-                        poseLibraryItems: [...(characterOptions.poseLibraryItems || []), item],
-                        poseMode: 'library'
-                    }));
-                }}
-                filter="pose"
-                multiSelect={characterOptions.provider === 'comfyui' && characterOptions.comfyCharacterMode !== 'flux2' && characterOptions.comfyCharacterMode !== 'qwen21-create'}
-                onSelectMultiple={(items) => {
-                    if (characterOptions.provider !== 'comfyui' || characterOptions.comfyCharacterMode === 'flux2' || characterOptions.comfyCharacterMode === 'qwen21-create') return;
-                    dispatch(updateCharacterOptions({
-                        poseLibraryItems: items,
-                        poseMode: 'library'
-                    }));
-                }}
-            />
-            {/* ... Other pickers ... */}
-            <LibraryPickerModal isOpen={isCharacterSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isCharacterSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setSourceImage(new File([b], "char_source.jpg", { type: b.type }))); }} filter={['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo']} />
-            <LibraryPickerModal isOpen={isRefineSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isRefineSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => {
-                const response = await fetch(item.media);
-                if (!response.ok) throw new Error('Could not load the Library source image.');
-                const blob = await response.blob();
-                if (!blob.type.startsWith('image/')) throw new Error('Choose a Library image to use as the source.');
-                dispatch(setSourceImage(new File([blob], 'refine_source.png', { type: blob.type })));
-            }} filter={options.comfyModelType === 'flux2-edit' || options.comfyModelType === 'moss-image' ? ['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo'] : 'image'} />
-            <LibraryPickerModal isOpen={isMaskPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMaskPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(setMaskImage(new File([b], "mask.png", { type: b.type }))); }} filter="image" />
-            <LibraryPickerModal isOpen={isElementPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isElementPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); const maxReferences = options.comfyModelType === 'flux2-edit' ? 3 : 2; dispatch(setElementImages([...elementImages, new File([b], `element_${Date.now()}.jpg`, { type: b.type })].slice(0, maxReferences))); if (options.comfyModelType === 'flux2-edit' && elementImages.length < 3) { const roles = [...(options.comfyFlux2EditReferenceRoles || ['outfit', 'background', 'pose'])]; const libraryPrompts = [...(options.comfyFlux2EditReferenceLibraryPrompts || [])]; roles[elementImages.length] = item.mediaType === 'clothes' ? 'outfit' : item.mediaType === 'pose' ? 'pose' : roles[elementImages.length] || 'custom'; libraryPrompts[elementImages.length] = getLibraryReferencePrompt(item); dispatch(updateOptions({ comfyFlux2EditReferenceRoles: roles, comfyFlux2EditReferenceLibraryPrompts: libraryPrompts })); } }} filter={['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo']} />
-            <LibraryPickerModal isOpen={isPromptGenImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ image: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
-            <LibraryPickerModal isOpen={isPromptGenBgImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenBgImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ bgImage: new File([b], "bg_source.jpg", { type: b.type }) })); }} filter="image" />
-            <LibraryPickerModal isOpen={isPromptGenSubjectImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPromptGenSubjectImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updatePromptGenState({ subjectImage: new File([b], "subj_source.jpg", { type: b.type }) })); }} filter="image" />
-            <LibraryPickerModal isOpen={isClothesSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isClothesSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ clothesSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
-            <LibraryPickerModal isOpen={isHairSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isHairSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ hairSourceFile: new File([b], "source.jpg", { type: b.type }), generatedHair: [] })); }} filter={['image', 'character', 'group-fusion']} />
-            <LibraryPickerModal isOpen={isObjectSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isObjectSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ objectSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
-            <LibraryPickerModal isOpen={isPoseSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isPoseSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ poseSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
-            <LibraryPickerModal isOpen={isMannequinRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isMannequinRefPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ mannequinReferenceFile: new File([b], "ref.jpg", { type: b.type }) })); }} filter="image" />
-            <LibraryPickerModal isOpen={isFontSourcePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isFontSourcePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateExtractorState({ fontSourceFile: new File([b], "source.jpg", { type: b.type }) })); }} filter="image" />
-            <LibraryPickerModal isOpen={isColorImagePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isColorImagePickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ colorPicker: { ...videoUtilsState.colorPicker, imageFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
-            <LibraryPickerModal isOpen={isVideoUtilsPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isVideoUtilsPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ videoFile: new File([b], "video.mp4", { type: b.type }) })); }} filter="video" />
-            <LibraryPickerModal isOpen={isResizeCropPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isResizeCropPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); dispatch(updateVideoUtilsState({ resizeCrop: { ...videoUtilsState.resizeCrop, sourceFile: new File([b], "source.jpg", { type: b.type }) } })); }} filter="image" />
-            <LibraryPickerModal isOpen={isGroupFusionPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isGroupFusionPickerOpen', isOpen: false }))} onSelectItem={async (item) => { const r = await fetch(item.media); const b = await r.blob(); const file = new File([b], `group-fusion-${item.id}.jpg`, { type: b.type }); const newFile: UploadedFile = { id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), personaId: 'default' }; dispatch(setUploadedFiles([...uploadedFiles, newFile])); }} filter="image" />
+            <LibraryPickerHost />
             <LibraryPickerModal isOpen={isUpscalePickerOpen} onClose={() => setIsUpscalePickerOpen(false)} onSelectItem={(item) => { setIsUpscalePickerOpen(false); handleSendToUpscale(item.media, item.name ? `${item.name}.png` : undefined); }} filter={['image', 'character', 'logo', 'banner', 'album-cover']} />
-
-            {/* Logo Theme Pickers */}
-            <LibraryPickerModal isOpen={isLogoRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ referenceItems: [...(logoThemeState.referenceItems || []), item] }))} filter="image" />
-            <LibraryPickerModal isOpen={isLogoPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ selectedPalette: item }))} filter="color-palette" />
-            <LibraryPickerModal isOpen={isLogoFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isLogoFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ selectedFont: item, fontReferenceImage: null }))} filter="font" />
-            <LibraryPickerModal isOpen={isBannerRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerReferenceItems: [...(logoThemeState.bannerReferenceItems || []), item] }))} filter="image" />
-            <LibraryPickerModal isOpen={isBannerPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedPalette: item }))} filter="color-palette" />
-            <LibraryPickerModal isOpen={isBannerLogoPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerLogoPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedLogo: item }))} filter="logo" />
-            <LibraryPickerModal isOpen={isBannerFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isBannerFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ bannerSelectedFont: item, bannerFontReferenceImage: null }))} filter="font" />
-            <LibraryPickerModal isOpen={isAlbumCoverRefPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverRefPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumReferenceItems: [...(logoThemeState.albumReferenceItems || []), item] }))} filter="image" />
-            <LibraryPickerModal isOpen={isAlbumCoverPalettePickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverPalettePickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedPalette: item }))} filter="color-palette" />
-            <LibraryPickerModal isOpen={isAlbumCoverLogoPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverLogoPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedLogo: item }))} filter="logo" />
-            <LibraryPickerModal isOpen={isAlbumCoverFontPickerOpen} onClose={() => dispatch(setModalOpen({ modal: 'isAlbumCoverFontPickerOpen', isOpen: false }))} onSelectItem={(item) => dispatch(updateLogoThemeState({ albumSelectedFont: item, albumFontReferenceImage: null }))} filter="font" />
 
         </div>
     );

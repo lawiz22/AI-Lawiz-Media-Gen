@@ -20,6 +20,7 @@ import { createFontChartGuide, dataUrlToFile, dataUrlToThumbnail, fileToResizedD
 import { SendToLTXButton } from './SendToLTXButton';
 import { createAccentStyle } from '../utils/accentTheme';
 import { OllamaActivityPanel } from './OllamaActivityPanel';
+import { useUnmountCleanup } from './useUnmountCleanup';
 
 const EXTRACTOR_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     clothes: createAccentStyle('#fb923c', '#fdba74', '#ea580c'),
@@ -162,7 +163,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
         return () => { cancelled = true; };
     }, [ollamaUrl]);
 
-    useEffect(() => () => ollamaAbortController.current?.abort(), []);
+    const root = useUnmountCleanup(() => ollamaAbortController.current?.abort());
 
     const startOllamaRequest = () => {
         ollamaAbortController.current?.abort();
@@ -739,7 +740,7 @@ OUTPUT COMPOSITION: Center one head only in a square catalog image. Show the com
     );
     
     return (
-        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto" style={EXTRACTOR_ACCENT_STYLES[activeSubTab] || EXTRACTOR_ACCENT_STYLES.clothes}>
+        <div ref={root} className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-7xl mx-auto" style={EXTRACTOR_ACCENT_STYLES[activeSubTab] || EXTRACTOR_ACCENT_STYLES.clothes}>
              <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
 
                  {((activeSubTab === 'clothes' && clothesAnalysisProvider === 'ollama') || (activeSubTab === 'objects' && objectAnalysisProvider === 'ollama')) && ollamaActivity && (

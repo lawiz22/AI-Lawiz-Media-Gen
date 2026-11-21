@@ -8,7 +8,8 @@ const compile = source => `data:text/javascript;base64,${Buffer.from(ts.transpil
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText).toString('base64')}`;
 const civitaiURL = compile(read('./civitaiService.ts'));
-const api = await import(compile(read('./styleLibrary.ts').replace("from './civitaiService'", `from '${civitaiURL}'`)));
+const api = await import(compile(read('./styleLibrary.ts').replace("from './civitaiService'", `from '${civitaiURL}'`)
+    .replace("from './styleGallery'", `from '${compile(read('./styleGallery.ts'))}'`)));
 const gallery = await import(compile(read('./styleGallery.ts')));
 const item = (path = 'loras/FLUX2/style.safetensors', patch = {}) => ({
     path: `C:/ComfyUI/models/${path}`, relativePath: path, fileName: path.split('/').pop(), kind: 'lora',
@@ -127,4 +128,18 @@ test('inventory consumers share one metadata read, updates and errors without re
     await hook.refreshModelInventory();
     assert.match(hook.useModelInventory().error, /unavailable/);
     assert.equal(hook.useModelInventory().inventory, newer);
+});
+test('showing a tab again does not re-read an inventory that is already loaded', async t => {
+    const eagerReactURL = compile('export const useEffect = effect => { effect(); }; export const useSyncExternalStore = (_, read) => read();');
+    const eager = await import(compile(read('../components/useModelInventory.ts').replace("from 'react'", `from '${eagerReactURL}'`)));
+    const previous = globalThis.window; let reads = 0;
+    globalThis.window = { electron: { getCivitaiInventory: async () => { reads++; return inventory(item()); } } };
+    t.after(() => { globalThis.window = previous; });
+    eager.useModelInventory(); eager.useModelInventory();
+    await eager.refreshModelInventory();
+    assert.equal(reads, 1);
+    eager.useModelInventory();
+    assert.equal(reads, 1); assert.equal(eager.useModelInventory().loading, false);
+    await eager.refreshModelInventory();
+    assert.equal(reads, 2);
 });

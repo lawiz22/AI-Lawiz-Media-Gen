@@ -62,7 +62,8 @@ const canClassifyAsOwned = (item: CivitaiInventoryItem) => !hasExternalMatch(ite
 const SAMPLER_OPTIONS = ['', 'euler', 'euler_ancestral', 'heun', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpm_fast', 'dpm_adaptive', 'dpmpp_2s_ancestral', 'dpmpp_sde', 'dpmpp_2m', 'dpmpp_2m_sde', 'dpmpp_3m_sde', 'ddim', 'uni_pc', 'uni_pc_bh2'];
 const SCHEDULER_OPTIONS = ['', 'normal', 'karras', 'exponential', 'sgm_uniform', 'simple', 'ddim_uniform', 'beta', 'linear_quadratic', 'kl_optimal'];
 
-const getComfyOptions = (widgetInfo: unknown): string[] => Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0]) ? widgetInfo[0] : [];
+const getComfyOptions = (widgetInfo: unknown): string[] => !Array.isArray(widgetInfo) ? []
+    : Array.isArray(widgetInfo[0]) ? widgetInfo[0] : Array.isArray(widgetInfo[1]?.options) ? widgetInfo[1].options : [];
 
 const getCompatibleBaseModel = (modelType: ComfyModelType, objectInfo: any, family?: CivitaiFamily): string | undefined => {
     if (modelType === 'flux2-simple' || modelType === 'flux2-edit') {
@@ -88,7 +89,6 @@ const getCompatibleBaseModel = (modelType: ComfyModelType, objectInfo: any, fami
         return getComfyOptions(objectInfo?.UNETLoader?.input?.required?.unet_name).find(model => /z[-_ ]?image|\bzit\b/i.test(model));
     }
     const checkpoints = getComfyOptions(objectInfo?.CheckpointLoaderSimple?.input?.required?.ckpt_name);
-    if (modelType === 'flux') return checkpoints.find(model => /flux/i.test(model));
     if (modelType === 'sdxl') return checkpoints.find(model => /sdxl|pony|illustrious|noobai/i.test(model));
     return checkpoints.find(model => /sd[._ -]?1[._ -]?5/i.test(model));
 };
@@ -116,11 +116,12 @@ const getFlux2UseDefaults = (mode: 't2i' | 'i2i'): Partial<GenerationOptions> =>
     };
 };
 
-const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelType; loraPrefix: string; checkpointField: keyof GenerationOptions; promptField: keyof GenerationOptions } => {
+// null: a FLUX 1 model, whose image workflow was removed (it must not fall back to another family).
+const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelType; loraPrefix: string; checkpointField: keyof GenerationOptions; promptField: keyof GenerationOptions } | null => {
     if (inventoryFlux2Variant(item)) return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
     if (item.userFamily === 'flux2') return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
     if (inventoryItemMatchesFamily(item, 'krea2')) return { modelType: 'krea2-simple', loraPrefix: 'comfyKrea', checkpointField: 'comfyKreaUnet', promptField: 'comfyKreaPrompt' };
-    if (item.userFamily === 'flux') return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
+    if (item.userFamily === 'flux') return null;
     if (item.userFamily === 'qwen' || item.userFamily === 'qwen-edit') return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet', promptField: 'comfyPrompt' };
     if (item.userFamily === 'zit-base' || item.userFamily === 'zit-turbo') return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet', promptField: 'comfyPrompt' };
     if (item.userFamily === 'sdxl') return { modelType: 'sdxl', loraPrefix: 'comfySdxl', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
@@ -129,7 +130,7 @@ const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelTy
     if (pathSegments.includes('flux2')) return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
     if (pathSegments.includes('qwen')) return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet', promptField: 'comfyPrompt' };
     if (pathSegments.includes('zit')) return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet', promptField: 'comfyPrompt' };
-    if (pathSegments.some(segment => segment === 'flux' || segment === 'flux-dev')) return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
+    if (pathSegments.some(segment => segment === 'flux' || segment === 'flux-dev')) return null;
     if (pathSegments.includes('sdxl')) return { modelType: 'sdxl', loraPrefix: 'comfySdxl', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
     if (pathSegments.some(segment => segment === 'sd15' || segment === 'sd1.5')) return { modelType: 'sd1.5', loraPrefix: 'comfySd15', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
 
@@ -140,7 +141,7 @@ const getImageWorkflow = (item: CivitaiInventoryItem): { modelType: ComfyModelTy
         item.modelName,
     ].filter(Boolean).join(' ').replace(/\\/g, '/').toLowerCase();
     if (/flux[- ._]?2|klein/.test(identity)) return { modelType: 'flux2-simple', loraPrefix: 'comfyFlux2', checkpointField: 'comfyFlux2Unet', promptField: 'comfyFlux2Prompt' };
-    if (/\bflux(?:[ ._-]?1)?\b/.test(identity)) return { modelType: 'flux', loraPrefix: 'comfyFlux', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
+    if (/\bflux(?:[ ._-]?1)?\b/.test(identity)) return null;
     if (/\bqwen\b/.test(identity)) return { modelType: 'qwen-t2i-gguf', loraPrefix: 'comfyQwen', checkpointField: 'comfyQwenUnet', promptField: 'comfyPrompt' };
     if (/z[-_ ]?image|\bzit\b/.test(identity)) return { modelType: 'z-image', loraPrefix: 'comfyZImage', checkpointField: 'comfyZImageUnet', promptField: 'comfyPrompt' };
     if (/\bsdxl\b|stable diffusion xl|\bpony\b|\billustrious\b|\bnoobai\b/.test(identity)) return { modelType: 'sdxl', loraPrefix: 'comfySdxl', checkpointField: 'comfyModel', promptField: 'comfyPrompt' };
@@ -389,9 +390,13 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
         }
         let selectedItem = item;
         const workflow = getImageWorkflow(item);
+        if (!workflow) {
+            window.alert('The FLUX 1 workflow was removed from the Image Generator. This model stays in your library, but it can no longer be applied to an image workflow.');
+            return;
+        }
         const hasRecommendedSettings = Boolean(item.usageMetadata?.sampler
             && item.usageMetadata?.steps
-            && (workflow.modelType === 'flux' ? item.usageMetadata?.guidance : item.usageMetadata?.cfg));
+            && item.usageMetadata?.cfg);
         if (item.kind === 'lora' && !hasRecommendedSettings && window.electron) {
             setUsageBusy(true);
             const preferredSources = item.usageMetadata?.source === 'archive'
@@ -586,7 +591,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
                     {item.kind === 'lora' ? item.usageMetadata?.triggerWords?.length ? <div className="flex flex-wrap gap-1">{item.usageMetadata.triggerWords.map(word => <span key={word} className="px-1.5 py-0.5 rounded bg-bg-tertiary text-[10px] text-text-secondary">{word}</span>)}</div> : <p className="text-[11px] text-text-muted">No trigger words saved.</p> : null}
                     {item.usageMetadata && [item.usageMetadata.sampler, item.usageMetadata.scheduler, item.usageMetadata.steps && `${item.usageMetadata.steps} steps`, item.usageMetadata.cfg && `CFG ${item.usageMetadata.cfg}`, item.usageMetadata.guidance && `Guidance ${item.usageMetadata.guidance}`].filter(Boolean).length ? <p className="text-[11px] text-text-secondary">{[item.usageMetadata.sampler, item.usageMetadata.scheduler, item.usageMetadata.steps && `${item.usageMetadata.steps} steps`, item.usageMetadata.cfg && `CFG ${item.usageMetadata.cfg}`, item.usageMetadata.guidance && `Guidance ${item.usageMetadata.guidance}`].filter(Boolean).join(' · ')}</p> : item.kind !== 'lora' ? <p className="text-[11px] text-text-muted">No recommended settings saved.</p> : null}
                     <div className="flex flex-wrap gap-x-3 gap-y-1"><button type="button" onClick={() => fetchUsageMetadata('civitai')} disabled={usageBusy} className="text-[11px] text-blue-400 hover:underline disabled:opacity-50">Find on Civitai</button><button type="button" onClick={() => fetchUsageMetadata('archive')} disabled={usageBusy} className="text-[11px] text-emerald-400 hover:underline disabled:opacity-50">Find on CivArchive</button>{item.kind !== 'lora' && item.huggingFaceInfo && <button type="button" onClick={() => fetchUsageMetadata('huggingface')} disabled={usageBusy} className="text-[11px] text-violet-400 hover:underline disabled:opacity-50">Find on Hugging Face</button>}{item.usageMetadata && <span className="text-[10px] text-text-muted">Source: {item.usageMetadata.source}</span>}</div>
-                    {usageEditorOpen && <div className="space-y-1.5 pt-1">{item.kind === 'lora' && <textarea value={triggerWords} onChange={event => setTriggerWords(event.target.value)} rows={2} placeholder="trigger one, trigger two" className="w-full resize-y bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary" />}<div className="grid grid-cols-2 gap-1.5"><MenuSelect value={sampler} onChange={setSampler} ariaLabel="Recommended sampler" options={[...new Set([sampler, ...SAMPLER_OPTIONS])].map(value => ({ value, label: value || 'Sampler: Not set' }))} /><MenuSelect value={scheduler} onChange={setScheduler} ariaLabel="Recommended scheduler" options={[...new Set([scheduler, ...SCHEDULER_OPTIONS])].map(value => ({ value, label: value || 'Scheduler: Not set' }))} /><input type="number" min="1" step="1" value={steps} onChange={event => setSteps(event.target.value)} placeholder="Steps" className="min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary" /><input type="number" min="0.1" step="0.1" value={cfg} onChange={event => setCfg(event.target.value)} placeholder="CFG" className="min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary" />{getImageWorkflow(item).modelType === 'flux' && <input type="number" min="0.1" step="0.1" value={guidance} onChange={event => setGuidance(event.target.value)} placeholder="Guidance" className="min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary" />}</div><div className="flex gap-1.5"><button type="button" onClick={() => saveUsageMetadata()} disabled={usageBusy} className="flex-1 rounded bg-blue-600 px-2 py-1.5 text-[11px] font-bold text-white disabled:opacity-50">Save</button><button type="button" onClick={() => saveUsageMetadata(true)} disabled={usageBusy} className="rounded border border-border-primary px-2 py-1.5 text-[11px] text-text-secondary disabled:opacity-50">Clear</button></div></div>}
+                    {usageEditorOpen && <div className="space-y-1.5 pt-1">{item.kind === 'lora' && <textarea value={triggerWords} onChange={event => setTriggerWords(event.target.value)} rows={2} placeholder="trigger one, trigger two" className="w-full resize-y bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary" />}<div className="grid grid-cols-2 gap-1.5"><MenuSelect value={sampler} onChange={setSampler} ariaLabel="Recommended sampler" options={[...new Set([sampler, ...SAMPLER_OPTIONS])].map(value => ({ value, label: value || 'Sampler: Not set' }))} /><MenuSelect value={scheduler} onChange={setScheduler} ariaLabel="Recommended scheduler" options={[...new Set([scheduler, ...SCHEDULER_OPTIONS])].map(value => ({ value, label: value || 'Scheduler: Not set' }))} /><input type="number" min="1" step="1" value={steps} onChange={event => setSteps(event.target.value)} placeholder="Steps" className="min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary" /><input type="number" min="0.1" step="0.1" value={cfg} onChange={event => setCfg(event.target.value)} placeholder="CFG" className="min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary" /></div><div className="flex gap-1.5"><button type="button" onClick={() => saveUsageMetadata()} disabled={usageBusy} className="flex-1 rounded bg-blue-600 px-2 py-1.5 text-[11px] font-bold text-white disabled:opacity-50">Save</button><button type="button" onClick={() => saveUsageMetadata(true)} disabled={usageBusy} className="rounded border border-border-primary px-2 py-1.5 text-[11px] text-text-secondary disabled:opacity-50">Clear</button></div></div>}
                     {usageError && <p className="text-[11px] text-red-400">{usageError}</p>}
                 </div>
                 {item.hasUpdate && <p className="text-xs font-semibold text-amber-400">New version: {item.latestVersionName}</p>}

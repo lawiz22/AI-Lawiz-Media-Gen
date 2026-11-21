@@ -1,6 +1,7 @@
 import type { MinimaxDraft, VideoReference } from './videoPromptService';
 import { audioPromptRequirements, referenceToken } from './videoPromptService';
 import { applyH3GalleryStyle, type H3StyleSettings } from './h3StyleWorkflow';
+import { isH3LoraPath } from './styleGallery';
 
 export interface H3NodeInfo {
     input?: { required?: Record<string, unknown>; optional?: Record<string, unknown> };
@@ -141,6 +142,27 @@ export const h3Choices = (info: H3ObjectInfo | null | undefined, node: string, n
     if (!Array.isArray(input)) return [];
     const values = Array.isArray(input[0]) ? input[0] : typeof input[1] === 'object' && input[1] !== null && 'options' in input[1] ? input[1].options : [];
     return Array.isArray(values) ? values.flatMap(item => typeof item === 'string' ? [item] : isRecord(item) && typeof item.key === 'string' ? [item.key] : []) : [];
+};
+const h3LoraCatalogCache = new WeakMap<H3ObjectInfo, string[]>();
+export const h3LoraCatalog = (info: H3ObjectInfo | null | undefined): string[] => {
+    if (!info) return [];
+    let names = h3LoraCatalogCache.get(info);
+    if (!names) {
+        names = [...new Set([...h3Choices(info, 'LoraLoader', 'lora_name'),
+            ...h3Choices(info, 'LoraLoaderModelOnly', 'lora_name')])];
+        h3LoraCatalogCache.set(info, names);
+    }
+    return names;
+};
+const h3LoraChoiceCache = new WeakMap<H3ObjectInfo, string[]>();
+export const h3LoraChoices = (info: H3ObjectInfo | null | undefined): string[] => {
+    if (!info) return [];
+    let names = h3LoraChoiceCache.get(info);
+    if (!names) {
+        names = h3LoraCatalog(info).filter(isH3LoraPath);
+        h3LoraChoiceCache.set(info, names);
+    }
+    return names;
 };
 export interface H3FormatWidget { name: string; type: string | string[]; config?: Record<string, unknown> }
 export const h3FormatWidgets = (info: H3ObjectInfo | null | undefined, format: string): H3FormatWidget[] => {

@@ -29,7 +29,6 @@ export const getImagePromptOnlyUpdate = (prompt: string, options: GenerationOpti
 export const PROMPT_T2I_WORKFLOWS: Array<{ id: ComfyModelType; label: string }> = [
   { id: 'sd1.5', label: 'SD 1.5' },
   { id: 'sdxl', label: 'SDXL' },
-  { id: 'flux', label: 'FLUX' },
   { id: 'qwen-t2i-gguf', label: 'QWEN' },
   { id: 'qwen21-t2i', label: 'QWEN 2.1 T2I' },
   { id: 'qwen21-turbo', label: 'QWEN 2.1 T2I (Turbo)' },

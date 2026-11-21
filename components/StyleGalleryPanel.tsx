@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { defaultStyleGallery, normalizeStyleModel, parseStyleGallery, saveStyleGallery, type GalleryStyle } from '../services/styleGallery';
-import { h3Choices, isRecord, type H3ObjectInfo } from '../services/minimaxH3Workflow';
-import { jsonRequest, minimaxComfyURL } from '../services/minimaxH3Service';
+import { defaultStyleGallery, isH3LoraPath, normalizeStyleModel, parseStyleGallery, saveStyleGallery, type GalleryStyle } from '../services/styleGallery';
+import { h3Choices, h3LoraChoices, type H3ObjectInfo } from '../services/minimaxH3Workflow';
+import { loadH3Catalog } from '../services/minimaxH3Service';
 import { useStyleGallery } from './useStyleGallery';
 import { useModelInventory } from './useModelInventory';
 import { PresetTextInput, SelectInput } from './InputComponents';
@@ -18,13 +18,9 @@ export const StyleGalleryPanel: React.FC<{ isComfyUIConnected: boolean | null; o
     const [model, setModel] = useState('FLUX2-9B');
     const [editing, setEditing] = useState<GalleryStyle | null>(null), [error, setError] = useState(''), [status, setStatus] = useState('');
     const [info, setInfo] = useState<H3ObjectInfo>({});
-    const refresh = async (signal?: AbortSignal) => {
-        const schemas = await Promise.all(['LoraLoaderModelOnly', 'KSamplerSelect', 'BasicScheduler'].map(async name => {
-            const value = await jsonRequest(`${minimaxComfyURL()}/object_info/${name}`, { signal });
-            if (!isRecord(value)) throw new Error(`Invalid ComfyUI catalog: ${name}.`);
-            return value;
-        }));
-        setInfo(Object.assign({}, ...schemas));
+    const refresh = async (signal?: AbortSignal, force = false) => {
+        const nodes = await loadH3Catalog(['LoraLoaderModelOnly', 'KSamplerSelect', 'BasicScheduler'], signal, force);
+        if (!signal?.aborted) setInfo(nodes);
     };
     useEffect(() => {
         if (!isComfyUIConnected) return;
@@ -34,13 +30,16 @@ export const StyleGalleryPanel: React.FC<{ isComfyUIConnected: boolean | null; o
     }, [isComfyUIConnected]);
     const creating = !!editing && !gallery?.styles.some(style => style.id === editing.id);
     const loras = useMemo(() => {
-        const names = styleInstalledLoras(h3Choices(info, 'LoraLoaderModelOnly', 'lora_name'), editing?.model || model, inventory);
+        const family = editing?.model || model;
+        const names = styleInstalledLoras(normalizeStyleModel(family) === 'H3' ? h3LoraChoices(info)
+            : h3Choices(info, 'LoraLoaderModelOnly', 'lora_name'), family, inventory);
         return creating ? unusedStyleLoras(names, gallery?.styles || [], editing?.model || model, inventory) : names;
     }, [info, editing?.model, model, inventory, creating, gallery]);
     const samplers = useMemo(() => h3Choices(info, 'KSamplerSelect', 'sampler_name'), [info]);
     const schedulers = useMemo(() => h3Choices(info, 'BasicScheduler', 'scheduler'), [info]);
     const libraryLoras = useMemo(() => {
-        const items = styleLibraryLoras(inventory, editing?.model || model);
+        const family = editing?.model || model;
+        const items = styleLibraryLoras(inventory, family).filter(item => normalizeStyleModel(family) !== 'H3' || isH3LoraPath(getComfyRelativePath(item)));
         const available = new Set(creating ? unusedStyleLoras(items.map(getComfyRelativePath), gallery?.styles || [], editing?.model || model, inventory) : items.map(getComfyRelativePath));
         return items.filter(item => available.has(getComfyRelativePath(item))
             && `${item.fileName} ${item.modelName || ''} ${item.relativePath}`.toLowerCase().includes(libraryQuery.toLowerCase()));
@@ -76,7 +75,7 @@ export const StyleGalleryPanel: React.FC<{ isComfyUIConnected: boolean | null; o
                         saveStyleGallery(imported); setEditing(null); setError(''); setStatus(`Imported ${imported.styles.length} styles.`);
                     }).catch(cause => setError(String(cause)));
                 }} /></label>
-                <button className={button} disabled={!isComfyUIConnected} onClick={() => void refresh().then(() => setError('')).catch(cause => setError(String(cause)))}>Refresh LoRAs</button>
+                <button className={button} disabled={!isComfyUIConnected} onClick={() => void refresh(undefined, true).then(() => setError('')).catch(cause => setError(String(cause)))}>Refresh LoRAs</button>
                 <button className={button} disabled={inventoryLoading} onClick={() => void refreshInventory()}>Refresh My Library</button>
                 <button className={button} disabled={!gallery || !inventory.items.length || !!editing} title="Close the editor before linking all saved styles" onClick={() => {
                     if (!gallery) return;

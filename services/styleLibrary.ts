@@ -1,5 +1,5 @@
 import { getComfyRelativePath, inventoryItemMatchesFamily, inventoryFlux2Variant, resolveComfyOption, type CivitaiFamily, type CivitaiInventory, type CivitaiInventoryItem } from './civitaiService';
-import type { GalleryStyle } from './styleGallery';
+import { isH3LoraPath, type GalleryStyle } from './styleGallery';
 
 const normalize = (value: string) => value.trim().replace(/\\/g, '/').toLowerCase();
 const basename = (value: string) => normalize(value).split('/').pop()!.replace(/\.safetensors$/, '');
@@ -18,10 +18,11 @@ export const styleInstalledLoras = (names: string[], model: string, inventory?: 
     const family = styleModelFamily(model);
     const indexed = new Map(inventory?.items.filter(item => item.kind === 'lora').map(item => [normalize(getComfyRelativePath(item)), item]));
     return names.filter(name => {
+        if (family === 'minimax-h3' && !isH3LoraPath(name)) return false;
         if (family === 'krea2' || family === 'moss' || family === 'minimax-h3') {
             const item = indexed.get(normalize(name));
             return item ? inventoryItemMatchesFamily(item, family) : family === 'moss' ? /^moss[\\/]/i.test(name)
-                : family === 'minimax-h3' ? /^(?:h3|mini[- _]?max(?:[- _]?h3)?)[\\/]/i.test(name) : /^krea(?:[- _]?2)?[\\/]/i.test(name);
+                : family === 'minimax-h3' ? true : /^krea(?:[- _]?2)?[\\/]/i.test(name);
         }
         if (family === 'flux2-9b' || family === 'flux2-4b') {
             const item = indexed.get(normalize(name));

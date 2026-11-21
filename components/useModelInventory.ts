@@ -28,6 +28,7 @@ export const refreshModelInventory = (): Promise<void> => {
 };
 export const useModelInventory = () => {
     const value = useSyncExternalStore(subscribe, snapshot, snapshot);
-    useEffect(() => { void refreshModelInventory(); }, []);
+    // Tabs re-run this effect each time they are shown; a loaded inventory is kept current by its editors.
+    useEffect(() => { if (!state.inventory.items.length) void refreshModelInventory(); }, []);
     return { ...value, setInventory: setModelInventory, refresh: refreshModelInventory };
 };

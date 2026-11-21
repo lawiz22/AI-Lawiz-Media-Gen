@@ -27,9 +27,8 @@ When a response is received, preserve the exact permission and its source, verif
 
 The developer identifies [Past Forward by Ammaar Reshi](https://github.com/ammaarreshi/past-forward-ai-studio) as the source of the Past Forward feature's starting point.
 
-These local files retain explicit `Apache-2.0` headers:
+This local file retains an explicit `Apache-2.0` header:
 
-- [components/pastForward/PolaroidCard.tsx](components/pastForward/PolaroidCard.tsx)
 - [utils/pastForwardAlbumUtils.ts](utils/pastForwardAlbumUtils.ts)
 
 Keep applicable upstream license, copyright and attribution notices, document modifications, and include the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0.txt) and any applicable upstream NOTICE when distributing Apache-covered material. Apache-2.0 is compatible with GPLv3, but that does not erase the upstream notices. File-level headers are not a blanket license for every file in the upstream repository; the full scope of the imported material still needs verification.

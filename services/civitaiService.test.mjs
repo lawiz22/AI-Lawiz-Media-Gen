@@ -547,6 +547,20 @@ test('MiniMax H3 USE never dispatches an SD image workflow', async () => {
     }
 });
 
+test('FLUX 1 models have no image workflow any more: USE explains it and never falls back to SD 1.5', async () => {
+    const base = { kind: 'lora', path: 'C:/models/loras/x/style.safetensors', relativePath: 'loras/custom/style.safetensors', fileName: 'style.safetensors' };
+    for (const flux1 of [{ ...base, userFamily: 'flux' }, { ...base, relativePath: 'loras/Flux/style.safetensors' }, { ...base, kind: 'checkpoint', relativePath: 'checkpoints/flux-dev/base.safetensors' }, { ...base, modelName: 'Flux.1 D portrait' }]) {
+        assert.equal(inventory.getImageWorkflow(flux1), null);
+        const result = await useModel(flux1, { comfyModelType: 'sdxl' });
+        assert.deepEqual(result.actions, []);
+        assert.match(result.alerts[0], /FLUX 1 workflow was removed/);
+    }
+    assert.equal(inventory.getImageWorkflow({ ...base, userFamily: 'flux2' }).modelType, 'flux2-simple');
+    assert.equal(inventory.getImageWorkflow({ ...base, relativePath: 'loras/SDXL/style.safetensors' }).modelType, 'sdxl');
+    assert.equal(inventory.inferItemFamily({ ...base, modelName: 'Flux.1 D portrait' }), 'flux');
+    assert.equal(service.getRecommendedSettingUpdates('sdxl', { guidance: 3.5, cfg: 6 }, {}).comfyFluxGuidance, undefined);
+});
+
 test('existing SD, FLUX, Qwen, ZIT and LTX folder routing stays intact', async () => {
     for (const [baseModel, folder] of [['SD 1.5', 'sd15'], ['SDXL 1.0', 'SDXL'], ['Flux.1 D', 'Flux'], ['Flux.2 D', 'flux2'], ['Krea 2', 'krea'], ['Qwen', 'QWEN'], ['ZImageTurbo', 'ZIT'], ['LTXV 2.3', 'LTX2']]) {
         assert.equal(service.getCivitaiModelFolder(model, version(baseModel), 'all'), folder);

@@ -18,6 +18,8 @@ export const reset = () => { localItems = []; remoteIndex = {version:1,items:{}}
 export const clearRemote = () => { remoteIndex = {version:1,items:{}}; };
 export const clearLocal = () => { localItems = []; };
 const idbService = {
+  getLibraryProjectBinding: async () => ({projectKey:'test-project'}),
+  assertLibraryProjectUnchanged: async () => {},
   saveToLibrary: async (item, useExisting, blobs = {}) => {
     const saved = {...item, id:item.id || 1234, assetRefs:Object.fromEntries(Object.entries(blobs).map(([role,blob])=>[role,{id:role,mimeType:blob.type,size:blob.size}]))};
     localItems.push(saved); return saved;
@@ -35,8 +37,10 @@ const driveService = {
   updateLibraryIndex: async index => { remoteIndex = index; },
   downloadMediaFile: async () => new Blob(['reference'],{type:'video/mp4'}),
 };
+const getActiveLibraryFolderHandle = async () => null;
 `;
-const { outputText } = ts.transpileModule(mocks + helpers, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
+const tags = readFileSync(new URL('./libraryTags.ts', import.meta.url), 'utf8').replace(/^import .*;\r?$/gm, '');
+const { outputText } = ts.transpileModule(mocks + tags + helpers, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 const item = {
     mediaType: 'prompt', name: 'Video Prompt test', media: 'generated prompt', thumbnail: 'thumbnail',
@@ -58,6 +62,22 @@ test('immediate Library saving uploads prompt reference binaries and retains inl
     assert.equal(remote.assetRefs, undefined);
     assert.deepEqual(remote.videoPromptOptions, item.videoPromptOptions);
     assert.equal(Object.keys(remote.driveAssetFileIds).length, 2);
+});
+
+test('style hashtags persist in local image/video metadata and Drive indexes without replacing existing tags', async () => {
+    for (const metadata of [
+        { mediaType: 'image', options: { provider: 'comfyui', comfyModelType: 'moss-photo', comfyMossPhoto: { style: { title: 'Retro VHS' } } } },
+        { mediaType: 'video', minimaxH3Options: { options: { style: { title: 'Retro VHS' }, variant: 'advanced', advanced: { inputMode: 'generate' } } } },
+    ]) {
+        api.reset();
+        const original = { name: 'Styled output', media: '', thumbnail: 'thumbnail', tags: ['favorite'], ...metadata };
+        const saved = await api.saveToLibrary(original, { media: new Blob(['output'], { type: metadata.mediaType === 'video' ? 'video/mp4' : 'image/png' }) });
+        assert.deepEqual(saved.tags, ['favorite', 'retro vhs']);
+        assert.deepEqual(api.localItems[0].tags, saved.tags);
+        assert.deepEqual(api.remoteIndex.items[saved.id].tags, saved.tags);
+        assert.deepEqual(original.tags, ['favorite']);
+        assert.equal(api.remoteIndex.items[saved.id].assetRefs, undefined);
+    }
 });
 
 test('bulk Drive backup and restore preserve video prompt references rather than treating them as text-only', async () => {

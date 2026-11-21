@@ -6,6 +6,7 @@ import { audioSelectionFrames, type AudioSelection } from '../services/audioClip
 import { buildAudioWaveform, decodeMediaAudio, exportAudioExcerpt } from '../services/audioExtractorService';
 import { readLibraryMediaFile } from '../services/libraryMediaService';
 import { LibraryPickerModal } from './LibraryPickerModal';
+import { useUnmountCleanup } from './useUnmountCleanup';
 
 const button = 'rounded-lg border border-border-primary bg-bg-tertiary px-3 py-2 text-sm hover:bg-bg-tertiary-hover disabled:opacity-40 disabled:cursor-not-allowed';
 const field = 'mt-1 w-full rounded-lg border border-border-primary bg-bg-primary p-2 text-sm';
@@ -61,12 +62,14 @@ export const AudioExtractorPanel: React.FC<{ active: boolean }> = ({ active }) =
     useEffect(() => {
         if (!active) stop();
     }, [active]);
+    const root = useUnmountCleanup(() => {
+        controller.current?.abort();
+        void context.current?.close().catch(cause => console.warn('Could not close audio extractor playback.', cause));
+    });
     useEffect(() => () => {
         playRevision.current++;
-        controller.current?.abort();
         resultAudio.current?.pause();
         if (source.current) { source.current.onended = null; source.current.stop(); source.current.disconnect(); }
-        void context.current?.close().catch(cause => console.warn('Could not close audio extractor playback.', cause));
     }, []);
     useEffect(() => {
         const url = result ? URL.createObjectURL(result) : '';
@@ -176,7 +179,7 @@ export const AudioExtractorPanel: React.FC<{ active: boolean }> = ({ active }) =
         }).join('');
     }, [peaks]);
     const x = (time: number) => (time - visibleStart) / span * 1000;
-    return <section aria-label="Audio extractor" className="space-y-5 text-text-primary">
+    return <section ref={root} aria-label="Audio extractor" className="space-y-5 text-text-primary">
         <header><h2 className="text-xl font-bold">Audio Extractor</h2><p className="mt-1 text-sm text-text-secondary">Extract a video's soundtrack or cut an existing audio file. Local processing, no upload or ComfyUI required.</p></header>
         <div className="flex flex-wrap items-end gap-3">
             <label className="min-w-0 flex-1 text-sm">Audio or video file<input aria-label="Audio or video file" type="file" accept="audio/*,video/*,.mkv,.mov,.flac,.m4a,.ogg,.aac" disabled={busy} className={field} onChange={event => {

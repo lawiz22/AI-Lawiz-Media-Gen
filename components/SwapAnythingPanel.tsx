@@ -8,8 +8,13 @@ import { defaultSwapAnythingOptions, type SwapAnythingOptions } from '../service
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { ImageUploader } from './ImageUploader';
 import { LibraryPickerModal } from './LibraryPickerModal';
-import { NumberSlider, SelectInput, TextInput } from './InputComponents';
+import { TextInput } from './InputComponents';
 import { CheckIcon, DownloadIcon, GenerateIcon, LibraryIcon, RefreshIcon, SaveIcon, SpinnerIcon } from './icons';
+import { Button, ModelFields, NumberField, SamplerFields, SeedField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { SettingsLayout } from './ui/SettingsLayout';
+import { ui } from './ui/styles';
 
 interface SwapAnythingPanelProps {
     isComfyUIConnected: boolean;
@@ -92,8 +97,8 @@ const SWAP_PRESETS: SwapPreset[] = [
     },
 ];
 
-const getOptions = (input: any): string[] => Array.isArray(input?.[0]) ? input[0] : [];
-const withCurrent = (current: string, values: string[]) => Array.from(new Set([current, ...values].filter(Boolean))).map(value => ({ value, label: value }));
+const getOptions = (input: any): string[] => Array.isArray(input?.[0]) ? input[0] : Array.isArray(input?.[1]?.options) ? input[1].options : [];
+const NAME = 'Swap Anything';
 
 const DEFAULT_OPTIONS = defaultSwapAnythingOptions();
 
@@ -102,7 +107,6 @@ const SwapAnythingPanel: React.FC<SwapAnythingPanelProps> = ({ isComfyUIConnecte
     const [destinationImage, setDestinationImage] = useState<File | null>(null);
     const [donorImage, setDonorImage] = useState<File | null>(null);
     const [options, setOptions] = useState<SwapAnythingOptions>(DEFAULT_OPTIONS);
-    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [libraryTarget, setLibraryTarget] = useState<'destination' | 'donor' | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -127,10 +131,9 @@ const SwapAnythingPanel: React.FC<SwapAnythingPanelProps> = ({ isComfyUIConnecte
     )?.id || 'custom', [options.destinationTarget, options.donorTarget, options.prompt]);
 
     const updateOption = <K extends keyof SwapAnythingOptions>(key: K, value: SwapAnythingOptions[K]) => setOptions(current => ({ ...current, [key]: value }));
-    const handleNumber = (key: keyof SwapAnythingOptions) => (event: React.ChangeEvent<HTMLInputElement>) => updateOption(key, Number(event.target.value) as never);
     const handleText = (key: keyof SwapAnythingOptions) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => updateOption(key, event.target.value as never);
-    const applyPreset = (event: React.ChangeEvent<HTMLSelectElement>) => {
-        const preset = SWAP_PRESETS.find(candidate => candidate.id === event.target.value);
+    const applyPreset = (id: string) => {
+        const preset = SWAP_PRESETS.find(candidate => candidate.id === id);
         if (!preset) return;
         setOptions(current => ({
             ...current,
@@ -198,59 +201,63 @@ const SwapAnythingPanel: React.FC<SwapAnythingPanelProps> = ({ isComfyUIConnecte
     };
 
     const canGenerate = isComfyUIConnected && !!destinationImage && !!donorImage && !!options.destinationTarget.trim() && !!options.donorTarget.trim() && !isGenerating;
+    const number = (label: string, key: 'megapixels' | 'donorMegapixels' | 'samThreshold' | 'samRefineIterations' | 'maskGrow', min: number, max: number, step: number) =>
+        <NumberField slider label={label} ariaLabel={`${NAME} ${label}`} value={options[key]} min={min} max={max} step={step} disabled={isGenerating} onChange={value => updateOption(key, value)} />;
+    const source = (side: 'destination' | 'donor', label: string, file: File | null, change: (file: File | null) => void) => <div className="min-w-0 space-y-2">
+        <ImageUploader id={`swap-${side}`} label={label} sourceFile={file} onImageUpload={change} disabled={isGenerating} />
+        <Button className="w-full" onClick={() => setLibraryTarget(side)} disabled={isGenerating}><LibraryIcon className="h-4 w-4" />Choose from Library</Button>
+    </div>;
 
     return <section className="mx-auto max-w-7xl overflow-hidden rounded-lg border border-border-primary bg-bg-secondary shadow-xl">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border-primary px-5 py-4">
-            <div><h2 className="text-xl font-bold text-accent">Swap Anything</h2><p className="text-xs text-text-muted">Replace one selected element while preserving the destination image.</p></div>
-            <button type="button" onClick={() => setAdvancedOpen(open => !open)} className={`rounded-md border px-3 py-2 text-sm font-semibold ${advancedOpen ? 'border-accent text-accent' : 'border-border-primary text-text-secondary'}`}>Advanced</button>
-        </header>
+        <header className="border-b border-border-primary px-5 py-4"><h2 className="text-xl font-bold text-accent">{NAME}</h2><p className="text-xs text-text-muted">Replace one selected element while preserving the destination image.</p></header>
 
-        <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div className="space-y-5">
-                <div className="grid gap-4 md:grid-cols-2">
-                    <div className="min-w-0 space-y-2"><ImageUploader id="swap-destination" label="Picture 1 - Destination" sourceFile={destinationImage} onImageUpload={setDestinationImage} disabled={isGenerating} /><button type="button" onClick={() => setLibraryTarget('destination')} disabled={isGenerating} className="flex w-full items-center justify-center gap-2 rounded-md border border-border-primary px-3 py-2 text-sm font-semibold text-text-secondary hover:text-accent"><LibraryIcon className="h-4 w-4" />Choose from Library</button></div>
-                    <div className="min-w-0 space-y-2"><ImageUploader id="swap-donor" label="Picture 2 - Element Donor" sourceFile={donorImage} onImageUpload={setDonorImage} disabled={isGenerating} /><button type="button" onClick={() => setLibraryTarget('donor')} disabled={isGenerating} className="flex w-full items-center justify-center gap-2 rounded-md border border-border-primary px-3 py-2 text-sm font-semibold text-text-secondary hover:text-accent"><LibraryIcon className="h-4 w-4" />Choose from Library</button></div>
-                </div>
-                <SelectInput label="Swap preset" value={activePreset} onChange={applyPreset} options={[{ value: 'custom', label: 'Custom' }, ...SWAP_PRESETS.map(preset => ({ value: preset.id, label: preset.label }))]} disabled={isGenerating} />
+        <div className="p-5">
+            <SettingsLayout label={NAME} disabled={isGenerating}
+                top={<>{source('destination', 'Picture 1 - Destination', destinationImage, setDestinationImage)}{source('donor', 'Picture 2 - Element Donor', donorImage, setDonorImage)}</>}
+                models={() => <ModelFields name={NAME} disabled={isGenerating} onChange={(id, value) => updateOption(id as 'unet' | 'samCheckpoint' | 'clip' | 'vae', value)} fields={[
+                    { id: 'unet', label: 'FLUX2 Model', value: options.unet, choices: models },
+                    { id: 'samCheckpoint', label: 'SAM3.1 Model', value: options.samCheckpoint, choices: samModels },
+                    { id: 'clip', label: 'CLIP', value: options.clip, choices: clips },
+                    { id: 'vae', label: 'VAE', value: options.vae, choices: vaes },
+                ]} />}
+                loras={() => ([1, 2] as const).map(index => <div key={index} className="space-y-2">
+                    <Select variant="search" label={`Optional LoRA ${index}`} ariaLabel={`${NAME} LoRA ${index}`} value={options[`lora${index}Name`] || ''} disabled={isGenerating}
+                        options={[{ value: '', label: 'None' }, ...loras.map(value => ({ value, label: value }))]} onChange={value => updateOption(`lora${index}Name`, value)} />
+                    <NumberField slider label={`LoRA ${index} Strength`} ariaLabel={`${NAME} LoRA ${index} strength`} value={options[`lora${index}Strength`]} min={-10} max={10} step={0.5} disabled={isGenerating} onChange={value => updateOption(`lora${index}Strength`, value)} />
+                </div>)}
+                sampler={() => <>
+                    <SamplerFields name={NAME} disabled={isGenerating} value={{ sampler: options.sampler, steps: options.steps, cfg: options.cfg }} samplers={samplers}
+                        limits={{ steps: { min: 1, max: 40, step: 1 }, cfg: { min: 0.1, max: 10, step: 0.1 } }} onChange={patch => setOptions(current => ({ ...current, ...patch }))} />
+                    {/* The workflow uses a negative seed for "new seed for every run". */}
+                    <SeedField name={NAME} value={Math.max(options.seed, 0)} onChange={seed => updateOption('seed', seed)} randomize={options.seed < 0} onRandomizeChange={random => updateOption('seed', random ? -1 : 0)} disabled={isGenerating} />
+                </>}
+                advanced={() => <>
+                    {number('Destination MP', 'megapixels', 0.25, 4, 0.25)}
+                    {number('Donor MP', 'donorMegapixels', 0.25, 4, 0.25)}
+                    {number('SAM Threshold', 'samThreshold', 0.05, 1, 0.05)}
+                    {number('SAM Refine Iterations', 'samRefineIterations', 0, 10, 1)}
+                    {number('Mask Grow', 'maskGrow', -32, 64, 1)}
+                </>}>
+                <Select label="Swap preset" ariaLabel={`${NAME} Swap preset`} value={activePreset} onChange={applyPreset} options={[{ value: 'custom', label: 'Custom' }, ...SWAP_PRESETS.map(preset => ({ value: preset.id, label: preset.label }))]} disabled={isGenerating} />
                 <TextInput label="Area to replace in Picture 1" value={options.destinationTarget} onChange={handleText('destinationTarget')} disabled={isGenerating} />
                 <TextInput label="Element to take from Picture 2" value={options.donorTarget} onChange={handleText('donorTarget')} disabled={isGenerating} />
-                <TextInput label="Optional editing instructions" value={options.prompt || ''} onChange={handleText('prompt')} disabled={isGenerating} isTextArea />
-
-                {advancedOpen && <div className="space-y-5 border-t border-border-primary pt-5">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <SelectInput label="FLUX2 Model" value={options.unet} onChange={handleText('unet')} options={withCurrent(options.unet, models)} disabled={isGenerating} />
-                        <SelectInput label="SAM3.1 Model" value={options.samCheckpoint} onChange={handleText('samCheckpoint')} options={withCurrent(options.samCheckpoint, samModels)} disabled={isGenerating} />
-                        <SelectInput label="CLIP" value={options.clip} onChange={handleText('clip')} options={withCurrent(options.clip, clips)} disabled={isGenerating} />
-                        <SelectInput label="VAE" value={options.vae} onChange={handleText('vae')} options={withCurrent(options.vae, vaes)} disabled={isGenerating} />
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <NumberSlider label={`Destination MP: ${options.megapixels}`} value={options.megapixels} onChange={handleNumber('megapixels')} min={0.25} max={4} step={0.25} disabled={isGenerating} allowDirectInput />
-                        <NumberSlider label={`Donor MP: ${options.donorMegapixels}`} value={options.donorMegapixels} onChange={handleNumber('donorMegapixels')} min={0.25} max={4} step={0.25} disabled={isGenerating} allowDirectInput />
-                        <NumberSlider label={`SAM Threshold: ${options.samThreshold}`} value={options.samThreshold} onChange={handleNumber('samThreshold')} min={0.05} max={1} step={0.05} disabled={isGenerating} allowDirectInput />
-                        <NumberSlider label={`SAM Refine Iterations: ${options.samRefineIterations}`} value={options.samRefineIterations} onChange={handleNumber('samRefineIterations')} min={0} max={10} step={1} disabled={isGenerating} allowDirectInput />
-                        <NumberSlider label={`Mask Grow: ${options.maskGrow}`} value={options.maskGrow} onChange={handleNumber('maskGrow')} min={-32} max={64} step={1} disabled={isGenerating} allowDirectInput />
-                        <SelectInput label="Sampler" value={options.sampler} onChange={handleText('sampler')} options={withCurrent(options.sampler, samplers)} disabled={isGenerating} />
-                        <NumberSlider label={`Steps: ${options.steps}`} value={options.steps} onChange={handleNumber('steps')} min={1} max={40} step={1} disabled={isGenerating} allowDirectInput />
-                        <NumberSlider label={`CFG: ${options.cfg}`} value={options.cfg} onChange={handleNumber('cfg')} min={0.1} max={10} step={0.1} disabled={isGenerating} allowDirectInput />
-                    </div>
-                    <label className="block text-sm font-medium text-text-secondary">Seed (-1 = random)<input type="number" value={options.seed} onChange={handleNumber('seed')} disabled={isGenerating} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2" /></label>
-                    <div className="grid gap-4 rounded-md border border-border-primary p-3 sm:grid-cols-2">
-                        <div className="space-y-3"><SelectInput label="Optional LoRA 1" value={options.lora1Name || ''} onChange={handleText('lora1Name')} options={[{ value: '', label: 'None' }, ...withCurrent(options.lora1Name || '', loras).filter(option => option.value)]} disabled={isGenerating} /><NumberSlider label={`LoRA 1 Strength: ${options.lora1Strength}`} value={options.lora1Strength} onChange={handleNumber('lora1Strength')} min={-10} max={10} step={0.5} disabled={isGenerating} allowDirectInput /></div>
-                        <div className="space-y-3"><SelectInput label="Optional LoRA 2" value={options.lora2Name || ''} onChange={handleText('lora2Name')} options={[{ value: '', label: 'None' }, ...withCurrent(options.lora2Name || '', loras).filter(option => option.value)]} disabled={isGenerating} /><NumberSlider label={`LoRA 2 Strength: ${options.lora2Strength}`} value={options.lora2Strength} onChange={handleNumber('lora2Strength')} min={-10} max={10} step={0.5} disabled={isGenerating} allowDirectInput /></div>
-                    </div>
-                </div>}
+                <PromptBox kind="instruction" label="Optional editing instructions" ariaLabel={`${NAME} Optional editing instructions`} rows={3} value={options.prompt || ''} onChange={value => updateOption('prompt', value)} disabled={isGenerating} />
 
                 {!isComfyUIConnected && <p className="rounded-md bg-danger-bg p-3 text-sm text-danger">Connect ComfyUI to use Swap Anything.</p>}
                 {error && <p className="rounded-md bg-danger-bg p-3 text-sm text-danger">{error}</p>}
                 {isGenerating && <div><div className="mb-1 flex justify-between text-xs text-text-muted"><span>{progressMessage}</span><span>{Math.round(progress * 100)}%</span></div><div className="h-1 overflow-hidden rounded bg-bg-tertiary"><div className="h-full bg-accent" style={{ width: `${progress * 100}%` }} /></div></div>}
-                <div className="flex gap-3"><button type="button" onClick={reset} disabled={isGenerating} className="flex items-center gap-2 rounded-md border border-border-primary px-4 py-3 font-semibold text-text-secondary"><RefreshIcon className="h-5 w-5" />Reset</button><button type="button" onClick={generate} disabled={!canGenerate} className="flex flex-1 items-center justify-center gap-2 rounded-md bg-accent px-4 py-3 font-bold text-accent-text disabled:cursor-not-allowed disabled:opacity-40">{isGenerating ? <SpinnerIcon className="h-5 w-5 animate-spin" /> : <GenerateIcon className="h-5 w-5" />}{isGenerating ? 'Swapping...' : 'Swap Anything'}</button></div>
-            </div>
+                <div className="flex gap-3">
+                    <Button onClick={reset} disabled={isGenerating}><RefreshIcon className="h-5 w-5" />Reset</Button>
+                    <Button variant="primary" className="flex-1" onClick={generate} disabled={!canGenerate}>{isGenerating ? <SpinnerIcon className="h-5 w-5 animate-spin" /> : <GenerateIcon className="h-5 w-5" />}{isGenerating ? 'Swapping...' : 'Swap Anything'}</Button>
+                </div>
 
-            <div className="flex min-h-[520px] flex-col">
-                <h3 className="mb-2 text-xs font-bold uppercase text-text-muted">Result</h3>
-                <div className="flex flex-1 items-center justify-center overflow-hidden rounded-md bg-bg-primary">{result ? <img src={result} alt="Swap Anything result" className="max-h-[70vh] max-w-full object-contain" /> : <span className="px-6 text-center text-sm text-text-muted">The generated image will preserve Picture 1 dimensions.</span>}</div>
-                {result && <div className="mt-3 grid grid-cols-2 gap-2"><a href={result} download="swap-anything.png" className="flex items-center justify-center gap-2 rounded-md border border-border-primary py-2 text-sm font-semibold text-text-secondary"><DownloadIcon className="h-4 w-4" />Download</a><button type="button" onClick={saveResult} disabled={saveStatus !== 'idle'} className="flex items-center justify-center gap-2 rounded-md bg-accent py-2 text-sm font-bold text-accent-text disabled:opacity-60">{saveStatus === 'saving' ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : saveStatus === 'saved' ? <CheckIcon className="h-4 w-4" /> : <SaveIcon className="h-4 w-4" />}{saveStatus === 'saved' ? 'Saved' : 'Save to Library'}</button></div>}
-            </div>
+                <h3 className="text-xs font-bold uppercase text-text-muted">Result</h3>
+                <div className="flex min-h-80 items-center justify-center overflow-hidden rounded-md bg-bg-primary">{result ? <img src={result} alt="Swap Anything result" className="max-h-[70vh] max-w-full object-contain" /> : <span className="px-6 text-center text-sm text-text-muted">The generated image will preserve Picture 1 dimensions.</span>}</div>
+                {result && <div className="grid grid-cols-2 gap-2">
+                    <a href={result} download="swap-anything.png" className={ui.buttons.secondary}><DownloadIcon className="h-4 w-4" />Download</a>
+                    <Button variant="primary" onClick={saveResult} disabled={saveStatus !== 'idle'}>{saveStatus === 'saving' ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : saveStatus === 'saved' ? <CheckIcon className="h-4 w-4" /> : <SaveIcon className="h-4 w-4" />}{saveStatus === 'saved' ? 'Saved' : 'Save to Library'}</Button>
+                </div>}
+            </SettingsLayout>
         </div>
 
         <LibraryPickerModal isOpen={libraryTarget !== null} onClose={() => setLibraryTarget(null)} onSelectItem={selectLibraryImage} filter={LIBRARY_IMAGE_TYPES} />

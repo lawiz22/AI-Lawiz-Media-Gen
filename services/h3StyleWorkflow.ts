@@ -35,6 +35,12 @@ export const applyH3GalleryStyle = (workflow: H3Workflow, options: MinimaxH3Opti
     const style = h3GalleryStyle(options);
     if (!style) return;
     if (style.lora) {
+        const manualLoader = workflow['137'];
+        // Keep the native LoRA stage order, including REF2V's preview-before-LoRA chain.
+        const modelSource = manualLoader ? '137'
+            : !options.variant && workflow['141'] ? '141' : '135';
+        const clipSource = manualLoader && options.useLoraClip ? '137' : '127';
+        if (!workflow[clipSource]) throw new Error('Cannot apply the H3 style: H3 CLIP loader is missing.');
         for (const node of Object.values(workflow)) {
             if (node.class_type === 'Power Lora Loader (rgthree)') {
                 for (const [key, value] of Object.entries(node.inputs)) {
@@ -51,11 +57,22 @@ export const applyH3GalleryStyle = (workflow: H3Workflow, options: MinimaxH3Opti
                 }));
             }
             const model = node.inputs.model;
-            if (Array.isArray(model) && model[0] === '135' && model[1] === 0) node.inputs.model = ['style_lora', 0];
+            if (Array.isArray(model) && model[0] === modelSource && model[1] === 0) node.inputs.model = ['style_lora', 0];
+            const clip = node.inputs.clip;
+            if (node !== manualLoader && Array.isArray(clip) && clip[0] === clipSource && clip[1] === (clipSource === '137' ? 1 : 0)) {
+                node.inputs.clip = ['style_lora', 1];
+            }
         }
-        workflow.style_lora = { class_type: 'LoraLoaderModelOnly', inputs: {
-            model: ['135', 0], lora_name: style.lora, strength_model: options.styleStrength ?? style.strength,
-        } };
+        // The style always patches H3's text encoder, independently of the manual CLIP switch.
+        const model = [modelSource, 0], clip = [clipSource, clipSource === '137' ? 1 : 0];
+        const strength = options.styleStrength ?? style.strength;
+        workflow.style_lora = options.variant === 'ultrafast'
+            ? { class_type: 'LTX_lora_loader', inputs: { model, clip, mode: 'minimax',
+                stack_data: JSON.stringify([{ on: true, lora: style.lora, str: strength, v: 1, a: 1, t: 1 }]),
+            } }
+            : { class_type: 'Power Lora Loader (rgthree)', inputs: {
+                model, clip, lora_1: { on: true, lora: style.lora, strength },
+            } };
     }
     const conditioning = Object.values(workflow).filter(node => ['MiniMaxH3ReferenceToVideo', 'MiniMaxH3ImageToVideo'].includes(node.class_type));
     if (!conditioning.length) throw new Error('Cannot apply the H3 style: H3 prompt conditioning is missing.');

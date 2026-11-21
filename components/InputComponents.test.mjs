@@ -1,15 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { withUiKit } from './ui/compileForTest.mjs';
 
-const require = createRequire(import.meta.url);
-const source = readFileSync(new URL('./InputComponents.tsx', import.meta.url), 'utf8')
-    .replace("'react'", JSON.stringify(pathToFileURL(require.resolve('react')).href));
+const source = withUiKit(readFileSync(new URL('./InputComponents.tsx', import.meta.url), 'utf8'));
 const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
 });

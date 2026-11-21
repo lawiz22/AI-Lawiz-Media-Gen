@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch, useSelector, useStore } from 'react-redux';
 import type { AppDispatch, RootState } from '../store/store';
 import type { GenerationOptions, LibraryItem } from '../types';
 import { addToLibrary } from '../store/librarySlice';
@@ -15,6 +15,7 @@ import { ImageUploader } from './ImageUploader';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { NumberSlider } from './InputComponents';
 import { SendToLTXButton } from './SendToLTXButton';
+import { useUnmountCleanup } from './useUnmountCleanup';
 import { CheckIcon, CloseIcon, DownloadIcon, GenerateIcon, LibraryIcon, RefreshIcon, ResetIcon, SaveIcon, SpinnerIcon, WorkflowIcon } from './icons';
 
 interface Props { isComfyUIConnected: boolean | null; objectInfo: any; onModelChange: (model: string) => void }
@@ -24,7 +25,9 @@ const input = 'mt-1 w-full min-w-0 rounded-md border border-border-primary bg-bg
 const initial = () => ({ ...defaultCharacterSceneOptions(), ollamaUrl: localStorage.getItem('ollama_url') || DEFAULT_OLLAMA_URL, ollamaModel: localStorage.getItem('ollama_model') || DEFAULT_OLLAMA_MODEL });
 const CharacterScenePanel: React.FC<Props> = ({ isComfyUIConnected, objectInfo, onModelChange }) => {
     const dispatch: AppDispatch = useDispatch();
-    const global = useSelector((state: RootState) => state.generation);
+    // Only the lock is subscribed to; generation options are read when a result is saved.
+    const store = useStore<RootState>();
+    const globalLoading = useSelector((state: RootState) => state.generation.isLoading);
     const [settings, setSettings] = useState<CharacterSceneOptions>(initial);
     const current = useRef(settings); current.current = settings;
     const [scene, setScene] = useState<File | null>(null);
@@ -46,12 +49,12 @@ const CharacterScenePanel: React.FC<Props> = ({ isComfyUIConnected, objectInfo, 
     const busy = useRef(false);
     const skipAnalysis = useRef(false);
     const analyzedSources = useRef<{ scene: File | null; character: File | null }>({ scene: null, character: null });
-    const locked = running || saving || global.isLoading;
+    const locked = running || saving || globalLoading;
     const analysis = settings.analysis || null;
     const update = (change: Partial<CharacterSceneOptions>) => setSettings(previous => ({ ...previous, ...change }));
     useEffect(() => { onModelChange(`Qwen Image 2.1 - Character in a Scene: ${settings.unet}`); }, [settings.unet, onModelChange]);
     const analyze = async () => {
-        if (!scene || busy.current || global.isLoading) return;
+        if (!scene || busy.current || globalLoading) return;
         request.current?.abort(); const cancellation = new AbortController(); request.current = cancellation;
         setAnalyzing(true); setError(''); update({ analysis: null, targetId: '', placement: '' });
         try {
@@ -72,7 +75,7 @@ const CharacterScenePanel: React.FC<Props> = ({ isComfyUIConnected, objectInfo, 
         setAnalyzing(false);
         update({ analysis: null, targetId: '', placement: '' });
     }, [scene, character]);
-    useEffect(() => () => { request.current?.abort(); }, []);
+    const root = useUnmountCleanup(() => request.current?.abort());
     let prompt = ''; let readiness = ''; let promptError = ''; let dimensions = { width: 1152, height: 864 };
     try { prompt = characterScenePrompt(settings, analysis); } catch (failure) { promptError = failure instanceof Error ? failure.message : 'Complete the analysis.'; }
     try {
@@ -81,13 +84,13 @@ const CharacterScenePanel: React.FC<Props> = ({ isComfyUIConnected, objectInfo, 
         if (isComfyUIConnected && objectInfo) validateCharacterSceneReadiness(graph, objectInfo);
     } catch (failure) { readiness = failure instanceof Error ? failure.message : 'Invalid workflow settings.'; }
     const ready = !!scene && !!character && !!analysis && !analyzing && !locked && !!isComfyUIConnected && !!objectInfo && !readiness && !promptError;
-    const snapshotOptions = (snapshot: CharacterSceneOptions): GenerationOptions => ({ ...structuredClone(global.options), provider: 'comfyui', comfyModelType: 'qwen21-character-scene', comfyPrompt: snapshot.prompt, comfySeed: snapshot.seed, comfyCharacterScene: snapshot });
+    const snapshotOptions = (snapshot: CharacterSceneOptions): GenerationOptions => ({ ...structuredClone(store.getState().generation.options), provider: 'comfyui', comfyModelType: 'qwen21-character-scene', comfyPrompt: snapshot.prompt, comfySeed: snapshot.seed, comfyCharacterScene: snapshot });
     const generate = async () => {
         if (!ready || !scene || !character || busy.current) return;
         busy.current = true; setRunning(true); setStopping(false); setError('');
         const cancellation = new AbortController(); generation.current = cancellation;
         const snapshot = structuredClone(settings); const sceneFile = scene; const characterFile = character; const started = performance.now(); const options = snapshotOptions(snapshot);
-        dispatch(setLoadingState({ isLoading: true }));
+        dispatch(setLoadingState({ isLoading: true, owner: 'character-scene' }));
         try {
             const [original, characterOriginal] = await Promise.all([fileToDataUrl(sceneFile), fileToDataUrl(characterFile)]); cancellation.signal.throwIfAborted();
             const generated = await generateComfyUICharacterScene(sceneFile, characterFile, snapshot, (text, value) => { setMessage(text); setProgress(value); }, cancellation.signal);
@@ -95,7 +98,7 @@ const CharacterScenePanel: React.FC<Props> = ({ isComfyUIConnected, objectInfo, 
             setResult({ ...generated, original, character: characterOriginal, width: image.naturalWidth, height: image.naturalHeight, seconds: (performance.now() - started) / 1000, options: { ...options, comfyPrompt: generated.prompt, comfySeed: generated.seed, comfyCharacterScene: { ...snapshot, seed: generated.seed, prompt: generated.prompt } } });
             setSaved(false); setPosition(50);
         } catch (failure) { setError(failure instanceof Error ? failure.message : 'Character in a Scene failed.'); }
-        finally { busy.current = false; generation.current = null; setRunning(false); setStopping(false); dispatch(setLoadingState({ isLoading: false })); }
+        finally { busy.current = false; generation.current = null; setRunning(false); setStopping(false); dispatch(setLoadingState({ isLoading: false, owner: 'character-scene' })); }
     };
     const stop = async () => { if (!running || stopping) return; setStopping(true); generation.current?.abort(new Error('Generation cancelled.')); await cancelComfyUIExecution(); };
     const save = async () => {
@@ -128,7 +131,7 @@ const CharacterScenePanel: React.FC<Props> = ({ isComfyUIConnected, objectInfo, 
     const select = (label: string, key: keyof CharacterSceneOptions, type: string, name: string) => <label className="block text-sm text-text-secondary">{label}<select aria-label={label} className={input} disabled={locked} value={String(settings[key])} onChange={event => update({ [key]: event.target.value })}>{[...new Set([String(settings[key]), ...getQwen21Choices(objectInfo, type, name)])].map(value => <option key={value}>{value}</option>)}</select></label>;
     const loraChange = (key: 'lora' | 'extraLora', change: Partial<Qwen21Lora>) => update({ [key]: { ...settings[key], ...change } });
     const reset = () => { if (locked || busy.current) return; request.current?.abort(); setSettings(initial()); setScene(null); setCharacter(null); setResult(null); setSaved(false); setError(''); };
-    return <section aria-label="Character in a Scene" className="space-y-5">
+    return <section ref={root} aria-label="Character in a Scene" className="space-y-5">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border-primary pb-3"><h2 className="text-xl font-bold text-accent">Character in a Scene</h2><div className="flex flex-wrap gap-2"><button type="button" className={button} disabled={locked} onClick={() => setLibrary('restore')}><LibraryIcon className="h-4 w-4" />Restore composition</button><button type="button" className={button} disabled={locked} onClick={reset}><ResetIcon className="h-4 w-4" />Reset</button></div></header>
         {!isComfyUIConnected && <p role="status" className="text-sm text-text-secondary">ComfyUI disconnected.</p>}
         {(error || readiness) && <p role="alert" className="break-words rounded-md border border-danger/50 bg-danger-bg p-3 text-sm text-danger">{error || readiness}</p>}

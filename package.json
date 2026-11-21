@@ -9,6 +9,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node --test \"components/**/*.test.mjs\" \"services/**/*.test.mjs\" \"utils/**/*.test.mjs\" \"electron/**/*.test.cjs\"",
+    "typecheck": "tsc --noEmit",
+    "check:locks": "node scripts/browser/lock-release-check.mjs",
+    "check:tabs": "node scripts/browser/tab-switch-audit.mjs",
+    "check:tab-jobs": "node scripts/browser/tab-switch-job-check.mjs",
+    "check:ui": "node scripts/browser/ui-kit-check.mjs",
+    "check:panels": "node scripts/browser/panel-controls-audit.mjs",
+    "profile:renders": "node scripts/browser/app-render-profile.mjs",
     "electron:dev": "node electron/dev.cjs",
     "electron:build": "npm run build && electron-builder"
   },
@@ -20,7 +28,6 @@
     "@reduxjs/toolkit": "2.12.0",
     "@streamparser/json": "^0.0.26",
     "@zip.js/zip.js": "^2.8.2",
-    "clsx": "2.1.1",
     "electron-store": "^11.0.2",
     "framer-motion": "13.1.1",
     "hash-wasm": "^4.12.0",
@@ -30,7 +37,6 @@
     "react-dom": "19",
     "react-image-crop": "11.0.5",
     "react-redux": "9.2.0",
-    "tailwind-merge": "2.4.0",
     "url": "0.11.3"
   },
   "devDependencies": {
@@ -40,6 +46,7 @@
     "cross-env": "^10.1.0",
     "electron": "^44.1.1",
     "electron-builder": "^26.0.12",
+    "fake-indexeddb": "^6.2.4",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "wait-on": "^9.0.3"

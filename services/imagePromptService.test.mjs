@@ -39,7 +39,8 @@ test('five image formats share established styles without changing existing work
     }
     assert.match(api.getImagePromptStyleInstruction('flux2-simple'), /Subject:.*\nSetting:/);
     assert.match(api.getImagePromptStyleInstruction('gemini'), /600 to 900 words/);
-    assert.match(api.getImagePromptStyleInstruction('flux'), /detailed.*paragraph/);
+    assert.match(api.getImagePromptStyleInstruction('krea2-simple'), /detailed.*paragraph/);
+    for (const removed of ['flux', 'nunchaku-flux-image', 'flux-krea']) assert.doesNotMatch(api.getImagePromptStyleInstruction(removed), /detailed.*paragraph/);
     assert.match(api.getImagePromptStyleInstruction('qwen-edit'), /concise/);
 });
 

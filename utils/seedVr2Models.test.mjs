@@ -56,11 +56,10 @@ const { outputText: generationCode } = ts.transpileModule(generationStatement.ge
 });
 
 const createGenerator = (objectInfo, onUpload, onWorkflow) => new Function(
-    'getSeedVr2Models', 'selectSeedVr2Model', 'getComfyUIUrl', 'fetch', 'uploadImage', 'executeWorkflow',
+    'getSeedVr2Models', 'selectSeedVr2Model', 'getComfyUIObjectInfo', 'uploadImage', 'executeWorkflow',
     `${generationCode}\nreturn generateSeedVr2Upscale;`,
 )(
-    getSeedVr2Models, selectSeedVr2Model, () => 'http://localhost:8188',
-    async () => ({ ok: true, json: async () => objectInfo }),
+    getSeedVr2Models, selectSeedVr2Model, async () => objectInfo,
     async () => { onUpload(); return { name: 'source.png' }; },
     async workflow => { onWorkflow(workflow); return { images: ['result.png'] }; },
 );

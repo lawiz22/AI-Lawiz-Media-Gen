@@ -17,7 +17,7 @@ This reference preserves the model-family notes formerly grouped under Qwen requ
 - [Blazing Fast character](#blazing-fast-character)
 - [Photo Fusion FLUX2](#photo-fusion-flux2)
 - [Photo Fusion Qwen Edit](#photo-fusion-qwen-edit)
-- [Legacy Flux and Qwen](#legacy-flux-and-qwen)
+- [Legacy Qwen](#legacy-qwen)
 - [LTX Director](#ltx-director)
 - [LTX 2.5 Audio-Sync](#ltx-25-audio-sync)
 - [LTX-Ripple-FFAF](#ltx-ripple-ffaf)
@@ -108,9 +108,9 @@ Photo Fusion maps the first portrait to Picture 1 and each remaining portrait to
 
 Qwen Edit Photo Fusion maps each input image to exactly one person and uses the existing three-picture Qwen workflow. It therefore supports a maximum of three total inputs: two or three subject portraits, or two portraits plus one background. The interface blocks unsupported combinations instead of silently omitting an image. Its workflow requires `UNETLoader`, `CLIPLoader`, `VAELoader`, `TextEncodeQwenImageEditPlus`, `ModelSamplingAuraFlow`, `CFGNorm`, `ImageScaleToTotalPixels`, and `KSampler`. Lightning presets additionally require a compatible Qwen Image Edit 4-step or 8-step LoRA in ComfyUI.
 
-## Legacy Flux and Qwen
+## Legacy Qwen
 
-The standard Flux workflow automatically enables `Flux\flux-turbo.safetensors` at strength `1`. The legacy Qwen T2I GGUF workflow always uses 4 steps and CFG `1`, including when Library metadata contains different recommended values; this does not apply to Qwen Image 2.1.
+The legacy Qwen T2I GGUF workflow always uses 4 steps and CFG `1`, including when Library metadata contains different recommended values; this does not apply to Qwen Image 2.1.
 
 ## LTX Director
 

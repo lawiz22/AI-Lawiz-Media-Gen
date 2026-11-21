@@ -182,7 +182,7 @@ export const LTXRipplePanel: React.FC<{
                 snapshot.nodes['1232'].seed = Math.floor(Math.random() * 1e15); onSettingsChange(snapshot);
             }
             if (action === 'check') {
-                const schemas = await loadRippleObjectInfo(abort.signal); setInfo(schemas);
+                const schemas = await loadRippleObjectInfo(abort.signal, true); setInfo(schemas);
                 buildRippleWorkflow(snapshot, source.prompt, { image: source.image!.name, video: source.video!.name }, schemas);
                 setStatus('Ripple nodes, models and settings validated. No upload or generation performed.');
             } else if (action === 'export') {

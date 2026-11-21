@@ -138,6 +138,13 @@ test('pre-aborted requests do not upload, queue or open a socket', async t => {
     const abort = new AbortController(); abort.abort(); const h = harness(t);
     await assert.rejects(h.run(draft(), abort.signal)); assert.equal(h.requests.length, 0); assert.equal(h.socket, undefined);
 });
+test('list loads reuse the cached schemas while a forced load re-reads the server', async t => {
+    const h = harness(t), schemas = () => h.requests.filter(r => r.path.startsWith('/object_info/')).length;
+    const first = await api.loadClothesSwitcherObjectInfo(undefined, true), count = schemas();
+    assert.ok(count > 0);
+    assert.equal(await api.loadClothesSwitcherObjectInfo(), first); assert.equal(schemas(), count);
+    assert.notEqual(await api.loadClothesSwitcherObjectInfo(undefined, true), first); assert.equal(schemas(), count * 2);
+});
 test('local draft storage round trips the actual File and protects invalid drafts', async t => {
     const prior = globalThis.clothesSwitcherDB; let stored, closed = 0;
     globalThis.clothesSwitcherDB = async () => ({ get: async () => stored, put: async (_, value) => { stored = value; }, close: () => { closed++; } });

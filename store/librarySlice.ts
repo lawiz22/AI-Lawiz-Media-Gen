@@ -5,22 +5,31 @@ import * as idb from '../services/idbLibraryService';
 import * as libraryService from '../services/libraryService';
 import { createVideoPlaceholderThumbnail, videoToThumbnail } from '../utils/imageUtils';
 
+// A video whose thumbnail cannot be rebuilt is not hydrated and decoded again on every Library refresh.
+const unrepairable = new Set<string>();
+
 export const fetchLibrary = createAsyncThunk('library/fetchLibrary', async (_, thunkAPI) => {
+    const projectEpoch = idb.getLibraryProjectEpoch();
     try {
         const items = await idb.getLibraryItems();
         const placeholder = createVideoPlaceholderThumbnail();
         for (const item of items) {
             if (item.mediaType === 'image' && item.name?.startsWith('Swap Anything - ')) {
                 item.mediaType = 'swap-anything';
+                idb.assertLibraryProjectEpoch(projectEpoch);
                 await idb.updateLibraryItem(item.id, { mediaType: 'swap-anything' });
             }
             if (!item.ltxDirectorOptions || (item.thumbnail && item.thumbnail !== placeholder) || (!item.media && !item.assetRefs?.media)) continue;
+            const repairKey = `${projectEpoch}:${item.id}`;
+            if (unrepairable.has(repairKey)) continue;
             try {
                 const hydratedItem = await idb.hydrateLibraryItem(item);
                 const thumbnail = await videoToThumbnail(hydratedItem.media, 256);
                 item.thumbnail = thumbnail;
+                idb.assertLibraryProjectEpoch(projectEpoch);
                 await idb.updateLibraryItem(item.id, { thumbnail });
             } catch (error) {
+                unrepairable.add(repairKey);
                 console.warn(`Could not repair the thumbnail for LTX video ${item.id}.`, error);
             }
         }
@@ -117,17 +126,18 @@ const librarySlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            .addCase(fetchLibrary.pending, (state) => {
+            .addCase(fetchLibrary.pending, (state, action) => {
                 state.status = 'loading';
+                state.fetchRequestId = action.meta.requestId;
             })
             .addCase(fetchLibrary.fulfilled, (state, action) => {
-                if (state.status !== 'loading') return;
+                if (state.status !== 'loading' || state.fetchRequestId !== action.meta.requestId) return;
                 state.status = 'succeeded';
                 state.items = action.payload;
                 state.error = null;
             })
             .addCase(fetchLibrary.rejected, (state, action) => {
-                if (state.status !== 'loading') return;
+                if (state.status !== 'loading' || state.fetchRequestId !== action.meta.requestId) return;
                 state.status = 'failed';
                 state.error = action.payload as string || 'Failed to fetch library';
             })

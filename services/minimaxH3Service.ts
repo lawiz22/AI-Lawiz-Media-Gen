@@ -55,8 +55,56 @@ export const jsonRequest = async (url: string, init: RequestInit = {}): Promise<
     if (!response.ok) throw new Error(`ComfyUI HTTP ${response.status}: ${(await response.text()).slice(0, 1800)}`);
     return response.json();
 };
-export const loadH3ObjectInfo = async (signal?: AbortSignal, variant: H3RenderWorkflow = 'reference'): Promise<H3ObjectInfo> => {
+const h3CatalogCache = new Map<string, Map<string, Promise<H3ObjectInfo>>>();
+export const clearH3CatalogCache = (): void => { h3CatalogCache.delete(minimaxComfyURL()); };
+export const loadH3Catalog = async (classes: string[], signal?: AbortSignal, force = false): Promise<H3ObjectInfo> => {
+    signal?.throwIfAborted();
     const base = minimaxComfyURL();
+    if (force) h3CatalogCache.delete(base);
+    let cache = h3CatalogCache.get(base);
+    if (!cache) { cache = new Map(); h3CatalogCache.set(base, cache); }
+    const names = [...new Set(classes)];
+    const key = `catalog:${names.join(',')}`;
+    let catalog = cache.get(key);
+    if (!catalog) {
+        const entries = cache;
+        const schemas = names.map(name => {
+            const nodeKey = `node:${name}`;
+            let node = entries.get(nodeKey);
+            if (!node) {
+                node = jsonRequest(`${base}/object_info/${encodeURIComponent(name)}`).then(payload => {
+                    if (!isRecord(payload)) throw new Error(`Invalid ComfyUI schema response for ${name}.`);
+                    const info: H3ObjectInfo = {};
+                    for (const [id, schema] of Object.entries(payload)) if (isRecord(schema)) info[id] = schema;
+                    return info;
+                }).catch(error => { entries.delete(nodeKey); throw error; });
+                entries.set(nodeKey, node);
+            }
+            return node;
+        });
+        catalog = Promise.all(schemas).then(schemas => {
+            const info: H3ObjectInfo = {};
+            for (const schema of schemas) Object.assign(info, schema);
+            return info;
+        })
+            .catch(error => { entries.delete(key); throw error; });
+        entries.set(key, catalog);
+    }
+    if (!signal) return catalog;
+    // Leaving a panel cancels its wait, not the shared request needed by other H3 panels.
+    return new Promise((resolve, reject) => {
+        const abort = () => reject(signal.reason);
+        signal.addEventListener('abort', abort, { once: true });
+        catalog.then(info => {
+            signal.removeEventListener('abort', abort);
+            if (signal.aborted) reject(signal.reason); else resolve(info);
+        }, error => {
+            signal.removeEventListener('abort', abort);
+            reject(error);
+        });
+    });
+};
+export const loadH3ObjectInfo = async (signal?: AbortSignal, variant: H3RenderWorkflow = 'reference', force = false): Promise<H3ObjectInfo> => {
     const classes = [
         'ResolutionSelector', 'PrimitiveFloat', 'ComfyMathExpression', 'UNETLoader', 'CLIPLoader', 'VAELoader',
         'ModelPreviewOverrideKJ', 'Power Lora Loader (rgthree)', 'MiniMaxH3ReferencePack', 'MiniMaxH3ReferenceToVideo',
@@ -71,16 +119,7 @@ export const loadH3ObjectInfo = async (signal?: AbortSignal, variant: H3RenderWo
             'LTXVAudioVAEEncode', 'LTXVAudioVAEDecode', 'ImpactExecutionOrderController', 'VHS_LoadVideo', 'VHS_VideoInfo', 'ImageScale',
         ]) : []),
     ];
-    const schemas = await Promise.all([...new Set(classes)].map(async name => {
-        const payload = await jsonRequest(`${base}/object_info/${encodeURIComponent(name)}`, { signal });
-        if (!isRecord(payload)) throw new Error(`Invalid ComfyUI schema response for ${name}.`);
-        return payload;
-    }));
-    const info: H3ObjectInfo = {};
-    for (const schema of schemas) for (const [name, node] of Object.entries(schema)) {
-        if (isRecord(node)) info[name] = node;
-    }
-    return info;
+    return loadH3Catalog(classes, signal, force);
 };
 export const parseH3Preview = (type: string, payload: unknown): H3Preview | null => {
     if (type !== 'kj_preview_override' || !isRecord(payload) || String(payload.node_id) !== '141' || typeof payload.image !== 'string' || !payload.image) return null;
@@ -155,6 +194,7 @@ export const generateMinimaxH3Video = async (
         let promptId = '';
         let settled = false;
         let checking = false;
+        let historyTimedOut = false;
         let ending = false;
         let submitted = false;
         let poll: ReturnType<typeof setInterval> | undefined;
@@ -163,6 +203,7 @@ export const generateMinimaxH3Video = async (
         let currentNode: string | undefined, step: number | undefined, totalSteps: number | undefined;
         const nodes = new Map<string, H3ExecutionProgress['nodes'][number]>();
         const videos = new Map<string, H3StageVideo>();
+        const historyController = new AbortController();
         const report = () => onExecution?.({
             nodes: [...nodes.values()].map(node => ({ ...node })), totalNodes: Object.keys(workflow).length,
             currentNode, step, totalSteps, elapsedSeconds: Math.floor((Date.now() - started) / 1000),
@@ -192,6 +233,7 @@ export const generateMinimaxH3Video = async (
         const cleanup = () => {
             clearTimeout(connectTimer); clearTimeout(jobTimer); clearInterval(poll); clearInterval(heartbeat);
             signal.removeEventListener('abort', abort);
+            historyController.abort();
             ws.close();
         };
         const fail = (error: unknown) => {
@@ -214,8 +256,12 @@ export const generateMinimaxH3Video = async (
             if (!promptId || settled || checking) return;
             checking = true;
             try {
-                const payload = await jsonRequest(`${base}/history/${encodeURIComponent(promptId)}`);
+                const payload = await jsonRequest(`${base}/history/${encodeURIComponent(promptId)}`, { signal: historyController.signal });
                 if (settled || signal.aborted) return;
+                if (historyTimedOut) {
+                    historyTimedOut = false;
+                    onProgress('ComfyUI history monitoring restored.', fraction());
+                }
                 const history = isRecord(payload) ? payload[promptId] : undefined;
                 if (isRecord(history)) {
                     const status = isRecord(history.status) ? history.status : {};
@@ -237,7 +283,13 @@ export const generateMinimaxH3Video = async (
                         resolve({ videoUrl, ...(videos.size ? { stageVideos: [...videos.values()] } : {}), promptId, workflow, prompt: displayed || fallbackPrompt, promptIsFinal: videoFinishing || !!displayed || options.promptProvider === 'none', seed: options.seed, options: resolvedOptions });
                     } else if (status.completed || ending) throw new Error(`H3 finished without a video in ${workflow['119'].class_type} output 119. Check the output format and ComfyUI logs.`);
                 }
-            } catch (cause) { fail(cause); }
+            } catch (cause) {
+                if (settled || signal.aborted) return;
+                if (cause instanceof Error && cause.name === 'TimeoutError') {
+                    historyTimedOut = true;
+                    onProgress(`ComfyUI history request timed out; retrying monitoring of job ${promptId}. The render may still be running; do not resubmit.`, fraction());
+                } else fail(cause);
+            }
             finally { checking = false; }
         };
         signal.addEventListener('abort', abort, { once: true });

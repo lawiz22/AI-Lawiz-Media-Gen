@@ -132,10 +132,9 @@ export interface CivitaiInventory {
     items: CivitaiInventoryItem[];
 }
 
-const WORKFLOW_DEFAULT_SETTINGS: Partial<Record<ComfyModelType, Pick<GenerationOptions, 'comfySteps' | 'comfyCfg' | 'comfySampler' | 'comfyScheduler' | 'comfyFluxGuidance'>>> = {
+const WORKFLOW_DEFAULT_SETTINGS: Partial<Record<ComfyModelType, Pick<GenerationOptions, 'comfySteps' | 'comfyCfg' | 'comfySampler' | 'comfyScheduler'>>> = {
     'sd1.5': { comfySteps: 25, comfyCfg: 7, comfySampler: 'euler', comfyScheduler: 'normal' },
     sdxl: { comfySteps: 25, comfyCfg: 5.5, comfySampler: 'euler', comfyScheduler: 'normal' },
-    flux: { comfySteps: 10, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'simple', comfyFluxGuidance: 3.5 },
     'qwen-t2i-gguf': { comfySteps: 4, comfyCfg: 1, comfySampler: 'euler_ancestral', comfyScheduler: 'beta57' },
     'z-image': { comfySteps: 8, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'simple' },
     'flux2-simple': { comfySteps: 10, comfyCfg: 1, comfySampler: 'euler' },
@@ -143,7 +142,8 @@ const WORKFLOW_DEFAULT_SETTINGS: Partial<Record<ComfyModelType, Pick<GenerationO
     'krea2-raw': { comfyCfg: 1 },
 };
 
-const getComfyOptions = (widgetInfo: unknown): string[] => Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0]) ? widgetInfo[0] : [];
+const getComfyOptions = (widgetInfo: unknown): string[] => !Array.isArray(widgetInfo) ? []
+    : Array.isArray(widgetInfo[0]) ? widgetInfo[0] : Array.isArray(widgetInfo[1]?.options) ? widgetInfo[1].options : [];
 
 const normalizeComfyOption = (value: string) => value.toLowerCase()
     .replace(/\+\+/g, 'pp')
@@ -181,7 +181,6 @@ export const getRecommendedSettingUpdates = (modelType: ComfyModelType, usageMet
         ...defaults,
         ...(usageMetadata?.steps ? { comfySteps: usageMetadata.steps } : {}),
         ...(usageMetadata?.cfg ? { comfyCfg: usageMetadata.cfg } : {}),
-        ...(modelType === 'flux' && usageMetadata?.guidance ? { comfyFluxGuidance: usageMetadata.guidance } : {}),
         ...(sampler ? { comfySampler: sampler } : {}),
         ...(scheduler ? { comfyScheduler: scheduler } : {}),
     };

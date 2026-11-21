@@ -29,6 +29,17 @@ const anglesUrl = compile(read('./characterAnglesWorkflow.ts'));
 const angles = await import(anglesUrl);
 const qwenUrl = compile(read('./qwen21Workflow.ts'));
 const qwen = await import(qwenUrl);
+const galleryUrl = compile(read('./styleGallery.ts'));
+const mossStyleUrl = compile(read('./mossStyleWorkflow.ts').replace("'./styleGallery'", JSON.stringify(galleryUrl)));
+const mossUrl = compile(read('./mossWorkflow.ts')
+    .replace("'./qwen21Workflow'", JSON.stringify(qwenUrl))
+    .replace("'./styleGallery'", JSON.stringify(galleryUrl))
+    .replace("'./mossStyleWorkflow'", JSON.stringify(mossStyleUrl)));
+const mossPhotoUrl = compile(read('./mossPhotoWorkflow.ts')
+    .replace("import template from '../assets/mossPhotoWorkflow.json';", `const template = ${read('../assets/mossPhotoWorkflow.json')};`)
+    .replace("'./qwen21Workflow'", JSON.stringify(qwenUrl))
+    .replace("'./mossStyleWorkflow'", JSON.stringify(mossStyleUrl)));
+const kreaEditUrl = compile(read('./krea2EditWorkflow.ts').replace("'./qwen21Workflow'", JSON.stringify(qwenUrl)));
 const api = await import(compile(read('./characterResults.ts')
     .replace("'./characterAnglesWorkflow'", JSON.stringify(anglesUrl))
     .replace("'./qwen21Workflow'", JSON.stringify(qwenUrl))
@@ -37,7 +48,10 @@ const api = await import(compile(read('./characterResults.ts')
 const generation = await import(compile(read('../store/generationSlice.ts')
     .replace("'@reduxjs/toolkit'", JSON.stringify(pathToFileURL(require.resolve('@reduxjs/toolkit')).href))
     .replace("'../services/characterAnglesWorkflow'", JSON.stringify(anglesUrl))
-    .replace("'../services/qwen21Workflow'", JSON.stringify(qwenUrl))));
+    .replace("'../services/qwen21Workflow'", JSON.stringify(qwenUrl))
+    .replace("'../services/mossWorkflow'", JSON.stringify(mossUrl))
+    .replace("'../services/mossPhotoWorkflow'", JSON.stringify(mossPhotoUrl))
+    .replace("'../services/krea2EditWorkflow'", JSON.stringify(kreaEditUrl))));
 const initial = generation.default(undefined, { type: 'test/init' });
 const options = overrides => ({ ...initial.characterOptions, ...overrides });
 const profiles = [
@@ -52,6 +66,43 @@ const profiles = [
     options({ provider: 'comfyui', comfyCharacterMode: 'qwen21-create', comfyQwen21CreateTurbo: true }),
     options({ provider: 'comfyui', comfyCharacterMode: 'qwen21-create', comfyQwen21Create: { ...qwen.defaultQwen21MultiOptions(), unet: 'other-qwen.safetensors' } }),
 ];
+
+test('the generation lock belongs to the workflow that took it', () => {
+    const lock = (state, payload) => generation.default(state, generation.setLoadingState(payload));
+    let state = lock(initial, { isLoading: true, owner: 'outpaint' });
+    assert.deepEqual([state.isLoading, state.loadingOwner, state.progressMessage], [true, 'outpaint', 'Initializing...']);
+    state = generation.default(state, generation.updateProgress({ message: 'Sampling', value: 0.4 }));
+    const foreignStart = lock(state, { isLoading: true, owner: 'blazing-fast' });
+    assert.deepEqual([foreignStart.loadingOwner, foreignStart.progressMessage, foreignStart.progressValue], ['outpaint', 'Sampling', 0.4]);
+    const foreignEnd = lock(state, { isLoading: false, owner: 'blazing-fast' });
+    assert.deepEqual([foreignEnd.isLoading, foreignEnd.loadingOwner, foreignEnd.progressMessage], [true, 'outpaint', 'Sampling']);
+    const released = lock(state, { isLoading: false, owner: 'outpaint' });
+    assert.deepEqual([released.isLoading, released.loadingOwner, released.progressValue], [false, null, 1]);
+    assert.equal(lock(released, { isLoading: true, owner: 'blazing-fast' }).loadingOwner, 'blazing-fast');
+    // Callers that do not name themselves keep the previous behaviour, including a forced release.
+    assert.equal(lock(state, { isLoading: false }).isLoading, false);
+    const anonymous = lock(initial, { isLoading: true });
+    assert.deepEqual([anonymous.isLoading, anonymous.loadingOwner], [true, null]);
+    assert.equal(lock(anonymous, { isLoading: false, owner: 'outpaint' }).isLoading, false);
+});
+
+test('saved options naming a removed workflow load with the default workflow; current ones are untouched', () => {
+    const removed = Object.keys(Function(`return ${read('../constants.ts').match(/export const REMOVED_IMAGE_WORKFLOWS: Record<string, string> = (\{[\s\S]*?\});/)[1]}`)());
+    assert.deepEqual(removed.sort(), ['flux', 'flux-krea', 'nunchaku-flux-image', 'nunchaku-kontext-flux', 'wan2.2']);
+    assert.deepEqual(Function(`return ${read('../store/generationSlice.ts').match(/const REMOVED_WORKFLOW_TYPES = (\[.*?\]);/)[1]}`)().sort(), removed);
+    const load = saved => generation.default(initial, generation.setOptions({ ...initial.options, ...saved })).options;
+    for (const comfyModelType of removed) {
+        const loaded = load({ provider: 'gemini', comfyModelType, geminiPrompt: 'kept' });
+        assert.deepEqual([loaded.comfyModelType, loaded.provider, loaded.geminiPrompt], [initial.options.comfyModelType, 'gemini', 'kept'], comfyModelType);
+    }
+    for (const comfyModelType of ['sdxl', 'flux2-simple', 'krea2-raw', 'qwen-edit']) assert.equal(load({ comfyModelType }).comfyModelType, comfyModelType);
+    const builder = read('./comfyUIService.ts'), app = read('../App.tsx');
+    assert.match(builder, /const removedMessage = removedImageWorkflowMessage\(options\.comfyModelType\);\s*if \(removedMessage\) throw new Error\(removedMessage\);/);
+    assert.equal(app.split("dispatch(setGlobalError({ title: 'Workflow removed', message: removedMessage }));").length - 1, 3);
+    for (const name of removed) assert.ok(!read('../components/ImageGeneratorHeader.tsx').includes(`'${name}'`), `${name} is still offered in the header`);
+    const destinations = read('../utils/promptDestination.ts').match(/export const PROMPT_T2I_WORKFLOWS[\s\S]*?\];/)[0];
+    for (const name of removed) assert.ok(!destinations.includes(`id: '${name}'`), `${name} is still a "Use Prompt In" destination`);
+});
 
 test('providers, cloud models, ComfyUI workflows, diffusion models and Turbo have distinct result keys', () => {
     assert.equal(new Set(profiles.map(api.getCharacterResultKey)).size, profiles.length);
@@ -134,7 +185,9 @@ const gridBody = grid.declarationList.declarations[0].initializer.body;
 const save = gridBody.statements.find(statement => ts.isVariableStatement(statement)
     && statement.declarationList.declarations.some(item => item.name.getText(gridTree) === 'handleSaveToLibrary'));
 assert.ok(save);
+const tagsUrl = compile(read('./libraryTags.ts'));
 const saving = await import(compile(`
+    import { imageGalleryStyleTag } from ${JSON.stringify(tagsUrl)};
     ${declaration(gridSource, 'generateCharacterDescription', 'ImageGrid.tsx')}
     export const saveImage = async ({ options, sourceImage, characterName, contentKey, activeTab, images }) => {
         const actions = [];

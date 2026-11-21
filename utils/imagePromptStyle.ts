@@ -5,9 +5,6 @@ export const getImagePromptStyleInstruction = (modelType: ComfyModelType | 'gemi
         case 'sd1.5':
         case 'face-detailer-sd1.5':
             return 'Your response MUST be a very simple, comma-separated list of keywords. Do not use sentences.';
-        case 'flux':
-        case 'nunchaku-flux-image':
-        case 'flux-krea':
         case 'qwen-t2i-gguf':
         case 'qwen21-t2i':
         case 'qwen21-turbo':

@@ -18,7 +18,7 @@ const getModelListFromInfo = (widgetInfo: any): string[] => {
     if (Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0])) {
         return widgetInfo[0] || [];
     }
-    return [];
+    return Array.isArray(widgetInfo?.[1]?.options) ? widgetInfo[1].options : [];
 };
 
 export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
@@ -53,7 +53,7 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
         <button type="button" onClick={() => setIsOpen(open => !open)} aria-expanded={isOpen} className="flex w-full justify-between border-b border-accent/30 pb-2 font-bold uppercase text-accent">Sampler Settings (MOSS)<span>{isOpen ? '-' : '+'}</span></button>
         {isOpen && <div className="mt-4"><MossSettingsPanel section="sampler" options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} /></div>}
     </div>;
-    const supportedModels = ['sdxl', 'sd1.5', 'flux', 'qwen-t2i-gguf', 'qwen-edit', 'qwen21-t2i', 'qwen21-turbo', 'z-image', 'flux2-simple', 'krea2-simple', 'krea2-raw'];
+    const supportedModels = ['sdxl', 'sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'qwen21-t2i', 'qwen21-turbo', 'z-image', 'flux2-simple', 'krea2-simple', 'krea2-raw'];
     if (!modelType || !supportedModels.includes(modelType)) return null;
 
     const styleSampling = modelType === 'krea2-simple' || modelType === 'flux2-simple' ? imageStyleSampling(options) : undefined;
@@ -97,7 +97,6 @@ export const SamplerSettingsPanel: React.FC<SamplerSettingsPanelProps> = ({
                                 ? { comfyKreaStyle: { ...style, settings: { ...style.settings, ...sampling } } }
                                 : { comfyFlux2Style: { ...style, settings: { ...style.settings, ...sampling } } });
                         }} />}
-                    {modelType === 'flux' && <NumberSlider label={`FLUX Guidance: ${options.comfyFluxGuidance || 2}`} value={options.comfyFluxGuidance || 2} onChange={handleSliderChange('comfyFluxGuidance')} min={0} max={10} step={0.1} disabled={isDisabled} />}
                 </>}
 
                 <div className="border-t border-border-primary/50 pt-2">

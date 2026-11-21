@@ -29,6 +29,7 @@ assert.ok(saveHandler);
 const { outputText } = ts.transpileModule(`
 import React, { useEffect, useMemo, useRef, useState } from ${JSON.stringify(pathToFileURL(require.resolve('react')).href)};
 const useDispatch = () => () => { throw new Error('SSR must not save Library items'); };
+const useUnmountCleanup = () => () => {};
 ${componentSource}
 export const saveHarness = (file, persist) => {
     let result = file, saveState = null, error = '';

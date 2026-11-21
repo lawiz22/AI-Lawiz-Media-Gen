@@ -15,6 +15,7 @@ import {
 import { emptyCreationSuiteLive, generateCreationSuite, loadCreationSuiteDraft, loadCreationSuiteObjectInfo, prepareCreationSuiteWorkflow, saveCreationSuiteDraft, type CreationSuiteResult } from '../services/creationSuiteService';
 import { createVideoPlaceholderThumbnail } from '../utils/imageUtils';
 import { useMediaURL } from './VideoReferenceEditor';
+import { useDraftAutosave } from './useDraftAutosave';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { CreationSuiteResult as CreationSuiteResultImage } from './CreationSuiteResult';
 import { CreationSuiteLivePreview } from './CreationSuiteLivePreview';
@@ -67,12 +68,10 @@ export const CreationSuitePanel: React.FC<{
         loadCreationSuiteDraft().then(value => { if (value) setDraft(value); setReady(true); })
             .catch(cause => setStorageError(`Could not restore Creation suite. Saving is disabled to protect the existing draft. ${errorText(cause)}`));
     }, []);
-    useEffect(() => {
-        if (!ready) return;
-        const snapshot = draft;
+    useDraftAutosave(draft, ready, snapshot => {
         saves.current = saves.current.then(() => saveCreationSuiteDraft(snapshot)).then(() => setStorageError(''))
             .catch(cause => setStorageError(`Could not save Creation suite locally: ${errorText(cause)}`));
-    }, [draft, ready]);
+    });
     useEffect(() => {
         const abort = new AbortController();
         loadCreationSuiteObjectInfo(abort.signal).then(setInfo).catch(cause => {
@@ -146,7 +145,7 @@ export const CreationSuitePanel: React.FC<{
         try {
             const current: CreationSuiteDraft = latest.current;
             validateCreationSuiteDraft(current);
-            const nodes = await loadCreationSuiteObjectInfo(); setInfo(nodes);
+            const nodes = await loadCreationSuiteObjectInfo(undefined, true); setInfo(nodes);
             buildCreationSuiteWorkflow(current.settings, Object.fromEntries(Object.entries(current.files).filter(([, file]) => !!file).map(([role, file]) => [role, file.name])), nodes);
             setStatus('Active Creation suite nodes, models and parameters validated. No upload or job was queued.');
         } catch (cause) { setError(errorText(cause)); } finally { setChecking(false); }
@@ -156,7 +155,7 @@ export const CreationSuitePanel: React.FC<{
         if (!exportOnly) setLive(emptyCreationSuiteLive());
         const abort = new AbortController(); controller.current = abort;
         const snapshot = { settings: structuredClone(latest.current.settings), files: { ...latest.current.files } };
-        dispatch(setLoadingState({ isLoading: true }));
+        dispatch(setLoadingState({ isLoading: true, owner: 'creation-suite' }));
         try {
             if (exportOnly) {
                 const workflow = await prepareCreationSuiteWorkflow(snapshot, abort.signal);
@@ -170,7 +169,7 @@ export const CreationSuitePanel: React.FC<{
                     '120': { ...current.settings.nodes['120'], seed: generated.settings.nodes['120'].seed } } } }));
             }
         } catch (cause) { setError(errorText(cause)); }
-        finally { controller.current = null; setRunning(false); setCancelling(false); dispatch(setLoadingState({ isLoading: false })); }
+        finally { controller.current = null; setRunning(false); setCancelling(false); dispatch(setLoadingState({ isLoading: false, owner: 'creation-suite' })); }
     };
     const save = async (output?: 'scene' | 'swap') => {
         setSaving(true); setError(''); setStatus('');

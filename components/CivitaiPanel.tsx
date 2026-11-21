@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     CIVITAI_FAMILIES,
     CIVITAI_SORTS,
@@ -20,6 +20,7 @@ import {
     getPreviewMedia,
     searchCivitaiModels,
 } from '../services/civitaiService';
+import { getComfyUIObjectInfo } from '../services/comfyUIService';
 import { CheckIcon, CloseIcon, DownloadIcon, LibraryIcon, SpinnerIcon } from './icons';
 import { CivitaiInventoryPanel } from './CivitaiInventoryPanel';
 import { useModelInventory } from './useModelInventory';
@@ -239,6 +240,13 @@ export const CivitaiPanel: React.FC<{ libraryRequest?: { path: string; id: numbe
     const [settingsMessage, setSettingsMessage] = useState('');
     const [download, setDownload] = useState<DownloadState | null>(null);
     const { inventory, setInventory, error: inventoryError } = useModelInventory();
+    const installedFiles = useRef<{ root: string; files: string } | null>(null);
+    useEffect(() => {
+        const previous = installedFiles.current, files = inventory.items.map(item => item.relativePath).join('\n');
+        installedFiles.current = { root: inventory.root, files };
+        // A downloaded, moved or removed model changes the lists ComfyUI offers in every tab.
+        if (previous?.root && previous.root === inventory.root && previous.files !== files) void getComfyUIObjectInfo(true).catch(() => undefined);
+    }, [inventory]);
     const [isScanning, setIsScanning] = useState(false);
     const [isOrganizing, setIsOrganizing] = useState(false);
     const [organizeMessage, setOrganizeMessage] = useState('');

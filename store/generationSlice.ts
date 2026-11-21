@@ -17,6 +17,9 @@ const KREA_TURBO_LORA_FIELDS = [
   'comfyKreaLora6Name',
 ] as const;
 
+// Same keys as REMOVED_IMAGE_WORKFLOWS in constants.ts; local because tests compile this file on its own.
+const REMOVED_WORKFLOW_TYPES = ['flux', 'flux-krea', 'nunchaku-kontext-flux', 'nunchaku-flux-image', 'wan2.2'];
+
 const initialOptions: GenerationOptions = {
   provider: 'comfyui',
   pastForwardProvider: 'comfyui',
@@ -159,59 +162,6 @@ const initialOptions: GenerationOptions = {
 
   // Video Generation
   videoProvider: 'comfyui',
-
-  // ComfyUI Video Defaults (I2V)
-  comfyVidModelType: 'wan-i2v',
-  comfyVidWanI2VPositivePrompt: 'cinematic shot of a majestic lion walking through the savanna',
-  comfyVidWanI2VNegativePrompt: 'blurry, bad quality, low-res, ugly, deformed, disfigured, text, watermark',
-  comfyVidWanI2VSteps: 6,
-  comfyVidWanI2VCfg: 1,
-  comfyVidWanI2VSampler: 'euler',
-  comfyVidWanI2VScheduler: 'simple',
-  comfyVidWanI2VFrameCount: 65,
-  comfyVidWanI2VRefinerStartStep: 3,
-  comfyVidWanI2VUseLightningLora: true,
-  comfyVidWanI2VHighNoiseLoraStrength: 2.0,
-  comfyVidWanI2VLowNoiseLoraStrength: 1.0,
-  comfyVidWanI2VUseFilmGrain: true,
-  comfyVidWanI2VFilmGrainIntensity: 0.02,
-  comfyVidWanI2VFilmGrainSize: 0.3, // Saturation Mix
-  comfyVidWanI2VFrameRate: 24,
-  comfyVidWanI2VVideoFormat: 'video/nvenc_h264-mp4',
-  comfyVidWanI2VUseEndFrame: false,
-  comfyVidWanI2VNoiseSeed: undefined,
-  comfyVidWanI2VSeedControl: 'randomize',
-
-  // ComfyUI Video Defaults (T2V)
-  comfyVidWanT2VHighNoiseModel: 'Wan2.2-T2V-A14B-HighNoise-Q5_K_M.gguf',
-  comfyVidWanT2VLowNoiseModel: 'Wan2.2-T2V-A14B-LowNoise-Q5_K_M.gguf',
-  comfyVidWanT2VClipModel: 'umt5-xxl-encoder-Q5_K_M.gguf',
-  comfyVidWanT2VVaeModel: 'wan_2.1_vae.safetensors',
-  comfyVidWanT2VPositivePrompt: 'A confident woman with red hair in a vibrant patterned dress against a plain green background., at sunrise with golden light, a steady tracking shot, the camera moves alongside the subject',
-  comfyVidWanT2VNegativePrompt: 'blurry, low quality, pixelated, distorted, out of frame, cropped, watermark, text, bad anatomy, disfigured, mutated, extra limbs, extra arms, extra legs, extra fingers, fused fingers, deformed hands, disconnected limbs, broken body, twisted posture, bad face, deformed face, asymmetrical face, mutated eyes, long neck, short limbs, unnatural body, flickering, jitter, duplicated body, ghosting, static pose, unnatural movement, stiff animation, camera shake, distorted perspective, ugly, poorly drawn, cartoon, 3d render, cgi',
-  comfyVidWanT2VWidth: 856,
-  comfyVidWanT2VHeight: 480,
-  comfyVidWanT2VFrameCount: 57,
-  comfyVidWanT2VSteps: 6,
-  comfyVidWanT2VCfg: 1,
-  comfyVidWanT2VSampler: 'euler',
-  comfyVidWanT2VScheduler: 'simple',
-  comfyVidWanT2VRefinerStartStep: 3,
-  comfyVidWanT2VNoiseSeed: undefined,
-  comfyVidWanT2VSeedControl: 'randomize',
-  comfyVidWanT2VUseLightningLora: true,
-  comfyVidWanT2VLightningLoraHigh: 'Wan2.2-Lightning_T2V-A14B-4steps-lora_HIGH_fp16.safetensors',
-  comfyVidWanT2VLightningLoraStrengthHigh: 2.0,
-  comfyVidWanT2VLightningLoraLow: 'Wan2.2-Lightning_T2V-A14B-4steps-lora_LOW_fp16.safetensors',
-  comfyVidWanT2VLightningLoraStrengthLow: 1.0,
-  comfyVidWanT2VUseOptionalLora: false,
-  comfyVidWanT2VOptionalLoraName: '',
-  comfyVidWanT2VOptionalLoraStrength: 1.0,
-  comfyVidWanT2VUseFilmGrain: true,
-  comfyVidWanT2VFilmGrainIntensity: 0.02,
-  comfyVidWanT2VFilmGrainSaturation: 0.3,
-  comfyVidWanT2VFrameRate: 24,
-  comfyVidWanT2VVideoFormat: 'video/nvenc_h264-mp4',
 };
 
 const initialCharacterOptions: GenerationOptions = {
@@ -275,6 +225,7 @@ const initialState: GenerationSliceState = {
   },
   characterOptions: initialCharacterOptions,
   isLoading: false,
+  loadingOwner: null,
   progressMessage: '',
   progressValue: 0,
   generatedContent: {
@@ -321,7 +272,10 @@ const generationSlice = createSlice({
       state.elementImages = action.payload;
     },
     setOptions: (state, action: PayloadAction<GenerationOptions>) => {
-      state.options = action.payload;
+      // Old cloud items can carry the type of a removed ComfyUI workflow.
+      state.options = REMOVED_WORKFLOW_TYPES.includes(action.payload.comfyModelType || '')
+        ? { ...action.payload, comfyModelType: initialOptions.comfyModelType }
+        : action.payload;
     },
     updateOptions: (state, action: PayloadAction<Partial<GenerationOptions>>) => {
       state.options = { ...state.options, ...action.payload };
@@ -420,21 +374,27 @@ const generationSlice = createSlice({
     updateCharacterOptions: (state, action: PayloadAction<Partial<GenerationOptions>>) => {
       state.characterOptions = { ...state.characterOptions, ...action.payload };
     },
-    setLoadingState: (state, action: PayloadAction<{ isLoading: boolean; message?: string; value?: number }>) => {
-      state.isLoading = action.payload.isLoading;
-      state.progressMessage = action.payload.message ?? (action.payload.isLoading ? 'Initializing...' : '');
-      state.progressValue = action.payload.value ?? (action.payload.isLoading ? 0 : 1);
+    setLoadingState: (state, action: PayloadAction<{ isLoading: boolean; message?: string; value?: number; owner?: string }>) => {
+      const { isLoading, message, value, owner } = action.payload;
+      // The lock belongs to the workflow that took it: another one can neither take it over nor release it.
+      if (state.isLoading && state.loadingOwner && owner && owner !== state.loadingOwner) return;
+      state.isLoading = isLoading;
+      state.loadingOwner = isLoading ? owner ?? null : null;
+      state.progressMessage = message ?? (isLoading ? 'Initializing...' : '');
+      state.progressValue = value ?? (isLoading ? 0 : 1);
     },
     updateProgress: (state, action: PayloadAction<{ message: string, value: number }>) => {
       state.progressMessage = action.payload.message;
       state.progressValue = action.payload.value;
     },
-    setGeneratedImages: (state, action: PayloadAction<{ tabId: string; images: { src: string, seed?: number, usageMetadata?: any, before?: string }[] }>) => {
-      const { tabId, images } = action.payload;
+    setGeneratedImages: (state, action: PayloadAction<{ tabId: string; images: { src: string, seed?: number, usageMetadata?: any, before?: string }[]; options?: GenerationOptions }>) => {
+      const { tabId, images, options } = action.payload;
       if (!state.generatedContent[tabId]) {
         state.generatedContent[tabId] = { images: [], lastUsedPrompt: null };
       }
       state.generatedContent[tabId].images = images.map(({ src, seed, usageMetadata, before }) => ({ src, seed, saved: 'idle', usageMetadata, before }));
+      if (options) state.generatedContent[tabId].options = structuredClone(options);
+      else if (!images.length) delete state.generatedContent[tabId].options;
     },
     setImageSaveStatus: (state, action: PayloadAction<{ tabId: string; index: number; status: 'idle' | 'saving' | 'saved' }>) => {
       const { tabId, index, status } = action.payload;

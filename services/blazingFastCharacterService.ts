@@ -1,5 +1,5 @@
 import { openDB } from 'idb';
-import { jsonRequest, minimaxComfyURL } from './minimaxH3Service';
+import { jsonRequest, loadH3Catalog, minimaxComfyURL } from './minimaxH3Service';
 import { isRecord, type H3ObjectInfo, type H3Workflow } from './minimaxH3Workflow';
 import { executeComfyGraph, comfyOutputImage, comfyOutputText, type GraphLive } from './comfyGraphExecution';
 import { blazingOutputs, blazingPoseCount, BLAZING_TEMPLATE, buildBlazingWorkflow, validateBlazingDraft, type BlazingDraft } from './blazingFastCharacterWorkflow';
@@ -25,19 +25,13 @@ export const saveBlazingDraft = async (draft: BlazingDraft): Promise<void> => {
     const db = await database();
     try { await db.put('workspace', draft, 'draft'); } finally { db.close(); }
 };
-export const loadBlazingObjectInfo = async (signal?: AbortSignal): Promise<H3ObjectInfo> => {
-    const classes = [...new Set([...Object.values(BLAZING_TEMPLATE).map(node => node.class_type).filter(name => name !== 'CustomCombo'), 'LoraLoaderModelOnly', 'LoraLoader', 'BasicScheduler'])];
-    const schemas = await Promise.all(classes.map(async name => {
-        const payload = await jsonRequest(`${minimaxComfyURL()}/object_info/${encodeURIComponent(name)}`, { signal });
-        if (!isRecord(payload)) throw new Error(`Invalid ComfyUI schema: ${name}.`);
-        return payload;
-    }));
-    return Object.assign({}, ...schemas);
-};
+// Lists are served from the shared cache; force re-reads the server before validating or queueing.
+export const loadBlazingObjectInfo = (signal?: AbortSignal, force = false): Promise<H3ObjectInfo> =>
+    loadH3Catalog([...Object.values(BLAZING_TEMPLATE).map(node => node.class_type).filter(name => name !== 'CustomCombo'), 'LoraLoaderModelOnly', 'LoraLoader', 'BasicScheduler'], signal, force);
 export const prepareBlazingWorkflow = async (draft: BlazingDraft, style: GalleryStyle | undefined, signal: AbortSignal): Promise<H3Workflow> => {
     validateBlazingDraft(draft); signal.throwIfAborted();
     if (!draft.file) throw new Error('Choose a character reference image.');
-    const info = await loadBlazingObjectInfo(signal);
+    const info = await loadBlazingObjectInfo(signal, true);
     signal.throwIfAborted();
     buildBlazingWorkflow(draft.settings, draft.file.name, style, info);
     const form = new FormData();

@@ -37,8 +37,9 @@ test('Tools includes Outpaint and Upscale alongside every existing utility', () 
     }
 });
 test('moved panels exist once under Tools; Upscale retains both existing child workflows', () => {
-    const start = app.indexOf("<React.Activity mode={activeTab === 'video-utils'");
-    const end = app.indexOf("<React.Activity mode={activeTab === 'video' ||", start);
+    const start = app.indexOf("<TabActivity mode={activeTab === 'video-utils'");
+    const end = app.indexOf("<TabActivity mode={activeTab === 'video' ||", start);
+    assert.ok(start > 0 && end > start);
     const workspace = app.slice(start, end);
     for (const [id, component] of [['outpaint', 'OutpaintPanel'], ['upscale', 'UpscalePanel']]) {
         assert.ok(!app.includes(`{ id: '${id}', label:`), `${id} must not be a root tab`);

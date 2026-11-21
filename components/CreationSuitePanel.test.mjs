@@ -26,7 +26,7 @@ const component = await import(compile(`
     import { defaultCreationSuiteSettings, creationSuitePrompt, CREATION_SUITE_HELPERS, CREATION_SUITE_INPUTS } from '${workflowURL}';
     import { CreationSuiteLivePreview } from '${liveURL}';
     const emptyCreationSuiteLive = () => ({ phase: 'queued', nodes: [], sigmas: [], deltas: [], stepTimes: [] });
-    const useDispatch = () => () => {}, useSelector = () => false, useMediaURL = () => '';
+    const useDispatch = () => () => {}, useSelector = () => false, useMediaURL = () => '', useDraftAutosave = () => {};
     const LibraryPickerModal = () => null, CreationSuiteResultImage = () => null;
     ${componentSource.replace(/import[\s\S]*?from\s+'[^']+';/g, '')}
     export { Accordion };

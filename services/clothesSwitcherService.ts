@@ -1,5 +1,5 @@
 import { openDB } from 'idb';
-import { jsonRequest, minimaxComfyURL } from './minimaxH3Service';
+import { jsonRequest, loadH3Catalog, minimaxComfyURL } from './minimaxH3Service';
 import { isRecord, type H3ObjectInfo, type H3Workflow } from './minimaxH3Workflow';
 import { mossPreviewBlob } from './mossWorkflow';
 import { buildClothesSwitcherWorkflow, CLOTHES_SWITCHER_TEMPLATE, upgradeClothesSwitcherSettings, validateClothesSwitcherDraft, type ClothesSwitcherDraft, type ClothesSwitcherSettings } from './clothesSwitcherWorkflow';
@@ -38,18 +38,13 @@ export const saveClothesSwitcherDraft = async (draft: ClothesSwitcherDraft): Pro
     const db = await database();
     try { await db.put('drafts', draft, 'workspace'); } finally { db.close(); }
 };
-export const loadClothesSwitcherObjectInfo = async (signal?: AbortSignal): Promise<H3ObjectInfo> => {
-    const schemas = await Promise.all([...new Set(Object.values(CLOTHES_SWITCHER_TEMPLATE).map(node => node.class_type))].map(async name => {
-        const schema = await jsonRequest(`${minimaxComfyURL()}/object_info/${encodeURIComponent(name)}`, { signal });
-        if (!isRecord(schema)) throw new Error(`Invalid Clothes Switcher schema for ${name}.`);
-        return schema;
-    }));
-    return Object.assign({}, ...schemas);
-};
+// Lists are served from the shared cache; force re-reads the server before validating or queueing.
+export const loadClothesSwitcherObjectInfo = (signal?: AbortSignal, force = false): Promise<H3ObjectInfo> =>
+    loadH3Catalog(Object.values(CLOTHES_SWITCHER_TEMPLATE).map(node => node.class_type), signal, force);
 export const prepareClothesSwitcherWorkflow = async (draft: ClothesSwitcherDraft, signal: AbortSignal): Promise<H3Workflow> => {
     validateClothesSwitcherDraft(draft); signal.throwIfAborted();
     if (!draft.file) throw new Error('Choose the original photo for Clothes Switcher.');
-    const info = await loadClothesSwitcherObjectInfo(signal);
+    const info = await loadClothesSwitcherObjectInfo(signal, true);
     buildClothesSwitcherWorkflow(draft.settings, draft.file.name, info);
     const form = new FormData();
     form.append('image', draft.file, `clothes-switcher-${crypto.randomUUID()}-${draft.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`);

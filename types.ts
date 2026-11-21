@@ -194,14 +194,12 @@ export type EraStyle = 'a modern digital photograph' | 'a 1990s magazine ad' | '
 export type GeminiMode = 'i2i' | 't2i';
 export type GeminiPoseSource = 'mannequin' | 'json';
 export type GeminiT2IModel = string;
+// 'flux', 'wan2.2', 'nunchaku-*' and 'flux-krea' only exist in saved items: those workflows were removed.
 export type ComfyModelType = 'sd1.5' | 'sdxl' | 'flux' | 'wan2.2' | 'qwen-edit' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea' | 'face-detailer-sd1.5' | 'qwen-t2i-gguf' | 'qwen21-t2i' | 'qwen21-turbo' | 'qwen21-remove-background' | 'qwen21-i2i-consistency' | 'qwen21-i2i-turbo' | 'qwen21-i2i-multi' | 'qwen21-character-scene' | 'z-image' | 'flux2-simple' | 'flux2-edit' | 'krea2-simple' | 'krea2-raw' | 'krea2-edit' | 'moss-image' | 'moss-photo';
 export type Flux2ReferenceRole = 'identity' | 'outfit' | 'background' | 'pose' | 'style' | 'custom';
-export type ComfyVideoModelType = 'wan-i2v' | 'wan-t2v' | 'svd';
 export type Provider = 'gemini' | 'comfyui' | 'mammouth';
 export type VideoProvider = 'gemini' | 'comfyui';
 export type ClothingStyleConsistency = 'varied' | 'strict';
-export type NunchakuPrecision = 'nunchaku-fp16' | 'bfloat16' | 'float32';
-export type NunchakuAttention = 'nunchaku-fp16' | 'flash-attention2';
 
 export interface GenerationOptions {
   provider: Provider;
@@ -373,7 +371,7 @@ export interface GenerationOptions {
   comfySdxlLora4Name?: string;
   comfySdxlLora4Strength?: number;
 
-  // Flux Specific
+  // FLUX 1 (workflow removed): still shown by the Library for saved items
   comfyFluxGuidance?: number;
   comfyFluxUseLora?: boolean;
   comfyFluxLora1Name?: string;
@@ -384,10 +382,6 @@ export interface GenerationOptions {
   comfyFluxLora3Strength?: number;
   comfyFluxLora4Name?: string;
   comfyFluxLora4Strength?: number;
-
-  comfyFluxClip1?: string;
-  comfyFluxClip2?: string;
-  comfyFluxVae?: string;
 
   // Qwen Specific
   comfyQwenUseLora?: boolean;
@@ -501,64 +495,6 @@ export interface GenerationOptions {
   comfySd15Lora4Name?: string;
   comfySd15Lora4Strength?: number;
 
-  // WAN 2.2 specific
-  comfyWanHighNoiseModel?: string;
-  comfyWanLowNoiseModel?: string;
-  comfyWanClipModel?: string;
-  comfyWanVaeModel?: string;
-  comfyWanRefinerStartStep?: number;
-  comfyWanUseFusionXLora?: boolean;
-  comfyWanFusionXLoraStrength?: number;
-  comfyWanFusionXLoraName?: string;
-  comfyWanUseLightningLora?: boolean;
-  comfyWanLightningLoraStrength?: number;
-  comfyWanLightningLoraNameHigh?: string;
-  comfyWanLightningLoraNameLow?: string;
-  comfyWanUseStockPhotoLora?: boolean;
-  comfyWanStockPhotoLoraStrength?: number;
-  comfyWanStockPhotoLoraNameHigh?: string;
-  comfyWanStockPhotoLoraNameLow?: string;
-
-  // Nunchaku specific
-  comfyNunchakuModel?: string;
-  comfyNunchakuVae?: string;
-  comfyNunchakuClipL?: string;
-  comfyNunchakuT5XXL?: string;
-  comfyFluxGuidanceKontext?: number; // Used by both nunchaku workflows
-  comfyNunchakuCacheThreshold?: number;
-  comfyNunchakuCpuOffload?: 'auto' | 'enable' | 'disable';
-  comfyNunchakuAttention?: NunchakuAttention;
-  comfyNunchakuUseTurboLora?: boolean;
-  comfyNunchakuTurboLoraName?: string;
-  comfyNunchakuTurboLoraStrength?: number;
-  comfyNunchakuUseNudifyLora?: boolean;
-  comfyNunchakuNudifyLoraName?: string;
-  comfyNunchakuNudifyLoraStrength?: number;
-  comfyNunchakuUseDetailLora?: boolean;
-  comfyNunchakuDetailLoraName?: string;
-  comfyNunchakuDetailLoraStrength?: number;
-  comfyNunchakuBaseShift?: number; // Only for image workflow
-  comfyNunchakuMaxShift?: number; // Only for image workflow
-
-  // FLUX Krea specific
-  comfyFluxKreaModel?: string;
-  comfyFluxKreaClipT5?: string;
-  comfyFluxKreaClipL?: string;
-  comfyFluxKreaVae?: string;
-  useP1x4r0maWomanLora?: boolean;
-  p1x4r0maWomanLoraStrength?: number;
-  p1x4r0maWomanLoraName?: string;
-  useNippleDiffusionLora?: boolean;
-  nippleDiffusionLoraStrength?: number;
-  nippleDiffusionLoraName?: string;
-  usePussyDiffusionLora?: boolean;
-  pussyDiffusionLoraStrength?: number;
-  pussyDiffusionLoraName?: string;
-  comfyFluxKreaUseUpscaler?: boolean;
-  comfyFluxKreaUpscaleModel?: string;
-  comfyFluxKreaDenoise?: number;
-  comfyFluxKreaUpscalerSteps?: number;
-
   // Face Detailer specific
   comfyDetailerBboxModel?: string;
   comfyDetailerSamModel?: string;
@@ -586,66 +522,7 @@ export interface GenerationOptions {
   geminiVidUseEndFrame?: boolean;
 
   // ComfyUI Video
-  comfyVidModelType?: ComfyVideoModelType;
-  comfyVidWanI2VHighNoiseModel?: string;
-  comfyVidWanI2VLowNoiseModel?: string;
-  comfyVidWanI2VClipModel?: string;
-  comfyVidWanI2VVaeModel?: string;
-  comfyVidWanI2VClipVisionModel?: string;
   comfyVidWanI2VPositivePrompt?: string;
-  comfyVidWanI2VNegativePrompt?: string;
-  comfyVidWanI2VSteps?: number;
-  comfyVidWanI2VCfg?: number;
-  comfyVidWanI2VSampler?: string;
-  comfyVidWanI2VScheduler?: string;
-  comfyVidWanI2VFrameCount?: number;
-  comfyVidWanI2VRefinerStartStep?: number;
-  comfyVidWanI2VUseLightningLora?: boolean;
-  comfyVidWanI2VHighNoiseLora?: string;
-  comfyVidWanI2VHighNoiseLoraStrength?: number;
-  comfyVidWanI2VLowNoiseLora?: string;
-  comfyVidWanI2VLowNoiseLoraStrength?: number;
-  comfyVidWanI2VUseFilmGrain?: boolean;
-  comfyVidWanI2VFilmGrainIntensity?: number;
-  comfyVidWanI2VFilmGrainSize?: number; // It's actually saturation mix
-  comfyVidWanI2VFrameRate?: number;
-  comfyVidWanI2VVideoFormat?: string;
-  comfyVidWanI2VWidth?: number;
-  comfyVidWanI2VHeight?: number;
-  comfyVidWanI2VUseEndFrame?: boolean;
-  comfyVidWanI2VNoiseSeed?: number;
-  comfyVidWanI2VSeedControl?: 'fixed' | 'randomize';
-
-  // WAN 2.2 T2I specific (new)
-  comfyVidWanT2VPositivePrompt?: string;
-  comfyVidWanT2VNegativePrompt?: string;
-  comfyVidWanT2VWidth?: number;
-  comfyVidWanT2VHeight?: number;
-  comfyVidWanT2VFrameCount?: number;
-  comfyVidWanT2VSteps?: number;
-  comfyVidWanT2VCfg?: number;
-  comfyVidWanT2VSampler?: string;
-  comfyVidWanT2VScheduler?: string;
-  comfyVidWanT2VRefinerStartStep?: number;
-  comfyVidWanT2VNoiseSeed?: number;
-  comfyVidWanT2VSeedControl?: 'fixed' | 'randomize';
-  comfyVidWanT2VUseLightningLora?: boolean;
-  comfyVidWanT2VLightningLoraHigh?: string;
-  comfyVidWanT2VLightningLoraStrengthHigh?: number;
-  comfyVidWanT2VLightningLoraLow?: string;
-  comfyVidWanT2VLightningLoraStrengthLow?: number;
-  comfyVidWanT2VUseOptionalLora?: boolean;
-  comfyVidWanT2VOptionalLoraName?: string;
-  comfyVidWanT2VOptionalLoraStrength?: number;
-  comfyVidWanT2VUseFilmGrain?: boolean;
-  comfyVidWanT2VFilmGrainIntensity?: number;
-  comfyVidWanT2VFilmGrainSaturation?: number;
-  comfyVidWanT2VFrameRate?: number;
-  comfyVidWanT2VVideoFormat?: string;
-  comfyVidWanT2VHighNoiseModel?: string;
-  comfyVidWanT2VLowNoiseModel?: string;
-  comfyVidWanT2VClipModel?: string;
-  comfyVidWanT2VVaeModel?: string;
 }
 
 export interface IdentifiedClothing {
@@ -1094,6 +971,16 @@ export interface LogoThemeState {
   albumCoverError?: string | null;
 }
 
+export type LibraryPicker =
+  | 'isClothingPickerOpen' | 'isBackgroundPickerOpen' | 'isPosePickerOpen' | 'isCharacterSourcePickerOpen' | 'isRefineSourcePickerOpen'
+  | 'isMaskPickerOpen' | 'isElementPickerOpen'
+  | 'isPromptGenImagePickerOpen' | 'isPromptGenBgImagePickerOpen' | 'isPromptGenSubjectImagePickerOpen'
+  | 'isClothesSourcePickerOpen' | 'isHairSourcePickerOpen' | 'isObjectSourcePickerOpen' | 'isPoseSourcePickerOpen' | 'isMannequinRefPickerOpen' | 'isFontSourcePickerOpen'
+  | 'isColorImagePickerOpen' | 'isVideoUtilsPickerOpen' | 'isResizeCropPickerOpen' | 'isGroupFusionPickerOpen'
+  | 'isLogoRefPickerOpen' | 'isLogoPalettePickerOpen' | 'isLogoFontPickerOpen'
+  | 'isBannerRefPickerOpen' | 'isBannerPalettePickerOpen' | 'isBannerLogoPickerOpen' | 'isBannerFontPickerOpen'
+  | 'isAlbumCoverRefPickerOpen' | 'isAlbumCoverPalettePickerOpen' | 'isAlbumCoverLogoPickerOpen' | 'isAlbumCoverFontPickerOpen';
+
 export interface AppSliceState {
   currentUser: User | null;
   theme: string;
@@ -1109,6 +996,7 @@ export interface AppSliceState {
     id: string;
     imageDataUrl?: string;
     prompt?: string;
+    promptDurationSeconds?: number;
     ttsText?: string;
     ttsSegments?: Array<{ prompt: string; ttsText: string; imageDataUrl?: string }>;
     audioDataUrl?: string;
@@ -1123,45 +1011,9 @@ export interface AppSliceState {
   isSettingsModalOpen: boolean;
   isVisualSettingsModalOpen: boolean;
   isComfyUIHelperOpen: boolean;
-  isClothingPickerOpen: boolean;
-  isBackgroundPickerOpen: boolean;
-  isPosePickerOpen: boolean;
-  isColorImagePickerOpen: boolean;
-  isVideoUtilsPickerOpen: boolean;
-  isStartFramePickerOpen: boolean;
-  isEndFramePickerOpen: boolean;
-  isLogoRefPickerOpen: boolean;
-  isLogoPalettePickerOpen: boolean;
-  isLogoFontPickerOpen: boolean;
   isOAuthHelperOpen: boolean;
-  isPromptGenImagePickerOpen: boolean;
-  isPromptGenBgImagePickerOpen: boolean;
-  isPromptGenSubjectImagePickerOpen: boolean;
-  isNunchakuSourcePickerOpen: boolean;
-  isCharacterSourcePickerOpen: boolean;
-  isVideoStartFramePickerOpen: boolean;
-  isVideoEndFramePickerOpen: boolean;
-  isGeminiVideoSourcePickerOpen: boolean;
-
-  isClothesSourcePickerOpen: boolean;
-  isHairSourcePickerOpen: boolean;
-  isObjectSourcePickerOpen: boolean;
-  isPoseSourcePickerOpen: boolean;
-  isBannerRefPickerOpen: boolean;
-  isBannerPalettePickerOpen: boolean;
-  isBannerLogoPickerOpen: boolean;
-  isBannerFontPickerOpen: boolean;
-  isAlbumCoverRefPickerOpen: boolean;
-  isAlbumCoverPalettePickerOpen: boolean;
-  isAlbumCoverLogoPickerOpen: boolean;
-  isAlbumCoverFontPickerOpen: boolean;
-  isMannequinRefPickerOpen: boolean;
-  isRefineSourcePickerOpen: boolean;
-  isFontSourcePickerOpen: boolean;
-  isMaskPickerOpen: boolean;
-  isElementPickerOpen: boolean;
-  isResizeCropPickerOpen: boolean;
-  isGroupFusionPickerOpen: boolean;
+  /** The "choose from Library" dialog currently open; only one can be open at a time. */
+  activePicker: LibraryPicker | null;
 
   // Google Drive State
   driveFolder: DriveFolder | null;
@@ -1194,6 +1046,8 @@ export interface GenerationSliceState {
   comfyDefaultOptionsByModel: Partial<Record<ComfyModelType, GenerationOptions>>;
   characterOptions: GenerationOptions; // Added character options
   isLoading: boolean;
+  /** Workflow that holds the generation lock, when it named itself. */
+  loadingOwner: string | null;
   progressMessage: string;
   progressValue: number;
   generatedContent: {
@@ -1209,17 +1063,12 @@ export interface GenerationSliceState {
         };
       }[];
       lastUsedPrompt: string | null;
+      options?: GenerationOptions;
     }
   };
 }
 
 export interface VideoSliceState {
-  // Video Generation
-  videoStartFrame: File | null;
-  videoEndFrame: File | null;
-  generatedVideoUrl: { url: string; saved: 'idle' | 'saving' | 'saved' } | null;
-  generationOptionsForSave: GenerationOptions | null;
-
   // Video Utilities
   videoUtilsState: VideoUtilsState;
   activeVideoUtilsSubTab: 'frames' | 'clips' | 'audio-extractor' | 'merge' | 'reference-maker' | 'colors' | 'resize-crop' | 'voice-recorder' | 'outpaint' | 'upscale';
@@ -1232,6 +1081,7 @@ export interface LibrarySliceState {
   items: LibraryItem[];
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
+  fetchRequestId?: string;
 }
 
 export interface UploadedFile {

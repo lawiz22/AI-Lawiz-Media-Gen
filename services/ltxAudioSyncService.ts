@@ -1,5 +1,5 @@
 import { AUDIO_SYNC_TEMPLATE, audioSyncInputPrompt, audioSyncNumber, audioSyncPromptText, buildAudioSyncWorkflow, validateAudioSyncDraft, type AudioSyncDraft, type AudioSyncSettings } from './ltxAudioSyncWorkflow';
-import { h3VideoFromHistory, jsonRequest, minimaxComfyURL } from './minimaxH3Service';
+import { h3VideoFromHistory, jsonRequest, loadH3Catalog, minimaxComfyURL } from './minimaxH3Service';
 import { isRecord, type H3ObjectInfo, type H3Workflow } from './minimaxH3Workflow';
 
 export interface AudioSyncResult {
@@ -12,18 +12,9 @@ export interface AudioSyncResult {
     workflow: H3Workflow;
 }
 
-export const loadAudioSyncObjectInfo = async (signal?: AbortSignal): Promise<H3ObjectInfo> => {
-    const base = minimaxComfyURL();
-    const classes = new Set([...Object.values(AUDIO_SYNC_TEMPLATE).map(value => value.class_type), 'UnetLoaderGGUF', 'CLIPLoaderGGUF', 'LoraLoaderModelOnly']);
-    const schemas = await Promise.all([...classes].map(async name => {
-        const response = await jsonRequest(`${base}/object_info/${encodeURIComponent(name)}`, { signal });
-        if (!isRecord(response)) throw new Error(`Invalid ComfyUI schema for ${name}.`);
-        return response;
-    }));
-    const info: H3ObjectInfo = {};
-    for (const schema of schemas) for (const [name, spec] of Object.entries(schema)) if (isRecord(spec)) info[name] = spec;
-    return info;
-};
+// Lists are served from the shared cache; force re-reads the server before validating or queueing.
+export const loadAudioSyncObjectInfo = (signal?: AbortSignal, force = false): Promise<H3ObjectInfo> =>
+    loadH3Catalog([...Object.values(AUDIO_SYNC_TEMPLATE).map(value => value.class_type), 'UnetLoaderGGUF', 'CLIPLoaderGGUF', 'LoraLoaderModelOnly'], signal, force);
 
 const upload = async (base: string, file: File, signal?: AbortSignal): Promise<string> => {
     const form = new FormData();
@@ -43,7 +34,7 @@ export const prepareAudioSyncWorkflow = async (
     signal.throwIfAborted();
     validateAudioSyncDraft(draft, settings);
     onProgress('Checking LTX Audio-Sync nodes, models and settings...', 0.01);
-    const info = await loadAudioSyncObjectInfo(signal);
+    const info = await loadAudioSyncObjectInfo(signal, true);
     const prompt = audioSyncInputPrompt(draft);
     buildAudioSyncWorkflow(settings, prompt, { image: draft.image?.name, audio: draft.audio!.name }, info);
     const base = minimaxComfyURL();

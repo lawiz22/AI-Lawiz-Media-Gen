@@ -15,16 +15,17 @@ import { setActiveTab } from '../store/appSlice';
 import { createAccentStyle } from '../utils/accentTheme';
 import { getPromptDestinationOptions, PROMPT_T2I_WORKFLOWS } from '../utils/promptDestination';
 import { OllamaActivityPanel } from './OllamaActivityPanel';
+import { useUnmountCleanup } from './useUnmountCleanup';
 import { getOpenRouterSettings } from '../services/openRouterService';
 import { buildPromptSoupIngredients, getPromptSoupSourceClass, getPromptSoupSourceHex } from '../utils/promptSoup';
 
 
-type PromptModelType = 'sd1.5' | 'sdxl' | 'flux' | 'flux2-simple' | 'gemini' | 'nunchaku-kontext-flux' | 'nunchaku-flux-image' | 'flux-krea';
-type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'wan-video' | 'qwen-image';
+type PromptModelType = 'sd1.5' | 'sdxl' | 'flux2-simple' | 'gemini';
+type PromptCategory = 'image' | 'background' | 'subject' | 'soup' | 'qwen-image';
 type AnalysisProvider = 'gemini' | 'mammouth' | 'openrouter' | 'ollama' | 'comfyui';
 
 const getComfyChoices = (input: any): string[] => {
-    const choices = Array.isArray(input?.[0]) ? input[0] : [];
+    const choices = Array.isArray(input?.[0]) ? input[0] : Array.isArray(input?.[1]?.options) ? input[1].options : [];
     return choices.filter((choice: unknown): choice is string => typeof choice === 'string' && Boolean(choice));
 };
 
@@ -36,13 +37,12 @@ const PROMPT_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     'qwen-image': createAccentStyle('#60a5fa', '#93c5fd', '#2563eb'),
 };
 
-const createPromptThumbnail = (text: string, type: PromptCategory, modelType: PromptModelType | 'wan2.2' | 'qwen-image', promptParts?: PromptSoupPart[]): string => {
+const createPromptThumbnail = (text: string, type: PromptCategory, modelType: PromptModelType | 'qwen-image', promptParts?: PromptSoupPart[]): string => {
     const colors: Record<PromptCategory, string> = {
         image: '#06b6d4',
         background: '#4ade80',
         subject: '#facc15',
         soup: '#a78bfa',
-        'wan-video': '#ec4899',
         'qwen-image': '#3b82f6',
     };
     const borderColor = colors[type] || '#374151';
@@ -255,7 +255,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         setOllamaActivity(current => current ? { ...current, phase: 'cancelled' } : current);
     };
 
-    useEffect(() => () => ollamaAbortController.current?.abort(), []);
+    const root = useUnmountCleanup(() => ollamaAbortController.current?.abort());
 
     const [bgModelType, setBgModelType] = useState<PromptModelType>('sdxl');
     const [isBgLoading, setIsBgLoading] = useState<boolean>(false);
@@ -335,13 +335,13 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     }, [activeSubTab, analysisProvider]);
 
     useEffect(() => {
-        if (activeSubTab === 'qwen-image' || activeSubTab === 'wan-video') setActiveSubTab('from-image');
+        if (activeSubTab === 'qwen-image') setActiveSubTab('from-image');
     }, [activeSubTab, setActiveSubTab]);
 
     const handleSavePrompt = async (
         promptToSave: string, 
         type: PromptCategory,
-        modelTypeToSave: PromptModelType | 'wan2.2' | 'qwen-image',
+        modelTypeToSave: PromptModelType | 'qwen-image',
         sourceFile: File | null,
         promptParts?: PromptSoupPart[],
     ) => {
@@ -536,7 +536,6 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         const types: { id: PromptModelType; label: string }[] = [
             { id: 'gemini', label: 'Narrative (Very Long)' },
             { id: 'flux2-simple', label: 'Prompt Segment (FLUX2)' },
-            { id: 'flux', label: 'Descriptive (FLUX)' },
             { id: 'sdxl', label: 'Sentence (SDXL)' },
             { id: 'sd1.5', label: 'Keywords (SD1.5)' },
         ];
@@ -635,7 +634,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     ];
 
     return (
-        <div className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto" style={PROMPT_ACCENT_STYLES[activeSubTab] || PROMPT_ACCENT_STYLES['prompt-soup']}>
+        <div ref={root} className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto" style={PROMPT_ACCENT_STYLES[activeSubTab] || PROMPT_ACCENT_STYLES['prompt-soup']}>
             {renderProviderSelector()}
             <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
 

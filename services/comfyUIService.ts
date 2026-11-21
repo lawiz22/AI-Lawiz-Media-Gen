@@ -2,16 +2,9 @@ import type { ComfyModelType, GenerationOptions, PromptSoupIngredient, PromptSou
 import {
     COMFYUI_SD15_WORKFLOW_TEMPLATE,
     COMFYUI_WORKFLOW_TEMPLATE,
-    COMFYUI_WAN22_WORKFLOW_TEMPLATE,
-    COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE,
-    COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE,
-    COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE,
-    COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE,
-    COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE,
     COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE,
     COMFYUI_QWEN_WORKFLOW_TEMPLATE,
     COMFYUI_QWEN_EDIT_WORKFLOW_TEMPLATE,
-    COMFYUI_FLUX_WORKFLOW_TEMPLATE,
     COMFYUI_Z_IMAGE_WORKFLOW_TEMPLATE,
     COMFYUI_FLUX2_SIMPLE_WORKFLOW_TEMPLATE,
     FLUX2_RESOLUTION_OPTIONS,
@@ -19,9 +12,11 @@ import {
     KREA2_RESOLUTION_OPTIONS,
     COMFYUI_KREA2_RAW_WORKFLOW_TEMPLATE,
     KREA2_RAW_RESOLUTION_OPTIONS,
+    removedImageWorkflowMessage,
 } from "../constants";
 
 import { generateMammouthText } from './mammouthService';
+import { cachedComfyCatalog, comfyInput, comfyWidgetChoices, loadComfyCatalog, loadComfyNodes, subscribeComfyCatalog } from './comfyCatalog';
 import { generateOpenRouterText } from './openRouterService';
 import { getSeedVr2Models, selectSeedVr2Model } from '../utils/seedVr2Models';
 import { generateGeminiText } from './geminiService';
@@ -299,27 +294,23 @@ const sanitizeFilename = (filename: string): string => {
 let currentExecution: { clientId: string; ws: WebSocket; reject: (reason?: any) => void } | null = null;
 
 export const cancelComfyUIExecution = async (): Promise<void> => {
-    if (!currentExecution) {
+    const execution = currentExecution;
+    if (!execution) {
         console.warn("No ComfyUI execution to cancel.");
         return;
     }
     const url = getComfyUIUrl();
-    if (!url) return;
 
     try {
         // ComfyUI's interrupt endpoint does not require a body.
-        await fetch(`${url}/interrupt`, { method: 'POST' });
+        if (url) await fetch(`${url}/interrupt`, { method: 'POST', signal: AbortSignal.timeout(5000) });
         console.log("ComfyUI execution interrupt requested.");
-
-        currentExecution.reject(new Error('Operation was cancelled by the user.'));
-
-        if (currentExecution.ws.readyState === WebSocket.OPEN || currentExecution.ws.readyState === WebSocket.CONNECTING) {
-            currentExecution.ws.close();
-        }
     } catch (e) {
         console.error("Failed to send interrupt request to ComfyUI:", e);
     } finally {
-        currentExecution = null;
+        // The caller is released even when the server cannot be reached.
+        execution.reject(new Error('Operation was cancelled by the user.'));
+        if (currentExecution === execution) currentExecution = null;
     }
 };
 
@@ -392,13 +383,12 @@ const formatTtsVoiceLabel = (voice: string): string => {
 export const getTtsReferenceVoices = async (): Promise<TtsReferenceVoice[]> => {
     const url = getComfyUIUrl();
     if (!url) throw new Error('ComfyUI URL not set');
-    const response = await fetch(`${url}/object_info/UnifiedTTSTextNode`);
-    if (!response.ok) throw new Error('Could not load TTS Audio Suite voices.');
-    const objectInfo = await response.json();
-    const choices = objectInfo?.UnifiedTTSTextNode?.input?.required?.narrator_voice?.[0];
-    if (!Array.isArray(choices)) throw new Error('TTS Audio Suite did not return a voice list.');
-    return choices
-        .filter((voice): voice is string => typeof voice === 'string' && voice !== 'none')
+    // Both TTS panels ask on every tab visit; they share one answer for 30 seconds.
+    const nodes = await loadComfyNodes(url, ['UnifiedTTSTextNode'], { maxAgeMs: 30000 }).catch(() => { throw new Error('Could not load TTS Audio Suite voices.'); });
+    const widget = comfyInput(nodes, 'UnifiedTTSTextNode', 'narrator_voice');
+    if (!Array.isArray(widget)) throw new Error('TTS Audio Suite did not return a voice list.');
+    return comfyWidgetChoices(widget)
+        .filter(voice => voice !== 'none')
         .map((voice) => ({ value: voice, label: formatTtsVoiceLabel(voice) }));
 };
 
@@ -845,13 +835,19 @@ export const checkConnection = async (url: string): Promise<{ success: boolean; 
     }
 };
 
-export const getComfyUIObjectInfo = async (): Promise<any> => {
+export const getComfyUIObjectInfo = async (force = false): Promise<any> => {
     const url = getComfyUIUrl();
     if (!url) throw new Error('ComfyUI URL not set');
-    const response = await fetch(`${url}/object_info`);
-    if (!response.ok) throw new Error('Failed to fetch ComfyUI object info');
-    return response.json();
+    // Readiness checks must see the server's current state; checks a few seconds apart share one answer.
+    return loadComfyCatalog(url, { maxAgeMs: 10000, force });
 };
+
+/** Calls the listener whenever the configured server's catalog actually changes. */
+export const subscribeComfyUIObjectInfo = (listener: (info: any) => void): (() => void) =>
+    subscribeComfyCatalog(base => {
+        const info = base === getComfyUIUrl() ? cachedComfyCatalog(base) : undefined;
+        if (info) listener(info);
+    });
 
 export const generateComfyUISwapAnything = async (
     destinationImage: File,
@@ -1122,7 +1118,9 @@ const executeWorkflow = async (
         onProgress("Connecting to ComfyUI...", 0.1);
         const ws = new WebSocket(wsUrl);
         if (onPreview) ws.binaryType = 'arraybuffer';
-        currentExecution = { clientId, ws, reject };
+        let settled = false;
+        let queuedPromptId = '';
+        let queueing: Promise<void> | undefined;
 
         const cleanup = () => {
             if (currentExecution && currentExecution.clientId === clientId) {
@@ -1132,18 +1130,121 @@ const executeWorkflow = async (
                 ws.close();
             }
         };
+        const finish = (settle: () => void) => {
+            if (settled) return;
+            settled = true;
+            settle();
+            cleanup();
+        };
+        const fail = (error: unknown) => finish(() => reject(error));
+        currentExecution = { clientId, ws, reject: fail };
 
-        ws.onopen = async () => {
-            try {
-                onProgress("Queueing prompt...", 0.2);
-                await queuePrompt(workflow, clientId);
-            } catch (err) {
-                reject(err);
-                cleanup();
+        const collectOutputs = async (outputs: any) => {
+            const imageOutputs = [];
+            let videoUrl = null;
+            let audioUrl = null;
+
+            for (const nodeId in outputs) {
+                const nodeOutput = outputs[nodeId];
+                const genericFiles = Array.isArray(nodeOutput.files) ? nodeOutput.files : [];
+                const audioFiles = genericFiles.filter((file: any) => /\.(wav|mp3|flac|m4a|ogg|opus|aac)$/i.test(file.filename || ''));
+                const audioList = Array.isArray(nodeOutput.audio)
+                    ? nodeOutput.audio
+                    : Array.isArray(nodeOutput.audios) ? nodeOutput.audios : audioFiles;
+                if (audioList.length > 0 && audioList[0].filename) {
+                    const audioFile = audioList[0];
+                    audioUrl = `${url}/view?filename=${encodeURIComponent(audioFile.filename)}&subfolder=${encodeURIComponent(audioFile.subfolder || '')}&type=${encodeURIComponent(audioFile.type || 'output')}`;
+                }
+                let videoList = [];
+                if (nodeOutput.ui && Array.isArray(nodeOutput.ui.videos)) videoList = nodeOutput.ui.videos;
+                else if (Array.isArray(nodeOutput.videos)) videoList = nodeOutput.videos;
+                else if (Array.isArray(nodeOutput.gifs)) videoList = nodeOutput.gifs;
+                else if (genericFiles.length > 0) videoList = genericFiles.filter((file: any) => !audioFiles.includes(file));
+                if (videoList.length > 0) {
+                    const videoFile = videoList[0];
+                    if (videoFile.filename) {
+                        videoUrl = `${url}/view?filename=${encodeURIComponent(videoFile.filename)}&subfolder=${encodeURIComponent(videoFile.subfolder || '')}&type=${encodeURIComponent(videoFile.type || 'output')}`;
+                        break;
+                    }
+                }
+            }
+
+            const imageOutputNodeIds = imageNodeOrder || Object.keys(outputs);
+            for (const nodeId of imageOutputNodeIds) {
+                if (outputs[nodeId]?.images) {
+                    for (const image of outputs[nodeId].images) {
+                        const isVideoFile = image.format?.startsWith('video/') || image.filename?.endsWith('.mp4');
+                        if (isVideoFile && !videoUrl) {
+                            videoUrl = `${url}/view?filename=${encodeURIComponent(image.filename)}&subfolder=${encodeURIComponent(image.subfolder || '')}&type=${image.type}`;
+                        } else if (!isVideoFile) {
+                            const fileUrl = `${url}/view?filename=${encodeURIComponent(image.filename)}&subfolder=${encodeURIComponent(image.subfolder || '')}&type=${image.type}`;
+                            const imageRes = await fetch(fileUrl);
+                            const blob = await imageRes.blob();
+                            const dataUrl = await new Promise<string>(res => {
+                                const reader = new FileReader();
+                                reader.onload = () => res(reader.result as string);
+                                reader.readAsDataURL(blob);
+                            });
+                            imageOutputs.push(dataUrl);
+                        }
+                    }
+                }
+            }
+            return { images: imageOutputs, videoUrl, audioUrl };
+        };
+
+        // A dropped socket does not stop the job on the server: its outcome is read from the history.
+        const recoverFromHistory = async () => {
+            await queueing?.catch(() => undefined);
+            if (settled) return;
+            if (!queuedPromptId) {
+                fail(new Error('The connection to ComfyUI closed before the job was queued.'));
+                return;
+            }
+            onProgress('Live connection lost. Checking the job on ComfyUI...', 0.3);
+            let failedChecks = 0;
+            while (!settled) {
+                try {
+                    const historyRes = await fetch(`${url}/history/${queuedPromptId}`);
+                    if (!historyRes.ok) throw new Error(historyRes.statusText);
+                    const history = (await historyRes.json())[queuedPromptId];
+                    if (settled) return;
+                    if (history?.status?.status_str === 'error') {
+                        fail(new Error(`ComfyUI execution error: ${JSON.stringify(history.status.messages ?? history.status).slice(0, 2000)}`));
+                        return;
+                    }
+                    if (history?.outputs) {
+                        if (onNodeOutput) for (const [nodeId, output] of Object.entries(history.outputs)) onNodeOutput(nodeId, output);
+                        const result = await collectOutputs(history.outputs);
+                        finish(() => resolve(result));
+                        return;
+                    }
+                    const queueRes = await fetch(`${url}/queue`);
+                    if (!queueRes.ok) throw new Error(queueRes.statusText);
+                    const queue = await queueRes.json();
+                    const known = [...(queue.queue_running || []), ...(queue.queue_pending || [])]
+                        .some((entry: any) => Array.isArray(entry) && entry[1] === queuedPromptId);
+                    failedChecks = known ? 0 : failedChecks + 1;
+                } catch (error) {
+                    console.warn('ComfyUI job recovery check failed', error);
+                    failedChecks++;
+                }
+                if (failedChecks >= 3) {
+                    fail(new Error('The connection to ComfyUI was lost and the job could not be found on the server. Check that ComfyUI is running, then try again.'));
+                    return;
+                }
+                await new Promise(res => setTimeout(res, 2000));
             }
         };
 
+        ws.onopen = () => {
+            onProgress("Queueing prompt...", 0.2);
+            queueing = queuePrompt(workflow, clientId).then(id => { queuedPromptId = id; });
+            queueing.catch(fail);
+        };
+
         ws.onmessage = async (event) => {
+            if (settled) return;
             if (onPreview && event.data instanceof ArrayBuffer) {
                 const preview = mossPreviewBlob(event.data);
                 if (preview) onPreview(preview);
@@ -1201,87 +1302,35 @@ const executeWorkflow = async (
                         const history = await fetchHistoryWithRetries(retries, delay);
                         const outputs = history.outputs;
                         if (onNodeOutput) for (const [nodeId, output] of Object.entries(outputs)) onNodeOutput(nodeId, output);
-                        const imageOutputs = [];
-                        let videoUrl = null;
-                        let audioUrl = null;
+                        const result = await collectOutputs(outputs);
 
-                        for (const nodeId in outputs) {
-                            const nodeOutput = outputs[nodeId];
-                            const genericFiles = Array.isArray(nodeOutput.files) ? nodeOutput.files : [];
-                            const audioFiles = genericFiles.filter((file: any) => /\.(wav|mp3|flac|m4a|ogg|opus|aac)$/i.test(file.filename || ''));
-                            const audioList = Array.isArray(nodeOutput.audio)
-                                ? nodeOutput.audio
-                                : Array.isArray(nodeOutput.audios) ? nodeOutput.audios : audioFiles;
-                            if (audioList.length > 0 && audioList[0].filename) {
-                                const audioFile = audioList[0];
-                                audioUrl = `${url}/view?filename=${encodeURIComponent(audioFile.filename)}&subfolder=${encodeURIComponent(audioFile.subfolder || '')}&type=${encodeURIComponent(audioFile.type || 'output')}`;
-                            }
-                            let videoList = [];
-                            if (nodeOutput.ui && Array.isArray(nodeOutput.ui.videos)) videoList = nodeOutput.ui.videos;
-                            else if (Array.isArray(nodeOutput.videos)) videoList = nodeOutput.videos;
-                            else if (Array.isArray(nodeOutput.gifs)) videoList = nodeOutput.gifs;
-                            else if (genericFiles.length > 0) videoList = genericFiles.filter((file: any) => !audioFiles.includes(file));
-                            if (videoList.length > 0) {
-                                const videoFile = videoList[0];
-                                if (videoFile.filename) {
-                                    videoUrl = `${url}/view?filename=${encodeURIComponent(videoFile.filename)}&subfolder=${encodeURIComponent(videoFile.subfolder || '')}&type=${encodeURIComponent(videoFile.type || 'output')}`;
-                                    break;
-                                }
-                            }
-                        }
-
-                        const imageOutputNodeIds = imageNodeOrder || Object.keys(outputs);
-                        for (const nodeId of imageOutputNodeIds) {
-                            if (outputs[nodeId]?.images) {
-                                for (const image of outputs[nodeId].images) {
-                                    const isVideoFile = image.format?.startsWith('video/') || image.filename?.endsWith('.mp4');
-                                    if (isVideoFile && !videoUrl) {
-                                        videoUrl = `${url}/view?filename=${encodeURIComponent(image.filename)}&subfolder=${encodeURIComponent(image.subfolder || '')}&type=${image.type}`;
-                                    } else if (!isVideoFile) {
-                                        const fileUrl = `${url}/view?filename=${encodeURIComponent(image.filename)}&subfolder=${encodeURIComponent(image.subfolder || '')}&type=${image.type}`;
-                                        const imageRes = await fetch(fileUrl);
-                                        const blob = await imageRes.blob();
-                                        const dataUrl = await new Promise<string>(res => {
-                                            const reader = new FileReader();
-                                            reader.onload = () => res(reader.result as string);
-                                            reader.readAsDataURL(blob);
-                                        });
-                                        imageOutputs.push(dataUrl);
-                                    }
-                                }
-                            }
-                        }
-
-                        if (!videoUrl && !audioUrl && imageOutputs.length < expectedImageCount) {
-                            onProgress(`Generated ${imageOutputs.length}/${expectedImageCount} images...`, 0.95);
+                        if (!result.videoUrl && !result.audioUrl && result.images.length < expectedImageCount) {
+                            onProgress(`Generated ${result.images.length}/${expectedImageCount} images...`, 0.95);
                             break;
                         }
-                        if (onPreview) cleanup();
-                        resolve({ images: imageOutputs, videoUrl, audioUrl });
+                        finish(() => resolve(result));
                     } catch (err) {
-                        reject(err);
-                        cleanup();
+                        fail(err);
                     }
                     break;
                 case 'execution_interrupted':
-                    reject(new Error('Operation was cancelled by the user.'));
-                    cleanup();
-                    break;
                 case 'execution_error':
-                    reject(new Error(`ComfyUI execution error: ${JSON.stringify(data.data)}`));
-                    cleanup();
+                    // ComfyUI broadcasts interruptions to every client, including those waiting in the queue.
+                    if (queuedPromptId && data.data?.prompt_id && data.data.prompt_id !== queuedPromptId) break;
+                    fail(new Error(data.type === 'execution_interrupted'
+                        ? 'Operation was cancelled by the user.'
+                        : `ComfyUI execution error: ${JSON.stringify(data.data)}`));
                     break;
             }
         };
 
         ws.onerror = (err) => {
             console.error("WebSocket Error:", err);
-            reject(new Error("WebSocket connection failed. Ensure the ComfyUI server is running and accessible."));
-            cleanup();
+            if (!queueing) fail(new Error("WebSocket connection failed. Ensure the ComfyUI server is running and accessible."));
         };
 
         ws.onclose = () => {
-            cleanup();
+            if (!settled) void recoverFromHistory();
         };
     });
 };
@@ -1324,11 +1373,7 @@ export const generateSeedVr2Upscale = async (
     updateProgress: (message: string, value: number) => void,
 ): Promise<string> => {
     const resolution = Math.min(2180, Math.max(256, Math.round(options.resolution / 2) * 2));
-    const url = getComfyUIUrl();
-    if (!url) throw new Error('ComfyUI URL not set');
-    const objectInfoResponse = await fetch(`${url}/object_info`);
-    if (!objectInfoResponse.ok) throw new Error('Could not inspect the installed ComfyUI nodes.');
-    const objectInfo = await objectInfoResponse.json();
+    const objectInfo = await getComfyUIObjectInfo();
     const requiredNodes = ['SeedVR2LoadDiTModel', 'SeedVR2LoadVAEModel', 'SeedVR2VideoUpscaler'];
     const missingNodes = requiredNodes.filter((nodeName) => !objectInfo[nodeName]);
     if (missingNodes.length > 0) {
@@ -1470,11 +1515,7 @@ export const generateZImageCreativeUpscale = async (
     updateProgress: (message: string, value: number) => void,
     onPromptReady?: (prompt: string) => void,
 ): Promise<string> => {
-    const url = getComfyUIUrl();
-    if (!url) throw new Error('ComfyUI URL not set');
-    const objectInfoResponse = await fetch(`${url}/object_info`);
-    if (!objectInfoResponse.ok) throw new Error('Could not inspect the installed ComfyUI nodes.');
-    const objectInfo = await objectInfoResponse.json();
+    const objectInfo = await getComfyUIObjectInfo();
     const requiredNodes = ['UNETLoader', 'VAELoader', 'CLIPLoaderGGUF', 'Florence2Run', 'DownloadAndLoadFlorence2Model', 'AddTextPrefix', 'easy showAnything', 'ZImageTurboProgressiveLockedUpscale', 'UpscaleModelLoader'];
     const missingNodes = requiredNodes.filter((nodeName) => !objectInfo[nodeName]);
     if (missingNodes.length > 0) throw new Error(`Z-Image Creative Upscale nodes are not installed or loaded: ${missingNodes.join(', ')}.`);
@@ -1658,6 +1699,8 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
         const settings = (mode === 'turbo' ? options.comfyQwen21Turbo : options.comfyQwen21T2i) || defaultQwen21Settings(mode);
         return buildQwen21Workflow(mode, settings, options.comfySeed ?? Math.floor(Math.random() * 1e15));
     }
+    const removedMessage = removedImageWorkflowMessage(options.comfyModelType);
+    if (removedMessage) throw new Error(removedMessage);
     let workflow;
 
     const findNodeKey = (wf: any, identifier: string, by: 'title' | 'class_type' | 'key') => {
@@ -1685,10 +1728,6 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
 
     switch (options.comfyModelType) {
         case 'sd1.5': workflow = JSON.parse(JSON.stringify(COMFYUI_SD15_WORKFLOW_TEMPLATE)); break;
-        case 'wan2.2': workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_WORKFLOW_TEMPLATE)); break;
-        case 'nunchaku-kontext-flux': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_WORKFLOW_TEMPLATE)); break;
-        case 'nunchaku-flux-image': workflow = JSON.parse(JSON.stringify(COMFYUI_NUNCHAKU_FLUX_IMAGE_WORKFLOW_TEMPLATE)); break;
-        case 'flux-krea': workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_KREA_WORKFLOW_TEMPLATE)); break;
         case 'face-detailer-sd1.5': workflow = JSON.parse(JSON.stringify(COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE)); break;
         case 'qwen-edit': {
             if (!sourceFile) throw new Error('Qwen Image Edit requires a source image.');
@@ -1765,126 +1804,6 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             break;
         }
 
-        case 'flux': {
-            workflow = JSON.parse(JSON.stringify(COMFYUI_FLUX_WORKFLOW_TEMPLATE));
-
-            // Set Prompts
-            if (workflow["6"]) workflow["6"].inputs.text = options.comfyPrompt || '';
-            if (workflow["33"]) {
-                workflow["33"].inputs.text = options.comfyNegativePrompt || '';
-            }
-
-            // Set Flux Guidance
-            if (workflow["35"]) workflow["35"].inputs.guidance = options.comfyFluxGuidance || 3.5;
-
-            // Set Checkpoint
-            if (workflow["43"] && options.comfyModel) workflow["43"].inputs.ckpt_name = options.comfyModel;
-
-            // Set CLIPs
-            if (workflow["44"]) {
-                if (options.comfyFluxClip1) workflow["44"].inputs.clip_name1 = options.comfyFluxClip1;
-                if (options.comfyFluxClip2) workflow["44"].inputs.clip_name2 = options.comfyFluxClip2;
-            }
-
-            // Set VAE
-            if (workflow["45"] && options.comfyFluxVae) {
-                workflow["45"].inputs.vae_name = options.comfyFluxVae;
-            }
-
-            // Dynamic LoRA Chaining
-            let lastModelNodeId = "43"; // Start with CheckpointLoaderSimple
-
-            // Remove template LoRAs first to start clean
-            delete workflow["41"];
-            delete workflow["42"];
-
-            if (options.comfyFluxUseLora) {
-                let currentLoraIndex = 0;
-                for (let i = 1; i <= 4; i++) {
-                    const configuredName = options[`comfyFluxLora${i}Name` as keyof GenerationOptions] as string | undefined;
-                    const loraName = i === 1 && configuredName === undefined ? 'Flux\\flux-turbo.safetensors' : configuredName;
-                    const loraStrength = options[`comfyFluxLora${i}Strength` as keyof GenerationOptions] as number;
-
-                    if (loraName && loraName !== 'None') {
-                        currentLoraIndex++;
-                        const loraNodeId = `lora_${currentLoraIndex}`;
-                        workflow[loraNodeId] = {
-                            "inputs": {
-                                "lora_name": loraName,
-                                "strength_model": loraStrength !== undefined ? Number(loraStrength) : 1.0,
-                                "model": [
-                                    lastModelNodeId,
-                                    0
-                                ]
-                            },
-                            "class_type": "LoraLoaderModelOnly",
-                            "_meta": {
-                                "title": `LoraLoaderModelOnly ${currentLoraIndex}`
-                            }
-                        };
-                        lastModelNodeId = loraNodeId;
-                    }
-                }
-            }
-
-            // Connect last model node to KSampler
-            if (workflow["31"]) workflow["31"].inputs.model = [lastModelNodeId, 0];
-
-            // Handle T2I vs Refine (I2I)
-            if (options.useRefine && sourceFile) {
-                // I2I / Refine Path
-                const uploadedImageName = await uploadImageToComfyUI(sourceFile);
-                if (workflow["90"]) workflow["90"].inputs.image = uploadedImageName;
-
-                // Ensure KSampler uses VAEEncode (91)
-                if (workflow["31"]) workflow["31"].inputs.latent_image = ["91", 0];
-
-                // Set Denoise
-                if (workflow["31"]) workflow["31"].inputs.denoise = options.refineDenoise || 0.5;
-            } else {
-                // T2I Path
-                // Ensure KSampler uses EmptySD3LatentImage (27)
-                if (workflow["31"]) workflow["31"].inputs.latent_image = ["27", 0];
-
-                // Set Denoise to 1.0 for T2I
-                if (workflow["31"]) workflow["31"].inputs.denoise = 1.0;
-
-                // Handle Aspect Ratio
-                if (workflow["27"] && options.aspectRatio) {
-                    const [w, h] = options.aspectRatio.split(':').map(Number);
-                    const baseSize = 1024;
-                    const aspect = w / h;
-
-                    let width, height;
-                    if (aspect >= 1) {
-                        width = baseSize;
-                        height = Math.round(baseSize / aspect / 16) * 16;
-                    } else {
-                        height = baseSize;
-                        width = Math.round(baseSize * aspect / 16) * 16;
-                    }
-                    workflow["27"].inputs.width = width;
-                    workflow["27"].inputs.height = height;
-                }
-
-                // Set KSampler Parameters
-                if (workflow["31"]) {
-                    workflow["31"].inputs.steps = options.comfySteps;
-                    workflow["31"].inputs.cfg = options.comfyCfg;
-                    workflow["31"].inputs.sampler_name = options.comfySampler;
-                    workflow["31"].inputs.scheduler = options.comfyScheduler;
-
-                    if (options.comfySeed !== undefined) {
-                        workflow["31"].inputs.seed = options.comfySeed;
-                        workflow["31"].inputs.control_after_generate = "fixed";
-                    } else {
-                        workflow["31"].inputs.seed = Math.floor(Math.random() * 1e15);
-                        workflow["31"].inputs.control_after_generate = "fixed";
-                    }
-                }
-            }
-            break;
-        }
         case 'qwen-t2i-gguf': {
             workflow = JSON.parse(JSON.stringify(COMFYUI_QWEN_WORKFLOW_TEMPLATE));
 
@@ -2444,123 +2363,6 @@ const buildWorkflow = async (options: GenerationOptions, sourceFile: File | null
             workflow[latentKey].inputs.width = width;
             workflow[latentKey].inputs.height = height;
         }
-    }
-    else if (options.comfyModelType === 'wan2.2') {
-        workflow["38"].inputs.unet_name = options.comfyWanHighNoiseModel;
-        workflow["39"].inputs.unet_name = options.comfyWanLowNoiseModel;
-        workflow["22"].inputs.clip_name = options.comfyWanClipModel;
-        if (options.comfyWanClipModel?.toLowerCase().endsWith('.gguf')) {
-            workflow["22"].class_type = 'CLIPLoaderGGUF';
-            workflow["22"]._meta.title = 'CLIPLoaderGGUF';
-        } else {
-            workflow["22"].class_type = 'CLIPLoader';
-            workflow["22"]._meta.title = 'CLIP Loader';
-        }
-        workflow["8"].inputs.vae_name = options.comfyWanVaeModel;
-
-        const [w, h] = options.aspectRatio.split(':').map(Number);
-        const aspect = w / h;
-        const baseSize = 1024;
-        let width, height;
-        if (aspect >= 1) { width = baseSize; height = Math.round(baseSize / aspect / 8) * 8; }
-        else { height = baseSize; width = Math.round(baseSize * aspect / 8) * 8; }
-        workflow["5"].inputs.width = width;
-        workflow["5"].inputs.height = height;
-
-        const sampler1 = workflow["35"];
-        const sampler2 = workflow["36"];
-        sampler1.inputs.steps = sampler2.inputs.steps = options.comfySteps;
-        sampler1.inputs.cfg = sampler2.inputs.cfg = options.comfyCfg;
-        sampler1.inputs.sampler_name = sampler2.inputs.sampler_name = options.comfySampler;
-        sampler1.inputs.scheduler = sampler2.inputs.scheduler = options.comfyScheduler;
-        sampler2.inputs.start_at_step = options.comfyWanRefinerStartStep;
-        sampler1.inputs.end_at_step = options.comfyWanRefinerStartStep;
-
-        if (!options.comfyWanUseFusionXLora) { delete workflow["30"]; delete workflow["43"]; workflow["29"].inputs.model = ["38", 0]; workflow["29"].inputs.clip = ["22", 0]; workflow["44"].inputs.model = ["39", 0]; }
-        if (!options.comfyWanUseLightningLora) { delete workflow["29"]; delete workflow["44"]; workflow["14"].inputs.model = options.comfyWanUseFusionXLora ? ["30", 0] : ["38", 0]; workflow["14"].inputs.clip = options.comfyWanUseFusionXLora ? ["30", 1] : ["22", 0]; workflow["45"].inputs.model = options.comfyWanUseFusionXLora ? ["43", 0] : ["39", 0]; }
-        if (!options.comfyWanUseStockPhotoLora) { delete workflow["14"]; delete workflow["45"]; sampler1.inputs.model = options.comfyWanUseLightningLora ? ["29", 0] : (options.comfyWanUseFusionXLora ? ["30", 0] : ["38", 0]); sampler2.inputs.model = options.comfyWanUseLightningLora ? ["44", 0] : (options.comfyWanUseFusionXLora ? ["43", 0] : ["39", 0]); }
-    }
-    else if (options.comfyModelType === 'nunchaku-kontext-flux') {
-        if (sourceFile) { workflow["99"].inputs.image = (await uploadImage(sourceFile)).name; }
-        workflow["22"].inputs.model_path = options.comfyNunchakuModel;
-        workflow["1"].inputs.vae_name = options.comfyNunchakuVae;
-        workflow["2"].inputs.clip_name1 = options.comfyNunchakuClipL;
-        workflow["2"].inputs.clip_name2 = options.comfyNunchakuT5XXL;
-        const ksampler = workflow["20"];
-        ksampler.inputs.steps = options.comfySteps; ksampler.inputs.cfg = options.comfyCfg; ksampler.inputs.sampler_name = options.comfySampler; ksampler.inputs.scheduler = options.comfyScheduler;
-        workflow["12"].inputs.guidance = options.comfyFluxGuidanceKontext;
-        workflow["22"].inputs.cache_threshold = options.comfyNunchakuCacheThreshold ?? 0.12;
-        workflow["22"].inputs.cpu_offload = options.comfyNunchakuCpuOffload;
-        workflow["22"].inputs.attention = options.comfyNunchakuAttention;
-
-        let lastLoraNode = "22";
-        if (options.comfyNunchakuUseTurboLora) { workflow["26"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "26"; } else { delete workflow["26"]; }
-        if (options.comfyNunchakuUseNudifyLora) { workflow["27"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "27"; } else { delete workflow["27"]; }
-        if (options.comfyNunchakuUseDetailLora) { workflow["28"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "28"; } else { delete workflow["28"]; }
-        ksampler.inputs.model = [lastLoraNode, 0];
-    }
-    else if (options.comfyModelType === 'nunchaku-flux-image') {
-        workflow["45"].inputs.model_path = options.comfyNunchakuModel;
-        workflow["10"].inputs.vae_name = options.comfyNunchakuVae;
-        workflow["44"].inputs.text_encoder1 = options.comfyNunchakuClipL;
-        workflow["44"].inputs.text_encoder2 = options.comfyNunchakuT5XXL;
-        workflow["17"].inputs.steps = options.comfySteps;
-        workflow["16"].inputs.sampler_name = options.comfySampler;
-        workflow["17"].inputs.scheduler = options.comfyScheduler;
-        workflow["26"].inputs.guidance = options.comfyFluxGuidanceKontext;
-        workflow["30"].inputs.base_shift = options.comfyNunchakuBaseShift;
-        workflow["30"].inputs.max_shift = options.comfyNunchakuMaxShift;
-        workflow["45"].inputs.cpu_offload = options.comfyNunchakuCpuOffload;
-        workflow["45"].inputs.attention = options.comfyNunchakuAttention;
-        workflow["45"].inputs.cache_threshold = options.comfyNunchakuCacheThreshold ?? 0;
-
-        const latentKey = findNodeKey(workflow, "EmptySD3LatentImage", 'class_type');
-        if (latentKey) {
-            const [w, h] = options.aspectRatio.split(':').map(Number);
-            const aspect = w / h;
-            const baseSize = 768;
-            let width, height;
-            if (aspect >= 1) { width = baseSize; height = Math.round(baseSize / aspect / 8) * 8; }
-            else { height = baseSize; width = Math.round(baseSize * aspect / 8) * 8; }
-            workflow[latentKey].inputs.width = width; workflow[latentKey].inputs.height = height;
-            const modelSamplingKey = findNodeKey(workflow, "ModelSamplingFlux", "class_type");
-            if (modelSamplingKey) { workflow[modelSamplingKey].inputs.width = width; workflow[modelSamplingKey].inputs.height = height; }
-        }
-
-        let lastLoraNode = "45";
-        if (options.comfyNunchakuUseTurboLora) { workflow["46"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "46"; } else { delete workflow["46"]; }
-        if (options.comfyNunchakuUseNudifyLora) { workflow["48"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "48"; } else { delete workflow["48"]; }
-        if (options.comfyNunchakuUseDetailLora) { workflow["47"].inputs.model = [lastLoraNode, 0]; lastLoraNode = "47"; } else { delete workflow["47"]; }
-        workflow["30"].inputs.model = [lastLoraNode, 0];
-    }
-    else if (options.comfyModelType === 'flux-krea') {
-        workflow["186"].inputs.unet_name = options.comfyFluxKreaModel;
-        workflow["26"].inputs.clip_name2 = options.comfyFluxKreaClipT5;
-        workflow["26"].inputs.clip_name1 = options.comfyFluxKreaClipL;
-        workflow["27"].inputs.vae_name = options.comfyFluxKreaVae;
-        workflow["163"].inputs.steps = options.comfySteps;
-        workflow["163"].inputs.sampler_name = options.comfySampler;
-        workflow["163"].inputs.scheduler = options.comfyScheduler;
-        const latentKey = findNodeKey(workflow, "EmptySD3LatentImage", 'class_type');
-        if (latentKey) {
-            const [w, h] = options.aspectRatio.split(':').map(Number);
-            const aspect = w / h;
-            const baseSize = 1024;
-            let width, height;
-            if (aspect >= 1) { width = baseSize; height = Math.round(baseSize / aspect / 8) * 8; }
-            else { height = baseSize; width = Math.round(baseSize * aspect / 8) * 8; }
-            workflow[latentKey].inputs.width = width;
-            workflow[latentKey].inputs.height = height;
-        }
-
-        const loraLoader = workflow["191"];
-        loraLoader.widgets_values[2].on = options.useP1x4r0maWomanLora;
-        loraLoader.widgets_values[3].on = options.useNippleDiffusionLora;
-        loraLoader.widgets_values[4].on = options.usePussyDiffusionLora;
-
-        if (!options.comfyFluxKreaUseUpscaler) {
-            workflow["51"].mode = workflow["100"].mode = workflow["102"].mode = workflow["110"].mode = workflow["111"].mode = workflow["170"].mode = 4;
-        }
     } else if (options.comfyModelType === 'face-detailer-sd1.5') {
         workflow = JSON.parse(JSON.stringify(COMFYUI_FACE_DETAILER_WORKFLOW_TEMPLATE));
         if (sourceFile) {
@@ -2643,7 +2445,7 @@ export const generateComfyUIPortraits = async (
         validateQwen21Readiness(baseWorkflow, await getComfyUIObjectInfo());
     }
 
-    const isLongJob = isMoss || isQwen21 || isKreaEdit || ['flux-krea', 'nunchaku-kontext-flux', 'face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'flux2-simple', 'flux2-edit', 'krea2-simple', 'krea2-raw'].includes(options.comfyModelType!);
+    const isLongJob = isMoss || isQwen21 || isKreaEdit || ['face-detailer-sd1.5', 'qwen-t2i-gguf', 'qwen-edit', 'flux2-simple', 'flux2-edit', 'krea2-simple', 'krea2-raw'].includes(options.comfyModelType!);
     const numImages = options.comfyModelType === 'face-detailer-sd1.5' ? 1 : options.numImages;
 
     let currentSeed = options.comfySeed ?? Math.floor(Math.random() * 1e15);
@@ -2875,157 +2677,6 @@ export const generateComfyUICharacterAngles = async (
         onOutputReady(index, image, workflowResult.prompts[0]);
     }
     return { images, finalPrompt: prompts.join('\n\n') };
-};
-
-export const generateComfyUIVideo = async (
-    startFrame: File | null,
-    endFrame: File | null,
-    options: GenerationOptions,
-    updateProgress: (message: string, value: number) => void
-): Promise<{ videoUrl: string, finalPrompt: string }> => {
-    let workflow;
-    let finalPrompt = '';
-
-    if (options.comfyVidModelType === 'wan-t2v') {
-        workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_T2I_WORKFLOW_TEMPLATE));
-        finalPrompt = options.comfyVidWanT2VPositivePrompt || '';
-
-        workflow["6"].inputs.text = options.comfyVidWanT2VPositivePrompt;
-        workflow["7"].inputs.text = options.comfyVidWanT2VNegativePrompt;
-
-        // Models
-        workflow["105"].inputs.unet_name = options.comfyVidWanT2VHighNoiseModel;
-        workflow["106"].inputs.unet_name = options.comfyVidWanT2VLowNoiseModel;
-        workflow["107"].inputs.clip_name = options.comfyVidWanT2VClipModel;
-        workflow["39"].inputs.vae_name = options.comfyVidWanT2VVaeModel;
-
-        // Latent
-        const latentNode = workflow["117"];
-        latentNode.inputs.width = options.comfyVidWanT2VWidth;
-        latentNode.inputs.height = options.comfyVidWanT2VHeight;
-        latentNode.inputs.length = options.comfyVidWanT2VFrameCount;
-
-        // Samplers
-        const sampler1 = workflow["101"];
-        const sampler2 = workflow["102"];
-        sampler1.inputs.steps = sampler2.inputs.steps = options.comfyVidWanT2VSteps;
-        sampler1.inputs.cfg = sampler2.inputs.cfg = options.comfyVidWanT2VCfg;
-        sampler1.inputs.sampler_name = sampler2.inputs.sampler_name = options.comfyVidWanT2VSampler;
-        sampler1.inputs.scheduler = sampler2.inputs.scheduler = options.comfyVidWanT2VScheduler;
-        sampler1.inputs.end_at_step = options.comfyVidWanT2VRefinerStartStep;
-        sampler2.inputs.start_at_step = options.comfyVidWanT2VRefinerStartStep;
-        sampler1.inputs.noise_seed = options.comfyVidWanT2VNoiseSeed ?? Math.floor(Math.random() * 1e15);
-        sampler1.inputs.control_after_generate = options.comfyVidWanT2VSeedControl || 'randomize';
-
-        // LoRA Chaining
-        let highNoiseModelInput: [string, number] = ["105", 0];
-        let lowNoiseModelInput: [string, number] = ["106", 0];
-
-        if (options.comfyVidWanT2VUseOptionalLora && options.comfyVidWanT2VOptionalLoraName) {
-            workflow["optional_lora_high"] = { inputs: { lora_name: options.comfyVidWanT2VOptionalLoraName, strength_model: options.comfyVidWanT2VOptionalLoraStrength, model: highNoiseModelInput }, class_type: "LoraLoaderModelOnly" };
-            workflow["optional_lora_low"] = { inputs: { lora_name: options.comfyVidWanT2VOptionalLoraName, strength_model: options.comfyVidWanT2VOptionalLoraStrength, model: lowNoiseModelInput }, class_type: "LoraLoaderModelOnly" };
-            highNoiseModelInput = ["optional_lora_high", 0];
-            lowNoiseModelInput = ["optional_lora_low", 0];
-        }
-
-        if (options.comfyVidWanT2VUseLightningLora) {
-            workflow["94"].inputs.model = highNoiseModelInput;
-            workflow["94"].inputs.lora_name = options.comfyVidWanT2VLightningLoraHigh;
-            workflow["94"].inputs.strength_model = options.comfyVidWanT2VLightningLoraStrengthHigh;
-            workflow["95"].inputs.model = lowNoiseModelInput;
-            workflow["95"].inputs.lora_name = options.comfyVidWanT2VLightningLoraLow;
-            workflow["95"].inputs.strength_model = options.comfyVidWanT2VLightningLoraStrengthLow;
-        } else {
-            delete workflow["94"];
-            delete workflow["95"];
-            workflow["79"].inputs.model = highNoiseModelInput;
-            workflow["93"].inputs.model = lowNoiseModelInput;
-        }
-
-        // Post-processing
-        workflow["111"].inputs.frame_rate = options.comfyVidWanT2VFrameRate;
-        workflow["111"].inputs.format = options.comfyVidWanT2VVideoFormat;
-        if (options.comfyVidWanT2VUseFilmGrain) {
-            workflow["114"].inputs.grain_intensity = options.comfyVidWanT2VFilmGrainIntensity;
-            workflow["114"].inputs.saturation_mix = options.comfyVidWanT2VFilmGrainSaturation;
-        } else {
-            delete workflow["114"];
-            workflow["111"].inputs.images = ["8", 0];
-        }
-    } else { // Existing I2V logic
-        if (!startFrame) throw new Error("A start frame is required for Image-to-Video generation.");
-        workflow = JSON.parse(JSON.stringify(COMFYUI_WAN22_I2V_WORKFLOW_TEMPLATE));
-        finalPrompt = options.comfyVidWanI2VPositivePrompt || '';
-
-        updateProgress("Uploading start frame...", 0.05);
-        const startFrameInfo = await uploadImage(startFrame);
-
-        workflow["52"].inputs.image = startFrameInfo.name;
-        workflow["105"].inputs.unet_name = options.comfyVidWanI2VHighNoiseModel;
-        workflow["106"].inputs.unet_name = options.comfyVidWanI2VLowNoiseModel;
-        workflow["107"].inputs.clip_name = options.comfyVidWanI2VClipModel;
-        workflow["39"].inputs.vae_name = options.comfyVidWanI2VVaeModel;
-        workflow["49"].inputs.clip_name = options.comfyVidWanI2VClipVisionModel;
-        workflow["112"].inputs.string = options.comfyVidWanI2VPositivePrompt;
-        workflow["7"].inputs.text = options.comfyVidWanI2VNegativePrompt;
-
-        const mainNode = workflow["83"];
-        mainNode.inputs.length = options.comfyVidWanI2VFrameCount;
-        mainNode.inputs.width = options.comfyVidWanI2VWidth;
-        mainNode.inputs.height = options.comfyVidWanI2VHeight;
-
-        const useEndFrame = endFrame && options.comfyVidWanI2VUseEndFrame;
-        if (useEndFrame) {
-            updateProgress("Uploading end frame...", 0.1);
-            const endFrameInfo = await uploadImage(endFrame);
-            workflow["72"].inputs.image = endFrameInfo.name;
-        } else {
-            delete workflow["72"];
-            delete workflow["87"];
-            delete mainNode.inputs.end_image;
-            delete mainNode.inputs.clip_vision_end_image;
-        }
-
-        const sampler1 = workflow["101"];
-        const sampler2 = workflow["102"];
-        sampler1.inputs.steps = sampler2.inputs.steps = options.comfyVidWanI2VSteps;
-        sampler1.inputs.cfg = sampler2.inputs.cfg = options.comfyVidWanI2VCfg;
-        sampler1.inputs.sampler_name = sampler2.inputs.sampler_name = options.comfyVidWanI2VSampler;
-        sampler1.inputs.scheduler = sampler2.inputs.scheduler = options.comfyVidWanI2VScheduler;
-        sampler1.inputs.end_at_step = options.comfyVidWanI2VRefinerStartStep;
-        sampler2.inputs.start_at_step = options.comfyVidWanI2VRefinerStartStep;
-        sampler1.inputs.noise_seed = options.comfyVidWanI2VNoiseSeed ?? Math.floor(Math.random() * 1e15);
-        sampler1.inputs.control_after_generate = options.comfyVidWanI2VSeedControl || 'randomize';
-
-        if (options.comfyVidWanI2VUseLightningLora) {
-            workflow["94"].inputs.lora_name = options.comfyVidWanI2VHighNoiseLora;
-            workflow["94"].inputs.strength_model = options.comfyVidWanI2VHighNoiseLoraStrength;
-            workflow["95"].inputs.lora_name = options.comfyVidWanI2VLowNoiseLora;
-            workflow["95"].inputs.strength_model = options.comfyVidWanI2VLowNoiseLoraStrength;
-        } else {
-            delete workflow["94"];
-            delete workflow["95"];
-            workflow["79"].inputs.model = ["105", 0];
-            workflow["93"].inputs.model = ["106", 0];
-        }
-
-        workflow["111"].inputs.frame_rate = options.comfyVidWanI2VFrameRate;
-        workflow["111"].inputs.format = options.comfyVidWanI2VVideoFormat;
-
-        if (options.comfyVidWanI2VUseFilmGrain) {
-            workflow["114"].inputs.grain_intensity = options.comfyVidWanI2VFilmGrainIntensity;
-            workflow["114"].inputs.saturation_mix = options.comfyVidWanI2VFilmGrainSize;
-        } else {
-            delete workflow["114"];
-            workflow["111"].inputs.images = ["8", 0];
-        }
-    }
-
-    // --- Execution ---
-    const { videoUrl } = await executeWorkflow(workflow, updateProgress, true);
-    if (!videoUrl) throw new Error("Generation finished, but no video file was found.");
-
-    return { videoUrl, finalPrompt };
 };
 
 export interface LtxDirectorOptions {

@@ -182,7 +182,7 @@ const getAudioDuration = (file: File): Promise<number> => new Promise((resolve) 
 });
 const DEFAULT_LORAS = LTX_MODEL_PROFILES['2.3'].loras;
 
-const getModelList = (widgetInfo: any): string[] => Array.isArray(widgetInfo?.[0]) ? widgetInfo[0] : [];
+const getModelList = (widgetInfo: any): string[] => Array.isArray(widgetInfo?.[0]) ? widgetInfo[0] : Array.isArray(widgetInfo?.[1]?.options) ? widgetInfo[1].options : [];
 const appendMissingTriggerWords = (prompt: string, triggerWords: string[] = []) => {
     const trimmedPrompt = prompt.trim();
     const normalizedPrompt = trimmedPrompt.toLowerCase();
@@ -565,7 +565,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                 image: null,
                 imageUrl: '',
                 prompt: pendingTransfer.prompt || '',
-                durationSeconds: 5,
+                durationSeconds: pendingTransfer.promptDurationSeconds ?? 5,
             };
             setSegments((current) => current.some((item) => item.id === segment.id) ? current : [...current, segment]);
             setSelectedId(segment.id);
@@ -581,13 +581,18 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
                     image,
                     imageUrl: URL.createObjectURL(image),
                     prompt: pendingTransfer.prompt || '',
-                    durationSeconds: 5,
+                    durationSeconds: pendingTransfer.promptDurationSeconds ?? 5,
                 };
                 setSegments((current) => current.some((item) => item.id === segment.id) ? current : [...current, segment]);
                 setSelectedId(segment.id);
                 dispatch(clearLtxTransfer());
             })
-            .catch(() => dispatch(clearLtxTransfer()));
+            .catch(cause => {
+                if (!cancelled) {
+                    setError(`Could not load the first-frame image into LTX Director: ${cause instanceof Error ? cause.message : String(cause)}`);
+                    dispatch(clearLtxTransfer());
+                }
+            });
         return () => { cancelled = true; };
     }, [dispatch, pendingTransfer]);
 

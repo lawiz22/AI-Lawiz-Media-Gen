@@ -58,7 +58,7 @@ const DEFAULT_OPTIONS: ZImageCreativeUpscaleOptions = {
     florenceSample: true,
 };
 
-const choices = (widget: any): string[] => Array.isArray(widget?.[0]) ? widget[0] : [];
+const choices = (widget: any): string[] => Array.isArray(widget?.[0]) ? widget[0] : Array.isArray(widget?.[1]?.options) ? widget[1].options : [];
 const withCurrent = (current: string, values: string[]) => Array.from(new Set([current, ...values].filter(Boolean)));
 const controlClass = 'mt-1 w-full rounded border border-border-primary bg-bg-tertiary p-2 text-sm text-text-primary';
 

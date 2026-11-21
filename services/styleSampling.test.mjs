@@ -6,6 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { withUiKit } from '../components/ui/compileForTest.mjs';
 
 const read = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 const compile = text => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(text, {
@@ -169,7 +170,7 @@ test('a failed snapshot callback does not misreport a successful gallery write',
     assert.match(result.status, /Defaults saved/);
     assert.deepEqual(reload().styles[0].settings, { ...style.settings, ...sampling });
 });
-const inputsURL = compile(read('../components/InputComponents.tsx').replace("from 'react'", `from '${reactURL}'`));
+const inputsURL = compile(withUiKit(read('../components/InputComponents.tsx')));
 const panelSource = read('../components/SamplerSettingsPanel.tsx');
 const { SamplerSettingsPanel } = await import(compile(`
     import React, {useMemo, useState} from '${reactURL}';

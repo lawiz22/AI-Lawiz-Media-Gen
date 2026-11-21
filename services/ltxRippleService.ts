@@ -1,5 +1,5 @@
 import { executeComfyGraph, type GraphLive } from './comfyGraphExecution';
-import { h3VideoFromHistory, jsonRequest, minimaxComfyURL } from './minimaxH3Service';
+import { h3VideoFromHistory, jsonRequest, loadH3Catalog, minimaxComfyURL } from './minimaxH3Service';
 import { isRecord, type H3ObjectInfo, type H3Workflow } from './minimaxH3Workflow';
 import { RIPPLE_OUTPUTS, buildRippleWorkflow, defaultRippleDraft, defaultRippleSettings, type RippleDraft, type RippleSettings, validateRippleDraft } from './ltxRippleWorkflow';
 
@@ -10,17 +10,10 @@ export interface RippleResult {
     draft: RippleDraft;
     videos: { id: string; label: string; url: string }[];
 }
-export const loadRippleObjectInfo = async (signal?: AbortSignal): Promise<H3ObjectInfo> => {
+// Lists are served from the shared cache; force re-reads the server before validating or queueing.
+export const loadRippleObjectInfo = (signal?: AbortSignal, force = false): Promise<H3ObjectInfo> => {
     const graph = buildRippleWorkflow(defaultRippleSettings(), defaultRippleDraft().prompt, { image: 'check.png', video: 'check.mp4' });
-    const classes = [...new Set(Object.values(graph).map(node => node.class_type))];
-    const schemas = await Promise.all(classes.map(async name => {
-        const result = await jsonRequest(`${minimaxComfyURL()}/object_info/${encodeURIComponent(name)}`, { signal });
-        if (!isRecord(result)) throw new Error(`Invalid ComfyUI schema for ${name}.`);
-        return result;
-    }));
-    const info: H3ObjectInfo = {};
-    for (const schema of schemas) for (const [name, spec] of Object.entries(schema)) if (isRecord(spec)) info[name] = spec;
-    return info;
+    return loadH3Catalog(Object.values(graph).map(node => node.class_type), signal, force);
 };
 const uploadRippleInput = async (file: File, signal: AbortSignal): Promise<string> => {
     const form = new FormData();
@@ -35,7 +28,7 @@ export const prepareRippleWorkflow = async (
 ): Promise<H3Workflow> => {
     signal.throwIfAborted(); validateRippleDraft(draft);
     progress('Checking Ripple nodes, models and settings...', 0.01);
-    const info = await loadRippleObjectInfo(signal);
+    const info = await loadRippleObjectInfo(signal, true);
     buildRippleWorkflow(settings, draft.prompt, { image: draft.image!.name, video: draft.video!.name }, info);
     progress('Uploading source video and edited first frame...', 0.03);
     const [image, video] = await Promise.all([uploadRippleInput(draft.image!, signal), uploadRippleInput(draft.video!, signal)]);

@@ -1,5 +1,5 @@
 import { openDB } from 'idb';
-import { jsonRequest, minimaxComfyURL } from './minimaxH3Service';
+import { jsonRequest, loadH3Catalog, minimaxComfyURL } from './minimaxH3Service';
 import { isRecord, type H3ObjectInfo, type H3Workflow } from './minimaxH3Workflow';
 import { mossPreviewBlob } from './mossWorkflow';
 import { buildCreationSuiteWorkflow, creationSuitePrompt, CREATION_SUITE_TEMPLATE, validateCreationSuiteDraft, validateCreationSuiteSettings, type CreationSuiteDraft, type CreationSuiteInput, type CreationSuiteSettings } from './creationSuiteWorkflow';
@@ -47,18 +47,12 @@ export const saveCreationSuiteDraft = async (draft: CreationSuiteDraft): Promise
     const db = await database();
     try { await db.put('drafts', draft, 'workspace'); } finally { db.close(); }
 };
-export const loadCreationSuiteObjectInfo = async (signal?: AbortSignal): Promise<H3ObjectInfo> => {
-    const base = minimaxComfyURL();
-    const schemas = await Promise.all([...new Set(Object.values(CREATION_SUITE_TEMPLATE).map(spec => spec.class_type))].map(async name => {
-        const result = await jsonRequest(`${base}/object_info/${encodeURIComponent(name)}`, { signal });
-        if (!isRecord(result)) throw new Error(`Invalid Creation suite schema for ${name}.`);
-        return result;
-    }));
-    return Object.assign({}, ...schemas);
-};
+// Lists are served from the shared cache; force re-reads the server before validating or queueing.
+export const loadCreationSuiteObjectInfo = (signal?: AbortSignal, force = false): Promise<H3ObjectInfo> =>
+    loadH3Catalog(Object.values(CREATION_SUITE_TEMPLATE).map(spec => spec.class_type), signal, force);
 export const prepareCreationSuiteWorkflow = async (draft: CreationSuiteDraft, signal: AbortSignal): Promise<H3Workflow> => {
     validateCreationSuiteDraft(draft); signal.throwIfAborted();
-    const info = await loadCreationSuiteObjectInfo(signal);
+    const info = await loadCreationSuiteObjectInfo(signal, true);
     const placeholders = Object.fromEntries(Object.entries(draft.files).filter(([, file]) => !!file).map(([role, file]) => [role, file.name]));
     const active = buildCreationSuiteWorkflow(draft.settings, placeholders, info);
     const files: Partial<Record<CreationSuiteInput, string>> = {};

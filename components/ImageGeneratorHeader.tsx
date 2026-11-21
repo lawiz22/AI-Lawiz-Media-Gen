@@ -9,7 +9,7 @@ import type { AppDispatch, RootState } from '../store/store';
 import { addToLibrary, deleteFromLibrary } from '../store/librarySlice';
 
 type GenerationMode = 't2i' | 'i2i';
-type ModelFamilyId = 'sd15' | 'sdxl' | 'flux' | 'qwen' | 'qwen21' | 'z-image' | 'flux2' | 'krea2' | 'moss';
+type ModelFamilyId = 'sd15' | 'sdxl' | 'qwen' | 'qwen21' | 'z-image' | 'flux2' | 'krea2' | 'moss';
 
 interface ModelFamily {
     id: ModelFamilyId;
@@ -20,7 +20,6 @@ interface ModelFamily {
 const MODEL_FAMILIES: ModelFamily[] = [
     { id: 'sd15', label: 'SD 1.5', workflows: { t2i: 'sd1.5', i2i: 'face-detailer-sd1.5' } },
     { id: 'sdxl', label: 'SDXL', workflows: { t2i: 'sdxl' } },
-    { id: 'flux', label: 'FLUX', workflows: { t2i: 'flux' } },
     { id: 'qwen', label: 'QWEN', workflows: { t2i: 'qwen-t2i-gguf', i2i: 'qwen-edit' } },
     { id: 'qwen21', label: 'QWEN 2.1', workflows: { t2i: 'qwen21-t2i', i2i: 'qwen21-remove-background' } },
     { id: 'z-image', label: 'Z-Image', workflows: { t2i: 'z-image' } },
@@ -32,7 +31,7 @@ const MODEL_FAMILIES: ModelFamily[] = [
 interface ImageGeneratorHeaderProps {
     options: GenerationOptions;
     updateOptions: (options: Partial<GenerationOptions>) => void;
-    restoreOptions: (options: GenerationOptions) => void;
+    restoreOptions: (options: GenerationOptions) => boolean;
     switchComfyModel: (modelType: ComfyModelType) => void;
     generationMode: GenerationMode;
     setGenerationMode: (mode: GenerationMode) => void;
@@ -109,9 +108,12 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
     const handleLoadPreset = (presetId: string) => {
         const preset = presets.find(candidate => String(candidate.id) === presetId);
         if (preset && preset.options) {
-            restoreOptions(preset.options);
+            if (!restoreOptions(preset.options)) {
+                setSelectedPresetId('');
+                return;
+            }
             const isComfyI2I = preset.options.provider === 'comfyui'
-                && ['qwen-edit', 'flux2-edit', 'krea2-edit', 'face-detailer-sd1.5', 'nunchaku-kontext-flux', 'qwen21-remove-background', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(preset.options.comfyModelType || '');
+                && ['qwen-edit', 'flux2-edit', 'krea2-edit', 'face-detailer-sd1.5', 'qwen21-remove-background', 'qwen21-i2i-consistency', 'qwen21-i2i-turbo', 'qwen21-i2i-multi'].includes(preset.options.comfyModelType || '');
             const isCloudI2I = preset.options.provider !== 'comfyui' && preset.options.geminiMode === 'i2i';
             setGenerationMode(isComfyI2I || isCloudI2I ? 'i2i' : 't2i');
             setSelectedPresetId(presetId);

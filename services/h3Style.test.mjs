@@ -16,7 +16,8 @@ const apiURL = compile(['./styleGallery.ts', './h3StyleWorkflow.ts', './videoPro
     './minimaxH3AdvancedWorkflow.ts', './minimaxH3UltrafastWorkflow.ts'].map(name => strip(read(name))).join('\n'));
 const api = await import(apiURL);
 const civitaiURL = compile(read('./civitaiService.ts'));
-const libraryURL = compile(read('./styleLibrary.ts').replace("from './civitaiService'", `from '${civitaiURL}'`));
+const libraryURL = compile(read('./styleLibrary.ts').replace("from './civitaiService'", `from '${civitaiURL}'`)
+    .replace("from './styleGallery'", `from '${apiURL}'`));
 const library = await import(libraryURL);
 const style = { id: 'h3-ink', model: 'H3', title: 'Ink', trigger: 'INK', prompt: 'Engraved film', lora: 'H3\\ink.safetensors',
     strength: 0.65, notes: 'Keep', settings: { steps: 8, cfg: 7, sampler: 'euler', scheduler: 'simple', megapixels: 3 } };
@@ -47,8 +48,16 @@ const text = (graph, value) => {
     assert.equal(node.class_type, 'StringConcatenate');
     return [text(graph, node.inputs.string_a), text(graph, node.inputs.string_b)].join(node.inputs.delimiter);
 };
+const styleLoaderInputs = (variant, model, clip, strength = style.strength) => variant === 'ultrafast'
+    ? { model, clip, mode: 'minimax', stack_data: JSON.stringify([{ on: true, lora: style.lora, str: strength, v: 1, a: 1, t: 1 }]) }
+    : { model, clip, lora_1: { on: true, lora: style.lora, strength } };
+const renameStyleLoader = graph => Object.fromEntries(Object.entries(graph).map(([id, node]) => [
+    id === 'style_lora' ? '137' : id,
+    { ...node, inputs: Object.fromEntries(Object.entries(node.inputs).map(([key, value]) =>
+        [key, Array.isArray(value) && value[0] === 'style_lora' ? ['137', value[1]] : value])) },
+]));
 
-test('H3 aliases, indexed classifications and installed folder filtering share My Library without scanning', () => {
+test('H3 aliases and Library metadata are retained while selectable files stay in the H3 folder', () => {
     for (const model of ['H3', 'h3', 'MiniMax', 'MiniMax-H3', 'H3 / MiniMax', 'H/minimax']) {
         assert.equal(api.normalizeStyleModel(model), 'H3');
         assert.equal(library.styleModelFamily(model), 'minimax-h3');
@@ -59,7 +68,7 @@ test('H3 aliases, indexed classifications and installed folder filtering share M
     const wrong = { ...item, path: 'C:\\models\\wrong.safetensors', relativePath: 'loras\\H3\\wrong.safetensors', userFamily: 'flux' };
     const inv = { ...inventory, items: [item, wrong] };
     assert.deepEqual(library.styleInstalledLoras([...names, 'MiniMax\\vhs.safetensors', 'Custom\\custom.safetensors', 'H3\\wrong.safetensors', 'flux2\\ink.safetensors'], 'H3', inv),
-        [...names, 'MiniMax\\vhs.safetensors', 'Custom\\custom.safetensors']);
+        names);
     const linked = library.linkStyleLibrary({ ...style, lora: '', trigger: '', settings: {} }, item);
     const resolved = library.resolveLibraryStyle(linked, inv, ['euler']);
     assert.equal(resolved.item, item);
@@ -69,10 +78,24 @@ test('H3 aliases, indexed classifications and installed folder filtering share M
 });
 
 for (const variant of ['reference', 'ultrafast', 'advanced']) {
+    test(`${variant}: gallery model and CLIP chains exactly match manual LoRA + patched CLIP`, () => {
+        for (const preview of [false, true]) for (const useLoraClip of [false, true]) {
+            const options = { ...api.defaultH3WorkflowOptions(variant), preview, style, loras: [], useLoras: false, useLoraClip };
+            if (options.advanced) options.advanced.boost = true;
+            if (options.ultrafast) options.ultrafast.spectrum = true;
+            const gallery = build(options);
+            const manual = build({ ...options, style: { ...style, lora: '' }, useLoras: true, useLoraClip: true,
+                loras: [{ enabled: true, name: style.lora, strength: style.strength }] });
+            assert.deepEqual(renameStyleLoader(gallery), manual, 'same seed, prompts, loaders, conditioning, patches and sampling');
+            assertDAG(gallery);
+        }
+    });
     test(`${variant}: independent style loader, trigger-first prompt, no accumulation and no input mutation`, () => {
         const options = { ...api.defaultH3WorkflowOptions(variant), style, useLoras: false }, before = structuredClone(options);
         const graph = build(options);
-        assert.deepEqual(graph.style_lora.inputs, { model: ['135', 0], lora_name: style.lora, strength_model: 0.65 });
+        assert.equal(graph.style_lora.class_type, variant === 'ultrafast' ? 'LTX_lora_loader' : 'Power Lora Loader (rgthree)');
+        assert.deepEqual(graph.style_lora.inputs, styleLoaderInputs(variant, [variant === 'reference' && options.preview ? '141' : '135', 0], ['127', 0]));
+        assert.deepEqual(graph['184'].inputs.clip, ['style_lora', 1]);
         assert.equal(text(graph, graph['184'].inputs.prompt), 'INK\nA rainy street.\nEngraved film');
         assert.equal(text(graph, graph['186'].inputs.source), 'INK\nA rainy street.\nEngraved film');
         assert.deepEqual(options, before);
@@ -84,6 +107,17 @@ for (const variant of ['reference', 'ultrafast', 'advanced']) {
         assert.equal(cleared['184'].inputs.prompt, 'A rainy street.');
         assert.equal(graph['190'].inputs.steps, options.steps, 'sampling remains opt-in');
         assertDAG(graph);
+    });
+    test(`${variant}: additional LoRA CLIP remains opt-in upstream of the independent gallery patch`, () => {
+        for (const useLoraClip of [false, true]) {
+            const options = { ...api.defaultH3WorkflowOptions(variant), style, useLoras: true, useLoraClip,
+                loras: [{ enabled: true, name: 'H3\\detail.safetensors', strength: 0.4 }] };
+            const graph = build(options);
+            assert.deepEqual(graph.style_lora.inputs, styleLoaderInputs(variant, ['137', 0], [useLoraClip ? '137' : '127', useLoraClip ? 1 : 0]));
+            assert.deepEqual(graph['184'].inputs.clip, ['style_lora', 1]);
+            assert.deepEqual(graph['137'].inputs.clip, variant === 'ultrafast' && !useLoraClip ? undefined : ['127', 0]);
+            assertDAG(graph);
+        }
     });
     test(`${variant}: style trigger wraps final rewritten/reference prompt, preserving ReferencePack controls`, () => {
         const options = { ...api.defaultH3WorkflowOptions(variant), style, promptProvider: 'local', apiBase: 'http://localhost:1234', localModelSlug: 'writer' };
@@ -100,7 +134,7 @@ for (const variant of ['reference', 'ultrafast', 'advanced']) {
         const options = { ...api.defaultH3WorkflowOptions(variant), style, styleStrength: 0, useLoras: true, useLoraClip: true };
         options.loras = options.loras.map((lora, index) => ({ ...lora, name: index ? 'H3\\detail.safetensors' : 'h3/INK.safetensors', enabled: index < 2 }));
         const graph = build(options);
-        assert.equal(graph.style_lora.inputs.strength_model, 0);
+        assert.deepEqual(graph.style_lora.inputs, styleLoaderInputs(variant, ['137', 0], ['137', 1], 0));
         if (variant === 'ultrafast') {
             const stack = JSON.parse(graph['137'].inputs.stack_data);
             assert.ok(!stack.some(entry => /ink/i.test(entry.lora)));
@@ -109,7 +143,7 @@ for (const variant of ['reference', 'ultrafast', 'advanced']) {
             assert.equal(graph['137'].inputs.lora_1, undefined);
             assert.equal(graph['137'].inputs.lora_2.lora, 'H3\\detail.safetensors');
         }
-        assert.deepEqual(graph['184'].inputs.clip, ['137', 1]);
+        assert.deepEqual(graph['184'].inputs.clip, ['style_lora', 1]);
         assert.equal(options.loras.length, 6);
         assert.equal(options.loras[0].name, 'h3/INK.safetensors', 'builder does not edit saved options');
         assertDAG(graph);
@@ -164,6 +198,19 @@ test('Advanced source-video styles only H3 latent conditioning, never LTX or non
     assert.equal(noH3.style_lora, undefined);
     assert.deepEqual(noH3, build(options, draft));
 });
+test('Advanced source-video gallery matches manual model/CLIP patches for both refinement orders', () => {
+    for (const stageOrder of ['latent-first', 'ltx-first']) for (const useLoraClip of [false, true]) {
+        const options = { ...api.defaultAdvancedH3Options(), style, loras: [], useLoras: false, useLoraClip };
+        Object.assign(options.advanced, { inputMode: 'video', stageOrder, latentUpscale: true, ltxRefine: true, sourceAudio: false, boost: true });
+        const draft = input('advanced', [reference('video')]);
+        const gallery = build(options, draft);
+        const manual = build({ ...options, style: { ...style, lora: '' }, useLoras: true, useLoraClip: true,
+            loras: [{ enabled: true, name: style.lora, strength: style.strength }] }, draft);
+        assert.deepEqual(renameStyleLoader(gallery), manual);
+        assert.deepEqual(gallery['advanced-latent-conditioning'].inputs.clip, ['style_lora', 1]);
+        assertDAG(gallery);
+    }
+});
 
 test('wrong families, strengths, invalid stacks, unavailable LoRAs/schedulers and missing native nodes fail explicitly', () => {
     const options = api.defaultMinimaxH3Options();
@@ -173,7 +220,7 @@ test('wrong families, strengths, invalid stacks, unavailable LoRAs/schedulers an
     const graph = build({ ...options, style, useStyleSettings: true });
     const info = Object.fromEntries(Object.values(graph).map(node => [node.class_type, {}]));
     info.LoraLoaderModelOnly = { input: { required: { lora_name: [['H3\\missing.safetensors']] } } };
-    assert.throws(() => api.validateMinimaxH3Readiness(graph, info), /unavailable.*lora_name/);
+    assert.throws(() => api.validateMinimaxH3Readiness(graph, info), /not available.*LoRA catalog/);
     info.LoraLoaderModelOnly.input.required.lora_name = [[style.lora]];
     info.BasicScheduler = { input: { required: { scheduler: ['COMBO', { options: ['beta'] }] } } };
     assert.throws(() => api.validateMinimaxH3Readiness(graph, info), /unavailable.*scheduler/);
@@ -185,7 +232,8 @@ test('wrong families, strengths, invalid stacks, unavailable LoRAs/schedulers an
 const require = createRequire(import.meta.url), reactURL = pathToFileURL(require.resolve('react')).href;
 const control = await import(compile(`
     import React from '${reactURL}';
-    import { h3Choices, h3GalleryStyle, h3StyleLoraRemovals, h3StyleSampling, appendGalleryStylePrompt, resolveStyleLora } from '${apiURL}';
+    import { h3Choices, h3LoraCatalog, h3LoraChoices, h3GalleryStyle, h3StyleLoraRemovals, h3StyleSampling, appendGalleryStylePrompt,
+        isH3LoraPath, resolveStyleLora, styleLoraMatches } from '${apiURL}';
     import { resolveLibraryStyle, styleInstalledLoras } from '${libraryURL}';
     export let picker, saveButton;
     export const stateWrites = [];
@@ -196,15 +244,50 @@ const control = await import(compile(`
     const SaveStyleSamplingButton = props => {saveButton=props; return React.createElement('button', {disabled:props.disabled}, 'Save sampling as style default');};
     ${strip(read('../components/H3StyleControl.tsx'))}
 `));
-const render = (options, disabled = false) => {
+const render = (options, disabled = false, installedNames = names) => {
     const patches = [];
     control.stateWrites.length = 0;
-    const info = { LoraLoaderModelOnly: { input: { required: { lora_name: [names] } } },
+    const info = { LoraLoaderModelOnly: { input: { required: { lora_name: [installedNames] } } },
         KSamplerSelect: { input: { required: { sampler_name: [['euler', 'heun']] } } } };
     const html = renderToStaticMarkup(React.createElement(control.H3StyleControl, { options, info, prompt: 'A rainy street.',
         disabled, onChange: patch => patches.push(patch) }));
     return { html, patches };
 };
+test('H3 styles retain exact installed saved paths outside the H3 dropdown folder without a false missing-LoRA error', () => {
+    const reported = 'moss\\MOSS_Something_feels_off__Ambiance_LoRA_by_FoS.safetensors';
+    for (const variant of ['reference', 'ultrafast', 'advanced']) {
+        const selected = { ...style, lora: reported };
+        const options = { ...api.defaultH3WorkflowOptions(variant), useLoras: false, useLoraClip: false };
+        const installed = [...names, reported];
+        const { patches } = render(options, false, installed);
+        assert.equal(control.picker.onSelect(selected), true, 'existence must be checked against the actual catalog, not the dropdown filter');
+        assert.equal(patches[0].style.lora, reported);
+        assert.match(control.stateWrites.at(-1), /installed saved LoRA path outside the H3 folder/);
+        const graph = build({ ...options, ...patches[0] });
+        assert.deepEqual(graph['184'].inputs.clip, ['style_lora', 1]);
+        const lora = variant === 'ultrafast' ? JSON.parse(graph.style_lora.inputs.stack_data)[0].lora : graph.style_lora.inputs.lora_1.lora;
+        assert.equal(lora, reported);
+        const info = Object.fromEntries(Object.values(graph).map(node => [node.class_type, {}]));
+        info.LoraLoaderModelOnly = { input: { required: { lora_name: [installed] } } };
+        assert.deepEqual(api.h3LoraChoices(info), names, 'the visible choices remain H3-only');
+        api.validateMinimaxH3Readiness(graph, info);
+        assertDAG(graph);
+    }
+});
+test('H3 saved paths moved into H3 resolve to the installed path; absent or ambiguous files still fail explicitly', () => {
+    const reported = 'moss\\MOSS_Something_feels_off__Ambiance_LoRA_by_FoS.safetensors';
+    const moved = reported.replace('moss\\', 'H3\\');
+    const options = api.defaultAdvancedH3Options(), selected = { ...style, lora: reported };
+    const { patches } = render(options, false, [moved]);
+    assert.equal(control.picker.onSelect(selected), true);
+    assert.equal(patches[0].style.lora, moved);
+    render(options, false, names);
+    assert.equal(control.picker.onSelect(selected), false);
+    assert.match(control.stateWrites.at(-1), /Missing LoRA/);
+    render(options, false, [moved, moved.replace('H3\\', 'H3\\nested\\')]);
+    assert.equal(control.picker.onSelect(selected), false);
+    assert.match(control.stateWrites.at(-1), /Ambiguous LoRA/);
+});
 test('all three UI modes select/clear gallery snapshots without changing prompt, sampling or unrelated slots', () => {
     for (const variant of ['reference', 'ultrafast', 'advanced']) {
         const options = { ...api.defaultH3WorkflowOptions(variant), style };

@@ -2,6 +2,7 @@ import React from 'react';
 import { UploadedFile } from '../../groupPhotoFusion/types';
 import { PERSONAS } from '../../groupPhotoFusion/constants';
 import { CloseIcon, LibraryIcon, UploadCloudIcon } from '../icons';
+import { Select } from '../ui/Select';
 
 interface ImagePreviewProps {
   files: UploadedFile[];
@@ -75,17 +76,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ files, onRemove, onPersonaC
               </button>
             </div>
             <div className="mt-2">
-                <label htmlFor={`persona-select-${uploadedFile.id}`} className="sr-only">Select facial expression for subject {index + 1}</label>
-                <select
-                    id={`persona-select-${uploadedFile.id}`}
-                    value={uploadedFile.personaId}
-                    onChange={(e) => onPersonaChange(uploadedFile.id, e.target.value)}
-                    className="w-full bg-bg-tertiary border border-border-primary text-text-primary text-sm rounded-lg focus:ring-accent focus:border-accent block p-2.5"
-                >
-                  {PERSONAS.map((persona) => (
-                    <option key={persona.id} value={persona.id}>{persona.name}</option>
-                  ))}
-                </select>
+                <Select ariaLabel={`Select facial expression for subject ${index + 1}`} value={uploadedFile.personaId} options={PERSONAS.map(persona => ({ value: persona.id, label: persona.name }))} onChange={value => onPersonaChange(uploadedFile.id, value)} />
                 <label htmlFor={`character-name-${uploadedFile.id}`} className="mt-2 block text-left text-xs font-medium text-text-secondary">Known person (optional)</label>
                 <input
                   id={`character-name-${uploadedFile.id}`}

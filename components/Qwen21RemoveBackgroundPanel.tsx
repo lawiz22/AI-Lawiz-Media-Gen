@@ -28,6 +28,7 @@ const Fold: React.FC<{ title: string; children: React.ReactNode; wide?: boolean 
 const Qwen21RemoveBackgroundPanel: React.FC<Props> = ({ options, updateOptions, sourceFile, onSourceChange, isComfyUIConnected, objectInfo, editMode }) => {
     const dispatch: AppDispatch = useDispatch();
     const otherBusy = useSelector((state: RootState) => state.generation.isLoading);
+    const lockOwner = `qwen21-${editMode || 'remove-background'}`;
     const settingsKey = editMode === 'turbo' ? 'comfyQwen21EditTurbo' : editMode === 'consistency' ? 'comfyQwen21EditConsistency' : 'comfyQwen21RemoveBackground';
     const defaults = () => editMode ? defaultQwen21EditOptions(editMode) : defaultQwen21RemoveBackgroundOptions();
     const settings = options[settingsKey] || defaults();
@@ -78,7 +79,7 @@ const Qwen21RemoveBackgroundPanel: React.FC<Props> = ({ options, updateOptions, 
         busy.current = true; setRunning(true); setStopping(false); setError('');
         const cancellation = new AbortController(); controller.current = cancellation;
         const snapshot = structuredClone(settings); const generationOptions = structuredClone(options); const file = sourceFile; const started = performance.now();
-        dispatch(setLoadingState({ isLoading: true }));
+        dispatch(setLoadingState({ isLoading: true, owner: lockOwner }));
         try {
             const original = await fileToDataUrl(file);
             const report = (text: string, value: number) => { setMessage(text); setProgress(value); };
@@ -88,7 +89,7 @@ const Qwen21RemoveBackgroundPanel: React.FC<Props> = ({ options, updateOptions, 
                 options: { ...generationOptions, provider: 'comfyui', comfyModelType: model, comfyPrompt: generated.prompt, comfyNegativePrompt: snapshot.negativePrompt, comfySeed: generated.seed, [settingsKey]: { ...snapshot, seed: generated.seed } } });
             setSaved(false); setPosition(50);
         } catch (failure) { setError(failure instanceof Error ? failure.message : 'Remove Background failed.'); }
-        finally { busy.current = false; controller.current = null; setRunning(false); setStopping(false); dispatch(setLoadingState({ isLoading: false })); }
+        finally { busy.current = false; controller.current = null; setRunning(false); setStopping(false); dispatch(setLoadingState({ isLoading: false, owner: lockOwner })); }
     };
     const stop = async () => {
         if (!running || stopping) return;

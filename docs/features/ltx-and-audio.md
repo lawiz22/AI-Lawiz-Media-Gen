@@ -30,7 +30,7 @@ Compose LTX timelines, animate an image with LTX 2.5 Audio-Sync, and reuse speec
 
 ## LTX-Ripple-FFAF
 
-Open **Video > LTX-Ripple-FFAF** (First Frame All Frames). This uses the supplied `00-LTX_Ripple_FFAF_EditAPI.json` graph, checked against its normal UI workflow, independently of Director, Audio-Sync and H3.
+Open **Video > LTX > LTX-Ripple-FFAF** (First Frame All Frames). This uses the supplied `00-LTX_Ripple_FFAF_EditAPI.json` graph, checked against its normal UI workflow, independently of Director, Audio-Sync and H3.
 
 1. Select the **source video** and its **already edited first-frame image**, from disk or Library. This workflow propagates that edit; it does not edit the first frame itself.
 2. Keep the original editing prompt or describe what should remain consistent. The prompt is sent verbatim, without a remote rewriter.
@@ -52,7 +52,7 @@ Five disconnected nodes (`445`, `815`, `933`, `935`, `952`) are omitted from sub
 
 ## LTX 2.5 Audio-Sync
 
-Open **Video > LTX 2.5 Audio-Sync**. This follows the supplied ImageAudioToVideo v10 workflow, not LTX Director or an H3 finishing stage.
+Open **Video > LTX > LTX 2.5 Audio-Sync**. This follows the supplied ImageAudioToVideo v10 workflow, not LTX Director or an H3 finishing stage.
 
 ### Direct generation or prompt-generator transfer
 

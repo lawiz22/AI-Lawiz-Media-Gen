@@ -165,6 +165,49 @@ test('Library item includes generated text and every generation parameter withou
     assert.ok(!JSON.stringify(item).includes('minimaxDrafts'));
 });
 
+test('LTX model, mode and separate canvases survive Library snapshots without sharing mutable templates', async () => {
+    const original = { ...inputs(), targetFamily: 'ltx', promptMode: 'v2v', workflow: 'ltx-ripple-ffaf',
+        ltxTemplates: { ...api.DEFAULT_LTX_VIDEO_TEMPLATES, generation: api.DEFAULT_LTX_VIDEO_TEMPLATES.generation + '\nLTX saved directions.' } };
+    const item = await hydratePrompt(await api.buildVideoPromptLibraryItem(result, original));
+    assert.ok(item.tags.includes('ltx'));
+    assert.ok(!item.tags.includes('minimax-h3'));
+    assert.equal(item.videoPromptOptions.targetFamily, 'ltx');
+    assert.equal(item.videoPromptOptions.promptMode, 'v2v');
+    assert.match(item.videoPromptOptions.instruction, /Generation mode: V2V/);
+    assert.match(item.videoPromptOptions.instruction, /LTX saved directions/);
+    const restored = await api.restoreVideoPromptLibraryItem(item);
+    assert.equal(restored.inputs.targetFamily, 'ltx');
+    assert.equal(restored.inputs.promptMode, 'v2v');
+    assert.equal(restored.inputs.workflow, 'ltx-ripple-ffaf');
+    assert.match(restored.inputs.templates.generation, /Warm light/);
+    assert.match(restored.inputs.ltxTemplates.generation, /LTX saved directions/);
+    assert.equal(await restored.inputs.references[0].file.text(), 'edited video bytes');
+    const clone = api.cloneVideoPromptLibraryOptions(item.videoPromptOptions);
+    clone.ltxTemplates.generation = 'Changed';
+    assert.match(item.videoPromptOptions.ltxTemplates.generation, /LTX saved directions/);
+    original.ltxTemplates.generation = 'Changed original';
+    assert.match(item.videoPromptOptions.ltxTemplates.generation, /LTX saved directions/);
+});
+
+test('REF2V and FI2V Library snapshots preserve distinct reference semantics and legacy I2V remains readable', async () => {
+    for (const [savedMode, restoredMode] of [['ref2v', 'ref2v'], ['fi2v', 'fi2v'], ['i2v', 'fi2v']]) {
+        const original = { ...inputs(), targetFamily: 'h3', promptMode: savedMode };
+        const item = await hydratePrompt(await api.buildVideoPromptLibraryItem(result, original));
+        assert.equal(item.videoPromptOptions.promptMode, restoredMode);
+        assert.ok(item.videoPromptOptions.instruction.includes(`Generation mode: ${restoredMode.toUpperCase()}`));
+        const restored = await api.restoreVideoPromptLibraryItem(item);
+        assert.equal(restored.inputs.promptMode, restoredMode);
+        assert.equal(restored.inputs.references[1].note, original.references[1].note);
+        if (restoredMode === 'ref2v') {
+            assert.match(item.videoPromptOptions.instruction, /independent references, NOT starting frames/);
+            assert.doesNotMatch(item.videoPromptOptions.instruction, /the first attached image is the starting frame/);
+        } else {
+            assert.match(item.videoPromptOptions.instruction, /the first attached image is the starting frame/);
+        }
+        assert.equal(original.promptMode, savedMode);
+    }
+});
+
 test('externalized binaries round-trip original and edited image/video/audio without mutating metadata', async () => {
     const original = inputs();
     const { assetBlobs, ...itemMetadata } = await api.buildVideoPromptLibraryItem(result, original);

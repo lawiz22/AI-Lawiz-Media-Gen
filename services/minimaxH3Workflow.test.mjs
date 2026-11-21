@@ -18,6 +18,24 @@ export const draft = (references = [ref('image', 1)]) => ({
 const build = (options = api.defaultMinimaxH3Options(), input = draft()) =>
     api.buildMinimaxH3Workflow(input, options, Object.fromEntries(input.references.map(ref => [ref.id, ref.file.name])));
 
+test('H3 LoRA choices filter a large mixed catalog once and preserve raw schemas for existing saved workflows', () => {
+    const other = Array.from({ length: 10000 }, (_, index) => `FLUX2\\lora-${index}.safetensors`);
+    const h3 = Array.from({ length: 12 }, (_, index) => `${index % 2 ? 'h3/subfolder/' : 'H3\\'}lora-${index}.safetensors`);
+    const names = [...other, ...h3, 'MiniMax\\other.safetensors', 'Custom\\other.safetensors', 'h3-root.safetensors'];
+    const info = { LoraLoader: { input: { required: { lora_name: [names] } } },
+        LoraLoaderModelOnly: { input: { required: { lora_name: [h3] } } } };
+    const filtered = api.h3LoraChoices(info);
+    assert.deepEqual(filtered, h3);
+    for (let i = 0; i < 20; i++) assert.equal(api.h3LoraChoices(info), filtered);
+    const catalog = api.h3LoraCatalog(info);
+    assert.equal(api.h3LoraCatalog(info), catalog);
+    assert.deepEqual(catalog, names);
+    assert.equal(api.h3Choices(info, 'LoraLoader', 'lora_name').length, names.length);
+    const refreshed = { LoraLoader: { input: { required: { lora_name: [['H3\\new.safetensors']] } } } };
+    assert.deepEqual(api.h3LoraChoices(refreshed), ['H3\\new.safetensors']);
+    assert.notEqual(api.h3LoraChoices(refreshed), filtered);
+});
+
 test('filename dates expand locally before VHS saving without changing saved prefixes', () => {
     const prefix = 'MrWeaz/%date:yyyy-MM-dd%/Advanced_';
     assert.equal(api.resolveH3FilenamePrefix(prefix, new Date(2026, 0, 2, 23, 59)), 'MrWeaz/2026-01-02/Advanced_');

@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { useImperativeHandle, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../store/store';
 import type { GenerationOptions, LibraryItem } from '../types';
@@ -15,6 +15,7 @@ import { LibraryPickerModal } from './LibraryPickerModal';
 import { LibraryPromptButton } from './LibraryPromptButton';
 import { NumberSlider } from './InputComponents';
 import { SendToLTXButton } from './SendToLTXButton';
+import { useUnmountCleanup } from './useUnmountCleanup';
 import { CheckIcon, CloseIcon, DownloadIcon, GenerateIcon, LibraryIcon, RefreshIcon, ResetIcon, SaveIcon, SpinnerIcon, TrashIcon, WorkflowIcon } from './icons';
 
 export interface Qwen21MultiHandle { exportWorkflow: () => Promise<void> }
@@ -60,7 +61,7 @@ const Qwen21MultiPanel: React.FC<Props> = ({ options, updateOptions, isComfyUICo
         latest.current.settings = next; current.updateOptions({ comfyQwen21Multi: next });
     };
     const abortAnalysis = () => { requests.current.forEach(request => request?.abort()); requests.current = [null, null, null, null]; setAnalysis(['', '', '', '']); };
-    useEffect(() => () => { requests.current.forEach(request => request?.abort()); }, []);
+    const root = useUnmountCleanup(() => requests.current.forEach(request => request?.abort()));
     const analyze = async (index: number, file: File, role: Qwen21ReferenceRole) => {
         requests.current[index]?.abort();
         const cancellation = new AbortController(); requests.current[index] = cancellation;
@@ -114,7 +115,7 @@ const Qwen21MultiPanel: React.FC<Props> = ({ options, updateOptions, isComfyUICo
         busy.current = true; setRunning(true); setStopping(false); setError('');
         const cancellation = new AbortController(); controller.current = cancellation;
         const snapshot = structuredClone(settings); const optionSnapshot = structuredClone(options); const sources = activeFiles as File[]; const started = performance.now();
-        dispatch(setLoadingState({ isLoading: true }));
+        dispatch(setLoadingState({ isLoading: true, owner: 'qwen21-multi' }));
         try {
             const originals = await Promise.all(sources.map(fileToDataUrl)); cancellation.signal.throwIfAborted();
             const generated = await generateComfyUIQwen21Multi(sources, snapshot, (text, value) => { setMessage(text); setProgress(value); }, cancellation.signal);
@@ -123,7 +124,7 @@ const Qwen21MultiPanel: React.FC<Props> = ({ options, updateOptions, isComfyUICo
                 options: { ...optionSnapshot, provider: 'comfyui', comfyModelType: 'qwen21-i2i-multi', comfyPrompt: generated.prompt, comfyNegativePrompt: snapshot.negativePrompt, comfySeed: generated.seed, comfyQwen21Multi: { ...snapshot, seed: generated.seed, prompt: generated.prompt } } });
             setSaved(false);
         } catch (failure) { setError(failure instanceof Error ? failure.message : 'Generation failed.'); }
-        finally { busy.current = false; controller.current = null; setRunning(false); setStopping(false); dispatch(setLoadingState({ isLoading: false })); }
+        finally { busy.current = false; controller.current = null; setRunning(false); setStopping(false); dispatch(setLoadingState({ isLoading: false, owner: 'qwen21-multi' })); }
     };
     const stop = async () => { if (!running || stopping) return; setStopping(true); controller.current?.abort(new Error('Generation cancelled.')); await cancelComfyUIExecution(); };
     const save = async () => {
@@ -154,7 +155,7 @@ const Qwen21MultiPanel: React.FC<Props> = ({ options, updateOptions, isComfyUICo
     const select = (label: string, key: keyof Qwen21MultiOptions, node: string, name: string) => <label className="block text-sm text-text-secondary">{label}<select aria-label={label} className={input} value={String(settings[key])} disabled={locked} onChange={event => update({ [key]: event.target.value })}>{[...new Set([String(settings[key]), ...getQwen21Choices(objectInfo, node, name)])].map(value => <option key={value}>{value}</option>)}</select></label>;
     const loraChange = (index: number, change: Partial<Qwen21Lora>) => update({ loras: settings.loras.map((lora, slot) => slot === index ? { ...lora, ...change } : lora) });
     const reset = () => { if (locked || busy.current) return; abortAnalysis(); updateOptions({ comfyQwen21Multi: initial() }); setFiles([null, null, null, null]); setResult(null); setSaved(false); setError(''); setAnalysisErrors(['', '', '', '']); };
-    return <section aria-label="Qwen 2.1 I2I Multi Images" className="space-y-5">
+    return <section ref={root} aria-label="Qwen 2.1 I2I Multi Images" className="space-y-5">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border-primary pb-3"><h2 className="text-xl font-bold text-accent">I2I Multi Images</h2><div className="flex flex-wrap gap-2"><button type="button" className={button} disabled={locked} onClick={() => setLibrary({ index: 0, restore: true })}><LibraryIcon className="h-4 w-4" />Restore composition</button><button type="button" className={button} disabled={locked} onClick={reset}><ResetIcon className="h-4 w-4" />Reset</button></div></header>
         {!isComfyUIConnected && <p role="status" className="text-sm text-text-secondary">ComfyUI disconnected.</p>}
         {(error || readiness) && <p role="alert" className="rounded-md border border-danger/50 bg-danger-bg p-3 text-sm text-danger">{error || readiness}</p>}

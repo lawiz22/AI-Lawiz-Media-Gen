@@ -72,7 +72,7 @@ const Qwen21CharacterSheetPanel: React.FC<Props> = ({ options, onOptionsChange, 
         busy.current = true; setRunning(true); setStopping(false); setError('');
         const controller = new AbortController(); cancellation.current = controller;
         const snapshot = structuredClone(settings); const generationOptions = structuredClone(options); const name = characterName.trim() || 'Character'; const file = sourceFile; const started = performance.now();
-        dispatch(setLoadingState({ isLoading: true }));
+        dispatch(setLoadingState({ isLoading: true, owner: 'qwen21-character-sheet' }));
         try {
             const source = await fileToDataUrl(file);
             const generated = await generateComfyUICharacterSheet(file, snapshot, (text, value) => { setMessage(text); setProgress(value); }, controller.signal);
@@ -81,7 +81,7 @@ const Qwen21CharacterSheetPanel: React.FC<Props> = ({ options, onOptionsChange, 
             setResult({ src: generated.src, source, settings: submitted, options: { ...generationOptions, provider: 'comfyui', comfyCharacterMode: 'qwen21', qwen21CharacterSheet: submitted }, prompt: generated.prompt, name, width: image.naturalWidth, height: image.naturalHeight, seconds: (performance.now() - started) / 1000 });
             setViews([]); setSaved([]); savedKeys.current.clear();
         } catch (failure) { setError(failure instanceof Error ? failure.message : 'Character Sheet generation failed.'); }
-        finally { busy.current = false; cancellation.current = null; setRunning(false); setStopping(false); dispatch(setLoadingState({ isLoading: false })); }
+        finally { busy.current = false; cancellation.current = null; setRunning(false); setStopping(false); dispatch(setLoadingState({ isLoading: false, owner: 'qwen21-character-sheet' })); }
     };
     const stop = async () => {
         if (!running || stopping) return;

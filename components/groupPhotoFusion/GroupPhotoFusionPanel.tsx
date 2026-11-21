@@ -26,10 +26,12 @@ import { DownloadIcon, RefreshIcon, ZoomIcon, ZipIcon, SaveIcon, CheckIcon, Spin
 import DebugSection from './DebugSection';
 import { dataUrlToThumbnail, fileToDataUrl } from '../../utils/imageUtils';
 import { SendToLTXButton } from '../SendToLTXButton';
-import { NumberSlider, SelectInput } from '../InputComponents';
+import { Accordion } from '../ui/Accordion';
+import { ModelFields, NumberField, SamplerFields } from '../ui/fields';
+import { Select } from '../ui/Select';
 
-const getOptions = (input: any): string[] => Array.isArray(input?.[0]) ? input[0] : [];
-const withCurrent = (current: string, values: string[]) => Array.from(new Set([current, ...values].filter(Boolean))).map(value => ({ value, label: value }));
+const NAME = 'Photo Fusion';
+const getOptions = (input: any): string[] => Array.isArray(input?.[0]) ? input[0] : Array.isArray(input?.[1]?.options) ? input[1].options : [];
 const getImageExtension = (dataUrl: string) => dataUrl.startsWith('data:image/png') ? 'png' : dataUrl.startsWith('data:image/webp') ? 'webp' : 'jpg';
 const QWEN_LIGHTNING_PRESETS = {
   4: 'QWEN\\Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors',
@@ -51,11 +53,12 @@ const GroupPhotoFusionPanel: React.FC = () => {
       isLoading, generatedImages, error, isDebugMode, debugInfos
   } = useSelector((state: RootState) => state.groupPhotoFusion);
   const generationOptions = useSelector((state: RootState) => state.generation.options);
-    const { isComfyUIConnected, isMammouthConnected, comfyUIObjectInfo } = useSelector((state: RootState) => state.app);
+  const isComfyUIConnected = useSelector((state: RootState) => state.app.isComfyUIConnected);
+  const isMammouthConnected = useSelector((state: RootState) => state.app.isMammouthConnected);
+  const comfyUIObjectInfo = useSelector((state: RootState) => state.app.comfyUIObjectInfo);
   const ltxPrompt = selectedPose?.getPrompt(getSubjectDescriptions(uploadedFiles), quality, !!backgroundFile);
 
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [geminiModels, setGeminiModels] = useState<string[]>([...GEMINI_IMAGE_MODELS]);
   const [mammouthModels, setMammouthModels] = useState<string[]>([...MAMMOUTH_IMAGE_MODELS].sort());
   const [isLoadingMammouthModels, setIsLoadingMammouthModels] = useState(false);
@@ -465,7 +468,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
                    {image.status === 'error' && (
                     <div className="p-4 text-center">
                         <p className="text-danger font-semibold">Generation Failed</p>
-                        <p className="text-xs text-danger/80 mt-1">{image.error}</p>
+                        <p className="text-xs text-danger mt-1">{image.error}</p>
                     </div>
                    )}
 
@@ -516,14 +519,14 @@ const GroupPhotoFusionPanel: React.FC = () => {
                <button
                 onClick={handleDownloadAll}
                 disabled={successfulGenerations === 0}
-                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-accent-text bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-bg-primary focus:ring-accent disabled:bg-accent/50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-accent-text bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-bg-primary focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ZipIcon className="h-5 w-5 mr-2" />
                 Download All (.zip)
               </button>
               <button
                 onClick={() => dispatch(startOver())}
-                className="inline-flex items-center px-6 py-3 border border-accent text-base font-medium rounded-md shadow-sm text-accent bg-transparent hover:bg-accent/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-bg-primary focus:ring-accent"
+                className="inline-flex items-center px-6 py-3 border border-accent text-base font-medium rounded-md shadow-sm text-accent bg-transparent hover:bg-bg-tertiary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-bg-primary focus:ring-accent"
               >
                 <RefreshIcon className="h-5 w-5 mr-2" />
                 Start Over
@@ -553,53 +556,51 @@ const GroupPhotoFusionPanel: React.FC = () => {
               numFiles={uploadedFiles.length}
             />
             <QualitySelector selectedQuality={quality} onSelectQuality={(q) => dispatch(setQuality(q))} />
-            {provider === 'comfyui' && <div className="mx-auto w-full max-w-4xl rounded-md border border-border-primary bg-bg-secondary">
-              <button type="button" onClick={() => setAdvancedOpen(open => !open)} className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-text-secondary hover:text-accent" aria-expanded={advancedOpen}>
-                <span>FLUX2 Advanced Settings</span><span>{advancedOpen ? '−' : '+'}</span>
-              </button>
-              {advancedOpen && <div className="space-y-5 border-t border-border-primary p-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <SelectInput label="FLUX2 Model (GGUF / Safetensors)" value={selectedFlux2Model} onChange={(event) => updateFlux2Option({ comfyFlux2EditUnet: event.target.value })} options={withCurrent(selectedFlux2Model, flux2Models)} disabled={isLoading} />
-                  <SelectInput label="CLIP" value={generationOptions.comfyFlux2EditClip || 'qwen_3_4b.safetensors'} onChange={(event) => updateFlux2Option({ comfyFlux2EditClip: event.target.value })} options={withCurrent(generationOptions.comfyFlux2EditClip || 'qwen_3_4b.safetensors', clips)} disabled={isLoading} />
-                  <SelectInput label="VAE" value={generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors'} onChange={(event) => updateFlux2Option({ comfyFlux2EditVae: event.target.value })} options={withCurrent(generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors', vaes)} disabled={isLoading} />
-                  <SelectInput label="Sampler" value={generationOptions.comfyFlux2EditSampler || 'euler'} onChange={(event) => updateFlux2Option({ comfyFlux2EditSampler: event.target.value })} options={withCurrent(generationOptions.comfyFlux2EditSampler || 'euler', samplers)} disabled={isLoading} />
-                  <NumberSlider label={`Source Megapixels: ${generationOptions.comfyFlux2EditMegapixels ?? 1}`} value={generationOptions.comfyFlux2EditMegapixels ?? 1} onChange={(event) => updateFlux2Option({ comfyFlux2EditMegapixels: Number(event.target.value) })} min={0.25} max={4} step={0.25} disabled={isLoading} allowDirectInput />
-                  <NumberSlider label={`Steps: ${generationOptions.comfyFlux2EditSteps ?? 4}`} value={generationOptions.comfyFlux2EditSteps ?? 4} onChange={(event) => updateFlux2Option({ comfyFlux2EditSteps: Number(event.target.value) })} min={1} max={40} step={1} disabled={isLoading} allowDirectInput />
-                  <NumberSlider label={`CFG: ${generationOptions.comfyFlux2EditCfg ?? 1}`} value={generationOptions.comfyFlux2EditCfg ?? 1} onChange={(event) => updateFlux2Option({ comfyFlux2EditCfg: Number(event.target.value) })} min={0.1} max={10} step={0.1} disabled={isLoading} allowDirectInput />
-                  <label className="block text-sm font-medium text-text-secondary">Seed (-1 = random)<input type="number" value={generationOptions.comfySeed ?? -1} onChange={(event) => updateFlux2Option({ comfySeed: Number(event.target.value) < 0 ? undefined : Number(event.target.value) })} disabled={isLoading} className="mt-1 w-full rounded-md border border-border-primary bg-bg-tertiary p-2" /></label>
-                  <SelectInput label="Seed Control" value={generationOptions.comfySeedControl || 'randomize'} onChange={(event) => updateFlux2Option({ comfySeedControl: event.target.value as NonNullable<typeof generationOptions.comfySeedControl> })} options={[{ value: 'randomize', label: 'Randomize' }, { value: 'fixed', label: 'Fixed' }, { value: 'increment', label: 'Increment' }, { value: 'decrement', label: 'Decrement' }]} disabled={isLoading} />
-                  {(generationOptions.comfySeedControl === 'increment' || generationOptions.comfySeedControl === 'decrement') && <NumberSlider label={`Seed Step: ${generationOptions.comfySeedIncrement ?? 1}`} value={generationOptions.comfySeedIncrement ?? 1} onChange={(event) => updateFlux2Option({ comfySeedIncrement: Number(event.target.value) })} min={1} max={1000} step={1} disabled={isLoading} allowDirectInput />}
-                </div>
-                <div className="space-y-3 border-t border-border-primary/50 pt-4">
-                  <h5 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Additional LoRAs</h5>
-                  {([1, 2] as const).map(index => {
-                    const nameField = `comfyFlux2EditLora${index}Name` as const;
-                    const strengthField = `comfyFlux2EditLora${index}Strength` as const;
-                    const selectedName = generationOptions[nameField] || '';
-                    const strength = generationOptions[strengthField] ?? 1;
-                    return <div key={index} className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.65fr)]">
-                      <SelectInput label={`LoRA ${index}`} value={selectedName} onChange={(event) => updateFlux2Option({ [nameField]: event.target.value })} options={[{ value: '', label: 'None' }, ...withCurrent(selectedName, qwenLoras)]} disabled={isLoading} />
-                      <NumberSlider label={`LoRA ${index} Strength: ${strength}`} value={strength} onChange={(event) => updateFlux2Option({ [strengthField]: Number(event.target.value) })} min={-2} max={2} step={0.05} disabled={isLoading || !selectedName} allowDirectInput />
-                    </div>;
-                  })}
-                  {(generationOptions.comfyFlux2EditLora1Name || generationOptions.comfyFlux2EditLora2Name) && !comfyUIObjectInfo?.LoraLoaderModelOnly && <p className="text-xs text-warning">Additional LoRAs require LoraLoaderModelOnly in ComfyUI.</p>}
-                </div>
+            {provider === 'comfyui' && <div className="mx-auto w-full max-w-4xl space-y-3">
+              <h3 className="text-sm font-bold text-text-secondary">FLUX2 settings</h3>
+              <Accordion title="Models">{() => <ModelFields name={NAME} disabled={isLoading} onChange={(id, value) => updateFlux2Option({ [id as 'comfyFlux2EditUnet']: value })} fields={[
+                { id: 'comfyFlux2EditUnet', label: 'FLUX2 Model (GGUF / Safetensors)', value: selectedFlux2Model, choices: flux2Models },
+                { id: 'comfyFlux2EditClip', label: 'CLIP', value: generationOptions.comfyFlux2EditClip || 'qwen_3_4b.safetensors', choices: clips },
+                { id: 'comfyFlux2EditVae', label: 'VAE', value: generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors', choices: vaes },
+              ]} />}</Accordion>
+              <Accordion title="LoRAs">{() => <>
+                {([1, 2] as const).map(index => {
+                  const nameField = `comfyFlux2EditLora${index}Name` as const, strengthField = `comfyFlux2EditLora${index}Strength` as const;
+                  const selectedName = generationOptions[nameField] || '';
+                  return <div key={index} className="space-y-2">
+                    <Select variant="search" label={`LoRA ${index}`} ariaLabel={`${NAME} LoRA ${index}`} value={selectedName} options={[{ value: '', label: 'None' }, ...qwenLoras.map(value => ({ value, label: value }))]} disabled={isLoading} onChange={value => updateFlux2Option({ [nameField]: value })} />
+                    <NumberField slider label={`LoRA ${index} Strength`} ariaLabel={`${NAME} LoRA ${index} strength`} value={generationOptions[strengthField] ?? 1} min={-2} max={2} step={0.05} disabled={isLoading || !selectedName} onChange={value => updateFlux2Option({ [strengthField]: value })} />
+                  </div>;
+                })}
+                {(generationOptions.comfyFlux2EditLora1Name || generationOptions.comfyFlux2EditLora2Name) && !comfyUIObjectInfo?.LoraLoaderModelOnly && <p className="text-xs text-warning">Additional LoRAs require LoraLoaderModelOnly in ComfyUI.</p>}
+              </>}</Accordion>
+              <Accordion title="Sampler">{() => <>
+                <SamplerFields name={NAME} disabled={isLoading} samplers={samplers} limits={{ steps: { min: 1, max: 40, step: 1 }, cfg: { min: 0.1, max: 10, step: 0.1 } }}
+                  value={{ sampler: generationOptions.comfyFlux2EditSampler || 'euler', steps: generationOptions.comfyFlux2EditSteps ?? 4, cfg: generationOptions.comfyFlux2EditCfg ?? 1 }}
+                  onChange={patch => updateFlux2Option({
+                    ...(patch.sampler !== undefined && { comfyFlux2EditSampler: patch.sampler }),
+                    ...(patch.steps !== undefined && { comfyFlux2EditSteps: patch.steps }),
+                    ...(patch.cfg !== undefined && { comfyFlux2EditCfg: patch.cfg }) })} />
+                <NumberField label="Seed (-1 = random)" ariaLabel={`${NAME} Seed`} value={generationOptions.comfySeed ?? -1} min={-1} step={1} disabled={isLoading} onChange={value => updateFlux2Option({ comfySeed: value < 0 ? undefined : value })} />
+                <Select label="Seed Control" ariaLabel={`${NAME} Seed Control`} value={generationOptions.comfySeedControl || 'randomize'} disabled={isLoading} onChange={value => updateFlux2Option({ comfySeedControl: value })}
+                  options={[{ value: 'randomize', label: 'Randomize' }, { value: 'fixed', label: 'Fixed' }, { value: 'increment', label: 'Increment' }, { value: 'decrement', label: 'Decrement' }]} />
+                {(generationOptions.comfySeedControl === 'increment' || generationOptions.comfySeedControl === 'decrement') && <NumberField slider label="Seed Step" ariaLabel={`${NAME} Seed Step`} value={generationOptions.comfySeedIncrement ?? 1} min={1} max={1000} step={1} disabled={isLoading} onChange={value => updateFlux2Option({ comfySeedIncrement: value })} />}
+              </>}</Accordion>
+              <Accordion title="Advanced">{() => <>
+                <NumberField slider label="Source Megapixels" ariaLabel={`${NAME} Source Megapixels`} value={generationOptions.comfyFlux2EditMegapixels ?? 1} min={0.25} max={4} step={0.25} disabled={isLoading} onChange={value => updateFlux2Option({ comfyFlux2EditMegapixels: value })} />
                 <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-text-secondary">
                   <input type="checkbox" checked={!!generationOptions.comfyFlux2EditUseCacheDit} onChange={(event) => updateFlux2Option({ comfyFlux2EditUseCacheDit: event.target.checked })} disabled={isLoading} className="rounded text-accent focus:ring-accent" />
                   Enable CacheDiT Accelerator
                 </label>
-                {generationOptions.comfyFlux2EditUseCacheDit && <div className="grid gap-4 sm:grid-cols-3">
-                  <SelectInput label="CacheDiT Model Type" value={generationOptions.comfyFlux2EditCacheDitModelType || 'Auto'} onChange={(event) => updateFlux2Option({ comfyFlux2EditCacheDitModelType: event.target.value })} options={withCurrent(generationOptions.comfyFlux2EditCacheDitModelType || 'Auto', cacheDitModels)} disabled={isLoading} />
-                  <NumberSlider label={`Warmup: ${generationOptions.comfyFlux2EditCacheDitWarmupSteps ?? 0}`} value={generationOptions.comfyFlux2EditCacheDitWarmupSteps ?? 0} onChange={(event) => updateFlux2Option({ comfyFlux2EditCacheDitWarmupSteps: Number(event.target.value) })} min={0} max={20} step={1} disabled={isLoading} allowDirectInput />
-                  <NumberSlider label={`Skip: ${generationOptions.comfyFlux2EditCacheDitSkipInterval ?? 0}`} value={generationOptions.comfyFlux2EditCacheDitSkipInterval ?? 0} onChange={(event) => updateFlux2Option({ comfyFlux2EditCacheDitSkipInterval: Number(event.target.value) })} min={0} max={10} step={1} disabled={isLoading} allowDirectInput />
-                </div>}
-              </div>}
+                {generationOptions.comfyFlux2EditUseCacheDit && <>
+                  <Select label="CacheDiT Model Type" ariaLabel={`${NAME} CacheDiT Model Type`} value={generationOptions.comfyFlux2EditCacheDitModelType || 'Auto'} options={cacheDitModels} disabled={isLoading} onChange={value => updateFlux2Option({ comfyFlux2EditCacheDitModelType: value })} />
+                  <NumberField slider label="Warmup" ariaLabel={`${NAME} CacheDiT Warmup`} value={generationOptions.comfyFlux2EditCacheDitWarmupSteps ?? 0} min={0} max={20} step={1} disabled={isLoading} onChange={value => updateFlux2Option({ comfyFlux2EditCacheDitWarmupSteps: value })} />
+                  <NumberField slider label="Skip" ariaLabel={`${NAME} CacheDiT Skip`} value={generationOptions.comfyFlux2EditCacheDitSkipInterval ?? 0} min={0} max={10} step={1} disabled={isLoading} onChange={value => updateFlux2Option({ comfyFlux2EditCacheDitSkipInterval: value })} />
+                </>}
+              </>}</Accordion>
             </div>}
-            {provider === 'qwen' && <div className="mx-auto w-full max-w-4xl rounded-md border border-border-primary bg-bg-secondary">
-              <button type="button" onClick={() => setAdvancedOpen(open => !open)} className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-text-secondary hover:text-accent" aria-expanded={advancedOpen}>
-                <span>QWEN-Edit Advanced Settings</span><span>{advancedOpen ? '−' : '+'}</span>
-              </button>
-              {advancedOpen && <div className="space-y-5 border-t border-border-primary p-4">
+            {provider === 'qwen' && <div className="mx-auto w-full max-w-4xl space-y-3">
+              <h3 className="text-sm font-bold text-text-secondary">QWEN-Edit settings</h3>
                 <div className="space-y-2">
                   <span className="block text-sm font-medium text-text-secondary">Lightning preset</span>
                   <div className="grid grid-cols-2 gap-1 rounded-md bg-bg-tertiary p-1">
@@ -607,42 +608,32 @@ const GroupPhotoFusionPanel: React.FC = () => {
                   </div>
                   <p className="text-xs text-text-muted">Switches the installed Lightning LoRA and sampling steps together.</p>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <SelectInput label="Qwen Edit Model" value={generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors'} onChange={(event) => updateFlux2Option({ comfyQwenEditUnet: event.target.value })} options={withCurrent(generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors', qwenModels)} disabled={isLoading} />
-                  <SelectInput label="CLIP" value={generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors'} onChange={(event) => updateFlux2Option({ comfyQwenEditClip: event.target.value })} options={withCurrent(generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors', clips)} disabled={isLoading} />
-                  <SelectInput label="VAE" value={generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors'} onChange={(event) => updateFlux2Option({ comfyQwenEditVae: event.target.value })} options={withCurrent(generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors', vaes)} disabled={isLoading} />
-                  <SelectInput label="Lightning LoRA" value={generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8]} onChange={(event) => updateFlux2Option({ comfyQwenEditUseLora: true, comfyQwenEditLora1Name: event.target.value })} options={withCurrent(generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8], qwenLoras)} disabled={isLoading} />
-                  <NumberSlider label={`LoRA Strength: ${generationOptions.comfyQwenEditLora1Strength ?? 1}`} value={generationOptions.comfyQwenEditLora1Strength ?? 1} onChange={(event) => updateFlux2Option({ comfyQwenEditLora1Strength: Number(event.target.value) })} min={0} max={2} step={0.05} disabled={isLoading} allowDirectInput />
-                  <SelectInput label="Sampler" value={generationOptions.photoFusionQwenSampler || 'euler_ancestral'} onChange={(event) => updateFlux2Option({ photoFusionQwenSampler: event.target.value })} options={withCurrent(generationOptions.photoFusionQwenSampler || 'euler_ancestral', samplers)} disabled={isLoading} />
-                  <SelectInput label="Scheduler" value={generationOptions.photoFusionQwenScheduler || 'beta57'} onChange={(event) => updateFlux2Option({ photoFusionQwenScheduler: event.target.value })} options={withCurrent(generationOptions.photoFusionQwenScheduler || 'beta57', schedulers)} disabled={isLoading} />
-                  <NumberSlider label={`Source Megapixels: ${generationOptions.comfyQwenEditMegapixels ?? 1}`} value={generationOptions.comfyQwenEditMegapixels ?? 1} onChange={(event) => updateFlux2Option({ comfyQwenEditMegapixels: Number(event.target.value) })} min={0.25} max={4} step={0.25} disabled={isLoading} allowDirectInput />
-                  <NumberSlider label={`AuraFlow Shift: ${generationOptions.comfyQwenEditShift ?? 2.5}`} value={generationOptions.comfyQwenEditShift ?? 2.5} onChange={(event) => updateFlux2Option({ comfyQwenEditShift: Number(event.target.value) })} min={0} max={10} step={0.1} disabled={isLoading} allowDirectInput />
-                  <NumberSlider label={`Steps: ${generationOptions.photoFusionQwenSteps ?? 8}`} value={generationOptions.photoFusionQwenSteps ?? 8} onChange={(event) => updateFlux2Option({ photoFusionQwenSteps: Number(event.target.value) })} min={1} max={40} step={1} disabled={isLoading} allowDirectInput />
-                  <NumberSlider label={`CFG: ${generationOptions.photoFusionQwenCfg ?? 1}`} value={generationOptions.photoFusionQwenCfg ?? 1} onChange={(event) => updateFlux2Option({ photoFusionQwenCfg: Number(event.target.value) })} min={0.1} max={10} step={0.1} disabled={isLoading} allowDirectInput />
-                </div>
-              </div>}
+              <Accordion title="Models">{() => <ModelFields name={NAME} disabled={isLoading} onChange={(id, value) => updateFlux2Option({ [id as 'comfyQwenEditUnet']: value })} fields={[
+                { id: 'comfyQwenEditUnet', label: 'Qwen Edit Model', value: generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors', choices: qwenModels },
+                { id: 'comfyQwenEditClip', label: 'CLIP', value: generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors', choices: clips },
+                { id: 'comfyQwenEditVae', label: 'VAE', value: generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors', choices: vaes },
+              ]} />}</Accordion>
+              <Accordion title="LoRAs">{() => <>
+                <Select variant="search" label="Lightning LoRA" ariaLabel={`${NAME} Lightning LoRA`} value={generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8]} options={qwenLoras} disabled={isLoading} onChange={value => updateFlux2Option({ comfyQwenEditUseLora: true, comfyQwenEditLora1Name: value })} />
+                <NumberField slider label="LoRA Strength" ariaLabel={`${NAME} LoRA Strength`} value={generationOptions.comfyQwenEditLora1Strength ?? 1} min={0} max={2} step={0.05} disabled={isLoading} onChange={value => updateFlux2Option({ comfyQwenEditLora1Strength: value })} />
+              </>}</Accordion>
+              <Accordion title="Sampler">{() => <SamplerFields name={NAME} disabled={isLoading} samplers={samplers} schedulers={schedulers} limits={{ steps: { min: 1, max: 40, step: 1 }, cfg: { min: 0.1, max: 10, step: 0.1 } }}
+                value={{ sampler: generationOptions.photoFusionQwenSampler || 'euler_ancestral', scheduler: generationOptions.photoFusionQwenScheduler || 'beta57', steps: generationOptions.photoFusionQwenSteps ?? 8, cfg: generationOptions.photoFusionQwenCfg ?? 1 }}
+                onChange={patch => updateFlux2Option({
+                  ...(patch.sampler !== undefined && { photoFusionQwenSampler: patch.sampler }),
+                  ...(patch.scheduler !== undefined && { photoFusionQwenScheduler: patch.scheduler }),
+                  ...(patch.steps !== undefined && { photoFusionQwenSteps: patch.steps }),
+                  ...(patch.cfg !== undefined && { photoFusionQwenCfg: patch.cfg }) })} />}</Accordion>
+              <Accordion title="Advanced">{() => <>
+                <NumberField slider label="Source Megapixels" ariaLabel={`${NAME} Source Megapixels`} value={generationOptions.comfyQwenEditMegapixels ?? 1} min={0.25} max={4} step={0.25} disabled={isLoading} onChange={value => updateFlux2Option({ comfyQwenEditMegapixels: value })} />
+                <NumberField slider label="AuraFlow Shift" ariaLabel={`${NAME} AuraFlow Shift`} value={generationOptions.comfyQwenEditShift ?? 2.5} min={0} max={10} step={0.1} disabled={isLoading} onChange={value => updateFlux2Option({ comfyQwenEditShift: value })} />
+              </>}</Accordion>
             </div>}
           </div>
           <div className="w-full max-w-4xl mx-auto mt-8">
               <h2 className="text-xl font-semibold text-text-primary mb-4 text-center">Number of Pictures</h2>
               <div className="p-4 bg-bg-tertiary rounded-lg">
-                  <label className="block text-sm font-medium text-text-secondary">Number of Images to Generate: {numImages}</label>
-                  <input
-                      type="range"
-                      min="1"
-                      max="4"
-                      step="1"
-                      value={numImages}
-                      onChange={(e) => dispatch(setNumImages(parseInt(e.target.value, 10)))}
-                      disabled={isLoading}
-                      className="w-full h-2 mt-1 bg-bg-primary rounded-lg appearance-none cursor-pointer"
-                  />
-                  <div className="flex justify-between text-xs text-text-muted mt-1 px-1">
-                      <span>1</span>
-                      <span>2</span>
-                      <span>3</span>
-                      <span>4</span>
-                  </div>
+                  <NumberField slider label="Number of Images to Generate" ariaLabel={`${NAME} Number of images`} value={numImages} min={1} max={4} step={1} disabled={isLoading} onChange={value => dispatch(setNumImages(Math.round(value)))} />
               </div>
           </div>
           <div className="mt-8 text-center">
@@ -655,7 +646,7 @@ const GroupPhotoFusionPanel: React.FC = () => {
             <button
               onClick={handleGenerate}
               disabled={isLoading || !isProviderReady || qwenInputLimitExceeded || !selectedPose || uploadedFiles.length < 2 || uploadedFiles.length > 4}
-              className="px-8 py-4 bg-accent text-accent-text font-bold rounded-lg shadow-lg hover:bg-accent-hover disabled:bg-accent/50 disabled:cursor-not-allowed transition-colors duration-300 transform hover:scale-105"
+              className="px-8 py-4 bg-accent text-accent-text font-bold rounded-lg shadow-lg hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300 transform hover:scale-105"
             >
               {isLoading ? 'Generating...' : `Fuse Photos with ${providerLabel}`}
             </button>
@@ -678,26 +669,17 @@ const GroupPhotoFusionPanel: React.FC = () => {
             <button type="button" onClick={() => dispatch(setProvider('mammouth'))} disabled={isLoading} className={`rounded px-3 py-1.5 text-xs font-bold ${provider === 'mammouth' ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>Mammouth</button>
           </div>
           {provider === 'gemini' && <div className="grid min-w-[240px] flex-1 gap-2 sm:grid-cols-3">
-            <select value={generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL} onChange={(event) => {
-              const model = event.target.value;
+            <Select ariaLabel="Gemini image model" value={generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL} options={geminiModels} disabled={isLoading} onChange={model => {
               const sizes = getGeminiImageSizes(model);
               updateFlux2Option({ geminiT2IModel: model, geminiImageSize: sizes.includes(generationOptions.geminiImageSize) ? generationOptions.geminiImageSize : '1K' });
-            }} disabled={isLoading} className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" aria-label="Gemini image model">
-              {geminiModels.map(model => <option key={model} value={model}>{model}</option>)}
-            </select>
-            <select value={generationOptions.geminiImageSize || '1K'} onChange={(event) => updateFlux2Option({ geminiImageSize: event.target.value as typeof generationOptions.geminiImageSize })} disabled={isLoading} className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" aria-label="Gemini image size">
-              {getGeminiImageSizes(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL).map(size => <option key={size} value={size}>{size}</option>)}
-            </select>
-            {supportsGeminiThinkingLevel(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) && <select value={generationOptions.geminiThinkingLevel || 'minimal'} onChange={(event) => updateFlux2Option({ geminiThinkingLevel: event.target.value as typeof generationOptions.geminiThinkingLevel })} disabled={isLoading} className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" aria-label="Gemini thinking level">
-              <option value="minimal">Minimal thinking</option>
-              <option value="high">High thinking</option>
-            </select>}
+            }} />
+            <Select<string> ariaLabel="Gemini image size" value={generationOptions.geminiImageSize || '1K'} options={getGeminiImageSizes(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL)} disabled={isLoading} onChange={size => updateFlux2Option({ geminiImageSize: size as typeof generationOptions.geminiImageSize })} />
+            {supportsGeminiThinkingLevel(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) && <Select<string> ariaLabel="Gemini thinking level" value={generationOptions.geminiThinkingLevel || 'minimal'} disabled={isLoading}
+              options={[{ value: 'minimal', label: 'Minimal thinking' }, { value: 'high', label: 'High thinking' }]} onChange={level => updateFlux2Option({ geminiThinkingLevel: level as typeof generationOptions.geminiThinkingLevel })} />}
           </div>}
           {provider === 'mammouth' && <div className="relative min-w-[240px] flex-1">
-            <select value={generationOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL} onChange={(event) => updateFlux2Option({ mammouthImageModel: event.target.value })} disabled={isLoading || isLoadingMammouthModels} className="w-full rounded-md border border-border-primary bg-bg-tertiary p-2 pr-8 text-sm" aria-label="Mammouth image model">
-              {mammouthModels.map(model => <option key={model} value={model}>{model}</option>)}
-            </select>
-            {isLoadingMammouthModels && <SpinnerIcon className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-text-muted" />}
+            <Select ariaLabel="Mammouth image model" value={generationOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL} options={mammouthModels} disabled={isLoading || isLoadingMammouthModels} onChange={model => updateFlux2Option({ mammouthImageModel: model })} />
+            {isLoadingMammouthModels && <SpinnerIcon className="absolute right-8 top-2.5 h-4 w-4 animate-spin text-text-muted" />}
           </div>}
         </div>
         {error && (

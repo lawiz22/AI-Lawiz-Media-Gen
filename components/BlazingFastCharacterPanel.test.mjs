@@ -6,14 +6,15 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { withUiKit } from './ui/compileForTest.mjs';
 
 const require = createRequire(import.meta.url), source = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 const compile = text => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(text, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
 }).outputText).toString('base64')}`;
 const reactURL = pathToFileURL(require.resolve('react')).href;
-const helpers = compile(source('../services/minimaxH3Workflow.ts').replace(/^import .*;\r?$/gm, ''));
 const stylesURL = compile(source('../services/styleGallery.ts'));
+const helpers = compile(`import { isH3LoraPath } from '${stylesURL}';\n` + source('../services/minimaxH3Workflow.ts').replace(/^import .*;\r?$/gm, ''));
 const anglesURL = compile(source('../services/characterAnglesWorkflow.ts'));
 const civitaiURL = compile(source('../services/civitaiService.ts'));
 const workflowURL = compile(source('../services/blazingFastCharacterWorkflow.ts')
@@ -22,8 +23,9 @@ const workflowURL = compile(source('../services/blazingFastCharacterWorkflow.ts'
     .replace("from './civitaiService'", `from '${civitaiURL}'`)
     .replace("from './minimaxH3Workflow'", `from '${helpers}'`).replace("from './styleGallery'", `from '${stylesURL}'`));
 const constantsURL = compile(source('../constants.ts'));
-const styleLibraryURL = compile(source('../services/styleLibrary.ts').replace("from './civitaiService'", `from '${civitaiURL}'`));
-const inputsURL = compile(source('./InputComponents.tsx').replace("from 'react'", `from '${reactURL}'`));
+const styleLibraryURL = compile(source('../services/styleLibrary.ts').replace("from './civitaiService'", `from '${civitaiURL}'`)
+    .replace("from './styleGallery'", `from '${stylesURL}'`));
+const inputsURL = compile(withUiKit(source('./InputComponents.tsx')));
 const browserURL = compile(source('./StyleBrowser.tsx').replace("from 'react'", `from '${reactURL}'`)
     .replace("from 'react-dom'", `from '${pathToFileURL(require.resolve('react-dom')).href}'`)
     .replace("from '../services/styleGallery'", `from '${stylesURL}'`).replace("from '../services/styleLibrary'", `from '${styleLibraryURL}'`));
@@ -42,7 +44,7 @@ const component = await import(compile(`
     import { defaultStyleGallery } from '${stylesURL}';
     import { h3Choices } from '${helpers}';
     const useDispatch = () => () => {}, useSelector = selector => selector({generation:{isLoading:false},library:{items:[]}});
-    const useMediaURL = () => '', useStyleGallery = () => ({gallery:defaultStyleGallery(),error:''});
+    const useMediaURL = () => '', useStyleGallery = () => ({gallery:defaultStyleGallery(),error:''}), useUnmountCleanup = () => () => {}, useDraftAutosave = () => {};
     const useModelInventory = () => ({inventory:{root:'',scannedAt:null,items:[]},error:''});
     const LibraryPickerModal = () => null, CreationSuiteResult = () => null, comfyOutputImage = () => undefined, comfyOutputText = () => '';
     ${componentSource.replace(/import[\s\S]*?from\s+'[^']+';/g, '')}
@@ -204,8 +206,8 @@ const galleryComponent = await import(compile(`
     import { linkStyleLibrary, matchStyleLibrary, resolveLibraryStyle, styleLibraryLoras, styleInstalledLoras } from '${styleLibraryURL}';
     import { StyleBrowser, StyleLibraryPreview, StyleModal } from '${browserURL}';
     import { getComfyRelativePath } from '${civitaiURL}';
-    import { defaultStyleGallery } from '${stylesURL}';
-    import { h3Choices } from '${helpers}';
+    import { defaultStyleGallery, normalizeStyleModel, isH3LoraPath } from '${stylesURL}';
+    import { h3Choices, h3LoraChoices } from '${helpers}';
     const useStyleGallery = () => ({gallery:defaultStyleGallery(),error:''});
     const useModelInventory = () => ({inventory:{root:'',scannedAt:null,items:[]},error:'',loading:false,refresh(){}});
     const window = {};

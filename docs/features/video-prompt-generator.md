@@ -7,6 +7,7 @@ Create a production prompt independently of video rendering, save its complete p
 ## On this page
 
 - [Video workspace](#video-workspace)
+- [Target model and generation mode](#target-model-and-generation-mode)
 - [H3 style-aware prompting](#h3-style-aware-prompting)
 - [References and media editing](#references-and-media-editing)
 - [Providers and editable templates](#providers-and-editable-templates)
@@ -20,7 +21,27 @@ Create a production prompt independently of video rendering, save its complete p
 
 ## Video workspace
 
-- **Video** contains **Video Prompt Generator** (first subtab), **LTX Director**, **[LTX 2.5 Audio-Sync](ltx-and-audio.md#ltx-25-audio-sync)** (orange), **Minimax REF2v H3** (violet), **[Ultrafast](minimax-h3.md#ultrafast)** (green), **[MiniMax Advanced](minimax-h3.md#minimax-advanced)** (cyan, FL2V/REF2V), and the independent [Character Swap H3 Shot Planner](character-swap-h3.md) (rose). The prompt generator is optional for rendering. Existing Library, TTS and model transfers still open LTX Director inside this workspace.
+- **Video** has three top-level tabs, in order: **Video Prompt Generator**, **LTX**, **H3**.
+- **LTX** contains **LTX Director**, **LTX-Ripple-FFAF**, and **[LTX 2.5 Audio-Sync](ltx-and-audio.md#ltx-25-audio-sync)**.
+- **H3** contains **Minimax REF2v H3**, **[Ultrafast](minimax-h3.md#ultrafast)**, **[MiniMax Advanced](minimax-h3.md#minimax-advanced)**, and the independent [Character Swap H3 Shot Planner](character-swap-h3.md). Each group remembers its last opened tool while the workspace is mounted. Renderers retain their independent drafts and controls.
+- The prompt generator remains optional. Existing Library, TTS and model transfers open the correct group/tool automatically.
+
+## Target model and generation mode
+
+Choose **Target video model** and **Generation mode** before composing:
+
+- **H3 / MiniMax** retains its existing editable templates, numbered shots, multimodal output fields and optional H3 styles. Only mode-specific source instructions are added.
+- **LTX 2 / LTX 2.5** uses separate editable templates: fluent present-tense prose, chronological physical motion and a continuous shot unless cuts are requested. It does not use H3 shot/subject tokens or H3 style LoRAs. Switching back preserves the H3 templates and selected style.
+- **T2V** establishes the scene from text. Attached visuals, if any, are contextual references rather than a conditioned first frame.
+- **FI2V - First image to video** requires an image; the first attached image defines the starting frame. The prompt focuses on motion from that frame without redesigning its subjects or composition. This is the renamed **I2V** mode.
+- **REF2V - References to video** uses images for their assigned identity, appearance, clothing, object, environment or style roles in a **new scene**, not as a starting frame. Pose, composition and camera framing come from the idea rather than being copied from the reference. Video/audio references contribute their stated motion/style/voice/sound cues without imposing a source opening frame or timeline. At least one reference is required. Assign each attachment's role to avoid carrying over unwanted attributes.
+- **V2V** requires a source video; the first attached video defines source timing, motion, framing and continuity. The prompt distinguishes retained content from requested edits. Character replacement requires this mode plus an image.
+
+Older drafts without an explicit mode infer it from their references (H3 images use REF2V, LTX images use FI2V) and keep their saved H3 templates. Existing explicitly saved **I2V** drafts and snapshots remain compatible and display as **FI2V**, preserving their first-frame semantics. The model family and mode are saved in the workspace and Library snapshot. Changing either after generation requires regenerating before transfer; switching an existing first-frame prompt to REF2V does not rewrite it automatically.
+
+REF2V prompts transfer to H3 REF2v, Ultrafast or Advanced. An explicit REF2V transfer to Advanced selects its REF2V generation branch, retaining other render settings instead of inheriting FL2V or source-video finishing mode. The connected LTX workflows do not implement independent reference conditioning: REF2V prompt composition/copy/export remains available, but transfer is blocked with an explanation rather than silently treating a reference as a first frame.
+
+LTX responses retain the application's validated field envelope for editing and Library storage; **Copy**, **Export .txt** and LTX transfers extract the visual description, soundscape and music as natural prose without field headings. H3 output formatting is unchanged.
 
 ## H3 style-aware prompting
 
@@ -28,11 +49,12 @@ Choose **Prompt style - H3 / MiniMax** to link a Style Gallery entry to prompt g
 
 **Find prompt examples** / **Local prompts** opens the same example dialog as the image generator. **Save all locally** writes the existing desktop LoRA prompt sidecar. **Use prompt** copies an example into the idea, not into models or sampling controls. The desktop app and an indexed My Library LoRA are required for local example storage.
 
-Generated prompts keep their required field structure; the selected trigger leads the visual field body. **Send to H3** carries the style snapshot and actual LoRA into REF2V, Ultrafast or Advanced. Changing style after generation requires regenerating before sending. Saved Library prompts retain the style context and examples. H3 styles remain inactive when LTX Audio-Sync is the destination.
+Generated prompts keep their required field structure; the selected trigger leads the visual field body. **Send to H3** carries the style snapshot and actual LoRA into REF2V, Ultrafast or Advanced. Changing style after generation requires regenerating before sending. Saved Library prompts retain the style context and examples. H3 styles remain inactive for every LTX destination.
 
 ## References and media editing
 
 - The dedicated prompt generator accepts up to **6 pictures, 2 videos and 2 audio files**, with previews, stable numbered/color-coded reference tokens, per-reference roles and click-to-insert tokens. Images and videos have free/preset-ratio crop and pixel resizing; video editing also trims and exports a real local H.264 MP4 with audio using the existing FFmpeg encoder. Restore Original undoes edits.
+- Each reference category offers **Library** as well as upload/drop. Choose saved images/characters/frames and other image assets, videos, or TTS/reference audio. Imports read the original durable media rather than an expired preview, use the same slot/type limits and editing controls, and never modify the Library item. Missing or unsupported media is reported in the picker.
 
 ## Providers and editable templates
 
@@ -58,11 +80,15 @@ Regression checks: `node --test components/VideoWorkspace.test.mjs services/open
 
 ## Send to LTX 2.5 Audio-Sync
 
-Use the **generation** template, choose **LTX 2.5 Audio-Sync** in **Send prompt to workflow**, then transfer the result. One edited image and one edited standalone audio are supported; extra references and video/character-replacement inputs are rejected explicitly. Missing inputs can be attached in Audio-Sync after transferring. Apply any pending audio passage first.
+Choose **LTX** as the target model, **T2V** or **FI2V**, and the **generation** template, then choose **LTX 2.5 Audio-Sync** in **Send prompt to workflow**. One edited image and one edited standalone audio are supported; extra references and video/character-replacement inputs are rejected explicitly. Missing inputs can be attached in Audio-Sync after transferring. Apply any pending audio passage first. An explicit T2V transfer enables Audio-Sync's text-to-video setting; FI2V disables it.
 
 The destination keeps an independent prompt/input draft and its own models and seeds. Transfer updates the prompt, aspect and requested duration, **switches local Qwen enhancement off**, and does not overwrite H3/Director. You can explicitly re-enable Qwen in Audio-Sync. Applied audio passages retain the full original, selection and optional words for further editing in its shared H3 waveform/lyrics controls. Later generator edits have no effect until another explicit transfer. Apply the desired audio passage there to synchronize its WAV and duration; transcription is optional and never automatic.
 
 Audio-Sync uses its source workflow's masked audio latent and VAE decode. It does not import H3's **Force original WAV soundtrack** post-render mux setting. See [Audio-Sync behavior and limits](ltx-and-audio.md#ltx-25-audio-sync).
+
+For **LTX Director**, T2V/FI2V transfer creates a new segment with the prompt, optional single edited first-frame image and requested **3-15 second** duration. Existing segments and models are retained. Video/audio references are rejected rather than dropped; use Audio-Sync for a soundtrack.
+
+For **LTX-Ripple-FFAF**, choose V2V and attach exactly one source video and one edited first-frame image. Transfer copies the prompt and files into an independent Ripple draft, retaining its render/model settings. Ripple controls source timing and output dimensions; generator duration/aspect do not overwrite those settings. Audio references are rejected explicitly.
 
 ## Library snapshots and restoration
 
@@ -73,7 +99,7 @@ Audio-Sync uses its source workflow's masked audio latent and VAE decode. It doe
 
 ## Local draft persistence
 
-- The workspace, editable canvases, H3 settings and workflow drafts (including original and edited files) persist in browser/Electron IndexedDB, not in the cloud or source tree; storage failures are shown explicitly. Local saves wait for a 400 ms typing pause instead of cloning the full media workspace on every keystroke. No new prompt-generator-to-LTX link is enabled yet.
+- The workspace, target model/mode, separate H3/LTX canvases, H3 settings and workflow drafts (including original and edited files) persist in browser/Electron IndexedDB, not in the cloud or source tree; storage failures are shown explicitly. Local saves wait for a 400 ms typing pause instead of cloning the full media workspace on every keystroke.
 
 ## Screenshots
 

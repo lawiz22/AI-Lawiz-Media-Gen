@@ -1,4 +1,7 @@
 import React, { ChangeEvent, useEffect, useId, useState } from 'react';
+import { Select } from './ui/Select';
+import { PromptBox, type PromptKind } from './ui/PromptBox';
+import { ui } from './ui/styles';
 
 export const PresetTextInput: React.FC<{
     label: string;
@@ -93,26 +96,22 @@ export const EditableNumberInput: React.FC<{
 };
 
 export const SelectInput: React.FC<{ label: string, value: string, onChange: (e: ChangeEvent<HTMLSelectElement>) => void, options: { value: string, label: string, disabled?: boolean }[], disabled?: boolean, className?: string, selectClassName?: string }> =
-    ({ label, value, onChange, options, disabled, className, selectClassName }) => (
-        <div className={className}>
-            <label className="block text-sm font-medium text-text-secondary">{label}</label>
-            <select aria-label={label} value={value} onChange={onChange} disabled={disabled} className={`mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent ${selectClassName || ''}`}>
-                {options.map(opt => <option key={opt.value} value={opt.value} disabled={opt.disabled}>{opt.label}</option>)}
-            </select>
-        </div>
-    );
+    ({ label, value, onChange, options, disabled, className, selectClassName }) =>
+        <Select label={label} value={value} options={options} disabled={disabled} className={className} controlClassName={selectClassName}
+            onChange={(_, event) => { if (event) onChange(event); }} />;
+
+const promptKind = (label: string): PromptKind => /negative/i.test(label) ? 'negative' : /prompt|positive/i.test(label) ? 'positive' : /instruction/i.test(label) ? 'instruction' : 'neutral';
 
 export const TextInput: React.FC<{ label: string, value: string, onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void, placeholder?: string, disabled?: boolean, isTextArea?: boolean, rows?: number, tooltip?: string }> =
-    ({ label, value, onChange, placeholder, disabled, isTextArea, rows = 3, tooltip }) => (
-        <div className="relative">
-            <label className="block text-sm font-medium text-text-secondary" title={tooltip}>{label}</label>
-            {isTextArea ? (
-                <textarea value={value} onChange={onChange} placeholder={placeholder} disabled={disabled} rows={rows} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent disabled:opacity-50" />
-            ) : (
-                <input type="text" value={value} onChange={onChange} placeholder={placeholder} disabled={disabled} className="mt-1 block w-full bg-bg-tertiary border border-border-primary rounded-md p-2 text-sm focus:ring-accent focus:border-accent disabled:opacity-50" />
-            )}
-        </div>
-    );
+    ({ label, value, onChange, placeholder, disabled, isTextArea, rows = 3, tooltip }) => {
+        const id = useId();
+        if (isTextArea) return <PromptBox className="relative" label={label} title={tooltip} kind={promptKind(label)} highlight={false} value={value} rows={rows}
+            placeholder={placeholder} disabled={disabled} onChange={(_, event) => { if (event) onChange(event); }} />;
+        return <div className="relative">
+            <label htmlFor={id} className={ui.label} title={tooltip}>{label}</label>
+            <input id={id} type="text" value={value} onChange={onChange} placeholder={placeholder} disabled={disabled} className={`mt-1 block ${ui.control}`} />
+        </div>;
+    };
 
 export const CheckboxSlider: React.FC<{
     label: string;

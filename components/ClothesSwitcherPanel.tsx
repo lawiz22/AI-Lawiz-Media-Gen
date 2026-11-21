@@ -18,6 +18,8 @@ import {
 } from '../services/clothesSwitcherService';
 import { createVideoPlaceholderThumbnail } from '../utils/imageUtils';
 import { useMediaURL } from './VideoReferenceEditor';
+import { useUnmountCleanup } from './useUnmountCleanup';
+import { useDraftAutosave } from './useDraftAutosave';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { CreationSuiteResult as ResultImage } from './CreationSuiteResult';
 import { PresetSaveModal } from './PresetSaveModal';
@@ -69,11 +71,10 @@ export const ClothesSwitcherPanel: React.FC<{
         loadClothesSwitcherDraft().then(value => { if (value) setDraft(value); setReady(true); })
             .catch(cause => setStorageError(`Could not restore Clothes Switcher. Saving is disabled to protect the existing draft. ${errorText(cause)}`));
     }, []);
-    useEffect(() => {
-        if (!ready) return;
-        saves.current = saves.current.then(() => saveClothesSwitcherDraft(draft)).then(() => setStorageError(''))
+    useDraftAutosave(draft, ready, value => {
+        saves.current = saves.current.then(() => saveClothesSwitcherDraft(value)).then(() => setStorageError(''))
             .catch(cause => setStorageError(`Could not save Clothes Switcher locally: ${errorText(cause)}`));
-    }, [draft, ready]);
+    });
     useEffect(() => {
         if (!isComfyUIConnected) return;
         const abort = new AbortController();
@@ -83,7 +84,7 @@ export const ClothesSwitcherPanel: React.FC<{
         return () => abort.abort();
     }, [isComfyUIConnected]);
     useEffect(() => { onModelChange(`Clothes Switcher: ${settings.nodes['106'].unet_name}`); }, [settings.nodes['106'].unet_name, onModelChange]);
-    useEffect(() => () => controller.current?.abort(), []);
+    const root = useUnmountCleanup(() => controller.current?.abort());
     const setValue = (id: string, name: string, value: ClothesSwitcherValue) => setDraft(current => ({ ...current, settings: {
         ...current.settings, nodes: { ...current.settings.nodes, [id]: { ...current.settings.nodes[id], [name]: value } },
     } }));
@@ -143,7 +144,7 @@ export const ClothesSwitcherPanel: React.FC<{
         busy.current = true; setWorking(true); setError(''); setStatus('');
         try {
             validateClothesSwitcherDraft(latest.current);
-            const nodes = await loadClothesSwitcherObjectInfo(); setInfo(nodes);
+            const nodes = await loadClothesSwitcherObjectInfo(undefined, true); setInfo(nodes);
             buildClothesSwitcherWorkflow(latest.current.settings, latest.current.file?.name || '', nodes);
             setStatus('Clothes Switcher nodes, models and parameters validated. No upload or job was queued.');
         } catch (cause) { setError(errorText(cause)); } finally { busy.current = false; setWorking(false); }
@@ -154,7 +155,7 @@ export const ClothesSwitcherPanel: React.FC<{
         const snapshot = { settings: structuredClone(latest.current.settings), file: latest.current.file };
         if (!exportOnly) setLive({});
         const abort = new AbortController(); controller.current = abort;
-        dispatch(setLoadingState({ isLoading: true }));
+        dispatch(setLoadingState({ isLoading: true, owner: 'clothes-switcher' }));
         try {
             if (exportOnly) {
                 const workflow = await prepareClothesSwitcherWorkflow(snapshot, abort.signal);
@@ -169,7 +170,7 @@ export const ClothesSwitcherPanel: React.FC<{
         } catch (cause) { setError(errorText(cause)); }
         finally {
             controller.current = null; busy.current = false; setRunning(false); setCancelling(false);
-            setLive(current => ({ ...current, node: undefined })); dispatch(setLoadingState({ isLoading: false }));
+            setLive(current => ({ ...current, node: undefined })); dispatch(setLoadingState({ isLoading: false, owner: 'clothes-switcher' }));
         }
     };
     const save = async (output = false): Promise<boolean> => {
@@ -213,7 +214,7 @@ export const ClothesSwitcherPanel: React.FC<{
             setSelectedPresetId(''); setStatus('Clothes Switcher parameter preset deleted.');
         } catch (cause) { setError(errorText(cause)); } finally { busy.current = false; setWorking(false); }
     };
-    return <section className="min-w-0 space-y-5 rounded-2xl border border-accent/20 bg-bg-secondary p-4 sm:p-5">
+    return <section ref={root} className="min-w-0 space-y-5 rounded-2xl border border-accent/20 bg-bg-secondary p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-accent">Clothes Switcher</h2>
             <p className="mt-1 text-sm text-text-secondary">The supplied FLUX2 Klein 9B workflow: original photo + depth + Canny references, with no automatic prompt rewriting.</p></div>
             <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">

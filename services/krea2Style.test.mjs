@@ -12,7 +12,8 @@ const compile = (source, jsx = ts.JsxEmit.None) => `data:text/javascript;base64,
 }).outputText).toString('base64')}`;
 const galleryURL = compile(read('./styleGallery.ts')), civitaiURL = compile(read('./civitaiService.ts'));
 const workflowURL = compile(read('./krea2StyleWorkflow.ts').replace("from './styleGallery'", `from '${galleryURL}'`));
-const libraryURL = compile(read('./styleLibrary.ts').replace("from './civitaiService'", `from '${civitaiURL}'`));
+const libraryURL = compile(read('./styleLibrary.ts').replace("from './civitaiService'", `from '${civitaiURL}'`)
+    .replace("from './styleGallery'", `from '${galleryURL}'`));
 const api = await import(workflowURL), library = await import(libraryURL), gallery = await import(galleryURL);
 const source = read('./comfyUIService.ts'), tree = ts.createSourceFile('service.ts', source, ts.ScriptTarget.Latest, true);
 const cases = new Map();

@@ -17,15 +17,17 @@ import {
 } from '../icons';
 import { ImageUploader } from '../ImageUploader';
 import { LibraryPickerModal } from '../LibraryPickerModal';
-import { NumberSlider, SelectInput } from '../InputComponents';
 import { SendToLTXButton } from '../SendToLTXButton';
+import { Accordion } from '../ui/Accordion';
+import { ModelFields, NumberField, SamplerFields } from '../ui/fields';
+import { Select } from '../ui/Select';
 import { CLOTHING_CATALOG, type ClothingAudience } from './clothingCatalog';
 import { HISTORICAL_CAMEO_CATALOG, type HistoricalCameo } from './historicalCameoCatalog';
 
+const NAME = 'Past Forward';
 const DECADES = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s'];
 const LIBRARY_IMAGE_TYPES: LibraryItemType[] = ['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo'];
-const getOptions = (input: any): string[] => Array.isArray(input?.[0]) ? input[0] : [];
-const withCurrent = (current: string, values: string[]) => Array.from(new Set([current, ...values].filter(Boolean))).map(value => ({ value, label: value }));
+const getOptions = (input: any): string[] => Array.isArray(input?.[0]) ? input[0] : Array.isArray(input?.[1]?.options) ? input[1].options : [];
 const QWEN_LIGHTNING_PRESETS = {
     4: 'QWEN\\Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors',
     8: 'QWEN\\Qwen-Image-Lightning-8steps-V2.0.safetensors',
@@ -273,7 +275,9 @@ interface DecadeProgress {
 const PastForwardPanel: React.FC = () => {
     const dispatch: AppDispatch = useDispatch();
     const generationOptions = useSelector((state: RootState) => state.generation.options);
-    const { isComfyUIConnected, isMammouthConnected, comfyUIObjectInfo } = useSelector((state: RootState) => state.app);
+    const isComfyUIConnected = useSelector((state: RootState) => state.app.isComfyUIConnected);
+    const isMammouthConnected = useSelector((state: RootState) => state.app.isMammouthConnected);
+    const comfyUIObjectInfo = useSelector((state: RootState) => state.app.comfyUIObjectInfo);
     
     // State
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -313,7 +317,6 @@ const PastForwardPanel: React.FC = () => {
     const isCloudProvider = provider === 'gemini' || provider === 'mammouth';
     const requiresSubjectGender = selectedTheme === 'historical' || selectedTheme === 'superhero' || (selectedTheme === 'hairstyles' && !isCloudProvider);
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [themesOpen, setThemesOpen] = useState(true);
     const [hairstylesOpen, setHairstylesOpen] = useState(true);
     const [locationsOpen, setLocationsOpen] = useState(true);
@@ -332,6 +335,7 @@ const PastForwardPanel: React.FC = () => {
     const clips = getOptions(comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name);
     const vaes = getOptions(comfyUIObjectInfo?.VAELoader?.input?.required?.vae_name);
     const samplers = getOptions(comfyUIObjectInfo?.KSamplerSelect?.input?.required?.sampler_name);
+    const schedulers = getOptions(comfyUIObjectInfo?.KSampler?.input?.required?.scheduler);
     const qwenLoras = getOptions(comfyUIObjectInfo?.LoraLoaderModelOnly?.input?.required?.lora_name);
     const cacheDitModels = getOptions(comfyUIObjectInfo?.CacheDiT_Model_Optimizer?.input?.required?.model_type);
     const fluxRequiredNodes = ['UnetLoaderGGUF', 'CLIPLoader', 'VAELoader', 'ReferenceLatent', 'Flux2Scheduler', 'EmptyFlux2LatentImage'];
@@ -840,24 +844,16 @@ const PastForwardPanel: React.FC = () => {
                 </div>
                 {provider === 'gemini' && <div className="grid min-w-[240px] flex-1 gap-2 sm:grid-cols-3">
                     <div className="relative sm:col-span-2">
-                        <select value={generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL} onChange={(event) => dispatch(updateOptions({ geminiT2IModel: event.target.value }))} disabled={isGenerating || isLoadingGeminiModels} className="w-full rounded-md border border-border-primary bg-bg-tertiary p-2 pr-8 text-sm" aria-label="Gemini image model">
-                            {geminiModels.map(model => <option key={model} value={model}>{model}</option>)}
-                        </select>
-                        {isLoadingGeminiModels && <SpinnerIcon className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-text-muted" />}
+                        <Select ariaLabel="Gemini image model" value={generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL} options={geminiModels} disabled={isGenerating || isLoadingGeminiModels} onChange={model => dispatch(updateOptions({ geminiT2IModel: model }))} />
+                        {isLoadingGeminiModels && <SpinnerIcon className="absolute right-8 top-2.5 h-4 w-4 animate-spin text-text-muted" />}
                     </div>
-                    <select value={generationOptions.geminiImageSize || '1K'} onChange={(event) => dispatch(updateOptions({ geminiImageSize: event.target.value as typeof generationOptions.geminiImageSize }))} disabled={isGenerating} className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm" aria-label="Gemini image size">
-                        {getGeminiImageSizes(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL).map(size => <option key={size} value={size}>{size}</option>)}
-                    </select>
-                    {supportsGeminiThinkingLevel(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) && <select value={generationOptions.geminiThinkingLevel || 'minimal'} onChange={(event) => dispatch(updateOptions({ geminiThinkingLevel: event.target.value as typeof generationOptions.geminiThinkingLevel }))} disabled={isGenerating} className="rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm sm:col-span-3" aria-label="Gemini thinking level">
-                        <option value="minimal">Minimal thinking</option>
-                        <option value="high">High thinking</option>
-                    </select>}
+                    <Select<string> ariaLabel="Gemini image size" value={generationOptions.geminiImageSize || '1K'} options={getGeminiImageSizes(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL)} disabled={isGenerating} onChange={size => dispatch(updateOptions({ geminiImageSize: size as typeof generationOptions.geminiImageSize }))} />
+                    {supportsGeminiThinkingLevel(generationOptions.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL) && <Select<string> className="sm:col-span-3" ariaLabel="Gemini thinking level" value={generationOptions.geminiThinkingLevel || 'minimal'} disabled={isGenerating}
+                        options={[{ value: 'minimal', label: 'Minimal thinking' }, { value: 'high', label: 'High thinking' }]} onChange={level => dispatch(updateOptions({ geminiThinkingLevel: level as typeof generationOptions.geminiThinkingLevel }))} />}
                 </div>}
                 {provider === 'mammouth' && <div className="relative min-w-[240px] flex-1">
-                    <select value={generationOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL} onChange={(event) => dispatch(updateOptions({ mammouthImageModel: event.target.value }))} disabled={isGenerating || isLoadingMammouthModels} className="w-full rounded-md border border-border-primary bg-bg-tertiary p-2 pr-8 text-sm" aria-label="Mammouth image model">
-                        {mammouthModels.map(model => <option key={model} value={model}>{model}</option>)}
-                    </select>
-                    {isLoadingMammouthModels && <SpinnerIcon className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-text-muted" />}
+                    <Select ariaLabel="Mammouth image model" value={generationOptions.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL} options={mammouthModels} disabled={isGenerating || isLoadingMammouthModels} onChange={model => dispatch(updateOptions({ mammouthImageModel: model }))} />
+                    {isLoadingMammouthModels && <SpinnerIcon className="absolute right-8 top-2.5 h-4 w-4 animate-spin text-text-muted" />}
                 </div>}
             </div>
 
@@ -881,56 +877,64 @@ const PastForwardPanel: React.FC = () => {
                             <LibraryIcon className="h-4 w-4" /> Choose from Library
                         </button>
 
-                        {provider === 'comfyui' && <div className="rounded-md border border-border-primary bg-bg-primary">
-                            <button type="button" onClick={() => setAdvancedOpen(open => !open)} className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-text-secondary hover:text-accent" aria-expanded={advancedOpen}>
-                                <span>FLUX2 Advanced Settings</span><span>{advancedOpen ? '−' : '+'}</span>
-                            </button>
-                            {advancedOpen && <div className="space-y-4 border-t border-border-primary p-4">
-                                <SelectInput label="FLUX2 Model" value={generationOptions.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf'} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditUnet: event.target.value }))} options={withCurrent(generationOptions.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf', models)} disabled={isGenerating} />
-                                <SelectInput label="CLIP" value={generationOptions.comfyFlux2EditClip || 'qwen_3_4b.safetensors'} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditClip: event.target.value }))} options={withCurrent(generationOptions.comfyFlux2EditClip || 'qwen_3_4b.safetensors', clips)} disabled={isGenerating} />
-                                <SelectInput label="VAE" value={generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors'} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditVae: event.target.value }))} options={withCurrent(generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors', vaes)} disabled={isGenerating} />
-                                <SelectInput label="Sampler" value={generationOptions.comfyFlux2EditSampler || 'euler'} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditSampler: event.target.value }))} options={withCurrent(generationOptions.comfyFlux2EditSampler || 'euler', samplers)} disabled={isGenerating} />
-                                <NumberSlider label={`Source Megapixels: ${generationOptions.comfyFlux2EditMegapixels ?? 1}`} value={generationOptions.comfyFlux2EditMegapixels ?? 1} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditMegapixels: Number(event.target.value) }))} min={0.25} max={4} step={0.25} disabled={isGenerating} allowDirectInput />
-                                <NumberSlider label={`Identity Reference Weight: ${generationOptions.comfyFlux2EditIdentityReferenceWeight ?? 3}`} value={generationOptions.comfyFlux2EditIdentityReferenceWeight ?? 3} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditIdentityReferenceWeight: Number(event.target.value) }))} min={1} max={4} step={1} disabled={isGenerating} allowDirectInput />
-                                <NumberSlider label={`Reimagine Identity Weight: ${generationOptions.pastForwardReimagineIdentityWeight ?? 2}`} value={generationOptions.pastForwardReimagineIdentityWeight ?? 2} onChange={(event) => dispatch(updateOptions({ pastForwardReimagineIdentityWeight: Number(event.target.value) }))} min={1} max={4} step={1} disabled={isGenerating} allowDirectInput />
-                                <NumberSlider label={`Steps: ${generationOptions.comfyFlux2EditSteps ?? 4}`} value={generationOptions.comfyFlux2EditSteps ?? 4} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditSteps: Number(event.target.value) }))} min={1} max={40} step={1} disabled={isGenerating} allowDirectInput />
-                                <NumberSlider label={`CFG: ${generationOptions.comfyFlux2EditCfg ?? 1}`} value={generationOptions.comfyFlux2EditCfg ?? 1} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditCfg: Number(event.target.value) }))} min={0.1} max={10} step={0.1} disabled={isGenerating} allowDirectInput />
-                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={!!generationOptions.comfyFlux2EditUseCacheDit} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditUseCacheDit: event.target.checked }))} disabled={isGenerating} className="rounded text-accent focus:ring-accent" />Enable CacheDiT Accelerator</label>
-                                {generationOptions.comfyFlux2EditUseCacheDit && <div className="space-y-4">
-                                    <SelectInput label="CacheDiT Model Type" value={generationOptions.comfyFlux2EditCacheDitModelType || 'Auto'} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditCacheDitModelType: event.target.value }))} options={withCurrent(generationOptions.comfyFlux2EditCacheDitModelType || 'Auto', cacheDitModels)} disabled={isGenerating} />
-                                    <NumberSlider label={`Warmup: ${generationOptions.comfyFlux2EditCacheDitWarmupSteps ?? 0}`} value={generationOptions.comfyFlux2EditCacheDitWarmupSteps ?? 0} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditCacheDitWarmupSteps: Number(event.target.value) }))} min={0} max={20} step={1} disabled={isGenerating} allowDirectInput />
-                                    <NumberSlider label={`Skip: ${generationOptions.comfyFlux2EditCacheDitSkipInterval ?? 0}`} value={generationOptions.comfyFlux2EditCacheDitSkipInterval ?? 0} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditCacheDitSkipInterval: Number(event.target.value) }))} min={0} max={10} step={1} disabled={isGenerating} allowDirectInput />
-                                </div>}
-                            </div>}
+                        {provider === 'comfyui' && <div className="space-y-3">
+                            <h3 className="text-sm font-bold text-text-secondary">FLUX2 settings</h3>
+                            <Accordion title="Models">{() => <ModelFields name={NAME} disabled={isGenerating} onChange={(id, value) => dispatch(updateOptions({ [id as 'comfyFlux2EditUnet']: value }))} fields={[
+                                { id: 'comfyFlux2EditUnet', label: 'FLUX2 Model', value: generationOptions.comfyFlux2EditUnet || 'flux-2-klein-4b-Q4_K_M.gguf', choices: models },
+                                { id: 'comfyFlux2EditClip', label: 'CLIP', value: generationOptions.comfyFlux2EditClip || 'qwen_3_4b.safetensors', choices: clips },
+                                { id: 'comfyFlux2EditVae', label: 'VAE', value: generationOptions.comfyFlux2EditVae || 'flux2-vae.safetensors', choices: vaes },
+                            ]} />}</Accordion>
+                            <Accordion title="Sampler">{() => <SamplerFields name={NAME} disabled={isGenerating} samplers={samplers} limits={{ steps: { min: 1, max: 40, step: 1 }, cfg: { min: 0.1, max: 10, step: 0.1 } }}
+                                value={{ sampler: generationOptions.comfyFlux2EditSampler || 'euler', steps: generationOptions.comfyFlux2EditSteps ?? 4, cfg: generationOptions.comfyFlux2EditCfg ?? 1 }}
+                                onChange={patch => dispatch(updateOptions({
+                                    ...(patch.sampler !== undefined && { comfyFlux2EditSampler: patch.sampler }),
+                                    ...(patch.steps !== undefined && { comfyFlux2EditSteps: patch.steps }),
+                                    ...(patch.cfg !== undefined && { comfyFlux2EditCfg: patch.cfg }) }))} />}</Accordion>
+                            <Accordion title="Advanced">{() => <>
+                                <NumberField slider label="Source Megapixels" ariaLabel={`${NAME} Source Megapixels`} value={generationOptions.comfyFlux2EditMegapixels ?? 1} min={0.25} max={4} step={0.25} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyFlux2EditMegapixels: value }))} />
+                                <NumberField slider label="Identity Reference Weight" ariaLabel={`${NAME} Identity Reference Weight`} value={generationOptions.comfyFlux2EditIdentityReferenceWeight ?? 3} min={1} max={4} step={1} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyFlux2EditIdentityReferenceWeight: value }))} />
+                                <NumberField slider label="Reimagine Identity Weight" ariaLabel={`${NAME} Reimagine Identity Weight`} value={generationOptions.pastForwardReimagineIdentityWeight ?? 2} min={1} max={4} step={1} disabled={isGenerating} onChange={value => dispatch(updateOptions({ pastForwardReimagineIdentityWeight: value }))} />
+                                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={!!generationOptions.comfyFlux2EditUseCacheDit} onChange={(event) => dispatch(updateOptions({ comfyFlux2EditUseCacheDit: event.target.checked }))} disabled={isGenerating} className="rounded text-accent focus:ring-accent" />Enable CacheDiT Accelerator</label>
+                                {generationOptions.comfyFlux2EditUseCacheDit && <>
+                                    <Select label="CacheDiT Model Type" ariaLabel={`${NAME} CacheDiT Model Type`} value={generationOptions.comfyFlux2EditCacheDitModelType || 'Auto'} options={cacheDitModels} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyFlux2EditCacheDitModelType: value }))} />
+                                    <NumberField slider label="Warmup" ariaLabel={`${NAME} CacheDiT Warmup`} value={generationOptions.comfyFlux2EditCacheDitWarmupSteps ?? 0} min={0} max={20} step={1} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyFlux2EditCacheDitWarmupSteps: value }))} />
+                                    <NumberField slider label="Skip" ariaLabel={`${NAME} CacheDiT Skip`} value={generationOptions.comfyFlux2EditCacheDitSkipInterval ?? 0} min={0} max={10} step={1} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyFlux2EditCacheDitSkipInterval: value }))} />
+                                </>}
+                            </>}</Accordion>
                         </div>}
 
-                        {provider === 'qwen' && <div className="rounded-md border border-border-primary bg-bg-primary">
-                            <button type="button" onClick={() => setAdvancedOpen(open => !open)} className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-text-secondary hover:text-accent" aria-expanded={advancedOpen}>
-                                <span>QWEN-Edit Advanced Settings</span><span>{advancedOpen ? '−' : '+'}</span>
-                            </button>
-                            {advancedOpen && <div className="space-y-4 border-t border-border-primary p-4">
-                                <div className="space-y-2">
-                                    <span className="block text-sm font-medium text-text-secondary">Lightning preset</span>
-                                    <div className="grid grid-cols-2 gap-1 rounded-md bg-bg-tertiary p-1">
-                                        {([4, 8] as const).map(steps => <button key={steps} type="button" onClick={() => selectQwenLightningPreset(steps)} disabled={isGenerating} className={`rounded px-3 py-2 text-xs font-bold transition-colors ${qwenLightningPreset === steps ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>{steps}-step</button>)}
-                                    </div>
-                                    <p className="text-xs text-text-muted">Changes the Lightning LoRA and sampling steps together.</p>
+                        {provider === 'qwen' && <div className="space-y-3">
+                            <h3 className="text-sm font-bold text-text-secondary">QWEN-Edit settings</h3>
+                            <div className="space-y-2">
+                                <span className="block text-sm font-medium text-text-secondary">Lightning preset</span>
+                                <div className="grid grid-cols-2 gap-1 rounded-md bg-bg-tertiary p-1">
+                                    {([4, 8] as const).map(steps => <button key={steps} type="button" onClick={() => selectQwenLightningPreset(steps)} disabled={isGenerating} className={`rounded px-3 py-2 text-xs font-bold transition-colors ${qwenLightningPreset === steps ? 'bg-accent text-accent-text' : 'text-text-secondary hover:bg-bg-secondary'}`}>{steps}-step</button>)}
                                 </div>
-                                <SelectInput label="Qwen Edit Model" value={generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors'} onChange={(event) => dispatch(updateOptions({ comfyQwenEditUnet: event.target.value }))} options={withCurrent(generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors', qwenModels)} disabled={isGenerating} />
-                                <SelectInput label="CLIP" value={generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors'} onChange={(event) => dispatch(updateOptions({ comfyQwenEditClip: event.target.value }))} options={withCurrent(generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors', clips)} disabled={isGenerating} />
-                                <SelectInput label="VAE" value={generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors'} onChange={(event) => dispatch(updateOptions({ comfyQwenEditVae: event.target.value }))} options={withCurrent(generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors', vaes)} disabled={isGenerating} />
-                                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={generationOptions.comfyQwenEditUseLora !== false} onChange={(event) => dispatch(updateOptions({ comfyQwenEditUseLora: event.target.checked }))} disabled={isGenerating} className="rounded text-accent focus:ring-accent" />Enable Lightning LoRA</label>
+                                <p className="text-xs text-text-muted">Changes the Lightning LoRA and sampling steps together.</p>
+                            </div>
+                            <Accordion title="Models">{() => <ModelFields name={NAME} disabled={isGenerating} onChange={(id, value) => dispatch(updateOptions({ [id as 'comfyQwenEditUnet']: value }))} fields={[
+                                { id: 'comfyQwenEditUnet', label: 'Qwen Edit Model', value: generationOptions.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors', choices: qwenModels },
+                                { id: 'comfyQwenEditClip', label: 'CLIP', value: generationOptions.comfyQwenEditClip || 'qwen_2.5_vl_7b_fp8_scaled.safetensors', choices: clips },
+                                { id: 'comfyQwenEditVae', label: 'VAE', value: generationOptions.comfyQwenEditVae || 'qwen_image_vae.safetensors', choices: vaes },
+                            ]} />}</Accordion>
+                            <Accordion title="LoRAs">{() => <>
+                                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-text-secondary"><input type="checkbox" checked={generationOptions.comfyQwenEditUseLora !== false} onChange={(event) => dispatch(updateOptions({ comfyQwenEditUseLora: event.target.checked }))} disabled={isGenerating} className="rounded text-accent focus:ring-accent" />Enable Lightning LoRA</label>
                                 {generationOptions.comfyQwenEditUseLora !== false && <>
-                                    <SelectInput label="Lightning LoRA" value={generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8]} onChange={(event) => dispatch(updateOptions({ comfyQwenEditLora1Name: event.target.value }))} options={withCurrent(generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8], qwenLoras)} disabled={isGenerating} />
-                                    <NumberSlider label={`LoRA Strength: ${generationOptions.comfyQwenEditLora1Strength ?? 1}`} value={generationOptions.comfyQwenEditLora1Strength ?? 1} onChange={(event) => dispatch(updateOptions({ comfyQwenEditLora1Strength: Number(event.target.value) }))} min={0} max={2} step={0.05} disabled={isGenerating} allowDirectInput />
+                                    <Select variant="search" label="Lightning LoRA" ariaLabel={`${NAME} Lightning LoRA`} value={generationOptions.comfyQwenEditLora1Name || QWEN_LIGHTNING_PRESETS[8]} options={qwenLoras} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyQwenEditLora1Name: value }))} />
+                                    <NumberField slider label="LoRA Strength" ariaLabel={`${NAME} LoRA Strength`} value={generationOptions.comfyQwenEditLora1Strength ?? 1} min={0} max={2} step={0.05} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyQwenEditLora1Strength: value }))} />
                                 </>}
-                                <SelectInput label="Sampler" value={generationOptions.pastForwardQwenSampler || 'euler_ancestral'} onChange={(event) => dispatch(updateOptions({ pastForwardQwenSampler: event.target.value }))} options={withCurrent(generationOptions.pastForwardQwenSampler || 'euler_ancestral', samplers)} disabled={isGenerating} />
-                                <SelectInput label="Scheduler" value={generationOptions.pastForwardQwenScheduler || 'beta57'} onChange={(event) => dispatch(updateOptions({ pastForwardQwenScheduler: event.target.value }))} options={withCurrent(generationOptions.pastForwardQwenScheduler || 'beta57', getOptions(comfyUIObjectInfo?.KSampler?.input?.required?.scheduler))} disabled={isGenerating} />
-                                <NumberSlider label={`Source Megapixels: ${generationOptions.comfyQwenEditMegapixels ?? 1}`} value={generationOptions.comfyQwenEditMegapixels ?? 1} onChange={(event) => dispatch(updateOptions({ comfyQwenEditMegapixels: Number(event.target.value) }))} min={0.25} max={4} step={0.25} disabled={isGenerating} allowDirectInput />
-                                <NumberSlider label={`AuraFlow Shift: ${generationOptions.comfyQwenEditShift ?? 2.5}`} value={generationOptions.comfyQwenEditShift ?? 2.5} onChange={(event) => dispatch(updateOptions({ comfyQwenEditShift: Number(event.target.value) }))} min={0} max={10} step={0.1} disabled={isGenerating} allowDirectInput />
-                                <NumberSlider label={`Steps: ${generationOptions.pastForwardQwenSteps ?? 8}`} value={generationOptions.pastForwardQwenSteps ?? 8} onChange={(event) => dispatch(updateOptions({ pastForwardQwenSteps: Number(event.target.value) }))} min={1} max={40} step={1} disabled={isGenerating} allowDirectInput />
-                                <NumberSlider label={`CFG: ${generationOptions.pastForwardQwenCfg ?? 1}`} value={generationOptions.pastForwardQwenCfg ?? 1} onChange={(event) => dispatch(updateOptions({ pastForwardQwenCfg: Number(event.target.value) }))} min={0.1} max={10} step={0.1} disabled={isGenerating} allowDirectInput />
-                            </div>}
+                            </>}</Accordion>
+                            <Accordion title="Sampler">{() => <SamplerFields name={NAME} disabled={isGenerating} samplers={samplers} schedulers={schedulers} limits={{ steps: { min: 1, max: 40, step: 1 }, cfg: { min: 0.1, max: 10, step: 0.1 } }}
+                                value={{ sampler: generationOptions.pastForwardQwenSampler || 'euler_ancestral', scheduler: generationOptions.pastForwardQwenScheduler || 'beta57', steps: generationOptions.pastForwardQwenSteps ?? 8, cfg: generationOptions.pastForwardQwenCfg ?? 1 }}
+                                onChange={patch => dispatch(updateOptions({
+                                    ...(patch.sampler !== undefined && { pastForwardQwenSampler: patch.sampler }),
+                                    ...(patch.scheduler !== undefined && { pastForwardQwenScheduler: patch.scheduler }),
+                                    ...(patch.steps !== undefined && { pastForwardQwenSteps: patch.steps }),
+                                    ...(patch.cfg !== undefined && { pastForwardQwenCfg: patch.cfg }) }))} />}</Accordion>
+                            <Accordion title="Advanced">{() => <>
+                                <NumberField slider label="Source Megapixels" ariaLabel={`${NAME} Source Megapixels`} value={generationOptions.comfyQwenEditMegapixels ?? 1} min={0.25} max={4} step={0.25} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyQwenEditMegapixels: value }))} />
+                                <NumberField slider label="AuraFlow Shift" ariaLabel={`${NAME} AuraFlow Shift`} value={generationOptions.comfyQwenEditShift ?? 2.5} min={0} max={10} step={0.1} disabled={isGenerating} onChange={value => dispatch(updateOptions({ comfyQwenEditShift: value }))} />
+                            </>}</Accordion>
                         </div>}
 
                         <div className="rounded-md border border-border-primary bg-bg-primary">
@@ -952,7 +956,7 @@ const PastForwardPanel: React.FC = () => {
                                         disabled={isGenerating}
                                         className={`p-3 rounded-lg text-left transition-all duration-200 border ${
                                             selectedTheme === key 
-                                                ? 'bg-accent/10 border-accent shadow-sm' 
+                                                ? 'border-accent shadow-sm' 
                                                 : 'bg-bg-tertiary border-transparent hover:bg-bg-tertiary-hover'
                                         }`}
                                     >
@@ -988,7 +992,7 @@ const PastForwardPanel: React.FC = () => {
                         </div>}
 
                         {((selectedTheme === 'decades' && !isCloudProvider) || selectedTheme === 'historical') && <div className="grid gap-2 sm:grid-cols-2">
-                            <label className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition-colors ${sourceWearsGlasses ? 'border-accent bg-accent/10' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'hover:border-accent'}`}>
+                            <label className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition-colors ${sourceWearsGlasses ? 'border-accent' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'hover:border-accent'}`}>
                                 <input
                                     type="checkbox"
                                     checked={sourceWearsGlasses}
@@ -998,7 +1002,7 @@ const PastForwardPanel: React.FC = () => {
                                 />
                                 <span className="text-sm font-semibold text-text-secondary">Source wears glasses</span>
                             </label>
-                            <label className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition-colors ${sourceHasFacialHair ? 'border-accent bg-accent/10' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'hover:border-accent'}`}>
+                            <label className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition-colors ${sourceHasFacialHair ? 'border-accent' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'hover:border-accent'}`}>
                                 <input
                                     type="checkbox"
                                     checked={sourceHasFacialHair}
@@ -1044,12 +1048,15 @@ const PastForwardPanel: React.FC = () => {
                                     />
                                     Vary hair color with era-plausible colors
                                 </label>
-                                {DECADES.map(decade => <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                {DECADES.map(decade => <div key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
                                     <span className="text-xs font-bold text-text-secondary">{decade}</span>
-                                    <select
+                                    <Select
+                                        className="min-w-0"
+                                        ariaLabel={`${decade} ${subjectGender} hairstyle`}
                                         value={selectedHairstyles[subjectGender][decade]}
-                                        onChange={(event) => {
-                                            const hairstyle = event.target.value;
+                                        options={HAIRSTYLE_CATALOG[decade][subjectGender]}
+                                        disabled={isGenerating}
+                                        onChange={hairstyle => {
                                             setSelectedHairstyles(current => ({
                                                 ...current,
                                                 [subjectGender]: { ...current[subjectGender], [decade]: hairstyle },
@@ -1057,13 +1064,8 @@ const PastForwardPanel: React.FC = () => {
                                             setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
                                             setAlbumSaveStatus('idle');
                                         }}
-                                        disabled={isGenerating}
-                                        className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
-                                        aria-label={`${decade} ${subjectGender} hairstyle`}
-                                    >
-                                        {HAIRSTYLE_CATALOG[decade][subjectGender].map(hairstyle => <option key={hairstyle} value={hairstyle}>{hairstyle}</option>)}
-                                    </select>
-                                </label>)}
+                                    />
+                                </div>)}
                             </div>}
                         </div>}
 
@@ -1091,22 +1093,21 @@ const PastForwardPanel: React.FC = () => {
                                 </button>
                             </div>
                             {historicalCameosOpen && <div id="past-forward-historical-cameos" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
-                                {DECADES.map(decade => <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                {DECADES.map(decade => <div key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
                                     <span className="text-xs font-bold text-text-secondary">{decade}</span>
-                                    <select
+                                    <Select<number>
+                                        className="min-w-0"
+                                        ariaLabel={`${decade} historical event`}
                                         value={selectedHistoricalCameos[decade]}
-                                        onChange={(event) => {
-                                            setSelectedHistoricalCameos(current => ({ ...current, [decade]: Number(event.target.value) }));
+                                        options={HISTORICAL_CAMEO_CATALOG[decade].map(cameo => ({ value: cameo.year, label: `${cameo.year} · ${cameo.event}` }))}
+                                        disabled={isGenerating}
+                                        onChange={year => {
+                                            setSelectedHistoricalCameos(current => ({ ...current, [decade]: year }));
                                             setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
                                             setAlbumSaveStatus('idle');
                                         }}
-                                        disabled={isGenerating}
-                                        className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
-                                        aria-label={`${decade} historical event`}
-                                    >
-                                        {HISTORICAL_CAMEO_CATALOG[decade].map(cameo => <option key={cameo.year} value={cameo.year}>{cameo.year} · {cameo.event}</option>)}
-                                    </select>
-                                </label>)}
+                                    />
+                                </div>)}
                             </div>}
                         </div>}
 
@@ -1136,12 +1137,15 @@ const PastForwardPanel: React.FC = () => {
                             {clothingOpen && <div id="past-forward-clothing" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
                                 {DECADES.map(decade => {
                                     const audience: ClothingAudience = subjectGender === 'woman' ? 'female' : subjectGender === 'man' ? 'male' : 'both';
-                                    return <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                    return <div key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
                                         <span className="text-xs font-bold text-text-secondary">{decade}</span>
-                                        <select
+                                        <Select
+                                            className="min-w-0"
+                                            ariaLabel={`${decade} ${audience} clothing`}
                                             value={selectedClothing[audience][decade]}
-                                            onChange={(event) => {
-                                                const outfit = event.target.value;
+                                            options={CLOTHING_CATALOG[decade][audience]}
+                                            disabled={isGenerating}
+                                            onChange={outfit => {
                                                 setSelectedClothing(current => ({
                                                     ...current,
                                                     [audience]: { ...current[audience], [decade]: outfit },
@@ -1149,13 +1153,8 @@ const PastForwardPanel: React.FC = () => {
                                                 setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
                                                 setAlbumSaveStatus('idle');
                                             }}
-                                            disabled={isGenerating}
-                                            className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
-                                            aria-label={`${decade} ${audience} clothing`}
-                                        >
-                                            {CLOTHING_CATALOG[decade][audience].map(outfit => <option key={outfit} value={outfit}>{outfit}</option>)}
-                                        </select>
-                                    </label>;
+                                        />
+                                    </div>;
                                 })}
                             </div>}
                         </div>}
@@ -1186,12 +1185,15 @@ const PastForwardPanel: React.FC = () => {
                             {locationsOpen && <div id="past-forward-locations" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
                                 {DECADES.map(decade => {
                                     const audience: LocationAudience = subjectGender === 'woman' ? 'female' : subjectGender === 'man' ? 'male' : 'both';
-                                    return <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                    return <div key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
                                         <span className="text-xs font-bold text-text-secondary">{decade}</span>
-                                        <select
+                                        <Select
+                                            className="min-w-0"
+                                            ariaLabel={`${decade} ${audience} location`}
                                             value={selectedLocations[audience][decade]}
-                                            onChange={(event) => {
-                                                const location = event.target.value;
+                                            options={LOCATION_CATALOG[decade][audience]}
+                                            disabled={isGenerating}
+                                            onChange={location => {
                                                 setSelectedLocations(current => ({
                                                     ...current,
                                                     [audience]: { ...current[audience], [decade]: location },
@@ -1199,18 +1201,13 @@ const PastForwardPanel: React.FC = () => {
                                                 setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
                                                 setAlbumSaveStatus('idle');
                                             }}
-                                            disabled={isGenerating}
-                                            className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
-                                            aria-label={`${decade} ${audience} location`}
-                                        >
-                                            {LOCATION_CATALOG[decade][audience].map(location => <option key={location} value={location}>{location}</option>)}
-                                        </select>
-                                    </label>;
+                                        />
+                                    </div>;
                                 })}
                             </div>}
                         </div>}
 
-                        <label className={`flex items-start gap-3 rounded-md border p-3 transition-colors ${reimagineScene ? 'border-accent bg-accent/10' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-accent'}`}>
+                        <label className={`flex items-start gap-3 rounded-md border p-3 transition-colors ${reimagineScene ? 'border-accent' : 'border-border-primary bg-bg-tertiary'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-accent'}`}>
                             <input type="checkbox" checked={reimagineScene} onChange={(event) => { setReimagineScene(event.target.checked); setAlbumSaveStatus('idle'); }} disabled={isGenerating} className="mt-0.5 rounded border-border-primary text-accent focus:ring-accent" />
                             <span>
                                 <span className={`block text-sm font-bold ${reimagineScene ? 'text-accent' : 'text-text-primary'}`}>Reimagine the scene</span>
@@ -1243,22 +1240,21 @@ const PastForwardPanel: React.FC = () => {
                                     </button>
                                 </div>
                                 {photoTypesOpen && <div id="past-forward-photo-types" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
-                                    {DECADES.map(decade => <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                    {DECADES.map(decade => <div key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
                                         <span className="text-xs font-bold text-text-secondary">{decade}</span>
-                                        <select
+                                        <Select
+                                            className="min-w-0"
+                                            ariaLabel={`${decade} photo type`}
                                             value={selectedPhotoTypes[decade]}
-                                            onChange={(event) => {
-                                                setSelectedPhotoTypes(current => ({ ...current, [decade]: event.target.value }));
+                                            options={PHOTO_TYPE_CATALOG[decade]}
+                                            disabled={isGenerating}
+                                            onChange={photoType => {
+                                                setSelectedPhotoTypes(current => ({ ...current, [decade]: photoType }));
                                                 setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
                                                 setAlbumSaveStatus('idle');
                                             }}
-                                            disabled={isGenerating}
-                                            className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
-                                            aria-label={`${decade} photo type`}
-                                        >
-                                            {PHOTO_TYPE_CATALOG[decade].map(photoType => <option key={photoType} value={photoType}>{photoType}</option>)}
-                                        </select>
-                                    </label>)}
+                                        />
+                                    </div>)}
                                 </div>}
                             </div>
 
@@ -1286,22 +1282,21 @@ const PastForwardPanel: React.FC = () => {
                                     </button>
                                 </div>
                                 {shotAnglesOpen && <div id="past-forward-shot-angles" className="space-y-2 border-t border-border-primary bg-bg-tertiary p-3">
-                                    {DECADES.map(decade => <label key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                                    {DECADES.map(decade => <div key={decade} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
                                         <span className="text-xs font-bold text-text-secondary">{decade}</span>
-                                        <select
+                                        <Select
+                                            className="min-w-0"
+                                            ariaLabel={`${decade} shot and angle`}
                                             value={selectedShotAngles[decade]}
-                                            onChange={(event) => {
-                                                setSelectedShotAngles(current => ({ ...current, [decade]: event.target.value }));
+                                            options={SHOT_ANGLE_CATALOG}
+                                            disabled={isGenerating}
+                                            onChange={shotAngle => {
+                                                setSelectedShotAngles(current => ({ ...current, [decade]: shotAngle }));
                                                 setSaveStatuses(current => ({ ...current, [decade]: 'idle' }));
                                                 setAlbumSaveStatus('idle');
                                             }}
-                                            disabled={isGenerating}
-                                            className="min-w-0 rounded-md border border-border-primary bg-bg-primary px-2 py-2 text-xs text-text-primary focus:border-accent focus:ring-accent disabled:opacity-60"
-                                            aria-label={`${decade} shot and angle`}
-                                        >
-                                            {SHOT_ANGLE_CATALOG.map(shotAngle => <option key={shotAngle} value={shotAngle}>{shotAngle}</option>)}
-                                        </select>
-                                    </label>)}
+                                        />
+                                    </div>)}
                                 </div>}
                             </div>
                         </>}
@@ -1310,14 +1305,14 @@ const PastForwardPanel: React.FC = () => {
                             <div className="mb-2 flex items-center justify-between gap-2">
                                 <label className="text-sm font-medium text-text-secondary">Select Decades ({selectedDecades.length}/{DECADES.length})</label>
                                 <div className="flex gap-1">
-                                    <button type="button" onClick={() => { setSelectedDecades([...DECADES]); setAlbumSaveStatus('idle'); }} disabled={isGenerating || selectedDecades.length === DECADES.length} className="rounded px-2 py-1 text-xs font-semibold text-accent hover:bg-accent/10 disabled:opacity-40">Select All</button>
+                                    <button type="button" onClick={() => { setSelectedDecades([...DECADES]); setAlbumSaveStatus('idle'); }} disabled={isGenerating || selectedDecades.length === DECADES.length} className="rounded px-2 py-1 text-xs font-semibold text-accent hover:bg-bg-tertiary disabled:opacity-40">Select All</button>
                                     <button type="button" onClick={() => { setSelectedDecades([]); setAlbumSaveStatus('idle'); }} disabled={isGenerating || selectedDecades.length === 0} className="rounded px-2 py-1 text-xs font-semibold text-text-secondary hover:bg-bg-tertiary disabled:opacity-40">Deselect All</button>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                                 {DECADES.map(decade => {
                                     const isSelected = selectedDecades.includes(decade);
-                                    return <label key={decade} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition-colors ${isSelected ? 'border-accent bg-accent/10 text-accent' : 'border-border-primary bg-bg-tertiary text-text-muted'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'hover:border-accent'}`}>
+                                    return <label key={decade} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition-colors ${isSelected ? 'border-accent text-accent' : 'border-border-primary bg-bg-tertiary text-text-muted'} ${isGenerating ? 'cursor-not-allowed opacity-60' : 'hover:border-accent'}`}>
                                         <input type="checkbox" checked={isSelected} onChange={() => toggleDecade(decade)} disabled={isGenerating} className="rounded border-border-primary text-accent focus:ring-accent" />
                                         {decade}
                                     </label>;
@@ -1393,7 +1388,7 @@ const PastForwardPanel: React.FC = () => {
                                 </div>;
                             })}
                         </div>
-                        {failedDecades.length > 0 && <div className="rounded-md border border-danger/50 bg-danger-bg p-3 text-sm text-danger">
+                        {failedDecades.length > 0 && <div className="rounded-md border border-danger bg-danger-bg p-3 text-sm text-danger">
                             <p className="font-bold">Generation errors</p>
                             {failedDecades.map(decade => <p key={decade} className="mt-1"><span className="font-semibold">{decade}:</span> {generatedImages[decade]?.error}</p>)}
                         </div>}
@@ -1409,7 +1404,7 @@ const PastForwardPanel: React.FC = () => {
                             return (
                                 <div
                                     key={decade}
-                                    className={`group relative aspect-[3/4] overflow-hidden rounded-lg border bg-bg-tertiary shadow-md transition-opacity ${status === 'done' && image.url ? 'cursor-zoom-in' : ''} ${isSelected ? 'border-accent/50' : 'border-border-primary/30 opacity-45'}`}
+                                    className={`group relative aspect-[3/4] overflow-hidden rounded-lg border bg-bg-tertiary shadow-md transition-opacity ${status === 'done' && image.url ? 'cursor-zoom-in' : ''} ${isSelected ? 'border-accent' : 'border-border-primary opacity-45'}`}
                                     onClick={() => { if (status === 'done' && image.url) setZoomedImage({ url: image.url, decade }); }}
                                     onKeyDown={(event) => { if ((event.key === 'Enter' || event.key === ' ') && status === 'done' && image.url) setZoomedImage({ url: image.url, decade }); }}
                                     role={status === 'done' && image.url ? 'button' : undefined}
@@ -1436,7 +1431,7 @@ const PastForwardPanel: React.FC = () => {
                                     {status === 'error' && (
                                         <div className="flex flex-col items-center justify-center h-full p-4 text-center">
                                             <p className="text-danger font-bold text-sm">Generation Failed</p>
-                                            <p className="text-xs text-danger/70 mt-1">{image.error}</p>
+                                            <p className="text-xs text-danger mt-1">{image.error}</p>
                                             <button 
                                                 onClick={() => handleRegenerateDecade(decade)}
                                                 className="mt-3 p-2 bg-bg-primary rounded-full hover:bg-accent hover:text-accent-text transition-colors"

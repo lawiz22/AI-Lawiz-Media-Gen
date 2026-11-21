@@ -20,6 +20,7 @@ assert.ok(capture);
 const { outputText } = ts.transpileModule(`
 import React, { useEffect, useRef, useState } from ${JSON.stringify(pathToFileURL(require.resolve('react')).href)};
 const useDispatch = () => () => {};
+const useUnmountCleanup = () => () => {};
 ${source}
 export const harness = (target = null, fail = false, playerTime = target) => {
     let seconds = target, error = '', working = false, saved;

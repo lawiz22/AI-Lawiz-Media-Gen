@@ -95,13 +95,13 @@ const OutpaintPanel: React.FC<{ isComfyUIConnected: boolean | null; comfyUIObjec
         generating.current = true; setRunning(true); setError(''); setStopping(false);
         cancellation.current = new AbortController();
         const original = source; const settings = structuredClone(options); const submittedLayout = { ...layout }; const started = performance.now();
-        dispatch(setLoadingState({ isLoading: true }));
+        dispatch(setLoadingState({ isLoading: true, owner: 'outpaint' }));
         try {
             const generated = await generateComfyUIOutpaint(original.file, settings, (text, value) => { setMessage(text); setProgress(value); }, cancellation.current.signal);
             setResult({ src: generated.src, prompt: generated.prompt, source: original, settings: { ...settings, seed: generated.seed }, layout: submittedLayout, seconds: (performance.now() - started) / 1000 });
             setSaved('idle'); setCompare(false); setComparison(50);
         } catch (failure) { setError(failure instanceof Error ? failure.message : 'Outpaint failed.'); }
-        finally { cancellation.current = null; generating.current = false; setRunning(false); setStopping(false); dispatch(setLoadingState({ isLoading: false })); }
+        finally { cancellation.current = null; generating.current = false; setRunning(false); setStopping(false); dispatch(setLoadingState({ isLoading: false, owner: 'outpaint' })); }
     };
     const stop = async () => {
         if (!generating.current || stopping) return;

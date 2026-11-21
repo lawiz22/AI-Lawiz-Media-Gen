@@ -8,7 +8,7 @@ import { VideoPromptEditor } from './VideoPromptText';
 import { AdvancedH3Settings } from './AdvancedH3Settings';
 import { planAdvancedH3Input } from '../services/minimaxH3AdvancedWorkflow';
 import {
-    H3_ASPECTS, h3Choices, h3FormatWidgets, h3FrameCount,
+    H3_ASPECTS, h3Choices, h3LoraChoices, h3FormatWidgets, h3FrameCount,
     h3ReferenceControl, h3Resolution, planH3References, replaceH3FirstPicture, validateMinimaxH3Readiness, withH3OriginalAudio,
     type H3FormatWidget, type H3ObjectInfo, type MinimaxH3Options,
 } from '../services/minimaxH3Workflow';
@@ -16,6 +16,7 @@ import { buildH3RenderWorkflow, defaultH3WorkflowOptions, h3ReferenceLimits, h3W
 import { generateMinimaxH3Video, loadH3ObjectInfo, type H3ExecutionProgress, type H3GenerationResult, type H3Preview } from '../services/minimaxH3Service';
 import { referenceToken, type MinimaxDraft, type ReferenceKind, type VideoReference, type VideoPromptProvider } from '../services/videoPromptService';
 import { VideoReferenceEditor, useMediaURL } from './VideoReferenceEditor';
+import { useUnmountCleanup } from './useUnmountCleanup';
 import { H3AudioReference } from './H3AudioReference';
 import { AudioPlayer } from './AudioPlayer';
 import { AudioLyricsEditor, OriginalAudioSelector } from './VideoAudioControls';
@@ -119,25 +120,26 @@ export const MinimaxH3Panel: React.FC<{
         defaultsApplied.current = true;
         if (!savedOptions) onOptionsChange(defaultH3WorkflowOptions(variant));
     }, [ready, savedOptions, onOptionsChange, variant]);
-    useEffect(() => {
-        return () => { refreshController.current?.abort(); frameController.current?.abort(); };
-    }, []);
+    const root = useUnmountCleanup(() => { refreshController.current?.abort(); frameController.current?.abort(); });
     const update = (patch: Partial<MinimaxH3Options>) => onOptionsChange({ ...options, ...patch });
     const updateAcceleration = (patch: Partial<NonNullable<MinimaxH3Options['ultrafast']>>) => {
         if (!acceleration) { setError('Ultrafast settings are missing. Reset settings before editing accelerators.'); return; }
         update({ ultrafast: { ...acceleration, ...patch } });
     };
-    const refresh = async () => {
+    const refresh = async (force = true) => {
         refreshController.current?.abort();
         const abort = new AbortController(); refreshController.current = abort;
         setLoading(true); setError('');
-        try { setInfo(await loadH3ObjectInfo(abort.signal, variant)); }
+        try {
+            const nodes = await loadH3ObjectInfo(abort.signal, variant, force);
+            if (!abort.signal.aborted) setInfo(nodes);
+        }
         catch (cause) { if (!abort.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause)); }
         finally { if (refreshController.current === abort) setLoading(false); }
     };
     useEffect(() => {
         if (!ready) return;
-        void refresh();
+        void refresh(false);
         return () => refreshController.current?.abort();
     }, [variant, ready]);
     const patchDraft = (patch: Partial<MinimaxDraft>) => onDraftChange({
@@ -275,7 +277,7 @@ export const MinimaxH3Panel: React.FC<{
             return choices.length ? choices : fallback;
         };
     }, [info]);
-    const loraNames = React.useMemo(() => Array.from(new Set([...lists('LoraLoader', 'lora_name'), ...lists('LoraLoaderModelOnly', 'lora_name')])), [lists]);
+    const loraNames = React.useMemo(() => h3LoraChoices(info), [info]);
     const changeFormat = (format: string) => {
         const formatOptions: MinimaxH3Options['formatOptions'] = {};
         for (const widget of h3FormatWidgets(info, format)) {
@@ -350,11 +352,11 @@ export const MinimaxH3Panel: React.FC<{
         {mapping && (!advanced || options.advanced?.mode === 'ref2v') && <div className="space-y-1 text-xs text-text-secondary">{mapping.mappings.map(item => <p key={item.from}>{item.from} → {item.to}</p>)}<p>Video soundtrack presence is verified before final token mapping.</p></div>}</>}
         {mappingError && <p role="alert" className="text-xs text-amber-300">{mappingError}</p>}
     </fieldset>;
-    return <div className={`min-w-0 space-y-4 rounded-xl border-t-2 pt-3 ${advanced ? 'border-cyan-400' : ultrafast ? 'border-emerald-400' : 'border-violet-400'}`}>
+    return <div ref={root} className={`min-w-0 space-y-4 rounded-xl border-t-2 pt-3 ${advanced ? 'border-cyan-400' : ultrafast ? 'border-emerald-400' : 'border-violet-400'}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
             <div><h3 className={`text-xl font-bold ${advanced ? 'text-cyan-300' : ultrafast ? 'text-emerald-300' : 'text-violet-300'}`}>{name}</h3><p className="mt-1 text-xs text-text-secondary">{videoInput ? 'Finish a source video with the enabled stages. No H3 first-pass generation.' : 'Write or paste a prompt. Image, video and audio references are optional.'}</p></div>
             <div className="flex flex-wrap gap-2">
-                <button type="button" className={button} disabled={!ready || busy || loading} onClick={refresh}>{loading ? 'Refreshing...' : 'Refresh nodes / models'}</button>
+                <button type="button" className={button} disabled={!ready || busy || loading} onClick={() => void refresh()}>{loading ? 'Refreshing...' : 'Refresh nodes / models'}</button>
                 <button type="button" className={button} disabled={resetBlocked} title="Restore settings while keeping the current prompt, references and output" onClick={() => { if (window.confirm(`Restore all ${name} workflow settings to the supplied defaults? Prompt and media will be retained.`)) onOptionsChange(defaultH3WorkflowOptions(variant)); }}>Reset settings only</button>
                 <button type="button" className={`${button} border-red-400/40 text-red-300`} disabled={resetBlocked} onClick={startFromScratch}>Start from scratch</button>
             </div>

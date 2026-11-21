@@ -6,8 +6,9 @@ type LtxObjectInfo = Record<string, LtxLoaderInfo>;
 
 const getChoices = (info: LtxObjectInfo | null | undefined, loader: string, input: string): string[] => {
   const widget = info?.[loader]?.input?.required?.[input];
-  if (!Array.isArray(widget) || !Array.isArray(widget[0])) return [];
-  return widget[0].filter((value): value is string => typeof value === 'string' && value.length > 0);
+  if (!Array.isArray(widget)) return [];
+  const choices: unknown = Array.isArray(widget[0]) ? widget[0] : (widget[1] as { options?: unknown } | undefined)?.options;
+  return Array.isArray(choices) ? choices.filter((value): value is string => typeof value === 'string' && value.length > 0) : [];
 };
 
 export const getLtxDirectorModelLists = (info: LtxObjectInfo | null | undefined) => ({

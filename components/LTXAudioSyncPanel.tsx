@@ -176,7 +176,7 @@ export const LTXAudioSyncPanel: React.FC<{
                 snapshot.nodes['398:339'].noise_seed = Math.floor(Math.random() * 1e15); onSettingsChange(snapshot);
             }
             if (action === 'check') {
-                const nodes = await loadAudioSyncObjectInfo(abort.signal); setInfo(nodes);
+                const nodes = await loadAudioSyncObjectInfo(abort.signal, true); setInfo(nodes);
                 buildAudioSyncWorkflow(snapshot, audioSyncInputPrompt(snapshotDraft), { image: snapshotDraft.image?.name, audio: snapshotDraft.audio!.name }, nodes);
                 setStatus('Active nodes, installed models and parameters validated. No upload or generation was performed.');
             } else if (action === 'export') {

@@ -11,6 +11,7 @@ import { SendToLTXButton } from './SendToLTXButton';
 import { CHARACTER_ANGLES, getEnabledCharacterAngles } from '../services/characterAnglesWorkflow';
 import type { GenerationOptions, LibraryItem } from '../types';
 import { fileToResizedDataUrl, dataUrlToThumbnail, getImageDimensionsFromDataUrl, dataUrlToFile } from '../utils/imageUtils';
+import { imageGalleryStyleTag } from '../services/libraryTags';
 
 const generateCharacterDescription = (options: GenerationOptions): string => {
   const parts = [];
@@ -169,7 +170,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
       const isGeminiT2I = options.provider === 'gemini' && options.geminiMode === 't2i';
       const isMammouthT2I = options.provider === 'mammouth' && options.geminiMode === 't2i';
 
-      const comfyI2IWorkflows: (GenerationOptions['comfyModelType'])[] = ['qwen-edit', 'nunchaku-kontext-flux', 'face-detailer-sd1.5'];
+      const comfyI2IWorkflows: (GenerationOptions['comfyModelType'])[] = ['qwen-edit', 'face-detailer-sd1.5'];
       const isComfyT2I = options.provider === 'comfyui' && !comfyI2IWorkflows.includes(options.comfyModelType);
 
       if (isEnhanced) {
@@ -207,6 +208,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
         }
       }
 
+      const styleTag = isCharacter ? undefined : imageGalleryStyleTag(options);
       const item: Omit<LibraryItem, 'id'> = {
         mediaType: isCharacter ? 'character' : 'image',
         media: imageSrc,
@@ -214,6 +216,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, onSendToI2I, onSen
         options: optionsToSave as GenerationOptions,
         sourceImage: sourceImageToSave ? await fileToResizedDataUrl(sourceImageToSave, 512) : undefined,
         name: itemName,
+        tags: styleTag ? [styleTag] : undefined,
       };
 
       await dispatch(addToLibrary(item)).unwrap();

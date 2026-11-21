@@ -224,8 +224,93 @@ test('providers receive selected model and edited media without changing global 
 });
 
 test('connected workflows include H3 variants and LTX Audio-Sync with their exact user-facing names', () => {
-    assert.deepEqual(api.VIDEO_WORKFLOWS.map(item => item.id), ['reference', 'ultrafast', 'advanced', 'ltx-audio-sync']);
+    assert.deepEqual(api.VIDEO_WORKFLOWS.map(item => item.id), ['reference', 'ultrafast', 'advanced', 'ltx-audio-sync', 'ltx-director', 'ltx-ripple-ffaf']);
     assert.equal(api.VIDEO_WORKFLOWS[0].name, 'Minimax REF2v H3');
     assert.equal(api.VIDEO_WORKFLOWS[1].name, 'Ultrafast');
     assert.equal(api.VIDEO_WORKFLOWS[3].name, 'LTX 2.5 Audio-Sync');
+});
+
+test('H3 keeps its templates while T2V, FI2V, REF2V and V2V add distinct source semantics', () => {
+    const legacy = api.buildVideoPromptInstruction(draft());
+    assert.ok(legacy.startsWith(api.DEFAULT_VIDEO_TEMPLATES.generation));
+    assert.doesNotMatch(legacy, /Generation mode:/);
+    for (const [mode, references, expected] of [
+        ['t2v', [], /no conditioned first frame/],
+        ['fi2v', [ref('image')], /first attached image is the starting frame/],
+        ['ref2v', [ref('image')], /independent references, NOT starting frames/],
+        ['v2v', [ref('video')], /preserving source timing, motion, framing/],
+    ]) {
+        const instruction = api.buildVideoPromptInstruction(draft({ targetFamily: 'h3', promptMode: mode, references }));
+        assert.ok(instruction.startsWith(api.DEFAULT_VIDEO_TEMPLATES.generation));
+        assert.ok(instruction.includes(`Generation mode: ${mode.toUpperCase()}`));
+        assert.match(instruction, expected);
+    }
+    assert.throws(() => api.buildVideoPromptInstruction(draft({ promptMode: 'fi2v' })), /FI2V requires/);
+    assert.throws(() => api.buildVideoPromptInstruction(draft({ promptMode: 'ref2v' })), /REF2V requires/);
+    assert.throws(() => api.buildVideoPromptInstruction(draft({ promptMode: 'v2v' })), /V2V requires/);
+    assert.throws(() => api.buildVideoPromptInstruction(draft({ promptMode: 'i2v', template: 'replacement', references: [ref('image'), ref('video')] })), /requires V2V/);
+});
+
+test('LTX templates are isolated from H3 and sent to all providers with mode-specific instructions', async () => {
+    for (const provider of ['gemini', 'openrouter', 'mammouth']) {
+        const value = draft({ provider, targetFamily: 'ltx', promptMode: 'fi2v', workflow: 'ltx-director',
+            references: [ref('image')], style: filmStyle,
+            templates: { ...api.DEFAULT_VIDEO_TEMPLATES, generation: 'H3_CUSTOM_ONLY' },
+            ltxTemplates: { ...api.DEFAULT_LTX_VIDEO_TEMPLATES, generation: api.DEFAULT_LTX_VIDEO_TEMPLATES.generation + '\nLTX_CUSTOM_ONLY' } });
+        assert.equal(await api.generateVideoPrompt(value), generated);
+        const instruction = api.calls.at(-1)[1];
+        assert.match(instruction, /LTX 2 \/ LTX 2.5/);
+        assert.match(instruction, /Generation mode: FI2V/);
+        assert.match(instruction, /one coherent continuous shot/);
+        assert.match(instruction, /LTX_CUSTOM_ONLY/);
+        assert.doesNotMatch(instruction, /H3_CUSTOM_ONLY|AGED_FILM|Selected H3/);
+        assert.equal(value.templates.generation, 'H3_CUSTOM_ONLY');
+        assert.equal(api.captureVideoPromptInputs(value).style, undefined, 'Inactive H3 styles must not become LTX generation provenance.');
+        assert.equal(value.style, filmStyle, 'Switching to LTX must keep the independent H3 style.');
+    }
+    const snapshot = api.captureVideoPromptInputs(draft({ targetFamily: 'ltx', promptMode: 'v2v',
+        ltxTemplates: { ...api.DEFAULT_LTX_VIDEO_TEMPLATES } }));
+    assert.equal(snapshot.targetFamily, 'ltx');
+    assert.equal(snapshot.promptMode, 'v2v');
+    snapshot.ltxTemplates.generation = 'edited';
+    assert.notEqual(api.DEFAULT_LTX_VIDEO_TEMPLATES.generation, 'edited');
+    assert.equal(api.ltxVideoPromptText(generated, 'generation'), '[Shot 1] A scene.\n\nFootsteps.\n\nNone.');
+    assert.equal(api.ltxVideoPromptText(replacement, 'replacement'), '[Shot 1] Walk.\n\nFootsteps.\n\nNone.');
+    assert.throws(() => api.ltxVideoPromptText('invalid', 'generation'), /required non-empty fields/);
+});
+
+test('legacy I2V drafts normalize to FI2V without changing first-frame semantics; untyped H3 images infer REF2V', () => {
+    const old = draft({ promptMode: 'i2v', references: [ref('image')] });
+    assert.equal(api.videoPromptMode(old), 'fi2v');
+    assert.equal(api.captureVideoPromptInputs(old).promptMode, 'fi2v');
+    assert.match(api.buildVideoPromptInstruction(old), /Generation mode: FI2V/);
+    assert.match(api.buildVideoPromptInstruction(old), /first attached image is the starting frame/);
+    assert.equal(old.promptMode, 'i2v', 'Compatibility reads must not mutate saved inputs.');
+    assert.throws(() => api.buildVideoPromptInstruction(draft({ promptMode: 'i2v' })), /FI2V requires/);
+    assert.equal(api.videoPromptMode(draft({ references: [ref('image')] })), 'ref2v');
+    assert.equal(api.videoPromptMode(draft({ workflow: 'ltx-audio-sync', references: [ref('image')] })), 'fi2v');
+});
+
+test('all providers receive REF2V role-based instructions, not first-frame instructions', async () => {
+    for (const provider of ['gemini', 'openrouter', 'mammouth']) {
+        const references = [ref('image'), ref('image', 2)];
+        references[0].note = 'Character identity only; new pose and outfit';
+        references[1].note = 'Visual style only';
+        const value = draft({ provider, promptMode: 'ref2v', references });
+        assert.equal(await api.generateVideoPrompt(value), generated);
+        const call = api.calls.at(-1), instruction = call[1];
+        assert.match(instruction, /Generation mode: REF2V/);
+        assert.match(instruction, /independent references, NOT starting frames/);
+        assert.match(instruction, /Compose a NEW scene, opening shot, camera framing and action/);
+        assert.match(instruction, /Do not copy its pose, composition, framing/);
+        assert.match(instruction, /Never describe a reference image as the starting\/first frame/);
+        assert.doesNotMatch(instruction, /the first attached image is the starting frame|Focus on how subjects and camera move from that frame/);
+        assert.ok(instruction.includes(references[0].note));
+        assert.ok(instruction.includes(references[1].note));
+        assert.deepEqual(call[2], references.map(ref => ref.file));
+        assert.equal(api.captureVideoPromptInputs(value).promptMode, 'ref2v');
+    }
+    for (const kind of ['image', 'video', 'audio']) {
+        assert.doesNotThrow(() => api.buildVideoPromptInstruction(draft({ promptMode: 'ref2v', references: [ref(kind)] })));
+    }
 });

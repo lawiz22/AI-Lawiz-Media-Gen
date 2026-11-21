@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, ChangeEvent, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
-// Fix: Import `NunchakuAttention` type to be used for casting.
-import type { Flux2ReferenceRole, GenerationOptions, NunchakuAttention, ImageStyle } from '../types';
+import type { Flux2ReferenceRole, GenerationOptions, ImageStyle } from '../types';
 import {
     BACKGROUND_OPTIONS,
     ASPECT_RATIO_OPTIONS,
@@ -132,7 +131,6 @@ const getSelectedLoraNames = (options: GenerationOptions): string[] => {
     }
     const config = options.comfyModelType === 'sd1.5' ? ['comfySd15', 4]
         : options.comfyModelType === 'sdxl' ? ['comfySdxl', 4]
-            : options.comfyModelType === 'flux' ? ['comfyFlux', 4]
                 : options.comfyModelType === 'qwen-t2i-gguf' ? ['comfyQwen', 4]
                     : options.comfyModelType === 'qwen-edit' ? ['comfyQwenEdit', 5]
                         : options.comfyModelType === 'z-image' ? ['comfyZImage', 4]
@@ -156,7 +154,7 @@ const getModelListFromInfo = (widgetInfo: any): string[] => {
     if (Array.isArray(widgetInfo) && Array.isArray(widgetInfo[0])) {
         return widgetInfo[0] || [];
     }
-    return [];
+    return Array.isArray(widgetInfo?.[1]?.options) ? widgetInfo[1].options : [];
 };
 
 // --- Helper Components ---
@@ -571,7 +569,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             return lowerModel.includes('sd1.5') || lowerModel.includes('sd 1.5');
         }
         if (options.comfyModelType === 'sdxl') return lowerModel.includes('sdxl');
-        if (options.comfyModelType === 'flux') return lowerModel.includes('flux');
         return true;
     }), [comfyModels, options.comfyModelType]);
 
@@ -589,7 +586,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         const sources = [
             comfyUIObjectInfo?.LoraLoader?.input?.required?.lora_name,
             comfyUIObjectInfo?.LoraLoaderModelOnly?.input?.required?.lora_name,
-            comfyUIObjectInfo?.NunchakuFluxLoraLoader?.input?.required?.lora_name,
             comfyUIObjectInfo?.["Power Lora Loader (rgthree)"]?.input?.required?.lora_name
         ];
         for (const source of sources) {
@@ -610,7 +606,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         const sources = [
             comfyUIObjectInfo?.CLIPLoader?.input?.required?.clip_name,
             comfyUIObjectInfo?.DualCLIPLoader?.input?.required?.clip_name1,
-            comfyUIObjectInfo?.NunchakuTextEncoderLoader?.input?.required?.text_encoder1,
             comfyUIObjectInfo?.DualCLIPLoaderGGUF?.input?.required?.clip_l_name
         ];
         for (const source of sources) {
@@ -635,23 +630,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         return Array.from(modelSet);
     }, [comfyUIObjectInfo]);
 
-    const t5SafetensorEncoderModels = useMemo(() => {
-        const sources = [
-            comfyUIObjectInfo?.DualCLIPLoader?.input?.required?.clip_name2,
-            comfyUIObjectInfo?.NunchakuTextEncoderLoader?.input?.required?.text_encoder2,
-        ];
-        const modelSet = new Set<string>();
-        for (const source of sources) {
-            const list = getModelListFromInfo(source);
-            if (list.length > 0) {
-                list.forEach(model => modelSet.add(model));
-            }
-        }
-        return Array.from(modelSet);
-    }, [comfyUIObjectInfo]);
-
-    const comfyUpscaleModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.UpscaleModelLoader?.input?.required?.model_name), [comfyUIObjectInfo]);
-
     const comfyGgufModels = useMemo(() => {
         const sources = [
             comfyUIObjectInfo?.UnetLoaderGGUF?.input?.required?.unet_name,
@@ -674,13 +652,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         ...comfyUnets,
     ])), [comfyGgufModels, comfyUnets]);
 
-    const nunchakuModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.NunchakuFluxDiTLoader?.input?.required?.model_path), [comfyUIObjectInfo]);
-
-    const nunchakuAttentions = useMemo(() => {
-        const list = getModelListFromInfo(comfyUIObjectInfo?.NunchakuFluxDiTLoader?.input?.required?.attention);
-        return list.length > 0 ? list : ['nunchaku-fp16', 'flash-attention2'];
-    }, [comfyUIObjectInfo]);
-
     const comfyBboxModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.UltralyticsDetectorProvider?.input?.required?.model_name), [comfyUIObjectInfo]);
     const comfySamModels = useMemo(() => getModelListFromInfo(comfyUIObjectInfo?.SAMLoader?.input?.required?.model_name), [comfyUIObjectInfo]);
 
@@ -691,7 +662,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
         let field: keyof GenerationOptions | undefined;
         let candidates: string[] = [];
 
-        if (modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux' || modelType === 'face-detailer-sd1.5') {
+        if (modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'face-detailer-sd1.5') {
             field = 'comfyModel';
             candidates = filteredComfyModels;
         } else if (modelType === 'qwen-t2i-gguf') {
@@ -711,12 +682,6 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             candidates = comfyUnets.filter(model => /krea[-_ .]?2/i.test(model));
         } else if (modelType === 'krea2-raw') {
             return;
-        } else if (modelType === 'nunchaku-kontext-flux' || modelType === 'nunchaku-flux-image') {
-            field = 'comfyNunchakuModel';
-            candidates = nunchakuModels;
-        } else if (modelType === 'flux-krea') {
-            field = 'comfyFluxKreaModel';
-            candidates = comfyGgufModels.filter(model => /flux/i.test(model));
         }
 
         if (!field || candidates.length === 0) return;
@@ -754,7 +719,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
 
         void applyModelDefaults();
         return () => { cancelled = true; };
-    }, [options.provider, options.comfyModelType, options.comfyModel, options.comfyQwenUnet, options.comfyQwenEditUnet, options.comfyZImageUnet, options.comfyFlux2Unet, options.comfyFlux2EditUnet, options.comfyKreaUnet, options.comfyNunchakuModel, options.comfyFluxKreaModel, options.comfyPromptExampleSource, updateOptions, comfyUIObjectInfo, filteredComfyModels, comfyGgufModels, comfyUnets, comfyFlux2Models, nunchakuModels]);
+    }, [options.provider, options.comfyModelType, options.comfyModel, options.comfyQwenUnet, options.comfyQwenEditUnet, options.comfyZImageUnet, options.comfyFlux2Unet, options.comfyFlux2EditUnet, options.comfyKreaUnet, options.comfyPromptExampleSource, updateOptions, comfyUIObjectInfo, filteredComfyModels, comfyGgufModels, comfyUnets, comfyFlux2Models]);
 
 
     useEffect(() => {
@@ -1611,33 +1576,8 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     </button>
 
                     {comfyModelsOpen && <div className="space-y-4 rounded-md border border-border-primary bg-bg-tertiary p-3">
-                        {(modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'flux' || modelType === 'face-detailer-sd1.5') && (
+                        {(modelType === 'sd1.5' || modelType === 'sdxl' || modelType === 'face-detailer-sd1.5') && (
                             <SelectInput label="Checkpoint" value={options.comfyModel || ''} onChange={handleOptionChange('comfyModel')} options={[{ value: '', label: 'Select Checkpoint' }, ...filteredComfyModels.map(model => ({ value: model, label: model }))]} disabled={isDisabled} />
-                        )}
-                        {modelType === 'flux' && (
-                            <div className="space-y-4">
-                                <SelectInput
-                                    label="CLIP 1 (T5)"
-                                    value={options.comfyFluxClip1 || ''}
-                                    onChange={handleOptionChange('comfyFluxClip1')}
-                                    options={comfyClips.map(m => ({ value: m, label: m }))}
-                                    disabled={isDisabled}
-                                />
-                                <SelectInput
-                                    label="CLIP 2 (CLIP L)"
-                                    value={options.comfyFluxClip2 || ''}
-                                    onChange={handleOptionChange('comfyFluxClip2')}
-                                    options={comfyClips.map(m => ({ value: m, label: m }))}
-                                    disabled={isDisabled}
-                                />
-                                <SelectInput
-                                    label="VAE"
-                                    value={options.comfyFluxVae || ''}
-                                    onChange={handleOptionChange('comfyFluxVae')}
-                                    options={comfyVaes.map(m => ({ value: m, label: m }))}
-                                    disabled={isDisabled}
-                                />
-                            </div>
                         )}
 
                         {modelType === 'qwen-t2i-gguf' && (
@@ -1791,114 +1731,11 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                     </> : <>
                     {renderPromptExampleButtons()}
                     <TextInput label="Positive Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaPrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2Prompt || '') : (options.comfyPrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaPrompt' : modelType === 'flux2-simple' ? 'comfyFlux2Prompt' : 'comfyPrompt')} disabled={isDisabled} isTextArea />
-                    {modelType !== 'nunchaku-kontext-flux' && modelType !== 'nunchaku-flux-image' && modelType !== 'flux-krea' && (
-                        <TextInput label="Negative Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaNegativePrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2NegativePrompt || '') : (options.comfyNegativePrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaNegativePrompt' : modelType === 'flux2-simple' ? 'comfyFlux2NegativePrompt' : 'comfyNegativePrompt')} disabled={isDisabled} isTextArea />
-                    )}
+                    <TextInput label="Negative Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaNegativePrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2NegativePrompt || '') : (options.comfyNegativePrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaNegativePrompt' : modelType === 'flux2-simple' ? 'comfyFlux2NegativePrompt' : 'comfyNegativePrompt')} disabled={isDisabled} isTextArea />
                     </>}
                 </OptionSection>
 
 
-
-                {modelType === 'wan2.2' && (
-                    <>
-                        <OptionSection title="Core Sampler Settings">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <NumberSlider label={`Steps: ${options.comfySteps || 6}`} value={options.comfySteps || 6} onChange={handleSliderChange('comfySteps')} min={4} max={12} step={1} disabled={isDisabled} />
-                                <NumberSlider label={`CFG: ${options.comfyCfg || 1.0}`} value={options.comfyCfg || 1.0} onChange={handleSliderChange('comfyCfg')} min={1.0} max={3.0} step={0.1} disabled={isDisabled} />
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <SelectInput label="Sampler" value={options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={comfySamplers.map(s => ({ value: s, label: s }))} disabled={isDisabled} />
-                                <SelectInput label="Scheduler" value={options.comfyScheduler || ''} onChange={handleOptionChange('comfyScheduler')} options={comfySchedulers.map(s => ({ value: s, label: s }))} disabled={isDisabled} />
-                            </div>
-                            <NumberSlider label={`Refiner Start Step: ${options.comfyWanRefinerStartStep || 3}`} value={options.comfyWanRefinerStartStep || 3} onChange={handleSliderChange('comfyWanRefinerStartStep')} min={1} max={(options.comfySteps || 6) - 1} step={1} disabled={isDisabled} />
-                        </OptionSection>
-                        <OptionSection title="Models">
-                            <SelectInput label="High-Noise Unet" value={options.comfyWanHighNoiseModel || ''} onChange={handleOptionChange('comfyWanHighNoiseModel')} options={comfyGgufModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="Low-Noise Unet" value={options.comfyWanLowNoiseModel || ''} onChange={handleOptionChange('comfyWanLowNoiseModel')} options={comfyGgufModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="CLIP Model" value={options.comfyWanClipModel || ''} onChange={handleOptionChange('comfyWanClipModel')} options={[...t5GgufEncoderModels, ...t5SafetensorEncoderModels].map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="VAE Model" value={options.comfyWanVaeModel || ''} onChange={handleOptionChange('comfyWanVaeModel')} options={comfyVaes.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                        </OptionSection>
-                        <OptionSection title="LoRAs">
-                            <CheckboxSlider label="Use FusionX LoRA" isChecked={!!options.comfyWanUseFusionXLora} onCheckboxChange={handleOptionChange('comfyWanUseFusionXLora')} sliderValue={options.comfyWanFusionXLoraStrength || 0} onSliderChange={handleSliderChange('comfyWanFusionXLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
-                            <CheckboxSlider label="Use Lightning LoRA" isChecked={!!options.comfyWanUseLightningLora} onCheckboxChange={handleOptionChange('comfyWanUseLightningLora')} sliderValue={options.comfyWanLightningLoraStrength || 0} onSliderChange={handleSliderChange('comfyWanLightningLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
-                            <CheckboxSlider label="Use Stock Photo LoRA" isChecked={!!options.comfyWanUseStockPhotoLora} onCheckboxChange={handleOptionChange('comfyWanUseStockPhotoLora')} sliderValue={options.comfyWanStockPhotoLoraStrength || 0} onSliderChange={handleSliderChange('comfyWanStockPhotoLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
-                        </OptionSection>
-                    </>
-                )}
-
-                {(modelType === 'nunchaku-kontext-flux' || modelType === 'nunchaku-flux-image') && (
-                    <>
-                        <OptionSection title="Sampler Settings">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <NumberSlider label={`Steps: ${options.comfySteps || 10}`} value={options.comfySteps || 10} onChange={handleSliderChange('comfySteps')} min={1} max={20} step={1} disabled={isDisabled} />
-                                {modelType === 'nunchaku-kontext-flux' && <NumberSlider label={`CFG: ${options.comfyCfg || 1}`} value={options.comfyCfg || 1} onChange={handleSliderChange('comfyCfg')} min={1} max={5} step={0.1} disabled={isDisabled} />}
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <SelectInput label="Sampler" value={options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={comfySamplers.map(s => ({ value: s, label: s }))} disabled={isDisabled} />
-                                <SelectInput label="Scheduler" value={options.comfyScheduler || ''} onChange={handleOptionChange('comfyScheduler')} options={comfySchedulers.map(s => ({ value: s, label: s }))} disabled={isDisabled} />
-                            </div>
-                        </OptionSection>
-                        <OptionSection title="Advanced Settings">
-                            <NumberSlider label={`FLUX Guidance: ${options.comfyFluxGuidanceKontext || 2.5}`} value={options.comfyFluxGuidanceKontext || 2.5} onChange={handleSliderChange('comfyFluxGuidanceKontext')} min={0} max={10} step={0.1} disabled={isDisabled} />
-                            {modelType === 'nunchaku-flux-image' && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <NumberSlider label={`Base Shift: ${options.comfyNunchakuBaseShift || 1.0}`} value={options.comfyNunchakuBaseShift || 1.0} onChange={handleSliderChange('comfyNunchakuBaseShift')} min={0.5} max={1.5} step={0.05} disabled={isDisabled} />
-                                    <NumberSlider label={`Max Shift: ${options.comfyNunchakuMaxShift || 1.15}`} value={options.comfyNunchakuMaxShift || 1.15} onChange={handleSliderChange('comfyNunchakuMaxShift')} min={1.0} max={2.0} step={0.05} disabled={isDisabled} />
-                                </div>
-                            )}
-                            <NumberSlider label={`Cache Threshold: ${options.comfyNunchakuCacheThreshold || 0}`} value={options.comfyNunchakuCacheThreshold || 0} onChange={handleSliderChange('comfyNunchakuCacheThreshold')} min={0} max={1} step={0.01} disabled={isDisabled} />
-                            <SelectInput label="CPU Offload" value={options.comfyNunchakuCpuOffload || 'enable'} onChange={handleOptionChange('comfyNunchakuCpuOffload')} options={[{ value: 'enable', label: 'Enable' }, { value: 'disable', label: 'Disable' }, { value: 'auto', label: 'Auto' }]} disabled={isDisabled} />
-                            <SelectInput label="Attention Type" value={options.comfyNunchakuAttention || 'nunchaku-fp16'} onChange={e => updateOptions({ comfyNunchakuAttention: e.target.value as NunchakuAttention })} options={nunchakuAttentions.map(a => ({ value: a, label: a }))} disabled={isDisabled} />
-                        </OptionSection>
-                        <OptionSection title="Models">
-                            <SelectInput label="DiT Model" value={options.comfyNunchakuModel || ''} onChange={handleOptionChange('comfyNunchakuModel')} options={nunchakuModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="VAE Model" value={options.comfyNunchakuVae || ''} onChange={handleOptionChange('comfyNunchakuVae')} options={comfyVaes.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="CLIP L Model" value={options.comfyNunchakuClipL || ''} onChange={handleOptionChange('comfyNunchakuClipL')} options={comfyClips.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="T5 XXL Model" value={options.comfyNunchakuT5XXL || ''} onChange={handleOptionChange('comfyNunchakuT5XXL')} options={t5SafetensorEncoderModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                        </OptionSection>
-                        <OptionSection title="LoRAs">
-                            <CheckboxSlider label="Use Turbo LoRA" isChecked={!!options.comfyNunchakuUseTurboLora} onCheckboxChange={handleOptionChange('comfyNunchakuUseTurboLora')} sliderValue={options.comfyNunchakuTurboLoraStrength || 0} onSliderChange={handleSliderChange('comfyNunchakuTurboLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
-                            <CheckboxSlider label="Use Nudify LoRA" isChecked={!!options.comfyNunchakuUseNudifyLora} onCheckboxChange={handleOptionChange('comfyNunchakuUseNudifyLora')} sliderValue={options.comfyNunchakuNudifyLoraStrength || 0} onSliderChange={handleSliderChange('comfyNunchakuNudifyLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
-                            <CheckboxSlider label="Use Detail LoRA" isChecked={!!options.comfyNunchakuUseDetailLora} onCheckboxChange={handleOptionChange('comfyNunchakuUseDetailLora')} sliderValue={options.comfyNunchakuDetailLoraStrength || 0} onSliderChange={handleSliderChange('comfyNunchakuDetailLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
-                        </OptionSection>
-                    </>
-                )}
-
-                {modelType === 'flux-krea' && (
-                    <>
-                        <OptionSection title="Sampler Settings">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <NumberSlider label={`Steps: ${options.comfySteps || 20}`} value={options.comfySteps || 20} onChange={handleSliderChange('comfySteps')} min={10} max={40} step={1} disabled={isDisabled} />
-                                <NumberSlider label={`FLUX Guidance: ${options.comfyFluxGuidance || 3.5}`} value={options.comfyFluxGuidance || 3.5} onChange={handleSliderChange('comfyFluxGuidance')} min={0} max={10} step={0.1} disabled={isDisabled} />
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <SelectInput label="Sampler" value={options.comfySampler || ''} onChange={handleOptionChange('comfySampler')} options={comfySamplers.map(s => ({ value: s, label: s }))} disabled={isDisabled} />
-                                <SelectInput label="Scheduler" value={options.comfyScheduler || ''} onChange={handleOptionChange('comfyScheduler')} options={comfySchedulers.map(s => ({ value: s, label: s }))} disabled={isDisabled} />
-                            </div>
-                        </OptionSection>
-                        <OptionSection title="Models">
-                            <SelectInput label="Unet GGUF" value={options.comfyFluxKreaModel || ''} onChange={handleOptionChange('comfyFluxKreaModel')} options={comfyGgufModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="CLIP T5 GGUF" value={options.comfyFluxKreaClipT5 || ''} onChange={handleOptionChange('comfyFluxKreaClipT5')} options={t5GgufEncoderModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="CLIP L" value={options.comfyFluxKreaClipL || ''} onChange={handleOptionChange('comfyFluxKreaClipL')} options={comfyClips.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                            <SelectInput label="VAE" value={options.comfyFluxKreaVae || ''} onChange={handleOptionChange('comfyFluxKreaVae')} options={comfyVaes.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                        </OptionSection>
-                        <OptionSection title="LoRAs">
-                            <CheckboxSlider label="Woman LoRA" isChecked={!!options.useP1x4r0maWomanLora} onCheckboxChange={handleOptionChange('useP1x4r0maWomanLora')} sliderValue={options.p1x4r0maWomanLoraStrength || 0} onSliderChange={handleSliderChange('p1x4r0maWomanLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
-                            <CheckboxSlider label="Nipple Diffusion LoRA" isChecked={!!options.useNippleDiffusionLora} onCheckboxChange={handleOptionChange('useNippleDiffusionLora')} sliderValue={options.nippleDiffusionLoraStrength || 0} onSliderChange={handleSliderChange('nippleDiffusionLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
-                            <CheckboxSlider label="Pussy Diffusion LoRA" isChecked={!!options.usePussyDiffusionLora} onCheckboxChange={handleOptionChange('usePussyDiffusionLora')} sliderValue={options.pussyDiffusionLoraStrength || 0} onSliderChange={handleSliderChange('pussyDiffusionLoraStrength')} min={-10} max={10} step={0.5} disabled={isDisabled} sliderLabel="Strength" allowDirectInput />
-                        </OptionSection>
-                        <OptionSection title="Upscaler">
-                            <label className="flex items-center gap-2 text-sm font-medium text-text-secondary cursor-pointer"><input type="checkbox" checked={!!options.comfyFluxKreaUseUpscaler} onChange={handleOptionChange('comfyFluxKreaUseUpscaler')} disabled={isDisabled} className="rounded text-accent focus:ring-accent" />Enable Upscaler</label>
-                            {options.comfyFluxKreaUseUpscaler && (
-                                <div className="space-y-4 pt-2">
-                                    <SelectInput label="Upscale Model" value={options.comfyFluxKreaUpscaleModel || ''} onChange={handleOptionChange('comfyFluxKreaUpscaleModel')} options={comfyUpscaleModels.map(m => ({ value: m, label: m }))} disabled={isDisabled} />
-                                    <NumberSlider label={`Upscaler Steps: ${options.comfyFluxKreaUpscalerSteps || 10}`} value={options.comfyFluxKreaUpscalerSteps || 10} onChange={handleSliderChange('comfyFluxKreaUpscalerSteps')} min={5} max={20} step={1} disabled={isDisabled} />
-                                    <NumberSlider label={`Upscaler Denoise: ${options.comfyFluxKreaDenoise || 0.8}`} value={options.comfyFluxKreaDenoise || 0.8} onChange={handleSliderChange('comfyFluxKreaDenoise')} min={0} max={1} step={0.05} disabled={isDisabled} />
-                                </div>
-                            )}
-                        </OptionSection>
-                    </>
-                )}
 
                 {modelType === 'face-detailer-sd1.5' && (
                     <>

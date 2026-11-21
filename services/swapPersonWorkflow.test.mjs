@@ -5,17 +5,10 @@ import ts from 'typescript';
 
 const compile = name => ts.transpileModule(readFileSync(new URL(name, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const url = source => `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
+const sceneUrl = url(compile('./sceneVariationService.ts').replace("'./qwen21Workflow'", JSON.stringify(url(compile('./qwen21Workflow.ts')))));
 const module = await import(url(compile('./swapPersonWorkflow.ts').replace("'./swapAnythingWorkflow'", JSON.stringify(url(compile('./swapAnythingWorkflow.ts'))))));
 const anything = await import(url(compile('./swapAnythingWorkflow.ts')));
-const service = await import(url(compile('./swapPersonService.ts').replace("'./sceneVariationService'", JSON.stringify(url(compile('./sceneVariationService.ts'))))));
-const scene = await import(url(compile('./sceneVariationService.ts')));
-const maskPlanner = await import(url(compile('./swapPersonService.ts').replace("'./sceneVariationService'", JSON.stringify(url(`
-    export * from '${url(compile('./sceneVariationService.ts'))}';
-    import { sceneAutomaticMaskTargets } from '${url(compile('./sceneVariationService.ts'))}';
-    export const generateAutomaticSceneMasks = async (image, scene, controls, intensity, checkpoint, padding, progress, stopped, area, region, partPrompts) => {
-        const plan = sceneAutomaticMaskTargets(scene, controls, intensity, padding, region, partPrompts);
-        return Object.fromEntries(plan.selected.map(person => [person.id, { plan, area, region, padding }]));
-    }`)))));
+const scene = await import(sceneUrl);
 const options = () => ({ ...module.defaultSwapPersonOptions(), destinationTarget: 'left person', donorTarget: 'only person', destinationStyle: 'VHS with soft edges and chroma bleed', seed: 123 });
 
 test('quick person interface uses identical Swap Anything defaults and the user-validated face/hair graph', () => {
@@ -173,19 +166,6 @@ test('donor identity is always used with independent anatomy and outfit choices,
     assert.throws(() => module.buildSwapPersonPrompt({ ...options(), destinationStyle: '' }), /visual style/);
 });
 
-test('analysis accepts explicit people and style, rejects ambiguous schema and strips unrelated fields', async () => {
-    const raw = { style: 'VHS frame', uncertainty: '', people: [{ id: 'person-1', description: 'left foreground', samDescription: 'person with short hair wearing a red jacket on the left', gender: 'unrequested' }] };
-    const parsed = service.parseSwapPersonAnalysis(`\`\`\`json\n${JSON.stringify(raw)}\n\`\`\``);
-    assert.equal(parsed.people[0].gender, undefined);
-    assert.equal(parsed.style, 'VHS frame');
-    for (const mutate of [value => value.people.push(value.people[0]), value => value.people[0].id = 'wrong', value => value.style = '', value => value.people[0].samDescription = '', value => value.people = Array(13).fill(value.people[0])]) {
-        const invalid = structuredClone(raw); mutate(invalid);
-        assert.throws(() => service.parseSwapPersonAnalysis(JSON.stringify(invalid)));
-    }
-    assert.deepEqual(service.parseSwapPersonAnalysis(JSON.stringify({ ...raw, people: [] })).people, []);
-    await assert.rejects(service.calculateSwapPersonMask({}, parsed, 'missing', 'sam.safetensors', 0, false, () => {}, () => false), /Select a person/);
-});
-
 test('invalid sampling values are rejected before workflow submission', () => {
     for (const patch of [{ seed: NaN }, { seed: -1 }, { seed: 1.2 }, { steps: 0 }, { cfg: Infinity }, { megapixels: 0 }, { donorMegapixels: 8 }]) {
         assert.throws(() => module.buildSwapPersonWorkflow('source', 'donor', 'mask', 'donor-mask', { ...options(), ...patch }), /Invalid FLUX2/);
@@ -206,31 +186,6 @@ test('outfit preservation limits both references to head or face and keeps hair 
     assert.match(face, /Replace only the selected face/);
     assert.match(face, /Preserve the destination hair, hairstyle, hairline/);
     assert.doesNotMatch(face, /facial anatomy, hair/);
-});
-
-test('SAM plans head and face for the selected person, forwards margin and never expands partial body boxes', async () => {
-    const analysis = { style: 'photo', uncertainty: '', people: [
-        { id: 'person-1', description: 'left', samDescription: 'person in red on the left' },
-        { id: 'person-2', description: 'right', samDescription: 'person in blue on the right' },
-    ] };
-    for (const region of ['body', 'head', 'face']) {
-        for (const selected of ['person-1', 'person-2']) {
-            const result = await maskPlanner.calculateSwapPersonMask({}, analysis, selected, 'sam', 8, true, () => {}, () => false, region);
-            const partial = region !== 'body';
-            assert.equal(result.area, partial ? 'silhouette' : 'movement');
-            assert.equal(result.padding, 8);
-            assert.equal(result.plan.targets.length, region === 'head' ? 5 : partial ? 4 : 2);
-            assert.deepEqual(result.plan.selected.map(person => person.id), [selected]);
-            assert.equal(result.plan.selected[0].faceOnly, partial);
-            assert.equal(result.plan.targets.find(target => target.id === `body:${selected}`).padding, partial ? 0 : 8);
-            if (partial) {
-                assert.ok(result.plan.targets.every(target => target.padding === 0));
-                assert.equal(result.plan.targets[2].prompt, `${region === 'head' ? 'hair' : 'face'} of the person ${analysis.people.find(person => person.id === selected).description}`);
-                if (region === 'head') assert.equal(result.plan.targets[3].prompt, `face of the person ${analysis.people.find(person => person.id === selected).description}`);
-                assert.equal(result.plan.targets.at(-1).id, `clothing:${selected}`);
-            }
-        }
-    }
 });
 
 test('head mask includes an independently detected face when SAM returns hair only, without editing clothes', () => {
@@ -300,13 +255,4 @@ test('clothing is protected even when head detection includes the shirt and marg
     assert.equal(final.pixels[16], 255);
     assert.throws(() => scene.protectSceneClothing(body, body), /Clothing SAM prompt/);
     assert.throws(() => scene.protectSceneClothing(body, { ...clothing, width: 4 }), /dimensions/);
-});
-
-test('single-person SAM part prompts are short and overrides never alter whole-body selection', async () => {
-    const analysis = { style: 'photo', uncertainty: '', people: [{ id: 'person-1', description: 'center', samDescription: 'person with brown hair wearing a purple shirt' }] };
-    assert.deepEqual(service.defaultSwapPersonPartPrompts(analysis, 'person-1'), { hair: 'hair', face: 'face', clothing: 'clothing' });
-    const prompts = { hair: 'long brown hair', face: 'face', clothing: 'purple shirt' };
-    const result = await maskPlanner.calculateSwapPersonMask({}, analysis, 'person-1', 'sam', 0, false, () => {}, () => false, 'head', prompts);
-    assert.deepEqual(result.plan.targets.map(target => target.prompt), [analysis.people[0].samDescription, 'long brown hair', 'face', 'purple shirt']);
-    await assert.rejects(maskPlanner.calculateSwapPersonMask({}, analysis, 'person-1', 'sam', 0, false, () => {}, () => false, 'head', { ...prompts, clothing: '' }), /clothing SAM prompt/);
 });

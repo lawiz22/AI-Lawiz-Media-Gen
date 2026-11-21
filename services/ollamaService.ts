@@ -215,7 +215,6 @@ const getStyleInstruction = (modelType: string): string => {
     if (modelType === 'sd1.5') return 'Return only a simple comma-separated keyword list.';
     if (modelType === 'gemini') return 'Return one exhaustive natural-language image description with rich visual detail.';
     if (modelType === 'flux2-simple') return 'Return exactly five labeled lines: Subject, Setting, Details, Lighting, Atmosphere.';
-    if (modelType === 'flux') return 'Return one detailed artistic and descriptive paragraph.';
     return 'Return one concise natural-language sentence.';
 };
 

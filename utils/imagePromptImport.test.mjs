@@ -19,7 +19,7 @@ const prompt = '  A saved positive prompt.\nWith its original formatting.  ';
 const base = { provider: 'comfyui', comfyModelType: 'sdxl', comfySteps: 27, comfyCfg: 4.2, comfyNegativePrompt: 'Keep this negative', comfySeed: 123, comfySampler: 'euler', comfyScheduler: 'normal', aspectRatio: '3:4', numImages: 2, comfyPrompt: 'old' };
 
 test('Library prompt import updates only the active positive prompt for every standard Comfy image model', () => {
-    for (const model of ['sd1.5', 'sdxl', 'flux', 'qwen-t2i-gguf', 'qwen-edit', 'z-image', 'moss-image', 'nunchaku-kontext-flux', 'nunchaku-flux-image', 'flux-krea', 'face-detailer-sd1.5']) {
+    for (const model of ['sd1.5', 'sdxl', 'qwen-t2i-gguf', 'qwen-edit', 'z-image', 'moss-image', 'face-detailer-sd1.5']) {
         const options = { ...base, comfyModelType: model };
         const before = structuredClone(options);
         assert.deepEqual(getImagePromptOnlyUpdate(prompt, options, 't2i'), { comfyPrompt: prompt });

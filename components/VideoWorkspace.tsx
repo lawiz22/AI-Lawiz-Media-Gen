@@ -3,8 +3,13 @@ import { useDispatch } from 'react-redux';
 import type { AppDispatch } from '../store/store';
 import type { LibraryItem } from '../types';
 import { addToLibrary } from '../store/librarySlice';
+import { queueLtxTransfer } from '../store/appSlice';
+import { fileToDataUrl } from '../utils/imageUtils';
+import { readLibraryMediaFile } from '../services/libraryMediaService';
+import { LibraryPickerModal } from './LibraryPickerModal';
 import {
-    DEFAULT_VIDEO_TEMPLATES, REFERENCE_LIMITS, VIDEO_WORKFLOWS, VIDEO_PROMPT_ASPECTS, generateVideoPrompt, addVideoReferences,
+    DEFAULT_VIDEO_TEMPLATES, DEFAULT_LTX_VIDEO_TEMPLATES, REFERENCE_LIMITS, VIDEO_WORKFLOWS, VIDEO_PROMPT_ASPECTS, generateVideoPrompt, addVideoReferences,
+    videoPromptFamily, videoPromptMode, videoPromptTemplates, ltxVideoPromptText, type VideoPromptFamily, type VideoPromptMode,
     loadVideoPromptDraft, saveVideoPromptDraft, referenceToken, validateVideoPromptOutput,
     captureVideoPromptInputs, type ReferenceKind, type VideoPromptDraft, type VideoPromptInputs, type VideoPromptProvider, type VideoReference, type VideoTemplate,
 } from '../services/videoPromptService';
@@ -33,7 +38,21 @@ import { h3StyleLoraRemovals } from '../services/h3StyleWorkflow';
 const button = 'inline-flex items-center justify-center gap-2 rounded-lg border border-border-primary px-3 py-2 text-sm font-medium transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-40';
 const input = 'w-full rounded-lg border border-border-primary bg-bg-primary p-2.5 text-sm text-text-primary focus:border-accent focus:outline-none';
 const panel = 'rounded-2xl border border-border-primary bg-bg-secondary p-4 md:p-5';
+const videoToolGroups = {
+    ltx: [
+        { id: 'ltx', label: 'LTX Director' },
+        { id: 'ltx-ripple-ffaf', label: 'LTX-Ripple-FFAF' },
+        { id: 'ltx-audio-sync', label: 'LTX 2.5 Audio-Sync' },
+    ],
+    h3: [
+        { id: 'minimax', label: 'Minimax REF2v H3' },
+        { id: 'ultrafast', label: 'Ultrafast' },
+        { id: 'advanced', label: 'MiniMax Advanced' },
+        { id: 'character-swap', label: 'Character Swap H3' },
+    ],
+} as const;
 const initialDraft = (): VideoPromptDraft => ({
+    targetFamily: 'h3', promptMode: 't2v', ltxTemplates: { ...DEFAULT_LTX_VIDEO_TEMPLATES },
     idea: '', provider: 'openrouter',
     models: { openrouter: DEFAULT_OPENROUTER_MODEL, gemini: 'gemini-2.5-flash', mammouth: 'gemini-2.5-flash' },
     aspect: '16:9', duration: 10, template: 'generation', templates: { ...DEFAULT_VIDEO_TEMPLATES },
@@ -97,6 +116,7 @@ export const VideoWorkspace: React.FC<{
     const [notice, setNotice] = useState('');
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [editing, setEditing] = useState<VideoReference | null>(null);
+    const [referencePicker, setReferencePicker] = useState<ReferenceKind | null>(null);
     const [models, setModels] = useState<OpenRouterModel[]>([]);
     const [loadingModels, setLoadingModels] = useState(false);
     const [modelError, setModelError] = useState('');
@@ -105,6 +125,7 @@ export const VideoWorkspace: React.FC<{
     const [editOutput, setEditOutput] = useState(false);
     const [librarySaving, setLibrarySaving] = useState(false);
     const [librarySaved, setLibrarySaved] = useState(false);
+    const [transferring, setTransferring] = useState(false);
     const [pendingAudio, setPendingAudio] = useState<Record<string, boolean>>({});
     const hasPendingAudio = draft.references.some(ref => ref.kind === 'audio' && pendingAudio[ref.id]);
     const ideaRef = useRef<HTMLTextAreaElement>(null);
@@ -113,13 +134,22 @@ export const VideoWorkspace: React.FC<{
     const persistenceVersion = useRef(0);
     const latestDraft = useRef(draft);
     latestDraft.current = draft;
+    const lastLtxTab = useRef<(typeof videoToolGroups.ltx)[number]['id']>('ltx');
+    const lastH3Tab = useRef<(typeof videoToolGroups.h3)[number]['id']>('minimax');
+    const group = tab === 'prompt' ? 'prompt' : tab === 'ltx' || tab.startsWith('ltx-') ? 'ltx' : 'h3';
+    useEffect(() => {
+        const ltx = videoToolGroups.ltx.find(item => item.id === tab);
+        const h3 = videoToolGroups.h3.find(item => item.id === tab);
+        if (ltx) lastLtxTab.current = ltx.id;
+        if (h3) lastH3Tab.current = h3.id;
+    }, [tab]);
 
     useEffect(() => { if (openDirector) setTab('ltx'); }, [openDirector]);
     useEffect(() => {
         if (loaded.current) return;
         loaded.current = true;
         loadVideoPromptDraft().then(value => {
-            if (value) setDraft({ ...value, workflow: value.workflow === 'advanced' || value.workflow === 'ultrafast' || value.workflow === 'ltx-audio-sync' ? value.workflow : 'reference', minimaxLyricsSettings: value.minimaxLyricsSettings ?? { provider: value.provider, model: value.models[value.provider] } });
+            if (value) setDraft({ ...value, workflow: VIDEO_WORKFLOWS.some(workflow => workflow.id === value.workflow) ? value.workflow : 'reference', minimaxLyricsSettings: value.minimaxLyricsSettings ?? { provider: value.provider, model: value.models[value.provider] } });
             setReady(true);
         }).catch(cause => {
             setStorageError(`Could not restore the video workspace: ${cause instanceof Error ? cause.message : String(cause)}. Reload to retry; saving is disabled to protect the existing draft.`);
@@ -217,6 +247,19 @@ export const VideoWorkspace: React.FC<{
     }, [libraryItem, libraryWorkflow, openDirector, onLeaveDirector]);
 
     const update = (patch: Partial<VideoPromptDraft>) => setDraft(current => ({ ...current, ...patch }));
+    const family = videoPromptFamily(draft);
+    const mode = videoPromptMode(draft);
+    const templates = videoPromptTemplates(draft);
+    const destinations = VIDEO_WORKFLOWS.filter(workflow => (workflow.id.startsWith('ltx-') ? 'ltx' : 'h3') === family
+        && (family !== 'ltx' || (mode === 'v2v' ? workflow.id === 'ltx-ripple-ffaf' : workflow.id !== 'ltx-ripple-ffaf')));
+    const changeTarget = (targetFamily: VideoPromptFamily, promptMode: VideoPromptMode) => {
+        const workflow = targetFamily === 'h3'
+            ? family === 'h3' ? draft.workflow : 'reference'
+            : promptMode === 'v2v' ? 'ltx-ripple-ffaf'
+                : family === 'ltx' && draft.workflow !== 'ltx-ripple-ffaf' ? draft.workflow : 'ltx-audio-sync';
+        update({ targetFamily, promptMode, workflow });
+    };
+    const changeTemplates = (next: Record<VideoTemplate, string>) => update(family === 'ltx' ? { ltxTemplates: next } : { templates: next });
     const changeSoundtrack = (originalAudioId: string | undefined, forceOriginalAudio: boolean) => update({ originalAudioId, forceOriginalAudio });
     const chooseTab = (next: typeof tab) => { setTab(next); if (next === 'ltx-ripple-ffaf') setRippleOpened(true); if (next === 'ltx-audio-sync') setAudioSyncOpened(true); if (next === 'character-swap') setSwapOpened(true); if (next !== 'ltx' && openDirector) onLeaveDirector(); };
     const changeReference = (id: string, patch: Partial<VideoReference>) => setDraft(current => ({
@@ -251,7 +294,7 @@ export const VideoWorkspace: React.FC<{
         try {
             const inputs = captureVideoPromptInputs(draft);
             if (hasPendingAudio) throw new Error('Apply the audio selection first. The full song or an older excerpt will not be sent to the prompt model.');
-            inputs.styleExamples = inputs.style && inputs.workflow !== 'ltx-audio-sync'
+            inputs.styleExamples = inputs.style && videoPromptFamily(inputs) === 'h3'
                 ? await localStylePromptExamples(styleInventory, inputs.style.lora, inputs.style.libraryLink?.path) : undefined;
             const result = await generateVideoPrompt({ ...draft, ...inputs });
             update({ result, generatedInputs: inputs, generatedInputsProvenance: 'generation' });
@@ -270,14 +313,47 @@ export const VideoWorkspace: React.FC<{
         try { await savePromptToLibrary(draft.result, draft.generatedInputs || captureVideoPromptInputs(draft), !!draft.generatedInputs && draft.generatedInputsProvenance !== 'current-setup'); }
         catch (cause) { setError(`Could not save prompt to Library: ${cause instanceof Error ? cause.message : String(cause)}`); }
     };
-    const transfer = () => {
+    const transfer = async () => {
+        setTransferring(true);
         setError(''); setNotice('');
         try {
             const prompt = validateVideoPromptOutput(draft.result, draft.template);
-            if (hasPendingAudio) throw new Error('Apply the audio selection before transferring it to H3.');
+            if (hasPendingAudio) throw new Error('Apply the audio selection before transferring it to the video workflow.');
+            if (draft.generatedInputs && (videoPromptFamily(draft.generatedInputs) !== videoPromptFamily(draft)
+                || videoPromptMode(draft.generatedInputs) !== videoPromptMode(draft))) {
+                throw new Error('The target model or generation mode changed. Generate the prompt again before transferring it.');
+            }
+            if (videoPromptMode(draft) === 'ref2v' && draft.workflow.startsWith('ltx-')) {
+                throw new Error('The connected LTX workflows do not support REF2V reference conditioning. Copy/export the prompt, or choose H3 and regenerate. FI2V is a separate first-frame mode; references were not converted to starting frames.');
+            }
+            const ltxPrompt = draft.targetFamily === 'ltx' ? ltxVideoPromptText(prompt, draft.template) : prompt;
+            if (draft.workflow === 'ltx-director') {
+                if (draft.template !== 'generation' || draft.references.some(ref => ref.kind !== 'image') || draft.references.length > 1) {
+                    throw new Error('LTX Director transfer accepts text or one first-frame image. Use Audio-Sync for a soundtrack or Ripple for a source video; no references were discarded.');
+                }
+                if (draft.duration < 3 || draft.duration > 15) throw new Error('LTX Director segments support 3-15 seconds. Adjust the duration and regenerate the prompt.');
+                const image = draft.references[0]?.file;
+                const imageDataUrl = image ? await fileToDataUrl(image) : undefined;
+                dispatch(queueLtxTransfer({ prompt: ltxPrompt, imageDataUrl, promptDurationSeconds: draft.duration }));
+                chooseTab('ltx');
+                setNotice('Prompt and first-frame image sent to a new LTX Director segment. Existing segments and model settings are retained.');
+                return;
+            }
+            if (draft.workflow === 'ltx-ripple-ffaf') {
+                const images = draft.references.filter(ref => ref.kind === 'image'), videos = draft.references.filter(ref => ref.kind === 'video');
+                if (images.length !== 1 || videos.length !== 1 || draft.references.some(ref => ref.kind === 'audio')) {
+                    throw new Error('LTX Ripple requires one edited first-frame image and one source video, without audio references. No references were discarded.');
+                }
+                if (draft.rippleDraft && !window.confirm('Replace the LTX Ripple prompt and references? Model and render settings will be retained.')) return;
+                update({ rippleDraft: { prompt: ltxPrompt, image: images[0].file, video: videos[0].file } });
+                chooseTab('ltx-ripple-ffaf');
+                setNotice('Prompt and edited image/video references copied to LTX Ripple. Source timing and render settings remain controlled in Ripple.');
+                return;
+            }
             if (draft.workflow === 'ltx-audio-sync') {
                 if (draft.audioSyncDraft && !window.confirm('Replace the existing LTX Audio-Sync draft? Models will be kept and Qwen enhancement switched off.')) return;
-                const transferred = transferAudioSyncPrompt({ ...draft, result: prompt });
+                const transferred = transferAudioSyncPrompt({ ...draft, result: ltxPrompt });
+                if (draft.promptMode) transferred.settings.textToVideo = draft.promptMode === 't2v';
                 update({ audioSyncDraft: transferred.draft, audioSyncSettings: transferred.settings });
                 chooseTab('ltx-audio-sync'); setNotice(transferred.notice); return;
             }
@@ -296,6 +372,9 @@ export const VideoWorkspace: React.FC<{
                 ...withH3OriginalAudio((destination === 'advanced' ? draft.advancedH3Options : destination === 'ultrafast' ? draft.ultrafastH3Options : draft.minimaxH3Options) || defaultH3WorkflowOptions(destination), draft.originalAudioId, draft.forceOriginalAudio ?? false),
                 aspect: h3AspectFromPrompt(draft.aspect), duration: draft.duration,
             };
+            if (draft.promptMode === 'ref2v' && destination === 'advanced' && options.advanced) {
+                options.advanced = { ...options.advanced, mode: 'ref2v', inputMode: 'generate' };
+            }
             const style = draft.generatedInputs?.style || draft.style;
             options.loras = h3StyleLoraRemovals(options, style);
             options.style = style ? structuredClone(style) : undefined;
@@ -306,14 +385,23 @@ export const VideoWorkspace: React.FC<{
             chooseTab(destination === 'reference' ? 'minimax' : destination);
             setNotice(`Prompt and edited references transferred to ${h3WorkflowName(destination)}. Subsequent edits in the generator do not change that workflow.`);
         } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+        finally { setTransferring(false); }
     };
     const copy = async (text: string) => {
         setError('');
-        try { await navigator.clipboard.writeText(text); setNotice('Prompt copied.'); }
+        try {
+            const inputs = draft.generatedInputs ?? draft;
+            await navigator.clipboard.writeText(videoPromptFamily(inputs) === 'ltx' ? ltxVideoPromptText(text, inputs.template) : text);
+            setNotice('Prompt copied.');
+        }
         catch (cause) { setError(`Could not copy: ${cause instanceof Error ? cause.message : String(cause)}`); }
     };
     const download = (text: string, filename: string) => {
-        const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+        const inputs = draft.generatedInputs ?? draft;
+        let exported: string;
+        try { exported = videoPromptFamily(inputs) === 'ltx' ? ltxVideoPromptText(text, inputs.template) : text; }
+        catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); return; }
+        const url = URL.createObjectURL(new Blob([exported], { type: 'text/plain;charset=utf-8' }));
         const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename; anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     };
@@ -329,20 +417,16 @@ export const VideoWorkspace: React.FC<{
     return <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <nav className="flex flex-wrap gap-2" aria-label="Video tools">
-                {([
-                    { id: 'prompt', label: 'Video Prompt Generator', color: 'border-sky-400/60 text-sky-300', active: 'bg-sky-400/15' },
-                    { id: 'ltx', label: 'LTX Director', color: 'border-amber-400/60 text-amber-300', active: 'bg-amber-400/15' },
-                    { id: 'ltx-audio-sync', label: 'LTX 2.5 Audio-Sync', color: 'border-orange-400/60 text-orange-300', active: 'bg-orange-400/15' },
-                    { id: 'ltx-ripple-ffaf', label: 'LTX-Ripple-FFAF', color: 'border-teal-400/60 text-teal-300', active: 'bg-teal-400/15' },
-                    { id: 'minimax', label: 'Minimax REF2v H3', color: 'border-violet-400/60 text-violet-300', active: 'bg-violet-400/15' },
-                    { id: 'ultrafast', label: 'Ultrafast', color: 'border-emerald-400/60 text-emerald-300', active: 'bg-emerald-400/15' },
-                    { id: 'advanced', label: 'MiniMax Advanced', color: 'border-cyan-400/60 text-cyan-300', active: 'bg-cyan-400/15' },
-                    { id: 'character-swap', label: 'Character Swap H3', color: 'border-rose-400/60 text-rose-300', active: 'bg-rose-400/15' },
-                ] as const).map(item =>
-                    <button key={item.id} type="button" onClick={() => chooseTab(item.id)} aria-pressed={tab === item.id} className={`${button} ${item.color} ${tab === item.id ? item.active : ''}`}>{item.label}</button>)}
+                <button type="button" onClick={() => chooseTab('prompt')} aria-pressed={group === 'prompt'} className={`${button} border-sky-400/60 text-sky-300 ${group === 'prompt' ? 'bg-sky-400/15' : ''}`}>Video Prompt Generator</button>
+                <button type="button" onClick={() => chooseTab(lastLtxTab.current)} aria-pressed={group === 'ltx'} className={`${button} border-amber-400/60 text-amber-300 ${group === 'ltx' ? 'bg-amber-400/15' : ''}`}>LTX</button>
+                <button type="button" onClick={() => chooseTab(lastH3Tab.current)} aria-pressed={group === 'h3'} className={`${button} border-violet-400/60 text-violet-300 ${group === 'h3' ? 'bg-violet-400/15' : ''}`}>H3</button>
             </nav>
             <span role="status" className="text-xs text-text-secondary">{!ready ? 'Loading saved workspace...' : saved ? 'Saved locally · media included' : 'Saving workspace...'}</span>
         </div>
+        {group !== 'prompt' && <nav className="flex flex-wrap gap-2 rounded-xl border border-border-primary bg-bg-secondary p-2" aria-label={`${group.toUpperCase()} tools`}>
+            {videoToolGroups[group].map(item => <button key={item.id} type="button" onClick={() => chooseTab(item.id)} aria-pressed={tab === item.id}
+                className={`${button} ${tab === item.id ? group === 'ltx' ? 'border-amber-400/60 bg-amber-400/15 text-amber-300' : 'border-violet-400/60 bg-violet-400/15 text-violet-300' : 'text-text-secondary'}`}>{item.label}</button>)}
+        </nav>}
         {storageError && <div role="alert" className="rounded-xl border border-red-400/40 bg-red-400/10 p-3 text-sm text-red-300">{storageError}
             {ready && <button type="button" className={`${button} ml-3`} onClick={() => setDraft(current => ({ ...current }))}>Retry saving</button>}
         </div>}
@@ -386,7 +470,21 @@ export const VideoWorkspace: React.FC<{
                                 }}>Clear</button>
                             </div>
                         </div>
-                        <fieldset disabled={!ready || busy} className="space-y-4 disabled:opacity-50">
+                        <fieldset disabled={!ready || busy || transferring} className="space-y-4 disabled:opacity-50">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <label className="space-y-1 text-sm">Target video model<select aria-label="Target video model" className={input} value={family} onChange={event => changeTarget(event.target.value as VideoPromptFamily, mode)}>
+                                    <option value="h3">H3 / MiniMax</option><option value="ltx">LTX 2 / LTX 2.5</option>
+                                </select></label>
+                                <label className="space-y-1 text-sm">Generation mode<select aria-label="Generation mode" className={input} value={mode} onChange={event => changeTarget(family, event.target.value as VideoPromptMode)}>
+                                    <option value="t2v">T2V - Text to video</option><option value="fi2v">FI2V - First image to video</option><option value="ref2v">REF2V - References to video</option><option value="v2v">V2V - Video to video</option>
+                                </select></label>
+                            </div>
+                            <p className="text-xs text-text-secondary">{mode === 'ref2v'
+                                ? 'REF2V uses references for identity, appearance, style or other assigned roles in a new scene. No reference is imposed as the first frame; pose and framing come from your idea.'
+                                : mode === 'fi2v' ? 'FI2V explicitly uses the first attached image as the starting frame and describes motion from that image.'
+                                    : family === 'ltx' ? 'LTX uses chronological natural prose, with an original scene in T2V and explicit retained/edited content in V2V. H3 templates and styles are kept separately.'
+                                        : 'H3 keeps its existing structured multimodal format and styles. T2V establishes a new scene; V2V edits a source video. Use REF2V for independent references, or FI2V for a starting image.'}</p>
+                            {family === 'ltx' && mode === 'ref2v' && <p role="status" className="text-xs text-amber-300">You can compose and copy/export a reference-aware LTX prompt, but the connected LTX renderers only support first-frame/source-video conditioning. REF2V transfer is unavailable; references will not silently become starting frames.</p>}
                             <div className="grid gap-3 sm:grid-cols-2">
                                 <label className="space-y-1 text-sm">Provider<select className={input} value={draft.provider} onChange={event => update({ provider: event.target.value as VideoPromptProvider })}>
                                     <option value="openrouter">OpenRouter</option><option value="gemini">Gemini</option><option value="mammouth">Mammouth</option>
@@ -423,7 +521,7 @@ export const VideoWorkspace: React.FC<{
                                 <label className="space-y-1 text-sm">Duration (seconds)<input type="number" min={1} max={120} step={1} className={input} value={draft.duration} onChange={event => update({ duration: Number(event.target.value) })} /></label>
                             </div>
                             <label className="block space-y-2 text-sm font-medium">Your idea<textarea ref={ideaRef} className={`${input} min-h-40 resize-y`} placeholder="Describe the scene, action, dialogue and sound. Click a reference badge to insert its token..." value={draft.idea} onChange={event => update({ idea: event.target.value })} /></label>
-                            <VideoPromptStyleControl style={draft.style} disabled={!ready || busy} active={draft.workflow !== 'ltx-audio-sync'}
+                            <VideoPromptStyleControl style={draft.style} disabled={!ready || busy} active={family === 'h3'}
                                 onSelect={style => update({ style, styleExamples: undefined })}
                                 onUsePrompt={idea => update({ idea })} />
                             <div className="flex flex-wrap gap-2">{draft.references.map(ref => <button type="button" key={ref.id} onClick={() => insertToken(ref)}><Token text={referenceToken(ref)} /></button>)}</div>
@@ -433,27 +531,30 @@ export const VideoWorkspace: React.FC<{
                         </fieldset>
                     </section>
                     {settingsOpen && <section className={panel}>
-                        <h3 className="mb-2 font-semibold">Editable prompt templates</h3>
+                        <h3 className="mb-2 font-semibold">Editable prompt templates - {family === 'ltx' ? 'LTX' : 'H3'}</h3>
                         <p className="mb-3 text-xs text-text-secondary">Saved in this local workspace. Keep the listed output field names and order; the response validator uses that contract.</p>
                         <fieldset disabled={!ready || busy} className="space-y-3">
                             {(['generation', 'replacement'] as const).map(key => <label key={key} className="block space-y-2 text-sm">{key === 'generation' ? 'Audio + video generation' : 'Character replacement'}
-                                <textarea aria-label={key === 'generation' ? 'Audio + video generation template' : 'Character replacement template'} className={`${input} min-h-64 font-mono !text-xs`} value={draft.templates[key]} onChange={event => update({ templates: { ...draft.templates, [key]: event.target.value } })} />
-                                <button type="button" className={`${button} !text-xs`} onClick={() => { if (window.confirm('Restore this default template?')) update({ templates: { ...draft.templates, [key]: DEFAULT_VIDEO_TEMPLATES[key] } }); }}>Restore default</button>
+                                <textarea aria-label={key === 'generation' ? 'Audio + video generation template' : 'Character replacement template'} className={`${input} min-h-64 font-mono !text-xs`} value={templates[key]} onChange={event => changeTemplates({ ...templates, [key]: event.target.value })} />
+                                <button type="button" className={`${button} !text-xs`} onClick={() => { if (window.confirm('Restore this default template?')) changeTemplates({ ...templates, [key]: (family === 'ltx' ? DEFAULT_LTX_VIDEO_TEMPLATES : DEFAULT_VIDEO_TEMPLATES)[key] }); }}>Restore default</button>
                             </label>)}
                         </fieldset>
                     </section>}
                     <section className={`${panel} space-y-5`}>
-                        <div><h3 className="font-semibold">Reference studio</h3><p className="mt-1 text-xs text-text-secondary">4 images · 2 videos · 2 audio files. Numbers remain stable when a reference is removed. Crop and resize apply to the files actually sent.</p></div>
+                        <div><h3 className="font-semibold">Reference studio</h3><p className="mt-1 text-xs text-text-secondary">6 images · 2 videos · 2 audio files. Numbers remain stable when a reference is removed. Crop and resize apply to the files actually sent.</p></div>
                         {(['image', 'video', 'audio'] as const).map(kind => <div key={kind} className="space-y-3" onDragOver={event => event.preventDefault()} onDrop={event => {
                             event.preventDefault(); if (ready && !busy) importFiles(kind, Array.from(event.dataTransfer.files));
                         }}>
                             <div className="flex items-center justify-between gap-2">
                                 <h4 className="text-sm font-medium capitalize">{kind === 'image' ? 'Pictures' : `${kind}s`} <span className="ml-1 text-xs text-text-secondary">{count(kind)}/{REFERENCE_LIMITS[kind]}</span></h4>
+                                <div className="flex flex-wrap gap-2">
+                                <button type="button" className={`${button} !py-1.5 !text-xs`} disabled={!ready || busy || count(kind) >= REFERENCE_LIMITS[kind]} onClick={() => setReferencePicker(kind)}>Library</button>
                                 <label className={`${button} !py-1.5 !text-xs ${!ready || busy || count(kind) >= REFERENCE_LIMITS[kind] ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}>
                                     + Add {kind}<input aria-label={`Upload ${kind} references`} type="file" className="sr-only" accept={`${kind}/*`} multiple disabled={!ready || busy || count(kind) >= REFERENCE_LIMITS[kind]} onChange={event => {
                                         importFiles(kind, Array.from(event.target.files || [])); event.target.value = '';
                                     }} />
                                 </label>
+                                </div>
                             </div>
                             {count(kind) ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{draft.references.filter(ref => ref.kind === kind).map(ref =>
                                 <div key={ref.id} className={ref.kind === 'audio' ? 'sm:col-span-2' : ''}><ReferenceCard reference={ref} disabled={busy || !ready} onEdit={() => setEditing(ref)} onNote={note => changeReference(ref.id, { note })} onInsert={() => insertToken(ref)}
@@ -498,8 +599,11 @@ export const VideoWorkspace: React.FC<{
                         <p className="text-xs text-text-secondary">Includes originals and edited media, reference roles, idea, model and editable canvases. Edits to the output can be saved as a new Library item. Older prompts without a generation snapshot save the current setup.</p>
                     </div>
                     <div className="space-y-3 border-t border-border-primary pt-4">
-                        <label className="block space-y-1 text-sm">Send prompt to workflow<select className={input} disabled={busy || !ready} value={draft.workflow} onChange={event => update({ workflow: VIDEO_WORKFLOWS.find(workflow => workflow.id === event.target.value)?.id || 'reference' })}>{VIDEO_WORKFLOWS.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label>
-                        <button type="button" className={`${button} w-full ${draft.workflow === 'advanced' ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300' : draft.workflow === 'ultrafast' ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-violet-400/50 bg-violet-400/10 text-violet-300'}`} disabled={!draft.result || busy || !ready || hasPendingAudio} onClick={transfer}>Send to {draft.workflow === 'ltx-audio-sync' ? 'LTX 2.5 Audio-Sync' : h3WorkflowName(draft.workflow === 'advanced' || draft.workflow === 'ultrafast' ? draft.workflow : 'reference')}</button>
+                        <label className="block space-y-1 text-sm">Send prompt to workflow<select className={input} disabled={busy || !ready} value={draft.workflow} onChange={event => {
+                            const workflow = destinations.find(item => item.id === event.target.value);
+                            if (workflow) update({ workflow: workflow.id });
+                        }}>{destinations.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label>
+                        <button type="button" className={`${button} w-full ${family === 'ltx' ? 'border-amber-400/50 bg-amber-400/10 text-amber-300' : draft.workflow === 'advanced' ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300' : draft.workflow === 'ultrafast' ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-violet-400/50 bg-violet-400/10 text-violet-300'}`} disabled={!draft.result || busy || transferring || !ready || hasPendingAudio || family === 'ltx' && mode === 'ref2v'} onClick={() => void transfer()}>Send to {VIDEO_WORKFLOWS.find(workflow => workflow.id === draft.workflow)?.name ?? 'Minimax REF2v H3'}</button>
                         <p className="text-xs text-text-secondary">Copies the prompt, references, aspect ratio and duration into an independent draft. LTX Audio-Sync accepts one image and one audio (no video references), keeps model settings and switches Qwen enhancement off. You can explicitly re-enable it afterward. In Advanced, select REF2V for multimodal references or FL2V for first/last frames.</p>
                     </div>
                 </section>
@@ -577,5 +681,15 @@ export const VideoWorkspace: React.FC<{
             />
         </React.Activity>
         {editing && <VideoReferenceEditor key={editing.id} reference={editing} onClose={() => setEditing(null)} onSave={file => { changeReference(editing.id, { file }); setEditing(null); }} />}
+        {referencePicker && <LibraryPickerModal isOpen hydrateMedia={false} onClose={() => setReferencePicker(null)}
+            filter={referencePicker === 'image' ? ['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'hair', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo']
+                : referencePicker === 'video' ? ['video'] : ['audio-tts', 'tts-reference']}
+            onSelectItem={async item => {
+                const kind = referencePicker;
+                const file = await readLibraryMediaFile(item, [kind]);
+                const references = addVideoReferences(latestDraft.current.references, kind, [file]);
+                update({ references });
+                setNotice(`Library ${kind} imported as an independent reference. The Library item was not changed.`);
+            }} />}
     </div>;
 };

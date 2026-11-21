@@ -18,6 +18,8 @@ import { resolveLibraryStyle, styleInstalledLoras } from '../services/styleLibra
 import { inferFlux2Variant } from '../services/civitaiService';
 import { StylePicker } from './StyleBrowser';
 import { useMediaURL } from './VideoReferenceEditor';
+import { useUnmountCleanup } from './useUnmountCleanup';
+import { useDraftAutosave } from './useDraftAutosave';
 import { LibraryPickerModal } from './LibraryPickerModal';
 import { CreationSuiteResult } from './CreationSuiteResult';
 import { SelectInput, PresetTextInput } from './InputComponents';
@@ -70,11 +72,10 @@ export const BlazingFastCharacterPanel: React.FC<{
         loadBlazingDraft().then(value => { if (value) setDraft(value); setReady(true); })
             .catch(cause => setStorageError(`Cannot restore Blazing Fast. Saving is disabled to protect the stored draft. ${String(cause)}`));
     }, []);
-    useEffect(() => {
-        if (!ready) return;
-        saves.current = saves.current.then(() => saveBlazingDraft(draft)).then(() => setStorageError(''))
+    useDraftAutosave(draft, ready, value => {
+        saves.current = saves.current.then(() => saveBlazingDraft(value)).then(() => setStorageError(''))
             .catch(cause => setStorageError(`Cannot save the Blazing Fast draft: ${String(cause)}`));
-    }, [draft, ready]);
+    });
     useEffect(() => {
         if (!isComfyUIConnected) return;
         const abort = new AbortController();
@@ -82,7 +83,7 @@ export const BlazingFastCharacterPanel: React.FC<{
         return () => abort.abort();
     }, [isComfyUIConnected]);
     useEffect(() => { onModelChange(settings.model); }, [settings.model, onModelChange]);
-    useEffect(() => () => controller.current?.abort(), []);
+    const root = useUnmountCleanup(() => controller.current?.abort());
     const update = (patch: Partial<BlazingSettings>) => setDraft(current => ({ ...current, settings: { ...current.settings, ...patch } }));
     const updatePose = (index: number, patch: Partial<BlazingPose>) => update({ poses: settings.poses.map((pose, i) => i === index ? { ...pose, ...patch } : pose) });
     const setFile = (file?: File) => {
@@ -149,7 +150,7 @@ export const BlazingFastCharacterPanel: React.FC<{
         if (busy.current || locked) return false;
         busy.current = true; setRunning(true); setCancelling(false); setError('');
         const abort = new AbortController(); controller.current = abort;
-        dispatch(setLoadingState({ isLoading: true }));
+        dispatch(setLoadingState({ isLoading: true, owner: 'blazing-fast' }));
         try {
             if (action === 'generate') {
                 if (galleryError) throw new Error(galleryError);
@@ -160,7 +161,7 @@ export const BlazingFastCharacterPanel: React.FC<{
                 await saveResults(generated, abort.signal);
                 setProgress(1);
             } else if (action === 'check') {
-                const catalog = await loadBlazingObjectInfo(abort.signal); setInfo(catalog);
+                const catalog = await loadBlazingObjectInfo(abort.signal, true); setInfo(catalog);
                 buildBlazingWorkflow(settings, draft.file?.name || 'check-only.png', selectedStyle, catalog);
                 setStatus('Nodes, models, LoRAs and sampling settings checked. No generation was queued.');
             } else if (action === 'export') {
@@ -180,7 +181,7 @@ export const BlazingFastCharacterPanel: React.FC<{
         } finally {
             controller.current = null; busy.current = false; setRunning(false); setCancelling(false);
             setLive(current => ({ ...current, node: undefined, preview: undefined }));
-            dispatch(setLoadingState({ isLoading: false }));
+            dispatch(setLoadingState({ isLoading: false, owner: 'blazing-fast' }));
         }
     };
     const modelField = (key: 'model' | 'clip' | 'vae' | 'vision', label: string, node: string, name: string) => <label className="block text-sm">{label}
@@ -191,7 +192,7 @@ export const BlazingFastCharacterPanel: React.FC<{
         ariaLabel={`${key} for Blazing pose ${index + 1}`} emptyLabel="Same as reference" disabled={locked}
         value={settings.poses[index][key] === CHARACTER_NONE_VALUE ? '' : settings.poses[index][key]}
         options={values.filter(value => value !== CHARACTER_NONE_VALUE)} onChange={value => updatePose(index, { [key]: value })} />;
-    return <section className="space-y-5 rounded-2xl border border-accent/25 bg-bg-secondary p-4 sm:p-5">
+    return <section ref={root} className="space-y-5 rounded-2xl border border-accent/25 bg-bg-secondary p-4 sm:p-5">
         <header className="flex flex-wrap items-center justify-between gap-3">
             <div><h2 className="text-xl font-bold text-accent">Blazing Fast character</h2>
                 <p className="mt-1 text-sm text-text-secondary">FLUX2 Klein 9B · original workflow v1.1 · 1–6 poses · collage at 6 poses</p></div>

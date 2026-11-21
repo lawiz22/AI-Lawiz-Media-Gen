@@ -10,8 +10,13 @@ import { sceneModelOptions } from '../services/sceneVariationService';
 import { dataUrlToThumbnail, fileToDataUrl } from '../utils/imageUtils';
 import { ImageUploader } from './ImageUploader';
 import { LibraryPickerModal } from './LibraryPickerModal';
-import { NumberSlider } from './InputComponents';
 import { CheckIcon, DownloadIcon, GenerateIcon, LibraryIcon, RefreshIcon, SaveIcon, SpinnerIcon } from './icons';
+import { Accordion } from './ui/Accordion';
+import { Button, ModelFields, NumberField, SamplerFields, SeedField } from './ui/fields';
+import { PromptBox } from './ui/PromptBox';
+import { Select } from './ui/Select';
+import { SettingsLayout } from './ui/SettingsLayout';
+import { ui } from './ui/styles';
 
 type Side = 'destination' | 'donor';
 interface PersonImage { file: File | null; preview: string }
@@ -20,11 +25,12 @@ type Result = { src: string; prompt: string; seed: number; source: string; targe
     { mode: 'swap-anything'; settings: SwapAnythingOptions } | { mode: 'lanpaint'; settings: LanPaintPersonOptions }
 );
 interface Props { isComfyUIConnected: boolean; comfyUIObjectInfo: any | null }
+const NAME = 'Swap a Person';
 const emptyImage = (): PersonImage => ({ file: null, preview: '' });
 const imageTypes: LibraryItemType[] = ['image', 'character', 'extracted-frame', 'past-forward-photo', 'group-fusion', 'swap-anything'];
-const button = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border-primary px-3 py-2 text-sm font-semibold text-text-secondary hover:text-accent disabled:opacity-40 disabled:cursor-not-allowed';
-const input = 'mt-1 block w-full min-w-0 rounded-md border border-border-primary bg-bg-tertiary p-2 text-sm text-text-primary';
-const Select: React.FC<{ label: string; value: string; choices: Array<{ value: string; label: string }>; disabled: boolean; onChange: (value: string) => void }> = ({ label, value, choices, disabled, onChange }) => <label className="block min-w-0 text-sm text-text-secondary">{label}<select className={input} value={value} disabled={disabled} onChange={event => onChange(event.target.value)}>{choices.map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select></label>;
+const sides: Side[] = ['destination', 'donor'];
+const noneFirst = (values: string[]) => [{ value: '', label: 'None' }, ...values.map(value => ({ value, label: value }))];
+const check = 'flex items-center gap-2 text-sm text-text-secondary';
 
 const SwapPersonPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjectInfo }) => {
     const dispatch: AppDispatch = useDispatch();
@@ -42,7 +48,6 @@ const SwapPersonPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjectInf
     const [message, setMessage] = useState('');
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState('');
-    const [advanced, setAdvanced] = useState(false);
     const [libraryTarget, setLibraryTarget] = useState<Side | null>(null);
     const [result, setResult] = useState<Result | null>(null);
     const [saved, setSaved] = useState(false);
@@ -123,82 +128,118 @@ const SwapPersonPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjectInf
         setPeople({ destination: 'the woman', donor: 'the woman' }); setPreset('face-hair'); setPreserveStyle(false);
         setResult(null); setError(''); setSaved(false); setShowSource(false);
     };
-    const inventory = (key: 'unet' | 'clip' | 'vae' | 'sampler' | 'samCheckpoint' | 'lora1Name' | 'lora2Name') => {
-        const values = key === 'unet' ? [...sceneModelOptions(comfyUIObjectInfo, 'UNETLoader', 'unet_name'), ...sceneModelOptions(comfyUIObjectInfo, 'UnetLoaderGGUF', 'unet_name').filter(name => /flux.?2|klein/i.test(name))]
-            : key === 'clip' ? sceneModelOptions(comfyUIObjectInfo, 'CLIPLoader', 'clip_name') : key === 'vae' ? sceneModelOptions(comfyUIObjectInfo, 'VAELoader', 'vae_name')
-                : key === 'sampler' ? sceneModelOptions(comfyUIObjectInfo, 'KSamplerSelect', 'sampler_name') : key === 'samCheckpoint' ? sceneModelOptions(comfyUIObjectInfo, 'CheckpointLoaderSimple', 'ckpt_name').filter(name => /sam3/i.test(name))
-                    : ['', ...sceneModelOptions(comfyUIObjectInfo, 'LoraLoader', 'lora_name')];
-        return [...new Set([options[key] || '', ...values])].map(value => ({ value, label: value || 'None' }));
-    };
 
-    const lanInventory = (key: 'unet' | 'clip' | 'vae' | 'sampler' | 'scheduler' | 'loraName' | 'promptMode') => {
-        const definitions = { unet: ['UNETLoader', 'unet_name'], clip: ['CLIPLoader', 'clip_name'], vae: ['VAELoader', 'vae_name'],
-            sampler: ['LanPaint_KSampler', 'sampler_name'], scheduler: ['LanPaint_KSampler', 'scheduler'], loraName: ['LoraLoaderModelOnly', 'lora_name'], promptMode: ['LanPaint_KSampler', 'LanPaint_PromptMode'] };
-        const [node, field] = definitions[key];
-        const values = sceneModelOptions(comfyUIObjectInfo, node, field);
-        if (key === 'unet') values.push(...sceneModelOptions(comfyUIObjectInfo, 'UnetLoaderGGUF', 'unet_name').filter(name => /flux.?2|klein/i.test(name)));
-        if (key === 'loraName') values.unshift('');
-        return [...new Set([lanOptions[key], ...values])].map(value => ({ value, label: value || 'None' }));
-    };
+    const catalog = (node: string, field: string) => sceneModelOptions(comfyUIObjectInfo, node, field);
+    const flux2Models = [...new Set([...catalog('UNETLoader', 'unet_name'), ...catalog('UnetLoaderGGUF', 'unet_name').filter(name => /flux.?2|klein/i.test(name))])];
+    const clips = catalog('CLIPLoader', 'clip_name'), vaes = catalog('VAELoader', 'vae_name');
+    // The workflows use -1 for "new seed for every run".
+    const seedField = (seed: number, change: (seed: number) => void) =>
+        <SeedField name={NAME} value={Math.max(seed, 0)} onChange={change} randomize={seed === -1} onRandomizeChange={random => change(random ? -1 : 0)} disabled={locked} />;
+    const strength = { min: 0, max: 2, step: 0.05 };
 
-    return <section className="mx-auto max-w-7xl bg-bg-secondary" aria-label="Swap a Person">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border-primary px-5 py-4">
-            <h2 className="text-xl font-bold text-accent">Swap a Person</h2>
-            <button type="button" className={button} onClick={() => setAdvanced(value => !value)} aria-expanded={advanced}>FLUX2 settings</button>
-        </header>
-        <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div className="min-w-0 space-y-5">
-                <fieldset className="min-w-0"><legend className="mb-2 text-sm text-text-secondary">Workflow</legend><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{([{ value: 'swap-anything', label: 'Swap Anything (SAM3)' }, { value: 'lanpaint', label: 'LanPaint (Head Swap)' }] as const).map(item => <label key={item.value} className={`${button} cursor-pointer ${mode === item.value ? '!border-accent !text-accent' : ''}`}><input type="radio" name="person-swap-workflow" value={item.value} checked={mode === item.value} disabled={locked} onChange={() => setMode(item.value)} />{item.label}</label>)}</div></fieldset>
-                {!isLanPaint && <Select label="Person swap" value={activePreset} onChange={applyPreset} disabled={locked} choices={[...personSwapPresets.map(item => ({ value: item.id, label: item.label })), { value: 'custom', label: 'Custom' }]} />}
-                <div className="grid gap-4 sm:grid-cols-2">
-                    {(['destination', 'donor'] as const).map(side => {
-                        const label = side === 'destination' ? 'Destination' : 'Donor';
-                        const key = side === 'destination' ? 'destinationTarget' : 'donorTarget';
-                        return <div key={side} className="min-w-0 space-y-3">
-                            <ImageUploader id={`swap-person-${side}`} label={`Picture ${side === 'destination' ? 1 : 2} - ${label}`} sourceFile={images[side].file} onImageUpload={file => void perform('loading', () => loadImage(side, file))} disabled={locked} />
-                            <button type="button" className={`${button} w-full`} onClick={() => setLibraryTarget(side)} disabled={locked}><LibraryIcon className="h-4 w-4 shrink-0" />{label} Library</button>
-                            {!isLanPaint && <><Select label={`${label} person`} value={people[side]} onChange={value => changePerson(side, value)} disabled={locked} choices={[{ value: 'the woman', label: 'Woman' }, { value: 'the man', label: 'Man' }, { value: 'the person', label: 'Person' }]} />
-                            <label className="block text-sm text-text-secondary">{side === 'destination' ? 'Area to replace' : 'Element to take'}<textarea className={input} rows={3} value={options[key]} onChange={event => updateOption(key, event.target.value)} disabled={locked} /></label></>}
-                        </div>;
-                    })}
-                </div>
+    const swapSections = {
+        models: () => <ModelFields name={NAME} disabled={locked} onChange={(id, value) => updateOption(id as 'unet' | 'clip' | 'vae' | 'samCheckpoint', value)} fields={[
+            { id: 'unet', label: 'FLUX2 model', value: options.unet || '', choices: flux2Models },
+            { id: 'clip', label: 'CLIP', value: options.clip || '', choices: clips },
+            { id: 'vae', label: 'VAE', value: options.vae || '', choices: vaes },
+            { id: 'samCheckpoint', label: 'SAM3 checkpoint', value: options.samCheckpoint || '', choices: catalog('CheckpointLoaderSimple', 'ckpt_name').filter(name => /sam3/i.test(name)) },
+        ]} />,
+        loras: () => ([1, 2] as const).map(index => <div key={index} className="space-y-2">
+            <Select variant="search" label={`LoRA ${index}`} ariaLabel={`${NAME} LoRA ${index}`} value={options[`lora${index}Name`] || ''} options={noneFirst(catalog('LoraLoader', 'lora_name'))} disabled={locked} onChange={value => updateOption(`lora${index}Name`, value)} />
+            <NumberField slider label={`LoRA ${index} strength`} ariaLabel={`${NAME} LoRA ${index} strength`} value={options[`lora${index}Strength`]} {...strength} disabled={locked} onChange={value => updateOption(`lora${index}Strength`, value)} />
+        </div>),
+        sampler: () => <>
+            <SamplerFields name={NAME} disabled={locked} value={{ sampler: options.sampler, steps: options.steps, cfg: options.cfg }} samplers={catalog('KSamplerSelect', 'sampler_name')}
+                limits={{ steps: { min: 1, max: 40, step: 1 }, cfg: { min: 0.1, max: 10, step: 0.1 } }} onChange={patch => setOptions(current => ({ ...current, ...patch }))} />
+            {seedField(options.seed, seed => updateOption('seed', seed))}
+        </>,
+        advanced: () => <>
+            <NumberField slider label="Destination MP" ariaLabel={`${NAME} Destination MP`} value={options.megapixels} min={0.25} max={4} step={0.25} disabled={locked} onChange={value => updateOption('megapixels', value)} />
+            <NumberField slider label="Donor MP" ariaLabel={`${NAME} Donor MP`} value={options.donorMegapixels} min={0.25} max={4} step={0.25} disabled={locked} onChange={value => updateOption('donorMegapixels', value)} />
+            <NumberField slider label="SAM threshold" ariaLabel={`${NAME} SAM threshold`} value={options.samThreshold} min={0.05} max={1} step={0.05} disabled={locked} onChange={value => updateOption('samThreshold', value)} />
+            <NumberField slider label="SAM refinement" ariaLabel={`${NAME} SAM refinement`} value={options.samRefineIterations} min={0} max={10} step={1} disabled={locked} onChange={value => updateOption('samRefineIterations', value)} />
+            <Button className="w-full" disabled={locked} onClick={() => { setOptions(current => ({ ...defaultSwapAnythingOptions(), destinationTarget: current.destinationTarget, donorTarget: current.donorTarget, prompt: current.prompt })); setPreserveStyle(false); }}><RefreshIcon className="h-4 w-4" />Swap Anything defaults</Button>
+        </>,
+    };
+    const lanSections = {
+        models: () => <ModelFields name={NAME} disabled={locked} onChange={(id, value) => updateLanOption(id as 'unet' | 'clip' | 'vae', value)} fields={[
+            { id: 'unet', label: 'FLUX2 model', value: lanOptions.unet, choices: flux2Models },
+            { id: 'clip', label: 'CLIP', value: lanOptions.clip, choices: clips },
+            { id: 'vae', label: 'VAE', value: lanOptions.vae, choices: vaes },
+        ]} />,
+        loras: () => <div className="space-y-2">
+            <Select variant="search" label="Head swap LoRA" ariaLabel={`${NAME} Head swap LoRA`} value={lanOptions.loraName} options={noneFirst(catalog('LoraLoaderModelOnly', 'lora_name'))} disabled={locked} onChange={value => updateLanOption('loraName', value)} />
+            <NumberField slider label="LoRA strength" ariaLabel={`${NAME} LoRA strength`} value={lanOptions.loraStrength} {...strength} disabled={locked} onChange={value => updateLanOption('loraStrength', value)} />
+        </div>,
+        sampler: () => <>
+            <SamplerFields name={NAME} disabled={locked} value={{ sampler: lanOptions.sampler, scheduler: lanOptions.scheduler, steps: lanOptions.steps, cfg: lanOptions.cfg, denoise: lanOptions.denoise }}
+                samplers={catalog('LanPaint_KSampler', 'sampler_name')} schedulers={catalog('LanPaint_KSampler', 'scheduler')}
+                limits={{ steps: { min: 1, max: 100, step: 1 }, cfg: { min: 0, max: 20, step: 0.1 }, denoise: { min: 0, max: 1, step: 0.05 } }} onChange={patch => setLanOptions(current => ({ ...current, ...patch }))} />
+            <NumberField slider label="Flux guidance" ariaLabel={`${NAME} Flux guidance`} value={lanOptions.guidance} min={0} max={20} step={0.1} disabled={locked} onChange={value => updateLanOption('guidance', value)} />
+            <NumberField slider label="LanPaint steps" ariaLabel={`${NAME} LanPaint steps`} value={lanOptions.lanPaintSteps} min={1} max={100} step={1} disabled={locked} onChange={value => updateLanOption('lanPaintSteps', value)} />
+            <Select label="LanPaint prompt mode" ariaLabel={`${NAME} LanPaint prompt mode`} value={lanOptions.promptMode} options={catalog('LanPaint_KSampler', 'LanPaint_PromptMode')} disabled={locked} onChange={value => updateLanOption('promptMode', value)} />
+            {seedField(lanOptions.seed, seed => updateLanOption('seed', seed))}
+        </>,
+        advanced: () => <>
+            <label className={check}><input type="checkbox" checked={lanOptions.cacheEnabled} onChange={event => updateLanOption('cacheEnabled', event.target.checked)} disabled={locked} />CacheDiT</label>
+            <Button className="w-full" disabled={locked} onClick={() => setLanOptions(defaultLanPaintPersonOptions())}><RefreshIcon className="h-4 w-4" />Restore LanPaint workflow</Button>
+        </>,
+    };
+    const sections = isLanPaint ? lanSections : swapSections;
+
+    return <section className="mx-auto max-w-7xl bg-bg-secondary" aria-label={NAME}>
+        <header className="border-b border-border-primary px-5 py-4"><h2 className="text-xl font-bold text-accent">{NAME}</h2></header>
+        <div className="p-5">
+            <SettingsLayout label={NAME} disabled={locked} {...sections} top={<>
+                <fieldset className="min-w-0"><legend className="mb-2 text-sm text-text-secondary">Workflow</legend><div className="grid grid-cols-1 gap-2">{([{ value: 'swap-anything', label: 'Swap Anything (SAM3)' }, { value: 'lanpaint', label: 'LanPaint (Head Swap)' }] as const).map(item => <label key={item.value} className={`${ui.buttons.secondary} cursor-pointer ${mode === item.value ? '!border-accent !text-accent' : ''}`}><input type="radio" name="person-swap-workflow" value={item.value} checked={mode === item.value} disabled={locked} onChange={() => setMode(item.value)} />{item.label}</label>)}</div></fieldset>
+                {sides.map(side => {
+                    const label = side === 'destination' ? 'Destination' : 'Donor';
+                    return <div key={side} className="min-w-0 space-y-2">
+                        <ImageUploader id={`swap-person-${side}`} label={`Picture ${side === 'destination' ? 1 : 2} - ${label}`} sourceFile={images[side].file} onImageUpload={file => void perform('loading', () => loadImage(side, file))} disabled={locked} />
+                        <Button className="w-full" onClick={() => setLibraryTarget(side)} disabled={locked}><LibraryIcon className="h-4 w-4 shrink-0" />{label} Library</Button>
+                    </div>;
+                })}
+                {isLanPaint
+                    ? <NumberField slider label="Reference resolution (MP, Lanczos)" ariaLabel={`${NAME} Reference resolution`} value={lanOptions.megapixels} min={0.25} max={4} step={0.25} onChange={value => updateLanOption('megapixels', value)} disabled={locked} />
+                    : <NumberField slider label="Mask margin (px)" ariaLabel={`${NAME} Mask margin`} value={options.maskGrow} min={0} max={128} step={1} onChange={value => updateOption('maskGrow', value)} disabled={locked} />}
+            </>}>
                 {isLanPaint ? <>
-                    <NumberSlider label={`Reference resolution: ${lanOptions.megapixels} MP (Lanczos)`} value={lanOptions.megapixels} min={0.25} max={4} step={0.25} onChange={event => updateLanOption('megapixels', Number(event.target.value))} disabled={locked} allowDirectInput />
-                    <label className="block text-sm text-text-secondary">LanPaint prompt<textarea className={input} rows={10} value={lanOptions.prompt} onChange={event => updateLanOption('prompt', event.target.value)} disabled={locked} /></label>
-                    <label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={!!lanOptions.preserveDestinationStyle} onChange={event => updateLanOption('preserveDestinationStyle', event.target.checked)} disabled={locked} />Preserve destination style</label>
+                    <PromptBox label="LanPaint prompt" ariaLabel={`${NAME} LanPaint prompt`} rows={10} value={lanOptions.prompt} onChange={value => updateLanOption('prompt', value)} disabled={locked} />
+                    <label className={check}><input type="checkbox" checked={!!lanOptions.preserveDestinationStyle} onChange={event => updateLanOption('preserveDestinationStyle', event.target.checked)} disabled={locked} />Preserve destination style</label>
                     {comfyUIObjectInfo && !comfyUIObjectInfo.LanPaint_KSampler && <p role="status" className="text-sm text-warning">LanPaint_KSampler unavailable. Install LanPaint in ComfyUI, restart and reconnect.</p>}
                 </> : <>
-                <label className="block text-sm text-text-secondary">Optional editing instructions<textarea className={input} rows={3} value={options.prompt || ''} onChange={event => updateOption('prompt', event.target.value)} disabled={locked} /></label>
-                <label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={preserveStyle} onChange={event => setPreserveStyle(event.target.checked)} disabled={locked} />Reinforce destination style</label>
-                <NumberSlider label={`Mask margin: ${options.maskGrow} px`} value={options.maskGrow} min={0} max={128} step={1} onChange={event => updateOption('maskGrow', Number(event.target.value))} disabled={locked} allowDirectInput />
+                    <Select label="Person swap" ariaLabel={`${NAME} Person swap`} value={activePreset} onChange={applyPreset} disabled={locked} options={[...personSwapPresets.map(item => ({ value: item.id, label: item.label })), { value: 'custom', label: 'Custom' }]} />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {sides.map(side => {
+                            const label = side === 'destination' ? 'Destination' : 'Donor', key = side === 'destination' ? 'destinationTarget' : 'donorTarget';
+                            const target = side === 'destination' ? 'Area to replace' : 'Element to take';
+                            return <div key={side} className="min-w-0 space-y-3">
+                                <Select label={`${label} person`} ariaLabel={`${NAME} ${label} person`} value={people[side]} onChange={value => changePerson(side, value)} disabled={locked} options={[{ value: 'the woman', label: 'Woman' }, { value: 'the man', label: 'Man' }, { value: 'the person', label: 'Person' }]} />
+                                <PromptBox kind="neutral" label={target} ariaLabel={`${NAME} ${target}`} rows={3} value={options[key]} onChange={value => updateOption(key, value)} disabled={locked} />
+                            </div>;
+                        })}
+                    </div>
+                    <PromptBox kind="instruction" label="Optional editing instructions" ariaLabel={`${NAME} Optional editing instructions`} rows={3} value={options.prompt || ''} onChange={value => updateOption('prompt', value)} disabled={locked} />
+                    <label className={check}><input type="checkbox" checked={preserveStyle} onChange={event => setPreserveStyle(event.target.checked)} disabled={locked} />Reinforce destination style</label>
                 </>}
-                {advanced && isLanPaint && <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-                    <button type="button" className={`${button} sm:col-span-2`} disabled={locked} onClick={() => setLanOptions(defaultLanPaintPersonOptions())}><RefreshIcon className="h-4 w-4" />Restore LanPaint workflow</button>
-                    {(['unet', 'clip', 'vae', 'loraName', 'sampler', 'scheduler', 'promptMode'] as const).map(key => <Select key={key} label={{ unet: 'FLUX2 model', clip: 'CLIP', vae: 'VAE', loraName: 'Head swap LoRA', sampler: 'Sampler', scheduler: 'Scheduler', promptMode: 'LanPaint prompt mode' }[key]} value={lanOptions[key]} choices={lanInventory(key)} onChange={value => updateLanOption(key, value)} disabled={locked} />)}
-                    {([{ key: 'steps', label: 'Steps', min: 1, max: 100, step: 1 }, { key: 'cfg', label: 'CFG', min: 0, max: 20, step: 0.1 }, { key: 'guidance', label: 'Flux guidance', min: 0, max: 20, step: 0.1 }, { key: 'denoise', label: 'Denoise', min: 0, max: 1, step: 0.05 }, { key: 'lanPaintSteps', label: 'LanPaint steps', min: 1, max: 100, step: 1 }, { key: 'loraStrength', label: 'LoRA strength', min: 0, max: 2, step: 0.05 }] as const).map(setting => <NumberSlider key={setting.key} label={`${setting.label}: ${lanOptions[setting.key]}`} value={lanOptions[setting.key]} min={setting.min} max={setting.max} step={setting.step} onChange={event => updateLanOption(setting.key, Number(event.target.value))} disabled={locked} allowDirectInput />)}
-                    <label className="text-sm text-text-secondary">Seed (-1 = random)<input type="number" min={-1} step={1} className={input} value={lanOptions.seed} onChange={event => updateLanOption('seed', Number(event.target.value))} disabled={locked} /></label>
-                    <label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={lanOptions.cacheEnabled} onChange={event => updateLanOption('cacheEnabled', event.target.checked)} disabled={locked} />CacheDiT</label>
-                </div>}
-                {advanced && !isLanPaint && <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-                    <button type="button" className={`${button} sm:col-span-2`} disabled={locked} onClick={() => { setOptions(current => ({ ...defaultSwapAnythingOptions(), destinationTarget: current.destinationTarget, donorTarget: current.donorTarget, prompt: current.prompt })); setPreserveStyle(false); }}><RefreshIcon className="h-4 w-4" />Swap Anything defaults</button>
-                    {(['unet', 'clip', 'vae', 'sampler', 'samCheckpoint', 'lora1Name', 'lora2Name'] as const).map(key => <Select key={key} label={{ unet: 'FLUX2 model', clip: 'CLIP', vae: 'VAE', sampler: 'Sampler', samCheckpoint: 'SAM3 checkpoint', lora1Name: 'LoRA 1', lora2Name: 'LoRA 2' }[key]} value={options[key] || ''} choices={inventory(key)} onChange={value => updateOption(key, value)} disabled={locked} />)}
-                    {([{ key: 'steps', label: 'Steps', min: 1, max: 40, step: 1 }, { key: 'cfg', label: 'CFG', min: 0.1, max: 10, step: 0.1 }, { key: 'megapixels', label: 'Destination MP', min: 0.25, max: 4, step: 0.25 }, { key: 'donorMegapixels', label: 'Donor MP', min: 0.25, max: 4, step: 0.25 }, { key: 'samThreshold', label: 'SAM threshold', min: 0.05, max: 1, step: 0.05 }, { key: 'samRefineIterations', label: 'SAM refinement', min: 0, max: 10, step: 1 }, { key: 'lora1Strength', label: 'LoRA 1 strength', min: 0, max: 2, step: 0.05 }, { key: 'lora2Strength', label: 'LoRA 2 strength', min: 0, max: 2, step: 0.05 }] as const).map(setting => <NumberSlider key={setting.key} label={`${setting.label}: ${options[setting.key]}`} value={options[setting.key]} min={setting.min} max={setting.max} step={setting.step} onChange={event => updateOption(setting.key, Number(event.target.value))} disabled={locked} allowDirectInput />)}
-                    <label className="text-sm text-text-secondary">Seed (-1 = random)<input type="number" min={-1} step={1} className={input} value={options.seed} onChange={event => updateOption('seed', Number(event.target.value))} disabled={locked} /></label>
-                </div>}
                 {!isComfyUIConnected && <p className="text-sm text-warning">ComfyUI disconnected.</p>}
                 {error && <p role="alert" className="whitespace-pre-wrap break-words text-sm text-danger">{error}</p>}
                 {busy && <div role="status" className="space-y-2 text-sm text-text-secondary"><span>{message || busy}</span><progress className="w-full" value={progress} max={1} /></div>}
-                <div className="flex flex-wrap gap-3"><button type="button" className={button} disabled={locked} onClick={reset}><RefreshIcon className="h-4 w-4" />Reset</button><button type="button" className={`${button} flex-1 !bg-accent !text-accent-text`} disabled={!canGenerate} onClick={() => void generate()}>{busy === 'generating' ? <SpinnerIcon className="h-5 w-5 animate-spin" /> : <GenerateIcon className="h-5 w-5" />}Swap person</button></div>
-            </div>
-            <div className="min-w-0 space-y-3">
+                <div className="flex flex-wrap gap-3">
+                    <Button disabled={locked} onClick={reset}><RefreshIcon className="h-4 w-4" />Reset</Button>
+                    <Button variant="primary" className="flex-1" disabled={!canGenerate} onClick={() => void generate()}>{busy === 'generating' ? <SpinnerIcon className="h-5 w-5 animate-spin" /> : <GenerateIcon className="h-5 w-5" />}Swap person</Button>
+                </div>
                 <h3 className="text-sm font-semibold text-text-secondary">Result{result ? ` - ${result.mode === 'lanpaint' ? 'LanPaint' : 'Swap Anything'}` : ''}</h3>
                 <div className="flex min-h-80 items-center justify-center bg-bg-primary">{result ? <img src={showSource ? result.source : result.src} alt={showSource ? 'Original destination' : 'Person swap result'} className="max-h-[75vh] max-w-full object-contain" /> : <span className="text-sm text-text-muted">No result</span>}</div>
                 {result && <>
-                    <label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={showSource} onChange={event => setShowSource(event.target.checked)} />Show original destination</label>
-                    <div className="flex flex-wrap gap-2"><a href={result.src} download={`swap-person-${result.seed}.png`} className={button}><DownloadIcon className="h-4 w-4" />Download</a><button type="button" className={button} disabled={locked || saved} onClick={() => void save()}>{saved ? <CheckIcon className="h-4 w-4" /> : <SaveIcon className="h-4 w-4" />}{saved ? 'Saved' : 'Save to Library'}</button></div>
-                    <details className="text-sm text-text-muted"><summary>Prompt / seed {result.seed}</summary><pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{result.prompt}</pre></details>
+                    <label className={check}><input type="checkbox" checked={showSource} onChange={event => setShowSource(event.target.checked)} />Show original destination</label>
+                    <div className="flex flex-wrap gap-2">
+                        <a href={result.src} download={`swap-person-${result.seed}.png`} className={ui.buttons.secondary}><DownloadIcon className="h-4 w-4" />Download</a>
+                        <Button disabled={locked || saved} onClick={() => void save()}>{saved ? <CheckIcon className="h-4 w-4" /> : <SaveIcon className="h-4 w-4" />}{saved ? 'Saved' : 'Save to Library'}</Button>
+                    </div>
+                    <Accordion title={`Prompt / seed ${result.seed}`}><PromptBox kind="readonly" label="Prompt" ariaLabel={`${NAME} result prompt`} rows={8} value={result.prompt} copyable /></Accordion>
                 </>}
-            </div>
+            </SettingsLayout>
         </div>
         <LibraryPickerModal isOpen={libraryTarget !== null} onClose={() => setLibraryTarget(null)} onSelectItem={selectLibrary} filter={imageTypes} />
     </section>;

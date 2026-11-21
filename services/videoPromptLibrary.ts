@@ -1,6 +1,6 @@
 import type { LibraryItem, LibraryAssetRef, LibraryAssetRole, VideoPromptLibraryFile, VideoPromptLibraryOptions } from '../types';
 import { dataUrlToThumbnail } from '../utils/imageUtils';
-import { DEFAULT_VIDEO_TEMPLATES, buildVideoPromptInstruction, captureVideoPromptInputs, loadVideoPromptDraft, validateVideoPromptOutput, type MinimaxDraft, type VideoPromptDraft, type VideoPromptInputs } from './videoPromptService';
+import { DEFAULT_VIDEO_TEMPLATES, buildVideoPromptInstruction, captureVideoPromptInputs, loadVideoPromptDraft, validateVideoPromptOutput, videoPromptFamily, type MinimaxDraft, type VideoPromptDraft, type VideoPromptInputs } from './videoPromptService';
 import { defaultMinimaxH3Options, h3AspectFromPrompt, withH3OriginalAudio, type MinimaxH3Options } from './minimaxH3Workflow';
 
 const serializeFile = (file: File): VideoPromptLibraryFile => ({
@@ -44,7 +44,7 @@ const buildPromptLibraryItem = async (
     return {
         mediaType: 'prompt', promptType: 'wan-video', media, thumbnail,
         name: `${renderOptions ? renderOptions.variant === 'advanced' ? 'MiniMax Advanced' : renderOptions.variant === 'ultrafast' ? 'Ultrafast' : 'Minimax REF2v H3' : 'Video Prompt'} - ${snapshot.idea.replace(/\s+/g, ' ').trim().slice(0, 80) || (videoFinishing ? 'Video finishing setup' : '')}`,
-        tags: ['video-prompt', 'minimax-h3'],
+        tags: ['video-prompt', videoPromptFamily(snapshot) === 'ltx' ? 'ltx' : 'minimax-h3'],
         videoPromptOptions: { ...snapshot, references, version: 1, savedAt: new Date().toISOString(), provenance, instruction,
             ...(savedRenderOptions ? { renderOptions: savedRenderOptions } : {}) },
         assetBlobs,
@@ -176,6 +176,7 @@ export const restoreMinimaxH3PromptLibraryItem = async (
 
 export const cloneVideoPromptLibraryOptions = (options: VideoPromptLibraryOptions | undefined): VideoPromptLibraryOptions | undefined =>
     options ? { ...options, ...(options.style ? { style: structuredClone(options.style) } : {}),
+        ...(options.ltxTemplates ? { ltxTemplates: { ...options.ltxTemplates } } : {}),
         ...(options.styleExamples ? { styleExamples: [...options.styleExamples] } : {}),
         ...(options.renderOptions ? { renderOptions: structuredClone(options.renderOptions) } : {}), references: options.references.map(ref => ({
         ...ref, file: { ...ref.file }, original: ref.original ? { ...ref.original } : undefined,

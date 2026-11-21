@@ -26,7 +26,7 @@ Choose an image family, edit references or generate character views. Each workfl
 ## Image and character workflows
 
 - Text-to-image and image-to-image generation through Mammouth AI or ComfyUI.
-- Local workflows for SD 1.5, SDXL, Flux, FLUX2 Simple, Qwen Image, Qwen Edit, Z-Image, MOSS Image, MOSS PHOTO, KREA2 Simple, KREA2 RAW, Nunchaku Flux, Flux Krea, and face detailing.
+- Local workflows for SD 1.5, SDXL, FLUX2 Simple, Qwen Image, Qwen Edit, Z-Image, MOSS Image, MOSS PHOTO, KREA2 Simple, KREA2 RAW, and face detailing.
 - Qwen image-to-image editing with multiple source references passed independently to ComfyUI.
 - FLUX2 Edit with a primary source image and role-based references for identity, outfit, background, pose, style, or custom instructions.
 - **Scene Variation > Clothes Switcher** is a separate, faithful Klein 9B outfit-editing workflow with original/depth/Canny reference latents, three LoRAs, both preprocessing previews and a final before/after comparison. See [Clothes Switcher](scene-variation.md#clothes-switcher) for exact defaults and controls.

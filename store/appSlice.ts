@@ -1,5 +1,8 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import type { User, VersionInfo, DriveFolder, AppSliceState, LtxDirectorGenerationInfo } from '../types';
+import type { User, VersionInfo, DriveFolder, AppSliceState, LibraryPicker } from '../types';
+
+type DialogFlag = 'isSettingsModalOpen' | 'isVisualSettingsModalOpen' | 'isComfyUIHelperOpen' | 'isOAuthHelperOpen';
+const DIALOG_FLAGS: readonly string[] = ['isSettingsModalOpen', 'isVisualSettingsModalOpen', 'isComfyUIHelperOpen', 'isOAuthHelperOpen'] satisfies DialogFlag[];
 
 const initialState: AppSliceState = {
   currentUser: null,
@@ -18,44 +21,8 @@ const initialState: AppSliceState = {
   isSettingsModalOpen: false,
   isVisualSettingsModalOpen: false,
   isComfyUIHelperOpen: false,
-  isClothingPickerOpen: false,
-  isBackgroundPickerOpen: false,
-  isPosePickerOpen: false,
-  isColorImagePickerOpen: false,
-  isVideoUtilsPickerOpen: false,
-  isStartFramePickerOpen: false,
-  isEndFramePickerOpen: false,
-  isLogoRefPickerOpen: false,
-  isLogoPalettePickerOpen: false,
-  isLogoFontPickerOpen: false,
   isOAuthHelperOpen: false,
-  isPromptGenImagePickerOpen: false,
-  isPromptGenBgImagePickerOpen: false,
-  isPromptGenSubjectImagePickerOpen: false,
-  isNunchakuSourcePickerOpen: false,
-  isCharacterSourcePickerOpen: false,
-  isVideoStartFramePickerOpen: false,
-  isVideoEndFramePickerOpen: false,
-  isGeminiVideoSourcePickerOpen: false,
-  isClothesSourcePickerOpen: false,
-  isHairSourcePickerOpen: false,
-  isObjectSourcePickerOpen: false,
-  isPoseSourcePickerOpen: false,
-  isBannerRefPickerOpen: false,
-  isBannerPalettePickerOpen: false,
-  isBannerLogoPickerOpen: false,
-  isBannerFontPickerOpen: false,
-  isAlbumCoverRefPickerOpen: false,
-  isAlbumCoverPalettePickerOpen: false,
-  isAlbumCoverLogoPickerOpen: false,
-  isAlbumCoverFontPickerOpen: false,
-  isMannequinRefPickerOpen: false,
-  isRefineSourcePickerOpen: false,
-  isFontSourcePickerOpen: false,
-  isMaskPickerOpen: false,
-  isElementPickerOpen: false,
-  isResizeCropPickerOpen: false,
-  isGroupFusionPickerOpen: false,
+  activePicker: null,
 
   // Google Drive State
   driveFolder: null,
@@ -77,22 +44,15 @@ const appSlice = createSlice({
   reducers: {
     setCurrentUser: (state, action: PayloadAction<User | null>) => {
       state.currentUser = action.payload;
-      if (action.payload) {
-        sessionStorage.setItem('currentUser', JSON.stringify(action.payload));
-      } else {
-        sessionStorage.removeItem('currentUser');
-      }
     },
     setTheme: (state, action: PayloadAction<string>) => {
       state.theme = action.payload;
     },
     setProjectName: (state, action: PayloadAction<string>) => {
       state.projectName = action.payload;
-      localStorage.setItem('projectName', action.payload);
     },
     setFontSize: (state, action: PayloadAction<number>) => {
       state.fontSize = action.payload;
-      localStorage.setItem('fontSize', action.payload.toString());
     },
     setActiveTab: (state, action: PayloadAction<string>) => {
       state.activeTab = action.payload;
@@ -112,31 +72,19 @@ const appSlice = createSlice({
     setGlobalError: (state, action: PayloadAction<{ title: string; message: string } | null>) => {
       state.globalError = action.payload;
     },
-    queueLtxTransfer: (state, action: PayloadAction<{
-      imageDataUrl?: string;
-      prompt?: string;
-      ttsText?: string;
-      ttsSegments?: Array<{ prompt: string; ttsText: string; imageDataUrl?: string }>;
-      audioDataUrl?: string;
-      audioName?: string;
-      videoDataUrl?: string;
-      directorOptions?: LtxDirectorGenerationInfo;
-      selectedCheckpoint?: string;
-      selectedLora?: string;
-    }>) => {
-      state.pendingLtxTransfer = { id: crypto.randomUUID(), ...action.payload };
-      state.activeTab = 'ltx-director';
+    queueLtxTransfer: {
+      reducer: (state, action: PayloadAction<NonNullable<AppSliceState['pendingLtxTransfer']>>) => {
+        state.pendingLtxTransfer = action.payload;
+        state.activeTab = 'ltx-director';
+      },
+      // The transfer id is created with the action, so the reducer itself stays deterministic.
+      prepare: (transfer: Omit<NonNullable<AppSliceState['pendingLtxTransfer']>, 'id'>) => ({ payload: { id: crypto.randomUUID(), ...transfer } }),
     },
     clearLtxTransfer: (state) => {
       state.pendingLtxTransfer = null;
     },
     setDriveFolder: (state, action: PayloadAction<DriveFolder | null>) => {
       state.driveFolder = action.payload;
-      if (action.payload) {
-        localStorage.setItem('drive_folder', JSON.stringify(action.payload));
-      } else {
-        localStorage.removeItem('drive_folder');
-      }
     },
     setIsSyncing: (state, action: PayloadAction<boolean>) => {
       state.isSyncing = action.payload;
@@ -170,14 +118,12 @@ const appSlice = createSlice({
     openComfyUIHelper: state => { state.isComfyUIHelperOpen = true; },
     closeComfyUIHelper: state => { state.isComfyUIHelperOpen = false; },
 
-    // Dynamic Modal Toggler
-    // Fix: Narrowed the 'modal' payload type to only accept keys matching the 'is...Open' pattern.
-    // This makes the reducer type-safe and resolves downstream type inference errors.
-    setModalOpen: (state, action: PayloadAction<{ modal: Extract<keyof AppSliceState, `is${string}Open`>; isOpen: boolean }>) => {
+    // Library pickers share one slot; a late close of a picker that is no longer open is ignored.
+    setModalOpen: (state, action: PayloadAction<{ modal: DialogFlag | LibraryPicker; isOpen: boolean }>) => {
       const { modal, isOpen } = action.payload;
-      if (modal.startsWith('is') && modal.endsWith('Open')) {
-        (state as any)[modal] = isOpen;
-      }
+      if (DIALOG_FLAGS.includes(modal)) state[modal as DialogFlag] = isOpen;
+      else if (isOpen) state.activePicker = modal as LibraryPicker;
+      else if (state.activePicker === modal) state.activePicker = null;
     }
   },
 });

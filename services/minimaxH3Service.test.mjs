@@ -42,6 +42,7 @@ function harness(t, config = {}) {
     const fixture = config.stages?.inputMode === 'video' ? { ...input([reference('video', 1)]), prompt: '' } : input();
     const graph = workflow.buildH3RenderWorkflow({ ...fixture, workflow: config.advanced ? 'advanced' : config.ultrafast ? 'ultrafast' : 'reference' }, options, { 'image-1': 'image.png', 'video-1': 'video.mp4' });
     const info = Object.fromEntries(Object.values(graph).map(node => [node.class_type, {}]));
+    if (options.style?.lora) info.LoraLoaderModelOnly = { input: { required: { lora_name: [[options.style.lora]] } } };
     if (config.omitReferencePack) delete info.MiniMaxH3ReferencePack;
     class Socket {
         constructor(url) { this.url = String(url); socket = this; queueMicrotask(() => this.onopen?.()); }
@@ -50,6 +51,7 @@ function harness(t, config = {}) {
     }
     globalThis.WebSocket = Socket;
     globalThis.localStorage = { getItem: () => config.url || 'http://localhost:8188/' };
+    api.clearH3CatalogCache();
     globalThis.fetch = async (url, init = {}) => {
         const parsed = new URL(url), path = parsed.pathname;
         requests.push({ path, init, url: String(url) });
@@ -255,6 +257,93 @@ test('a plain prompt queues successfully with no media uploads or ReferencePack 
     assert.equal(h.socket.closed, true);
 });
 
+test('all H3 renderers recover repeated history timeouts without resubmitting or losing live progress', async t => {
+    for (const variant of ['reference', 'ultrafast', 'advanced']) await t.test(variant, async t => {
+        let attempts = 0, poll;
+        const h = harness(t, { advanced: variant === 'advanced', ultrafast: variant === 'ultrafast', history: socket => {
+            attempts++;
+            if (attempts <= 2) {
+                socket.emit('executing', { prompt_id: 'owned-h3', node: '153' });
+                socket.emit('progress', { prompt_id: 'owned-h3', value: attempts, max: 7 });
+                throw new DOMException('signal timed out', 'TimeoutError');
+            }
+            return { 'owned-h3': finalHistory };
+        } });
+        const nativeSet = globalThis.setInterval;
+        t.mock.method(globalThis, 'setInterval', (callback, ms) => {
+            if (ms === 3000) poll = callback;
+            return nativeSet(callback, ms);
+        });
+        const run = h.run({ ...input([]), workflow: variant, prompt: 'A quiet scene.' });
+        // Flush the asynchronous schema/upload/queue chain without waiting for real polling.
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(attempts, 1);
+        assert.equal(h.socket.closed, undefined);
+        assert.equal(h.execution.at(-1).step, 1);
+        poll();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(attempts, 2);
+        assert.equal(h.socket.closed, undefined);
+        assert.equal(h.execution.at(-1).step, 2);
+        poll();
+        const result = await run;
+        assert.equal(result.promptId, 'owned-h3');
+        assert.equal(h.requests.filter(request => request.path === '/prompt').length, 1);
+        assert.equal(h.progress.filter(([message]) => message.includes('retrying monitoring')).length, 2);
+        assert.ok(h.progress.some(([message]) => message.includes('monitoring restored')));
+        assert.equal(h.socket.closed, true);
+        assert.ok(h.requests.filter(request => request.path === '/history/owned-h3').every(request => request.init.signal.aborted));
+    });
+});
+
+test('history errors other than request timeouts remain terminal', async t => {
+    const h = harness(t, { history: () => { throw new Error('ComfyUI HTTP 500: history unavailable'); } });
+    await assert.rejects(h.run(), /ComfyUI HTTP 500/);
+    assert.equal(h.socket.closed, true);
+    assert.ok(!h.progress.some(([message]) => message.includes('retrying monitoring')));
+});
+
+test('history requests enforce the 30-second request deadline and preserve caller cancellation', async t => {
+    const timeouts = [];
+    t.mock.method(AbortSignal, 'timeout', ms => {
+        const controller = new AbortController();
+        timeouts.push({ ms, controller });
+        return controller.signal;
+    });
+    t.mock.method(globalThis, 'fetch', async (_url, init) => new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true });
+    }));
+    const timedOut = api.jsonRequest('http://localhost:8188/history/owned-h3');
+    assert.equal(timeouts[0].ms, 30000);
+    timeouts[0].controller.abort(new DOMException('signal timed out', 'TimeoutError'));
+    await assert.rejects(timedOut, { name: 'TimeoutError' });
+    const caller = new AbortController();
+    const cancelled = api.jsonRequest('http://localhost:8188/history/owned-h3', { signal: caller.signal });
+    caller.abort();
+    await assert.rejects(cancelled, { name: 'AbortError' });
+});
+
+test('a history timeout does not remove the two-hour monitoring limit or targeted cancellation', async t => {
+    for (const cancel of [false, true]) await t.test(cancel ? 'cancel after timeout' : 'monitoring deadline', async t => {
+        const controller = new AbortController();
+        let deadline;
+        const h = harness(t, { history: () => { throw new DOMException('signal timed out', 'TimeoutError'); } });
+        const nativeSet = globalThis.setTimeout;
+        t.mock.method(globalThis, 'setTimeout', (callback, ms, ...args) => {
+            if (ms === 2 * 60 * 60 * 1000) deadline = callback;
+            return nativeSet(callback, ms, ...args);
+        });
+        const run = h.run(input(), controller);
+        await new Promise(resolve => setImmediate(resolve));
+        assert.ok(h.progress.some(([message]) => message.includes('retrying monitoring')));
+        if (cancel) controller.abort(); else deadline();
+        await assert.rejects(run, cancel ? { name: 'AbortError' } : /monitoring timed out after two hours/);
+        assert.equal(h.socket.closed, true);
+        assert.equal(h.requests.filter(request => request.path === '/api/jobs/owned-h3/cancel').length, cancel ? 1 : 0);
+        assert.equal(h.requests.filter(request => request.path === '/prompt').length, 1);
+    });
+});
+
 test('references still require ReferencePack and fail before any upload when it is missing', async t => {
     const h = harness(t, { omitReferencePack: true });
     await assert.rejects(h.run(), /Missing ComfyUI nodes: MiniMaxH3ReferencePack/);
@@ -303,6 +392,84 @@ test('preview parser accepts only node 141 image/WebP/MP4 messages, including no
     assert.equal(api.parseH3Preview('kj_preview_override', { node_id: 141, image: 'YWJj', mime: 'text/html' }), null);
 });
 
+test('H3 catalogs load once across repeated opens, checks and renderer variants until explicit refresh', async t => {
+    const h = harness(t, { advanced: true });
+    const first = await api.loadH3ObjectInfo();
+    const repeated = await api.loadH3ObjectInfo();
+    assert.equal(repeated, first);
+    const count = h.requests.length;
+    await api.loadH3ObjectInfo(undefined, 'advanced');
+    const loraRequests = () => h.requests.filter(request => /\/object_info\/LoraLoader(?:ModelOnly)?$/.test(request.path));
+    assert.equal(loraRequests().length, 2, 'shared LoRA catalogs are fetched only once across variants');
+    await api.loadH3ObjectInfo(undefined, 'advanced');
+    assert.equal(loraRequests().length, 2);
+    assert.ok(h.requests.length > count, 'Advanced fetches its extra node schemas');
+    const refreshed = await api.loadH3ObjectInfo(undefined, 'reference', true);
+    assert.notEqual(refreshed, first);
+    assert.equal(loraRequests().length, 4);
+    assert.equal(await api.loadH3ObjectInfo(), refreshed);
+});
+
+test('gallery and H3 renderers reuse the same LoRA schema requests', async t => {
+    const h = harness(t);
+    await api.loadH3Catalog(['LoraLoaderModelOnly', 'KSamplerSelect', 'BasicScheduler']);
+    await api.loadH3ObjectInfo();
+    assert.equal(h.requests.filter(request => request.path === '/object_info/LoraLoaderModelOnly').length, 1);
+    assert.equal(h.requests.filter(request => request.path === '/object_info/KSamplerSelect').length, 1);
+    await api.loadH3Catalog(['LoraLoaderModelOnly', 'KSamplerSelect', 'BasicScheduler'], undefined, true);
+    assert.equal(h.requests.filter(request => request.path === '/object_info/LoraLoaderModelOnly').length, 2);
+});
+
+test('concurrent catalog consumers share requests and cancelling one does not cancel the others', async t => {
+    const h = harness(t);
+    const fetch = globalThis.fetch;
+    let release;
+    const pending = new Promise(resolve => { release = resolve; });
+    globalThis.fetch = async (...args) => { await pending; return fetch(...args); };
+    const controller = new AbortController();
+    const cancelled = api.loadH3ObjectInfo(controller.signal);
+    const surviving = api.loadH3ObjectInfo();
+    const rejected = assert.rejects(cancelled, { name: 'AbortError' });
+    controller.abort();
+    await rejected;
+    release();
+    const info = await surviving;
+    assert.equal(await api.loadH3ObjectInfo(), info);
+    assert.equal(h.requests.length, 25);
+    const before = h.requests.length;
+    await assert.rejects(api.loadH3ObjectInfo(controller.signal, 'reference', true), { name: 'AbortError' });
+    assert.equal(h.requests.length, before, 'pre-cancelled refresh does not invalidate or fetch');
+});
+
+test('failed catalog requests surface errors and retry instead of caching a failure', async t => {
+    harness(t);
+    let calls = 0;
+    globalThis.fetch = async () => {
+        calls++;
+        return calls === 1 ? new Response('offline', { status: 503 })
+            : new Response(JSON.stringify({ LoraLoaderModelOnly: { input: { required: { lora_name: [['H3\\fixed.safetensors']] } } } }));
+    };
+    await assert.rejects(api.loadH3Catalog(['LoraLoaderModelOnly']), /HTTP 503.*offline/);
+    const recovered = await api.loadH3Catalog(['LoraLoaderModelOnly']);
+    assert.equal(calls, 2);
+    assert.equal(await api.loadH3Catalog(['LoraLoaderModelOnly']), recovered);
+    assert.equal(calls, 2);
+});
+
+test('H3 catalogs are isolated by ComfyUI base URL', async t => {
+    const h = harness(t);
+    const first = await api.loadH3ObjectInfo();
+    globalThis.localStorage = { getItem: () => 'http://second-comfy:8188/' };
+    api.clearH3CatalogCache();
+    const second = await api.loadH3ObjectInfo();
+    assert.notEqual(first, second);
+    assert.equal(h.requests.length, 50);
+    assert.equal(new URL(h.requests.at(-1).url).hostname, 'second-comfy');
+    globalThis.localStorage = { getItem: () => 'http://localhost:8188/' };
+    assert.equal(await api.loadH3ObjectInfo(), first);
+    assert.equal(h.requests.length, 50);
+});
+
 test('history supports VHS output variants and temporary output URLs with encoded names', () => {
     for (const key of ['gifs', 'videos', 'images', 'files']) {
         const url = api.h3VideoFromHistory({ outputs: { '119': { [key]: [{ filename: 'a b.mp4', subfolder: 'foo', type: 'temp' }] } } }, 'https://server');
@@ -347,7 +514,10 @@ test('all H3 renderers retain the actual styled prompt and style snapshot when n
         assert.equal(result.prompt, 'ETCH\nA rainy street.\nEngraved film');
         assert.equal(result.promptIsFinal, true);
         assert.deepEqual(result.options.style, style);
-        assert.equal(result.workflow.style_lora.inputs.lora_name, style.lora);
+        const loader = result.workflow.style_lora;
+        assert.equal(loader.class_type, variant === 'ultrafast' ? 'LTX_lora_loader' : 'Power Lora Loader (rgthree)');
+        assert.equal(variant === 'ultrafast' ? JSON.parse(loader.inputs.stack_data)[0].lora : loader.inputs.lora_1.lora, style.lora);
+        assert.deepEqual(result.workflow['184'].inputs.clip, ['style_lora', 1]);
         assert.equal(result.workflow['186'], undefined);
         assert.equal(draft.prompt, 'A rainy street.');
     });

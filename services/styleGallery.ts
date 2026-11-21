@@ -22,6 +22,7 @@ export const normalizeStyleModel = (model: string): string => {
     if (['H3', 'MINIMAX', 'MINIMAXH3', 'H3MINIMAX', 'HMINIMAX'].includes(normalized.replace(/[^A-Z0-9]/g, ''))) return 'H3';
     return normalized;
 };
+export const isH3LoraPath = (name: string): boolean => /^h3[\\/]/i.test(name.trim());
 export const styleLoraMatches = (name: string, names: string[]): boolean => {
     const normalize = (value: string) => value.trim().replace(/\\/g, '/').toLowerCase();
     return !!name.trim() && names.some(value => !!value.trim() && normalize(value) === normalize(name));

@@ -130,6 +130,14 @@ test('all six LoRA slots use real dropdowns and preserve saved files missing fro
     assert.doesNotMatch(html, /<input|<datalist/);
 });
 
+test('all H3 modes use the shared H3-only choices and only explicit refresh invalidates the catalog', () => {
+    assert.match(declarations.get('loraNames').getText(tree), /h3LoraChoices\(info\)/);
+    assert.match(declarations.get('refresh').getText(tree), /force = true/);
+    assert.match(declarations.get('refresh').getText(tree), /loadH3ObjectInfo\(abort.signal, variant, force\)/);
+    assert.match(source, /void refresh\(false\)/);
+    assert.match(source, /onClick=\{\(\) => void refresh\(\)\}/);
+});
+
 test('closed LoRA accordions and disabled chains/slots do not mount unused catalogs', () => {
     assert.ok(loraField);
     const guards = new Set();
