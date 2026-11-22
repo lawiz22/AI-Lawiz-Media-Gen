@@ -7,17 +7,16 @@ export const StarIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     </svg>
 );
 
-export const UploadIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+export const UploadIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className, ...props }) => (
+  <svg {...props} className={className || 'h-6 w-6'} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14" />
   </svg>
 );
 
 export const UploadCloudIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
-    <path d="M12 12v9" />
-    <path d="m16 16-4-4-4 4" />
+    <path d="M7 18a4 4 0 0 1-.6-7.96A5.5 5.5 0 0 1 17 8.5h.5a4.5 4.5 0 0 1 1.2 8.84" />
+    <path d="M12 21v-8M9 15.5l3-3 3 3" />
   </svg>
 );
 
@@ -78,21 +77,12 @@ export const EnhanceIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 );
 
 // --- Spinner Icon (Redesigned for visibility) ---
-export const SpinnerIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className, ...props }) => {
-  const classes = className || "h-6 w-6";
-  return (
-    <svg 
-        className={classes} 
-        xmlns="http://www.w3.org/2000/svg" 
-        fill="none" 
-        viewBox="0 0 24 24" 
-        {...props}
-    >
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-    </svg>
-  );
-};
+export const SpinnerIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className, ...props }) => (
+  <svg className={className || 'h-6 w-6'} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" {...props}>
+    <circle cx="12" cy="12" r="9" opacity="0.25" />
+    <path d="M21 12a9 9 0 0 0-9-9" strokeLinecap="round" />
+  </svg>
+);
 
 export const ZoomIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -101,8 +91,8 @@ export const ZoomIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 );
 
 export const CloseIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+    <path d="M7 7l10 10M17 7 7 17" />
   </svg>
 );
 
@@ -242,8 +232,8 @@ export const PastForwardIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) 
 );
 
 export const SaveIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3.5v11M7.5 10.5 12 15l4.5-4.5M4 15.5v3A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-3" />
     </svg>
 );
 
@@ -420,21 +410,16 @@ export const ResizeIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 
 export const ImageIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
-        <circle cx="9" cy="9" r="2"></circle>
-        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
+        <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+        <circle cx="15.5" cy="9" r="1.75" />
+        <path d="m4 17 5-5.5 4 4 2.5-2.5 5 5" />
     </svg>
 );
 
 export const ZipIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <path d="M10 12h1" />
-      <path d="M10 18h1" />
-      <path d="M10 15h1" />
-      <path d="m14 12-1 1 1 1" />
-      <path d="m14 18-1-1 1-1" />
-      <path d="M11 12v6" />
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 8h18M12 8v1.5M12 11v1.5" />
+      <rect x="10.5" y="14" width="3" height="3" rx="0.5" />
     </svg>
   );

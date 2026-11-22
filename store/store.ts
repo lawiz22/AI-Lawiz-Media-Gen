@@ -6,7 +6,7 @@ import promptGenReducer from './promptGenSlice';
 import extractorReducer from './extractorSlice';
 import logoThemeReducer from './logoThemeSlice';
 import libraryReducer from './librarySlice';
-import groupPhotoFusionReducer from './groupPhotoFusionSlice';
+import photoFusionReducer from './photoFusionSlice';
 
 // Reducers stay pure: these preferences are written to browser storage once the state has changed.
 const persistPreferences: Middleware = () => next => action => {
@@ -28,7 +28,7 @@ export const store = configureStore({
     extractor: extractorReducer,
     logoTheme: logoThemeReducer,
     library: libraryReducer,
-    groupPhotoFusion: groupPhotoFusionReducer,
+    photoFusion: photoFusionReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

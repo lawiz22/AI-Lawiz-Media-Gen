@@ -17,15 +17,13 @@ import {
   TEXT_OBJECT_PROMPTS,
 } from '../constants';
 
-// Helper to decode base64 poses
-export const decodePose = (encoded: string): string => {
+// Settings saved before 2.0 hold base64-encoded poses; current poses are plain text.
+export const decodePose = (pose: string): string => {
+  if (/\s/.test(pose) || !/^[A-Za-z0-9+/]{16,}={0,2}$/.test(pose)) return pose;
   try {
-    // This will work in browser environments
-    return atob(encoded);
-  } catch (e) {
-    console.error("Failed to decode pose:", e);
-    // Fallback for non-browser env or error
-    return "a standard pose";
+    return atob(pose);
+  } catch {
+    return pose;
   }
 };
 

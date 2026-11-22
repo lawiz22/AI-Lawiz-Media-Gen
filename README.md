@@ -19,7 +19,7 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 
 > This repository contains the application and workflow definitions. AI checkpoints, LoRAs, ComfyUI, custom nodes, and third-party API access are not bundled.
 
-> **Licensing status:** original Lawiz contributions are GPLv3. Permission for portions derived from zGenMedia's projects is still pending; this is not clearance to redistribute the complete application. See [licensing scope and pending permissions](LICENSING.md).
+> **Licensing status:** original Lawiz contributions are GPLv3. Material derived from zGenMedia's projects was replaced on November 22, 2026; third-party notices still have to be assembled before a public release. See [licensing scope and distribution status](LICENSING.md).
 
 ## Features
 
@@ -137,13 +137,13 @@ The following authors, maintainers and teams also deserve credit for the node pa
 
 Thank you as well to every contributor to these projects and to the researchers behind the models they support. These credits are not an exhaustive dependency or model attribution list; see the [workflow dependency inventory](COMFYUI_REQUIRED_NODES.txt) and each upstream project for its own contributors, model credits, installation instructions and license terms. Third-party nodes and models remain separate installations, and these acknowledgements do not imply endorsement of Lawiz.
 
-Feature starting points also include **[Ammaar Reshi's Past Forward](https://github.com/ammaarreshi/past-forward-ai-studio)** and **zGenMedia's [Portrait Generator v2.0](https://github.com/zGenMedia/zGenMedia-Portrait-Generator-v2.0) and [Group Photo Fusion](https://github.com/zGenMedia/zGenMedia-Group-Photo-Fusion)**. Thank you to their creators. Attribution is not permission: authorization for the zGenMedia-derived portions remains [pending](LICENSING.md#zgenmedia-permission-pending).
+Feature starting points also include **[Ammaar Reshi's Past Forward](https://github.com/ammaarreshi/past-forward-ai-studio)**. Thank you to its creator. The history of earlier starting points is recorded in [LICENSING.md](LICENSING.md#zgenmedia-derived-material-replaced).
 
 ## License
 
 Copyright (C) 2026 Lawiz. Original contributions for which Lawiz holds licensing rights are licensed under the **GNU General Public License v3.0 only** (`GPL-3.0-only`), without warranty. See [LICENSE](LICENSE) for the license text and [LICENSING.md](LICENSING.md) for its scope, third-party notices and unresolved permissions.
 
-**The current application is not yet cleared for redistribution as a complete GPLv3 release.** Permission for code derived from zGenMedia's projects is being requested in [zGenMedia/zGenMedia-Group-Photo-Fusion#1](https://github.com/zGenMedia/zGenMedia-Group-Photo-Fusion/issues/1). Adding the GPL text does not relicense that material or replace third-party obligations.
+Material derived from zGenMedia's projects was replaced rather than relicensed; [LICENSING.md](LICENSING.md#zgenmedia-derived-material-replaced) records what was replaced, how it was checked and what remains to do before a public release. Adding the GPL text does not replace third-party obligations.
 
 ## Important notes
 

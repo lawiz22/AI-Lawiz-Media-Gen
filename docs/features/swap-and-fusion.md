@@ -38,15 +38,14 @@ Keep the SAM3 swap, LanPaint head swap and multi-person fusion workflows distinc
 
 ## Photo Fusion
 
-- Choose between local ComfyUI FLUX2, local Qwen Edit, Gemini and Mammouth AI; FLUX2 is selected by default.
-- Fuse two to four subject portraits with FLUX2 or Mammouth. Qwen Edit accepts two or three subjects without a background, or exactly two subjects plus one background image.
-- Preserve each uploaded person as a distinct identity with explicit facial-feature and exact-subject-count instructions.
-- Optionally identify any subject as a notable person, such as Elvis Presley or Marilyn Monroe, to reinforce that recognizable identity in FLUX2, Qwen Edit, and Mammouth prompts.
-- Add an optional background reference while retaining personas, scenarios, poses, quality controls, and one to four output images.
-- Configure the FLUX2 model, CLIP, VAE, megapixels, sampler, steps, CFG, seed behavior, and optional CacheDiT acceleration.
-- Qwen Photo Fusion uses concise model-specific prompts to preserve every identity, prevent missing or duplicated people, and apply the selected scene without overloading the edit model.
-- Configure the Qwen Edit model, CLIP encoder, VAE, source megapixels, AuraFlow shift, sampler, scheduler, steps, CFG, and optional LoRA. The synchronized Lightning presets select the matching installed LoRA and switch sampling to 4 or 8 steps.
-- Retry individual results, inspect debug information, download all outputs as a ZIP, or save selected results to the Library.
+- Choose the engine at the top: local ComfyUI **FLUX2** (default), local **QWEN-Edit**, **Gemini** or **Mammouth**.
+- Add one photo per person, from the computer or the Library: two to four people with FLUX2, Gemini or Mammouth; with QWEN-Edit, at most three images in total, background included.
+- For each person, choose an expression and optionally name a well-known person whose face must stay recognisable.
+- Add an optional background image. **Film Poster** and **Monochrome Studio** always use their own setting.
+- Pick one of thirteen scenes, a detail level and one to four images. **Cheek Kiss** is for exactly two people.
+- The **Prompt sent** box on the right shows the exact text built from these choices. Every engine is told the exact head count and to keep each identity distinct, with nobody added, missing, repeated or merged; QWEN-Edit receives a shorter version.
+- FLUX2 and QWEN-Edit settings are in the **Models**, **LoRAs**, **Sampler** and **Advanced** sections; the QWEN-Edit Lightning presets select the matching installed LoRA and switch to 4 or 8 steps. Gemini and Mammouth model choices are in **Models**.
+- Each result can be enlarged, downloaded, saved to the Library, sent to LTX, or retried if it failed. **Download all** makes a ZIP.
 
 ## Screenshots
 

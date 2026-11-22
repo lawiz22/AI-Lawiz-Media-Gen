@@ -1,30 +1,24 @@
 import type { PaletteColor } from '../types';
 
-// Fix: The function was returning just the blob data, not a full Generative AI Part. Wrapped the result in `inlineData` and updated the return type to match the expected structure for the Gemini API.
-export const fileToGenerativePart = async (file: File): Promise<{inlineData: {mimeType: string; data: string}}> => {
-  return new Promise((resolve, reject) => {
+const readAsDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result !== 'string') {
-        return reject(new Error('Failed to read file as a data URL.'));
-      }
-      const base64String = reader.result.split(',')[1];
-      if (!base64String) {
-        return reject(new Error('Failed to extract base64 string from data URL.'));
-      }
-      resolve({
-        inlineData: {
-          mimeType: file.type,
-          data: base64String,
-        }
-      });
-    };
-    reader.onerror = (error) => {
-        reject(error);
-    };
-    reader.readAsDataURL(file);
-  });
+    reader.addEventListener('load', () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('The file could not be read as a data URL.')));
+    reader.addEventListener('error', () => reject(reader.error || new Error('The file could not be read.')));
+    reader.readAsDataURL(blob);
+});
+
+export const fileToDataUrl = (file: File): Promise<string> => readAsDataUrl(file);
+
+export const fileToBase64 = async (file: File): Promise<string> => {
+    const dataUrl = await readAsDataUrl(file);
+    const data = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    if (!data) throw new Error('The file is empty or not encoded as base64.');
+    return data;
 };
+
+/** Inline image part as expected by the Gemini API. */
+export const fileToGenerativePart = async (file: File): Promise<{ inlineData: { mimeType: string; data: string } }> =>
+    ({ inlineData: { mimeType: file.type, data: await fileToBase64(file) } });
 
 export const dataUrlToGenerativePart = (dataUrl: string): {inlineData: {mimeType: string; data: string}} => {
     const [header, base64Data] = dataUrl.split(',');
@@ -44,41 +38,6 @@ export const dataUrlToGenerativePart = (dataUrl: string): {inlineData: {mimeType
     };
 };
 
-export const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result !== 'string') {
-        return reject(new Error('Failed to read file as a data URL.'));
-      }
-      const base64String = reader.result.split(',')[1];
-      if (!base64String) {
-        return reject(new Error('Failed to extract base64 string from data URL.'));
-      }
-      resolve(base64String);
-    };
-    reader.onerror = (error) => {
-        reject(error);
-    };
-    reader.readAsDataURL(file);
-  });
-};
-
-export const fileToDataUrl = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result !== 'string') {
-        return reject(new Error('Failed to read file as a data URL.'));
-      }
-      resolve(reader.result);
-    };
-    reader.onerror = (error) => {
-      reject(error);
-    };
-    reader.readAsDataURL(file);
-  });
-};
 const canvasToJpegBlob = (canvas: HTMLCanvasElement, quality: number): Promise<Blob> => new Promise((resolve, reject) => {
     canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Failed to compress image.')), 'image/jpeg', quality);
 });

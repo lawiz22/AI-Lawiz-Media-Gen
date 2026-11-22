@@ -8,20 +8,21 @@ The original contributions to LAWIZ'S Media Generator for which Lawiz holds lice
 
 This grant does not claim ownership of third-party code, replace existing third-party licenses, or grant permissions that Lawiz does not hold. It is not a statement that every part of the current application has been cleared for redistribution.
 
-## zGenMedia: permission pending
+## zGenMedia: derived material replaced
 
-The developer has identified these projects as sources used during development:
+Lawiz's first version (September 2025) started from [zGenMedia Portrait Generator v2.0](https://github.com/zGenMedia/zGenMedia-Portrait-Generator-v2.0), and the Photo Fusion feature was first built from [zGenMedia Group Photo Fusion](https://github.com/zGenMedia/zGenMedia-Group-Photo-Fusion). Neither project carries a license. A permission request sent on October 19, 2026 in [zGenMedia/zGenMedia-Group-Photo-Fusion#1](https://github.com/zGenMedia/zGenMedia-Group-Photo-Fusion/issues/1) received no response.
 
-- [zGenMedia Portrait Generator v2.0](https://github.com/zGenMedia/zGenMedia-Portrait-Generator-v2.0)
-- [zGenMedia Group Photo Fusion](https://github.com/zGenMedia/zGenMedia-Group-Photo-Fusion)
+On November 22, 2026 the developer replaced that material instead of relying on permission:
 
-As of October 19, 2026, no applicable license or reuse authorization has been identified for the portions taken from these projects. A request covering both projects was sent in [zGenMedia/zGenMedia-Group-Photo-Fusion#1](https://github.com/zGenMedia/zGenMedia-Group-Photo-Fusion/issues/1).
+- **Photo Fusion** was rewritten from its behaviour: new interface, scenes, prompts, state and service. The files derived from Group Photo Fusion were deleted.
+- **Shared code from Portrait Generator** was rewritten: the image upload box, the generation progress card, the file-reading helpers, seven icon drawings and the thirteen original character pose texts.
+- **Character creation**, which descends from Portrait Generator, was not rewritten from scratch. Its code has been substantially reworked since 2025 and its copied pose texts were replaced; its origin is recorded here.
 
-**Permission is pending, not granted.** The GPL grant for Lawiz's original contributions does not cover the underlying zGenMedia material or establish permission to redistribute adaptations of it. The exact affected file boundaries have not yet been audited; copied portions may occur in shared application files, not only dedicated feature panels. An unmarked file must not be assumed to be cleared.
+How it was checked: every source file was compared line by line with the public files of both projects (whitespace normalised, lines of 25 characters or more). The lines still identical are generic: React and browser idioms, Gemini API calls, and the Google AI Studio scaffolding that both projects share (`vite.config.ts`, `index.html`, `index.tsx`).
 
-Do not treat the current application or an existing installer as cleared for redistribution by the addition of LICENSE. Resolve the permission request, or remove and independently replace the affected material, before presenting the complete application as a cleared GPLv3 release. Substantial changes and attribution alone do not establish reuse permission.
+Limits: this is the developer's assessment, not a legal opinion. A line comparison does not detect code that was copied and then renamed or reformatted. Commits and installers produced before November 22, 2026 still contain the former material.
 
-When a response is received, preserve the exact permission and its source, verify that it covers the intended source/binary redistribution, and update this notice. Do not treat silence, an issue reaction or issue closure alone as permission.
+If zGenMedia replies, record the exact response and its source here.
 
 ## Past Forward and Apache-2.0 notices
 
@@ -42,6 +43,6 @@ Keep applicable upstream license, copyright and attribution notices, document mo
 
 ## Distribution status
 
-The GPL text and this scope notice are configured for inclusion in future Electron packages. This does not complete a third-party license audit or clear the pending permissions above. Previously generated installers are unchanged.
+The GPL text and this scope notice are configured for inclusion in Electron packages. This does not complete a third-party license audit.
 
-Before publishing a new installer, resolve the zGenMedia permission and imported-code scope, assemble the required third-party license/notice texts, provide access to the complete corresponding source and build instructions for the exact distributed version and GPL components, and verify the legal notices in the packaged application.
+Before publishing a new installer, assemble the required third-party license and notice texts (npm dependencies, the FFmpeg core, the Past Forward Apache notices), provide access to the complete corresponding source and build instructions for the exact distributed version and GPL components, and verify the legal notices in the packaged application.

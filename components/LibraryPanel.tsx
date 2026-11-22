@@ -611,7 +611,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({ onLoadItem, onUpscal
   const { items, status: libraryStatus, error: libraryError } = useSelector((state: RootState) => state.library);
   const projectName = useSelector((state: RootState) => state.app.projectName);
   const projectSwitchBlocked = useSelector((state: RootState) => state.generation.isLoading
-    || state.groupPhotoFusion.isLoading || state.extractor.extractorState.isGenerating || state.extractor.extractorState.isGeneratingHair
+    || state.photoFusion.busy || state.extractor.extractorState.isGenerating || state.extractor.extractorState.isGeneratingHair
     || state.extractor.extractorState.isGeneratingObjects || state.extractor.extractorState.isGeneratingPoses || state.extractor.extractorState.isGeneratingFont
     || !!state.logoTheme.logoThemeState.isGeneratingLogos || !!state.logoTheme.logoThemeState.isGeneratingBanners || !!state.logoTheme.logoThemeState.isGeneratingAlbumCovers);
 

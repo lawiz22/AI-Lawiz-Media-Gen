@@ -1,7 +1,7 @@
 import React from 'react';
 import { useDispatch, useSelector, useStore } from 'react-redux';
 import type { AppDispatch, RootState } from '../store/store';
-import type { LibraryItem, LibraryPicker, UploadedFile } from '../types';
+import type { LibraryItem, LibraryPicker } from '../types';
 import { setModalOpen } from '../store/appSlice';
 import {
     setBackgroundImage, setCharacterPoseImage, setClothingImage, setElementImages, setMaskImage, setSourceImage, updateCharacterOptions, updateOptions,
@@ -10,7 +10,7 @@ import { updatePromptGenState } from '../store/promptGenSlice';
 import { updateExtractorState } from '../store/extractorSlice';
 import { updateVideoUtilsState } from '../store/videoSlice';
 import { updateLogoThemeState } from '../store/logoThemeSlice';
-import { setUploadedFiles } from '../store/groupPhotoFusionSlice';
+import { addSubjects } from '../store/photoFusionSlice';
 import { LibraryPickerModal } from './LibraryPickerModal';
 
 const ANY_IMAGE: LibraryItem['mediaType'][] = ['image', 'character', 'extracted-frame', 'logo', 'banner', 'album-cover', 'clothes', 'object', 'pose', 'group-fusion', 'swap-anything', 'past-forward-photo'];
@@ -100,10 +100,8 @@ export const LibraryPickerHost: React.FC = () => {
             dispatch(updateVideoUtilsState({ resizeCrop: { ...resizeCrop, sourceFile: await libraryFile(item, 'source.jpg') } }));
         }} />
         <LibraryPickerModal {...picker('isGroupFusionPickerOpen')} filter="image" onSelectItem={async item => {
-            const uploadedFiles = store.getState().groupPhotoFusion.uploadedFiles;
-            const file = await libraryFile(item, `group-fusion-${item.id}.jpg`);
-            const added: UploadedFile = { id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), personaId: 'default' };
-            dispatch(setUploadedFiles([...uploadedFiles, added]));
+            const file = await libraryFile(item, `photo-fusion-${item.id}.jpg`);
+            dispatch(addSubjects([{ id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), expression: 'as-is' }]));
         }} />
 
         <LibraryPickerModal {...picker('isLogoRefPickerOpen')} filter="image" onSelectItem={item => dispatch(updateLogoThemeState({ referenceItems: [...(logoTheme().referenceItems || []), item] }))} />

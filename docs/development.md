@@ -39,7 +39,7 @@ constants.ts      Embedded ComfyUI workflow templates
 
 ## Production build
 
-**Redistribution clearance is pending.** Original Lawiz contributions are GPLv3, but permission for zGenMedia-derived code and third-party source/notice obligations must be resolved before publishing a cleared release. Read [licensing scope and distribution status](../LICENSING.md) first. Builds for local validation do not resolve those permissions.
+**Before publishing a release**, read [licensing scope and distribution status](../LICENSING.md): third-party notices and corresponding-source obligations must be assembled. Builds for local validation do not do this.
 
 Create the optimized renderer and Windows x64 NSIS installer:
 
@@ -93,7 +93,7 @@ The Scene Variation suite runs directly with Node's test runner and covers promp
 - Default Ollama endpoint: `http://127.0.0.1:11434`
 - Default Ollama model: `huihui_ai/qwen3-vl-abliterated:8b`
 
-Original Lawiz contributions are licensed under **GPL-3.0-only**; see [LICENSE](../LICENSE). The grant applies only where Lawiz holds licensing rights. Existing third-party licenses remain applicable, and authorization for zGenMedia-derived portions is pending in [zGenMedia/zGenMedia-Group-Photo-Fusion#1](https://github.com/zGenMedia/zGenMedia-Group-Photo-Fusion/issues/1). See [LICENSING.md](../LICENSING.md) for scope and distribution requirements.
+Original Lawiz contributions are licensed under **GPL-3.0-only**; see [LICENSE](../LICENSE). The grant applies only where Lawiz holds licensing rights. Existing third-party licenses remain applicable, and material derived from zGenMedia's projects was replaced on November 22, 2026. See [LICENSING.md](../LICENSING.md) for scope and distribution requirements.
 
 The package metadata points to that scope notice rather than claiming that all bundled code is already cleared under a single SPDX license. Future Electron packages include LICENSE and LICENSING.md in the application archive; previously built installers are not retroactively updated. These two documents alone are not a complete third-party notice/source bundle.
 

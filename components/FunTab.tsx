@@ -1,6 +1,6 @@
 import React from 'react';
 import { createAccentStyle } from '../utils/accentTheme';
-import GroupPhotoFusionPanel from './groupPhotoFusion/GroupPhotoFusionPanel';
+import PhotoFusionPanel from './photoFusion/PhotoFusionPanel';
 import PastForwardPanel from './pastForward/PastForwardPanel';
 import StyliseAnythingPanel from './StyliseAnythingPanel';
 import SwapAnythingPanel from './SwapAnythingPanel';
@@ -30,7 +30,7 @@ export const FunTab: React.FC<{
 }> = ({ active, subTab, onSubTabChange, resetVersion, isComfyUIConnected, comfyUIObjectInfo }) => {
     const comfy = { isComfyUIConnected, comfyUIObjectInfo };
     const panels: Record<FunSubTab, React.ReactNode> = {
-        'photo-fusion': <GroupPhotoFusionPanel />,
+        'photo-fusion': <PhotoFusionPanel />,
         'past-forward': <PastForwardPanel />,
         'swap-anything': <SwapAnythingPanel {...comfy} />,
         'swap-person': <SwapPersonPanel {...comfy} />,

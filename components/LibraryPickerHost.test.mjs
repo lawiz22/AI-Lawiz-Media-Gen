@@ -42,7 +42,7 @@ test('every declared picker has exactly one dialog in the host, and every opener
     assert.equal(new Set(declared).size, declared.length);
     const hosted = [...host.matchAll(/picker\('(is\w+PickerOpen)'\)/g)].map(match => match[1]);
     assert.deepEqual([...hosted].sort(), [...declared].sort());
-    const openers = ['../App.tsx', './ImageGeneratorTab.tsx', './CharacterTab.tsx', './groupPhotoFusion/GroupPhotoFusionPanel.tsx'].flatMap(file =>
+    const openers = ['../App.tsx', './ImageGeneratorTab.tsx', './CharacterTab.tsx', './photoFusion/PhotoFusionPanel.tsx'].flatMap(file =>
         [...read(file).matchAll(/modal: '(is\w+Open)', isOpen: true/g)].map(match => match[1]));
     assert.ok(openers.length >= 25, `Found ${openers.length} openers`);
     for (const name of openers) assert.ok(declared.includes(name), `${name} is opened but has no dialog`);

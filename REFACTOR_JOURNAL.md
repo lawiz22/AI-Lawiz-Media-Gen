@@ -1800,6 +1800,108 @@ Non vérifié : **l'installateur n'a pas été lancé**, ni l'application empaqu
 
 État de Git, laissé tel quel (je n'indexe ni ne commite rien) : 155 entrées indexées par l'utilisateur ; les autres changements ne le sont pas, dont deux fichiers nouveaux jamais suivis, `components/CharacterTab.tsx` et `components/ImageGeneratorTab.tsx`, que `App.tsx` importe. Un commit sans eux ne se construirait pas.
 
+### 2026-11-20 — Push refusé par GitHub (adresse courriel privée)
+
+L'utilisateur a commité la version 2.0.0 en deux commits ; GitHub a refusé le push (« push declined due to email privacy restrictions ») parce que ces commits portaient son adresse Gmail et que son compte bloque les pushes qui l'exposent.
+
+Correction choisie par l'utilisateur : utiliser l'adresse privée GitHub, pour ce dépôt seulement.
+
+- `user.email` de ce dépôt réglé sur l'adresse `…@users.noreply.github.com` du compte. La configuration Git globale n'est pas modifiée.
+- Les deux commits en attente ont été recréés avec cette adresse (auteur et committer). Contenu identique vérifié, dates conservées, messages identiques à une ligne vide finale près. Les fichiers de travail n'ont pas été touchés.
+- Push normal (non forcé) réussi : `aaa7071..d558acc`. La branche locale et `origin/main` sont au même commit.
+
+À savoir : les commits publiés avant celui-ci contiennent toujours l'adresse Gmail ; ils n'ont pas été modifiés. Les anciens commits locaux (`57146ca`, `0bb9647`) ne sont plus sur aucune branche.
+
+## Licence : code issu de zGenMedia
+
+### 2026-11-22 — Évaluation avant remplacement (aucun code modifié)
+
+Demande de l'utilisateur : zGenMedia ne répond pas ; remplacer le code qui en provient, sauf la création de personnage qu'il estime déjà substantiellement modifiée, pour pouvoir présenter l'application sous GPL. D'abord une évaluation.
+
+Méthode : les fichiers publics des deux projets (Portrait Generator v2.0, Group Photo Fusion) ont été téléchargés dans le dossier temporaire et comparés ligne par ligne à tous les fichiers source de l'application, et au premier jour du dépôt (2025-09-08). Une ligne compte si elle est identique après normalisation des espaces et fait au moins 25 caractères.
+
+Faits relevés :
+
+- Aucun des deux projets n'a de licence (ni champ GitHub, ni fichier). La demande d'autorisation est ouverte depuis le 2026-10-19, sans aucune réponse.
+- Le premier jour du dépôt, onze fichiers étaient des copies de Portrait Generator à 55–100 % (`App.tsx`, `ImageUploader`, `icons`, `OptionsPanel`, `constants`, `ImageGrid`, `Loader`, `Header`, `index.html`, `imageUtils`, `vite.config`).
+- Aujourd'hui, 622 lignes sur l'ensemble du code sont identiques à une ligne d'un des deux projets ; la plupart sont du code banal. Les concentrations réelles :
+
+| Partie | Fichiers | Ce qui reste |
+| --- | --- | --- |
+| Photo Fusion (onglet Fun) | 11 fichiers, environ 1 870 lignes | Clairement dérivé : 38 à 77 % de lignes identiques dans six petits composants et les types, 82 lignes dans le panneau, 9 titres de pose sur 13 et 7 descriptions mot pour mot |
+| Fichiers partagés venus de Portrait Generator | `ImageUploader.tsx`, `icons.tsx`, `utils/imageUtils.ts`, `Loader.tsx` | `ImageUploader` : 57 % du fichier d'origine survit ; 6 icônes sur 68 ont un dessin identique ; une fonction de `imageUtils` et son motif de lecture de fichier |
+| Fichiers partagés réécrits au fil du temps | `App.tsx`, `ImageGrid.tsx`, `Header.tsx`, `index.html`, `vite.config.ts` | Quelques lignes banales (4 à 20 par fichier) |
+| Création de personnage (exclue par l'utilisateur) | `constants.ts`, `OptionsPanel.tsx`, `services/geminiService.ts` | Le code est bien réécrit (15 et 19 lignes banales), **mais 11 des 33 textes de pose sont mot pour mot ceux de Portrait Generator** (stockés encodés dans `constants.ts`) |
+
+Limites :
+
+- La mesure ne voit que les lignes identiques. Du code copié puis renommé ou reformaté lui échappe.
+- Ce n'est pas un avis juridique. Le fichier `LICENSING.md` du dépôt dit lui-même qu'une modification substantielle ne vaut pas autorisation.
+- Les icônes d'origine ressemblent à un jeu d'icônes libre courant ; je ne l'ai pas vérifié.
+- L'historique Git et les installateurs déjà produits contiennent l'ancien code ; remplacer le code actuel ne les change pas.
+
+Outils dans le dossier temporaire : `lawiz-zgen\` (fichiers d'origine), `lawiz-zgen-fetch.mjs.txt`, `lawiz-zgen-compare.mjs.txt`.
+
+### 2026-11-22 — Remplacement du code issu de zGenMedia
+
+Décisions de l'utilisateur : réécrire aussi les 11 textes de pose de la création de personnage ; profiter de la réécriture de Photo Fusion pour retirer le superflu, dont le mode débogage ; garder dans `LICENSING.md` une ligne d'origine pour la création de personnage.
+
+**Photo Fusion, réécrit à partir de son comportement.** Supprimés (11 fichiers) : `components/groupPhotoFusion/` (7 fichiers), `groupPhotoFusion/constants.ts` et `types.ts`, `services/groupPhotoFusionService.ts`, `store/groupPhotoFusionSlice.ts`. Nouveaux :
+
+| Fichier | Rôle |
+| --- | --- |
+| `photoFusion/scenes.ts` | Types, 13 scènes décrites comme des données, 11 expressions, 3 niveaux de détail, construction du prompt |
+| `services/photoFusionService.ts` | Limites par moteur et un seul point d'entrée pour les quatre moteurs |
+| `store/photoFusionSlice.ts` | État (la scène est un identifiant, plus un objet contenant une fonction) |
+| `components/photoFusion/PhotoFusionPanel.tsx` | Écran |
+| `services/photoFusion.test.mjs` | 6 tests nouveaux |
+
+Ce qui change pour l'utilisateur :
+
+- disposition standard : personnes, arrière-plan, scène, détail et nombre d'images à gauche, puis **Models**, **LoRAs**, **Sampler**, **Advanced** ; à droite le prompt réellement envoyé (lecture seule), le bouton et les résultats. Avant, l'écran n'affichait rien d'autre que la zone de dépôt tant qu'aucune photo n'était chargée ;
+- les scènes, leurs titres, les expressions et tous les textes de prompt sont nouveaux : les images produites ne seront pas les mêmes qu'avant ;
+- **retirés** : le mode débogage et sa section, la double barre de progression par image, le grand écran « Your Fused Photos are Ready! » ;
+- QWEN-Edit a maintenant les champs de graine, comme FLUX2, et suit la même règle de graine (avant : fixe ou aléatoire seulement) ;
+- l'en-tête affiche « Gemini · modèle » quand Gemini est choisi (il affichait Mammouth) ;
+- les messages d'erreur sont nouveaux et disent ce qui bloque avant le clic (pas assez de personnes, limite de QWEN-Edit, scène pour deux personnes, connexion ou nœuds manquants).
+
+Conservés : quatre moteurs et leurs réglages (`GenerationOptions`, donc préréglages et Library inchangés), personne connue, arrière-plan, import depuis la Library, enregistrement dans la Library (même type `group-fusion`), envoi à LTX, nouvel essai, ZIP.
+
+**Code partagé venu de Portrait Generator, réécrit** : `components/ImageUploader.tsx` (mêmes propriétés pour ses 20 utilisateurs ; aperçu par URL d'objet au lieu d'une lecture du fichier), `components/Loader.tsx`, les trois fonctions de lecture de fichier de `utils/imageUtils.ts` (une seule fonction commune), 7 dessins d'icônes (`UploadIcon`, `UploadCloudIcon`, `SpinnerIcon`, `SaveIcon`, `ImageIcon`, `ZipIcon`, `CloseIcon`). `UploadIcon` respecte maintenant la taille demandée (il était toujours en 6) ; `CloseIcon` garde sa taille fixe pour ne pas changer ses 61 usages.
+
+**Création de personnage** : les 13 premières poses (11 identiques à Portrait Generator, 2 copies abîmées à l'encodage) sont réécrites, avec de nouveaux noms dans la liste à cocher. Les 33 poses sont maintenant en texte clair au lieu d'être encodées en base64 (le commentaire « Obfuscated poses to protect intellectual property » venait aussi de l'origine) ; deux fautes corrigées au passage. Les réglages enregistrés avant 2.0 contiennent des poses encodées : elles sont toujours décodées et envoyées telles quelles, mais ces anciennes sélections n'apparaissent plus cochées dans la liste.
+
+**Licence et documentation** : `LICENSING.md` remplace « permission pending » par ce qui a été remplacé, comment c'est vérifié et les limites ; la création de personnage y garde sa ligne d'origine. README (statut, remerciements, licence), `docs/development.md` et la section Photo Fusion de `docs/features/swap-and-fusion.md` mis à jour.
+
+Mesure après remplacement (même méthode que l'évaluation) :
+
+| | Avant | Après |
+| --- | --- | --- |
+| Lignes identiques à une ligne des deux projets | 622 | 327 |
+| Dont 60 caractères ou plus | 155 | 65 |
+| Fichiers d'origine retrouvés à plus de 40 % | 12 | 2 (`vite.config.ts` des deux projets, 5 lignes du modèle Google AI Studio) |
+
+Les lignes restantes de 45 caractères ou plus ont été relues une à une : écouteurs de clavier, `useState` d'erreur, appels de l'API Gemini, `index.html`/`index.tsx`/`vite.config.ts` du modèle AI Studio, et dans `icons.tsx` l'enveloppe `<svg …>` commune à tous les jeux d'icônes (aucun dessin identique). Deux libellés d'options d'arrière-plan de la création de personnage (« Green Screen », « Natural Studio ») restent identiques.
+
+Vérifié :
+
+- typecheck 18 erreurs (mêmes fichiers) ; 978 tests (964 réussis, 0 en échec, 14 ignorés ; les 6 nouveaux compris) ; build Vite temporaire réussi ;
+- `check:panels` avec exercice : Fun 14/14 (les 4 variantes de Photo Fusion, photos chargées), Character 7/7, Image 22/22, Tools 14/14, Library 2/2 ; contraste de Fun : 0 texte sous 4,5:1 dans Studio Light et dans Cyberpunk ;
+- parcours dans le navigateur avec ComfyUI simulé, 14 vérifications réussies : une personne bloque la génération, trois personnes, Cheek Kiss désactivée à trois, expression et personne connue dans le prompt, Film Poster ignore l'arrière-plan, Line-Up l'utilise, limite de QWEN-Edit puis levée en retirant une personne, Mammouth non connecté, bouton Library, Remove all, aucune erreur de page ;
+- `check:locks` 13/13, `check:tab-jobs` 6/6, `profile:renders` 5 réussies ;
+- `check:tabs` : seul Fun change (2 listes natives et 3 listes avec recherche visibles dès la première visite). Nouvelle référence enregistrée ; l'ancienne est gardée (`lawiz-tabs-control-before-fusion.txt`) ;
+- `check:ui` : **1 échec sur 9 exécutions**, scénario non relevé (la première exécution n'affichait que le compte). Les 8 suivantes ont réussi. Le harnais ne touche pas Photo Fusion ; il utilise deux des icônes redessinées. Point « À régler » 3 rouvert.
+
+Non vérifié : **aucune génération** avec les nouveaux prompts, ni sur aucun des quatre moteurs (les images, l'identité des visages et le respect du nombre de personnes restent à juger par l'utilisateur) ; l'enregistrement dans la Library et l'envoi à LTX depuis un vrai résultat ; rien dans Electron ; les icônes redessinées n'ont été vues que sur quelques captures.
+
+### 2026-11-22 — Installateur reconstruit
+
+Demande de l'utilisateur. `npm run electron:build`, fichiers temporaires sur E: puis supprimés (C: avait 3,8 Go libres).
+
+- `dist\lawiz's-media-generator-v-2 Setup 2.0.0.exe`, 252 Mo ; il remplace celui du 2026-11-20, qui contenait encore l'ancien code. La version reste 2.0.0.
+- Vérifié avant : typecheck 18 erreurs, 978 tests (964 réussis, 0 en échec). Après : empreinte SHA-512 et taille conformes à `latest.yml`, exécutable en 2.0.0, le paquet contient le nouveau Photo Fusion et plus le texte du mode débogage, `LICENSING.md` à jour est dans l'archive de l'application. La seule ligne « erreur » du journal de construction est un avertissement de Vite écrit sur la sortie d'erreur.
+- Non vérifié : l'installateur n'a pas été lancé.
+
 ---
 
 ## Suivi général
@@ -1826,7 +1928,7 @@ Non vérifié : **l'installateur n'a pas été lancé**, ni l'application empaqu
 
 1. ~~**Library : erreur à la première ouverture après un redémarrage.**~~ Corrigé le 2026-11-19 (voir « Correctif Library »). **Confirmé par l'utilisateur dans Electron.**
 2. ~~**Opacité sur les couleurs du thème sans effet**~~ (constat de B4) : 187 classes dans 51 fichiers au départ, aucune après B5g (2026-11-20). Reste la décision du point ouvert 11.
-3. ~~**`check:ui` échoue par intermittence**~~ (3 exécutions sur 22 le 2026-11-19) : harnais corrigé le 2026-11-20, 25 exécutions de suite sans échec ; cause probable trouvée mais non reproduite (voir « Liste À régler »). À rouvrir si un échec revient. Constat d'origine : une fois sans aucun résultat affiché, deux fois avec un scénario en échec. Le seul échec capturé est un délai dépassé au chargement de la page du harnais (`page.goto`, 30 s), pas une assertion sur le kit. Cause non identifiée ; je ne sais pas si le défaut existait avant cette session, le harnais ayant été lancé moins souvent.
+3. **`check:ui` échoue par intermittence** (3 exécutions sur 22 le 2026-11-19) : harnais corrigé le 2026-11-20, 25 exécutions de suite sans échec ; **rouvert le 2026-11-22** : 1 échec sur 9 exécutions, scénario non relevé (voir « Remplacement du code issu de zGenMedia »). À la prochaine occurrence, noter le scénario et le message. Constat d'origine : une fois sans aucun résultat affiché, deux fois avec un scénario en échec. Le seul échec capturé est un délai dépassé au chargement de la page du harnais (`page.goto`, 30 s), pas une assertion sur le kit. Cause non identifiée ; je ne sais pas si le défaut existait avant cette session, le harnais ayant été lancé moins souvent.
 4. ~~**Onglets actifs peu lisibles dans « Studio Light »**~~ (constat du 2026-11-20) : réglé le 2026-11-20 avec l'ensemble du thème clair (voir « Thème clair » ; reste 46 textes entre 2,7 et 4,5:1, listés là). Constat d'origine : la barre d'onglets principale et les sous-onglets Video utilisent des couleurs fixes de la palette (texte ambre clair sur fond ambre clair). Vu sur capture, non corrigé ; les autres barres de sous-onglets n'ont pas été regardées dans ce thème. Plus largement : 226 textes de couleur claire fixe (ambre, émeraude, cyan, rouge… en teinte 200 à 400) dans 37 fichiers, pensés pour un fond sombre ; les plus touchés sont `CivitaiInventoryPanel` 29, `MinimaxH3Panel` 28, `VideoWorkspace` 18, `LibraryPanel` 17. Tous ne sont pas illisibles sur fond clair ; aucun tri fait. Relevé complet du 2026-11-20 (fichiers `.ts` compris) : 587 classes de couleur fixe dans 49 fichiers sur 226 (texte 236, fond 201, bordure 119, autres 31), dont 9 fichiers de plus de 20 classes et 26 de 5 ou moins. Deux causes s'ajoutent aux classes : la table des accents par onglet (`utils/accentTheme.ts`, 17 couleurs pastel identiques dans tous les thèmes, qui remplacent l'accent du thème dans chaque onglet) et les 13 styles d'onglet actif de `App.tsx`. Limite connue : les fonds teintés (`bg-amber-400/15`) n'ont pas d'équivalent en couleur de thème tant que celles-ci n'acceptent pas l'opacité.
 5. ~~**Audio Extractor : le champ « End (s) » affiche toutes les décimales**~~ (constat du 2026-11-20, par exemple 3.01859410430839) : corrigé le 2026-11-20 (voir « Liste À régler »).
 6. **Champs de découpe de H3, Clips, Merge et Frames** : même défaut possible après « Set start here » ou « Set end here », non observé, non corrigé.

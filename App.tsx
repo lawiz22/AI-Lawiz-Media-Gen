@@ -29,7 +29,7 @@ import {
     setActiveLogoThemeSubTab, resetLogoThemeState, updateLogoThemeState
 } from './store/logoThemeSlice';
 import { fetchLibrary } from './store/librarySlice';
-import { removeAllFiles, setUploadedFiles } from './store/groupPhotoFusionSlice';
+import { resetPhotoFusion } from './store/photoFusionSlice';
 import { removedImageWorkflowMessage } from './constants';
 
 import type { User, GenerationOptions, GeneratedClothing, LibraryItem, VersionInfo, DriveFolder, VideoUtilsState, PromptGenState, ExtractorState, IdentifiedObject, LogoThemeState, LibraryItemType, MannequinStyle, AppSliceState, UploadedFile, Provider } from './types';
@@ -79,7 +79,6 @@ import { CloudImageProviderBar } from './components/CloudImageProviderBar';
 import * as driveService from './services/googleDriveService';
 import { clearDriveFileReferences, setDriveService, syncLibraryFromDrive, syncLibraryToDrive } from './services/libraryService';
 import { FunTab, type FunSubTab } from './components/FunTab';
-import { PERSONAS } from './groupPhotoFusion/constants';
 import { getTabAccentStyle } from './utils/accentTheme';
 
 const IMAGE_JOBS_KEY = 'image-generator';
@@ -140,7 +139,7 @@ const App: React.FC = () => {
 
     // --- Video State (from videoSlice) ---
     const activeVideoUtilsSubTab = useSelector((state: RootState) => state.video.activeVideoUtilsSubTab);
-    const groupPhotoFusionProvider = useSelector((state: RootState) => state.groupPhotoFusion.provider);
+    const photoFusionEngine = useSelector((state: RootState) => state.photoFusion.engine);
 
     // --- Prompt Gen State (from promptGenSlice) ---
     const activePromptToolsSubTab = useSelector((state: RootState) => state.promptGen.activePromptToolsSubTab);
@@ -596,7 +595,7 @@ const App: React.FC = () => {
         if (activeTab === 'ltx-director') dispatch(clearLtxTransfer());
         if (activeTab === 'prompt-generator') dispatch(resetPromptGenState());
         if (activeTab === 'extractor-tools') dispatch(resetExtractorState());
-        if (activeTab === 'fun') dispatch(removeAllFiles());
+        if (activeTab === 'fun') dispatch(resetPhotoFusion());
         if (activeTab === 'logo-theme-generator') dispatch(resetLogoThemeState());
         if (activePanelResetKey === 'video-utils') dispatch(resetVideoUtilsState());
         if (activePanelResetKey === 'upscale') setUpscaleSourceFile(null);
@@ -1021,11 +1020,13 @@ const App: React.FC = () => {
         activeModel = 'Qwen Image 2.1 Outpaint';
     } else if (activeTab === 'fun') {
         activeModel = activeFunSubTab === 'photo-fusion'
-            ? groupPhotoFusionProvider === 'comfyui'
+            ? photoFusionEngine === 'comfyui'
                 ? 'ComfyUI · FLUX2 Photo Fusion'
-                : groupPhotoFusionProvider === 'qwen'
+                : photoFusionEngine === 'qwen'
                     ? `Qwen Edit · ${options.comfyQwenEditUnet || 'qwen_image_edit_2509_fp8_e4m3fn.safetensors'}`
-                    : `Mammouth · ${options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL}`
+                    : photoFusionEngine === 'gemini'
+                        ? `Gemini · ${options.geminiT2IModel || DEFAULT_GEMINI_IMAGE_MODEL}`
+                        : `Mammouth · ${options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL}`
             : activeFunSubTab === 'past-forward'
                 ? options.pastForwardProvider === 'mammouth'
                     ? (options.mammouthImageModel || DEFAULT_MAMMOUTH_IMAGE_MODEL)
@@ -1076,7 +1077,7 @@ const App: React.FC = () => {
         : activeTab === 'extractor-tools' && activeExtractorSubTab === 'font'
             ? (extractorState.fontGenerationProvider || 'flux2') === 'gemini' ? 'gemini' : (extractorState.fontGenerationProvider || 'flux2') === 'mammouth' ? 'mammouth' : 'comfyui'
         : activeTab === 'fun' && activeFunSubTab === 'photo-fusion'
-            ? groupPhotoFusionProvider === 'mammouth' ? 'mammouth' : 'comfyui'
+            ? photoFusionEngine === 'mammouth' || photoFusionEngine === 'gemini' ? photoFusionEngine : 'comfyui'
         : activeTab === 'fun' && activeFunSubTab === 'past-forward'
             ? options.pastForwardProvider === 'mammouth' ? 'mammouth' : 'comfyui'
         : activeTab === 'fun' && (activeFunSubTab === 'swap-anything' || activeFunSubTab === 'swap-person')

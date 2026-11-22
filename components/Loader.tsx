@@ -3,47 +3,31 @@ import { SpinnerIcon, CloseIcon } from './icons';
 
 interface LoaderProps {
   message?: string;
-  progress: number; // A value from 0 to 1
+  /** Between 0 and 1. */
+  progress: number;
   onCancel?: () => void;
 }
 
+/** Progress card shown while a generation runs. */
 export const Loader: React.FC<LoaderProps> = ({ message, progress, onCancel }) => {
-  const fillPercentage = Math.round(progress * 100);
-
+  const percent = Math.max(0, Math.min(100, Math.round(progress * 100)));
   return (
-    <div className="flex flex-col items-center justify-center text-center w-full max-w-md">
-      <div className="w-full rounded-xl border-2 border-border-primary shadow-lg p-6">
-        <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-accent uppercase tracking-widest flex items-center gap-2">
-                <SpinnerIcon className="w-5 h-5 animate-spin" />
-                Generating
-            </h3>
-            <p className="text-3xl font-bold font-mono text-text-primary">{fillPercentage}%</p>
-        </div>
-
-        <div className="h-4 w-full bg-bg-primary rounded-full overflow-hidden border border-border-primary mb-4">
-            <div
-                className="h-full bg-accent rounded-full transition-all duration-300 ease-out shadow-[0_0_15px_var(--color-accent)]"
-                style={{ width: `${fillPercentage}%` }}
-            />
-        </div>
-
-        <p className="text-sm text-text-secondary h-5 truncate" title={message}>
-          {message || 'Initializing...'}
-        </p>
-
-        {onCancel && (
-            <div className="mt-6">
-                <button
-                    onClick={onCancel}
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto mx-auto bg-danger-bg text-danger font-semibold py-2 px-6 rounded-lg hover:bg-danger hover:text-white transition-colors duration-200"
-                >
-                    <CloseIcon className="w-5 h-5" />
-                    Cancel Generation
-                </button>
-            </div>
-        )}
+    <section aria-label="Generation progress" className="w-full max-w-md space-y-4 rounded-xl border border-border-primary bg-bg-secondary p-5 shadow-lg">
+      <div className="flex items-center gap-3">
+        <SpinnerIcon className="h-6 w-6 animate-spin text-accent" />
+        <span className="flex-1 text-sm font-semibold text-text-primary">Generating</span>
+        <span className="font-mono text-2xl font-bold text-accent">{percent}%</span>
       </div>
-    </div>
+      <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="h-3 overflow-hidden rounded-full bg-bg-tertiary">
+        <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${percent}%` }} />
+      </div>
+      <p className="truncate text-sm text-text-secondary" title={message}>{message || 'Starting...'}</p>
+      {onCancel && (
+        <button type="button" onClick={onCancel} className="mx-auto flex items-center gap-2 rounded-lg border border-danger px-5 py-2 text-sm font-semibold text-danger hover:bg-danger-bg">
+          <CloseIcon className="h-4 w-4" />
+          Cancel Generation
+        </button>
+      )}
+    </section>
   );
 };
