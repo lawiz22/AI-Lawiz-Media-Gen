@@ -1902,6 +1902,14 @@ Demande de l'utilisateur. `npm run electron:build`, fichiers temporaires sur E: 
 - Vérifié avant : typecheck 18 erreurs, 978 tests (964 réussis, 0 en échec). Après : empreinte SHA-512 et taille conformes à `latest.yml`, exécutable en 2.0.0, le paquet contient le nouveau Photo Fusion et plus le texte du mode débogage, `LICENSING.md` à jour est dans l'archive de l'application. La seule ligne « erreur » du journal de construction est un avertissement de Vite écrit sur la sortie d'erreur.
 - Non vérifié : l'installateur n'a pas été lancé.
 
+### 2026-11-22 — Version 2.0.1
+
+Décision de l'utilisateur : passer à 2.0.1 pour distinguer cet installateur de celui du 2026-11-20, qui portait aussi le numéro 2.0.0.
+
+Fichiers touchés : `package.json`, `package-lock.json`, `version.json` (notes affichées dans l'infobulle de la version), `README.md` (badge et ligne « 2.0.1 » dans « What's new in 2.0 »), `docs/development.md`.
+
+Installateur reconstruit : `dist\lawiz's-media-generator-v-2 Setup 2.0.1.exe`, 252 Mo ; la construction vide `dist`, l'installateur 2.0.0 n'y est plus. Vérifié : typecheck 18 erreurs, 978 tests (964 réussis, 0 en échec) avant ; après, `latest.yml` en 2.0.1 avec empreinte et taille conformes, exécutable en 2.0.1, notes 2.0.1 présentes dans le paquet. Non vérifié : l'installateur n'a pas été lancé.
+
 ---
 
 ## Suivi général

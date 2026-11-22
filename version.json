@@ -1,5 +1,5 @@
 {
-  "version": "2.0",
-  "date": "2026-11-20T00:00:00Z",
-  "changes": "Every settings panel now uses the same layout: sources, then Models, LoRAs, Sampler and Advanced on the left; prompt, Generate and results on the right. Lists, sliders and prompt boxes are standardised: searchable model and LoRA lists filtered by model family, sliders with a manual field, and prompt boxes coloured by role. Lists and menus are released reliably after a generation, a stop or an error, and switching tabs no longer cancels a running job. The Studio Light theme is readable everywhere and the dark themes use dark text on accent buttons. The FLUX 1, Nunchaku, FLUX Krea and WAN 2.2 workflows were removed."
+  "version": "2.0.1",
+  "date": "2026-11-22T00:00:00Z",
+  "changes": "Photo Fusion was rewritten: standard layout, thirteen new scenes, new prompts shown before sending, and no debug mode. Code inherited from earlier starting points was replaced, including the image upload box, the progress card, several icons and the first thirteen character poses. Version 2.0 reworked every settings panel into one layout with standard lists, sliders and prompt boxes, made lists and menus reliable after a generation, kept running jobs when switching tabs, made Studio Light readable everywhere and removed the FLUX 1, Nunchaku, FLUX Krea and WAN 2.2 workflows."
 }
