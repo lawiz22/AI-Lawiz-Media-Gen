@@ -185,7 +185,9 @@ test('RAW ignores Simple KREA style settings and only Simple mounts the shared s
     assert.match(panel, /checked=\{!!options\.comfyKreaUseStyleSettings\}/);
     assert.match(read('../components/LoraSettingsPanel.tsx'), /options\.comfyModelType === 'krea2-simple' && <ImageStyleControl[^>]+showSamplingControl=\{false\}/);
     assert.doesNotMatch(panel, /modelType === 'krea2-(?:raw|edit)' && <ImageStyleControl/);
-    for (const file of ['../App.tsx', '../store/generationSlice.ts', '../components/CivitaiInventoryPanel.tsx']) {
+    // App applies the shared Simple defaults declared in promptDestination.
+    assert.match(read('../App.tsx'), /applyDefaultsIfMissing\(KREA2_SIMPLE_DEFAULTS\)/);
+    for (const file of ['../utils/promptDestination.ts', '../store/generationSlice.ts', '../components/CivitaiInventoryPanel.tsx']) {
         assert.match(read(file), /comfyKreaStyle: undefined/);
         assert.match(read(file), /comfyKreaUseStyleSettings: false/);
     }
@@ -303,7 +305,9 @@ test('Simple workflow template and prompt imports share Turbo defaults without d
         ts.forEachChild(node, findDefaults);
     };
     findDefaults(appTree); assert.ok(appDefaults);
-    const { defaults } = await import(compile(`export const defaults = ${appDefaults};`));
+    // App may pass the shared constant from promptDestination instead of an inline object.
+    const defaults = /^[A-Z0-9_]+$/.test(appDefaults) ? destination[appDefaults] : (await import(compile(`export const defaults = ${appDefaults};`))).defaults;
+    assert.ok(defaults, `${appDefaults} is exported by promptDestination`);
     assert.equal(defaults.comfyKreaUnet, 'krea2_turbo_fp8_scaled.safetensors');
     assert.equal(defaults.comfyKreaLora1Name, '');
 });

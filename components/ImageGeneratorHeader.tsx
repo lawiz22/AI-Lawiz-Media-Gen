@@ -287,7 +287,7 @@ export const ImageGeneratorHeader: React.FC<ImageGeneratorHeaderProps> = ({
         </div>
         {options.provider === 'comfyui' && <div role="tablist" aria-label="ComfyUI workflow" className="mb-5 flex min-w-0 overflow-x-auto border-b border-border-primary" onKeyDown={event => {
             if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-            const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="tab"]:not(:disabled)'));
+            const tabs = Array.from((event.currentTarget as HTMLDivElement).querySelectorAll<HTMLButtonElement>('button[role="tab"]:not(:disabled)'));
             const current = tabs.indexOf(event.target as HTMLButtonElement);
             if (current < 0) return;
             event.preventDefault();

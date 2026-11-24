@@ -792,6 +792,8 @@ export interface CharacterSwapLibraryOptions {
 export interface LibraryItem {
   id: number; // Unique ID, typically a timestamp
   name?: string;
+  characterName?: string;
+  prompt?: string;
   mediaType: LibraryItemType;
   safetyRating?: 'sfw' | 'nsfw';
   tags?: string[];

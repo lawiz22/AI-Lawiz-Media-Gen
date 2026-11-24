@@ -333,7 +333,7 @@ export const LTXDirectorPanel: React.FC<LTXDirectorPanelProps> = ({ isComfyUICon
         const loadSources = async () => {
             const inventory = await window.electron!.getCivitaiInventory().catch(() => undefined);
             if (!inventory) return;
-            const sources = await Promise.all(loras.filter((lora) => lora.enabled && lora.name).map(async (lora) => {
+            const sources = await Promise.all(loras.filter((lora) => lora.enabled && lora.name).map(async (lora): Promise<LtxPromptExampleSource | null> => {
                 const item = findInventoryModel(inventory, lora.name);
                 if (!item) return null;
                 return {

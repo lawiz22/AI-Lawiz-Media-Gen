@@ -6,7 +6,8 @@ export interface SelectOption<T extends string | number = string> { value: T; la
 export interface SelectProps<T extends string | number = string> {
     value: T;
     options: readonly (T | SelectOption<T>)[];
-    onChange: (value: T, event?: ChangeEvent<HTMLSelectElement>) => void;
+    // NoInfer: a state setter passed here must not widen T to string | number.
+    onChange: (value: NoInfer<T>, event?: ChangeEvent<HTMLSelectElement>) => void;
     /** native: short fixed lists. search: long lists such as models, LoRAs and samplers. */
     variant?: 'native' | 'search';
     label?: string;

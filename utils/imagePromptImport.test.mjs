@@ -13,7 +13,7 @@ const { defaultKrea2EditSettings } = await import(kreaUrl);
 const destinationSource = readFileSync(new URL('./promptDestination.ts', import.meta.url), 'utf8')
     .replace("from '../services/qwen21Workflow'", `from '${qwenUrl}'`)
     .replace("from '../services/krea2EditWorkflow'", `from '${kreaUrl}'`);
-const { getImagePromptOnlyUpdate } = await import(moduleUrl(destinationSource));
+const { getImagePromptOnlyUpdate, getKrea2PromptUpdate, KREA2_SIMPLE_DEFAULTS, KREA2_RAW_DEFAULTS } = await import(moduleUrl(destinationSource));
 const { filterLibraryPrompts, getLibraryPromptPreview } = await import(moduleUrl(readFileSync(new URL('./libraryPrompt.ts', import.meta.url), 'utf8')));
 const prompt = '  A saved positive prompt.\nWith its original formatting.  ';
 const base = { provider: 'comfyui', comfyModelType: 'sdxl', comfySteps: 27, comfyCfg: 4.2, comfyNegativePrompt: 'Keep this negative', comfySeed: 123, comfySampler: 'euler', comfyScheduler: 'normal', aspectRatio: '3:4', numImages: 2, comfyPrompt: 'old' };
@@ -49,6 +49,22 @@ test('KREA2 edit Library prompt import preserves task, composer, sources, LoRAs 
     assert.deepEqual(getImagePromptOnlyUpdate(prompt, options, 'i2i'), { comfyKrea2Edit: { ...nested, prompt } });
     assert.deepEqual(options, before);
     assert.deepEqual(getImagePromptOnlyUpdate(prompt, { ...base, comfyModelType: 'krea2-edit' }, 'i2i'), { comfyKrea2Edit: { ...defaultKrea2EditSettings(), prompt } });
+});
+
+test('KREA2 prompt helper keeps existing workflow settings and applies guide settings only on request', () => {
+    const current = { ...base, comfyModelType: 'krea2-simple', comfyKreaLora3Name: 'KREA\\mine.safetensors', comfySteps: 12 };
+    assert.deepEqual(getKrea2PromptUpdate(prompt, 'krea2-simple', current), { comfyKreaPrompt: prompt });
+    assert.deepEqual(getKrea2PromptUpdate(prompt, 'krea2-simple', current, { comfySteps: 8, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'beta', comfyKreaResolution: '1024x1024' }),
+        { comfyKreaPrompt: prompt, comfySteps: 8, comfyCfg: 1, comfySampler: 'euler', comfyScheduler: 'beta', comfyKreaResolution: '1024x1024' });
+    assert.deepEqual(getKrea2PromptUpdate(prompt, 'krea2-simple'), { ...KREA2_SIMPLE_DEFAULTS, comfyKreaPrompt: prompt });
+    assert.deepEqual(getKrea2PromptUpdate(prompt, 'krea2-raw', undefined, { comfyKreaResolution: '1440x1440' }), { ...KREA2_RAW_DEFAULTS, comfyKreaPrompt: prompt, comfyKreaResolution: '1440x1440' });
+    const nested = { ...defaultKrea2EditSettings(), task: 'identity', refBoost: 2, steps: 20, cfg: 3 };
+    assert.deepEqual(getKrea2PromptUpdate(prompt, 'krea2-edit', { comfyKrea2Edit: nested }), { comfyKrea2Edit: { ...nested, prompt } });
+    assert.deepEqual(getKrea2PromptUpdate(prompt, 'krea2-edit', { comfyKrea2Edit: nested }, { edit: { steps: 8, cfg: 1, sampler: 'euler', scheduler: 'beta', aspect: '16:9' } }),
+        { comfyKrea2Edit: { ...nested, prompt, steps: 8, cfg: 1, sampler: 'euler', scheduler: 'beta', aspect: '16:9' } });
+    assert.equal(KREA2_SIMPLE_DEFAULTS.comfyKreaUnet, 'krea2_turbo_fp8_scaled.safetensors');
+    assert.equal(KREA2_RAW_DEFAULTS.comfyKreaLora1Strength, 0.6);
+    assert.throws(() => getKrea2PromptUpdate('  ', 'krea2-simple'), /KREA2 prompt/);
 });
 
 test('Gemini and Mammouth prompt import targets T2I and active I2I fields without changing modes or tasks', () => {

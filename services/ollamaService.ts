@@ -207,6 +207,10 @@ const chatWithOllama = async (url: string, model: string, content: string, image
     return text;
 };
 
+export const generateOllamaText = (
+    content: string, url: string, model: string, image?: File, onActivity?: OllamaActivityCallback, signal?: AbortSignal,
+): Promise<string> => chatWithOllama(url, model, content, image, undefined, 0.5, onActivity, signal);
+
 export const generateOllamaImagePrompt = (
     image: File, instruction: string, url: string, model: string, signal?: AbortSignal,
 ): Promise<string> => chatWithOllama(url, model, instruction, image, undefined, 0.35, undefined, signal);

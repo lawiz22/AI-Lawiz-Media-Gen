@@ -23,6 +23,7 @@ import { Qwen21SettingsPanel } from './Qwen21SettingsPanel';
 import { MossSettingsPanel } from './MossSettingsPanel';
 import { MossPhotoSettingsPanel } from './MossPhotoSettingsPanel';
 import { Krea2EditSettingsPanel } from './Krea2EditSettingsPanel';
+import { Krea2PromptHelperButton } from './Krea2PromptStudio';
 import { ImageStyleControl } from './ImageStyleControl';
 import { defaultFlux2Clip } from '../services/flux2EditWorkflow';
 import { LibraryPromptButton } from './LibraryPromptButton';
@@ -1334,7 +1335,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             {characterOutputsContainer === undefined ? outputControls : characterOutputsContainer ? createPortal(outputControls, characterOutputsContainer) : null}
 
             <OptionSection title="Background">
-                <SelectInput label="Background Source" value={options.background} onChange={event => updateOptions({ background: event.target.value, comfyCharacterPreserveBackgroundPerspective: false })} options={backgroundOptions} disabled={isDisabled} />
+                <SelectInput label="Background Source" value={options.background} onChange={event => updateOptions({ background: event.target.value as GenerationOptions['background'], comfyCharacterPreserveBackgroundPerspective: false })} options={backgroundOptions} disabled={isDisabled} />
                 {supportsReferences && <label className="flex items-center gap-2 text-sm font-medium text-text-secondary" title="Replace background instructions with the original scene viewed from the requested angle. Background references are ignored while enabled; stored prompts remain unchanged.">
                     <input type="checkbox" checked={options.background !== 'green screen' && !!options.comfyCharacterPreserveBackgroundPerspective} onChange={event => updateOptions({ comfyCharacterPreserveBackgroundPerspective: event.target.checked })} disabled={isDisabled || options.background === 'green screen'} className="rounded text-accent focus:ring-accent" />
                     Preserve original background with new perspective
@@ -1500,7 +1501,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
             const panel = (section: 'main' | 'models' | 'prompt' | 'advanced') => <Krea2EditSettingsPanel section={section} options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled}
                 sourceFile={sourceImage} secondFile={elementImages?.[0]} onSourceChange={onSourceImageChange}
                 onSecondChange={setElementImages ? file => setElementImages(file ? [file] : []) : undefined} />;
-            return <>{panel('main')}<Accordion title="Models">{panel('models')}</Accordion>{settingsSlot}<Accordion title="Advanced">{panel('advanced')}</Accordion>{promptCard(panel('prompt'))}</>;
+            return <>{panel('main')}<Accordion title="Models">{panel('models')}</Accordion>{settingsSlot}<Accordion title="Advanced">{panel('advanced')}</Accordion>{promptCard(<><Krea2PromptHelperButton workflow="krea2-edit" options={options} updateOptions={updateOptions} disabled={isDisabled} />{panel('prompt')}</>)}</>;
         }
         if (modelType === 'moss-image') {
             const panel = (section: 'main' | 'models' | 'prompt' | 'advanced') => <MossSettingsPanel section={section} options={options} updateOptions={updateOptions} objectInfo={comfyUIObjectInfo} disabled={isDisabled} sourceFile={sourceImage} onSourceFileChange={onSourceImageChange} onOpenSourceLibrary={onOpenSourceLibrary} />;
@@ -1645,6 +1646,7 @@ export const OptionsPanel: React.FC<OptionsPanelProps> = ({
                         <TextInput label="Additional Editing Instructions" value={options.comfyFlux2EditPrompt || ''} onChange={handleOptionChange('comfyFlux2EditPrompt')} disabled={isDisabled} isTextArea />
                     </> : <>
                     {renderPromptExampleButtons()}
+                    {(modelType === 'krea2-simple' || modelType === 'krea2-raw') && <Krea2PromptHelperButton workflow={modelType} options={options} updateOptions={updateOptions} disabled={isDisabled} />}
                     <TextInput label="Positive Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaPrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2Prompt || '') : (options.comfyPrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaPrompt' : modelType === 'flux2-simple' ? 'comfyFlux2Prompt' : 'comfyPrompt')} disabled={isDisabled} isTextArea />
                     <TextInput label="Negative Prompt" value={modelType === 'krea2-simple' || modelType === 'krea2-raw' ? (options.comfyKreaNegativePrompt || '') : modelType === 'flux2-simple' ? (options.comfyFlux2NegativePrompt || '') : (options.comfyNegativePrompt || '')} onChange={handleOptionChange(modelType === 'krea2-simple' || modelType === 'krea2-raw' ? 'comfyKreaNegativePrompt' : modelType === 'flux2-simple' ? 'comfyFlux2NegativePrompt' : 'comfyNegativePrompt')} disabled={isDisabled} isTextArea />
                     </>}

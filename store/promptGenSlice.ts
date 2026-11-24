@@ -1,9 +1,11 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { PromptGenState, PromptCategory } from '../types';
+import { defaultKrea2PromptDraft, type Krea2PromptDraft } from '../utils/krea2Prompting';
 
 interface PromptGenSliceState {
   promptGenState: PromptGenState;
   activePromptToolsSubTab: string;
+  krea2Draft: Krea2PromptDraft;
 }
 
 const initialState: PromptGenSliceState = {
@@ -34,6 +36,7 @@ const initialState: PromptGenSliceState = {
     qwenPromptSaveStatus: 'idle',
   },
   activePromptToolsSubTab: 'from-image',
+  krea2Draft: defaultKrea2PromptDraft(),
 };
 
 const promptGenSlice = createSlice({
@@ -76,6 +79,10 @@ const promptGenSlice = createSlice({
     },
     resetPromptGenState: (state) => {
       state.promptGenState = initialState.promptGenState;
+      state.krea2Draft = defaultKrea2PromptDraft();
+    },
+    updateKrea2Draft: (state, action: PayloadAction<Partial<Krea2PromptDraft>>) => {
+      Object.assign(state.krea2Draft, action.payload);
     },
     setPromptSaveStatus: (state, action: PayloadAction<{ type: PromptCategory; status: 'idle' | 'saving' | 'saved' }>) => {
         const { type, status } = action.payload;
@@ -105,6 +112,7 @@ export const {
   addSoupToHistory,
   setActivePromptToolsSubTab,
   resetPromptGenState,
+  updateKrea2Draft,
   setPromptSaveStatus,
 } = promptGenSlice.actions;
 

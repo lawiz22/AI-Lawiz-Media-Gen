@@ -1,0 +1,41 @@
+{
+  "skill_name": "write-agentsmd",
+  "kind": "behavioral",
+  "purpose": "Output quality on a dirty fixture. Each scenario starts from a fresh copy of evals/fixture with one commit, runs a fresh agent with only the skill loaded, then runs check_behavioral.sh.",
+  "fixture": "evals/fixture",
+  "setup": "cp -r evals/fixture/. <workdir> && git -C <workdir> init -q && git -C <workdir> add -A && git -C <workdir> commit -qm fixture",
+  "how_to_run": "For each scenario: create <workdir>, run the setup, give the prompt to an agent with the skill path, then run the scenario check. Compare with a baseline run that has no skill.",
+  "evals": [
+    {
+      "id": "audit-existing",
+      "prompt": "Audit this repo's AGENTS.md and fix it. Keep the test command working.",
+      "files": ["evals/fixture"],
+      "expected_output": "AGENTS.md no longer contains the planted token, the dead lint script, or the known-bug caveat. The bug is recorded in TODO_BEFORE_SHIPPING.md with its trigger and fix, src/calc.py stays untouched, the generated file is marked with its regeneration command, the test command is kept, and the file is 80 lines or fewer.",
+      "assertions": [
+        "AGENTS.md contains no ghp_ token and no API_TOKEN line",
+        "AGENTS.md does not mention scripts/lint.sh",
+        "AGENTS.md does not contain a known-bug caveat or ZeroDivisionError",
+        "TODO_BEFORE_SHIPPING.md names average, the empty input trigger, and ZeroDivisionError",
+        "src/calc.py and src/zz_generated_ids.py are unchanged from the fixture commit",
+        "AGENTS.md names src/zz_generated_ids.py, marks it generated, and names bash scripts/gen.sh",
+        "AGENTS.md keeps a python3 -m unittest command and it passes",
+        "AGENTS.md is 80 lines or fewer"
+      ],
+      "check": "bash evals/check_behavioral.sh <workdir> audit-existing"
+    },
+    {
+      "id": "small-edit",
+      "prompt": "Add one line to AGENTS.md: run the tests with -v.",
+      "files": ["evals/fixture"],
+      "expected_output": "One added line in AGENTS.md and nothing else. No TODO_BEFORE_SHIPPING.md, no audit, no recon, and the planted token and bug stay untouched.",
+      "assertions": [
+        "git diff shows exactly 1 added line and 0 deleted lines for AGENTS.md",
+        "AGENTS.md is the only changed file",
+        "TODO_BEFORE_SHIPPING.md does not exist",
+        "src/calc.py is unchanged",
+        "The existing API_TOKEN line is still present"
+      ],
+      "check": "bash evals/check_behavioral.sh <workdir> small-edit"
+    }
+  ]
+}

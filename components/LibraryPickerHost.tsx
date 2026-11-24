@@ -44,6 +44,7 @@ export const LibraryPickerHost: React.FC = () => {
     const refineAnyImage = useSelector((state: RootState) => state.generation.options.comfyModelType === 'flux2-edit' || state.generation.options.comfyModelType === 'moss-image');
     const picker = (name: LibraryPicker) => ({ isOpen: active === name, onClose: () => { dispatch(setModalOpen({ modal: name, isOpen: false })); } });
     const logoTheme = () => store.getState().logoTheme.logoThemeState;
+    const setLogo = (change: Parameters<typeof updateLogoThemeState>[0]) => { dispatch(updateLogoThemeState(change)); };
     const videoUtils = () => store.getState().video.videoUtilsState;
 
     return <>
@@ -104,16 +105,16 @@ export const LibraryPickerHost: React.FC = () => {
             dispatch(addSubjects([{ id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), expression: 'as-is' }]));
         }} />
 
-        <LibraryPickerModal {...picker('isLogoRefPickerOpen')} filter="image" onSelectItem={item => dispatch(updateLogoThemeState({ referenceItems: [...(logoTheme().referenceItems || []), item] }))} />
-        <LibraryPickerModal {...picker('isLogoPalettePickerOpen')} filter="color-palette" onSelectItem={item => dispatch(updateLogoThemeState({ selectedPalette: item }))} />
-        <LibraryPickerModal {...picker('isLogoFontPickerOpen')} filter="font" onSelectItem={item => dispatch(updateLogoThemeState({ selectedFont: item, fontReferenceImage: null }))} />
-        <LibraryPickerModal {...picker('isBannerRefPickerOpen')} filter="image" onSelectItem={item => dispatch(updateLogoThemeState({ bannerReferenceItems: [...(logoTheme().bannerReferenceItems || []), item] }))} />
-        <LibraryPickerModal {...picker('isBannerPalettePickerOpen')} filter="color-palette" onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedPalette: item }))} />
-        <LibraryPickerModal {...picker('isBannerLogoPickerOpen')} filter="logo" onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedLogo: item }))} />
-        <LibraryPickerModal {...picker('isBannerFontPickerOpen')} filter="font" onSelectItem={item => dispatch(updateLogoThemeState({ bannerSelectedFont: item, bannerFontReferenceImage: null }))} />
-        <LibraryPickerModal {...picker('isAlbumCoverRefPickerOpen')} filter="image" onSelectItem={item => dispatch(updateLogoThemeState({ albumReferenceItems: [...(logoTheme().albumReferenceItems || []), item] }))} />
-        <LibraryPickerModal {...picker('isAlbumCoverPalettePickerOpen')} filter="color-palette" onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedPalette: item }))} />
-        <LibraryPickerModal {...picker('isAlbumCoverLogoPickerOpen')} filter="logo" onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedLogo: item }))} />
-        <LibraryPickerModal {...picker('isAlbumCoverFontPickerOpen')} filter="font" onSelectItem={item => dispatch(updateLogoThemeState({ albumSelectedFont: item, albumFontReferenceImage: null }))} />
+        <LibraryPickerModal {...picker('isLogoRefPickerOpen')} filter="image" onSelectItem={item => setLogo({ referenceItems: [...(logoTheme().referenceItems || []), item] })} />
+        <LibraryPickerModal {...picker('isLogoPalettePickerOpen')} filter="color-palette" onSelectItem={item => setLogo({ selectedPalette: item })} />
+        <LibraryPickerModal {...picker('isLogoFontPickerOpen')} filter="font" onSelectItem={item => setLogo({ selectedFont: item, fontReferenceImage: null })} />
+        <LibraryPickerModal {...picker('isBannerRefPickerOpen')} filter="image" onSelectItem={item => setLogo({ bannerReferenceItems: [...(logoTheme().bannerReferenceItems || []), item] })} />
+        <LibraryPickerModal {...picker('isBannerPalettePickerOpen')} filter="color-palette" onSelectItem={item => setLogo({ bannerSelectedPalette: item })} />
+        <LibraryPickerModal {...picker('isBannerLogoPickerOpen')} filter="logo" onSelectItem={item => setLogo({ bannerSelectedLogo: item })} />
+        <LibraryPickerModal {...picker('isBannerFontPickerOpen')} filter="font" onSelectItem={item => setLogo({ bannerSelectedFont: item, bannerFontReferenceImage: null })} />
+        <LibraryPickerModal {...picker('isAlbumCoverRefPickerOpen')} filter="image" onSelectItem={item => setLogo({ albumReferenceItems: [...(logoTheme().albumReferenceItems || []), item] })} />
+        <LibraryPickerModal {...picker('isAlbumCoverPalettePickerOpen')} filter="color-palette" onSelectItem={item => setLogo({ albumSelectedPalette: item })} />
+        <LibraryPickerModal {...picker('isAlbumCoverLogoPickerOpen')} filter="logo" onSelectItem={item => setLogo({ albumSelectedLogo: item })} />
+        <LibraryPickerModal {...picker('isAlbumCoverFontPickerOpen')} filter="font" onSelectItem={item => setLogo({ albumSelectedFont: item, albumFontReferenceImage: null })} />
     </>;
 };

@@ -14,7 +14,7 @@ import { generateComfyUIPortraits } from '../services/comfyUIService';
 import { identifyClothingWithOllama, identifyObjectsWithOllama, testOllamaConnection, type OllamaActivity } from '../services/ollamaService';
 import { detectPosesInImage } from '../services/mediaPipeService';
 import { mediaPipeToOpenPose, renderPoseSkeleton } from '../utils/poseRenderer';
-import type { GeneratedClothing, GeneratedHair, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose, LibraryItem, PoseOutputMode } from '../types';
+import type { AspectRatio, GeneratedClothing, GeneratedHair, IdentifiedClothing, IdentifiedObject, GeneratedObject, ExtractorState, GeneratedPose, LibraryItem, PoseOutputMode } from '../types';
 import { CharacterIcon, GenerateIcon, TshirtIcon, CubeIcon, SpinnerIcon, ResetIcon, LibraryIcon, PoseIcon, FontIcon, DownloadIcon, SaveIcon, CheckIcon } from './icons';
 import { createFontChartGuide, dataUrlToFile, dataUrlToThumbnail, fileToResizedDataUrl, getDominantImageColor } from '../utils/imageUtils';
 import { SendToLTXButton } from './SendToLTXButton';
@@ -199,7 +199,7 @@ export const ExtractorToolsPanel: React.FC<ExtractorToolsPanelProps> = ({
     const generateGeminiExtractorImage = async (
         sourceFile: File,
         prompt: string,
-        aspectRatio: string,
+        aspectRatio: AspectRatio,
         updateProgress: (message: string, value: number) => void = () => undefined,
         referenceFiles: File[] = [],
     ) => {

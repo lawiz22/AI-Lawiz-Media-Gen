@@ -47,6 +47,7 @@ import { Login } from './components/Login';
 import { Header } from './components/Header';
 import { ConnectionSettingsModal } from './components/ComfyUIConnection';
 import { DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, testOllamaConnection } from './services/ollamaService';
+import { KREA2_RAW_DEFAULTS, KREA2_SIMPLE_DEFAULTS } from './utils/promptDestination';
 import { LibraryPanel } from './components/LibraryPanel';
 import { ExtractorToolsPanel } from './components/ClothesExtractorPanel';
 import { VideoUtilsPanel } from './components/VideoUtilsPanel';
@@ -322,53 +323,9 @@ const App: React.FC = () => {
                 comfySampler: 'euler',
             });
         } else if (newOpts.comfyModelType === 'krea2-simple') {
-            applyDefaultsIfMissing({
-                comfyKreaPrompt: '',
-                comfyKreaStyle: undefined,
-                comfyKreaStyleStrength: undefined,
-                comfyKreaUseStyleSettings: false,
-                comfyKreaNegativePrompt: '',
-                comfyKreaUnet: 'krea2_turbo_fp8_scaled.safetensors',
-                comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
-                comfyKreaVae: 'qwen_image_vae.safetensors',
-                comfyKreaResolution: '832x1216',
-                comfyKreaUseLora: true,
-                comfyKreaLora1Name: '',
-                comfyKreaLora1Strength: 1,
-                comfyKreaLora2Name: 'KREA\\snofs_krea_v1_nostrip.safetensors',
-                comfyKreaLora2Strength: 1,
-                comfyKreaLora3Name: '',
-                comfyKreaLora3Strength: 1,
-                comfyKreaLora4Name: '',
-                comfyKreaLora4Strength: 1,
-                comfyKreaLora5Name: '',
-                comfyKreaLora5Strength: 1,
-                comfyKreaLora6Name: '',
-                comfyKreaLora6Strength: 1,
-                comfySteps: 10,
-                comfyCfg: 1,
-                comfySampler: 'er_sde',
-                comfyScheduler: 'beta',
-            });
+            applyDefaultsIfMissing(KREA2_SIMPLE_DEFAULTS);
         } else if (newOpts.comfyModelType === 'krea2-raw') {
-            applyDefaultsIfMissing({
-                comfyKreaPrompt: '',
-                comfyKreaNegativePrompt: '',
-                comfyKreaUnet: 'krea2_raw_fp8_scaled.safetensors',
-                comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors',
-                comfyKreaVae: 'Wan2.1_VAE.safetensors',
-                comfyKreaResolution: '1920x1088',
-                comfyKreaUseLora: true,
-                comfyKreaLora1Name: 'KREA\\krea2_turbo_lora_rank_64_bf16.safetensors',
-                comfyKreaLora1Strength: 0.6,
-                comfyKreaLora2Name: 'KREA\\snofs_krea_v1_nostrip.safetensors',
-                comfyKreaLora2Strength: 1,
-                comfyKreaLora3Name: '', comfyKreaLora3Strength: 1,
-                comfyKreaLora4Name: '', comfyKreaLora4Strength: 1,
-                comfyKreaLora5Name: '', comfyKreaLora5Strength: 1,
-                comfyKreaLora6Name: '', comfyKreaLora6Strength: 1.5,
-                comfyCfg: 1,
-            });
+            applyDefaultsIfMissing(KREA2_RAW_DEFAULTS);
         }
 
         if (activeTab === 'character-generator') {

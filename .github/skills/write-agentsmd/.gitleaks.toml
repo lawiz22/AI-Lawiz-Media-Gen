@@ -1,0 +1,9 @@
+# Fake tokens in the fixture and its regression tests are intentional.
+title = "write-agentsmd"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fixture and audit tests carry planted tokens on purpose."
+paths = ['''^evals/fixture/''', '''^scripts/tests/(audit_test|secrets_test)\.sh$''']

@@ -24,6 +24,14 @@ Limits: this is the developer's assessment, not a legal opinion. A line comparis
 
 If zGenMedia replies, record the exact response and its source here.
 
+## krea2-prompting guide (CC BY-SA 4.0)
+
+The **Prompt > KREA2 Prompt** section and the **KREA2 prompt helper** of the KREA2 workflows use material adapted from [krea2-prompting](https://github.com/rakshazi/krea2-prompting) v1.5.1 by **rakshazi**, licensed under [Creative Commons Attribution-ShareAlike 4.0](https://creativecommons.org/licenses/by-sa/4.0/). That guide is based on [buxinzi2233/krea2-prompting](https://github.com/buxinzi2233/krea2-prompting) (MIT); its pose system is credited to [@Zuanfilm](https://x.com/Zuanfilm), and its style index was assembled from public Krea 2 workflow notes.
+
+- **Adapted material:** [utils/krea2Prompting.ts](utils/krea2Prompting.ts) (recommended settings, aspect and resolution table, photography vocabulary, sentence frame, every-prompt rules and trap table, composition modules, genre recipes, negative-prompt families, the 30 pose blocks, the style index names, four style paragraphs and the two style formulas). This adapted material remains under CC BY-SA 4.0.
+- **Changes made (November 23, 2026):** text condensed and reorganised into application tools (form builder, rule checks, closest-resolution selection, language-model instruction); the adult reference (`references/adult.md`) and two style names tied to adult content were not included; giant-scale, inpainting and reference-image chapters were not imported.
+- **Compatibility:** Creative Commons lists GPLv3 as a compatible license for BY-SA 4.0 adaptations (one-way). Keep this attribution, the license link and the list of changes when redistributing.
+
 ## Past Forward and Apache-2.0 notices
 
 The developer identifies [Past Forward by Ammaar Reshi](https://github.com/ammaarreshi/past-forward-ai-studio) as the source of the Past Forward feature's starting point.
@@ -36,6 +44,7 @@ Keep applicable upstream license, copyright and attribution notices, document mo
 
 ## Runtime components and dependencies
 
+- **write-agentsmd agent skill:** [.github/skills/write-agentsmd](.github/skills/write-agentsmd) is an unmodified copy of [rakshazi/write-agentsmd](https://github.com/rakshazi/write-agentsmd) (commit `7f630bf`, skill version 2.0.1) by Nikita Chernyi: scripts and evals GPL-3.0-or-later, Markdown CC BY-SA 4.0, assets CC0 1.0 (its `LICENSE`, `LICENSES/` and `REUSE.toml` are kept). It is a development tool for coding agents and is not packaged in the installer.
 - **BFSNodes:** [ComfyUI-BFSNodes](https://github.com/alisson-anjos/ComfyUI-BFSNodes) is GPLv3. The app loads and adapts the user's installed native Shot Planner JavaScript at runtime. Loading it at runtime is not, by itself, an exemption from applicable GPL obligations. Its authors retain their rights; no BFS source is bundled here.
 - **FFmpeg:** the installed `@ffmpeg/core` 0.12.10 declares `GPL-2.0-or-later`; its JavaScript/WebAssembly assets are included in the renderer build. `@ffmpeg/ffmpeg` is an MIT-licensed wrapper, which does not make the core MIT-licensed. Distribution requires the applicable notices and corresponding source/build information for the actual core and included libraries. A link to the latest upstream repository alone is not a verified source-compliance solution. See the [ffmpeg.wasm FAQ](https://ffmpegwasm.netlify.app/docs/faq/) and [FFmpeg legal guidance](https://ffmpeg.org/legal.html).
 - **Other dependencies:** packages retain their own licenses and notices. The dependency license fields in [package-lock.json](package-lock.json) are an inventory aid, not a complete redistribution notice bundle. Electron/Chromium notices do not replace the notices needed for npm dependencies or imported application code.
@@ -45,4 +54,4 @@ Keep applicable upstream license, copyright and attribution notices, document mo
 
 The GPL text and this scope notice are configured for inclusion in Electron packages. This does not complete a third-party license audit.
 
-Before publishing a new installer, assemble the required third-party license and notice texts (npm dependencies, the FFmpeg core, the Past Forward Apache notices), provide access to the complete corresponding source and build instructions for the exact distributed version and GPL components, and verify the legal notices in the packaged application.
+Before publishing a new installer, assemble the required third-party license and notice texts (npm dependencies, the FFmpeg core, the Past Forward Apache notices, the krea2-prompting CC BY-SA attribution), provide access to the complete corresponding source and build instructions for the exact distributed version and GPL components, and verify the legal notices in the packaged application.

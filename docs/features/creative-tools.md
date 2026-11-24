@@ -17,10 +17,24 @@ Prompt analysis, visual transformations, local media utilities and upscaling are
 ## Prompt tools and extraction
 
 - Prompt analysis through Gemini, Mammouth AI, OpenRouter, Ollama vision models, or ComfyUI Florence2.
+- **KREA2 Prompt** (Prompt tab): writes Krea 2 prompts as the model reads them. See [KREA2 Prompt](#krea2-prompt).
 - Local Ollama background and subject extraction with selectable installed models.
 - Creative Magic Soup generation through Mammouth AI or Ollama, with adjustable creativity and color attribution for multiple numbered Main, Background, and Subject ingredients.
 - Clothes, subject, object, background, pose, mannequin, and font extraction.
 - MediaPipe pose detection with ControlNet-compatible output.
+
+### KREA2 Prompt
+
+Open **Prompt > KREA2 Prompt**, or **KREA2 prompt helper** above the prompt of **Image Gen > ComfyUI > KREA2** (SIMPLE KREA, KREA2 RAW and I2I Edit / Identity). Both share the same draft.
+
+- **Write with AI:** a brief, an optional reference image (faithful prompt) and Gemini, Mammouth AI, OpenRouter or Ollama. The model receives the Krea 2 rules and the filled fields.
+- **Prompt builder:** medium, subject, pose and action, camera, place, light, materials, mood, exact text and restrictions, assembled in the guide's sentence order. Chips add shot sizes, angles, lenses, film stocks, light and texture terms.
+- **Style index** (283 names, four full paragraphs and two formulas) and **pose library** (30 poses in 11 fields, with the held object renamed or only the four key fields kept). Both are appended as blocks.
+- **Recipes and composition modules:** portrait, product, landscape, architecture, street and hero examples.
+- **Checks** while typing: quality words, negations, weights, long or uncounted text, figures behind furniture, hands, crowds, tag lists and CFG.
+- **Use:** the Prompt tab sends to SIMPLE KREA, KREA2 RAW or I2I Edit / Identity; the helper writes into the open workflow. **Also apply the guide settings** sets 8 steps, CFG 1, euler, beta and the closest resolution or aspect (RAW: resolution only). Prompts can be saved to the Library.
+
+At CFG 1.0 the negative prompt has no effect; the negative families are listed for RAW only. The guide is adapted from [krea2-prompting](https://github.com/rakshazi/krea2-prompting) by rakshazi (CC BY-SA 4.0); see [LICENSING.md](../../LICENSING.md#krea2-prompting-guide-cc-by-sa-40).
 
 ## PastForward transformations
 

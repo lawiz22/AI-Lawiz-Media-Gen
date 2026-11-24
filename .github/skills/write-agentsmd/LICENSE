@@ -1,0 +1,10 @@
+This project is mixed-licensed under copyleft terms.
+
+- Code, tests, eval scripts, and configuration: GPL-3.0-or-later
+- Markdown documentation: CC-BY-SA-4.0
+- Assets and templates: CC0-1.0
+
+Full license texts: LICENSES/
+Per-path mapping: REUSE.toml
+
+Copyright (C) 2026 Nikita Chernyi <https://rakshazi.me>

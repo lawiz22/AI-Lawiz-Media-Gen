@@ -474,14 +474,29 @@ export const generateCharacterNameForImage = async (imageDataUrl: string): Promi
     return { name: result.text?.trim() || "Character", usageMetadata: result.usageMetadata };
 };
 
+// An aspect ratio the model does not list is left out, as before, instead of failing the request.
+const geminiImageConfig = (aspectRatio?: string) => ({
+    responseModalities: [Modality.IMAGE],
+    ...(aspectRatio && getGeminiAspectRatios(DEFAULT_GEMINI_IMAGE_MODEL).includes(aspectRatio) ? { imageConfig: { aspectRatio } } : {}),
+});
+
+// Gemini image models return one image per request, so N images take N requests.
+const generateGeminiImages = async (parts: Part[], count: number | undefined, aspectRatio?: string): Promise<string[]> => {
+    const total = Math.max(1, Math.floor(Number(count) || 1));
+    const results = await Promise.all(Array.from({ length: total }, () => ai.models.generateContent({
+        model: DEFAULT_GEMINI_IMAGE_MODEL,
+        contents: { parts },
+        config: geminiImageConfig(aspectRatio),
+    })));
+    return results.flatMap(result => (result.candidates || []).flatMap(candidate => (candidate.content?.parts || [])
+        .flatMap(part => part.inlineData ? [`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`] : [])));
+};
+
 export const generateBackgroundImagePreview = async (prompt: string, aspectRatio: string): Promise<string> => {
     const result = await ai.models.generateContent({
         model: DEFAULT_GEMINI_IMAGE_MODEL,
         contents: { parts: [{ text: `Generate a high-quality background image: ${prompt}` }] },
-        config: {
-            responseModalities: [Modality.IMAGE],
-            aspectRatio: aspectRatio
-        }
+        config: geminiImageConfig(aspectRatio),
     });
     const img = result.candidates?.[0]?.content?.parts?.[0]?.inlineData;
     if (!img) throw new Error("No image returned");
@@ -492,10 +507,7 @@ export const generateClothingPreview = async (prompt: string, aspectRatio: strin
     const result = await ai.models.generateContent({
         model: DEFAULT_GEMINI_IMAGE_MODEL,
         contents: { parts: [{ text: `Generate a high-quality image of this clothing item laid out flat: ${prompt}` }] },
-        config: {
-            responseModalities: [Modality.IMAGE],
-            aspectRatio: aspectRatio
-        }
+        config: geminiImageConfig(aspectRatio),
     });
     const img = result.candidates?.[0]?.content?.parts?.[0]?.inlineData;
     if (!img) throw new Error("No image returned");
@@ -663,28 +675,7 @@ export const generateLogos = async (state: LogoThemeState): Promise<string[]> =>
         parts.push({ text: "Use the font style from this image." });
     }
 
-    const result = await ai.models.generateContent({
-        model: DEFAULT_GEMINI_IMAGE_MODEL,
-        contents: { parts },
-        config: {
-            responseModalities: [Modality.IMAGE],
-            numberOfGeneratedImages: state.numLogos
-        }
-    });
-
-    const images: string[] = [];
-    if (result.candidates) {
-        for (const candidate of result.candidates) {
-            if (candidate.content?.parts) {
-                for (const part of candidate.content.parts) {
-                    if (part.inlineData) {
-                        images.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
-                    }
-                }
-            }
-        }
-    }
-    return images;
+    return generateGeminiImages(parts, state.numLogos);
 };
 
 export const generateBanners = async (state: LogoThemeState): Promise<string[]> => {
@@ -708,29 +699,7 @@ export const generateBanners = async (state: LogoThemeState): Promise<string[]> 
         parts.push({ text: "Use the font style from this image." });
     }
 
-    const result = await ai.models.generateContent({
-        model: DEFAULT_GEMINI_IMAGE_MODEL,
-        contents: { parts },
-        config: {
-            responseModalities: [Modality.IMAGE],
-            numberOfGeneratedImages: state.numBanners,
-            aspectRatio: state.bannerAspectRatio === '16:9' || state.bannerAspectRatio === '1:1' ? state.bannerAspectRatio : undefined
-        }
-    });
-
-    const images: string[] = [];
-    if (result.candidates) {
-        for (const candidate of result.candidates) {
-            if (candidate.content?.parts) {
-                for (const part of candidate.content.parts) {
-                    if (part.inlineData) {
-                        images.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
-                    }
-                }
-            }
-        }
-    }
-    return images;
+    return generateGeminiImages(parts, state.numBanners, state.bannerAspectRatio === '16:9' || state.bannerAspectRatio === '1:1' ? state.bannerAspectRatio : undefined);
 };
 
 export const generateAlbumCovers = async (state: LogoThemeState): Promise<string[]> => {
@@ -754,29 +723,7 @@ export const generateAlbumCovers = async (state: LogoThemeState): Promise<string
         parts.push({ text: "Use the font style from this image." });
     }
 
-    const result = await ai.models.generateContent({
-        model: DEFAULT_GEMINI_IMAGE_MODEL,
-        contents: { parts },
-        config: {
-            responseModalities: [Modality.IMAGE],
-            numberOfGeneratedImages: state.numAlbumCovers,
-            aspectRatio: '1:1'
-        }
-    });
-
-    const images: string[] = [];
-    if (result.candidates) {
-        for (const candidate of result.candidates) {
-            if (candidate.content?.parts) {
-                for (const part of candidate.content.parts) {
-                    if (part.inlineData) {
-                        images.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
-                    }
-                }
-            }
-        }
-    }
-    return images;
+    return generateGeminiImages(parts, state.numAlbumCovers, '1:1');
 };
 
 export const generateDecadeImage = async (uploadedImage: string, prompt: string): Promise<string> => {
@@ -790,7 +737,6 @@ export const generateDecadeImage = async (uploadedImage: string, prompt: string)
         contents: { parts },
         config: {
             responseModalities: [Modality.IMAGE],
-            numberOfGeneratedImages: 1
         }
     });
 

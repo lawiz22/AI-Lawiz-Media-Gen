@@ -235,6 +235,7 @@ const LocalModelCard: React.FC<{ item: CivitaiInventoryItem; provider: CivitaiPr
     };
 
     const moveModel = async () => {
+        if (!folder) return;
         const category = kind === 'lora' ? 'loras' : kind === 'checkpoint' ? 'checkpoints' : 'diffusion_models';
         const destination = `models/${category}/${folder}`;
         if (!window.confirm(`Move ${item.fileName} to ${destination}? Its preview and metadata will move with it.`)) return;

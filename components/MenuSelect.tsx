@@ -9,7 +9,7 @@ interface MenuSelectOption<T extends string | number> {
 interface MenuSelectProps<T extends string | number> {
     value: T;
     options: readonly MenuSelectOption<T>[];
-    onChange: (value: T) => void;
+    onChange: (value: NoInfer<T>) => void;
     disabled?: boolean;
     ariaLabel?: string;
     className?: string;

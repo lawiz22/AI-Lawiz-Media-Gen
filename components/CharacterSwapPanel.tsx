@@ -43,7 +43,7 @@ export const CharacterSwapPanel: React.FC = () => {
     const dispatch = useDispatch<AppDispatch>();
     const { inventory } = useModelInventory();
     const [project, setProject] = useState<SwapProject>();
-    const current = useRef<SwapProject>();
+    const current = useRef<SwapProject>(undefined);
     const [base, setBase] = useState('');
     const [ready, setReady] = useState(false);
     const [plannerReady, setPlannerReady] = useState(false);
@@ -54,14 +54,14 @@ export const CharacterSwapPanel: React.FC = () => {
     const [retry, setRetry] = useState(0);
     const [info, setInfo] = useState<H3ObjectInfo>({});
     const host = useRef<HTMLDivElement>(null);
-    const handle = useRef<PlannerHandle>();
+    const handle = useRef<PlannerHandle>(undefined);
     const saveQueue = useRef<Promise<void>>(Promise.resolve());
     const pendingAction = useRef(false);
     const mounted = useRef(false);
     const pollAction = useRef<() => Promise<void>>(async () => {});
     const renderAction = useRef<() => Promise<void>>(async () => {});
     const runId = useRef('');
-    const monitor = useRef<SwapProgressConnection>();
+    const monitor = useRef<SwapProgressConnection>(undefined);
     const [progress, setProgress] = useState(initialSwapProgress);
     const [progressConnected, setProgressConnected] = useState(false);
     const [progressWarning, setProgressWarning] = useState('');

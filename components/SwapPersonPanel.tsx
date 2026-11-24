@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../store/store';
-import type { LibraryItem, LibraryItemType } from '../types';
+import type { GenerationOptions, LibraryItem, LibraryItemType } from '../types';
 import { addToLibrary } from '../store/librarySlice';
 import { buildQuickSwapPersonPrompt, buildLanPaintPersonPrompt, defaultQuickSwapPersonOptions, defaultLanPaintPersonOptions, personSwapPresets, personSwapTargets, type LanPaintPersonOptions } from '../services/swapPersonWorkflow';
 import { defaultSwapAnythingOptions, type SwapAnythingOptions } from '../services/swapAnythingWorkflow';
@@ -121,7 +121,8 @@ const SwapPersonPanel: React.FC<Props> = ({ isComfyUIConnected, comfyUIObjectInf
                 comfyFlux2EditMegapixels: result.settings.megapixels,
                 ...(result.mode === 'lanpaint' ? { comfyFlux2EditLora1Name: result.settings.loraName, comfyFlux2EditLora1Strength: result.settings.loraStrength,
                     comfyFlux2EditUseCacheDit: result.settings.cacheEnabled, comfyFlux2EditCacheDitModelType: 'Flux', comfyFlux2EditCacheDitWarmupSteps: 0, comfyFlux2EditCacheDitSkipInterval: 0 } : {}),
-            }, tags: ['swap-person', 'flux2', ...(result.mode === 'lanpaint' ? ['lanpaint'] : [])] })).unwrap();
+            // A partial snapshot: Library details read each field on its own.
+            } as GenerationOptions, tags: ['swap-person', 'flux2', ...(result.mode === 'lanpaint' ? ['lanpaint'] : [])] })).unwrap();
         setSaved(true);
     });
     const reset = () => {

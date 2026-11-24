@@ -1910,6 +1910,61 @@ Fichiers touchés : `package.json`, `package-lock.json`, `version.json` (notes a
 
 Installateur reconstruit : `dist\lawiz's-media-generator-v-2 Setup 2.0.1.exe`, 252 Mo ; la construction vide `dist`, l'installateur 2.0.0 n'y est plus. Vérifié : typecheck 18 erreurs, 978 tests (964 réussis, 0 en échec) avant ; après, `latest.yml` en 2.0.1 avec empreinte et taille conformes, exécutable en 2.0.1, notes 2.0.1 présentes dans le paquet. Non vérifié : l'installateur n'a pas été lancé.
 
+### 2026-11-23 — Section de prompt KREA2
+
+Demande : une section de prompt dédiée à KREA dans l'onglet Prompt, accessible depuis les onglets de génération KREA, avec les références et les outils pratiques du guide [rakshazi/krea2-prompting](https://github.com/rakshazi/krea2-prompting) (v1.5.1, CC BY-SA 4.0).
+
+Ajouté :
+
+- **Prompt > KREA2 Prompt** (nouveau sous-onglet, accent orange). Rédaction par IA (Gemini, Mammouth AI, OpenRouter ou Ollama, image de référence facultative pour un prompt fidèle), constructeur en phrases dans l'ordre du guide avec pastilles de vocabulaire photo, index de 283 styles (4 paragraphes complets, 2 formules), 30 poses en 11 champs (objet tenu renommé, option « 4 champs clés »), recettes et modules de composition, contrôles en direct (mots de qualité, négations, poids, texte long ou non compté, personnage derrière un meuble, mains, foule, liste de mots-clés, CFG), réglages recommandés, pièges, familles de négatifs (RAW seulement), crédits. Envoi vers SIMPLE KREA, KREA2 RAW ou I2I Edit / Identity, enregistrement dans la Library.
+- **Bouton « KREA2 prompt helper »** au-dessus du prompt de SIMPLE KREA, KREA2 RAW et I2I Edit / Identity : la même section dans une fenêtre, qui écrit dans le flux ouvert. Le brouillon est partagé avec l'onglet Prompt (store `promptGen.krea2Draft`).
+- **« Also apply the guide settings »**, décochée par défaut : 8 pas, CFG 1, euler, beta et la résolution la plus proche du ratio (RAW : résolution seulement ; Edit : réglages imbriqués et ratio). Sans elle, seuls les prompts changent ; les réglages existants du flux sont gardés (valeurs par défaut du flux appliquées seulement s'il n'a jamais été ouvert).
+
+Fichiers : `utils/krea2Prompting.ts` (données et logique adaptées), `components/Krea2PromptStudio.tsx`, `components/PromptGeneratorPanel.tsx`, `components/OptionsPanel.tsx`, `store/promptGenSlice.ts`, `services/ollamaService.ts` (`generateOllamaText`), `utils/promptDestination.ts` (`KREA2_SIMPLE_DEFAULTS`, `KREA2_RAW_DEFAULTS`, `getKrea2PromptUpdate`) ; `App.tsx` reprend ces deux constantes au lieu de ses copies (mêmes valeurs). Tests : `utils/krea2Prompting.test.mjs` (6), un test dans `utils/imagePromptImport.test.mjs`, deux vérifications de `services/krea2Style.test.mjs` adaptées à la constante. Audit : variante `krea2` du groupe `prompt`, variante `krea2 edit helper` du groupe `image`. Licence et docs : section dans `LICENSING.md`, remerciements et tableau de `README.md`, `docs/features/creative-tools.md`.
+
+Non repris : `references/adult.md` (contenu explicite), deux noms de style liés à ce contenu, les chapitres sur les échelles géantes, l'inpainting et les images de référence.
+
+Vérifié : typecheck 18 erreurs (les mêmes) ; 985 tests (971 réussis, 0 en échec, 14 ignorés) ; `check:panels` groupes `prompt` et `image` sans texte sous 4,5:1, la variante qui suit la fenêtre retrouve son nombre de contrôles (fenêtre fermée) ; `check:tabs` identique à la référence ; construction Vite de vérification réussie ; parcours dans le navigateur (script ponctuel `%TEMP%\scene-variation-browser\krea2-flow.mjs`, 10 vérifications réussies, aucune erreur de page) : construction depuis les champs, envoi vers SIMPLE KREA avec réglages du guide, aide dans SIMPLE KREA puis dans Edit, envoi vers RAW.
+
+Non vérifié : la rédaction par IA avec un vrai fournisseur (aucun appel payant ni GPU) ; aucune génération KREA2 ; Electron.
+
+### 2026-11-23 — Skill `write-agentsmd` installé dans le projet
+
+Demande : installer [rakshazi/write-agentsmd](https://github.com/rakshazi/write-agentsmd) dans un répertoire de skills du projet.
+
+Copie non modifiée du commit `7f630bf` (version 2.0.1 du skill) dans `.github/skills/write-agentsmd/`, emplacement lu par VS Code ; son dossier `.git` a été retiré pour que les fichiers soient suivis par le dépôt. Licences gardées (GPL-3.0-or-later pour les scripts, CC BY-SA 4.0 pour le Markdown, CC0 pour les gabarits) et notées dans `LICENSING.md`. Le dossier `.github` n'entre pas dans l'installateur. Scripts parcourus : aucun appel réseau ni commande destructrice ; `curl`/`wget` n'y figurent que dans une liste de noms de commandes.
+
+Non vérifié : `scripts/audit.sh` demande bash ; le seul bash trouvé est celui de WSL (`C:\WINDOWS\system32\bash.exe`), non essayé. Le skill n'a pas encore été utilisé ; il écrirait `AGENTS.md`, `AGENTS.ledger.md` (temporaire) et peut-être `TODO_BEFORE_SHIPPING.md` à la racine.
+
+### 2026-11-23 — `AGENTS.md` écrit avec le skill
+
+Mode « New file » du skill `write-agentsmd`. `AGENTS.md` (46 lignes) : commandes vérifiées (`npm test` 0, test isolé 0, `npm run typecheck` 2, build de vérification 0, `check:tabs` 0, `check:ui` 0), `dist/`, conventions, trois pièges (tests qui lisent le texte des sources, onglets montés en `TabActivity`, `.env.local` suivi par git alors que `vite.config.ts` injecte `GEMINI_API_KEY` dans le bundle ; il ne contient que la valeur d'exemple), limites et renvois. Le WSL n'a pas de bash ; l'audit a tourné avec le bash de Git pour Windows.
+
+Audit : plus aucun défaut sur le fichier ; il reste 13 lignes « repository file modified », qui désignent les modifications non commitées de la section KREA2 et ne sont pas à restaurer. `AGENTS.ledger.md` reste donc à la racine (le script ne le retire qu'après un audit sans échec). `TODO_BEFORE_SHIPPING.md` liste les 18 erreurs de typage existantes, dont certaines peuvent être de vrais défauts (Gemini : ratio et nombre d'images passés dans des champs inconnus du SDK ; Library : champs `prompt`, `characterName`, `thumbnail` absents du type). Rien corrigé.
+
+### 2026-11-23 — Les 18 erreurs de typage corrigées, `.env.local` retiré de git
+
+Décisions de l'utilisateur : tout corriger sans changement cassant ; retirer `.env.local` de git ; supprimer `TODO_BEFORE_SHIPPING.md` et `AGENTS.ledger.md` (fait).
+
+- **Gemini (vrais défauts)** : le ratio passait dans un champ que le SDK ignore, le nombre d'images aussi. Le ratio passe maintenant par `imageConfig` (aperçus de fond et de vêtement, bannières, pochettes), seulement s'il figure dans la liste du modèle ; sinon il est omis comme avant. Logos, bannières et pochettes envoient une requête par image demandée (Gemini rend une image par requête) : **4 logos = 4 requêtes facturées**, au lieu d'une seule image jusqu'ici. `generateDecadeImage` : champ inutile retiré.
+- **Library** : `prompt` et `characterName`, déjà enregistrés par Outpaint, Qwen 2.1 Remove Background et Character Sheet, sont déclarés dans `LibraryItem` (données inchangées). Lecture de `thumbnail` dans `libraryService` et de `fallback` dans `ttsDialogueService` rendue sûre pour le type, même comportement.
+- **Typage seul** : `SwapPersonPanel` (instantané partiel d'options), `ImageGeneratorHeader` (navigation clavier des onglets), `ClothesExtractorPanel` (ratio typé `AspectRatio`).
+- `.env.local` retiré de l'index (`git rm --cached`, suppression indexée) ; le fichier reste sur le disque et est ignoré par `*.local`. `AGENTS.md` : le typecheck entre dans la vérification complète ; le piège sur les clés vise `.env` (toujours suivi, vide) et `.env.local`.
+
+Constat : `@types/react` n'est pas installé, donc `tsc` ne contrôle ni le JSX ni les types React (d'où `event` en `any` dans `ImageGeneratorHeader`). Non changé ; l'installer ferait sans doute apparaître d'autres erreurs.
+
+Vérifié : typecheck 0 erreur (la ligne de vérification complète d'`AGENTS.md` passe telle qu'écrite) ; 985 tests, 971 réussis, 0 en échec ; build de vérification réussi ; audit d'`AGENTS.md` sans autre défaut que les fichiers non commités. Non vérifié : aucun appel Gemini réel (logos, bannières, pochettes, aperçus) ; Electron.
+
+### 2026-11-23 — Types React installés et erreurs révélées corrigées
+
+Décision de l'utilisateur : installer `@types/react` et `@types/react-dom`. Ajoutés en dépendances de développement (`npm install --save-dev @types/react@19 @types/react-dom@19`, `package.json` et `package-lock.json` modifiés). Le typecheck contrôle maintenant le JSX ; il a révélé 55 erreurs, toutes corrigées :
+
+- **Vrai défaut, Outpaint** : « Use result as source » passait une promesse au lieu d'un fichier à `loadSource` ; le fichier est maintenant attendu avant d'être chargé. Non essayé dans l'application.
+- **`Select` et `MenuSelect`** (49 erreurs) : passer directement un setter d'état à `onChange` élargissait le type de la valeur ; `onChange` utilise maintenant `NoInfer<T>`. Typage seul.
+- **Typage seul, même comportement** : `useRef` avec valeur initiale explicite (`CharacterSwapPanel`, exigé par React 19), garde « aucun dossier » dans le déplacement d'un modèle (`CivitaiInventoryPanel`, bouton déjà désactivé dans ce cas), type de retour des sources d'exemples de prompts LTX, valeur de `background` typée (`OptionsPanel`), sélecteurs Library des logos, bannières et pochettes qui ne renvoient plus l'action Redux (`LibraryPickerHost`).
+
+Vérifié : typecheck 0 erreur ; 985 tests, 971 réussis, 0 en échec ; build de vérification réussi ; `check:tabs` réussi ; `check:ui` : 1 échec sur 5 exécutions, scénario non relevé (sortie non gardée à cette exécution ; voir « À régler » 3), les 4 autres réussies. `npm install` signale des vulnérabilités dans les dépendances (non traitées, `npm audit fix --force` non lancé).
+
 ---
 
 ## Suivi général

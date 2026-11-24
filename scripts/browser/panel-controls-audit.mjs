@@ -47,7 +47,8 @@ const GROUPS = {
         { name: 'krea2 simple', steps: [{ tab: 'KREA2' }, { tab: 'SIMPLE KREA' }] },
         { name: 'krea2 raw', steps: [{ tab: 'KREA2 RAW' }] },
         { name: 'krea2 edit', steps: [{ tab: 'I2I Edit / Identity' }] },
-        { name: 'moss image', steps: [{ tab: 'MOSS' }, { tab: 'MOSS Image' }] },
+        { name: 'krea2 edit helper', steps: [{ button: 'KREA2 prompt helper' }] },
+        { name: 'moss image', steps: [{ press: 'Escape' }, { tab: 'MOSS' }, { tab: 'MOSS Image' }] },
         { name: 'moss photo', steps: [{ tab: 'MOSS PHOTO' }] },
         { name: 'mammouth t2i', steps: [{ button: 'Mammouth' }, { button: 't2i' }] },
         { name: 'mammouth i2i', steps: [{ button: 'i2i' }] },
@@ -104,6 +105,7 @@ const GROUPS = {
         { name: 'background', steps: [{ button: 'Gemini' }, { button: 'Extract Background' }] },
         { name: 'subject', steps: [{ button: 'Subject / Object' }] },
         { name: 'soup', steps: [{ button: 'Magical Prompt Soup' }] },
+        { name: 'krea2', steps: [{ button: 'KREA2 Prompt' }] },
     ] }] },
     extractor: { tab: 'extractor-tools', panels: [{ name: 'Extractor', open: [], variants: [
         { name: 'clothes', steps: [{ button: 'Clothes' }, { button: 'Gemini' }] },

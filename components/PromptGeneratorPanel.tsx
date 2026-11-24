@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch, useSelector, useStore } from 'react-redux';
 import { AppDispatch, RootState } from '../store/store';
 import { addToLibrary } from '../store/librarySlice';
 import { setPromptSaveStatus, updatePromptGenState } from '../store/promptGenSlice';
@@ -13,7 +13,9 @@ import { fileToResizedDataUrl, dataUrlToThumbnail } from '../utils/imageUtils';
 import { updateOptions, setGenerationMode, switchComfyModelOptions } from '../store/generationSlice';
 import { setActiveTab } from '../store/appSlice';
 import { createAccentStyle } from '../utils/accentTheme';
-import { getPromptDestinationOptions, PROMPT_T2I_WORKFLOWS } from '../utils/promptDestination';
+import { getKrea2PromptUpdate, getPromptDestinationOptions, PROMPT_T2I_WORKFLOWS } from '../utils/promptDestination';
+import type { Krea2SettingsPatch, Krea2Workflow } from '../utils/krea2Prompting';
+import { Krea2PromptStudio } from './Krea2PromptStudio';
 import { OllamaActivityPanel } from './OllamaActivityPanel';
 import { useUnmountCleanup } from './useUnmountCleanup';
 import { getOpenRouterSettings } from '../services/openRouterService';
@@ -38,9 +40,10 @@ const PROMPT_ACCENT_STYLES: Record<string, React.CSSProperties> = {
     'extract-subject': createAccentStyle('#facc15', '#fde047', '#ca8a04'),
     'prompt-soup': createAccentStyle('#a78bfa', '#c4b5fd', '#7c3aed'),
     'qwen-image': createAccentStyle('#60a5fa', '#93c5fd', '#2563eb'),
+    krea2: createAccentStyle('#fb923c', '#fdba74', '#ea580c'),
 };
 
-const createPromptThumbnail = (text: string, type: PromptCategory, modelType: PromptModelType | 'qwen-image', promptParts?: PromptSoupPart[]): string => {
+const createPromptThumbnail = (text: string, type: PromptCategory, modelType: string, promptParts?: PromptSoupPart[]): string => {
     const colors: Record<PromptCategory, string> = {
         image: '#06b6d4',
         background: '#4ade80',
@@ -215,6 +218,7 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
     defaultOllamaModel,
 }) => {
     const dispatch: AppDispatch = useDispatch();
+    const store = useStore<RootState>();
     const state = useSelector((state: RootState) => state.promptGen.promptGenState);
     const { 
         image, prompt, bgImage, bgPrompt, subjectImage, subjectPrompt, soupPrompt, soupHistory,
@@ -413,6 +417,21 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
           setPromptToUse(prompt);
           setPickerOpen(true);
         }
+    };
+
+    const sendKrea2Prompt = (text: string, workflow: Krea2Workflow, skill?: Krea2SettingsPatch) => {
+        const { options, comfyOptionsByModel } = store.getState().generation;
+        const current = options.comfyModelType === workflow ? options : comfyOptionsByModel[workflow];
+        dispatch(switchComfyModelOptions({ ...getKrea2PromptUpdate(text, workflow, current, skill), comfyModelType: workflow }));
+        dispatch(setGenerationMode(workflow === 'krea2-edit' ? 'i2i' : 't2i'));
+        dispatch(setActiveTab('image-generator'));
+    };
+
+    const saveKrea2Prompt = async (text: string) => {
+        await dispatch(addToLibrary({
+            mediaType: 'prompt', promptType: 'image', promptModelType: 'krea2-simple', name: 'KREA2 Prompt', media: text,
+            thumbnail: createPromptThumbnail(text, 'image', 'krea2'),
+        })).unwrap();
     };
 
     const handleBgGenerate = async () => {
@@ -617,12 +636,23 @@ export const PromptGeneratorPanel: React.FC<PromptGeneratorPanelProps> = ({
         { id: 'extract-background', label: 'Extract Background' },
         { id: 'extract-subject', label: 'Subject / Object' },
         { id: 'prompt-soup', label: 'Magical Prompt Soup' },
+        { id: 'krea2', label: 'KREA2 Prompt' },
     ];
 
     return (
-        <div ref={root} className="bg-bg-secondary p-6 rounded-2xl shadow-lg max-w-4xl mx-auto" style={PROMPT_ACCENT_STYLES[activeSubTab] || PROMPT_ACCENT_STYLES['prompt-soup']}>
-            {renderProviderSelector()}
+        <div ref={root} className={`bg-bg-secondary p-6 rounded-2xl shadow-lg mx-auto ${activeSubTab === 'krea2' ? 'max-w-6xl' : 'max-w-4xl'}`} style={PROMPT_ACCENT_STYLES[activeSubTab] || PROMPT_ACCENT_STYLES['prompt-soup']}>
+            {activeSubTab !== 'krea2' && renderProviderSelector()}
             <SubTabs tabs={subTabs} activeTab={activeSubTab} onTabClick={setActiveSubTab} />
+
+            {activeSubTab === 'krea2' && (
+                <div className="space-y-6">
+                    <div>
+                        <h2 className="text-xl font-bold text-accent">KREA2 Prompt</h2>
+                        <p className="mt-1 text-sm text-text-secondary">Write prompts the way Krea 2 reads them: prose sentences, subject first, camera, light and materials instead of quality words. The draft is shared with the KREA2 workflows in Image Gen.</p>
+                    </div>
+                    <Krea2PromptStudio onUse={sendKrea2Prompt} onSave={saveKrea2Prompt} ollamaUrl={ollamaUrl} ollamaModel={ollamaModel} />
+                </div>
+            )}
 
             {analysisProvider === 'ollama' && ollamaActivity && (
                 <div className="mb-6"><OllamaActivityPanel activity={ollamaActivity} model={ollamaModel} onClose={() => setOllamaActivity(null)} onStop={stopOllamaRequest} /></div>

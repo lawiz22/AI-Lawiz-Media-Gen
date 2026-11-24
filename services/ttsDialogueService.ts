@@ -181,7 +181,7 @@ export const generateTtsDialogue = async (requestedTheme: TtsDialogueTheme, dura
         return { text, theme: theme.value, themeLabel: theme.label };
     } catch {
         const fallbackOpenings = language === 'English'
-            ? TTS_DIALOGUE_THEMES.flatMap((dialogueTheme) => dialogueTheme.fallback ? [dialogueTheme.fallback] : [])
+            ? TTS_DIALOGUE_THEMES.flatMap((dialogueTheme) => 'fallback' in dialogueTheme && dialogueTheme.fallback ? [dialogueTheme.fallback] : [])
             : LOCALIZED_FALLBACKS[language];
         const text = createFallbackDialogue(
             fallbackOpenings,

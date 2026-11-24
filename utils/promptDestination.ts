@@ -1,6 +1,44 @@
 import type { ComfyModelType, GenerationOptions } from '../types';
 import { defaultQwen21Settings } from '../services/qwen21Workflow';
 import { defaultKrea2EditSettings } from '../services/krea2EditWorkflow';
+import type { Krea2SettingsPatch, Krea2Workflow } from './krea2Prompting';
+
+export const KREA2_SIMPLE_DEFAULTS: Partial<GenerationOptions> = {
+  comfyKreaPrompt: '', comfyKreaStyle: undefined, comfyKreaStyleStrength: undefined, comfyKreaUseStyleSettings: false, comfyKreaNegativePrompt: '',
+  comfyKreaUnet: 'krea2_turbo_fp8_scaled.safetensors', comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors', comfyKreaVae: 'qwen_image_vae.safetensors',
+  comfyKreaResolution: '832x1216', comfyKreaUseLora: true,
+  comfyKreaLora1Name: '', comfyKreaLora1Strength: 1, comfyKreaLora2Name: 'KREA\\snofs_krea_v1_nostrip.safetensors', comfyKreaLora2Strength: 1,
+  comfyKreaLora3Name: '', comfyKreaLora3Strength: 1, comfyKreaLora4Name: '', comfyKreaLora4Strength: 1,
+  comfyKreaLora5Name: '', comfyKreaLora5Strength: 1, comfyKreaLora6Name: '', comfyKreaLora6Strength: 1,
+  comfySteps: 10, comfyCfg: 1, comfySampler: 'er_sde', comfyScheduler: 'beta',
+};
+
+export const KREA2_RAW_DEFAULTS: Partial<GenerationOptions> = {
+  comfyKreaPrompt: '', comfyKreaNegativePrompt: '',
+  comfyKreaUnet: 'krea2_raw_fp8_scaled.safetensors', comfyKreaClip: 'qwen3vl_4b_fp8_scaled.safetensors', comfyKreaVae: 'Wan2.1_VAE.safetensors',
+  comfyKreaResolution: '1920x1088', comfyKreaUseLora: true,
+  comfyKreaLora1Name: 'KREA\\krea2_turbo_lora_rank_64_bf16.safetensors', comfyKreaLora1Strength: 0.6,
+  comfyKreaLora2Name: 'KREA\\snofs_krea_v1_nostrip.safetensors', comfyKreaLora2Strength: 1,
+  comfyKreaLora3Name: '', comfyKreaLora3Strength: 1, comfyKreaLora4Name: '', comfyKreaLora4Strength: 1,
+  comfyKreaLora5Name: '', comfyKreaLora5Strength: 1, comfyKreaLora6Name: '', comfyKreaLora6Strength: 1.5,
+  comfyCfg: 1,
+};
+
+/** Prompt and optional guide settings for a KREA2 workflow; `current` holds that workflow's settings, if any. */
+export const getKrea2PromptUpdate = (
+  prompt: string,
+  workflow: Krea2Workflow,
+  current?: Partial<GenerationOptions>,
+  skill?: Krea2SettingsPatch,
+): Partial<GenerationOptions> => {
+  if (!prompt.trim()) throw new Error('Write or build a KREA2 prompt first.');
+  const { edit, ...flat } = skill || {};
+  if (workflow === 'krea2-edit') {
+    return { comfyKrea2Edit: { ...(current?.comfyKrea2Edit || defaultKrea2EditSettings()), prompt, ...(edit || {}) } };
+  }
+  const defaults = current ? {} : workflow === 'krea2-raw' ? KREA2_RAW_DEFAULTS : KREA2_SIMPLE_DEFAULTS;
+  return { ...defaults, comfyKreaPrompt: prompt, ...flat };
+};
 
 export const getImagePromptOnlyUpdate = (prompt: string, options: GenerationOptions, mode: 't2i' | 'i2i'): Partial<GenerationOptions> => {
   if (!prompt.trim()) throw new Error('The selected Library prompt is empty.');
