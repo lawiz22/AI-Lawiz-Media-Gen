@@ -1965,6 +1965,20 @@ Décision de l'utilisateur : installer `@types/react` et `@types/react-dom`. Ajo
 
 Vérifié : typecheck 0 erreur ; 985 tests, 971 réussis, 0 en échec ; build de vérification réussi ; `check:tabs` réussi ; `check:ui` : 1 échec sur 5 exécutions, scénario non relevé (sortie non gardée à cette exécution ; voir « À régler » 3), les 4 autres réussies. `npm install` signale des vulnérabilités dans les dépendances (non traitées, `npm audit fix --force` non lancé).
 
+### 2026-11-25 — Installateur 2.0.1 reconstruit avec la section KREA2
+
+Constat de l'utilisateur : l'installateur 2.0.1 n'avait pas le prompt KREA2. Cause vérifiée : il datait du 2026-11-22 à 12 h 19, avant la section KREA2 (2026-11-23) ; son paquet ne contenait aucun de ses textes.
+
+Reconstruit avec `npm run electron:build` (typecheck 0 et 985 tests sans échec juste avant ; 19 Go libres sur C:, pas de redirection de TEMP) : `dist\lawiz's-media-generator-v-2 Setup 2.0.1.exe`, 264 262 113 octets, 2026-11-25 11 h 23. Vérifié : SHA-512 et taille conformes à `latest.yml` (version 2.0.1) ; le paquet contient la section KREA2 (« KREA2 prompt helper », « Write KREA2 prompt », « Build prompt from fields », « Use in this workflow ») et le `LICENSING.md` avec l'attribution krea2-prompting. Le numéro reste 2.0.1 : deux installateurs différents portent donc ce numéro. Non vérifié : l'installateur n'a pas été lancé.
+
+### 2026-11-25 — Version 2.0.2
+
+Décision de l'utilisateur : passer à 2.0.2 pour ne pas confondre avec les installateurs 2.0.1 (avec et sans section KREA2). Règle retenue : changer le numéro à chaque nouvel installateur dont le contenu diffère.
+
+Fichiers touchés : `package.json`, `package-lock.json` (racine), `version.json` (date et notes : section KREA2, correctifs Gemini et Outpaint), `README.md` (badge et ligne « 2.0.2 » dans « What's new in 2.0 »), `docs/development.md`.
+
+Installateur : `dist\lawiz's-media-generator-v-2 Setup 2.0.2.exe`, 264 272 728 octets, 2026-11-25 11 h 26 ; la construction a remplacé l'installateur 2.0.1 dans `dist`. Vérifié : typecheck 0 et 985 tests sans échec avant ; SHA-512 et taille conformes à `latest.yml` (2.0.2) ; exécutable en 2.0.2.0 ; `package.json` du paquet en 2.0.2 ; notes 2.0.2 et textes de la section KREA2 présents dans le bundle. Non vérifié : l'installateur n'a pas été lancé.
+
 ---
 
 ## Suivi général

@@ -87,7 +87,7 @@ The Scene Variation suite runs directly with Node's test runner and covers promp
 ## Repository and licensing
 
 - Source: [github.com/lawiz22/AI-Lawiz-Media-Gen](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
-- Current application version: `2.0.1`
+- Current application version: `2.0.2`
 - Default development port: `3000`
 - Default ComfyUI endpoint: `http://127.0.0.1:8188`
 - Default Ollama endpoint: `http://127.0.0.1:11434`

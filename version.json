@@ -1,5 +1,5 @@
 {
-  "version": "2.0.1",
-  "date": "2026-11-22T00:00:00Z",
-  "changes": "Photo Fusion was rewritten: standard layout, thirteen new scenes, new prompts shown before sending, and no debug mode. Code inherited from earlier starting points was replaced, including the image upload box, the progress card, several icons and the first thirteen character poses. Version 2.0 reworked every settings panel into one layout with standard lists, sliders and prompt boxes, made lists and menus reliable after a generation, kept running jobs when switching tabs, made Studio Light readable everywhere and removed the FLUX 1, Nunchaku, FLUX Krea and WAN 2.2 workflows."
+  "version": "2.0.2",
+  "date": "2026-11-25T00:00:00Z",
+  "changes": "New KREA2 Prompt section in the Prompt tab, also opened by the KREA2 prompt helper button of the KREA2 workflows: write Krea 2 prompts with AI or a sentence builder, a style index, a pose library, recipes, live checks and recommended settings. Gemini logos, banners and album covers now produce the requested number of images and aspect ratio. Outpaint's Use result as source works again. Version 2.0.1 rewrote Photo Fusion and replaced inherited code; version 2.0 reworked every settings panel into one layout."
 }

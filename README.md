@@ -4,7 +4,7 @@
 
 **A Windows creative workstation for cloud AI, Ollama, and local ComfyUI production.**
 
-[![Version](https://img.shields.io/badge/version-2.0.1-0ea5e9?style=for-the-badge)](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
+[![Version](https://img.shields.io/badge/version-2.0.2-0ea5e9?style=for-the-badge)](https://github.com/lawiz22/AI-Lawiz-Media-Gen)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vite.dev/)
@@ -34,6 +34,8 @@ LAWIZ'S Media Generator combines image generation, character creation, video dir
 | Installation diagnostics | Check backend connections, feature readiness, required nodes and the connected ComfyUI model inventory | [What's installed](docs/connections.md#installation-overview) |
 
 ## What's new in 2.0
+
+**2.0.2**: a [KREA2 Prompt](docs/features/creative-tools.md#krea2-prompt) section in the Prompt tab, also opened from the **KREA2 prompt helper** button of the KREA2 workflows. Gemini logos, banners and album covers now return the requested number of images and aspect ratio, and Outpaint's **Use result as source** works again.
 
 **2.0.1**: [Photo Fusion](docs/features/swap-and-fusion.md#photo-fusion) was rewritten with the standard layout, thirteen new scenes and a visible prompt; its debug mode was removed. Code inherited from earlier starting points was replaced (see [LICENSING.md](LICENSING.md#zgenmedia-derived-material-replaced)), including the first thirteen character poses, which have new texts and names.
 
